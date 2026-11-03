@@ -2,7 +2,7 @@ import { createActor } from 'xstate'
 
 import type { DeviceInstall } from '../../../../../platform/install'
 import type { Theme } from '../../../../../platform/theme'
-import { LocaleWrites } from '../../../application/locale-writes'
+import { NOTHING_SEEN } from '../../../application/setting-writes'
 import type { SelfReloads } from '../../../application/shell.machine'
 import { type ShellFrame, type ShellLive, shellFrameMachine } from '../shell-frame'
 
@@ -39,7 +39,7 @@ function startedFrame(account: string | undefined, options: OpenedFrameOptions):
   const live: ShellLive = {
     account,
     stored: undefined,
-    writes: LocaleWrites.none,
+    writes: NOTHING_SEEN,
     generation: 0,
     signOutHere: undefined,
     renderAgain: undefined,

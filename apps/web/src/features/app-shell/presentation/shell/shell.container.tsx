@@ -24,7 +24,7 @@ import { SYNC_STATUS, type SyncStatus } from '../../../../platform/sync-status.p
 import { useDeviceTheme } from '../../../../platform/theme'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
-import { LocaleWrites } from '../../application/locale-writes'
+import { NOTHING_SEEN } from '../../application/setting-writes'
 import { shellEvents } from '../../application/shell.events'
 
 import { pageTitle } from './page-title'
@@ -121,16 +121,16 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const unsaved = useUnsavedInput()
 
   // What the frame's machine reads, current before it is asked anything below: the account signed
-  // in and the language its settings hold here; another account, or none, starts knowing nothing
-  // of its stored language.
+  // in and the settings it holds here; another account, or none, starts knowing nothing of its
+  // stored settings.
   if (account.current !== user?.id) {
     account.current = user?.id
     live.generation += 1
-    live.writes = LocaleWrites.none
+    live.writes = NOTHING_SEEN
   }
 
   live.account = user?.id
-  live.stored = row?.locale
+  live.stored = row
   live.unsaved = unsaved
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
@@ -145,7 +145,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const canInstall = actor.getSnapshot().can({ type: 'app-shell.install-button' })
   const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
-  // The stored language arriving or changing, here or from another device: the frame's data event.
+  // The stored language arriving or changing, from this tab or another, or another device: the
+  // frame's data event.
   const stored = row?.locale
 
   useEffect(() => {
@@ -154,7 +155,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     }
 
     actor.send({ type: 'model.settings.locale' })
-    live.writes = live.writes.arrived(stored)
+    live.writes = { ...live.writes, locale: live.writes.locale.arrived(stored) }
   }, [user?.id, stored, actor, live])
 
   // The account going away, by its own sign-out or from another device: the frame's platform event.

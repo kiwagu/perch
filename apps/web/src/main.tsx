@@ -11,7 +11,7 @@ import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { serviceWorkerReload } from './composition/service-worker'
-import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { NOTHING_SEEN } from './features/app-shell/application/setting-writes'
 import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
 import { CrashSignal } from './features/app-shell/presentation/crash/crash-signal'
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
@@ -19,7 +19,7 @@ import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-tex
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
-  frameLanguageWrites,
+  frameSettingsWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
@@ -29,10 +29,10 @@ import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
-import { LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { SettingsWritesContext } from './platform/settings-writes'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -128,7 +128,7 @@ function App(props: { readonly reload: () => void }) {
     const live: ShellLive = {
       account: undefined,
       stored: undefined,
-      writes: LocaleWrites.none,
+      writes: NOTHING_SEEN,
       generation: 0,
       signOutHere: undefined,
       renderAgain: undefined,
@@ -142,8 +142,8 @@ function App(props: { readonly reload: () => void }) {
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
-  // The settings screen's stores of the language, kept by the frame to tell their echo from another device's.
-  const languageWrites = useMemo(() => frameLanguageWrites(made.live), [made])
+  // The settings screen's stores, kept by the frame to tell their echo from another tab's or device's.
+  const settingsWrites = useMemo(() => frameSettingsWrites(made.live), [made])
 
   useEffect(() => {
     const spoken = actor.on('speak', ({ locale }) => setLocale(locale))
@@ -234,11 +234,11 @@ function App(props: { readonly reload: () => void }) {
 
   return (
     <ShellFrameContext.Provider value={frame}>
-      <LanguageWritesContext.Provider value={languageWrites}>
+      <SettingsWritesContext.Provider value={settingsWrites}>
         <ServicesProvider services={started.services}>
           <RouterProvider router={started.router} />
         </ServicesProvider>
-      </LanguageWritesContext.Provider>
+      </SettingsWritesContext.Provider>
     </ShellFrameContext.Provider>
   )
 }

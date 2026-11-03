@@ -6,7 +6,7 @@ import type { Locale } from '@workspace/i18n'
 
 import type { Theme } from '../../../platform/theme'
 
-import { LocaleWrites } from './locale-writes'
+import { type FrameWrites, NOTHING_SEEN } from './setting-writes'
 import { createShellMachine, type ShellValues } from './shell.machine'
 
 /**
@@ -17,7 +17,7 @@ function frame(reloadedFor: string[] = []) {
   let values: ShellValues = {
     account: undefined,
     stored: undefined,
-    writes: LocaleWrites.none,
+    writes: NOTHING_SEEN,
     unsaved: false,
   }
   const signOutHere = vi.fn(() => okAsync(undefined))
@@ -60,17 +60,20 @@ function frame(reloadedFor: string[] = []) {
     },
     /** The account goes away, by its own sign-out or from another device. */
     signOut: () => {
-      values = { ...values, account: undefined, stored: undefined, writes: LocaleWrites.none }
+      values = { ...values, account: undefined, stored: undefined, writes: NOTHING_SEEN }
       actor.send({ type: 'platform.signed-out' })
     },
-    /** The settings arrive or change on this device, here or from another one. */
-    store: (stored: string) => {
-      values = { ...values, stored }
+    /** The stored language arrives or changes in this tab, from it, another tab or device. */
+    store: (locale: string) => {
+      values = { ...values, stored: { locale } }
       actor.send({ type: 'model.settings.locale' })
-      values = { ...values, writes: values.writes.arrived(stored) }
+      values = {
+        ...values,
+        writes: { ...values.writes, locale: values.writes.locale.arrived(locale) },
+      }
     },
-    /** This device's own writes of the language, as the settings screen tells them. */
-    write: (step: (writes: LocaleWrites) => LocaleWrites) => {
+    /** This tab's own writes of its settings, as the settings screen tells them. */
+    write: (step: (writes: FrameWrites) => FrameWrites) => {
       values = { ...values, writes: step(values.writes) }
     },
     /** A field starts holding unsaved input, or stops. */
@@ -259,7 +262,7 @@ describe('shell machine', () => {
     expect(shell.emitted).toEqual([REJECTED, RELOADED])
   })
 
-  it('speaks a language stored that this device has not seen yet, once', () => {
+  it('speaks a language stored that this tab has not seen yet, once', () => {
     const shell = frame()
 
     shell.open()
@@ -271,19 +274,22 @@ describe('shell machine', () => {
     expect(shell.spoken).toEqual(['es', 'en'])
   })
 
-  it("takes this device's own writes coming back late for its own, a failed one too", () => {
+  it("takes this tab's own writes coming back late for its own, a failed one too", () => {
     const shell = frame()
 
     shell.open()
     shell.signIn()
     shell.store('en')
     // The settings screen stores es, then en, and en's store fails; es comes back late.
-    shell.write((writes) => writes.writing('es').writing('en').failed('en'))
+    shell.write((writes) => ({
+      ...writes,
+      locale: writes.locale.writing('es').writing('en').failed('en'),
+    }))
     shell.store('es')
 
     expect(shell.spoken).toEqual(['en'])
 
-    // Another device stores en afterwards: that one is spoken.
+    // Another tab or device stores en afterwards: that one is spoken.
     shell.store('en')
 
     expect(shell.spoken).toEqual(['en', 'en'])

@@ -11,11 +11,11 @@ import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { memoryTheme } from '../../../../../platform/__fixtures__/theme'
 import { englishCatalog } from '../../../../../platform/catalogs'
-import { LanguageWritesContext } from '../../../../../platform/language-writes'
 import { defineModule } from '../../../../../platform/module'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
 import type { SessionPort } from '../../../../../platform/session.port'
+import { SettingsWritesContext } from '../../../../../platform/settings-writes'
 import { ThemeContext } from '../../../../../platform/theme'
 
 import { SettingsContainer } from './settings.container'
@@ -56,12 +56,12 @@ function open(answer: () => ChangeAnswer) {
     <I18nProvider locale="en" catalogs={{ en: englishCatalog }}>
       <ServicesProvider services={fakeServices(session)}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <LanguageWritesContext.Provider value={{ writing: () => () => {} }}>
+          <SettingsWritesContext.Provider value={{ locale: { writing: () => () => {} } }}>
             <UnsavedInputScope>
               <RouterProvider router={router} />
               <UnsavedProbe />
             </UnsavedInputScope>
-          </LanguageWritesContext.Provider>
+          </SettingsWritesContext.Provider>
         </ThemeContext.Provider>
       </ServicesProvider>
     </I18nProvider>,

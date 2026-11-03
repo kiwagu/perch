@@ -4,10 +4,10 @@ import { useLocale } from '@workspace/i18n'
 
 import { useFieldClears } from '../../../../../platform/field-clears'
 import { useSetLocale } from '../../../../../platform/i18n'
-import { trackedStore, useLanguageWrites } from '../../../../../platform/language-writes'
 import { useService, useShape } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
+import { trackedStore, useSettingsWrites } from '../../../../../platform/settings-writes'
 import { useDeviceTheme } from '../../../../../platform/theme'
 import { settingsShape } from '../../../application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
@@ -39,7 +39,7 @@ export function SettingsContainer() {
   const device = useDeviceTheme()
   const locale = useLocale()
   const setLocale = useSetLocale()
-  const writes = useLanguageWrites()
+  const writes = useSettingsWrites()
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
   const [email, setEmail] = useState(EMPTY_EMAIL)
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
@@ -57,8 +57,8 @@ export function SettingsContainer() {
       createSettingsMachine({
         values: () => live.current,
         setTheme: device.set,
-        // The frame learns of the write, so its echo is not taken for another device's language.
-        storeLocale: trackedStore(writes, (chosen) => {
+        // The frame learns of the write, so its echo is not taken for another tab's or device's.
+        storeLocale: trackedStore(writes.locale, (chosen) => {
           const stored = live.current.store
 
           live.current = { ...live.current, storingFor: live.current.account }

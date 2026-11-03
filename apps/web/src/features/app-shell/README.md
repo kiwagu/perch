@@ -21,8 +21,8 @@ modules' routes.
 
 - `application/shell.machine.ts`: the frame's flow as its machine (held to the contract by
   `platform/machines.spec.ts`), made by the start (`src/main.tsx`) through
-  `presentation/shell/shell-frame.tsx` and handed to the shell container; `locale-writes.ts`
-  tells a language another device stored from this device's own write coming back.
+  `presentation/shell/shell-frame.tsx` and handed to the shell container; `setting-writes.ts`
+  tells a setting another tab or device stored from this tab's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation
   for a signed-in account only (for a guest the kit's `AppShell` renders no `<nav>`, neither the
   bottom bar nor the side rail, and the page takes their room), the notice, whose line is held as tall as the longest notice (three lines on a phone, two
@@ -114,5 +114,5 @@ modules' routes.
 ## Commands
 
 - `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `shell.events.spec.ts`,
-  `locale-writes.spec.ts`, `shell-frame.spec.ts`, `shell.container.spec.tsx`,
+  `setting-writes.spec.ts`, `shell-frame.spec.ts`, `shell.container.spec.tsx`,
   `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).

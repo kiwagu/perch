@@ -23,7 +23,7 @@ import { dataError } from '@workspace/data'
 import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
 
-import { LocaleWrites } from '../features/app-shell/application/locale-writes'
+import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
@@ -86,7 +86,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       values: () => ({
         account: undefined,
         stored: undefined,
-        writes: LocaleWrites.none,
+        writes: NOTHING_SEEN,
         unsaved: false,
       }),
       signOutHere: () => okAsync(undefined),

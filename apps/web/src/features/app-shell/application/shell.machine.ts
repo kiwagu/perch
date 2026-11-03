@@ -5,16 +5,16 @@ import type { Locale } from '@workspace/i18n'
 
 import type { Theme } from '../../../platform/theme'
 
-import type { LocaleWrites } from './locale-writes'
+import type { FrameWrites } from './setting-writes'
 
 /** What the frame's guards read at the moment they are asked. */
 export interface ShellValues {
   /** The account signed in on this device; none for a guest. */
   readonly account: string | undefined
-  /** The language the account's settings hold on this device; none before they arrive. */
-  readonly stored: string | undefined
-  /** What this device knows of the stored language and of its own writes on their way. */
-  readonly writes: LocaleWrites
+  /** The account's settings as this tab holds them; none before they arrive. */
+  readonly stored: { readonly locale: string } | undefined
+  /** What this tab knows of each stored setting and of its own writes on their way. */
+  readonly writes: FrameWrites
   /** Whether a field holds unsaved input now. */
   readonly unsaved: boolean
 }
@@ -184,11 +184,11 @@ const PROTOCOL_OUTDATED = {
 
 /** The frame's flow (`contract/domain/screens/__root.yaml`) as the app runs it. */
 export function createShellMachine(deps: ShellMachineDeps) {
-  /** The stored language, when another device stored it and this one has not seen it yet. */
+  /** The stored language, when another tab or device stored it and this tab has not seen it yet. */
   const storedElsewhere = (): Locale | undefined => {
     const { stored, writes } = deps.values()
 
-    return stored === undefined ? undefined : writes.elsewhere(stored)
+    return stored === undefined ? undefined : writes.locale.elsewhere(stored.locale)
   }
 
   return setup({
