@@ -45,12 +45,18 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 
 ## Surface
 
-- Routes: `/sign-in` (guard `guest`) renders `SignInPage`; `/forgot-password` (no guard: a
-  signed-in device may ask too; search `email`) renders `ForgotPasswordPage`, which asks for the
+- Routes: `/sign-in` (guard `guest`; search `email`) renders `SignInPage`, its email field
+  starting with the address's `email`, the one a page that moved there carried over
+  (`useSearchStart`); `/forgot-password` (guard `guest`: a signed-in account changes its
+  password in its settings; search `email`) renders `ForgotPasswordPage`, which asks for the
   mail of a password reset (`application/forgot-password.machine.ts`, the flow of
   `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
-  email field starts with the address's `email`, `useSearchStart`), the same answer for any email
-  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for);
+  email field starts with the address's `email`, `useSearchStart`, and the page holds what it
+  holds), the same answer for any email
+  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for); once
+  it asked, a new password set in another tab of the browser (`platform.password-reset`, which the
+  page's machine hears with the email field's value) leaves this tab's sign-in page
+  `password-reset-elsewhere` and moves there with the email as typed (`reset-elsewhere`, final);
   `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
   link opens (`application/reset-password.machine.ts`, the flow of
   `contract/domain/screens/reset-password.yaml`): the new password typed twice, held to the rules
@@ -60,7 +66,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   does not work (`link-invalid`, `link-expired`) beside the link that asks for a new one; a
   password refused (`password-rejected`) shows under the password, the form kept. The reset signs
   every device of the account out, this one too when it is signed in to it (its channel hears
-  4002), and the page keeps its message, which its machine holds whatever the session does;
+  4002), and the page keeps its message, which its machine holds whatever the session does; the
+  browser's other tabs hear of the reset (`platform.password-reset`);
   `/confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
   confirmation mail's link opens (`application/confirm-email.machine.ts`, the flow of
   `contract/domain/screens/confirm-email.yaml`): one exchange of the address's token through
@@ -119,8 +126,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
   frame's guard of unsaved input, the sign-out button asks it first, and both forms are the
-  kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the sign-in page
-  follows another tab's sign-in with `useLeaveNow`, a leave nobody started here. The name and the bio
+  kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the guest pages
+  (sign-in, forgot-password, verify-email) follow another tab's sign-in to the profile through
+  the router's guard, a sign-in of the page's own going on to its welcome. The name and the bio
   (at most 2000 characters) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its
@@ -165,7 +173,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   were signed out from another device." when this device was signed out from another one
   (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), that a change of the
   account's password signed it out, through a reset link or on another device (the code
-  `password-changed-elsewhere`, when the channel closed with 4002), and that the data
+  `password-changed-elsewhere`, when the channel closed with 4002), that a new password was set
+  in another tab through a reset link (the code `password-reset-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);
   it also says to wait when the gateway limits the attempts (`data:RATE_LIMITED`,

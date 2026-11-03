@@ -89,7 +89,7 @@ describe('UserModule', () => {
     ).toMatchObject([{ locale: 'es' }])
   })
 
-  it('routes guests to sign-in and to the verification of their email, anyone to the recovery of a password, and signed-in users to their profile and their settings', () => {
+  it('routes guests to sign-in, the verification of their email and the request of a reset mail, anyone to the links that set a password or confirm an email, and signed-in users to their profile and their settings', () => {
     expect(
       UserModule.routes.map((route) => ({
         path: route.path,
@@ -98,12 +98,12 @@ describe('UserModule', () => {
         search: route.search === undefined ? undefined : Object.keys(route.search.shape),
       })),
     ).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: undefined },
+      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: ['email'] },
       { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
       {
         path: '/forgot-password',
         page: 'ForgotPasswordPage',
-        guard: undefined,
+        guard: 'guest',
         search: ['email'],
       },
       {
