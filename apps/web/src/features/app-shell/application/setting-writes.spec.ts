@@ -42,7 +42,9 @@ describe('SettingWrites', () => {
     expect(none.elsewhere('fr')).toBeUndefined()
   })
 
-  it("knows nothing of a new account's language", () => {
+  it("knows nothing of a new account's language or theme, and takes only a theme the app shows", () => {
     expect(NOTHING_SEEN.locale.elsewhere('en')).toBe('en')
+    expect(NOTHING_SEEN.theme.elsewhere('dark')).toBe('dark')
+    expect(NOTHING_SEEN.theme.elsewhere('sepia')).toBeUndefined()
   })
 })

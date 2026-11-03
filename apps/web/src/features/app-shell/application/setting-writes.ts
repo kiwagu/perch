@@ -1,5 +1,7 @@
 import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n'
 
+import { THEMES, type Theme } from '../../../platform/theme'
+
 /**
  * What this tab knows of one setting the account stores, to tell a value another tab or device
  * stored from this tab's own write coming back: the stored value as this tab last saw it, and the
@@ -65,9 +67,11 @@ export class SettingWrites<T extends string> {
 /** What this tab knows of each setting of the account the frame follows. */
 export interface FrameWrites {
   readonly locale: SettingWrites<Locale>
+  readonly theme: SettingWrites<Theme>
 }
 
 /** Another account, or none: nothing is known of its settings. */
 export const NOTHING_SEEN: FrameWrites = {
   locale: SettingWrites.none(SUPPORTED_LOCALES),
+  theme: SettingWrites.none(THEMES),
 }

@@ -56,7 +56,9 @@ function open(answer: () => ChangeAnswer) {
     <I18nProvider locale="en" catalogs={{ en: englishCatalog }}>
       <ServicesProvider services={fakeServices(session)}>
         <ThemeContext.Provider value={memoryTheme()}>
-          <SettingsWritesContext.Provider value={{ locale: { writing: () => () => {} } }}>
+          <SettingsWritesContext.Provider
+            value={{ locale: { writing: () => () => {} }, theme: { writing: () => () => {} } }}
+          >
             <UnsavedInputScope>
               <RouterProvider router={router} />
               <UnsavedProbe />

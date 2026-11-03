@@ -99,6 +99,11 @@ export function frameSettingsWrites(live: ShellLive): SettingsWrites {
       (writes) => writes.locale,
       (writes, locale) => ({ ...writes, locale }),
     ),
+    theme: frameWriting(
+      live,
+      (writes) => writes.theme,
+      (writes, theme) => ({ ...writes, theme }),
+    ),
   }
 }
 

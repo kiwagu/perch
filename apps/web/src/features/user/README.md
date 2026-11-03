@@ -87,10 +87,13 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
   failed exchange) asks afresh, and another token in the address of the open page starts another
   exchange with its own machine (the part of the page that runs it is keyed by the token). `/me` (guard `authenticated`)
-  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the theme of
-  this device (the platform's `useDeviceTheme`, `platform.theme.set`; the frame's theme select
-  chooses the same one) and the account's language
-  (stored through `settings.updateLocale`, spoken at once), the account's password (the current
+  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the account's
+  theme (stored through `settings.updateTheme`, shown at once through the platform's
+  `useDeviceTheme`, which keeps it on this device as the theme it showed last) and the account's
+  language (stored through `settings.updateLocale`, spoken at once), each taken only once the
+  settings are on the device and not while its store runs, a store that failed keeping the choice
+  on this device and saying so on the frame's notice (`theme-not-stored`, `locale-not-stored`;
+  nothing once the account left), the account's password (the current
   one, the new one typed twice and held to the rules of a new password as at sign-up, changed
   through `platform.change-password`, which signs the account's other devices out; a change says
   so on the frame's toast, `password-changed`, and the flow's `clear` empties the form, whose

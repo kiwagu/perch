@@ -11,6 +11,8 @@ import { createContext, useContext } from 'react'
 
 import type { Locale } from '@workspace/i18n'
 
+import type { Theme } from './theme'
+
 /** This tab's writes of one setting. */
 export interface SettingWriting<T> {
   /**
@@ -23,6 +25,7 @@ export interface SettingWriting<T> {
 /** This tab's writes of each setting the frame follows. */
 export interface SettingsWrites {
   readonly locale: SettingWriting<Locale>
+  readonly theme: SettingWriting<Theme>
 }
 
 export const SettingsWritesContext = createContext<SettingsWrites | undefined>(undefined)

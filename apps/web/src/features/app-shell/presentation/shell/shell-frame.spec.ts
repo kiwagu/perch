@@ -27,6 +27,19 @@ describe('frameSettingsWrites', () => {
     expect(frame.writes.locale.elsewhere('es')).toBe('es')
   })
 
+  it('keeps the writes of each setting apart', () => {
+    const frame = live()
+    const writes = frameSettingsWrites(frame)
+    const failed = writes.theme.writing('dark')
+
+    expect(frame.writes.theme.elsewhere('dark')).toBeUndefined()
+    expect(frame.writes.locale.elsewhere('en')).toBe('en')
+
+    failed()
+
+    expect(frame.writes.theme.elsewhere('dark')).toBe('dark')
+  })
+
   it("leaves the next account's writes alone when an earlier account's write fails late", () => {
     const frame = live()
     const writes = frameSettingsWrites(frame)

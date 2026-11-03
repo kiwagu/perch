@@ -131,6 +131,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
       setTheme: () => {},
+      storeTheme: () => okAsync(undefined),
       storeLocale: () => okAsync(undefined),
       changePassword: () => okAsync(undefined),
       changeEmail: () => okAsync(undefined),
