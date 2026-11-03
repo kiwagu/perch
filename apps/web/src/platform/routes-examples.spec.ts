@@ -6,7 +6,12 @@
  * while the app's links leave out a value equal to its default: both reach the same state);
  * and matching the link, the router reaches the binding's route with those parameters and
  * that search, unrefused. The route tree the router builds equals the tree of the screen
- * folder (`routeTree`): the same routes under the same parents.
+ * folder (`routeTree`): the same routes under the same parents. On a branch the pre-commit hook
+ * sets `CONTRACT_AHEAD=1`: a business commit may add or change a binding before its route, so
+ * only the bindings the app has a route for are held to their example and the tree, each as the
+ * contract says it now, or as it had it at the branch's merge base with `main`
+ * (`CONTRACT_AHEAD_BASE`) while the route still equals that one (`heldTo` of
+ * `__fixtures__/route-bindings.ts`); `bun run check` and `main` hold every binding as it is now.
  */
 
 import { join } from 'node:path'
@@ -28,6 +33,7 @@ import { z } from '@workspace/zod'
 
 import { modules } from '../modules'
 
+import { AHEAD, bindingsAtBase, bindingsOf, heldBindings } from './__fixtures__/route-bindings'
 import { type AppRouter, matchAt, routerOf, SPLAT } from './__fixtures__/router'
 import { defineModule } from './module'
 import { allModules } from './router'
@@ -176,16 +182,15 @@ describe('the example link on the router', () => {
   })
 })
 
+const AT_BASE = bindingsAtBase(ROOT)
 const { screens, problems } = loadScreens(ROOT)
-// On a branch (`CONTRACT_AHEAD=1`) a binding may wait for its route: only the routed ones are
-// held to their example and the tree; `bun run check` and `main` hold every binding.
-const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
-const routed = new Set(
-  allModules(modules).flatMap((module) => module.routes.map(({ path }) => path)),
-)
-const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? [])
-  .flatMap((screen) => screen.bindings.map((binding) => [binding.path, binding] as const))
-  .filter(([path]) => !AHEAD || routed.has(path))
+// The bindings the app's routes are held to: on a branch only the routed ones, each as now or
+// as at the base; `bun run check` and `main` hold every binding as it is now.
+const bindings: readonly (readonly [string, Binding])[] = heldBindings(
+  bindingsOf(screens?.screens ?? []),
+  allModules(modules).flatMap((module) => module.routes),
+  'bindings' in AT_BASE ? AT_BASE.bindings : [],
+).map(({ binding }) => [binding.path, binding] as const)
 const router = routerOf(modules)
 
 describe('the example links of the contract on the router', () => {
@@ -194,9 +199,17 @@ describe('the example links of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.each(bindings)('%s is written and read as its example says', (_path, binding) => {
-    exampleCase(router, binding)
+  // A base that does not load fails here, once; the examples then wait for it.
+  it("the contract at the branch's base loads", () => {
+    expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
   })
+
+  it.skipIf('problem' in AT_BASE).each(bindings)(
+    '%s is written and read as its example says',
+    (_path, binding) => {
+      exampleCase(router, binding)
+    },
+  )
 })
 
 /**
