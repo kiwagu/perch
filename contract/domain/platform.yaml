@@ -315,6 +315,18 @@ unsavedInput:
   state: never
   flow: never
   elsewhere: cannot
+composites:
+  password-rules:
+    description: The rules a new password keeps, each marked once the password typed keeps it.
+    list: password-rule-list
+    itemState: met
+    items:
+      length: 10 to 35 characters.
+      characters: "Only Latin letters, digits and the symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~ (no spaces); met once something is typed and every character is one of them."
+      digit: At least one digit.
+      uppercase: At least one uppercase letter.
+      lowercase: At least one lowercase letter.
+      symbol: At least one of the symbols.
 reserved:
   - app-shell.status
   - app-shell.notice-message

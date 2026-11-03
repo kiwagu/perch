@@ -43,39 +43,13 @@ anchors:
   user.settings.password.new-password-input:
     kind: input
     secret: true
+    composite: password-rules
     description: The new password (type password).
     binding:
       action: platform.change-password
       params:
         password: user.settings.password.new-password-input
     derived: [ visibility-button ]
-  user.settings.password-rule-list:
-    kind: list
-    description: "The rules a new password keeps, under the new password, each rule marked once the password typed keeps it."
-  user.settings.password-rule-list.length-item:
-    kind: item
-    description: 10 to 35 characters.
-    states: [ met ]
-  user.settings.password-rule-list.characters-item:
-    kind: item
-    description: "Only Latin letters, digits and the symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~ (no spaces); met once something is typed and every character is one of them."
-    states: [ met ]
-  user.settings.password-rule-list.digit-item:
-    kind: item
-    description: At least one digit.
-    states: [ met ]
-  user.settings.password-rule-list.uppercase-item:
-    kind: item
-    description: At least one uppercase letter.
-    states: [ met ]
-  user.settings.password-rule-list.lowercase-item:
-    kind: item
-    description: At least one lowercase letter.
-    states: [ met ]
-  user.settings.password-rule-list.symbol-item:
-    kind: item
-    description: At least one of the symbols.
-    states: [ met ]
   user.settings.password.password-confirmation-input:
     kind: input
     secret: true
