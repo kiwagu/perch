@@ -42,10 +42,12 @@ for Bun.
     (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
     fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
     does, and goes back to the one state that entered it on a control, showing the failure on
-    `<part>.error` of those controls, of its input's fields when none, else `<screen>.error`;
+    `<part>.error` of those controls, of its input's fields when none, else `<screen>.error`,
+    and `<screen>.error` when there is no part (no control enters, the input names no field);
     one written as its target alone gets the show; a state where its area starts, one two
-    states, an outcome or a target from outside its area enter, and one with no error are
-    problems that ask for its `onError`), the success of each mutation said on the
+    states, an outcome, a platform or a data event or a target from outside its area enter,
+    and one with no error are problems that ask for its `onError`), the success of each
+    mutation said on the
     frame's toast anchor (a model action by its name, a platform action by the platform's
     `toasts` map), which carries every code a flow shows on it
     (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), and the question before each

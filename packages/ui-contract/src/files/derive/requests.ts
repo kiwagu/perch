@@ -5,11 +5,13 @@
  * - The way back, taken when the state writes no `onError`: the one sibling state whose
  *   transitions on control events enter it. A state where its area starts (the `initial` of the
  *   root or of its region) has none, whatever enters it; so has a state nothing enters, one two
- *   states enter, one an invoke's outcome enters, or one entered from outside its area (a deep
- *   target from the root, an id target, the parallel state's own `on`).
+ *   states enter, one an invoke's outcome enters, one a platform or a data event enters, or one
+ *   entered from outside its area (a deep target from the root, an id target, the parallel
+ *   state's own `on`).
  * - The error its failure shows on: the part the controls of every transition entering it sit
  *   in, however many states those leave; with no control entering, the part of the invoke's
- *   input fields; one part, whose `<part>.error`, else the screen's `<screen>.error`.
+ *   input fields; one part, whose `<part>.error`, else the screen's `<screen>.error`; no part
+ *   at all (no control enters, the input names no field), the screen's `<screen>.error`.
  *
  * Read on the flow as written or as expanded: a transition may be its target alone.
  */
@@ -154,6 +156,12 @@ function backOf(state: Located, enterers: readonly Enterer[]): Request['back'] {
     return { why: `${name} is entered by the outcome of ${from.name}, not by a control` }
   }
 
+  const other = enterers.find(({ event }) => event !== undefined && !isControl(event))?.event
+
+  if (other !== undefined) {
+    return { why: `${name} is entered on ${other}, not by a control` }
+  }
+
   return { state: from.name }
 }
 
@@ -173,7 +181,11 @@ function errorOf(
   const [part] = parts
 
   if (part === undefined) {
-    return { why: `no control enters ${name} and its input names no field: no part has its error` }
+    return declared(`${screen}.error`)
+      ? { anchor: `${screen}.error` }
+      : {
+          why: `no control enters ${name} and its input names no field: no part has its error, and no ${screen}.error`,
+        }
   }
 
   if (parts.length > 1) {

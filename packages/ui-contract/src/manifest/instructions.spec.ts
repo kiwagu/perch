@@ -144,7 +144,10 @@ describe('instructionsOf', () => {
       "an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there",
     )
     expect(instructions.bindings).toContain(
-      'an `onError` written as its target alone still shows the failure',
+      'a start state, one several states enter, or one a platform or data event enters, writes its `onError`',
+    )
+    expect(instructions.bindings).toContain(
+      "an `onError` written as its target alone still shows the failure on that error, on the screen's error when no control enters and the input names no field",
     )
   })
   it('writes every instruction', () => {

@@ -132,9 +132,7 @@ describe('requestsOf', () => {
 
     expect(outcomeOf(initial, 'user.sign-in', 'verifying')).toEqual({
       back: { why: 'verifying is where its area starts, so it has no single way back' },
-      error: {
-        why: 'no control enters verifying and its input names no field: no part has its error',
-      },
+      error: { anchor: 'user.sign-in.error' },
     })
     expect(requestOf(nothing, 'user.sign-in', 'orphan')?.back).toEqual({
       why: 'nothing enters orphan, so it has no way back',
@@ -191,6 +189,62 @@ describe('requestsOf', () => {
     })
   })
 
+  it("falls back to the screen's error when no control enters and the input names no field", () => {
+    const linked = {
+      initial: 'verifying',
+      states: {
+        verifying: {
+          invoke: {
+            src: 'platform.verify-email',
+            input: { token: { search: 'token' } },
+            onDone: 'done',
+            onError: 'failed',
+          },
+        },
+        failed: {},
+        done: { type: 'final' },
+      },
+    }
+
+    expect(outcomeOf(linked, 'user.settings', 'verifying')).toEqual({
+      back: { why: 'verifying is where its area starts, so it has no single way back' },
+      error: { anchor: 'user.settings.error' },
+    })
+    expect(requestOf(linked, 'user.verify-email', 'verifying')?.error).toEqual({
+      why: 'no control enters verifying and its input names no field: no part has its error, and no user.verify-email.error',
+    })
+  })
+
+  it('has a way back only when every transition entering the state is on a control', () => {
+    const entering = (events: Record<string, string>) => ({
+      initial: 'idle',
+      states: {
+        idle: { on: events },
+        loading: {
+          invoke: {
+            src: 'platform.sign-in',
+            input: { email: 'user.sign-in.email-input' },
+            onDone: 'idle',
+          },
+        },
+      },
+    })
+
+    expect(
+      outcomeOf(entering({ 'model.profile.name': 'loading' }), 'user.sign-in', 'loading'),
+    ).toEqual({
+      back: { why: 'loading is entered on model.profile.name, not by a control' },
+      error: { anchor: 'user.sign-in.error' },
+    })
+    expect(
+      requestOf(
+        entering({ 'user.sign-in.submit-button': 'loading', 'platform.opened': 'loading' }),
+        'user.sign-in',
+        'loading',
+      )?.back,
+    ).toEqual({ why: 'loading is entered on platform.opened, not by a control' })
+  })
+
   it("takes the input fields' part when no control enters, and refuses parts that differ", () => {
     const byEvent = {
       initial: 'idle',
@@ -235,7 +289,7 @@ describe('requestsOf', () => {
     }
 
     expect(outcomeOf(byEvent, 'user.sign-in', 'loading')).toEqual({
-      back: { state: 'idle' },
+      back: { why: 'loading is entered on platform.opened, not by a control' },
       error: { anchor: 'user.sign-in.error' },
     })
     expect(outcomeOf(parts, 'user.settings', 'saving')).toEqual({

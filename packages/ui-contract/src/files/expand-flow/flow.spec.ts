@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { flowSchema } from '../../schemas'
-import type { Failure } from '../derive'
+import { type Failure, flowSourcesOf } from '../derive'
 
 import { expandFlow, type FlowLookups } from '.'
 
@@ -567,7 +567,151 @@ describe('the request pattern', () => {
       invoke: { src: 'thing.save', onDone: { target: 'idle' }, onError: { target: 'idle' } },
     })
     expect(neither.issues.map(({ message }) => message)).toEqual([
-      'thing.save fails with taken, failed and the state writes no onError: saving is where its area starts, so it has no single way back; no control enters saving and its input names no field: no part has its error; write its onError',
+      'thing.save fails with taken, failed and the state writes no onError: saving is where its area starts, so it has no single way back; no control enters saving and its input names no field: no part has its error, and no sample.error; write its onError',
+    ])
+  })
+})
+
+describe('the request pattern where no control enters, and the error sources it agrees with', () => {
+  const SCREEN_ERROR = 'sample.error'
+  /** The lookups with `sample.error` declared too, when `screenError` says so. */
+  const lookupsWith = (screenError: boolean): FlowLookups => ({
+    ...LOOKUPS,
+    codesOf: (anchor) =>
+      screenError && anchor === SCREEN_ERROR ? ['taken', 'failed'] : CODES[anchor],
+  })
+  /** The errors the expanded flow shows a failure on, in the onError of an invoke of the root. */
+  const shownOn = (flow: unknown): string[] =>
+    Object.values(
+      (flow as { states: Record<string, { invoke?: { onError?: unknown } }> }).states,
+    ).flatMap(({ invoke }) => {
+      const onError = invoke?.onError as { actions?: Array<{ params: { anchor: string } }> }
+
+      return (onError?.actions ?? []).map(({ params }) => params.anchor)
+    })
+  /** The errors the derivation lists the action against, on the screen `sample`. */
+  const sourcedOn = (flow: unknown, screenError: boolean): string[] => [
+    ...flowSourcesOf(
+      {
+        id: 'sample',
+        anchors: {
+          'sample.form.error': { kind: 'error' },
+          ...(screenError ? { [SCREEN_ERROR]: { kind: 'error' } } : {}),
+        },
+        flow,
+      },
+      LOOKUPS.failureOf,
+    ).invoked.keys(),
+  ]
+  /** A request where its area starts, its input taking a search parameter of the link. */
+  const linked = (onError?: unknown) => ({
+    initial: 'verifying',
+    states: {
+      verifying: {
+        invoke: {
+          src: 'thing.save',
+          input: { token: { search: 'token' } },
+          onDone: 'done',
+          ...(onError === undefined ? {} : { onError }),
+        },
+      },
+      failed: {},
+      done: { type: 'final' },
+    },
+  })
+  /** A request entered on a platform event, its input naming a field of the form. */
+  const opened = (onError?: unknown) => ({
+    initial: 'idle',
+    states: {
+      idle: { on: { 'platform.opened': 'loading' } },
+      loading: {
+        invoke: {
+          src: 'thing.save',
+          input: { name: 'sample.form.name-input' },
+          onDone: 'idle',
+          ...(onError === undefined ? {} : { onError }),
+        },
+      },
+    },
+  })
+  const AT = ['flow', 'states', 'verifying', 'invoke', 'onError']
+
+  it("shows the bare onError of a request no control enters, whose input names no field, on the screen's error", () => {
+    const { flow, issues } = expandFlow(linked('failed'), lookupsWith(true))
+
+    expect(issues).toEqual([])
+    expect((flow as { states: Record<string, unknown> }).states['verifying']).toEqual({
+      invoke: {
+        src: 'thing.save',
+        input: { token: { search: 'token' } },
+        onDone: { target: 'done' },
+        onError: {
+          target: 'failed',
+          actions: [{ type: 'show', params: { anchor: SCREEN_ERROR, codes: ['taken', 'failed'] } }],
+        },
+      },
+    })
+  })
+
+  it('reports such a request without a screen error, and one that writes no onError where its area starts', () => {
+    expect(expandFlow(linked('failed'), lookupsWith(false)).issues).toEqual([
+      {
+        at: AT,
+        message:
+          'thing.save fails with taken, failed and its onError shows them nowhere: no control enters verifying and its input names no field: no part has its error, and no sample.error; write its show',
+      },
+    ])
+    expect(expandFlow(linked(), lookupsWith(true)).issues).toEqual([
+      {
+        at: AT,
+        message:
+          'thing.save fails with taken, failed and the state writes no onError: verifying is where its area starts, so it has no single way back; write its onError',
+      },
+    ])
+  })
+
+  it('gives no way back to a request entered on a platform event, and shows its bare onError', () => {
+    const unwritten = expandFlow(opened(), LOOKUPS)
+    const bare = expandFlow(opened('idle'), LOOKUPS)
+
+    expect(unwritten.issues).toEqual([
+      {
+        at: ['flow', 'states', 'loading', 'invoke', 'onError'],
+        message:
+          'thing.save fails with taken, failed and the state writes no onError: loading is entered on platform.opened, not by a control; write its onError',
+      },
+    ])
+    expect((unwritten.flow as { states: Record<string, unknown> }).states['loading']).toEqual({
+      invoke: {
+        src: 'thing.save',
+        input: { name: 'sample.form.name-input' },
+        onDone: { target: 'idle' },
+      },
+    })
+    expect(bare.issues).toEqual([])
+    expect(shownOn(bare.flow)).toEqual(['sample.form.error'])
+  })
+
+  it('shows a failure on exactly the errors the derivation lists its action against', () => {
+    const cases = [
+      { flow: linked('failed'), screenError: true },
+      { flow: linked('failed'), screenError: false },
+      { flow: linked(), screenError: true },
+      { flow: opened(), screenError: false },
+      { flow: opened('idle'), screenError: false },
+    ]
+
+    expect(
+      cases.map(({ flow, screenError }) => ({
+        shown: shownOn(expandFlow(flow, lookupsWith(screenError)).flow),
+        sourced: sourcedOn(flow, screenError),
+      })),
+    ).toEqual([
+      { shown: [SCREEN_ERROR], sourced: [SCREEN_ERROR] },
+      { shown: [], sourced: [] },
+      { shown: [], sourced: [] },
+      { shown: [], sourced: [] },
+      { shown: ['sample.form.error'], sourced: ['sample.form.error'] },
     ])
   })
 })
