@@ -66,14 +66,8 @@ anchors:
     description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs, while the password breaks a rule, and while the password typed again differs.
     binding:
       - action: platform.sign-in
-        params:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
       - action: platform.sign-up
         params:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
-          name: user.sign-in.name-input
           locale: app-shell.locale-select
   user.sign-in.toggle-button:
     kind: button
@@ -85,10 +79,7 @@ anchors:
   user.sign-in.resend-button:
     kind: button
     description: "Sends the mail that verifies the email typed again; shown after a sign-up, and after a sign-in refused with email-not-verified; disabled while it sends."
-    binding:
-      action: platform.resend-verification
-      params:
-        email: user.sign-in.email-input
+    binding: { action: platform.resend-verification }
 states:
   ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
 flow:

@@ -58,11 +58,7 @@ anchors:
   user.settings.password.save-button:
     kind: button
     description: "Changes the password; disabled while the new password breaks a rule, once the password typed again has strayed from it, and while it changes; a click while only a part of it is typed again says it differs and sends nothing."
-    binding:
-      action: platform.change-password
-      params:
-        currentPassword: user.settings.password.current-password-input
-        password: user.settings.password.new-password-input
+    binding: { action: platform.change-password }
   user.settings.password.error:
     kind: error
     description: "Why the password did not change: under the current password a wrong one, under the new password one it refused, under the password typed again one that differs."
@@ -93,11 +89,7 @@ anchors:
   user.settings.email.send-button:
     kind: button
     description: Sends the mail that confirms the new email; disabled while it is sent.
-    binding:
-      action: platform.change-email
-      params:
-        email: user.settings.email.email-input
-        password: user.settings.email.password-input
+    binding: { action: platform.change-email }
   user.settings.email.message:
     kind: message
     description: "Asks to open the link of the mail sent to the new email, once the request went through; the email changes only then. A new email that has an account already gets the same words, and no mail."

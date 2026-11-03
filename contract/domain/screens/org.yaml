@@ -57,11 +57,7 @@ anchors:
   organisation.create.submit-button:
     kind: button
     description: Creates the organisation; disabled while it runs.
-    binding:
-      action: platform.organisations.create
-      params:
-        key: organisation.create.key-input
-        name: organisation.create.name-input
+    binding: { action: platform.organisations.create }
   organisation.notes.section:
     kind: section
     description: The content of the notes card of the current organisation.
@@ -177,10 +173,7 @@ anchors:
   organisation.invite.submit-button:
     kind: button
     description: Invites the account and empties the field; disabled while it runs.
-    binding:
-      action: platform.organisations.invite
-      params:
-        email: organisation.invite.email-input
+    binding: { action: platform.organisations.invite }
     roles: [ admin ]
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."

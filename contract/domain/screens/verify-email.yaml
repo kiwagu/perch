@@ -49,10 +49,7 @@ anchors:
   user.verify-email.resend-button:
     kind: button
     description: Sends a new verification link to the email typed; disabled while it sends.
-    binding:
-      action: platform.resend-verification
-      params:
-        email: user.verify-email.email-input
+    binding: { action: platform.resend-verification }
 states:
   loading: "user.verify-email.status in loading: the link is being checked."
   ready: "The message, or the error with the form that sends a new link."
