@@ -131,7 +131,7 @@ for Bun.
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
-    `[notice:<action>.<name>]`).
+    `[notice:<action>.<name>]`), in the order the text writes them.
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
@@ -195,8 +195,19 @@ for Bun.
     parameter: no `$param`, no splat, no required search key)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
-    activity a scenario names, as problems of each scenario's file). A problem of an activity
+    activity a scenario names, as problems of each scenario's file; in each text, the where,
+    the scenario sentence, a step or an expected result, a `[code:x]`, `[state:x]` or
+    `[value:x]` pairs with the anchor named last before it, a route being no anchor, and must
+    be one that anchor carries, `<anchor> never carries code <x>`; after a mail or a notice,
+    what follows speaks of it and pairs with no anchor until the text names one again; with no
+    anchor to pair with, it need only be one of the contract). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
+  - `anchorCarries(contract)`: whether an anchor carries a code, a state or a value
+    (`Carried`): one it declares or one an anchor under it, `<anchor>.<rest>`, declares (the
+    items of a composite's list, the options of a select, the eye of an input). Codes are the
+    loaded `codes`, the derived ones included; states the anchor's `states`; values the rows of
+    its choice values and its options' (a pattern row matching), or `show` and `hide` on a
+    `visibility-button`. The scenarios check pairs its brackets through it.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
     `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each
