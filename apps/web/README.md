@@ -206,7 +206,7 @@ modeling stage.
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
-  time that names no account, so the browser's other tabs hear of it. The container's runner and write
+  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below). The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). The root makes the app's domain event bus (`EventBus` of
@@ -226,14 +226,20 @@ modeling stage.
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  screens' machines, from the facts of this browser no account owns, each a key of its storage
+  another tab set (`perch.password.reset` tells `platform.password-reset`); the storage's own
+  event keeps it from echoing (a tab never hears its own write, a write that changes nothing and a
+  value kept before the tab opened tell nothing), and a key removed elsewhere tells nothing either.
+  `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a protected page left open is
   checked again when the user signs out), the ports for the session (with the memberships
   and the current organisation), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
-  (`served-build.port.ts`) and for the state of the sync (`sync-status.port.ts`),
+  (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
+  platform's events that reach the screens (`platform-events.port.ts`),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
@@ -286,7 +292,10 @@ modeling stage.
   field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
-  or actor; `false` when the state does not take the event; and the flow's effects on the
+  or actor; `false` when the state does not take the event; the platform's events reach the
+  machine while it runs, each carrying what the screen's fields hold, as the container gives them
+  (`useScreenMachine(machine, fields)`), for a move it makes, and a state that does not handle
+  one lets it pass; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
   a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move

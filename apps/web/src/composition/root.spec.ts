@@ -17,6 +17,7 @@ import {
 import { COMMANDS } from '../platform/commands.port'
 import { DEVICES } from '../platform/devices.port'
 import { ORGANISATIONS } from '../platform/organisations.port'
+import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SESSION } from '../platform/session.port'
 
 import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
@@ -26,7 +27,13 @@ import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
 import { type AppRootOptions, type AppServices, type BootStep, createAppRoot } from './root'
-import { keptAccountStart, type MemoryStorage, memoryStorage, saveDevice } from './storage'
+import {
+  keptAccountStart,
+  type MemoryStorage,
+  memoryStorage,
+  PASSWORD_RESET_KEY,
+  saveDevice,
+} from './storage'
 
 let services: AppServices | undefined
 const cleanups: Array<() => Promise<void>> = []
@@ -127,6 +134,20 @@ describe('createAppRoot', () => {
     expect(services.container.get(DEVICES)).toBe(services.devices)
     expect(services.session.current()).toBeUndefined()
     expect(failures).toEqual([])
+  })
+
+  it("tells the screens a password reset another tab of the browser made, through the browser's storage", async () => {
+    const storage = memoryStorage()
+    const { result } = await boot(storage, [], [])
+
+    services = result._unsafeUnwrap()
+
+    const heard = vi.fn()
+
+    services.container.get(PLATFORM_EVENTS).listen(heard)
+    storage.changeElsewhere(PASSWORD_RESET_KEY, 'reset-elsewhere')
+
+    expect(heard).toHaveBeenCalledWith({ type: 'platform.password-reset' })
   })
 
   it("opens the saved identity's database while it restores the session", async () => {

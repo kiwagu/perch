@@ -19,10 +19,15 @@ type Event =
   | { readonly type: 'x.carry-link'; readonly fields: { readonly 'x.y.email-input': string } }
   | { readonly type: 'user.profile.sign-out-button' }
   | { readonly type: 'organisation.notes.delete-button' }
+  | { readonly type: 'x.finish-button' }
+  | {
+      readonly type: 'platform.password-reset'
+      readonly fields: { readonly 'x.y.email-input': string }
+    }
 
 /**
- * Two saves in a chain, a button that does nothing, a flow's own move, a leaving control and a
- * control whose action destroys.
+ * Two saves in a chain, a button that does nothing, a flow's own move, a leaving control, a
+ * control whose action destroys, a platform event that moves with a field's value, and an end.
  */
 const machine = setup({
   types: {
@@ -61,6 +66,16 @@ const machine = setup({
         },
         'user.profile.sign-out-button': 'out',
         'organisation.notes.delete-button': 'deleted',
+        'x.finish-button': 'finished',
+        'platform.password-reset': {
+          target: 'moved',
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { email: { anchor: 'x.y.email-input' } },
+            fields: event.type === 'platform.password-reset' ? event.fields : {},
+          })),
+        },
       },
     },
     'saving-one': {
@@ -74,6 +89,8 @@ const machine = setup({
     'saving-two': { invoke: { src: 'save', input: () => ({ fail: false }), onDone: 'idle' } },
     out: {},
     deleted: {},
+    moved: {},
+    finished: { type: 'final' },
   },
 })
 
@@ -157,8 +174,11 @@ type Watched = ReturnType<typeof useScreenMachine<typeof watched>>
 
 const held: { screen?: Screen; watched?: Watched } = {}
 
+/** What the page's email field holds, which a platform event carries for its move. */
+const TYPED = { 'x.y.email-input': 'ann@example.test' }
+
 function Page() {
-  const running = useScreenMachine(machine)
+  const running = useScreenMachine(machine, TYPED)
 
   held.screen = running
 
@@ -192,6 +212,7 @@ const PageModule = defineModule({
 
 async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = confirming()) {
   const { session } = fakeSession()
+  const services = fakeServices(session)
   const router = createAppRouter({
     modules: [PageModule],
     session,
@@ -200,7 +221,7 @@ async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = conf
   })
 
   render(
-    <ServicesProvider services={fakeServices(session)}>
+    <ServicesProvider services={services}>
       <ConfirmGuardContext.Provider value={asking}>
         <LeaveGuardContext.Provider value={guard}>
           <RouterProvider router={router} />
@@ -216,7 +237,7 @@ async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = conf
     throw new Error('the page did not render')
   }
 
-  return { router, running }
+  return { router, running, services }
 }
 
 /** Opens the page of the machine with a background actor, and gives its running screen. */
@@ -388,6 +409,36 @@ describe('useScreenMachine', () => {
 
     await screen.findByText('there')
     expect(router.state.location.search).toEqual({ email: 'ann@example.test', view: 'read' })
+  })
+
+  it("brings a platform event to the machine, which moves with what the screen's field holds", async () => {
+    const { router, services } = await open(passing())
+
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
+  })
+
+  it('lets a platform event pass in a state that does not handle it', async () => {
+    const { running, services } = await open(passing())
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+  })
+
+  it('brings no platform event to a machine that ended', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { running, services } = await open(passing())
+
+    act(() => running.send({ type: 'x.finish-button' }))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    expect(running.actor.getSnapshot().status).toBe('done')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('asks the guard before a leaving control, and sends nothing when the user stays', async () => {
