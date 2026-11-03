@@ -196,7 +196,7 @@ actions:
       theme:
         type: string
         description: "light, dark, or system: the device's own setting, followed as it changes."
-    result: the app shows the theme at once and this device keeps it, the account's other devices untouched
+    result: the app shows the theme at once and this device keeps it; the other tabs of this browser where no account is signed in show it too
     codes: []
   reload:
     description: Loads the page again from the server.
@@ -281,6 +281,7 @@ events:
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
   password-reset: Another tab of this browser set a new password through the link of a reset mail; the answer names no account.
+  theme-set: Another tab of this browser chose the theme of this device.
   change-rejected: The server refused a change, and this device undid it.
   changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
   crashed: The open screen failed to render.
