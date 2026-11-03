@@ -527,6 +527,14 @@ describe('SignInView', () => {
     )
   })
 
+  it('says a new password was set in another tab, naming no account', () => {
+    renderView({ notice: 'password-reset-elsewhere' })
+
+    expect(noticeWith('password-reset-elsewhere').textContent).toBe(
+      'A new password was set in another tab. Sign in with it.',
+    )
+  })
+
   it('says the data leaves this device once the other tabs are closed when another tab held its delete up', () => {
     renderView({ notice: 'delete-pending' })
 

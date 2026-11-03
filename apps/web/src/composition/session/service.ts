@@ -23,6 +23,7 @@ import {
   deviceIdFrom,
   forgetNotice,
   IDENTITY_KEY,
+  leaveNotice,
   MEMBERSHIPS_KEY,
   savedIdentity,
   savedNotice,
@@ -269,6 +270,10 @@ export class SessionService implements SessionPort {
 
   clearNotice(): void {
     forgetNotice(this.#options.storage)
+  }
+
+  leaveNotice(notice: SessionNotice): void {
+    leaveNotice(this.#options.storage, notice)
   }
 
   protocolRefused(): boolean {

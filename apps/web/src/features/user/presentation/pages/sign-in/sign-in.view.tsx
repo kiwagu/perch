@@ -48,7 +48,8 @@ export interface SignInViewProps {
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
    * another device signed it out, `password-changed-elsewhere` once a change of the account's
-   * password did.
+   * password did, `password-reset-elsewhere` once another tab set a new password through a reset
+   * link, `delete-pending` while another tab still holds the data of the account signed out.
    */
   readonly notice?: SessionNotice | undefined
   /** The code of the message asking to open the verification mail, once a sign-up or a resend went through. */
@@ -112,6 +113,8 @@ function noticeText(
       return t('user.sign-in.notice.signed-out-elsewhere')
     case 'password-changed-elsewhere':
       return t('user.sign-in.notice.password-changed-elsewhere')
+    case 'password-reset-elsewhere':
+      return t('user.sign-in.notice.password-reset-elsewhere')
     case 'delete-pending':
       return t('user.sign-in.notice.delete-pending')
   }

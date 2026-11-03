@@ -12,20 +12,31 @@ export interface SignOutOptions {
 }
 
 /**
- * A word the session leaves for the sign-in page: `resend-after-sign-in` when the device was
- * signed out (its keys refused, signed out from another device, or a write landing during its
- * sign-out) while it held changes it had not sent; they are kept on the device, and signing in
- * again as the same identity sends them. `signed-out-elsewhere` when another device of the
- * identity signed this one out and nothing waited to be sent. `password-changed-elsewhere` when
- * the account's password changed (through a reset link, or on another device), which signed this
- * device out, and nothing waited to be sent. `delete-pending` when the device signed out but
- * another tab still held its databases open: they go once that tab closes them.
+ * The words left for the sign-in page (`user.sign-in.notice-message`): `resend-after-sign-in` when
+ * the device was signed out (its keys refused, signed out from another device, or a write landing
+ * during its sign-out) while it held changes it had not sent; they are kept on the device, and
+ * signing in again as the same identity sends them. `signed-out-elsewhere` when another device of
+ * the identity signed this one out and nothing waited to be sent. `password-changed-elsewhere`
+ * when the account's password changed (through a reset link, or on another device), which signed
+ * this device out, and nothing waited to be sent. `password-reset-elsewhere` when another tab of
+ * this browser set a new password through a reset link, which the tab that asked for the mail
+ * follows to the sign-in page. `delete-pending` when the device signed out but another tab still
+ * held its databases open: they go once that tab closes them.
  */
-export type SessionNotice =
-  | 'resend-after-sign-in'
-  | 'signed-out-elsewhere'
-  | 'password-changed-elsewhere'
-  | 'delete-pending'
+export const SESSION_NOTICES = [
+  'resend-after-sign-in',
+  'signed-out-elsewhere',
+  'password-changed-elsewhere',
+  'password-reset-elsewhere',
+  'delete-pending',
+] as const
+
+/** A word left for the sign-in page (`SESSION_NOTICES`). */
+export type SessionNotice = (typeof SESSION_NOTICES)[number]
+
+/** Whether `code` is a word the sign-in page says. */
+export const isSessionNotice = (code: string): code is SessionNotice =>
+  SESSION_NOTICES.some((notice) => notice === code)
 
 /** A change the gateway refused and this device undid: what the shell tells the user about. */
 export interface PushRejection {
@@ -141,6 +152,12 @@ export interface SessionPort {
   /** The word the last session left for the sign-in page, until `clearNotice`. */
   notice(): SessionNotice | undefined
   clearNotice(): void
+  /**
+   * Leaves the next sign-in page `notice`, as a screen's flow shows it there, in place of a word on
+   * why a session ended; a word on what became of the device's data (`resend-after-sign-in`,
+   * `delete-pending`), which the session left as it ended, says more and stays.
+   */
+  leaveNotice(notice: SessionNotice): void
   /**
    * Whether the gateway refused the sync protocol of the build this page runs since the page
    * loaded: the sync stopped, and stays stopped until the page loads again.

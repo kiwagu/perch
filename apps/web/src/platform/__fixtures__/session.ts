@@ -42,6 +42,7 @@ export function fakeSession(): { readonly session: SessionPort } {
       flush: refused,
       notice: () => undefined,
       clearNotice: () => {},
+      leaveNotice: () => {},
       protocolRefused: () => false,
       memberships: () => [],
       subscribeMemberships: () => () => {},

@@ -31,7 +31,9 @@ composition root, the session token and this device's id on every call). Layers:
   then signs every device out, this one included: once the gateway answered, the service has
   the session sign this device out (`signingOutEverywhere()`, named before the request goes,
   as on the channel's 4001, which a browser without a sync channel never hears), which leads to
-  the sign-in page; an answer that comes once that session has ended signs nobody out. A call that
+  the sign-in page, where the flow leaves `signed-out-elsewhere` unless the session left a word on
+  the device's data (`resend-after-sign-in`, `delete-pending`); an answer that comes once that
+  session has ended signs nobody out. A call that
   fails says so in a notice; a sign-out that failed reads the list again, unless the gateway is
   out of reach (the read would fail too).
 

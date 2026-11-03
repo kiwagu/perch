@@ -297,7 +297,10 @@ modeling stage.
   (`useScreenMachine(machine, fields)`), for a move it makes, and a state that does not handle
   one lets it pass; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
-  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
+  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
+  `user.sign-in.notice-message`, from any screen, leaves its word for the next sign-in page
+  (`SessionPort.leaveNotice`: in place of a word on why a session ended, never of one on what
+  became of the device's data, `resend-after-sign-in` or `delete-pending`), one code each, while
   a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
   for a leave nobody started here (`useLeaveNow()`); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen

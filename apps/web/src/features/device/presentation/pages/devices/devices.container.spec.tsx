@@ -17,6 +17,7 @@ import { InstallContext } from '../../../../../platform/install'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import type { SessionNotice } from '../../../../../platform/session.port'
 import { ThemeContext } from '../../../../../platform/theme'
 import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
 import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
@@ -31,6 +32,9 @@ let devices: FakeDevices
 
 /** How many times the page had the session sign this device out. */
 let signedOutHere = 0
+
+/** The words the page left for the sign-in page, oldest first. */
+let leftForSignIn: SessionNotice[] = []
 
 /** Whether Ann is still signed in, and who hears the account change. */
 let signedIn = true
@@ -48,11 +52,15 @@ function signOut(): void {
 /** The devices page in the application's frame, for Ann signed in, over `devices`. */
 async function openPage(): Promise<void> {
   signedOutHere = 0
+  leftForSignIn = []
   signedIn = true
   accountListeners.clear()
 
   const session = {
     ...fakeSession().session,
+    leaveNotice: (notice: SessionNotice) => {
+      leftForSignIn.push(notice)
+    },
     current: () => (signedIn ? ann : undefined),
     subscribe: (listener: (user: typeof ann | undefined) => void) => {
       accountListeners.add(listener)
@@ -204,6 +212,8 @@ describe('DevicesContainer', () => {
 
     await waitFor(() => expect(signedOutHere).toBe(1))
     expect(devices.calls).toEqual([['list'], ['everywhere']])
+    // The session keeps a word it left on the device's data in place of this one.
+    await waitFor(() => expect(leftForSignIn).toEqual(['signed-out-elsewhere']))
   })
 
   it('neither reads the devices again nor says they could not be read once the account signs out', async () => {
