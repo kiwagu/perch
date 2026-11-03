@@ -59,6 +59,7 @@ flow:
   states:
     verifying:
       description: The token of the link is being exchanged.
+      meta: { renders: [ user.verify-email.status ] }
       invoke:
         src: platform.verify-email
         input: { token: { search: token } }
@@ -77,11 +78,14 @@ flow:
     verified:
       description: The message says the email was verified before, beside user.verify-email.sign-in-link.
       type: final
+      meta: { renders: [ user.verify-email.sign-in-link ] }
     resend-offered:
       description: The error says why the link did not verify the email; the form sends a new link to the email typed.
+      meta: { renders: [ user.verify-email.form, user.verify-email.email-input, user.verify-email.resend-button ] }
       on:
         user.verify-email.resend-button: resending
     resending:
+      meta: { renders: [ user.verify-email.form, user.verify-email.email-input, user.verify-email.resend-button ] }
       invoke:
         src: platform.resend-verification
         input: { email: user.verify-email.email-input }
@@ -97,6 +101,7 @@ flow:
             - show: user.verify-email.error
     sent:
       description: The message says a new link is on its way to the email typed; the form sends another.
+      meta: { renders: [ user.verify-email.form, user.verify-email.email-input, user.verify-email.resend-button ] }
       on:
         user.verify-email.resend-button: resending
     done:

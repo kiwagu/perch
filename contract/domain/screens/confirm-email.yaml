@@ -51,6 +51,7 @@ flow:
   states:
     confirming:
       description: The token of the link is being exchanged.
+      meta: { renders: [ user.confirm-email.status ] }
       invoke:
         src: platform.confirm-email
         input: { token: { search: token } }
@@ -71,9 +72,11 @@ flow:
     done-here:
       description: The message says the email is the new one, beside user.confirm-email.profile-link.
       type: final
+      meta: { renders: [ user.confirm-email.profile-link ] }
     done:
       description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
       type: final
+      meta: { renders: [ user.confirm-email.sign-in-link ] }
     done-elsewhere:
       description: The message says the email is the new one; another account stays signed in on this device, and no link is offered.
       type: final

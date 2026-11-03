@@ -92,6 +92,7 @@ flow:
   states:
     sign-in:
       description: The form in the mode sign-in.
+      meta: { renders: [ user.sign-in.forgot-link ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -115,6 +116,7 @@ flow:
         user.sign-in.submit-button: signing-in
     sign-up:
       description: "The form in the mode sign-up, with the password rules (all kept), the password confirmation and the name input."
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       on:
         user.sign-in.toggle-button:
           target: sign-in
@@ -136,6 +138,7 @@ flow:
           - target: signing-up
     password-weak:
       description: "The form in the mode sign-up while the password breaks a rule: the list marks the rules it keeps, and the password typed again is not judged yet."
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       on:
         user.sign-in.password-input:
           - guard: passwordBreaksRules
@@ -150,6 +153,7 @@ flow:
             - clear: user.sign-in.error
     passwords-differ:
       description: The form in the mode sign-up while the password typed again differs.
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       entry:
         - show: { user.sign-in.error: [ passwords-differ ] }
       exit:
@@ -167,6 +171,7 @@ flow:
           target: sign-in
           description: The password rules, the password confirmation and the name input go.
     signing-in:
+      meta: { renders: [ user.sign-in.forgot-link ] }
       entry:
         - clear: user.sign-in.error
       invoke:
@@ -187,6 +192,7 @@ flow:
             actions:
               - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
     signing-up:
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
         src: platform.sign-up
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
@@ -197,6 +203,7 @@ flow:
             - show: { user.sign-in.mail-message: [ check-your-mail ] }
     check-mail:
       description: The form in the mode sign-in with the email kept and the resend button.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -224,6 +231,7 @@ flow:
               - clear: user.sign-in.mail-message
     unverified:
       description: The form in the mode sign-in with the error and the resend button.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -247,6 +255,7 @@ flow:
             actions:
               - clear: user.sign-in.error
     resending:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       entry:
         - clear: user.sign-in.error
       invoke:

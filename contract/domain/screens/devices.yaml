@@ -75,6 +75,7 @@ flow:
           actions:
             - show: app-shell.notice-message
     confirming:
+      meta: { renders: [ device.everywhere.dialog ] }
       on:
         device.everywhere.dialog.confirm-button: signing-out-everywhere
         device.everywhere.dialog.cancel-button: viewing
