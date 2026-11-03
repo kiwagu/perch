@@ -34,8 +34,6 @@ anchors:
     binding: { route: /sign-in }
   user.verify-email.error:
     kind: error
-    description: Why the link did not verify the email, or why a new link was not sent.
-    codes: [ link-invalid, link-expired, other-account, rate-limited, failed ]
   user.verify-email.form:
     kind: form
     description: Sends a new verification link to the email typed; shown with the error, and again after a resend.
@@ -48,11 +46,8 @@ anchors:
         email: user.verify-email.email-input
   user.verify-email.resend-button:
     kind: button
-    description: Sends a new verification link to the email typed; disabled while it sends.
-    binding:
-      action: platform.resend-verification
-      params:
-        email: user.verify-email.email-input
+    description: Sends a new verification link to the email typed.
+    binding: { action: platform.resend-verification }
 states:
   loading: "user.verify-email.status in loading: the link is being checked."
   ready: "The message, or the error with the form that sends a new link."
@@ -78,10 +73,7 @@ flow:
             description: The email was verified before; nothing is signed in.
             actions:
               - show: { user.verify-email.message: [ verified-before ] }
-        onError:
-          target: resend-offered
-          actions:
-            - show: user.verify-email.error
+        onError: resend-offered
     verified:
       description: The message says the email was verified before, beside user.verify-email.sign-in-link.
       type: final
@@ -100,7 +92,6 @@ flow:
             - show: { user.verify-email.message: [ check-your-mail ] }
         onError:
           target: resend-offered
-          description: The error says why the new link was not sent; a message of an earlier resend goes.
           actions:
             - clear: user.verify-email.message
             - show: user.verify-email.error

@@ -8,15 +8,12 @@ entry: [ not-found.page.heading ]
 anchors:
   not-found.page.heading:
     kind: heading
-    description: Says no page is at this address.
   not-found.page.sign-in-link:
     kind: link
-    description: Leads a guest to sign in.
     binding: { route: /sign-in }
     roles: [ guest ]
   not-found.page.profile-link:
     kind: link
-    description: Leads a signed-in account to its profile.
     binding: { route: /me }
     roles: [ identity, member, admin ]
 wireframe: |-

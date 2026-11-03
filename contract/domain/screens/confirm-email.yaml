@@ -39,8 +39,6 @@ anchors:
     roles: [ identity ]
   user.confirm-email.error:
     kind: error
-    description: "Why the link did not change the email: unknown or used before, too old, or the new email has got an account meanwhile."
-    codes: [ link-invalid, link-expired, rate-limited, failed ]
 states:
   loading: "user.confirm-email.status in loading: the link is being checked."
   ready: "The message with its link, or the error."
@@ -59,22 +57,17 @@ flow:
         onDone:
           - target: done-here
             guard: thisAccount
-            description: The message says the email is the new one, beside user.confirm-email.profile-link.
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
           - target: done
             guard: nobodyHere
-            description: The message says the email is the new one, beside user.confirm-email.sign-in-link.
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
           - target: done-elsewhere
             description: "Another account is signed in on this device: the message says the email is the new one, with no link, since signing in needs that other account signed out first."
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
-        onError:
-          target: failed
-          actions:
-            - show: user.confirm-email.error
+        onError: failed
     done-here:
       description: The message says the email is the new one, beside user.confirm-email.profile-link.
       type: final
