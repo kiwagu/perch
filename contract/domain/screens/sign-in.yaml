@@ -20,7 +20,6 @@ anchors:
   user.sign-in.error:
     kind: error
     description: "Why the last attempt failed, under the password typed again when that one differs; the next attempt or a switch of mode clears it."
-    codes: [ invalid-credentials, email-not-verified, rate-limited, other-account, sign-up-rejected, passwords-differ, name-required, name-too-long, failed ]
     fields:
       passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:

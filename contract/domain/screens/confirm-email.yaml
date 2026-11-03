@@ -40,7 +40,6 @@ anchors:
   user.confirm-email.error:
     kind: error
     description: "Why the link did not change the email: unknown or used before, too old, or the new email has got an account meanwhile."
-    codes: [ link-invalid, link-expired, rate-limited, failed ]
 states:
   loading: "user.confirm-email.status in loading: the link is being checked."
   ready: "The message with its link, or the error."

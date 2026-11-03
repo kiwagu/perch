@@ -62,7 +62,6 @@ anchors:
   user.settings.password.error:
     kind: error
     description: "Why the password did not change: under the current password a wrong one, under the new password one it refused, under the password typed again one that differs."
-    codes: [ invalid-credentials, password-rejected, passwords-differ, rate-limited, failed ]
     fields:
       invalid-credentials: user.settings.password.current-password-input
       password-rejected: user.settings.password.new-password-input
