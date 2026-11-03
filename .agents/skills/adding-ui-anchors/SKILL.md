@@ -78,13 +78,16 @@ code and the tests follow; the checks hold them to the contract.
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
    bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). A button leaves out the params the fields of its part
-   pass to its action in their own bindings, and writes only a value no field passes
+   its anchor to run it without asking). A button may leave out the params the fields of its
+   part pass to its action in their own bindings; a param it writes wins over theirs, key by key
    (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
-   `locale: app-shell.locale-select`). A request leaves out its failure: an invoke whose action
-   fails with codes clears its part's error on entry and goes back the one way it came, showing
-   the failure there, and a state where its area starts, or with no single way back, writes its
-   `onError`. A list the platform declares as a composite is never written: the secret input
+   `locale: app-shell.locale-select`, which no field passes). A request leaves out its failure:
+   an invoke whose action fails with codes clears its part's error on entry and goes back the
+   one way it came, on a control, showing the failure there; a state where its area starts,
+   one a platform or data event enters, or one with no single way back writes its `onError`,
+   and one written as its target alone gets the show on its part's error, else on
+   `<screen>.error` (also when no control enters it and its input names no field, as a request
+   a link starts). A list the platform declares as a composite is never written: the secret input
    writes `composite: password-rules` in place of the password rule list and its items. A
    `description` the engine says itself is left out too (a heading, a link to a screen, a secret
    input, an error, a composite's anchors), and `bun run contract:coverage --descriptions` lists

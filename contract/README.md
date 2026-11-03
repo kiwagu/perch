@@ -517,9 +517,12 @@ out, and the loader derives it, the same way every time:
   `onError` follows the pattern of a request: entering its state clears the error its failure
   shows on (unless the state's `entry` clears it already), and a failure goes back the one way
   it came, showing its codes on that error. The way back is the one sibling state whose
-  transitions on controls enter the invoking state. The error is `<part>.error` of the part
+  transitions on controls enter the invoking state: only a control makes one, so a state a
+  platform event or a data event enters has none. The error is `<part>.error` of the part
   those controls sit in (of the fields the invoke's `input` names, when no control enters it),
-  else `<screen>.error`. So the state `changing` of `user.settings` may leave out its `entry`
+  else `<screen>.error`; with no part at all, no control entering it and its `input` naming no
+  field (a request a link starts, its input a search parameter), it is `<screen>.error`. So
+  the state `changing` of `user.settings` may leave out its `entry`
   and its `onError`: the loader clears `user.settings.password.error` on entry and adds the
   `onError` back to `kept`, the one state whose `user.settings.password.save-button` enters it,
   showing the failure of `platform.change-password` on that error. An `onError` written as its
@@ -528,8 +531,11 @@ out, and the loader derives it, the same way every time:
   `user.reset-password`), is written in full and wins. A state with no single way back writes
   its `onError`, and the check names the reason when it does not: one where its flow or its
   region starts (even when a sibling enters it too), one two states enter, one an invoke's
-  outcome enters, one entered from outside its area. So does a state whose failure finds no
-  error, its target alone written or not. An action that fails with no code gets nothing.
+  outcome enters, one a platform event or a data event enters, one entered from outside its
+  area. So does a state whose failure finds no error, its target alone written or not. A state
+  with no way back may write its `onError` as its target alone, which still gets the show: a
+  request a link starts where its flow starts writes `onError: <state>`, and its failure shows
+  on `<screen>.error`. An action that fails with no code gets nothing.
 - **The region of a button.** A button bound to one action that no state of the flow
   handles gets its region, when the root of the flow has one parallel state. The region is
   named by the button without its screen and its kind (`organisation.notes.add-button` gives

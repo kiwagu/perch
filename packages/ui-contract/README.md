@@ -278,7 +278,8 @@ for Bun.
     <target>`; per screen both sides hold with a flow on either side, the lines of its flow
     added and removed (a flow one side lacks has none, so a flow added or removed whole shows
     every line; a screen added or removed whole is a change of the screens alone),
-    `flowLines(flow)`: `initial <state>`, `<path> address <path> <search as JSON, keys
+    `flowLines(flow)` (an internal helper of the hand-over, `handoff/flow-lines.ts`, not
+    exported from the root): `initial <state>`, `<path> address <path> <search as JSON, keys
     sorted>` (those the state's address has), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
@@ -314,7 +315,8 @@ for Bun.
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
     between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
-    `listDescriptions(contract)` (`handoff/descriptions.ts`, behind `coverage --descriptions`)
+    `listDescriptions(contract)` (an internal helper of the coverage command,
+    `handoff/descriptions.ts`, behind `coverage --descriptions`, not exported from the root)
     lists as `<anchor>: <description>` every written description equal to the one the engine
     says itself, for the developer to drop; an anchor a composite derives is never listed.
   - `parameterSample(parameter, slot)`: the value of a route parameter a link carries in a
