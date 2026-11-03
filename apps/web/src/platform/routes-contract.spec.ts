@@ -128,6 +128,12 @@ describe('the binding a route is held to', () => {
 
     expect(heldTo(route, now, [was])).toBe(was)
     expect(heldTo(route, now, [{ ...was, screen: 'other' }])).toBe(now)
+    expect(
+      heldTo(route, now, [
+        { ...was, binding: bindingSchema.parse({ path: '/other', roles: ['identity'] }) },
+      ]),
+    ).toBe(now)
+    expect(heldTo(route, now, [])).toBe(now)
   })
 
   it('is the binding now, which it fails, when the route equals neither', () => {
