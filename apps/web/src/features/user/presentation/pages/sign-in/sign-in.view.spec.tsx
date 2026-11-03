@@ -18,7 +18,14 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
   }
 
   renderWithProviders(
-    <SignInView mode="sign-in" showResend={false} can={() => true} {...handlers} {...props} />,
+    <SignInView
+      startEmail=""
+      mode="sign-in"
+      showResend={false}
+      can={() => true}
+      {...handlers}
+      {...props}
+    />,
     { locale, es },
   )
 
@@ -121,6 +128,22 @@ describe('SignInView', () => {
     expect(onToggleMode).toHaveBeenCalledExactlyOnceWith({
       password: 'secret-ann',
       confirmation: '',
+    })
+  })
+
+  it('starts with the email a page carried over, and signs in with the email as typed', () => {
+    const { onSubmit } = renderView({ startEmail: 'ann@example.test' })
+
+    expect(input('user.sign-in.email-input').value).toBe('ann@example.test')
+
+    type('user.sign-in.password-input', 'secret-ann')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      email: 'ann@example.test',
+      password: 'secret-ann',
+      confirmation: '',
+      name: '',
     })
   })
 
@@ -293,6 +316,7 @@ describe('SignInView', () => {
 
   it('describes the password typed again by its error exactly while the passwords differ', () => {
     const props: SignInViewProps = {
+      startEmail: '',
       mode: 'sign-up',
       showResend: false,
       can: () => true,

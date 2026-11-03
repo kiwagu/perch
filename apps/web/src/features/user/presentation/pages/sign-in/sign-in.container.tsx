@@ -6,6 +6,7 @@ import { useLeaveNow } from '../../../../../platform/leave-now'
 import { useService } from '../../../../../platform/module'
 import { HOME_PATH } from '../../../../../platform/router'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
+import { useSearchStart } from '../../../../../platform/search-start'
 import { SESSION } from '../../../../../platform/session.port'
 import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
 import { createSignInMachine } from '../../../application/sign-in-machine'
@@ -18,9 +19,14 @@ const PASSWORD_INPUTS = {
   confirmation: 'user.sign-in.password-confirmation-input',
 } as const
 
+/**
+ * The sign-in page: its flow run as its machine, the email field starting with the email the
+ * address carries (`{ search: email }`), the word the last session left read once.
+ */
 export function SignInContainer() {
   const service = useService(SIGN_IN_SERVICE)
   const session = useService(SESSION)
+  const startEmail = useSearchStart('email')
   // The word the last session left stays on the page while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
@@ -72,6 +78,7 @@ export function SignInContainer() {
 
   return (
     <SignInView
+      startEmail={startEmail}
       mode={mode}
       error={state.context.error}
       notice={notice}

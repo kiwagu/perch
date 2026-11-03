@@ -53,7 +53,13 @@ export const UserModule = defineModule({
     SettingsPage: SettingsContainer,
   },
   routes: [
-    { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
+    // A page that moves here may carry the email typed there.
+    {
+      path: '/sign-in',
+      page: 'SignInPage',
+      guard: 'guest',
+      search: z.object({ email: z.string().max(254).optional() }),
+    },
     {
       path: '/verify-email',
       page: 'VerifyEmailPage',

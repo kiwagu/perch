@@ -98,7 +98,7 @@ describe('UserModule', () => {
         search: route.search === undefined ? undefined : Object.keys(route.search.shape),
       })),
     ).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: undefined },
+      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: ['email'] },
       { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
       {
         path: '/forgot-password',

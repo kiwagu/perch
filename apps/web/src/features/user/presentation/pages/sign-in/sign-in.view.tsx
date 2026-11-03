@@ -41,6 +41,8 @@ export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-
 export type PasswordField = keyof Passwords
 
 export interface SignInViewProps {
+  /** The email the field starts with: the one a page that moved here carried over, or none. */
+  readonly startEmail: string
   readonly mode: 'sign-in' | 'sign-up'
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
@@ -128,7 +130,7 @@ export function SignInView(props: SignInViewProps) {
   // The rules of a new password describe the password while an account is created.
   const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
-    email: '',
+    email: props.startEmail,
     password: '',
     confirmation: '',
     name: '',

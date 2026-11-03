@@ -2,10 +2,11 @@
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { err, errAsync, okAsync, ResultAsync } from 'neverthrow'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
@@ -79,7 +80,7 @@ function UnsavedProbe() {
   return null
 }
 
-function renderSignIn(session: SessionPort) {
+function renderSignIn(session: SessionPort, at = '/sign-in') {
   const TestModule = defineModule({
     id: 'test',
     providers: [
@@ -94,7 +95,12 @@ function renderSignIn(session: SessionPort) {
       Forgot: () => <p>forgot</p>,
     },
     routes: [
-      { path: '/sign-in', page: 'SignIn', guard: 'guest' },
+      {
+        path: '/sign-in',
+        page: 'SignIn',
+        guard: 'guest',
+        search: z.object({ email: z.string().max(254).optional() }),
+      },
       { path: '/me', page: 'Me', guard: 'authenticated' },
       { path: '/forgot-password', page: 'Forgot' },
     ],
@@ -107,7 +113,7 @@ function renderSignIn(session: SessionPort) {
         <Outlet />
       </NoticeProvider>
     ),
-    history: createMemoryHistory({ initialEntries: ['/sign-in'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   })
 
   render(
@@ -141,6 +147,33 @@ const metRules = () =>
     )
 
 describe('SignInContainer', () => {
+  it('starts with the email the address carries, and says once the word left for it', async () => {
+    const clearNotice = vi.fn()
+    const session: SessionPort = {
+      ...fakeSession().session,
+      notice: () => 'password-reset-elsewhere',
+      clearNotice,
+    }
+
+    renderSignIn(session, '/sign-in?email=ann%40example.test')
+
+    expect(
+      ((await screen.findByTestId('user.sign-in.email-input')) as HTMLInputElement).value,
+    ).toBe('ann@example.test')
+    expect(screen.getByTestId('user.sign-in.notice-message').getAttribute('data-code')).toBe(
+      'password-reset-elsewhere',
+    )
+    expect(clearNotice).toHaveBeenCalled()
+  })
+
+  it('starts with an empty email without one in the address', async () => {
+    renderSignIn(fakeSession().session)
+
+    expect(
+      ((await screen.findByTestId('user.sign-in.email-input')) as HTMLInputElement).value,
+    ).toBe('')
+  })
+
   it('moves to ask for a reset mail with the email typed, never the password', async () => {
     const router = renderSignIn(fakeSession().session)
 
