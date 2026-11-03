@@ -43,28 +43,48 @@ test.describe('Set a new password in a second tab while the first waits for the 
       await expect(resetRequested(page)).toBeVisible()
     })
 
-    await test.step('3. In a second tab, open the link of [mail:request-password-reset], enter the new password into [user.reset-password.password-input] and [user.reset-password.password-confirmation-input], and click [user.reset-password.submit-button]', async () => {
-      const second = await page.context().newPage()
+    const resetAt =
+      await test.step('3. In a second tab, open the link of [mail:request-password-reset], enter the new password into [user.reset-password.password-input] and [user.reset-password.password-confirmation-input], and click [user.reset-password.submit-button]', async () => {
+        const second = await page.context().newPage()
 
-      await openResetMail(second, data.email, 1)
-      await appReady(second)
-      await enterNewPassword(second, data.newPassword)
-      // Expected: After step 3 the second tab's [user.reset-password.message] carries
-      //   [code:password-reset]
-      await expect(second.getByTestId('user.reset-password.message')).toHaveAttribute(
-        'data-code',
-        'password-reset',
-      )
-    })
+        await openResetMail(second, data.email, 1)
+        await appReady(second)
+
+        const answered = second.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            new URL(response.url()).pathname.endsWith('/auth/reset-password'),
+        )
+
+        await enterNewPassword(second, data.newPassword)
+        await answered
+
+        // The moment the gateway set the new password, which the deadline below counts from.
+        const at = Date.now()
+
+        // Expected: After step 3 the second tab's [user.reset-password.message] carries
+        //   [code:password-reset]
+        await expect(second.getByTestId('user.reset-password.message')).toHaveAttribute(
+          'data-code',
+          'password-reset',
+        )
+
+        return at
+      })
 
     // Expected: Within 5 seconds of step 3 the first tab is on [/sign-in],
     //   [user.sign-in.email-input] holds the email and [user.sign-in.notice-message] carries
     //   [code:password-reset-elsewhere]
-    await expectPathname(page, '/sign-in', 5_000)
-    await expect(page.getByTestId('user.sign-in.email-input')).toHaveValue(data.email, {
-      timeout: 5_000,
-    })
-    await expect(signInNotice(page, 'password-reset-elsewhere')).toBeVisible({ timeout: 5_000 })
+    // One deadline for the three, from the reset's answer; a timeout of 0 would mean none.
+    const left = Math.max(1, resetAt + 5_000 - Date.now())
+
+    await Promise.all([
+      expectPathname(page, '/sign-in', left),
+      expect(page.getByTestId('user.sign-in.email-input')).toHaveValue(data.email, {
+        timeout: left,
+      }),
+      expect(signInNotice(page, 'password-reset-elsewhere')).toBeVisible({ timeout: left }),
+    ])
 
     await test.step('4. In the first tab, enter the new password into [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
