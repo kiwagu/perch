@@ -217,8 +217,6 @@ flow:
                 onError:
                   target: open
                   description: The form stays open with what was typed.
-                  actions:
-                    - show: organisation.create.error
         note-items:
           description: The notes' items; one note is edited at a time, the one acted on last.
           initial: idle
@@ -245,10 +243,7 @@ flow:
                 onDone:
                   target: idle
                   description: The item shows the new text.
-                onError:
-                  target: editing
-                  actions:
-                    - show: organisation.notes.error
+                onError: editing
             deleting:
               invoke:
                 src: note.deleteNote
@@ -256,10 +251,7 @@ flow:
                 onDone:
                   target: idle
                   description: The item leaves the list.
-                onError:
-                  target: idle
-                  actions:
-                    - show: organisation.notes.error
+                onError: idle
         invite:
           by: organisation.invite.submit-button
           onDone:

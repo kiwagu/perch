@@ -71,10 +71,7 @@ flow:
             description: "Another account is signed in on this device: the message says the email is the new one, with no link, since signing in needs that other account signed out first."
             actions:
               - show: { user.confirm-email.message: [ email-changed ] }
-        onError:
-          target: failed
-          actions:
-            - show: user.confirm-email.error
+        onError: failed
     done-here:
       description: The message says the email is the new one, beside user.confirm-email.profile-link.
       type: final

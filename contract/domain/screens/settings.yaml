@@ -203,8 +203,6 @@ flow:
                   guard: confirmationFollows
             changing:
               description: The password is being changed; the error of the last attempt goes.
-              entry:
-                - clear: user.settings.password.error
               invoke:
                 src: platform.change-password
                 input: { currentPassword: user.settings.password.current-password-input, password: user.settings.password.new-password-input }
@@ -215,11 +213,6 @@ flow:
                     - clear: user.settings.password.current-password-input
                     - clear: user.settings.password.new-password-input
                     - clear: user.settings.password.password-confirmation-input
-                onError:
-                  target: kept
-                  description: The error says why the password did not change; the form stays as typed.
-                  actions:
-                    - show: user.settings.password.error
         email:
           description: Changing the account's email.
           initial: idle

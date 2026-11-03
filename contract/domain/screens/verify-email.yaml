@@ -75,10 +75,7 @@ flow:
             description: The email was verified before; nothing is signed in.
             actions:
               - show: { user.verify-email.message: [ verified-before ] }
-        onError:
-          target: resend-offered
-          actions:
-            - show: user.verify-email.error
+        onError: resend-offered
     verified:
       description: The message says the email was verified before, beside user.verify-email.sign-in-link.
       type: final
