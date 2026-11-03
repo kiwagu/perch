@@ -8,6 +8,13 @@ import { vocabularyProblems } from './vocabulary'
 const printed = (contract = sampleContract()): string[] =>
   vocabularyProblems(contract).map(formatProblem)
 
+const composite = {
+  description: 'The rules a new password keeps.',
+  list: 'password-rule-list',
+  itemState: 'current',
+  items: { length: '10 to 35 characters.' },
+}
+
 describe('vocabularyProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -141,6 +148,30 @@ describe('vocabularyProblems', () => {
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not a reserved anchor of the vocabulary',
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not an anchor of the app-shell screen',
       'contract/domain/platform.yaml:1: reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
+    ])
+  })
+  it('wants a row for every composite of the platform, and a composite for every row', () => {
+    const declared = sampleContract()
+
+    declared.screens.platform.composites = { 'password-rules': composite }
+    expect(vocabularyProblems(declared).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"]: "password-rules" is not a composite of the vocabulary',
+    ])
+
+    const documented = sampleContract()
+
+    documented.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(documented).map(formatProblem)).toEqual([
+      'contract/vocabulary.md:1: composite "password-rules" is documented but undeclared',
+    ])
+  })
+  it('wants the item state of a composite among the row states', () => {
+    const contract = sampleContract()
+
+    contract.screens.platform.composites = { 'password-rules': { ...composite, itemState: 'met' } }
+    contract.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(contract).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"].itemState[0]: "met" is not a row state of the vocabulary',
     ])
   })
   it('takes a choice-values anchor derived only through a suffix its base lists in derived', () => {

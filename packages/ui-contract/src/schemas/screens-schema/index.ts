@@ -4,6 +4,7 @@ export {
   anchorDefSchema,
   asksSchema,
   bindingRefSchema,
+  derivedFromSchema,
   modelFieldPathSchema,
   sourceSchema,
 } from './anchor'
@@ -28,5 +29,5 @@ export {
   platformNoticeSchema,
 } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
-export { platformSchema } from './platform'
+export { type PlatformComposite, platformCompositeSchema, platformSchema } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'

@@ -1,9 +1,12 @@
 /**
  * Reads `contract/vocabulary.md`: the closed lists of the contract, one `## ` section
- * each, as Markdown tables whose first cell is the key. The sections are fixed; a
- * missing, unknown or repeated section, a row with the wrong number of cells or with an
- * empty cell (only the Playwright cell of a kind may stay empty), a key listed twice and a
- * missing `Contract version: N` line are problems.
+ * each, as Markdown tables whose first cell is the key, after the Grammar in prose: the kinds,
+ * the derived suffixes, the attributes, the app, container and row states, the codes, the
+ * choice values, the screen names in use, the roles, the reserved anchors and the composites
+ * the platform declares. The sections are fixed; a missing section (but the composites, which a
+ * vocabulary written before them lacks), an unknown or repeated one, a row with the wrong number
+ * of cells or with an empty cell (only the Playwright cell of a kind may stay empty), a key
+ * listed twice and a missing `Contract version: N` line are problems.
  */
 
 import { VOCABULARY_FILE } from './paths'
@@ -27,6 +30,7 @@ export interface Vocabulary {
   screenNames: Record<string, string>
   roles: Record<string, string>
   reserved: Record<string, string>
+  composites: Record<string, string>
 }
 
 export const VOCABULARY_SECTIONS = [
@@ -42,6 +46,7 @@ export const VOCABULARY_SECTIONS = [
   'Screen names in use',
   'Roles',
   'Reserved anchors',
+  'Composites',
 ] as const
 
 type Section = (typeof VOCABULARY_SECTIONS)[number]
@@ -64,10 +69,17 @@ const COLUMNS: Readonly<Record<Exclude<Section, 'Grammar'>, readonly string[]>> 
   'Screen names in use': ['Screen', 'Meaning'],
   Roles: ['Role', 'Meaning'],
   'Reserved anchors': ['Anchor', 'Meaning'],
+  Composites: ['Composite', 'Meaning'],
 }
 
 /** The one column a row may leave empty: a kind no Playwright locator finds. */
 const OPTIONAL_COLUMN = { section: 'Kinds', column: 'Playwright' } as const
+
+/**
+ * The sections a vocabulary written before them may lack: a missing one reads as an empty
+ * table, so an older contract still loads, and the check asks for it once a row is wanted.
+ */
+const LATER_SECTIONS: ReadonlySet<Section> = new Set(['Composites'])
 
 const VERSION_LINE = /^Contract version: (\d+)$/m
 const SEPARATOR_ROW = /^\|[\s:|-]+\|$/
@@ -231,7 +243,7 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
   const version = VERSION_LINE.exec(markdown)?.[1]
 
   for (const section of VOCABULARY_SECTIONS) {
-    if (!sections.has(section)) {
+    if (!sections.has(section) && !LATER_SECTIONS.has(section)) {
       problems.push({ file: VOCABULARY_FILE, message: `missing section "${section}"` })
     }
   }
@@ -260,6 +272,7 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
     screenNames: simple('Screen names in use'),
     roles: simple('Roles'),
     reserved: simple('Reserved anchors'),
+    composites: simple('Composites'),
   }
 
   return { vocabulary, problems }

@@ -1,18 +1,22 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
- * it renames, the derived parts (a password input's visibility-button among them), the codes and
- * the error fields it adds or removes on the anchors both hold (written or derived, so a
- * constraint added to the model shows as the code it gives), the
- * fields that start or stop holding input, the actions that leave what the user typed behind
- * and how each leave that would lose it asks, the notices the platform actions declare, and the
- * transitions it adds or removes in each activity both contracts hold.
+ * it renames, the derived parts (a password input's visibility-button among them), the
+ * composites the platform declares, the codes, the states and the error fields it adds or
+ * removes on the anchors both hold (written or derived, so a constraint added to the model
+ * shows as the code it gives), the fields that start or stop holding input, the actions that
+ * leave what the user typed behind and how each leave that would lose it asks, the notices the
+ * platform actions declare, the transitions it adds or removes in each activity both contracts
+ * hold, and the lines of the flow it adds or removes in each screen both hold (a flow added or
+ * removed whole, every line; so a contract written shorter that loads to the same flows shows no
+ * change).
  */
 
 import { type Contract, codesOf, declaredAnchors } from '../check'
-import type { Activity, AnchorDef } from '../files'
+import type { Activity, AnchorDef, Flow } from '../files'
 
 import { branchesOf } from './activities'
+import { flowLines } from './flow-lines'
 
 export interface Change {
   added: string[]
@@ -23,9 +27,13 @@ export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
   /** As `<anchor>.<suffix>`, the derived parts the anchors both contracts hold render. */
   derived: Change
+  /** By name, the composites the platform declares. */
+  composites: Change
   codes: Change
   /** As `<anchor> <code>`, on the anchors both contracts hold (a renamed one by its new name). */
   anchorCodes: Change
+  /** As `<anchor> <state>`, the data-states of the anchors both contracts hold, renamed as above. */
+  anchorStates: Change
   /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
   errorFields: Change
   /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
@@ -44,6 +52,13 @@ export interface ContractChanges {
   fields: Change
   /** By id; per activity both hold, its transitions as `<state> on <anchor> -> <target>`. */
   activities: Change & { transitions: Record<string, Change> }
+  /**
+   * Per screen both contracts hold with a flow on either side, by its id, the lines of the flow
+   * (`flowLines`: initial states, addresses, entries, exits, transitions with their targets,
+   * guards and effects, invokes and their outcomes, final states; descriptions aside), a flow
+   * one side lacks having none.
+   */
+  flows: Record<string, Change>
 }
 
 const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
@@ -183,6 +198,35 @@ function activityChanges(
   }
 }
 
+/** Each screen's flow, by the screen's id, undefined for a screen without one. */
+const flowsOf = (contract: Contract | undefined): Map<string, Flow | undefined> =>
+  new Map((contract?.screens.screens ?? []).map(({ id, flow }) => [id, flow]))
+
+/** The lines of a flow, none for a screen without one. */
+const linesOf = (flow: Flow | undefined): string[] => (flow === undefined ? [] : flowLines(flow))
+
+/**
+ * Per screen both contracts hold, with a flow on either side, the lines of the flow added and
+ * removed: a flow one side lacks has no lines, so a flow added or removed whole shows every line.
+ * A screen added or removed whole is a change of `screens` alone.
+ */
+function flowChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['flows'] {
+  const was = flowsOf(before)
+
+  return Object.fromEntries(
+    [...flowsOf(after)].flatMap(([id, flow]) => {
+      const old = was.get(id)
+
+      return !was.has(id) || (old === undefined && flow === undefined)
+        ? []
+        : [[id, changeOf(linesOf(old), linesOf(flow))]]
+    }),
+  )
+}
+
 /** The changes from `before` to `after`; a contract left undefined is an empty one. */
 export function diffContracts(
   before: Contract | undefined,
@@ -193,11 +237,16 @@ export function diffContracts(
   return {
     anchors,
     derived: carriedChanges(before, after, anchors.renamed, (def) => def.derived ?? [], '.'),
+    composites: changeOf(
+      Object.keys(before?.screens.platform.composites ?? {}),
+      Object.keys(after?.screens.platform.composites ?? {}),
+    ),
     codes: changeOf(
       before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
       after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
+    anchorStates: carriedChanges(before, after, anchors.renamed, (def) => def.states ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
       Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
     ),
@@ -223,5 +272,6 @@ export function diffContracts(
     ),
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
+    flows: flowChanges(before, after),
   }
 }
