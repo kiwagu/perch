@@ -549,3 +549,73 @@ The link of a notice opens a screen whose every route needs no parameter, and ne
 ```markdown
 - [notice:confirm-email-change.email-changed] reaches the old address
 ```
+
+## 15. What a state renders
+
+An anchor that only some states of a screen render is listed in `meta.renders` of each state
+that renders it; an anchor no state lists is rendered in every state. The state decides, never
+the code an anchor shows. This example is illustrative: `contract/domain/screens/sign-in.yaml`
+may write its mode sign-up this way, where its descriptions say it today:
+
+```yaml
+sign-up:
+  meta:
+    renders: [ user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  on:
+    user.sign-in.password-confirmation-input:
+      target: passwords-differ
+      guard: confirmationStrays
+    # the toggle, the password and the submit as before
+signing-up:
+  meta:
+    renders: [ user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  invoke:
+    src: platform.sign-up
+    # input and onDone as before
+```
+
+`sign-up` handles the confirmation's event, so it lists it, or `contract:check` says it is
+handled here but not rendered. `signing-up` handles none of their events and lists them all
+the same: the fields stay on the page, disabled, while the account is created. A derived part
+goes with its base (list `user.sign-in.password-input`, never its `visibility-button`). A state
+of a region renders what it lists and what its parallel state lists; a region written by its
+pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
+full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
+
+## 16. A guard by failure code
+
+A guard that tells the failures of an invoke apart names the codes it takes instead of a
+sentence, and the bare `show` of its branch shows them. This example is illustrative: the
+state `signing-in` of `contract/domain/screens/sign-in.yaml` may write its `onError` this way,
+where it writes both lists of codes out today:
+
+```yaml
+flow:
+  meta:
+    guards:
+      emailNotVerified: { codes: [ email-not-verified ] }
+  states:
+    signing-in:
+      invoke:
+        src: platform.sign-in
+        # input and onDone as before
+        onError:
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
+```
+
+The first branch shows `email-not-verified`; the second, after it, the failure of
+`platform.sign-in` less the codes the guard took: `invalid-credentials`, `rate-limited`,
+`other-account` and `failed` (`bun run contract:flow user.sign-in` prints both). The error
+still carries every code of the failure. A guard may take several codes
+(`linkUnusable: { codes: [ link-invalid, link-expired ] }` on the reset-password screen). It
+guards only branches of an invoke's `onError`, a region written `by` its button included, and
+each code is one the action fails with, listed once; a guard that says anything else stays a
+sentence. The app implements it as any guard, by the failure the actor rejected with (pattern
+12's `emailNotVerified`). `contract:diff main` shows `guard emailNotVerified takes
+email-not-verified`.

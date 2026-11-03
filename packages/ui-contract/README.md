@@ -40,8 +40,8 @@ for Bun.
     input), its flow expanded from the shorter forms with the codes the anchors of every
     screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
     that a guard by failure code guards shows that guard's codes, one on a later branch the
-    failure's codes but those of the code-guarded branches before it;
-    `files/expand-flow/effects.ts`), the default outcome of each request
+    failure's codes but those of the code-guarded branches before it, a problem when they
+    leave none; `files/expand-flow/effects.ts`), the default outcome of each request
     (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
     fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
     does, and goes back to the one state that entered it on a control, showing the failure on

@@ -70,7 +70,8 @@ code and the tests follow; the checks hold them to the contract.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds and of the actions its flow invokes against it, with the codes its
-   flow shows on it, the codes of a `show` in an `onError` when they are the failure's,
+   flow shows on it, the codes of a `show` in an `onError` when they are the failure's (or,
+   on a branch guarded by failure code, the guard's, and after it the failure's other codes),
    the region of a button bound to one action when it only runs the action, and the toast of a
    mutation's success (one per operation, where it ends, a chain of actions named by the control
    that starts it; one event starting several at once is refused; on by default for an action of the
@@ -97,7 +98,13 @@ code and the tests follow; the checks hold them to the contract.
    of its parallel state, and an event belongs to one area; write it in the shorter forms
    of `contract/README.md` where they fit, a transition as its target, an effect by its
    name, a region by its pattern or by its button, and read the expansion with `bun run
-   contract:flow <screen>`) and the element to the `wireframe`. A
+   contract:flow <screen>`) and the element to the `wireframe`. An anchor that only some
+   states render goes into `meta.renders` of each state that renders it; one no state lists
+   is rendered in every state, and a state that handles its event must list it, or its
+   parallel state must (`references/patterns.md`, "What a state renders"). A guard that tells
+   the failures of an invoke apart takes their codes, `{ codes: [ … ] }`, guards only branches
+   of that invoke's `onError`, and a bare `show` on its branch shows them
+   (`references/patterns.md`, "A guard by failure code"). A
    new code, state or choice value goes into its table of the vocabulary in the same change:
    those tables are business, like the screen file. The toast codes the contract derives for
    mutations' successes (an action of the model, or a platform action the platform's `toasts`
@@ -113,7 +120,10 @@ code and the tests follow; the checks hold them to the contract.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
    bracket references; it names a mail by the action that sends it, `[mail:<action>]`, and a
-   notice by its action and its name, `[notice:<action>.<name>]`. When it cannot be written from the contract, the scenario has found a
+   notice by its action and its name, `[notice:<action>.<name>]`. A code, a state or a value
+   speaks of the anchor its text names last before it, which must carry it (or an anchor
+   under it, such as a list's items), so write the anchor first: `[user.settings.theme-select]
+   shows [value:dark]`; a mail or a notice named in between ends that pairing. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either
