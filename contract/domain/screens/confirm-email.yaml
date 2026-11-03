@@ -21,7 +21,7 @@ entry: [ user.confirm-email.status, user.confirm-email.message, user.confirm-ema
 anchors:
   user.confirm-email.status:
     kind: status
-    description: Says the link is being checked; the message or the error replaces it once it is.
+    description: Says the link is being checked.
     states: [ loading ]
   user.confirm-email.message:
     kind: message
@@ -29,12 +29,12 @@ anchors:
     codes: [ email-changed ]
   user.confirm-email.sign-in-link:
     kind: link
-    description: Leads to the sign-in page; shown with email-changed when nobody is signed in on this device.
+    description: Leads to the sign-in page.
     binding: { route: /sign-in }
     roles: [ guest ]
   user.confirm-email.profile-link:
     kind: link
-    description: Leads to the profile, which shows the new email; shown with email-changed when this device is signed in to the account whose email changed.
+    description: Leads to the profile, which shows the new email.
     binding: { route: /me }
     roles: [ identity ]
   user.confirm-email.error:

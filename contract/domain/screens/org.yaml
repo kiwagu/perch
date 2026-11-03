@@ -222,9 +222,7 @@ flow:
           states:
             idle:
               on:
-                organisation.notes.edit-button:
-                  target: editing
-                  description: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button.
+                organisation.notes.edit-button: editing
                 organisation.notes.delete-button: deleting
             editing:
               meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }

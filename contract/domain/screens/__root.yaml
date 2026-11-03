@@ -60,7 +60,7 @@ anchors:
     derived: [ option ]
   app-shell.sign-out-here-button:
     kind: button
-    description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
+    description: Signs the saved account out on this device when its data could not be opened, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
   app-shell.crash-message:
     kind: message
@@ -68,7 +68,7 @@ anchors:
     codes: [ screen-crashed ]
   app-shell.reload-button:
     kind: button
-    description: Loads the page again, shown with app-shell.crash-message.
+    description: Loads the page again.
     binding: { action: platform.reload }
   app-shell.update-message:
     kind: message
@@ -204,7 +204,7 @@ flow:
         app-shell.install-button: installing
         app-shell.install-later-button: postponing
     crashed:
-      description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
+      description: The open screen failed to render; the frame stays.
       meta: { renders: [ app-shell.nav, app-shell.reload-button ] }
       entry:
         - show: { app-shell.crash-message: [ screen-crashed ] }

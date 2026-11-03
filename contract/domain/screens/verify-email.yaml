@@ -22,7 +22,7 @@ entry: [ user.verify-email.status, user.verify-email.message, user.verify-email.
 anchors:
   user.verify-email.status:
     kind: status
-    description: Says the link is being checked; the message or the error replaces it once it is.
+    description: Says the link is being checked.
     states: [ loading ]
   user.verify-email.message:
     kind: message
@@ -30,13 +30,13 @@ anchors:
     codes: [ verified-before, check-your-mail ]
   user.verify-email.sign-in-link:
     kind: link
-    description: Leads to the sign-in page; shown with verified-before.
+    description: Leads to the sign-in page.
     binding: { route: /sign-in }
   user.verify-email.error:
     kind: error
   user.verify-email.form:
     kind: form
-    description: Sends a new verification link to the email typed; shown with the error, and again after a resend.
+    description: Sends a new verification link to the email typed.
   user.verify-email.email-input:
     kind: input
     description: The email to send a new verification link to (type email).
