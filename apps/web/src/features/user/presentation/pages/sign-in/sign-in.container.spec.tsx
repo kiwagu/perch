@@ -33,18 +33,26 @@ const ann: AuthUser = {
 
 /**
  * A session nobody is signed in to until a test says so, as another tab's sign-in or this
- * page's own would; this page's sign-in answers once the test lets it.
+ * page's own would; this page's sign-in answers once the test lets it, and is this tab's own
+ * until then.
  */
 function switchableSession() {
   let user: AuthUser | undefined
+  let here = false
   let answer: (result: AuthUser) => void = () => {}
   const listeners = new Set<(next: AuthUser | undefined) => void>()
-  const signIn = (): ReturnType<SessionPort['signIn']> =>
-    ResultAsync.fromSafePromise(
+  const signIn = (): ReturnType<SessionPort['signIn']> => {
+    here = true
+
+    return ResultAsync.fromSafePromise(
       new Promise<AuthUser>((resolve) => {
-        answer = resolve
+        answer = (result) => {
+          here = false
+          resolve(result)
+        }
       }),
     )
+  }
   const session: SessionPort = {
     ...fakeSession().session,
     current: () => user,
@@ -53,6 +61,7 @@ function switchableSession() {
 
       return () => listeners.delete(listener)
     },
+    signingInHere: () => here,
     signIn,
   }
 

@@ -2,8 +2,10 @@
  * Builds the application router from the module manifests. Each module route
  * becomes a page inside its module's scope; `authenticated` pages send visitors
  * to sign-in, `guest` pages send a signed-in user to the profile, and `/` opens
- * whichever applies. A page left open when the user signs out (here or in another
- * tab) is checked again, so a protected one sends the visitor to sign-in.
+ * whichever applies. A page left open when the account changes is checked again: a
+ * protected one sends a visitor who signed out (here or in another tab) to sign-in, a
+ * guest one sends a user another tab signed in to the profile. A sign-in of this tab's
+ * own is left to the page that started it, which goes on by its flow (its welcome).
  * A route's `search` schema validates the URL's search (a refused one lands in the
  * error component); a parameter equal to its default leaves the URL, and the
  * `retain` parameters are carried across navigations.
@@ -35,6 +37,8 @@ export interface AppRouterOptions {
   readonly session: {
     current(): AuthUser | undefined
     subscribe(listener: (user: AuthUser | undefined) => void): () => void
+    /** Whether this tab is signing an account in itself right now (`SessionPort.signingInHere`). */
+    signingInHere(): boolean
   }
   readonly layout: FunctionComponent
   readonly history?: RouterHistory
@@ -127,9 +131,11 @@ export function createAppRouter(options: AppRouterOptions) {
     ...(options.history ? { history: options.history } : {}),
   })
 
-  // The router lives as long as the page, so it never stops listening.
+  // The router lives as long as the page, so it never stops listening. Every change of the account
+  // checks the open page again, but the appearance of one this tab is signing in itself: the page
+  // that signs it in moves on by its flow, after its welcome.
   options.session.subscribe((user) => {
-    if (!user) {
+    if (user === undefined || !options.session.signingInHere()) {
       void router.invalidate()
     }
   })

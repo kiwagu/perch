@@ -72,6 +72,8 @@ export class SessionService implements SessionPort {
   readonly #elsewhere: SessionElsewhere
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
+  /** The sign-ins this tab started that are running now. */
+  #signingInHere = 0
 
   constructor(options: SessionOptions) {
     this.#options = options
@@ -161,13 +163,19 @@ export class SessionService implements SessionPort {
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    return this.#transitions.serially((generation) => this.#signingIn.signIn(input, generation))
+    return this.#transitions.serially((generation) =>
+      this.#here(() => this.#signingIn.signIn(input, generation)),
+    )
   }
 
   verifyEmail(token: string): ResultAsync<EmailVerified, DataError> {
     return this.#transitions.serially((generation) =>
-      verifyEmail(this.#signingIn, this.#options.auth, token, generation),
+      this.#here(() => verifyEmail(this.#signingIn, this.#options.auth, token, generation)),
     )
+  }
+
+  signingInHere(): boolean {
+    return this.#signingInHere > 0
   }
 
   resendVerification(email: string): ResultAsync<void, DataError> {
@@ -274,6 +282,17 @@ export class SessionService implements SessionPort {
 
   leaveNotice(notice: SessionNotice): void {
     leaveNotice(this.#options.storage, notice)
+  }
+
+  /** Runs a sign-in this tab started; `signingInHere` says so while it runs. */
+  #here<T>(run: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
+    const done = () => {
+      this.#signingInHere -= 1
+    }
+
+    this.#signingInHere += 1
+
+    return run().andTee(done).orTee(done)
   }
 
   protocolRefused(): boolean {

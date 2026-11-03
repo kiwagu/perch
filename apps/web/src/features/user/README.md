@@ -126,8 +126,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
   frame's guard of unsaved input, the sign-out button asks it first, and both forms are the
-  kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the sign-in page
-  follows another tab's sign-in with `useLeaveNow`, a leave nobody started here. The name and the bio
+  kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the guest pages
+  (sign-in, forgot-password, verify-email) follow another tab's sign-in to the profile through
+  the router's guard, a sign-in of the page's own going on to its welcome. The name and the bio
   (at most 2000 characters) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its

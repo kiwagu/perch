@@ -39,6 +39,7 @@ export function fakeSession(): { readonly session: SessionPort } {
       signingOutEverywhere: () => refused,
       current: () => undefined,
       subscribe: () => () => {},
+      signingInHere: () => false,
       flush: refused,
       notice: () => undefined,
       clearNotice: () => {},

@@ -234,8 +234,11 @@ modeling stage.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
-  from module routes (each page inside its module's scope; a protected page left open is
-  checked again when the user signs out), the ports for the session (with the memberships
+  from module routes (each page inside its module's scope; a page left open is checked again
+  whenever the account changes: a protected page sends one signed out to sign-in, a guest page
+  one another tab signed in to the profile, while a sign-in of this tab's own,
+  `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
+  welcome), the ports for the session (with the memberships
   and the current organisation), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
@@ -301,8 +304,7 @@ modeling stage.
   `user.sign-in.notice-message`, from any screen, leaves its word for the next sign-in page
   (`SessionPort.leaveNotice`: in place of a word on why a session ended, never of one on what
   became of the device's data, `resend-after-sign-in` or `delete-pending`), one code each, while
-  a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
-  for a leave nobody started here (`useLeaveNow()`); `search-start.ts` is a field's binding
+  a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,

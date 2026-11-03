@@ -147,6 +147,12 @@ export interface SessionPort {
   signingOutEverywhere(): () => ResultAsync<void, DataError>
   current(): AuthUser | undefined
   subscribe(listener: (user: AuthUser | undefined) => void): () => void
+  /**
+   * Whether this tab is signing an account in itself right now (a sign-in, or the exchange of a
+   * verification link): the account it tells of then is this tab's own doing, which the page that
+   * started it follows by its flow.
+   */
+  signingInHere(): boolean
   /** Resolves once every write so far is durable and projected; reports a write that is not durable. */
   flush(): ResultAsync<void, DataError>
   /** The word the last session left for the sign-in page, until `clearNotice`. */
