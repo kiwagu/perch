@@ -264,12 +264,13 @@ inside. Among JSX children the marker is the only content of a comment container
 ## 12. A machine from the flow
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
-that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
-195-215, the descriptions left out), the state that signs in, written in the shorter forms (a
-transition as its target, an effect by its name with the codes it shows; `signing-up` writes
-only `show: user.sign-in.error` and leaves its codes to the platform's `sign-up`; `bun run
-contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
-anchor, codes } }` and `{ target }`):
+that config with the implementations added. The state that signs in on the sign-in screen,
+`contract/domain/screens/sign-in.yaml`, in the shorter forms (the descriptions left out; a
+transition as its target, an effect by its name; `bun run contract:flow user.sign-in` prints
+the config they expand into, `{ type: show, params: { anchor, codes } }` and `{ target }`),
+with its guard `emailNotVerified: { codes: [ email-not-verified ] }` (pattern 16), so the
+first branch of its `onError` shows `email-not-verified` and the second `invalid-credentials`,
+`rate-limited`, `other-account` and `failed`, the rest of the failure of `platform.sign-in`:
 
 ```yaml
 signing-in:
@@ -287,10 +288,10 @@ signing-in:
       - target: unverified
         guard: emailNotVerified
         actions:
-          - show: { user.sign-in.error: [ email-not-verified ] }
+          - show: user.sign-in.error
       - target: sign-in
         actions:
-          - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+          - show: user.sign-in.error
 ```
 
 `clear: user.sign-in.error` takes the code off the form's error; a `clear` that names a
@@ -554,8 +555,8 @@ The link of a notice opens a screen whose every route needs no parameter, and ne
 
 An anchor that only some states of a screen render is listed in `meta.renders` of each state
 that renders it; an anchor no state lists is rendered in every state. The state decides, never
-the code an anchor shows. This example is illustrative: `contract/domain/screens/sign-in.yaml`
-may write its mode sign-up this way, where its descriptions say it today:
+the code an anchor shows. For the mode sign-up of the sign-in screen,
+`contract/domain/screens/sign-in.yaml` (the descriptions and the other states left out):
 
 ```yaml
 sign-up:
@@ -589,9 +590,9 @@ full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-
 ## 16. A guard by failure code
 
 A guard that tells the failures of an invoke apart names the codes it takes instead of a
-sentence, and the bare `show` of its branch shows them. This example is illustrative: the
-state `signing-in` of `contract/domain/screens/sign-in.yaml` may write its `onError` this way,
-where it writes both lists of codes out today:
+sentence, and the bare `show` of its branch shows them. For the state `signing-in` of the
+sign-in screen (pattern 12), its `onError` in the shortest form; a screen may write the codes
+of a `show` out instead, and what it writes wins:
 
 ```yaml
 flow:

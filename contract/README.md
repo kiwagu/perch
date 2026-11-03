@@ -437,7 +437,7 @@ as it holds its router to the bindings.
   neither are the effects: a `show` or a `clear` may name an anchor its state does not render.
   The states of a region written by its pattern or by its button, or derived by the loader,
   list nothing: an area that renders something in some of its states only is written in full.
-  The sign-in screen may say which anchors its modes render, the rest of its flow as it is:
+  For the modes of the sign-in screen (the rest of its flow left out):
 
   ```yaml
   flow:
@@ -572,14 +572,14 @@ out, and the loader derives it, the same way every time:
   by failure code, a bare `show` on that branch shows the guard's codes, and one on a later
   branch, unguarded or guarded by a sentence, the failure's codes but those the branches
   guarded by code before it take; a branch before the first one guarded by code shows the
-  whole failure, and a `show` that names its codes keeps them. So the state `signing-in` of
-  `user.sign-in` may write `show: user.sign-in.error` on both of its branches, with
-  `emailNotVerified: { codes: [ email-not-verified ] }`: the first shows
-  `email-not-verified`, the second `invalid-credentials`, `rate-limited`, `other-account` and
-  `failed`, what the file writes out today. The error's own codes are not narrowed: it carries
-  every code of the failure, whichever branch shows it. A bare `show` after branches guarded
-  by code that take every code of the failure is refused: that branch names the codes it
-  shows.
+  whole failure, and a `show` that names its codes keeps them. So where the state
+  `signing-in` of `user.sign-in` writes `show: user.sign-in.error` on both of its branches,
+  with `emailNotVerified: { codes: [ email-not-verified ] }`, the first shows
+  `email-not-verified` and the second `invalid-credentials`, `rate-limited`, `other-account`
+  and `failed`; a screen may write the codes out instead, and what it writes wins. The error's
+  own codes are not narrowed: it carries every code of the failure, whichever branch shows it.
+  A bare `show` after branches guarded by code that take every code of the failure is
+  refused: that branch names the codes it shows.
 - **The outcome of a request.** An invoke whose action fails with codes and that writes no
   `onError` follows the pattern of a request: entering its state clears the error its failure
   shows on (unless the state's `entry` clears it already), and a failure goes back the one way
