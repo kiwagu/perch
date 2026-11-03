@@ -24,7 +24,7 @@ import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
 
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
-import { createShellMachine } from '../features/app-shell/application/shell.machine'
+import { createShellMachine } from '../features/app-shell/application/shell-machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'

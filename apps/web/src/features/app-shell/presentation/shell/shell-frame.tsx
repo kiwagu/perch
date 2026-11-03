@@ -6,7 +6,7 @@ import type { DeviceInstall } from '../../../../platform/install'
 import type { SettingsWrites, SettingWriting } from '../../../../platform/settings-writes'
 import type { Theme } from '../../../../platform/theme'
 import type { FrameWrites, SettingWrites } from '../../application/setting-writes'
-import { createShellMachine, type SelfReloads } from '../../application/shell.machine'
+import { createShellMachine, type SelfReloads } from '../../application/shell-machine'
 
 /** What the frame's machine reads when it asks, kept by whoever knows it: the start, then the shell. */
 export interface ShellLive {

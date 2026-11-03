@@ -4,10 +4,10 @@ import { createActor, waitFor } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
-import type { Theme } from '../../../platform/theme'
+import type { Theme } from '../../../../platform/theme'
+import { type FrameWrites, NOTHING_SEEN } from '../setting-writes'
 
-import { type FrameWrites, NOTHING_SEEN } from './setting-writes'
-import { createShellMachine, type ShellValues } from './shell.machine'
+import { createShellMachine, type ShellValues } from '.'
 
 /**
  * A frame over its machine: what the guards read and what the machine emitted; `reloadedFor`

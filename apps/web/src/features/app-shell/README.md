@@ -26,8 +26,9 @@ modules' routes.
 
 ## Surface
 
-- `application/shell.machine.ts`: the frame's flow as its machine (held to the contract by
-  `platform/machines.spec.ts`), made by the start (`src/main.tsx`) through
+- `application/shell-machine/`: the frame's flow as its machine (held to the contract by
+  `platform/machines.spec.ts`; `machine.ts` assembles the events and deps of `events.ts` and
+  the transitions several states share, `transitions.ts`), made by the start (`src/main.tsx`) through
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `setting-writes.ts`
   tells a setting another tab or device stored from this tab's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation
@@ -121,6 +122,6 @@ modules' routes.
 
 ## Commands
 
-- `bun run test` in `apps/web` runs its specs (`shell.machine.spec.ts`, `shell.events.spec.ts`,
+- `bun run test` in `apps/web` runs its specs (`shell-machine/machine.spec.ts`, `shell.events.spec.ts`,
   `setting-writes.spec.ts`, `shell-frame.spec.ts`, `shell.container.spec.tsx`,
   `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).

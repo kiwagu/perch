@@ -3,7 +3,7 @@ import { createActor } from 'xstate'
 import type { DeviceInstall } from '../../../../../platform/install'
 import type { Theme } from '../../../../../platform/theme'
 import { NOTHING_SEEN } from '../../../application/setting-writes'
-import type { SelfReloads } from '../../../application/shell.machine'
+import type { SelfReloads } from '../../../application/shell-machine'
 import { type ShellFrame, type ShellLive, shellFrameMachine } from '../shell-frame'
 
 export interface OpenedFrameOptions {
