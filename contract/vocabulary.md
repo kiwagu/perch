@@ -27,6 +27,13 @@ a composite renders on its own: `user.profile.sign-out-dialog.confirm-button`,
 its `derived`. A rendered anchor, base or derived, has up to 5 segments and matches
 `^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`.
 
+A composite's anchors are declared anchors the loader derives, not derived parts. A secret
+`input` that opts into a composite of the platform (`composite: password-rules`) declares on
+its screen `<screen>.<list>`, a `list`, and `<screen>.<list>.<item>-item`, an `item` per item
+of the composite: `user.settings.password-rule-list.digit-item` is screen `user.settings`,
+kind `item`. They follow the grammar above, no screen file writes them, and "Composites" names
+each composite.
+
 Every anchor is declared once, in one screen file. On a page it marks one element, except
 an `item`, `row` or `option`, which marks every entry of its list, table or select and
 tells them apart by `data-id` (an entity) or `data-value` (a choice). No declared anchor

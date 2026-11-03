@@ -22,12 +22,30 @@ for Bun.
 - `.`: the tooling, for Bun.
   - Loaders of the contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
-    lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
+    lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`; a
+    vocabulary without its "Composites" section reads as an empty table),
     `loadScreens(root)` (every `.yaml` file under `contract/domain/screens`, sorted by path, one screen
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
-    failures of the actions, an error's codes and fields, the buttons whose regions the flow
-    leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, the success of each mutation said on the
+    anchors of the platform's composites its secret inputs opt into with `composite: <name>`,
+    the list `<screen>.<list>` and an item `<screen>.<list>.<item>-item` per item right after
+    the input, each marked `derivedFrom`, refused for an unknown composite, an opt-in on anything
+    but a secret input, a second opt-in of one composite on a screen, an id a written anchor or
+    another composite has, and a `derivedFrom` the file writes (`composites.ts`); a button's
+    params, for each action it binds the union of those the fields of its part pass to it, a
+    param it writes winning key by key, two fields passing one param with different values a
+    problem of the button (`form-params.ts`); the failures of the actions; an error's codes, from
+    the actions bound beside it, the actions its flow invokes whose failure shows on it and the
+    codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
+    `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
+    input), its flow expanded from the shorter forms with the codes the anchors of every
+    screen carry and the failures of the actions, the default outcome of each request
+    (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
+    fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
+    does, and goes back to the one state that entered it on a control, showing the failure on
+    `<part>.error` of those controls, of its input's fields when none, else `<screen>.error`;
+    one written as its target alone gets the show; a state where its area starts, one two
+    states, an outcome or a target from outside its area enter, and one with no error are
+    problems that ask for its `onError`), the success of each mutation said on the
     frame's toast anchor (a model action by its name, a platform action by the platform's
     `toasts` map), which carries every code a flow shows on it
     (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), and the question before each
@@ -40,7 +58,9 @@ for Bun.
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/domain/platform.yaml`, the version and the platform section (its actions,
     events, `leaving` actions, `toasts` (the platform actions whose success toasts, with
-    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first), reserved anchors and status line), through
+    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first),
+    `composites` (each a list with its items, their descriptions and their item state, declared
+    once for the screens that opt in), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
     screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
@@ -107,7 +127,8 @@ for Bun.
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
     screens is in the vocabulary, every code is used, no choice values for a
-    `visibility-button`, whose values its suffix defines), `screensProblems` (anchors unique and
+    `visibility-button`, whose values its suffix defines, the platform's composites and the
+    rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
     never named like a derived one, entry and names, `secret` on a field alone, a
     `visibility-button` derived by a secret `input` alone), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
@@ -215,12 +236,19 @@ for Bun.
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
     states taken from the vocabulary and the platform section) and `derivedParts` (each derived
-    suffix with the kind of the part it marks and, for a `visibility-button`, its values) and
+    suffix with the kind of the part it marks, the meaning of the suffix as its `description`
+    and, for a `visibility-button`, its values) and
     `composites` (the vocabulary's table of the platform's composites), the screens verbatim with
-    each binding's `example` link (`exampleOf`), the platform section and the activities
+    each binding's `example` link (`exampleOf`) and each anchor's description, the written one
+    (a secret input's with `(type password)` appended once) or else the one the engine says
+    (`files/derive/descriptions.ts`: a heading names its screen, a link with one route binding
+    leads to the screen at that path, a secret input holds a secret, an error says why the
+    actions beside it did not go through, each code with its meaning from the vocabulary), the
+    platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes, `holdsInput` of a field among them, a field's
-    `composite` and a derived anchor's `derivedFrom`), `routeParams` and the model document.
+    with its kind, its screen and its attributes, `holdsInput` of a field among them, a secret
+    input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
+    and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
     `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing
@@ -252,7 +280,8 @@ for Bun.
     one, as order runs the machine; so a screen file written shorter that loads to the same
     flow shows no change);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
-    line per list that is not empty, the transitions as `transitions added in <activity>`.
+    line per list that is not empty, the transitions as `transitions added in <activity>` and
+    the lines of a flow as `flow transitions added in <screen>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -274,7 +303,10 @@ for Bun.
     after the model) before the controls marked and ignored, `listControls(measure)` the two
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
     between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
-    described in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
+    described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
+    `listDescriptions(contract)` (`handoff/descriptions.ts`, behind `coverage --descriptions`)
+    lists as `<anchor>: <description>` every written description equal to the one the engine
+    says itself, for the developer to drop; an anchor a composite derives is never listed.
   - `parameterSample(parameter, slot)`: the value of a route parameter a link carries in a
     `SampleSlot`, `path` or `search`: its first example, else its default, else its first
     enum value, else one built within its `minLength`, `maxLength`, `minimum`, `maximum` and
@@ -369,18 +401,20 @@ for Bun.
   carries the output of
   `bun run contract:diff main` in its description.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
-  [--unmarked]`: the coverage block, first the fields and actions of each entity of the
+  [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios
   walk, then the controls marked and ignored per feature
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
   scenarios per screen; `--write` puts it between the markers of `contract/COVERAGE.md`,
   `--json` prints the measure, `--unmarked` prints the unmarked controls and the ignored ones
-  with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
+  with their reasons as `file:line: <element>`, `--descriptions` the written descriptions the
+  engine would say itself as `<anchor>: <description>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
   writing nothing). Not part of `bun run check`: the note is a report.
 - From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
   flow of a screen, named by its id or its file, as every reader takes it, expanded from
-  the shorter forms its file may write it in, the regions it leaves out derived). Not part
+  the shorter forms its file may write it in, the regions it leaves out derived and the
+  default outcome of each request filled in). Not part
   of `bun run check`: it is a view.
 - From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
   screen files in four sections, the table (path, screen, guard, roles, history, params,

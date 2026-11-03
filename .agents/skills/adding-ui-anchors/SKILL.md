@@ -69,7 +69,8 @@ code and the tests follow; the checks hold them to the contract.
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
-   actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
+   actions its part binds and of the actions its flow invokes against it, with the codes its
+   flow shows on it, the codes of a `show` in an `onError` when they are the failure's,
    the region of a button bound to one action when it only runs the action, and the toast of a
    mutation's success (one per operation, where it ends, a chain of actions named by the control
    that starts it; one event starting several at once is refused; on by default for an action of the
@@ -77,7 +78,17 @@ code and the tests follow; the checks hold them to the contract.
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
    bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). Add its
+   its anchor to run it without asking). A button leaves out the params the fields of its part
+   pass to its action in their own bindings, and writes only a value no field passes
+   (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
+   `locale: app-shell.locale-select`). A request leaves out its failure: an invoke whose action
+   fails with codes clears its part's error on entry and goes back the one way it came, showing
+   the failure there, and a state where its area starts, or with no single way back, writes its
+   `onError`. A list the platform declares as a composite is never written: the secret input
+   writes `composite: password-rules` in place of the password rule list and its items. A
+   `description` the engine says itself is left out too (a heading, a link to a screen, a secret
+   input, an error, a composite's anchors), and `bun run contract:coverage --descriptions` lists
+   the written ones to drop. Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms
