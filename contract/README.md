@@ -1193,8 +1193,8 @@ error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
 notice is listed by its action and its name, `<action>.<name>`. A composite is listed by its
-name. A screen's flow is listed as `flow transitions added in <screen id>` and `flow
-transitions removed in <screen id>`, one line per fact the machine runs: its initial state and each region's, each `entry` and `exit` effect,
+name. A screen's flow is listed as `flow lines added in <screen id>` and `flow lines
+removed in <screen id>`, one line per fact the machine runs: its initial state and each region's, each `entry` and `exit` effect,
 each transition on an event with its target, guard and effects, each invoke with its input as
 JSON and its outcomes, each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a

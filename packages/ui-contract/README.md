@@ -325,7 +325,7 @@ for Bun.
     flow shows no change);
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>` and
-    the lines of a flow as `flow transitions added in <screen>`.
+    the lines of a flow as `flow lines added in <screen>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with

@@ -462,11 +462,11 @@ describe('formatChanges', () => {
     const before = fixtureContract()
 
     expect(formatChanges(diffContracts(before, reshaped(before))).split('\n')).toEqual([
-      'contract changes: 1 composite added, 1 anchor state removed, 1 flow transition added in sample, 1 flow transition removed in sample',
+      'contract changes: 1 composite added, 1 anchor state removed, 1 flow line added in sample, 1 flow line removed in sample',
       'composites added: password-rules',
       'anchor states removed: sample.list loading',
-      'flow transitions added in sample: saving onError -> saving show sample.save-button: failed',
-      'flow transitions removed in sample: saving onError -> editing show sample.save-button: failed',
+      'flow lines added in sample: saving onError -> saving show sample.save-button: failed',
+      'flow lines removed in sample: saving onError -> editing show sample.save-button: failed',
     ])
   })
 })
