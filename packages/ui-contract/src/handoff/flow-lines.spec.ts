@@ -129,6 +129,44 @@ describe('flowLines', () => {
       }),
     ).toContain('viewing address {"tab":"b"}')
   })
+  it('writes each anchor a state renders after its address, a state of any kind by its path', () => {
+    const viewing = PARALLEL.states['viewing']
+
+    if (viewing?.type !== 'parallel') {
+      throw new Error('the parallel flow lost its viewing state')
+    }
+
+    const form = viewing.states['form'] ?? expect.unreachable('a form region')
+    const open = form.states['open'] ?? expect.unreachable('an open state')
+    const lines = flowLines({
+      ...PARALLEL,
+      states: {
+        viewing: {
+          ...viewing,
+          meta: { address: { path: '/sample' }, renders: ['sample.done-button'] },
+          states: {
+            ...viewing.states,
+            form: {
+              ...form,
+              states: {
+                ...form.states,
+                open: { ...open, meta: { renders: ['sample.close-button', 'sample.form.error'] } },
+              },
+            },
+          },
+        },
+        done: { type: 'final', meta: { renders: ['sample.home-link'] } },
+      },
+    })
+
+    expect(lines.slice(1, 3)).toEqual([
+      'viewing address /sample',
+      'viewing renders sample.done-button',
+    ])
+    expect(lines).toContain('viewing.form.open renders sample.close-button')
+    expect(lines).toContain('viewing.form.open renders sample.form.error')
+    expect(lines).toContain('done renders sample.home-link')
+  })
   it('writes an exit, and a transition without a target, guard or effect as its event alone', () => {
     const flow = flowIn(sampleContract())
 

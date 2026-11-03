@@ -506,6 +506,20 @@ describe('diffContracts and the order and the inputs of a flow', () => {
       },
     })
   })
+  it('lists the anchors a state renders as a set: one listed more is a line, another order none', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'saving').meta = { renders: ['sample.list', 'sample.save-button'] }
+        },
+        (flow) => {
+          plainState(flow, 'saving').meta = {
+            renders: ['sample.title-input', 'sample.save-button', 'sample.list'],
+          }
+        },
+      ),
+    ).toEqual({ sample: { added: ['saving renders sample.title-input'], removed: [] } })
+  })
   it('lists two entry effects swapped, as the last one decides what shows', () => {
     expect(
       flowsBetween(

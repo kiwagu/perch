@@ -1289,7 +1289,7 @@
                           "const": "final"
                         },
                         "meta": {
-                          "description": "What the contract says of the state beyond XState: its address.",
+                          "description": "What the contract says of the state beyond XState: its address and the anchors it renders.",
                           "type": "object",
                           "properties": {
                             "address": {
@@ -1318,6 +1318,16 @@
                                 }
                               },
                               "additionalProperties": false
+                            },
+                            "renders": {
+                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it; a state of a region also renders what its parallel state lists.",
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                              }
                             }
                           },
                           "additionalProperties": false
@@ -2768,7 +2778,7 @@
                           "description": "Its regions are all active at once, each on its own."
                         },
                         "meta": {
-                          "description": "What the contract says of the state beyond XState: its address.",
+                          "description": "What the contract says of the state beyond XState: its address and the anchors it renders.",
                           "type": "object",
                           "properties": {
                             "address": {
@@ -2797,6 +2807,16 @@
                                 }
                               },
                               "additionalProperties": false
+                            },
+                            "renders": {
+                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it; a state of a region also renders what its parallel state lists.",
+                              "minItems": 1,
+                              "type": "array",
+                              "items": {
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                              }
                             }
                           },
                           "additionalProperties": false
@@ -3500,6 +3520,23 @@
                                     "description": {
                                       "description": "What the state is, for a reader.",
                                       "type": "string"
+                                    },
+                                    "meta": {
+                                      "description": "What the contract says of the state beyond XState: the anchors it renders.",
+                                      "type": "object",
+                                      "properties": {
+                                        "renders": {
+                                          "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it; a state of a region also renders what its parallel state lists.",
+                                          "minItems": 1,
+                                          "type": "array",
+                                          "items": {
+                                            "type": "string",
+                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                            "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                                          }
+                                        }
+                                      },
+                                      "additionalProperties": false
                                     },
                                     "entry": {
                                       "description": "The effects on entering the state.",

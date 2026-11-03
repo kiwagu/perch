@@ -60,6 +60,13 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     .describe(
       'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
     )
+  const renders = z
+    .array(anchorSchema)
+    .min(1)
+    .exactOptional()
+    .describe(
+      'Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it; a state of a region also renders what its parallel state lists.',
+    )
   const meta = z
     .strictObject({
       address: z
@@ -69,9 +76,16 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
         })
         .exactOptional()
         .describe('The route that reaches this state: a link or a reload restores it.'),
+      renders,
     })
     .exactOptional()
-    .describe('What the contract says of the state beyond XState: its address.')
+    .describe(
+      'What the contract says of the state beyond XState: its address and the anchors it renders.',
+    )
+  const regionMeta = z
+    .strictObject({ renders })
+    .exactOptional()
+    .describe('What the contract says of the state beyond XState: the anchors it renders.')
   const state = z
     .strictObject({
       description,
@@ -84,7 +98,14 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     })
     .describe('One state of the flow.')
   const regionState = z
-    .strictObject({ description, entry, exit, on, invoke: invoke.exactOptional() })
+    .strictObject({
+      description,
+      meta: regionMeta,
+      entry,
+      exit,
+      on,
+      invoke: invoke.exactOptional(),
+    })
     .describe(
       'One state of a region: a plain state that does not end, has no address and no nested states.',
     )

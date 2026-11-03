@@ -103,10 +103,14 @@ for Bun.
     optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
-    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema` (a navigate's
-    search value a literal or `{ anchor }`, the value a field of the screen holds)
-    and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
-    `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
+    leaving for a state of the root by `#<flow id>.<state>`, a state of any kind saying in
+    `meta.renders` the anchors it renders (an anchor no state lists is rendered in every
+    state, one a state lists only in the states that list it, a region's state rendering its
+    parallel state's too; never on a region an authored flow writes by its pattern or its
+    button), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
+    value a field of the screen holds) and `transitionSchema`, with the types `Flow`,
+    `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
+    `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
     machine config in the subset of the flows without effects or `invoke`, whose states are
     visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
@@ -148,8 +152,11 @@ for Bun.
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
     which the app gives its machine, in a region),
-    handles each event of a parallel state in one area, reaches every state, leaves every
-    plain state that is not final, and puts the one transition without a guard last) over
+    handles each event of a parallel state in one area, lists in `meta.renders` anchors its own
+    screen declares (a derived part's base, never the part), each once, renders in a plain
+    state of the root or a state of a region every anchor it handles that a state lists (a
+    derived part through its base), reaches every state, leaves every plain state that is not
+    final, and puts the one transition without a guard last) over
     the tree of its states, `flowNodes(flow)` (every state in the order of the file as a
     `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode` with its path
     of names and its place in the flow), with `deepTargetOf`, `idTargetOf`, `rootOf`,
@@ -280,7 +287,8 @@ for Bun.
     every line; a screen added or removed whole is a change of the screens alone),
     `flowLines(flow)` (an internal helper of the hand-over, `handoff/flow-lines.ts`, not
     exported from the root): `initial <state>`, `<path> address <path> <search as JSON, keys
-    sorted>` (those the state's address has), `<path> entry|exit <effect>`, `<path> on
+    sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
+    `meta.renders`), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than

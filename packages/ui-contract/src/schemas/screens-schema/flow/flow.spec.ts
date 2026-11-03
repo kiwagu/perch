@@ -410,3 +410,81 @@ describe('the toast opt-out', () => {
     ).toBe(false)
   })
 })
+
+describe('the anchors a state renders, `meta.renders`', () => {
+  const RENDERS = ['organisation.create.form', 'organisation.create.toggle-button']
+
+  it('takes them on a plain state of the root, beside its address', () => {
+    expect(
+      changed((config) => {
+        stateOf(config, 'sign-up')['meta'] = { renders: ['user.sign-in.name-input'] }
+        Object.assign(stateOf(config, 'sign-in')['meta'] ?? {}, {
+          renders: ['user.sign-in.forgot-link'],
+        })
+      }),
+    ).toBe(true)
+  })
+  it('takes them on a parallel state and on a state of a region, never an address there', () => {
+    expect(
+      viewingChanged((viewing) => {
+        viewing['meta'] = { address: { path: '/org' }, renders: RENDERS }
+        stateOf(regionOf(viewing, 'form'), 'open')['meta'] = { renders: RENDERS }
+      }),
+    ).toBe(true)
+    expect(
+      viewingChanged((viewing) => {
+        stateOf(regionOf(viewing, 'form'), 'open')['meta'] = {
+          address: { path: '/org' },
+          renders: RENDERS,
+        }
+      }),
+    ).toBe(false)
+  })
+  it('refuses them on a region itself', () => {
+    expect(
+      viewingChanged((viewing) => {
+        regionOf(viewing, 'form')['meta'] = { renders: RENDERS }
+      }),
+    ).toBe(false)
+  })
+  it('wants one anchor or more', () => {
+    for (const renders of [[], ['Organisation create'], [{ anchor: 'organisation.create.form' }]]) {
+      expect(
+        changed((config) => {
+          stateOf(config, 'sign-up')['meta'] = { renders }
+        }),
+        JSON.stringify(renders),
+      ).toBe(false)
+    }
+  })
+
+  /** An authored flow whose one parallel state holds `region`, its only region written. */
+  const authoredWith = (region: Record<string, unknown>): boolean =>
+    authoredFlowSchema.safeParse({
+      initial: 'viewing',
+      meta: { guards: { titleStored: 'what was typed is the stored title' } },
+      states: { viewing: { type: 'parallel', states: { area: region } } },
+    }).success
+  const BY = { by: 'sample.form.add-button' }
+  const DRAFT = {
+    pattern: 'draft',
+    input: 'sample.title-input',
+    stored: 'model.thing.title',
+    guard: 'titleStored',
+  }
+
+  it('takes them on a state of a region an authored flow writes in full', () => {
+    expect(
+      authoredWith({
+        initial: 'closed',
+        states: { closed: { meta: { renders: ['sample.form.add-button'] } } },
+      }),
+    ).toBe(true)
+  })
+  it('refuses them on the short forms: a region by its button or by its pattern', () => {
+    expect(authoredWith(BY)).toBe(true)
+    expect(authoredWith(DRAFT)).toBe(true)
+    expect(authoredWith({ ...BY, meta: { renders: ['sample.form.add-button'] } })).toBe(false)
+    expect(authoredWith({ ...DRAFT, meta: { renders: ['sample.title-input'] } })).toBe(false)
+  })
+})

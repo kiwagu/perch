@@ -242,6 +242,42 @@ describe('expandFlow', () => {
       states: { idle: { on: { 'sample.form.save-button': { target: 'saving' } } }, saving: {} },
     })
   })
+  it('keeps the anchors a state renders, of the root and of a region', () => {
+    const renders = { renders: ['sample.form.name-input'] }
+    const { flow } = expandFlow(
+      {
+        initial: 'viewing',
+        states: {
+          viewing: {
+            type: 'parallel',
+            meta: renders,
+            states: {
+              form: { initial: 'open', states: { open: { meta: renders } } },
+              other: { initial: 'idle', states: { idle: {} } },
+            },
+          },
+          done: { type: 'final', meta: renders },
+        },
+      },
+      LOOKUPS,
+    )
+
+    expect(flow).toEqual({
+      initial: 'viewing',
+      states: {
+        viewing: {
+          type: 'parallel',
+          meta: renders,
+          states: {
+            form: { initial: 'open', states: { open: { meta: renders } } },
+            other: { initial: 'idle', states: { idle: {} } },
+          },
+        },
+        done: { type: 'final', meta: renders },
+      },
+    })
+    expect(flowSchema.safeParse(flow).success).toBe(true)
+  })
 
   it('expands draft into following and edited, back to following whenever its guard holds', () => {
     expect(

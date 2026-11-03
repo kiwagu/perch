@@ -108,6 +108,11 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain('`#<flow id>.<state>`')
   })
+  it("says which anchors a flow's state renders: those no state lists in every state", () => {
+    expect(instructions.screenMap).toContain(
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too.",
+    )
+  })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')
     expect(instructions.activities).toContain('`meta.screen`')
