@@ -123,8 +123,7 @@ flow:
               invoke:
                 src: platform.theme.set
                 input: { theme: user.settings.theme-select }
-                onDone:
-                  target: idle
+                onDone: idle
         language:
           description: The language of the account.
           initial: idle

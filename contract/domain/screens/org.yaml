@@ -239,15 +239,13 @@ flow:
               invoke:
                 src: note.updateNote
                 input: { id: organisation.notes.item, text: organisation.notes.edit-textarea }
-                onDone:
-                  target: idle
+                onDone: idle
                 onError: editing
             deleting:
               invoke:
                 src: note.deleteNote
                 input: { id: organisation.notes.item }
-                onDone:
-                  target: idle
+                onDone: idle
                 onError: idle
         invite:
           by: organisation.invite.submit-button

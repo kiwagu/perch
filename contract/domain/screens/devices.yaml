@@ -77,8 +77,7 @@ flow:
     confirming:
       on:
         device.everywhere.dialog.confirm-button: signing-out-everywhere
-        device.everywhere.dialog.cancel-button:
-          target: viewing
+        device.everywhere.dialog.cancel-button: viewing
     signing-out-everywhere:
       invoke:
         src: platform.sign-out-everywhere

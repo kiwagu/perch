@@ -120,8 +120,7 @@ flow:
               invoke:
                 src: profile.updateBio
                 input: { bio: user.profile.bio-textarea }
-                onDone:
-                  target: idle
+                onDone: idle
                 onError:
                   target: idle
                   actions:
@@ -152,8 +151,7 @@ flow:
             confirming:
               on:
                 user.profile.sign-out-dialog.confirm-button: signing-out-anyway
-                user.profile.sign-out-dialog.cancel-button:
-                  target: idle
+                user.profile.sign-out-dialog.cancel-button: idle
             signing-out-anyway:
               invoke:
                 src: platform.sign-out

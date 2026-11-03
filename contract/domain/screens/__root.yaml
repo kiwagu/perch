@@ -209,8 +209,7 @@ flow:
         - clear: app-shell.crash-message
       on:
         app-shell.reload-button: reloading
-        platform.navigated:
-          target: ready
+        platform.navigated: ready
         app-shell.locale-select:
           - target: ready
             guard: signedOut
