@@ -149,6 +149,7 @@ flow:
                   actions:
                     - navigate: /sign-in
             confirming:
+              meta: { renders: [ user.profile.sign-out-dialog ] }
               on:
                 user.profile.sign-out-dialog.confirm-button: signing-out-anyway
                 user.profile.sign-out-dialog.cancel-button: idle

@@ -50,11 +50,11 @@ anchors:
   user.sign-in.password-confirmation-input:
     kind: input
     secret: true
-    description: The password typed again; shown only in the mode sign-up, and never sent.
+    description: The password typed again; never sent.
     derived: [ visibility-button ]
   user.sign-in.name-input:
     kind: input
-    description: The name of the new account; shown only in the mode sign-up.
+    description: The name of the new account.
     binding:
       action: platform.sign-up
       params:
@@ -73,10 +73,10 @@ anchors:
     dataValue: true
   user.sign-in.forgot-link:
     kind: link
-    description: Leads to asking for a mail that sets a new password; shown in the mode sign-in.
+    description: Leads to asking for a mail that sets a new password.
   user.sign-in.resend-button:
     kind: button
-    description: Sends the verification mail again; shown after a sign-up and after a sign-in refused with email-not-verified.
+    description: Sends the verification mail again.
     binding: { action: platform.resend-verification }
 states:
   ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
@@ -84,7 +84,7 @@ flow:
   initial: sign-in
   meta:
     guards:
-      emailNotVerified: the sign-in was refused because the account's email is not verified yet
+      emailNotVerified: { codes: [ email-not-verified ] }
       passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
       passwordsDiffer: the password typed again is not the same as the password
       confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
@@ -92,6 +92,7 @@ flow:
   states:
     sign-in:
       description: The form in the mode sign-in.
+      meta: { renders: [ user.sign-in.forgot-link ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -100,7 +101,6 @@ flow:
         user.sign-in.toggle-button:
           - target: password-weak
             guard: passwordBreaksRules
-            description: The password rules, the password confirmation and the name input appear.
             actions:
               - clear: user.sign-in.error
           - target: passwords-differ
@@ -109,16 +109,15 @@ flow:
             actions:
               - clear: user.sign-in.error
           - target: sign-up
-            description: The password confirmation and the name input appear; the error is cleared.
             actions:
               - clear: user.sign-in.error
         user.sign-in.submit-button: signing-in
     sign-up:
-      description: "The form in the mode sign-up, with the password rules (all kept), the password confirmation and the name input."
+      description: The form in the mode sign-up while the password keeps every rule.
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       on:
         user.sign-in.toggle-button:
           target: sign-in
-          description: The password rules, the password confirmation and the name input go.
           actions:
             - clear: user.sign-in.error
         user.sign-in.password-confirmation-input:
@@ -136,6 +135,7 @@ flow:
           - target: signing-up
     password-weak:
       description: "The form in the mode sign-up while the password breaks a rule: the list marks the rules it keeps, and the password typed again is not judged yet."
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       on:
         user.sign-in.password-input:
           - guard: passwordBreaksRules
@@ -145,11 +145,11 @@ flow:
           - target: sign-up
         user.sign-in.toggle-button:
           target: sign-in
-          description: The password rules, the password confirmation and the name input go.
           actions:
             - clear: user.sign-in.error
     passwords-differ:
       description: The form in the mode sign-up while the password typed again differs.
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       entry:
         - show: { user.sign-in.error: [ passwords-differ ] }
       exit:
@@ -163,10 +163,9 @@ flow:
             guard: passwordBreaksRules
           - target: sign-up
             guard: confirmationFollows
-        user.sign-in.toggle-button:
-          target: sign-in
-          description: The password rules, the password confirmation and the name input go.
+        user.sign-in.toggle-button: sign-in
     signing-in:
+      meta: { renders: [ user.sign-in.forgot-link ] }
       entry:
         - clear: user.sign-in.error
       invoke:
@@ -180,13 +179,13 @@ flow:
         onError:
           - target: unverified
             guard: emailNotVerified
-            description: The resend button shows.
             actions:
-              - show: { user.sign-in.error: [ email-not-verified ] }
+              - show: user.sign-in.error
           - target: sign-in
             actions:
-              - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+              - show: user.sign-in.error
     signing-up:
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
         src: platform.sign-up
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
@@ -196,7 +195,8 @@ flow:
           actions:
             - show: { user.sign-in.mail-message: [ check-your-mail ] }
     check-mail:
-      description: The form in the mode sign-in with the email kept and the resend button.
+      description: The form in the mode sign-in with the email kept.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -210,7 +210,6 @@ flow:
         user.sign-in.toggle-button:
           - target: password-weak
             guard: passwordBreaksRules
-            description: The password rules, the password confirmation and the name input appear.
             actions:
               - clear: user.sign-in.mail-message
           - target: passwords-differ
@@ -219,11 +218,11 @@ flow:
             actions:
               - clear: user.sign-in.mail-message
           - target: sign-up
-            description: The password confirmation and the name input appear; the message goes.
             actions:
               - clear: user.sign-in.mail-message
     unverified:
-      description: The form in the mode sign-in with the error and the resend button.
+      description: The form in the mode sign-in with the error.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       on:
         user.sign-in.forgot-link:
           target: forgot-password
@@ -234,7 +233,6 @@ flow:
         user.sign-in.toggle-button:
           - target: password-weak
             guard: passwordBreaksRules
-            description: The password rules, the password confirmation and the name input appear.
             actions:
               - clear: user.sign-in.error
           - target: passwords-differ
@@ -243,10 +241,10 @@ flow:
             actions:
               - clear: user.sign-in.error
           - target: sign-up
-            description: The password confirmation and the name input appear; the error is cleared.
             actions:
               - clear: user.sign-in.error
     resending:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
       entry:
         - clear: user.sign-in.error
       invoke:
@@ -264,9 +262,11 @@ flow:
     done:
       description: The app has moved to /me.
       type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
     forgot-password:
       description: The app has moved to /forgot-password, carrying the email typed.
       type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
 wireframe: |-
   - heading "Sign in" [level=1]
   - textbox "Email"
