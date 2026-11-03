@@ -5,8 +5,12 @@
 The page frame every module renders into. It runs the frame's flow (`contract/domain/screens/__root.yaml`)
 as its machine from the start of the page, before the local database finishes opening, and
 carries a signed-in account's navigation (the profile, the organisation page, My devices and
-the settings; a guest sees none, only the banner and the page), the theme switch of this device for anyone (the device theme the settings screen chooses too), the
-language switch for a guest (a signed-in account chooses its language on the settings screen), and follows a language another device stores, the notice and the toasts the flows say, and the
+the settings; a guest sees none, only the banner and the page), the theme and language switches
+for a guest (a signed-in account chooses its theme and its language on the settings screen),
+and follows a language and a theme another tab or device stores (`model.settings.locale`,
+`model.settings.theme`, once the account's data is open, the first read counting as one this tab
+has not seen; a theme it shows is kept on the device as the theme it showed last, which the next
+start and the guest pages after a sign-out show), the notice and the toasts the flows say, and the
 notices of a change the gateway refused and this device undid, so the change does not just
 vanish, and, when the gateway refused the undo too, that the later changes not sent yet went
 with it (the bus's `sync.change-rejected` and `sync.changes-reloaded` reach the frame's flow as
@@ -28,10 +32,11 @@ modules' routes.
   bottom bar nor the side rail, and the page takes their room), the notice, whose line is held as tall as the longest notice (three lines on a phone, two
   wider up, a guard in `texts-contract.spec.ts`) so the page does not move, and the toasts
   (`app-shell.toast`, the kit's `Toaster` centred at the top, the newest first, each in its tone
-  and gone after a few seconds or a click); the theme select (`platform/theme.ts`'s
+  and gone after a few seconds or a click); a guest's theme select (`platform/theme.ts`'s
   `useDeviceTheme` gives its value, the machine's `setTheme` the device's choice, at the start, a
   crash or data that failed to open alike), the guest's language select and "Sign out on this
-  device" are enabled while the machine's state takes them. Before the router renders, the shell says where the start is: starting
+  device" are enabled while the machine's state takes them; the unrouted states (`opening`,
+  `failed`, `signing-out`) render the frame as for a guest, both selects included. Before the router renders, the shell says where the start is: starting
   (`opening`), a browser that keeps no site data, or data that could not be opened, which offers
   "Sign out on this device" when an account is saved. Once started (`platform.started`), a
   guest's page renders ready, and a signed-in account's frame and open screen render while its
@@ -43,8 +48,8 @@ modules' routes.
   (`CrashSignal`, handed to `createAppRouter` as `crash` by the start) in the page's place; it
   raises the frame's platform event `platform.crashed`, once the data is open when the page
   failed while it opened, and keeps the page's `reset` in the frame (`renderAgain`). The frame's flow then shows `app-shell.crash-message` (`screen-crashed`)
-  with `app-shell.reload-button` in the screen's place, a signed-in account's navigation, the
-  theme select and a guest's language select still around it. Another screen opening (`platform.navigated`, sent when the router starts a
+  with `app-shell.reload-button` in the screen's place, a signed-in account's navigation, a
+  guest's theme and language selects still around it. Another screen opening (`platform.navigated`, sent when the router starts a
   navigation) takes the message away; a language chosen renders the page again; the reload
   button asks the leave guard first (a leaving control) and loads the page again
   (`platform.reload`, `window.location.reload()`).

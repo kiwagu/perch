@@ -12,7 +12,7 @@ export interface ShellValues {
   /** The account signed in on this device; none for a guest. */
   readonly account: string | undefined
   /** The account's settings as this tab holds them; none before they arrive. */
-  readonly stored: { readonly locale: string } | undefined
+  readonly stored: { readonly locale: string; readonly theme: string } | undefined
   /** What this tab knows of each stored setting and of its own writes on their way. */
   readonly writes: FrameWrites
   /** Whether a field holds unsaved input now. */
@@ -47,6 +47,7 @@ export type ShellEvent =
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
   | { readonly type: 'app-shell.theme-select'; readonly theme: Theme }
   | { readonly type: 'model.settings.locale' }
+  | { readonly type: 'model.settings.theme' }
   | { readonly type: 'app-shell.sign-out-here-button' }
   | { readonly type: 'platform.signed-out' }
   | { readonly type: 'platform.change-rejected' }
@@ -138,6 +139,9 @@ const CRASHED = {
 const CRASH_GONE = { type: 'clear', params: { anchor: 'app-shell.crash-message' } } as const
 /** A theme chosen applies at once, whatever the frame is doing. */
 const THEME_CHOSEN = { actions: 'applyTheme' } as const
+/** The settings store a language or a theme this tab has not seen yet: the app applies it. */
+const LOCALE_STORED = { guard: 'storedElsewhere', actions: 'speakStored' } as const
+const THEME_STORED = { guard: 'themeStoredElsewhere', actions: 'showStoredTheme' } as const
 /**
  * The server serves a newer build, or no longer takes this build's protocol: the frame offers to
  * load the page again, and a refused protocol, which says more, keeps its message.
@@ -190,6 +194,12 @@ export function createShellMachine(deps: ShellMachineDeps) {
 
     return stored === undefined ? undefined : writes.locale.elsewhere(stored.locale)
   }
+  /** The stored theme, when another tab or device stored it and this tab has not seen it yet. */
+  const themeStoredElsewhere = (): Theme | undefined => {
+    const { stored, writes } = deps.values()
+
+    return stored === undefined ? undefined : writes.theme.elsewhere(stored.theme)
+  }
 
   return setup({
     types: {
@@ -207,6 +217,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
     guards: {
       signedOut: () => deps.values().account === undefined,
       storedElsewhere: () => storedElsewhere() !== undefined,
+      themeStoredElsewhere: () => themeStoredElsewhere() !== undefined,
       protocolTaken: ({ context }) => context.pending?.code !== 'protocol-outdated',
       quietReload: ({ context }) =>
         context.pending !== undefined &&
@@ -250,6 +261,15 @@ export function createShellMachine(deps: ShellMachineDeps) {
           enqueue.emit({ type: 'speak', locale })
         }
       }),
+      // Taken under the guard themeStoredElsewhere; the device keeps it as the theme it showed last.
+      showStoredTheme: ({ event }) => {
+        assertEvent(event, 'model.settings.theme')
+        const theme = themeStoredElsewhere()
+
+        if (theme !== undefined) {
+          deps.setTheme(theme)
+        }
+      },
     },
   }).createMachine({
     context: { pending: undefined },
@@ -268,7 +288,6 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'platform.opened': { target: 'ready' },
           'platform.open-failed': { target: 'failed' },
-          'app-shell.theme-select': THEME_CHOSEN,
         },
       },
       ready: {
@@ -277,7 +296,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'app-shell.theme-select': THEME_CHOSEN,
-          'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
+          'model.settings.locale': LOCALE_STORED,
+          'model.settings.theme': THEME_STORED,
           'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
@@ -308,7 +328,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
           ],
           'app-shell.theme-select': THEME_CHOSEN,
-          'model.settings.locale': { guard: 'storedElsewhere', actions: 'speakStored' },
+          'model.settings.locale': LOCALE_STORED,
+          'model.settings.theme': THEME_STORED,
           'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },

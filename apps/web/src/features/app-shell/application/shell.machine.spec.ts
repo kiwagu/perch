@@ -65,11 +65,20 @@ function frame(reloadedFor: string[] = []) {
     },
     /** The stored language arrives or changes in this tab, from it, another tab or device. */
     store: (locale: string) => {
-      values = { ...values, stored: { locale } }
+      values = { ...values, stored: { theme: 'system', ...values.stored, locale } }
       actor.send({ type: 'model.settings.locale' })
       values = {
         ...values,
         writes: { ...values.writes, locale: values.writes.locale.arrived(locale) },
+      }
+    },
+    /** The stored theme arrives or changes in this tab, from it, another tab or device. */
+    storeTheme: (theme: string) => {
+      values = { ...values, stored: { locale: 'en', ...values.stored, theme } }
+      actor.send({ type: 'model.settings.theme' })
+      values = {
+        ...values,
+        writes: { ...values.writes, theme: values.writes.theme.arrived(theme) },
       }
     },
     /** This tab's own writes of its settings, as the settings screen tells them. */
@@ -175,14 +184,13 @@ describe('shell machine', () => {
     expect(failed.is('failed')).toBe(true)
   })
 
-  it('takes a theme while the signed-in data opens, and no message, crash or language', () => {
+  it('takes no theme, message, crash or language while the signed-in data opens', () => {
     const opening = frame()
 
     opening.signIn()
     opening.actor.send({ type: 'platform.started' })
-    opening.chooseTheme('dark')
 
-    expect(opening.setTheme).toHaveBeenCalledWith('dark')
+    expect(opening.canChooseTheme()).toBe(false)
     expect(opening.canChoose()).toBe(false)
     expect(opening.canUpdate()).toBe(false)
 
@@ -295,7 +303,7 @@ describe('shell machine', () => {
     expect(shell.spoken).toEqual(['en', 'en'])
   })
 
-  it('applies a theme chosen while the data opens, once open, signed in or not, and if it failed', () => {
+  it('applies a theme chosen while the app starts, once open, and when the data failed to open', () => {
     const opening = frame()
 
     opening.chooseTheme('dark')
@@ -314,6 +322,44 @@ describe('shell machine', () => {
 
     expect(failed.setTheme).toHaveBeenCalledWith('dark')
     expect(failed.is('failed')).toBe(true)
+  })
+
+  it('shows a theme stored that this tab has not seen yet, once, keeping it on the device', () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.storeTheme('dark')
+    shell.storeTheme('dark')
+    shell.storeTheme('light')
+
+    expect(shell.setTheme.mock.calls).toEqual([['dark'], ['light']])
+  })
+
+  it("takes this tab's own theme coming back for its own, and leaves the language alone", () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.storeTheme('system')
+    // The settings screen shows dark and stores it; it comes back.
+    shell.write((writes) => ({ ...writes, theme: writes.theme.writing('dark') }))
+    shell.storeTheme('dark')
+
+    expect(shell.setTheme.mock.calls).toEqual([['system']])
+    expect(shell.spoken).toEqual([])
+  })
+
+  it('shows a stored theme around a crash, the message staying', () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.storeTheme('dark')
+
+    expect(shell.setTheme).toHaveBeenCalledWith('dark')
+    expect(shell.is('crashed')).toBe(true)
   })
 
   it('applies a theme chosen around a crash, the message staying', () => {

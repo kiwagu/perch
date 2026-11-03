@@ -145,18 +145,29 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const canInstall = actor.getSnapshot().can({ type: 'app-shell.install-button' })
   const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
-  // The stored language arriving or changing, from this tab or another, or another device: the
-  // frame's data event.
-  const stored = row?.locale
+  // The stored language and theme arriving or changing, from this tab or another, or another
+  // device: the frame's data events, heard once the data is open, so the first read after it
+  // opened is one this tab has not seen yet.
+  const storedLocale = row?.locale
+  const storedTheme = row?.theme
 
   useEffect(() => {
-    if (stored === undefined) {
+    if (dataOpening || storedLocale === undefined) {
       return
     }
 
     actor.send({ type: 'model.settings.locale' })
-    live.writes = { ...live.writes, locale: live.writes.locale.arrived(stored) }
-  }, [user?.id, stored, actor, live])
+    live.writes = { ...live.writes, locale: live.writes.locale.arrived(storedLocale) }
+  }, [dataOpening, user?.id, storedLocale, actor, live])
+
+  useEffect(() => {
+    if (dataOpening || storedTheme === undefined) {
+      return
+    }
+
+    actor.send({ type: 'model.settings.theme' })
+    live.writes = { ...live.writes, theme: live.writes.theme.arrived(storedTheme) }
+  }, [dataOpening, user?.id, storedTheme, actor, live])
 
   // The account going away, by its own sign-out or from another device: the frame's platform event.
   useEffect(() => {

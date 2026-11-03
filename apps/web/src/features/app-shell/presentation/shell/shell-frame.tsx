@@ -13,7 +13,7 @@ export interface ShellLive {
   /** The account signed in on this device; none for a guest. */
   account: string | undefined
   /** The account's settings as this tab holds them; none before they arrive. */
-  stored: { readonly locale: string } | undefined
+  stored: { readonly locale: string; readonly theme: string } | undefined
   /** What this tab knows of each stored setting and of its own writes on their way. */
   writes: FrameWrites
   /** Moves on each time the account changes: what this tab wrote before was the earlier one's. */

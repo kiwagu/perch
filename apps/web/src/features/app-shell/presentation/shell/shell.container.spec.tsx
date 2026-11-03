@@ -284,7 +284,7 @@ describe('ShellContainer', () => {
     )
   })
 
-  it('shows a signed-in account no language select: its settings screen takes the choice', async () => {
+  it('shows a signed-in account no language or theme select: its settings screen takes the choice', async () => {
     const { session } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const signedIn: SessionPort = { ...session, current: () => ann }
@@ -324,17 +324,78 @@ describe('ShellContainer', () => {
 
     expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+    expect(screen.queryByTestId('app-shell.theme-select')).toBeNull()
   })
 
-  it("chooses the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
-    const { session } = fakeSession()
+  it("applies the account's stored language and theme once its data opened, and ones stored elsewhere at once", async () => {
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
-    const signedIn: SessionPort = { ...session, current: () => ann }
-    const services = fakeServices(signedIn)
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const theme = memoryTheme()
+    const frame = openingFrame(ann.id, { setTheme: theme.set })
+    const spoken: string[] = []
+    const id = settingsIdFactory.create()
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    frame.actor.on('speak', ({ locale }) => spoken.push(locale))
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    // The settings read while the data still opens: the frame takes them once it is open.
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'dark' }])
+    })
+
+    expect(theme.current()).toBe('system')
+    expect(spoken).toEqual([])
+
+    act(() => {
+      frame.actor.send({ type: 'platform.opened' })
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('dark'))
+    expect(spoken).toEqual(['es'])
+
+    // Another tab or device stores another theme: it shows at once, the language staying.
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'light' }])
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('light'))
+    expect(spoken).toEqual(['es'])
+  })
+
+  it("lets a guest choose the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
+    const { session } = fakeSession()
+    const services = fakeServices(session)
     const theme = memoryTheme('dark')
     const router = createAppRouter({
       modules: [HomeModule],
-      session: signedIn,
+      session,
       layout: () => (
         <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
@@ -375,7 +436,7 @@ describe('ShellContainer', () => {
     expect(theme.current()).toBe('light')
     await waitFor(() => expect(select.getAttribute('data-value')).toBe('light'))
 
-    // The settings screen chooses the same device theme.
+    // Something else shows another theme on the device.
     act(() => theme.set('system'))
 
     expect(select.getAttribute('data-value')).toBe('system')
