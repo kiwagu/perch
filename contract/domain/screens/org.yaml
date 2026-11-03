@@ -222,7 +222,9 @@ flow:
           states:
             idle:
               on:
-                organisation.notes.edit-button: editing
+                organisation.notes.edit-button:
+                  target: editing
+                  description: The edit field starts with the note's text.
                 organisation.notes.delete-button: deleting
             editing:
               meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }

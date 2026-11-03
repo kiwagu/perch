@@ -262,9 +262,11 @@ flow:
     done:
       description: The app has moved to /me.
       type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
     forgot-password:
       description: The app has moved to /forgot-password, carrying the email typed.
       type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
 wireframe: |-
   - heading "Sign in" [level=1]
   - textbox "Email"
