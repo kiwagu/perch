@@ -51,8 +51,12 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   password in its settings; search `email`) renders `ForgotPasswordPage`, which asks for the
   mail of a password reset (`application/forgot-password.machine.ts`, the flow of
   `contract/domain/screens/forgot-password.yaml`, invoking `platform.request-password-reset`; its
-  email field starts with the address's `email`, `useSearchStart`), the same answer for any email
-  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for);
+  email field starts with the address's `email`, `useSearchStart`, and the page holds what it
+  holds), the same answer for any email
+  (`user.forgot-password.message`, code `check-your-mail`, naming the address asked for); once
+  it asked, a new password set in another tab of the browser (`platform.password-reset`, which the
+  page's machine hears with the email field's value) leaves the sign-in page
+  `password-reset-elsewhere` and moves there with the email as typed (`reset-elsewhere`, final);
   `/reset-password` (no guard; search `token`) renders `ResetPasswordPage`, what a reset mail's
   link opens (`application/reset-password.machine.ts`, the flow of
   `contract/domain/screens/reset-password.yaml`): the new password typed twice, held to the rules
@@ -62,7 +66,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   does not work (`link-invalid`, `link-expired`) beside the link that asks for a new one; a
   password refused (`password-rejected`) shows under the password, the form kept. The reset signs
   every device of the account out, this one too when it is signed in to it (its channel hears
-  4002), and the page keeps its message, which its machine holds whatever the session does;
+  4002), and the page keeps its message, which its machine holds whatever the session does; the
+  browser's other tabs hear of the reset (`platform.password-reset`);
   `/confirm-email` (no guard; search `token`) renders `ConfirmEmailPage`, what an email
   confirmation mail's link opens (`application/confirm-email.machine.ts`, the flow of
   `contract/domain/screens/confirm-email.yaml`): one exchange of the address's token through
