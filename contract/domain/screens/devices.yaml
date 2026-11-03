@@ -34,17 +34,17 @@ anchors:
     description: When the device was signed out; shown once it is.
   device.list.revoke-button:
     kind: button
-    description: Signs that device out; not on this device nor on a device signed out already; disabled while a sign-out runs.
+    description: Signs that device out; not on this device nor on a device signed out already.
     binding:
       action: platform.devices.revoke
       params:
         device: device.list.session-item
   device.everywhere.open-button:
     kind: button
-    description: Opens the dialog that signs every device out; disabled while a sign-out runs.
+    description: Opens the dialog that signs every device out.
   device.everywhere.dialog:
     kind: dialog
-    description: Asks whether to sign every device out, this one included; its confirm-button does, its cancel-button closes it.
+    description: Asks whether to sign every device out, this one included.
     binding: { action: platform.sign-out-everywhere }
     codes: [ sign-out-everywhere ]
     derived: [ confirm-button, cancel-button ]
@@ -75,12 +75,9 @@ flow:
           actions:
             - show: app-shell.notice-message
     confirming:
-      description: device.everywhere.dialog asks whether to sign every device out, this one included.
       on:
         device.everywhere.dialog.confirm-button: signing-out-everywhere
-        device.everywhere.dialog.cancel-button:
-          target: viewing
-          description: The dialog closes.
+        device.everywhere.dialog.cancel-button: viewing
     signing-out-everywhere:
       invoke:
         src: platform.sign-out-everywhere

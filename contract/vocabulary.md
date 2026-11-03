@@ -151,7 +151,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
-| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item`, `user.reset-password.password-rule-list.length-item`, `user.reset-password.password-rule-list.characters-item`, `user.reset-password.password-rule-list.digit-item`, `user.reset-password.password-rule-list.uppercase-item`, `user.reset-password.password-rule-list.lowercase-item`, `user.reset-password.password-rule-list.symbol-item`, `user.settings.password-rule-list.length-item`, `user.settings.password-rule-list.characters-item`, `user.settings.password-rule-list.digit-item`, `user.settings.password-rule-list.uppercase-item`, `user.settings.password-rule-list.lowercase-item`, `user.settings.password-rule-list.symbol-item` | the password typed keeps this rule |
+| `met` | each item of the composite `password-rules` | the password typed keeps this rule |
 
 ## Codes
 
@@ -303,3 +303,4 @@ repeats them. A row names the composite and what it is for.
 
 | Composite | Meaning |
 |---|---|
+| `password-rules` | the rules a new password keeps, listed under the field that takes it, each marked once the password typed keeps it |

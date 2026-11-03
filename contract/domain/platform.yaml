@@ -9,7 +9,7 @@ actions:
         description: The email of the new account.
       password:
         type: string
-        description: "The password of the new account: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol. A password that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password."
+        description: The password of the new account, kept to the composite password-rules; one that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password.
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
@@ -92,7 +92,7 @@ actions:
         description: The token the link of the reset mail carries in the address of /reset-password.
       password:
         type: string
-        description: "The new password, kept to the rules of a new password: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol."
+        description: The new password, kept to the composite password-rules.
     result: "the account's password is the new one, its email is verified when it was not yet, since only that mailbox got the link (its first sign-in then creates the account's settings and profile, as the link of the sign-up mail would have), every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page then keeps its message; nothing is signed in by it. A link unknown, used before or replaced by a newer one answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged. A network address takes twenty attempts within ten minutes, refused or not, and the next answers rate-limited"
     codes:
       - link-invalid
@@ -113,7 +113,7 @@ actions:
         description: The password the account has now.
       password:
         type: string
-        description: "The new password, kept to the rules of a new password: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol."
+        description: The new password, kept to the composite password-rules.
     result: "the password is the new one, every reset link of the account stops working, every other device of the account is signed out and this one stays signed in; a wrong current password answers invalid-credentials and counts toward the account's failed sign-ins, ten within a quarter of an hour, after which it answers rate-limited until the quarter of an hour has passed; a password that breaks the rules answers password-rejected; the password stays unchanged on any refusal"
     codes:
       - invalid-credentials
@@ -315,6 +315,18 @@ unsavedInput:
   state: never
   flow: never
   elsewhere: cannot
+composites:
+  password-rules:
+    description: The rules a new password keeps, each marked once the password typed keeps it.
+    list: password-rule-list
+    itemState: met
+    items:
+      length: 10 to 35 characters.
+      characters: "Only Latin letters, digits and the symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~ (no spaces); met once something is typed and every character is one of them."
+      digit: At least one digit.
+      uppercase: At least one uppercase letter.
+      lowercase: At least one lowercase letter.
+      symbol: At least one of the symbols.
 reserved:
   - app-shell.status
   - app-shell.notice-message
