@@ -11,8 +11,10 @@ a guest's other tabs follow a theme it chooses, `platform.theme-set`, which the 
 frame's machine from the moment the services exist, as every screen's machine hears the
 platform's events, and which a signed-in tab ignores), and follows a language and a theme another
 tab or device stores (`model.settings.locale`,
-`model.settings.theme`, once the account's data is open, the first read counting as one this tab
-has not seen; a theme it shows is kept on the device as the theme it showed last, which the next
+`model.settings.theme`, handed by `presentation/shell/stored-settings.ts` only while the frame's
+state takes the event and counted as seen only then, so a value that comes while the data opens
+or the app installs applies once the frame is back, the first read after the data opened counting
+as one this tab has not seen; a value this tab stored itself is only noted; a theme it shows is kept on the device as the theme it showed last, which the next
 start and the guest pages after a sign-out show), the notice and the toasts the flows say, and the
 notices of a change the gateway refused and this device undid, so the change does not just
 vanish, and, when the gateway refused the undo too, that the later changes not sent yet went
@@ -123,5 +125,6 @@ modules' routes.
 ## Commands
 
 - `bun run test` in `apps/web` runs its specs (`shell-machine/machine.spec.ts`, `shell.events.spec.ts`,
-  `setting-writes.spec.ts`, `shell-frame.spec.ts`, `shell.container.spec.tsx`,
+  `setting-writes.spec.ts`, `shell-frame.spec.ts`, `stored-settings.spec.ts`,
+  `shell.container.spec.tsx`,
   `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).

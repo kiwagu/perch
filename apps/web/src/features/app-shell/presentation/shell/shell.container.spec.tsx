@@ -389,6 +389,82 @@ describe('ShellContainer', () => {
     expect(spoken).toEqual(['es'])
   })
 
+  it('applies a language and a theme stored elsewhere while the install prompt is pending, once the frame is back', async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const theme = memoryTheme()
+    let endPrompt = () => {}
+    const frame = openedFrame({
+      setTheme: theme.set,
+      install: {
+        prompt: () =>
+          new Promise<void>((resolve) => {
+            endPrompt = resolve
+          }),
+        postpone: () => {},
+      },
+    })
+    const spoken: string[] = []
+    const id = settingsIdFactory.create()
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    frame.actor.on('speak', ({ locale }) => spoken.push(locale))
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'en', theme: 'light' }])
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('light'))
+    expect(spoken).toEqual(['en'])
+
+    // The browser's install prompt is up; another tab or device stores another language and theme.
+    act(() => {
+      frame.actor.send({ type: 'app-shell.install-button' })
+    })
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'dark' }])
+    })
+
+    expect(frame.actor.getSnapshot().matches('installing')).toBe(true)
+    expect(theme.current()).toBe('light')
+    expect(spoken).toEqual(['en'])
+
+    await act(async () => {
+      endPrompt()
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('dark'))
+    expect(spoken).toEqual(['en', 'es'])
+    expect(frame.actor.getSnapshot().matches('ready')).toBe(true)
+  })
+
   it("lets a guest choose the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
     const { session } = fakeSession()
     const services = fakeServices(session)

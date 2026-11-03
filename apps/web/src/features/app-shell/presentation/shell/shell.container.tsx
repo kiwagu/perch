@@ -30,6 +30,7 @@ import { shellEvents } from '../../application/shell.events'
 import { pageTitle } from './page-title'
 import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
+import { deliverStored } from './stored-settings'
 
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
 
@@ -94,7 +95,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     (onChange) => session.subscribe(onChange),
     () => session.current(),
   )
-  const { actor, live } = useShellFrame()
+  const frame = useShellFrame()
+  const { actor, live } = frame
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
   const signedInAs = useRef<string | undefined>(undefined)
@@ -134,7 +136,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   live.unsaved = unsaved
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
-  useSelector(actor, (state) => state)
+  const frameState = useSelector(actor, (state) => state).value
   // A signed-in account's data still opening: the frame shows no message of the platform yet, so
   // what the platform says reaches the frame's flow once the data is open.
   const dataOpening = actor.getSnapshot().matches('opening-data')
@@ -146,28 +148,19 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
   // The stored language and theme arriving or changing, from this tab or another, or another
-  // device: the frame's data events, heard once the data is open, so the first read after it
-  // opened is one this tab has not seen yet.
+  // device: the frame's data events, handed again on each move of the frame, so a value that came
+  // while its state took none (the data still opening, the app being installed) reaches it once
+  // one does, the first read after the data opened counting as one this tab has not seen yet.
   const storedLocale = row?.locale
   const storedTheme = row?.theme
 
   useEffect(() => {
-    if (dataOpening || storedLocale === undefined) {
-      return
-    }
-
-    actor.send({ type: 'model.settings.locale' })
-    live.writes = { ...live.writes, locale: live.writes.locale.arrived(storedLocale) }
-  }, [dataOpening, user?.id, storedLocale, actor, live])
+    deliverStored(frame, 'locale', storedLocale)
+  }, [frameState, user?.id, storedLocale, frame])
 
   useEffect(() => {
-    if (dataOpening || storedTheme === undefined) {
-      return
-    }
-
-    actor.send({ type: 'model.settings.theme' })
-    live.writes = { ...live.writes, theme: live.writes.theme.arrived(storedTheme) }
-  }, [dataOpening, user?.id, storedTheme, actor, live])
+    deliverStored(frame, 'theme', storedTheme)
+  }, [frameState, user?.id, storedTheme, frame])
 
   // The account going away, by its own sign-out or from another device: the frame's platform event.
   useEffect(() => {
