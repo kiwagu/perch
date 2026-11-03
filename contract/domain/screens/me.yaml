@@ -31,7 +31,7 @@ anchors:
     binding: { model: profile.bio }
   user.profile.error:
     kind: error
-    description: Why the last save failed.
+    description: Why the last save failed; failed shows above Save.
   user.profile.save-button:
     kind: button
     description: Saves the name, then the bio, each only when it changed.
