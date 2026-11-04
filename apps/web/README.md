@@ -205,7 +205,10 @@ modeling stage.
   which names the asking session before the request goes), without waiting for a 4001 it may
   never hear (no Web Locks, or no WebSocket); whichever of the two comes second finds nothing
   left to do, and an answer that comes once the asking session has ended (another account, or
-  the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
+  the same one, signed in since) signs nobody out. A forced sign-out that finds, once no tab
+  writes any more, a token another tab saved since it began (a sign-in made there meanwhile, of
+  the same account or another) forgets nothing and deletes nothing: this tab leaves its space and
+  follows that sign-in. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses (4400) stops the sync and keeps everything; the session publishes
   it and keeps it until the page loads again (`protocolRefused()`), so that the frame offers to

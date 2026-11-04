@@ -10,7 +10,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { forgetDevice, savedIdentity, saveNotice } from '../storage'
+import { forgetDevice, savedIdentity, savedToken, saveNotice } from '../storage'
 
 import type { SessionHost } from './host'
 import type { OpenSpace } from './open-space'
@@ -22,6 +22,9 @@ export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
 /** Why the gateway signed the device out, as the sign-in page says it. */
 export type ElsewhereNotice = 'signed-out-elsewhere' | 'password-changed-elsewhere'
+
+/** How a forced sign-out ended: done, or left to a sign-in another tab made while it waited. */
+export type ForcedSignOut = 'signed-out' | 'signed-in-since'
 
 export interface SessionSignOutOptions {
   readonly host: SessionHost
@@ -114,44 +117,85 @@ export class SessionSignOut {
    * barrier as a sign-out, and leaves nothing to sign out. Its data for the identity goes with the
    * token only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
    * any; otherwise (or when that cannot be read) the database stays, and the sign-in page says
-   * that signing in again as the identity sends the changes.
+   * that signing in again as the identity sends the changes. A token another tab saves while it
+   * waits for the writes or reads the outbox is a sign-in made since, which keeps the data and the
+   * keys (`signed-in-since`): this tab only leaves its space, for its caller to follow it.
    */
-  refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<void, DataError> {
+  refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
 
     if (open?.space.identity.id !== identity) {
-      return okAsync(undefined)
+      return okAsync('signed-out')
     }
 
     // Another tab changed who is signed in: what happens to this identity's data is its call.
     if (savedIdentity(storage)?.id !== identity) {
       this.#host.leaveAndTell()
 
-      return okAsync(undefined)
+      return okAsync('signed-out')
     }
+
+    const ended = savedToken(storage)
+    // Judged again right before anything is forgotten, with nothing awaited in between.
+    const signedInSince = () => this.#signedInSince(open, ended)
 
     // As in a sign-out, every tab's writes are held back, and what is unsent is read and the
     // database deleted once no tab writes any more. A database kept says so in place of `notice`.
     this.#barrier.hold(open.hints)
 
-    if (notice) {
-      saveNotice(storage, notice)
+    const release = () => this.#barrier.release(open.hints)
+    const keep = (): ForcedSignOut => {
+      if (signedInSince()) {
+        return 'signed-in-since'
+      }
+
+      this.#keepForNextSignIn(open, 'dead')
+
+      return 'signed-out'
     }
 
-    const release = () => this.#barrier.release(open.hints)
+    return this.#barrier
+      .exclusively(
+        identity,
+        () =>
+          this.#unsentOrUnknown(open).andThen((unsent): ResultAsync<ForcedSignOut, DataError> => {
+            if (unsent) {
+              return okAsync(keep())
+            }
 
-    return this.#exclusively(
-      open,
-      () =>
-        this.#unsentOrUnknown(open).andThen((unsent) =>
-          unsent ? okAsync(this.#keepForNextSignIn(open, 'dead')) : this.#forgetSpace(open, 'dead'),
-        ),
-      undefined,
-      'dead',
-    )
+            if (signedInSince()) {
+              return okAsync('signed-in-since')
+            }
+
+            if (notice) {
+              saveNotice(storage, notice)
+            }
+
+            return this.#forgetSpace(open, 'dead').map((): ForcedSignOut => 'signed-out')
+          }),
+        keep,
+      )
       .andTee(release)
       .orTee(release)
+  }
+
+  /**
+   * Whether another tab saved a token since `ended`, the one the forced sign-out ends, signing in
+   * again: this tab then leaves its space, keeping the data and the keys.
+   */
+  #signedInSince(open: OpenSpace, ended: string | undefined): boolean {
+    const token = savedToken(this.#host.options.storage)
+
+    if (token === undefined || token === ended) {
+      return false
+    }
+
+    if (this.#host.open() === open) {
+      this.#host.leaveAndTell()
+    }
+
+    return true
   }
 
   /**
