@@ -36,6 +36,7 @@ import {
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
 import { authHandler } from '../../auth/auth-handler'
+import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
@@ -235,6 +236,10 @@ async function openGateway(options: GatewayOptions = {}) {
     auth: opened.auth,
     sessions,
     ...accounts,
+    // No account is deleted here.
+    deletions: noAccounts.deletions,
+    departure: noAccounts.departure,
+    teardown: noAccounts.teardown,
     profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,

@@ -18,9 +18,11 @@ import { createLogger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { RegionHub } from '@workspace/replica/server'
 
-import { EmailChanges, ResetLinks } from '../auth/account-links'
+import { AccountDeletions, EmailChanges, ResetLinks } from '../auth/account-links'
 import { AccountMails } from '../auth/account-mails'
 import { AccountPasswords } from '../auth/account-passwords'
+import { AccountTeardown } from '../auth/account-teardown'
+import type { AccountDepartures } from '../auth/auth-handler'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
@@ -30,6 +32,7 @@ import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
+import { AccountDeparture } from '../tenants/account-departure'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -50,6 +53,16 @@ export interface GatewayRoot {
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
   readonly emailChanges: EmailChanges
+  /** The pending deletions of accounts, and their links. */
+  readonly deletions: AccountDeletions
+  /**
+   * The organisations a deleted account leaves: whether it is the only admin of one with other
+   * members, read from the directory's memberships (`AccountDeparture.blocked`), and its departure
+   * in the turns of the organisations' memberships (`Organisations.leaveAll`).
+   */
+  readonly departure: AccountDepartures
+  /** Whom the notice of a deleted account goes to, and the removal of the account's own rows. */
+  readonly teardown: AccountTeardown
   /** The mails about an account the gateway sends itself: confirmations and notices. */
   readonly mails: AccountMails
   /** The profile's email, which follows the account's into its private region through the hub. */
@@ -165,6 +178,8 @@ export function createGatewayRoot(
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
+    const departure = new AccountDeparture({ directory: local, databases })
+
     // One account's work, one turn at a time: the auth mount's and the profile's email's.
     const accountTurns = new KeyedTurns<string>()
 
@@ -197,6 +212,16 @@ export function createGatewayRoot(
         secret: options.authSecret,
         clock: options.clock,
       }),
+      deletions: new AccountDeletions({
+        directory: local,
+        secret: options.authSecret,
+        clock: options.clock,
+      }),
+      departure: {
+        blocked: (identity) => departure.blocked(identity),
+        leave: (identity, then) => organisations.leaveAll(identity, then),
+      },
+      teardown: new AccountTeardown(local),
       mails: new AccountMails({
         mail: options.mail,
         directory: local,

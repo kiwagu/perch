@@ -76,11 +76,12 @@ identity's devices are listed next.
 
 Better Auth's handler is mounted behind an allowlist (`auth-handler/`). Of the paths under
 `/auth/`, only `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email`
-and `POST /auth/send-verification-email` reach it, and the mount answers five more itself,
+and `POST /auth/send-verification-email` reach it, and the mount answers seven more itself,
 calling Better Auth on the server where it needs it: `POST /auth/request-password-reset`,
-`POST /auth/reset-password`, `POST /auth/change-password`, `POST /auth/change-email` and
-`POST /auth/confirm-email` (below). Every other path answers 404 `not-found` without asking
-Better Auth, and another method on those nine answers 405 with `Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
+`POST /auth/reset-password`, `POST /auth/change-password`, `POST /auth/change-email`,
+`POST /auth/confirm-email`, `POST /auth/request-account-deletion` and
+`POST /auth/delete-account` (below). Every other path answers 404 `not-found` without asking
+Better Auth, and another method on those eleven answers 405 with `Allow: POST`. The rest of Better Auth's endpoints stay out of reach: one lists an account's
 sessions with every token, another ends a session without closing its device's sockets. Better
 Auth serves its routes only under its public URL, `<GATEWAY_PUBLIC_URL>/backend/auth`, and trusts
 requests from that origin only; the front strips its `/backend` prefix, so the mount puts it back
@@ -350,6 +351,41 @@ goes to in one place (`accountAddressee`, `account-addressee.ts`): the account's
 name and that language. The notice of a deleted account is the one exception: it is written from
 the addressee read before the account went (`AccountTeardown.addressee`) and reads nothing.
 
+A signed-in device asks to delete its account with `POST /auth/request-account-deletion`
+`{ password }`, its token and `X-Perch-Device`. After a credential check of its address (429) and
+a body it can read (400 `bad-request`), one of the address's mails and one of the account's 3
+requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
+change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
+it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
+`invalid-credentials`, kept as a failure). An account that is the only admin of a ready
+organisation with other members answers 409 `last-admin` and gets no mail. Any other keeps its
+deletion as the pending one (`AccountDeletions.ask`: one row per identity in `verification`,
+`delete-account:<identity key>`, replacing an earlier one), and the mail to the account's own
+email starts in its language, its link the front's `/delete-account?token=…`
+(`AccountMails.deleteAccount`): 202 with no body. The request has no floor: it concerns the
+caller's own account, and its answer tells nothing of others. The link only opens a page; the
+account goes on the press of that page's button, `POST /auth/delete-account` `{ token }`, with no
+session needed. It takes one of its address's 20 attempts in 10 minutes first (429), then answers
+401 `link-invalid` for a token the gateway did not sign as a deletion (the token is a JWT signed
+with a key derived from the auth secret, `account-links/deletion-token.ts`, so neither Better
+Auth's verification nor the confirmation of an email takes it, nor it one of theirs) and 401
+`link-expired` for one asked an hour ago or more (`DELETION_LINK_LIFETIME_MS`). In the account's
+turn the token is judged again on the clock as it is then. An account that is the only admin of an
+organisation with other members answers 409 `last-admin` before its link is spent, so the same
+link deletes it once those members are removed. The pending deletion is spent then
+(`AccountDeletions.claim`, once: 401 `link-invalid` when it was used, replaced, or ended by a
+change of the password or of the email). Whom the notice goes to is read while the account exists
+(`AccountTeardown.addressee`); every session of the account ends (`AuthSessions.revokeAll`) and
+every socket of it closes with 4001 before any row goes; the account leaves its organisations and
+its own rows are removed while the turns of its memberships are still held
+(`Organisations.leaveAll` with `AccountTeardown.remove` as its continuation, `src/tenants`), so no
+invite of it lands in between. A departure refused there, the account having become the last admin
+of an organisation with others meanwhile, answers 409 `last-admin`, its sessions ended already.
+The notice of a deleted account then starts to the email it had (`AccountMails.accountDeleted`),
+and it answers 200 `{ identity }`, so the page can tell whether its device was signed in to the
+deleted account. A failure of the gateway answers 500 `internal`. Better Auth's own deletion of a
+user (`/delete-user`) stays off and out of reach.
+
 A deleted account leaves no row of itself in the directory (`AccountTeardown`,
 `account-teardown.ts`). Whom its notice goes to is read first, while the account exists
 (`addressee`, as every mail reads it). Then one transaction (`remove`,
@@ -409,12 +445,15 @@ error carries one.
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
   `POST /auth/send-verification-email`, Better Auth's behind the mount, and
   `POST /auth/request-password-reset`, `POST /auth/reset-password`, `POST /auth/change-password`,
-  `POST /auth/change-email` and `POST /auth/confirm-email`, the mount's own (`authHandler` and
-  `AuthMountDeps`, `auth-handler/`: the mount, the sign-up and its floor, `SIGN_UP_FLOOR_MS`, the
+  `POST /auth/change-email`, `POST /auth/confirm-email`, `POST /auth/request-account-deletion` and
+  `POST /auth/delete-account`, the mount's own (`authHandler`, `AuthMountDeps` and
+  `AccountDepartures`, `auth-handler/`: the mount, the sign-up and its floor, `SIGN_UP_FLOOR_MS`, the
   sign-in, the verification and the resend, the request for a reset mail and its floor
   `RESET_REQUEST_FLOOR_MS` and the reset (`password-reset.ts`), the change of a password
   (`password-change.ts`), the change of an email and its floor `CHANGE_EMAIL_FLOOR_MS` and its
-  confirmation (`email-change.ts`), what follows a new password (`password-changed.ts`), the
+  confirmation (`email-change.ts`), the request to delete an account and the deletion
+  (`account-deletion.ts`), the confirmation of a signed-in caller's password
+  (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
   Bearer caller of the mount (`signed-in.ts`), the floors' wait (`floor.ts`), the close of a
   device's sockets, and the requests and refusals as Better Auth and the client get them),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
@@ -501,6 +540,13 @@ error carries one.
   session making no link, a reset or a change whose last step fails leaving every step undone,
   the notices with their recipient and language, the old address's notice holding no part of the
   new email, and that nothing of an email, a token or a password reaches a log;
+  `auth-handler/account-deletion.spec.ts`, which holds the deletion mail to the account's own
+  email, the request's limit and its refusals (a wrong password counted as a failed sign-in,
+  `last-admin` with no mail), the newest link only, the link spent once, judged again when it
+  waited for its account, expired after an hour and ended by a change of the password, the
+  sessions ended and the sockets closed with 4001 before the rows go, the organisations left,
+  `last-admin` at the press keeping the link, the notice in the account's language, the email
+  free to sign up again, and Better Auth's `/delete-user` out of reach;
   `account-links/reset-links.spec.ts`,
   `account-links/email-changes.spec.ts`, `account-links/account-deletions.spec.ts`,
   `account-links/deletion-token.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,

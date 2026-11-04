@@ -1,8 +1,8 @@
 /**
  * The set-ups of the auth mount's specs: the mount over a stand-in for Better Auth, or over a real
- * instance on an embedded directory with the gateway's sessions, limits, sockets and turns; an
- * account with its verification link; a sign-up and a resend as the web sends them; a connection
- * that records its closes; and what a run prints.
+ * instance on an embedded directory with the gateway's sessions, limits, sockets and turns, and the
+ * organisations an account's deletion leaves; an account with its verification link; a sign-up
+ * and a resend as the web sends them; a connection that records its closes; and what a run prints.
  */
 
 import { inspect } from 'node:util'
@@ -10,15 +10,20 @@ import { inspect } from 'node:util'
 import { errAsync, okAsync } from 'neverthrow'
 import { expect, onTestFinished, vi } from 'vitest'
 
-import { dataError, type LocalDb } from '@workspace/data'
-import { interceptQueries } from '@workspace/data/testing'
+import { dataError, type LocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
+import { nodeEngines } from '@workspace/data/engines/node'
+import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory, idSchemas } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
+import { NAMESPACE } from '../../../config'
 import { KeyedTurns } from '../../../keyed-turns'
 import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
+import { AccountDeparture } from '../../../tenants/account-departure'
+import { Organisations } from '../../../tenants/organisations'
+import { TenantDatabases } from '../../../tenants/tenant-databases'
 import {
   AUTH_SECRET,
   accountServicesOf,
@@ -27,6 +32,7 @@ import {
   openAuth,
   signUpOn,
 } from '../../__fixtures__/auth-instance'
+import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
 import { type AuthMountDeps, authHandler } from '../mount'
@@ -113,16 +119,24 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signedIn: notHere,
   read: async () => ({ kind: 'none' }),
   signOut: notHere,
+  revokeAll: notHere,
 }
 
 /**
- * Stand-ins for the passwords, account links and mails, for the specs of the sign-up, the sign-in
- * and the verification over a stand-in for Better Auth: every one of them fails, as none is meant
- * to be asked.
+ * Stand-ins for the passwords, account links, mails and an account's deletion, for the specs of
+ * the sign-up, the sign-in and the verification over a stand-in for Better Auth: every one of them
+ * fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
-  'passwords' | 'resets' | 'emailChanges' | 'mails' | 'profiles'
+  | 'passwords'
+  | 'resets'
+  | 'emailChanges'
+  | 'deletions'
+  | 'departure'
+  | 'teardown'
+  | 'mails'
+  | 'profiles'
 > = {
   passwords: {
     requestReset: notHere,
@@ -143,10 +157,15 @@ export const noAccounts: Pick<
     claim: notHere,
     move: notHere,
   },
+  deletions: { ask: notHere, read: () => okAsync({ kind: 'invalid' }), claim: notHere },
+  departure: { blocked: notHere, leave: notHere },
+  teardown: { addressee: notHere, remove: notHere },
   mails: {
     confirmEmail: () => undefined,
     passwordChanged: () => undefined,
     emailChanged: () => undefined,
+    deleteAccount: () => undefined,
+    accountDeleted: () => undefined,
   },
   profiles: { queue: () => undefined },
 }
@@ -191,10 +210,47 @@ export interface RealMountOptions extends OpenAuthOptions {
 const INSTANCES = new WeakMap<Outbox, AuthInstance>()
 
 /**
+ * The organisations over `directory`, each organisation's database on an embedded engine of its
+ * own (closed when the test finishes), and the departure an account's deletion asks of them, as
+ * the composition root wires it: `blocked` by the directory's memberships, the departure itself
+ * through `Organisations.leaveAll`.
+ */
+function organisationsOver(directory: LocalDb, onError: (code: string) => void) {
+  const databases = new TenantDatabases({
+    open: (key) =>
+      openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: NAMESPACE,
+        database: tenantDatabase(key),
+        schema: readSchema('tenant'),
+      }),
+    clock: manualClock(),
+    onError: (error) => onError(error.code),
+  })
+
+  onTestFinished(() => databases.close())
+
+  const organisations = new Organisations({ directory, databases, revoke: async () => {} })
+  const departure = new AccountDeparture({ directory, databases })
+
+  return {
+    organisations,
+    departure: {
+      blocked: (identity) => departure.blocked(identity),
+      leave: (identity, then) => organisations.leaveAll(identity, then),
+    } satisfies AuthMountDeps['departure'],
+  }
+}
+
+/**
  * The mount over a real Better Auth instance on an embedded directory (closed when the test
  * finishes), with the gateway's sessions over it, a real registry of sync connections (`registry`)
  * whose every close the mount asks for is also kept (`closes`), real limits on the instance's
- * clock, and the accounts' turns (`turns`), which a test may hold to make work wait.
+ * clock, the accounts' turns (`turns`), which a test may hold to make work wait, and the
+ * organisations (`organisations`) an account's deletion leaves. What a deletion does to the
+ * account is kept in order (`steps`): its sessions ended, its sockets closed, its departure from
+ * the organisations asked, its rows removed.
  */
 export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const opened = await openAuth(
@@ -217,6 +273,11 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const turns = new KeyedTurns<string>()
   /** The identities whose profile was asked to follow their email, in order. */
   const followed: IdentityId[] = []
+  const steps: string[] = []
+  const { organisations, departure } = organisationsOver(opened.local, (code) =>
+    failures.push(code),
+  )
+  const teardown = new AccountTeardown(opened.local)
   const route = authHandler({
     auth: opened.auth,
     sessions: {
@@ -228,8 +289,30 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
       signOut: (token) => sessions.signOut(token),
+      revokeAll: (identity) => {
+        steps.push('sessions ended')
+
+        return sessions.revokeAll(identity)
+      },
     },
     ...accounts,
+    deletions: accounts.accountDeletions,
+    departure: {
+      blocked: (identity) => departure.blocked(identity),
+      leave: (identity, then) => {
+        steps.push('departure')
+
+        return departure.leave(identity, then)
+      },
+    },
+    teardown: {
+      addressee: (identity) => teardown.addressee(identity),
+      remove: (identity) => {
+        steps.push('rows removed')
+
+        return teardown.remove(identity)
+      },
+    },
     profiles: {
       queue: (identity) => {
         followed.push(identity)
@@ -239,6 +322,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     connections: {
       close: (identity, device, code) => {
         closes.push([identity, device, code])
+        steps.push(`sockets closed ${code}`)
 
         return registry.close(identity, device, code)
       },
@@ -268,6 +352,9 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     annsId,
     turns,
     followed,
+    organisations,
+    teardown,
+    steps,
   }
 }
 
