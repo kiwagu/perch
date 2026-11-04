@@ -71,7 +71,14 @@ modeling stage.
   that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
   profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
-  the session. Until the sign-in is whole its token
+  the session. `requestAccountDeletion(password)` asks
+  `POST /backend/auth/request-account-deletion` with this device's session token for the mail
+  whose link deletes the account (202; the account stays as it is), and `deleteAccount(token)`
+  sends that link's token to `POST /backend/auth/delete-account` with no session (200): both read
+  a 409 `last-admin` as `data:LAST_ADMIN`; the request reads a wrong password as
+  `data:INVALID_CREDENTIALS`, the deletion a link the gateway refuses as `data:LINK_EXPIRED` or
+  `data:LINK_INVALID`. The gateway ends the deleted account's sessions, so a device signed in to
+  it hears 4001 on its channel; the call itself signs nothing out. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
   still open and no other tab saved another account, saves the memberships, the token and the

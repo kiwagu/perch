@@ -129,6 +129,23 @@ export interface SessionPort {
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError>
   /**
+   * Asks to delete the signed-in account, confirmed by its password: the mail whose link deletes
+   * it goes to the account's email, and the account stays as it is until that link is used. A
+   * wrong password fails as `data:INVALID_CREDENTIALS`, an account that is the only administrator
+   * of an organisation with other members as `data:LAST_ADMIN`, a request to wait as
+   * `data:RATE_LIMITED`, and nobody signed in here as `data:AUTH_FAILED`.
+   */
+  requestAccountDeletion(password: string): ResultAsync<void, DataError>
+  /**
+   * Deletes the account a deletion link's `token` names, whoever is signed in here. Nothing is
+   * signed out by the call itself: the gateway ends every session of the account, and this device
+   * hears so on its channel when it is signed in to it (4001). A link past its hour fails as
+   * `data:LINK_EXPIRED`, another the gateway refuses as `data:LINK_INVALID`, an account that
+   * became the only administrator of an organisation with other members as `data:LAST_ADMIN` (the
+   * link still works once those members are removed), and a request to wait as `data:RATE_LIMITED`.
+   */
+  deleteAccount(token: string): ResultAsync<void, DataError>
+  /**
    * Signs this device out: `signed-out` once its changes reached the gateway (or were given up
    * with `forgetUnsent`) and its local data is gone; `needs-confirmation`, changing nothing,
    * when changes could not be sent and signing out would lose them.

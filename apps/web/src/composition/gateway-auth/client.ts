@@ -9,6 +9,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
 import { accountChangeOf } from './account-change'
+import { accountDeletedOf } from './account-deletion'
 import { type EmailConfirmation, emailConfirmationOf } from './email-confirmation'
 import { mailRequested } from './mail-request'
 import { passwordResetOf } from './password-reset'
@@ -94,6 +95,24 @@ export interface GatewayAuth {
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmation, DataError>
   /**
+   * Asks to delete the account `session` is signed in to, confirmed by its `password`: the mail
+   * whose link deletes it goes to the account's email, and nothing else changes. A wrong password
+   * fails as `data:INVALID_CREDENTIALS`, an account that is the only administrator of an
+   * organisation with other members as `data:LAST_ADMIN`, and the rest as a change of the
+   * password does.
+   */
+  requestAccountDeletion(password: string, session: AccountSession): ResultAsync<void, DataError>
+  /**
+   * Deletes an account with the `token` of its deletion link, with no session; the gateway signs
+   * every device of the account out, and the answer names nothing. A link past its hour fails as
+   * `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as
+   * `data:LINK_INVALID`, an account that became the only administrator of an organisation with
+   * other members as `data:LAST_ADMIN` (the link still works), a request to wait as
+   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer as
+   * `data:AUTH_FAILED` naming its status, never the token.
+   */
+  deleteAccount(token: string): ResultAsync<void, DataError>
+  /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as
    * `data:AUTH_FAILED`: it is dead already. A request the gateway refuses otherwise (any other
@@ -131,7 +150,8 @@ function urlOf(input: string | URL | Request): string {
  * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
  * `POST <baseUrl>/auth/send-verification-email`, `POST <baseUrl>/auth/request-password-reset`,
  * `POST <baseUrl>/auth/reset-password`, `POST <baseUrl>/auth/change-password`,
- * `POST <baseUrl>/auth/change-email`, `POST <baseUrl>/auth/confirm-email` and
+ * `POST <baseUrl>/auth/change-email`, `POST <baseUrl>/auth/confirm-email`,
+ * `POST <baseUrl>/auth/request-account-deletion`, `POST <baseUrl>/auth/delete-account` and
  * `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
@@ -217,6 +237,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
         : post('confirm-email', { token }).andThen(emailConfirmationOf),
+    requestAccountDeletion: (password, session) =>
+      post('request-account-deletion', { password }, bearer(session)).andThen((answer) =>
+        accountChangeOf(answer, 202),
+      ),
+    deleteAccount: (token) =>
+      token === ''
+        ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
+        : post('delete-account', { token }).andThen(accountDeletedOf),
     signOut: (token, device) =>
       ResultAsync.fromPromise(
         fetcher(`${baseUrl}/auth/sign-out`, {
