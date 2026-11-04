@@ -60,7 +60,8 @@ The suite runs from the front's one client address, so its tests, on every worke
 gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
 credential checks (sign-ups, sign-ins, verifications, changes of a password or an email and
 requests to delete an account, 20 per ten seconds) set the number of workers: with two, a run
-makes at most 17 in any ten seconds; three reached 22 and four had a sign-in refused. The others
+made at most 17 in any ten seconds when it was measured, before the deletion of an account added
+its three requests; three workers reached 22 and four had a sign-in refused. The others
 the run spends as a whole, in one window of each, and stays under them in whatever order the
 workers take the tests: the mails of sign-ups, resends, reset requests, email changes and
 deletion requests (about 140 of 200 per quarter hour), the attempts at a reset link (10 of 20
