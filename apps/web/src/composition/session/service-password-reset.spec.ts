@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
@@ -114,15 +114,16 @@ describe('a password reset in a browser signed in', () => {
 
   it('leaves the token another tab saved meanwhile, signed in with the new password', async () => {
     let answer = () => {}
+    const heard = new Promise<void>((resolve) => {
+      answer = resolve
+    })
     const { auth, world } = await signedIn((gateway) => ({
       ...gateway,
-      // The gateway's answer waits until another tab signed in again.
+      // The gateway resets at once; its answer reaches this tab only once `answer` is called.
       resetPassword: (link, password, session) =>
-        ResultAsync.fromSafePromise(
-          new Promise<void>((resolve) => {
-            answer = resolve
-          }),
-        ).andThen(() => gateway.resetPassword(link, password, session)),
+        gateway
+          .resetPassword(link, password, session)
+          .andThen((reset) => ResultAsync.fromSafePromise(heard).map(() => reset)),
     }))
     const me = world.session.current() ?? expect.unreachable('signed in')
 
@@ -130,13 +131,21 @@ describe('a password reset in a browser signed in', () => {
 
     const resetting = world.session.resetPassword(auth.resetLinkFor(email), 'Secret-new1')
 
-    // Another tab, which heard the 4002, signed Ann in again before this one heard the answer.
-    world.storage.set(TOKEN_KEY, 'token-of-the-new-sign-in')
+    // Another tab, which heard the 4002, signed Ann in again with the new password and saved its
+    // token before this one heard the answer.
+    await vi.waitFor(() => expect(auth.requests.at(-1)?.kind).toBe('reset'))
+
+    const again = await auth.signIn(
+      { email, password: 'Secret-new1' },
+      { id: 'device-other-tab', label: 'Other tab' },
+    )
+
+    world.storage.set(TOKEN_KEY, again._unsafeUnwrap().token)
     answer()
     expect((await resetting).isOk()).toBe(true)
 
     expect(world.session.current()?.id).toBe(me.id)
-    expect(savedToken(world.storage)).toBe('token-of-the-new-sign-in')
+    expect(savedToken(world.storage)).toBe(again._unsafeUnwrap().token)
     expect(world.session.notice()).toBeUndefined()
   })
 })
