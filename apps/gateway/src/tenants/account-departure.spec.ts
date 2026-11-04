@@ -1,12 +1,13 @@
-import { ok } from 'neverthrow'
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { recordId } from '@workspace/data'
+import { dataError, recordId } from '@workspace/data'
 import { membershipIdFactory, tenantIdFactory } from '@workspace/ids'
 
 import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
 
 import { closeDepartures, departureHarness } from './__fixtures__/departures'
+import identityForget from './__fixtures__/identity-forget.surql'
 import membershipPromote from './__fixtures__/membership-promote.surql'
 import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import departingMembershipsStatement from './surql/departing-memberships.surql'
@@ -407,8 +408,9 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
     const lookups = sentCount(identityByEmailStatement)
     const invite = organisations.invite({ actor: ann, key: 't1', email: 'bob@example.test' })
 
-    // The invite found the organisation and bob before the departure took it.
-    await vi.waitFor(() => expect(sentCount(identityByEmailStatement)).toBe(lookups + 1))
+    // The invite found the organisation and bob, and bob again in his turn, before the departure
+    // took the organisation.
+    await vi.waitFor(() => expect(sentCount(identityByEmailStatement)).toBe(lookups + 2))
     held.release()
 
     expect(await annLeaves).toEqual(ok(undefined))
@@ -445,5 +447,90 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
       { identity: ann, role: 'admin' },
       { identity: bob, role: 'member' },
     ])
+  })
+})
+
+describe('Organisations.leaveAll and what runs after the departure', () => {
+  it('runs the continuation once the identity left, still in its turn: an invite of it asked meanwhile waits, then finds no identity', async () => {
+    const { organisations, directory, ann, bob, founded, invited, membersIn, rolesIn, sentCount } =
+      await departureHarness()
+
+    await founded(ann, 't1')
+    await invited(ann, 't1', 'bob@example.test')
+
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let reached = (): void => {}
+    const continuing = new Promise<void>((resolve) => {
+      reached = resolve
+    })
+    /** Bob's roles in t1 as the continuation found them. */
+    const found: string[][] = []
+    const bobLeaves = organisations.leaveAll(bob, () =>
+      ResultAsync.fromSafePromise(
+        (async () => {
+          found.push(await rolesIn(bob, 't1'))
+          reached()
+          await gate
+          await directory.db.query(identityForget, { identity: recordId('identity', bob) })
+        })(),
+      ),
+    )
+
+    await continuing
+
+    const lookups = sentCount(identityByEmailStatement)
+    const additions = sentCount(membershipAddStatement)
+    const invite = organisations.invite({ actor: ann, key: 't1', email: 'bob@example.test' })
+
+    // The invite finds bob, then waits for the continuation: it writes no membership meanwhile.
+    await vi.waitFor(() => expect(sentCount(identityByEmailStatement)).toBe(lookups + 1))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(sentCount(membershipAddStatement)).toBe(additions)
+
+    release()
+
+    expect(await bobLeaves).toEqual(ok(undefined))
+    expect(found).toEqual([[]])
+    expect((await invite)._unsafeUnwrapErr()).toEqual({
+      kind: 'refused',
+      code: 'no-such-identity',
+    })
+    expect(sentCount(membershipAddStatement)).toBe(additions)
+    expect(await rolesIn(bob, 't1')).toEqual([])
+    expect(await membersIn('t1')).toEqual([{ identity: ann, role: 'admin' }])
+  })
+
+  it('runs no continuation for a departure refused last-admin', async () => {
+    const { organisations, ann, founded, invited, everything } = await departureHarness()
+
+    await founded(ann, 't1')
+    await invited(ann, 't1', 'bob@example.test')
+
+    let ran = false
+    const refusal = await organisations.leaveAll(ann, () => {
+      ran = true
+
+      return okAsync(undefined)
+    })
+
+    expect(refusal._unsafeUnwrapErr()).toEqual(lastAdmin)
+    expect(ran).toBe(false)
+    expect(await everything()).toEqual({ tenants: ['t1'], memberships: 2 })
+  })
+
+  it("answers the continuation's failure once the identity left", async () => {
+    const { organisations, ann, founded, everything } = await departureHarness()
+
+    await founded(ann, 't1')
+
+    const failure = dataError('data:WRITE_FAILED', 'the continuation failed')
+
+    expect((await organisations.leaveAll(ann, () => errAsync(failure)))._unsafeUnwrapErr()).toBe(
+      failure,
+    )
+    expect(await everything()).toEqual({ tenants: [], memberships: 0 })
   })
 })

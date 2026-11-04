@@ -112,7 +112,10 @@ export class Organisations {
 
   /**
    * An admin of the organisation adds the identity that signs in with `email` as a member
-   * (`OrganisationInvitation`), and the invited identity's listeners hear it.
+   * (`OrganisationInvitation`), and the invited identity's listeners hear it. In the identity's
+   * turn the email is looked up again: an identity whose account went while the invite waited for
+   * its departure (`leaveAll`), or whose email names another identity now, is refused
+   * `no-such-identity`, so no membership is written for an identity that is gone.
    */
   invite(input: {
     actor: IdentityId
@@ -129,12 +132,19 @@ export class Organisations {
       )
       .andThen(({ tenant, identity }) =>
         this.#turns.ofIdentity(identity.id, () =>
-          this.#asAdmin(actor, tenant, (current) =>
-            this.#invitation
-              .admit(current, identity.id)
-              .andThen(() => this.#listeners.tell(identity.id))
-              .map((): Member => ({ identity, role: 'member' })),
-          ),
+          this.#lookup
+            .identityByEmail(email)
+            .andThen((current) =>
+              current.id === identity.id ? okAsync(tenant) : errAsync(refused('no-such-identity')),
+            )
+            .andThen(() =>
+              this.#asAdmin(actor, tenant, (current) =>
+                this.#invitation
+                  .admit(current, identity.id)
+                  .andThen(() => this.#listeners.tell(identity.id))
+                  .map((): Member => ({ identity, role: 'member' })),
+              ),
+            ),
         ),
       )
   }
@@ -165,15 +175,21 @@ export class Organisations {
    * Takes `identity`, whose account goes, out of every organisation (`AccountDeparture.leave`)
    * in its turn and the turns of its organisations: an invite of it asked meanwhile waits for it,
    * and so does a change of another identity in one of them. Refused `last-admin`, changing
-   * nothing, while it is the only admin of a ready organisation with others in it. It revokes no
-   * region and tells nobody: the caller closes the identity's connections beforehand.
+   * nothing, while it is the only admin of a ready organisation with others in it. Once it left,
+   * `then` runs while those turns are still held, so what follows the departure (the removal of
+   * the account's own rows) ends before an invite of it can write anything; its failure is the
+   * answer, and nothing runs it after a refusal. It revokes no region and tells nobody: the caller
+   * closes the identity's connections beforehand.
    */
-  leaveAll(identity: IdentityId): ResultAsync<void, DepartureError> {
+  leaveAll(
+    identity: IdentityId,
+    then: () => ResultAsync<void, DataError> = () => okAsync(undefined),
+  ): ResultAsync<void, DepartureError> {
     return this.#turns.ofIdentity(identity, () =>
       this.#departure
         .organisationsOf(identity)
         .andThen((tenants) =>
-          this.#turns.ofTenants(tenants, () => this.#departure.leave(identity)),
+          this.#turns.ofTenants(tenants, () => this.#departure.leave(identity).andThen(then)),
         ),
     )
   }
