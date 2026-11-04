@@ -41,7 +41,7 @@ export function ProfileContainer() {
       }),
     [profiles, session],
   )
-  const { state, send, submit } = useScreenMachine(machine)
+  const { state, send, submit, renders } = useScreenMachine('user.profile', machine)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -76,7 +76,7 @@ export function ProfileContainer() {
       onType={type}
       onSave={() => submit({ type: 'user.profile.save-button' })}
       onSignOut={() => send({ type: 'user.profile.sign-out-button' })}
-      confirmSignOut={state.matches({ editing: { session: 'confirming' } })}
+      confirmSignOut={renders('user.profile.sign-out-dialog')}
       onConfirmSignOut={() => send({ type: 'user.profile.sign-out-dialog.confirm-button' })}
       onCancelSignOut={() => send({ type: 'user.profile.sign-out-dialog.cancel-button' })}
     />

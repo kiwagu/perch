@@ -315,15 +315,24 @@ modeling stage.
   `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
   confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
   ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
-  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, their search
+  (`useScreenMachine(screen, machine)`, `screen` the id of the contract's screen whose flow
+  it runs: the flow's `navigate` effects pass the guard, their search
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
   field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
-  (`useScreenMachine(machine, fields)`), for a move it makes, and a state that does not handle
-  one lets it pass; and the flow's effects on the
+  (`useScreenMachine(screen, machine, fields)`), for a move it makes, and a state that does not
+  handle one lets it pass; `renders(anchor)` says whether the state renders an anchor, read from
+  the machine, whose states carry their flow's `meta.renders` (`screen-renders.ts`: `rendersIn`
+  over the engine's `renderedAt` and `isRendered`, which the frame's shell reads too), so a view
+  shows an anchor only some states render where the state renders it, never by a list of states
+  of its own; in development and e2e builds each state of `screen` the page settles in (React
+  committed it, the browser painted it, every animation that ends has ended, and the machine is
+  still in it) goes to `window.__perchSettledState` when an e2e run exposes it
+  (`settled-report.ts`: `useSettledReport`, which the frame calls as `app-shell` from
+  `main.tsx`, and `reportSettled` over the page); and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in

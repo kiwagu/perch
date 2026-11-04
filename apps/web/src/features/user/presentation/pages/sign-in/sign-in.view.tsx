@@ -37,12 +37,21 @@ export interface SignInValues {
 /** The buttons the sign-in flow handles: each is enabled while the machine's state does. */
 export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-button'
 
+/** The anchors only some states of the flow render: each shows while the machine's state does. */
+export type SignInListed =
+  | 'user.sign-in.forgot-link'
+  | 'user.sign-in.password-rule-list'
+  | 'user.sign-in.password-confirmation-input'
+  | 'user.sign-in.name-input'
+  | 'user.sign-in.resend-button'
+
 /** A password field: the password, or the password typed again. */
 export type PasswordField = keyof Passwords
 
 export interface SignInViewProps {
   /** The email the field starts with: the one a page that moved here carried over, or none. */
   readonly startEmail: string
+  /** The mode the heading, the buttons' words and the password's autocomplete name. */
   readonly mode: 'sign-in' | 'sign-up'
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
@@ -58,8 +67,8 @@ export interface SignInViewProps {
   readonly mail?: 'check-your-mail' | undefined
   /** The address that mail went to, which `check-your-mail` names. */
   readonly sentTo?: string | undefined
-  /** Whether the button that sends the verification mail again shows. */
-  readonly showResend: boolean
+  /** Whether the flow's state renders an anchor: the anchor shows while it does. */
+  readonly renders: (anchor: SignInListed) => boolean
   /** Whether the flow's state handles a button's event: the button is enabled while it does. */
   readonly can: (control: SignInControl) => boolean
   /** Signs in or up with the values: resolves whether it did. */
@@ -209,12 +218,14 @@ export function SignInView(props: SignInViewProps) {
                 {...password('password')}
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
                 required
-                aria-describedby={signingUp ? rulesId : undefined}
+                aria-describedby={
+                  props.renders('user.sign-in.password-rule-list') ? rulesId : undefined
+                }
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
                 testId="user.sign-in.password-input"
               />
-              {signingUp ? (
+              {props.renders('user.sign-in.password-rule-list') ? (
                 <PasswordRuleList
                   id={rulesId}
                   password={values.password}
@@ -222,7 +233,7 @@ export function SignInView(props: SignInViewProps) {
                   items={RULES}
                 />
               ) : null}
-              {signingUp ? null : (
+              {props.renders('user.sign-in.forgot-link') ? (
                 // The flow moves, carrying the email typed; the address is there for a new tab.
                 <a
                   href="/forgot-password"
@@ -235,9 +246,9 @@ export function SignInView(props: SignInViewProps) {
                 >
                   {t('user.sign-in.forgot')}
                 </a>
-              )}
+              ) : null}
             </Field>
-            {signingUp ? (
+            {props.renders('user.sign-in.password-confirmation-input') ? (
               <Field data-invalid={concerns === 'confirmation' ? true : undefined}>
                 <FieldLabel htmlFor={ids.confirmation}>
                   {t('user.sign-in.password-confirmation')}
@@ -263,7 +274,7 @@ export function SignInView(props: SignInViewProps) {
                 ) : null}
               </Field>
             ) : null}
-            {signingUp ? (
+            {props.renders('user.sign-in.name-input') ? (
               <Field>
                 <FieldLabel htmlFor={ids.name}>{t('user.sign-in.name')}</FieldLabel>
                 <Input
@@ -292,7 +303,7 @@ export function SignInView(props: SignInViewProps) {
             >
               {signingUp ? t('user.sign-in.have-account') : t('user.sign-in.create-account')}
             </Button>
-            {props.showResend ? (
+            {props.renders('user.sign-in.resend-button') ? (
               <Button
                 type="button"
                 variant="outline"

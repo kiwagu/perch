@@ -98,6 +98,7 @@ export function createDevicesMachine(deps: DevicesMachineDeps) {
         },
       },
       confirming: {
+        meta: { renders: ['device.everywhere.dialog'] },
         on: {
           'device.everywhere.dialog.confirm-button': { target: 'signing-out-everywhere' },
           'device.everywhere.dialog.cancel-button': { target: 'viewing' },

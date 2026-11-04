@@ -14,10 +14,9 @@
  * the events of a parallel state's own `on` are not held to it.
  */
 
-import { baseOf } from '../../anchors'
+import { baseOf, isUnder } from '../../anchors'
 import type { Flow, FlowNode, Problem, RegionStateNode, RootNode } from '../../files'
 import { flowNodes } from '../../files'
-import { isUnder } from '../carries'
 import { own } from '../contract'
 
 import type { At, InFlow } from './in-flow'

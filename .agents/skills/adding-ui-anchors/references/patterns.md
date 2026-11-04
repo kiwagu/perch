@@ -587,6 +587,13 @@ region renders what it lists and what its parallel state lists; a region written
 pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
 full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
 
+Rendered means visible to the user: in a state that does not render it, an anchor is absent
+from the page or kept in it hidden, as a closed form that keeps what was typed. So a form that
+stays in the DOM while it is closed is still listed only in the states where it is open. The
+view asks the machine, `isRendered(renderedAt(snapshot.machine.config, snapshot.value),
+anchor)`, never a flag of its own, and an e2e run holds every settled state of a test to the
+list.
+
 ## 16. A guard by failure code
 
 A guard that tells the failures of an invoke apart names the codes it takes instead of a
