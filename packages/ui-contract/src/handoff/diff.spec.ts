@@ -176,6 +176,8 @@ describe('diffContracts', () => {
         transitions: { thing: { added: [], removed: [] } },
       },
       flows: { sample: { added: [], removed: [] } },
+      actions: { added: [], removed: [] },
+      actionLines: { 'sign-out': { added: [], removed: [] } },
     })
   })
   it('lists the composites, the states of the anchors both hold and the lines of each flow', () => {
@@ -366,8 +368,9 @@ describe('diffContracts', () => {
       { added: ['sign-out.password-changed'], removed: ['sign-out.signed-out'] },
     )
     expect(formatChanges(diffContracts(noticing(['signed-out']), before)).split('\n')).toEqual([
-      'contract changes: 1 notice removed',
+      'contract changes: 1 notice removed, 1 platform action line removed in sign-out',
       'notices removed: sign-out.signed-out',
+      'platform action lines removed in sign-out: notice signed-out to account language account',
     ])
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
@@ -416,6 +419,13 @@ describe('diffContracts', () => {
     expect(changes.anchors.removed).toEqual([])
     expect(changes.activities).toEqual({ added: ['thing'], removed: [], transitions: {} })
     expect(changes.flows).toEqual({})
+    expect(changes.actions).toEqual({ added: ['sign-out'], removed: [] })
+    expect(changes.actionLines).toEqual({
+      'sign-out': {
+        added: ['code failed', 'param forgetUnsent: boolean', 'result: this device signs out'],
+        removed: [],
+      },
+    })
   })
   it('finds nothing between a contract and itself', () => {
     expect(formatChanges(diffContracts(before, before))).toBe('contract changes: none')
@@ -433,17 +443,19 @@ describe('formatChanges', () => {
       'fields removed: thing.title',
     ])
   })
-  it('counts in the plural and keeps the order screens, anchors, codes, entities, fields, activities', () => {
+  it('counts in the plural and keeps the order screens, anchors, codes, platform actions, entities, fields, activities', () => {
     const changes = diffContracts(undefined, fixtureContract())
 
     expect(formatChanges(changes).split('\n')).toEqual([
-      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 entity added, 5 fields added, 1 activity added',
+      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 platform action added, 1 entity added, 5 fields added, 1 activity added, 3 platform action lines added in sign-out',
       'screens added: sample',
       'anchors added: sample.list, sample.list.row-item, sample.page, sample.save-button, sample.sign-out-button, sample.title-input',
       'codes added: failed, saved',
+      'platform actions added: sign-out',
       'entities added: thing',
       'fields added: thing.author, thing.created_at, thing.id, thing.size, thing.title',
       'activities added: thing',
+      'platform action lines added in sign-out: code failed, param forgetUnsent: boolean, result: this device signs out',
     ])
   })
   it('prints the activities added and removed, then the transitions changed in each', () => {
@@ -683,5 +695,105 @@ describe('diffContracts and the questions before destructive actions', () => {
       added: ['thing-delete'],
       removed: [],
     })
+  })
+})
+
+describe('diffContracts and the platform actions', () => {
+  const before = fixtureContract()
+
+  /** The platform action `name` of `contract`, for a spec to change. */
+  const actionOf = (contract: Contract, name: string) => {
+    const action = contract.screens.platform.actions[name]
+
+    if (action === undefined) {
+      throw new Error(`the contract has no platform action ${name}`)
+    }
+
+    return action
+  }
+
+  /**
+   * The fixture contract with `resend` added, an action that sends a mail, and the result and
+   * the description of `sign-out` rewritten.
+   */
+  const mailing = (): Contract => {
+    const contract = structuredClone(before)
+    const signOut = actionOf(contract, 'sign-out')
+
+    signOut.description = 'Signs this device out, at once.'
+    signOut.result = 'this device signs out and its data goes'
+    contract.screens.platform.actions['resend'] = {
+      description: 'Sends the mail again.',
+      params: { email: { type: 'string', description: 'The email of the account.' } },
+      result: 'the mail is on its way',
+      codes: ['failed'],
+      mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'token' } },
+    }
+
+    return contract
+  }
+  const RESEND_LINES = [
+    'code failed',
+    'mail to email language account link sample?token',
+    'param email: string',
+    'result: the mail is on its way',
+  ]
+
+  it('lists the actions added and removed, each with every line it declares', () => {
+    const added = diffContracts(before, mailing())
+    const removed = diffContracts(mailing(), before)
+
+    expect(added.actions).toEqual({ added: ['resend'], removed: [] })
+    expect(added.actionLines['resend']).toEqual({ added: RESEND_LINES, removed: [] })
+    expect(removed.actions).toEqual({ added: [], removed: ['resend'] })
+    expect(removed.actionLines['resend']).toEqual({ added: [], removed: RESEND_LINES })
+  })
+  it('lists the result of an action both hold as it changes, its description aside', () => {
+    expect(diffContracts(before, mailing()).actionLines['sign-out']).toEqual({
+      added: ['result: this device signs out and its data goes'],
+      removed: ['result: this device signs out'],
+    })
+  })
+  it('lists a parameter, a code and a role an action gains or loses', () => {
+    const changed = structuredClone(before)
+    const signOut = actionOf(changed, 'sign-out')
+
+    signOut.params = { everywhere: { type: 'boolean', description: 'Every device of it.' } }
+    signOut.codes = ['failed', 'rate-limited']
+    signOut.roles = ['admin']
+
+    expect(diffContracts(before, changed).actionLines['sign-out']).toEqual({
+      added: ['code rate-limited', 'param everywhere: boolean', 'role admin'],
+      removed: ['param forgetUnsent: boolean'],
+    })
+  })
+  it('lists a mail whose recipient, language or link changes, and a notice an action gains', () => {
+    const noticing = mailing()
+    const resend = actionOf(noticing, 'resend')
+
+    resend.mail = { to: 'email', language: 'email', link: { screen: 'sample', search: 'code' } }
+    actionOf(noticing, 'sign-out').notices = [
+      { name: 'signed-out', to: 'account', language: 'account', link: { screen: 'sample' } },
+    ]
+
+    expect(diffContracts(mailing(), noticing).actionLines).toEqual({
+      resend: {
+        added: ['mail to email language email link sample?code'],
+        removed: ['mail to email language account link sample?token'],
+      },
+      'sign-out': {
+        added: ['notice signed-out to account language account link sample'],
+        removed: [],
+      },
+    })
+  })
+  it('prints the actions added and removed, then the lines changed in each action', () => {
+    expect(formatChanges(diffContracts(before, mailing())).split('\n')).toEqual([
+      'contract changes: 1 platform action added, 4 platform action lines added in resend, 1 platform action line added in sign-out, 1 platform action line removed in sign-out',
+      'platform actions added: resend',
+      `platform action lines added in resend: ${RESEND_LINES.join(', ')}`,
+      'platform action lines added in sign-out: result: this device signs out and its data goes',
+      'platform action lines removed in sign-out: result: this device signs out',
+    ])
   })
 })

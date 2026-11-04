@@ -24,13 +24,22 @@ export interface SessionAccountDeps {
    * channel's 4001 does; resolves once done, and never rejects.
    */
   readonly signOutOf: (identity: IdentityId) => Promise<void>
+  /**
+   * Names the session open on this device now, before a reset asked with its `token` ends it: its
+   * sign-out as the channel's 4002 does, run only while that session is still the one open and
+   * the browser still keeps `token`, which resolves once done and never rejects; undefined with
+   * nobody signed in.
+   */
+  readonly resetHere: (token: string) => (() => Promise<void>) | undefined
 }
 
 /**
- * The calls about an account that sign nothing in or out: the mails of a password reset and the
- * links they carry, the changes of the signed-in account's password and email, the confirmation of
- * a new email and the deletion of the account. The signed-in account's own calls present the
- * session this device holds; the others, which come with a link or an email, present none.
+ * The calls about an account, which sign nothing in: the mails of a password reset and the links
+ * they carry, the changes of the signed-in account's password and email, the confirmation of a
+ * new email and the deletion of the account. The signed-in account's own calls present the
+ * session this device holds, and so does the reset when a session is open, to hear whether it
+ * ended it; the others, which come with a link or an email, present none. Only the gateway's
+ * answer to a reset or a deletion signs this device out, as the channel would.
  */
 export class SessionAccount {
   readonly #deps: SessionAccountDeps
@@ -45,13 +54,23 @@ export class SessionAccount {
   }
 
   /**
-   * Asks the gateway alone: it signs nothing in, and a device of the account it signs out, this one
-   * included, hears so on its channel (4002). Once it did, the browser's other tabs hear of it.
+   * Asks the gateway with this device's session when one is open: it signs nothing in, ends every
+   * session of the account and closes its channels (4002), which this device may never hear (no
+   * Web Locks, or its WebSocket blocked). Once it set the password, the browser's other tabs hear
+   * of it; once it answered that this device's session was among those it ended, the session
+   * signs out here as on the 4002, and one of another account stays. Resolves once that ran.
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError> {
+    const open = this.#openSession()
+    const signOut = open === undefined ? undefined : this.#deps.resetHere(open.token)
+    const session = signOut === undefined ? undefined : open
+
     return this.#deps.auth
-      .resetPassword(token, password)
+      .resetPassword(token, password, session)
       .andTee(() => savePasswordReset(this.#deps.storage))
+      .andThen(({ signedOut }) =>
+        ResultAsync.fromSafePromise(signedOut && signOut ? signOut() : Promise.resolve()),
+      )
   }
 
   /** Asks the gateway with this device's session; the other devices hear their sign-out (4002). */
@@ -101,10 +120,19 @@ export class SessionAccount {
 
   /** The session this device is signed in with, for a change of its account; none signed in fails. */
   #session(): ResultAsync<AccountSession, DataError> {
+    const session = this.#openSession()
+
+    return session === undefined
+      ? errAsync(dataError('data:AUTH_FAILED', 'nobody is signed in on this device'))
+      : okAsync(session)
+  }
+
+  /** The session this device is signed in with, if one is open. */
+  #openSession(): AccountSession | undefined {
     const token = savedToken(this.#deps.storage)
 
     return token === undefined || !this.#deps.signedIn()
-      ? errAsync(dataError('data:AUTH_FAILED', 'nobody is signed in on this device'))
-      : okAsync({ token, device: deviceIdFrom(this.#deps.storage) })
+      ? undefined
+      : { token, device: deviceIdFrom(this.#deps.storage) }
   }
 }

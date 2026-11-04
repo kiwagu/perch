@@ -466,6 +466,15 @@ as it holds its router to the bindings.
   confirmation and the name input, or they would go while the account is created.
   `contract:diff` lists each entry as a line `<state path> renders <anchor>`.
 
+  Rendered means visible to the user. An anchor a state renders is on the page and seen; one
+  it does not render is not seen: absent from the page, or kept in it hidden (`hidden`,
+  `display: none` or `visibility: hidden`, as the page helper's `visible` reads it), as a form
+  that keeps what was typed into it while it is closed. The app reads what a state renders
+  from its machine, whose states carry the flow's `meta.renders`, through the engine's
+  `renderedAt` and `isRendered` (`@workspace/ui-contract/anchors`), never from a flag of its
+  own, as it reads which controls are enabled; an e2e run holds the page to it in every state
+  a test passes through (see "The manifest").
+
 A screen file may write its flow shorter, and leave out what the contract says elsewhere
 (below); the loader expands it into the config above before anything reads it, so the
 checks, the walk in XState, the manifest and an app's machine see the full config, and `bun
@@ -1151,8 +1160,15 @@ gap is fixed in the contract files first, never worked around in a test.
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
   (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of
-  `main` compares the app it brings with the flows it brings), so a business commit may change
-  a transition the app has not changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  `main` compares the app it brings with the flows it brings) or at the commit the branch is at
+  (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
+  taken onto a branch whose app already follows its first, changes a flow the base may not have
+  at all), so a business commit may change a transition the app has not changed yet. The app's
+  routes likewise: a binding may wait for its route, and a route that still reads as its
+  binding did at the merge base (the same screen, the same path) is held to that binding as it
+  was there. The hook names both commits, and the cache of the unit tests keys on them, so a
+  pass never carries into another branch state with the same files. A branch whose merge base
+  with a local `main` cannot be found fails the
   hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
@@ -1212,6 +1228,18 @@ URL. Without the helper, the names a page renders are still there:
 ;[...document.querySelectorAll('[data-testid]')].map((element) => element.dataset.testid)
 ```
 
+An e2e run exposes the binding `window.__perchSettledState` (`SETTLED_STATE`), and such a
+build reports to it each settled state of a screen's machine, once the page has rendered it:
+the screen, the state value and the page as the helper reads it then (`SettledState`). The
+harness holds every report to the manifest the stand serves (`settledProblems`), and a test
+fails at its end when a state it passed through broke it. Of the anchors a screen renders only
+where listed, with their derived parts, one the state does not render is not visible, and one
+it renders is on the page and visible, unless data decides whether it shows: an anchor with
+`roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these, which
+only the first holds, as are the parts a page shows on demand (a select's `option`, a
+composite's `item`, a field's `error-message`). The anchors every state renders are not held:
+a message shows when it carries a code, and an error when there is one.
+
 ## Coverage
 
 `bun run contract:coverage` prints how far the contract reaches, and `--write` puts the same
@@ -1259,10 +1287,10 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the
-notices of the platform actions added or removed, the
-transitions added or removed in each activity both sides hold, and the lines of the flow
-added or removed in each screen both sides hold with a flow), and below
+error fields the anchors both sides hold gain or lose, the platform actions added or removed
+and the notices they declare, the transitions added or removed in each activity both sides
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
+the lines of each platform action added, removed or changed), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1304,8 +1332,16 @@ JSON and its outcomes, each final state. Where order runs the machine (the guard
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
 sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
 change nothing that runs, so a screen file written shorter that loads to the same flow shows
-no change. The tests are in this repository, so the same change updates them, and the
-consumers check fails until it does.
+no change. A platform action is listed by its name, and its lines as `platform action lines
+added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
+each parameter with its type (`param email: string`), its result (`result: <the text>`, the
+one prose that stays, since it says what holds once the action succeeds), each code its failure
+shows (`code rate-limited`), each role that may run it, its mail (`mail to email language
+locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
+opens and the search parameter that carries the token) and each notice (`notice
+password-changed to account language account link user.forgot-password`). An action added or
+removed whole shows every line, as nothing else in the summary says its mail. The tests are in
+this repository, so the same change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 

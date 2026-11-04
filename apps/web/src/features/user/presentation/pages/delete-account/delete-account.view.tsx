@@ -8,13 +8,22 @@ import { FieldGroup } from '@workspace/ui/components/ui/field'
 
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
+/** The anchors only some states of the flow render that the page shows or leaves out. */
+export type DeleteAccountListed =
+  | 'user.delete-account.delete-button'
+  | 'user.delete-account.sign-in-link'
+
 export interface DeleteAccountViewProps {
   /** The code the message shows once the account is gone. */
   readonly message?: 'account-deleted' | undefined
   /** The code of the last failure. */
   readonly error?: string | undefined
-  /** The link does not work: the button goes, and the error says to ask for a new one. */
-  readonly linkDead: boolean
+  /**
+   * Whether the flow's state renders an anchor: the button until the account is gone (a link
+   * that does not work takes it away, and the error says to ask for a new one), then the link to
+   * sign in.
+   */
+  readonly renders: (anchor: DeleteAccountListed) => boolean
   /** Whether the flow takes the press now: the button is enabled while it does. */
   readonly canDelete: boolean
   /** Whether nobody is signed in here, the one who is led to the sign-in page from the message. */
@@ -67,28 +76,13 @@ export function DeleteAccountView(props: DeleteAccountViewProps) {
       <CardContent>
         <FieldGroup>
           {props.message ? (
-            <>
-              <Alert variant="success">
-                <AlertDescription
-                  data-testid="user.delete-account.message"
-                  data-code={props.message}
-                >
-                  {t('user.delete-account.message.account-deleted')}
-                </AlertDescription>
-              </Alert>
-              {props.guest ? (
-                <Link
-                  to="/sign-in"
-                  className="text-sm underline"
-                  data-testid="user.delete-account.sign-in-link"
-                >
-                  {t('user.delete-account.sign-in')}
-                </Link>
-              ) : null}
-            </>
-          ) : props.linkDead ? (
-            alert
-          ) : (
+            <Alert variant="success">
+              <AlertDescription data-testid="user.delete-account.message" data-code={props.message}>
+                {t('user.delete-account.message.account-deleted')}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+          {props.renders('user.delete-account.delete-button') ? (
             <>
               <p className="text-sm">{t('user.delete-account.warning')}</p>
               {alert}
@@ -102,7 +96,18 @@ export function DeleteAccountView(props: DeleteAccountViewProps) {
                 {t('user.delete-account.delete')}
               </Button>
             </>
+          ) : (
+            alert
           )}
+          {props.renders('user.delete-account.sign-in-link') && props.guest ? (
+            <Link
+              to="/sign-in"
+              className="text-sm underline"
+              data-testid="user.delete-account.sign-in-link"
+            >
+              {t('user.delete-account.sign-in')}
+            </Link>
+          ) : null}
         </FieldGroup>
       </CardContent>
     </Card>

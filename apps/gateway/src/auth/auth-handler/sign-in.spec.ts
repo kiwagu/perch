@@ -98,7 +98,7 @@ describe('authHandler, a sign-in and what runs beside it', () => {
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
     insert.release()
 
     const answer = await signingIn
@@ -136,7 +136,7 @@ describe('authHandler, a sign-in and what runs beside it', () => {
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
     insert.release()
 
     // The email has no account again, as when the sign-in began.

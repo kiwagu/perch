@@ -103,7 +103,8 @@ code and the tests follow; the checks hold them to the contract.
    is rendered in every state, a listed anchor brings the anchors declared under it
    (`<anchor>.<rest>`, a list's items), and a state that handles its event must list it or an
    anchor it is under, or its parallel state must (`references/patterns.md`, "What a state
-   renders"). A guard that tells the failures of an invoke apart takes their codes,
+   renders"); rendered means visible, so an anchor kept in the DOM but hidden in a state is
+   not listed there. A guard that tells the failures of an invoke apart takes their codes,
    `{ codes: [ … ] }`, guards only branches of that invoke's `onError`, and a bare `show` on
    its branch shows them (`references/patterns.md`, "A guard by failure code"). A new code,
    state or choice value goes into its table of the vocabulary in the same change: those

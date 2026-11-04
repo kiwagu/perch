@@ -29,13 +29,22 @@ const RULES = [
 /** A password field: the new password, or the password typed again. */
 export type ResetPasswordField = keyof Passwords
 
+/** The anchors only some states of the flow render that the page shows or leaves out. */
+export type ResetPasswordListed =
+  | 'user.reset-password.form'
+  | 'user.reset-password.forgot-link'
+  | 'user.reset-password.sign-in-link'
+
 export interface ResetPasswordViewProps {
   /** The code the message shows once the password is the new one. */
   readonly message?: 'password-reset' | undefined
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
-  /** The link does not work: the form goes, and a link asks for a new one. */
-  readonly linkDead: boolean
+  /**
+   * Whether the flow's state renders an anchor: the form while a new password is typed, the link
+   * asking for a new mail once the link does not work, the way to sign in once it is set.
+   */
+  readonly renders: (anchor: ResetPasswordListed) => boolean
   /** Whether the flow takes the submit now: the button is enabled while it does. */
   readonly canSubmit: boolean
   /** A keystroke in a password, with both passwords as they are after it. */
@@ -123,33 +132,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {props.message ? (
-          <FieldGroup>
-            <Alert variant="success">
-              <AlertDescription data-testid="user.reset-password.message" data-code={props.message}>
-                {t('user.reset-password.message.password-reset')}
-              </AlertDescription>
-            </Alert>
-            <Link
-              to="/sign-in"
-              className="text-sm underline"
-              data-testid="user.reset-password.sign-in-link"
-            >
-              {t('user.reset-password.sign-in')}
-            </Link>
-          </FieldGroup>
-        ) : props.linkDead ? (
-          <FieldGroup>
-            {aboveForm}
-            <Link
-              to="/forgot-password"
-              className="text-sm underline"
-              data-testid="user.reset-password.forgot-link"
-            >
-              {t('user.reset-password.forgot')}
-            </Link>
-          </FieldGroup>
-        ) : (
+        {props.renders('user.reset-password.form') ? (
           <Form onSubmit={() => props.onSubmit(values)} data-testid="user.reset-password.form">
             <FieldGroup>
               {aboveForm}
@@ -186,6 +169,38 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
               </Button>
             </FieldGroup>
           </Form>
+        ) : (
+          <FieldGroup>
+            {props.message ? (
+              <Alert variant="success">
+                <AlertDescription
+                  data-testid="user.reset-password.message"
+                  data-code={props.message}
+                >
+                  {t('user.reset-password.message.password-reset')}
+                </AlertDescription>
+              </Alert>
+            ) : null}
+            {aboveForm}
+            {props.renders('user.reset-password.sign-in-link') ? (
+              <Link
+                to="/sign-in"
+                className="text-sm underline"
+                data-testid="user.reset-password.sign-in-link"
+              >
+                {t('user.reset-password.sign-in')}
+              </Link>
+            ) : null}
+            {props.renders('user.reset-password.forgot-link') ? (
+              <Link
+                to="/forgot-password"
+                className="text-sm underline"
+                data-testid="user.reset-password.forgot-link"
+              >
+                {t('user.reset-password.forgot')}
+              </Link>
+            ) : null}
+          </FieldGroup>
         )}
       </CardContent>
     </Card>
