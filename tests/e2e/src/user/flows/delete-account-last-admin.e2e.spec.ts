@@ -57,11 +57,13 @@ test.describe('Delete an account that administers an organisation with other mem
       const answeredAt = await sendDeletionRequest(page, userA.password)
 
       // Expected: After step 4 [user.settings.deletion.error] carries [code:last-admin] on device
-      //   A, and no [mail:request-account-deletion] reaches user A's email
+      //   A, [user.settings.deletion.password-input] is empty, and no
+      //   [mail:request-account-deletion] reaches user A's email
       await expect(page.getByTestId('user.settings.deletion.error')).toHaveAttribute(
         'data-code',
         'last-admin',
       )
+      await expect(page.getByTestId('user.settings.deletion.password-input')).toHaveValue('')
       await expect(page.getByTestId('user.settings.deletion.message')).toHaveCount(0)
       // Within the delivery window after the gateway's answer user A's email still holds the mail
       // of its sign-up alone (bounded non-arrival).
@@ -70,13 +72,6 @@ test.describe('Delete an account that administers an organisation with other mem
 
     await test.step("5. On device A, open [/org], click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await page.getByTestId('app-shell.nav.organisation-link').click()
-      // The refused request of step 4 left the password typed, which the deletion form keeps
-      // (only a sent mail empties it), so the frame asks before the leave loses it; the step
-      // goes on to [/org].
-      await expect(
-        page.locator('[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]'),
-      ).toBeVisible()
-      await page.getByTestId('app-shell.leave-dialog.confirm-button').click()
       await expect(page.getByTestId('organisation.page.heading')).toHaveText(data.name)
 
       const itemOfB = page.getByTestId('organisation.members.item').filter({ hasText: userB.email })
