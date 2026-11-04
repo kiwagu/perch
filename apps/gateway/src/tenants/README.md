@@ -6,7 +6,8 @@ The gateway's organisations: each organisation's own database, the directory's r
 belongs to it, the services that create organisations and change their members, and the
 routes over them. It also tells the region hub where each region lives
 (`region-databases.ts`). It has no domain rules of its own, so no `domain/` or `application/`
-folders, and no `index.ts` yet: it predates the index rule and is imported file by file.
+folders, and no `index.ts` yet: it predates the index rule and is imported file by file. Its
+`organisations/` folder is the one unit split since, entered through its own `index.ts`.
 
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
 the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
@@ -43,11 +44,14 @@ membership, so a run again after a failure finds what is left; its notes stay).
 `Organisations.leaveAll` runs that departure as a change of the identity's memberships, so an
 invite of it waits; it revokes no region and tells nobody, as the caller closes the identity's
 connections first and the other members read the members when they ask.
-`Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
-rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes
-one at a time. The identity an invite names is found by its email, in any case, through the
-auth module's one lookup (`identityByEmail`, `src/auth/identity-by-email.ts`); an email no
-identity has is refused `no-such-identity` here.
+`Organisations` (`organisations/service.ts`) checks what is asked and orders the changes; each
+change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
+`OrganisationInvitation` (`invitation.ts`), `OrganisationRemoval` (`removal.ts`), and
+`MembershipListeners` (`listeners.ts`), who hears the changes. They read the directory through
+`OrganisationLookup` and an organisation's `member` rows through `TenantMembers`; `KeyedTurns`
+(`src/keyed-turns.ts`) runs one identity's changes one at a time. The identity an invite names
+is found by its email, in any case, through the auth module's one lookup (`identityByEmail`,
+`src/auth/identity-by-email.ts`); an email no identity has is refused `no-such-identity` here.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
@@ -66,7 +70,8 @@ a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 f
 - Routes: `GET /organisations`, `POST /organisations`, `GET /organisations/:key/members`,
   `POST /organisations/:key/members`, `DELETE /organisations/:key/members/:identity`
   (`organisation.routes.ts`).
-- Services: `Organisations` (`organisations.ts`, `leaveAll` among its commands),
+- Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
+  commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
   (`tenant-databases.ts`), `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers`
   (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
@@ -79,7 +84,7 @@ a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 f
 
 ## Commands
 
-- `bun run test` in `apps/gateway` runs this module's specs (`organisations.spec.ts`,
+- `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
   `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`), each
   organisation on an embedded in-memory database of its own.
