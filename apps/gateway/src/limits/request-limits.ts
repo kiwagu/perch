@@ -46,7 +46,8 @@ export const ADDRESS_ORGANISATIONS = { limit: 30, windowMs: 60 * minute } as con
 
 /**
  * Mails per client address, 200 per 15 minutes: sign-ups, resends of the verification mail, reset
- * mails and the confirmations of a new email together, every attempt counted whatever the email:
+ * mails, the confirmations of a new email and the deletion mails together, every attempt counted
+ * whatever the email:
  * one client can make at most 200 such mails go out per quarter hour (the credential limit alone
  * would allow 1,800 sign-ups). The e2e suite signs every account up from the front's one address,
  * about 100 per run, on a gateway restarted for the run.
@@ -70,9 +71,13 @@ export const EMAIL_RESET_MAILS = { limit: 3, windowMs: 15 * minute } as const
 /** Changes of the email per identity, 3 per 15 minutes, each one mail to the new email. */
 export const IDENTITY_EMAIL_CHANGES = { limit: 3, windowMs: 15 * minute } as const
 
+/** Requests to delete the account per identity, 3 per 15 minutes, each one mail to its email. */
+export const IDENTITY_DELETION_REQUESTS = { limit: 3, windowMs: 15 * minute } as const
+
 /**
  * Attempts at one kind of link per client address, 20 per 10 minutes, refused or not: the reset of
- * a password and the confirmation of a new email each count on their own. A link's token is too
+ * a password, the confirmation of a new email and the deletion of an account each count on their
+ * own. A link's token is too
  * long to guess, so the limit only keeps one client from hammering the directory.
  */
 export const ADDRESS_LINK_ATTEMPTS = { limit: 20, windowMs: 10 * minute } as const
@@ -99,9 +104,10 @@ export type SignInAttempt =
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
  * each email, the mails of each client address, the resends and the reset mails of each email,
- * the email changes of each identity, the attempts of each client address at a reset link and at
- * a confirmation link, the invitations of each inviting identity and each client address, and the
- * organisations each identity and each client address create.
+ * the email changes and the deletion requests of each identity, the attempts of each client
+ * address at a reset link, a confirmation link and a deletion link, the invitations of each
+ * inviting identity and each client address, and the organisations each identity and each client
+ * address create.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
@@ -110,8 +116,10 @@ export class RequestLimits {
   private readonly emailVerificationMails: FixedWindow
   private readonly emailResetMails: FixedWindow
   private readonly identityEmailChanges: FixedWindow
+  private readonly identityDeletionRequests: FixedWindow
   private readonly resetAttempts: FixedWindow
   private readonly confirmationAttempts: FixedWindow
+  private readonly deletionAttempts: FixedWindow
   private readonly identityInvites: FixedWindow
   private readonly addressInvites: FixedWindow
   private readonly identityOrganisations: FixedWindow
@@ -130,8 +138,13 @@ export class RequestLimits {
       ...IDENTITY_EMAIL_CHANGES,
       clock: options.clock,
     })
+    this.identityDeletionRequests = new FixedWindow({
+      ...IDENTITY_DELETION_REQUESTS,
+      clock: options.clock,
+    })
     this.resetAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
     this.confirmationAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
+    this.deletionAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
     this.identityInvites = new FixedWindow({ ...IDENTITY_INVITES, clock: options.clock })
     this.addressInvites = new FixedWindow({ ...ADDRESS_INVITES, clock: options.clock })
     this.identityOrganisations = new FixedWindow({
@@ -213,6 +226,15 @@ export class RequestLimits {
     return this.mail(address, () => this.identityEmailChanges.take(identity))
   }
 
+  /**
+   * Takes one request to delete `identity`'s account from the client at `address`, before anything
+   * is asked: one of the address's mails and one of the identity's requests, the address's place
+   * given back when the identity refuses.
+   */
+  deletionMail(address: string, identity: IdentityId): Allowance {
+    return this.mail(address, () => this.identityDeletionRequests.take(identity))
+  }
+
   /** Takes one attempt of the client at `address` at a reset link, before anything is read. */
   passwordReset(address: string): Allowance {
     return this.resetAttempts.take(addressKey(address))
@@ -221,6 +243,11 @@ export class RequestLimits {
   /** Takes one attempt of the client at `address` at a confirmation link, before anything is read. */
   emailConfirmation(address: string): Allowance {
     return this.confirmationAttempts.take(addressKey(address))
+  }
+
+  /** Takes one attempt of the client at `address` at a deletion link, before anything is read. */
+  accountDeletion(address: string): Allowance {
+    return this.deletionAttempts.take(addressKey(address))
   }
 
   /**

@@ -50,6 +50,17 @@ export class SessionElsewhere {
       )
   }
 
+  /**
+   * The gateway deleted the account `identity` and ended its sessions: this device signs out of it
+   * as when its channel hears the 4001 (the sign-in page says `signed-out-elsewhere`), which it
+   * may never hear (no Web Locks, or its WebSocket blocked). Only the session open for `identity`
+   * is signed out, judged in the turn the sign-out takes: another account's stays, nobody's
+   * changes nothing, and so does a session the 4001 already ended. Resolves once it ran.
+   */
+  accountDeleted(identity: IdentityId): Promise<void> {
+    return this.#outElsewhere(identity)
+  }
+
   /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
   protocolRefused(): boolean {
     return this.#protocolRefused

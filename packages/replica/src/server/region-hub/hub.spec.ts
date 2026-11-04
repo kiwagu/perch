@@ -5,8 +5,24 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { LocalDb } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
 
-import bumpHeadStatement from '../__fixtures__/bump-head.surql'
-import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import bumpHeadStatement from '../../__fixtures__/bump-head.surql'
+import { noteCreate, noteUpdate } from '../../__fixtures__/note'
+import {
+  countRows,
+  forgedHistory,
+  nameIn,
+  profileIn,
+  storedEmail,
+  storedProfile,
+  storedSnapshot,
+} from '../__fixtures__/log'
+import type { RecordWrite } from '../record-write'
+import { type RegionDatabases, singleDatabase } from '../region-databases'
+import { RegionLog } from '../region-log'
+import { SERVER_PEER } from '../server-peer'
+import acceptStatement from '../surql/server-accept.surql'
+import headsStatement from '../surql/server-heads.surql'
+import loadStatement from '../surql/server-load.surql'
 
 import {
   actor,
@@ -25,29 +41,18 @@ import {
   subscriber,
   underPeerOf,
 } from './__fixtures__/hub'
-import {
-  countRows,
-  forgedHistory,
-  nameIn,
-  profileIn,
-  storedEmail,
-  storedProfile,
-  storedSnapshot,
-} from './__fixtures__/log'
-import type { RecordWrite } from './record-write'
-import { type RegionDatabases, singleDatabase } from './region-databases'
-import type { RegionHub, Subscriber } from './region-hub'
-import { RegionLog } from './region-log'
-import { SERVER_PEER } from './server-peer'
-import acceptStatement from './surql/server-accept.surql'
-import headsStatement from './surql/server-heads.surql'
-import loadStatement from './surql/server-load.surql'
+import type { RegionHub, Subscriber } from './hub'
 
 afterEach(closeHubs)
 
-/** The fixture's database for every region, counting the holds taken on it and released. */
+/**
+ * The fixture's database for every region, counting the holds taken on it and released. Once
+ * `replace` names another database, every later hold is taken on that one, as when a region's
+ * database was removed and made again.
+ */
 function counting() {
   const counts = { acquired: 0, released: 0 }
+  let replacement: LocalDb | undefined
   const databases = (local: LocalDb): RegionDatabases => {
     const single = singleDatabase(local)
 
@@ -57,7 +62,7 @@ function counting() {
         counts.acquired += 1
 
         return single.acquire(ref).map((database) => ({
-          local: database.local,
+          local: replacement ?? database.local,
           release: () => {
             counts.released += 1
           },
@@ -65,8 +70,11 @@ function counting() {
       },
     }
   }
+  const replace = (local: LocalDb) => {
+    replacement = local
+  }
 
-  return { counts, databases }
+  return { counts, databases, replace }
 }
 
 describe('region hub', () => {
@@ -1149,6 +1157,292 @@ describe('a write of the server to a record', () => {
     )
     expect(hub.loadedRegions()).toBe(0)
     expect(counts.acquired).toBe(0)
+  })
+})
+
+describe('retiring a region', () => {
+  const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+
+  it("drops the region's document: a subscription under the same id loads the region afresh from its database", async () => {
+    const { counts, databases, replace } = counting()
+    const { hub } = await openHub({ databases })
+    const ann = subscriber('ann')
+    const id = noteIdFactory.create()
+
+    ;(await hub.subscribe(acme, memberOf('idn_ann'), ann, null))._unsafeUnwrap()
+    ;(
+      await hub.push(acme.id, ann, 1, [
+        noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' }),
+      ])
+    )._unsafeUnwrap()
+    expect(ann.received.at(-1)).toMatchObject({ type: 'ack', head: 1 })
+
+    // The organisation goes: its device's connection ends, the region is retired, and the
+    // organisation's database is made again for another one under the same key.
+    hub.unsubscribe(acme.id, ann.id)
+    expect((await hub.retire(acme.id)).isOk()).toBe(true)
+    expect(hub.loadedRegions()).toBe(0)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+    replace(await openDatabase())
+
+    const bob = subscriber('bob')
+
+    ;(await hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null))._unsafeUnwrap()
+
+    expect(snapshotIn(bob).getMap('records').toJSON()).toEqual({})
+    expect((await hub.heads([acme.id]))._unsafeUnwrap()).toEqual([{ region: acme.id, head: 0 }])
+    expect(counts).toEqual({ acquired: 2, released: 1 })
+  })
+
+  it('settles the work asked before it first, as asked, then releases the database', async () => {
+    const held = gate()
+    let holding = false
+    const { counts, databases } = counting()
+    const { hub, clock, local, a, b } = await hubWithTwoSubscribers({
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    // A batch is stored meanwhile, and a write of the server's own waits behind it.
+    holding = true
+    const pushed = hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')])
+
+    await drain()
+    holding = false
+    const written = hub.writeRecord(region, emailWrite)
+    const retired = hub.retire(region.id)
+
+    await drain()
+    expect(counts).toEqual({ acquired: 1, released: 0 })
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+    expect((await written)._unsafeUnwrap()).toBe(2)
+    expect((await retired).isOk()).toBe(true)
+
+    expect(a.received.filter((m) => m.type === 'ack')).toEqual([
+      expect.objectContaining({ batch: 1, head: 1 }),
+    ])
+    expect(b.received.filter((m) => m.type === 'updates').map((m) => m.head)).toEqual([0, 1, 2])
+    expect(await storedEmail(local, 'prf_1')).toBe(newEmail)
+    expect(await countRows(local, '_replica_update')).toBe(2)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+    // Nothing is scheduled for the region it let go.
+    expect(clock.pending()).toBe(0)
+  })
+
+  it('gives a subscription and a write asked while it waits the region afresh, never the retired document', async () => {
+    const held = gate()
+    let holding = false
+    const { counts, databases, replace } = counting()
+    const { hub, a } = await hubWithHistory(['Ann'], {
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    holding = true
+    const pushed = hub.push(region.id, a, 2, [setFrom(a.doc, 'name', 'Ana')])
+
+    await drain()
+    holding = false
+    const retired = hub.retire(region.id)
+
+    replace(await openDatabase())
+    const fresh = subscriber('fresh')
+    const joined = hub.subscribe(region, actor, fresh, null)
+    const written = hub.writeRecord(region, emailWrite)
+
+    await drain()
+    // Both wait for the retire, which waits for the batch under way.
+    expect(fresh.received).toEqual([])
+    expect(counts).toEqual({ acquired: 1, released: 0 })
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+    expect((await retired).isOk()).toBe(true)
+    ;(await joined)._unsafeUnwrap()
+
+    expect(a.received.at(-1)).toMatchObject({ type: 'ack', batch: 2, head: 2 })
+    expect(fresh.received).toEqual([
+      expect.objectContaining({ type: 'updates', head: 0, snapshot: true }),
+    ])
+    expect(snapshotIn(fresh).getMap('records').toJSON()).toEqual({})
+    // The region the write found holds no profile.
+    expect((await written)._unsafeUnwrapErr().code).toBe('data:WRITE_REJECTED')
+    expect(counts).toEqual({ acquired: 2, released: 1 })
+  })
+
+  it('lets the region go at once: while it waits, the head is read from the database, not the retired log', async () => {
+    const held = gate()
+    let holding = false
+    const { databases, replace } = counting()
+    const { hub, a } = await hubWithHistory(['Ann'], {
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    holding = true
+    const pushed = hub.push(region.id, a, 2, [setFrom(a.doc, 'name', 'Ana')])
+
+    await drain()
+    holding = false
+    const retired = hub.retire(region.id)
+
+    replace(await openDatabase())
+
+    expect((await hub.heads([region.id]))._unsafeUnwrap()).toEqual([{ region: region.id, head: 0 }])
+    expect(hub.loadedRegions()).toBe(0)
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+    expect((await retired).isOk()).toBe(true)
+  })
+
+  it('drops the devices still subscribed: they are sent nothing of the region afterwards, and refused as not subscribed', async () => {
+    const { hub, local, a, b } = await hubWithTwoSubscribers()
+
+    ;(await hub.push(region.id, a, 1, [editFrom(a.doc, 'Ann')]))._unsafeUnwrap()
+    ;(await hub.retire(region.id))._unsafeUnwrap()
+    const received = b.received.length
+
+    ;(await hub.push(region.id, a, 2, [setFrom(a.doc, 'name', 'Ana')]))._unsafeUnwrap()
+    ;(await hub.pull(region.id, b, b.doc.version().encode()))._unsafeUnwrap()
+    ;(await hub.writeRecord(region, emailWrite))._unsafeUnwrap()
+
+    expect(a.received.at(-1)).toMatchObject({ type: 'error', code: 'protocol' })
+    expect(b.received.slice(received)).toEqual([
+      expect.objectContaining({ type: 'error', code: 'protocol' }),
+    ])
+    expect(await countRows(local, '_replica_update')).toBe(2)
+  })
+
+  it('leaves a region it does not hold as it is, and a region retired already', async () => {
+    const { counts, databases } = counting()
+    const { hub } = await openHub({ databases })
+
+    expect((await hub.retire(region.id)).isOk()).toBe(true)
+    expect(counts).toEqual({ acquired: 0, released: 0 })
+
+    ;(await hub.subscribe(region, actor, subscriber('a'), null))._unsafeUnwrap()
+
+    expect((await hub.retire(region.id)).isOk()).toBe(true)
+    expect((await hub.retire(region.id)).isOk()).toBe(true)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+    expect(hub.loadedRegions()).toBe(0)
+  })
+
+  it('cancels the unload scheduled when the last device left: the database is released once', async () => {
+    const { counts, databases } = counting()
+    const { hub, clock, a } = await hubWithHistory(['Ann'], { databases })
+
+    hub.unsubscribe(region.id, a.id)
+    expect(clock.pending()).toBe(1)
+
+    ;(await hub.retire(region.id))._unsafeUnwrap()
+
+    expect(clock.pending()).toBe(0)
+    await clock.advance(60_000)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+  })
+
+  it('releases the database once when the unload already waits in the queue, and keeps the region held afresh', async () => {
+    const held = gate()
+    let holding = false
+    const { counts, databases } = counting()
+    const { hub, clock, a } = await hubWithHistory(['Ann'], {
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    // The device's last batch is stored meanwhile; it leaves, and the unload comes due behind it.
+    holding = true
+    const pushed = hub.push(region.id, a, 2, [editFrom(a.doc, 'Ana')])
+
+    await drain()
+    holding = false
+    hub.unsubscribe(region.id, a.id)
+    await clock.advance(60_000)
+    const retired = hub.retire(region.id)
+    const fresh = subscriber('fresh')
+    const joined = hub.subscribe(region, actor, fresh, null)
+
+    held.open()
+    ;(await pushed)._unsafeUnwrap()
+    expect((await retired).isOk()).toBe(true)
+    ;(await joined)._unsafeUnwrap()
+    await drain()
+
+    expect(counts).toEqual({ acquired: 2, released: 1 })
+    expect(hub.loadedRegions()).toBe(1)
+    ;(await hub.push(region.id, fresh, 1, [setFrom(fresh.doc, 'name', 'Anna')]))._unsafeUnwrap()
+    expect(fresh.received.at(-1)).toMatchObject({ type: 'ack', batch: 1, head: 3 })
+  })
+
+  it('schedules no unload of the region once retired, when a write asked before it settles', async () => {
+    const { counts, databases } = counting()
+    const { hub, clock, a } = await hubWithHistory(['Ann'], { databases })
+
+    // Only the write holds the region when the retire is asked.
+    hub.unsubscribe(region.id, a.id)
+    const written = hub.writeRecord(region, emailWrite)
+    const retired = hub.retire(region.id)
+
+    expect((await written)._unsafeUnwrap()).toBe(2)
+    expect((await retired).isOk()).toBe(true)
+    await drain()
+
+    expect(clock.pending()).toBe(0)
+    expect(counts).toEqual({ acquired: 1, released: 1 })
+  })
+
+  it('fails as a data error when the database is not released, and lets the region go all the same', async () => {
+    const { hub } = await openHub({
+      databases: (local) => ({
+        databaseOf: () => 'single',
+        acquire: () =>
+          okAsync({
+            local,
+            release: () => {
+              throw new Error('the database went away')
+            },
+          }),
+      }),
+    })
+
+    ;(await hub.subscribe(region, actor, subscriber('a'), null))._unsafeUnwrap()
+
+    expect((await hub.retire(region.id))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    expect(hub.loadedRegions()).toBe(0)
+  })
+
+  it('is waited for by the close: the database is released before the hub closes', async () => {
+    const held = gate()
+    let holding = false
+    const { counts, databases } = counting()
+    const { hub, a } = await hubWithHistory(['Ann'], {
+      databases,
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    })
+
+    holding = true
+    const pushed = hub.push(region.id, a, 2, [editFrom(a.doc, 'Ana')])
+
+    await drain()
+    holding = false
+    const retired = hub.retire(region.id)
+    let releasedAtClose: number | undefined
+    const closed = hub.close().then(() => {
+      releasedAtClose = counts.released
+    })
+
+    held.open()
+    await closed
+    ;(await pushed)._unsafeUnwrap()
+
+    expect((await retired).isOk()).toBe(true)
+    expect(releasedAtClose).toBe(1)
   })
 })
 

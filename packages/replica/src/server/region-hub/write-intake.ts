@@ -2,9 +2,10 @@ import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 
+import { planRecordWrite, type RecordWrite } from '../record-write'
+
 import type { BatchIntake } from './batch-intake'
-import type { Loaded, RegionState } from './held-regions'
-import { planRecordWrite, type RecordWrite } from './record-write'
+import type { Loaded, RegionState } from './region-state'
 
 /**
  * Takes in a change of the server's own to one record of a region, in the region's queue, the

@@ -11,7 +11,7 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { linkToken, Outbox } from '../../mail/__fixtures__/outbox'
-import { EmailChanges, ResetLinks, verificationClaims } from '../account-links'
+import { AccountDeletions, EmailChanges, ResetLinks, verificationClaims } from '../account-links'
 import { AccountMails } from '../account-mails'
 import { AccountPasswords } from '../account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth-instance'
@@ -105,6 +105,11 @@ export function accountServicesOf(opened: OpenedAuth) {
     }),
     resets: new ResetLinks(opened.local),
     emailChanges: new EmailChanges({
+      directory: opened.local,
+      secret: AUTH_SECRET,
+      clock: opened.clock,
+    }),
+    accountDeletions: new AccountDeletions({
       directory: opened.local,
       secret: AUTH_SECRET,
       clock: opened.clock,

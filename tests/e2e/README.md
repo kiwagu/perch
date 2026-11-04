@@ -50,7 +50,7 @@ tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
-`change-email-refused`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
+`change-email-refused`, `delete-account-refused`, `delete-link-used`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
 a new version, offline, an outdated protocol, the sync status), `app-shell/flows/` (a guest
 across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
 its own). `bun run test:e2e --grep @smoke` runs the first set
@@ -58,13 +58,15 @@ on both projects.
 
 The suite runs from the front's one client address, so its tests, on every worker, share the
 gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
-credential checks (sign-ups, sign-ins, verifications and changes of a password or an email, 20
-per ten seconds) set the number of workers: with two, a run makes at most 17 in any ten seconds;
-three reached 22 and four had a sign-in refused. The others the run spends as a whole, in one
-window of each, and stays under them in whatever order the workers take the tests: the mails
-of sign-ups, resends, reset requests and email changes (about 120 of 200 per quarter hour), the
-attempts at a reset link (10 of 20 per ten minutes) and at a confirmation link (7 of 20), the
-organisations created (16 of 30 an hour) and the invitations (7 of 60 per ten minutes). The
+credential checks (sign-ups, sign-ins, verifications, changes of a password or an email and
+requests to delete an account, 20 per ten seconds) set the number of workers: with two, a run
+made at most 17 in any ten seconds when it was measured, before the deletion of an account added
+its three requests; three workers reached 22 and four had a sign-in refused. The others
+the run spends as a whole, in one window of each, and stays under them in whatever order the
+workers take the tests: the mails of sign-ups, resends, reset requests, email changes and
+deletion requests (about 140 of 200 per quarter hour), the attempts at a reset link (10 of 20
+per ten minutes), at a confirmation link (7 of 20) and at a deletion link (7 of 20), the
+organisations created (19 of 30 an hour) and the invitations (9 of 60 per ten minutes). The
 limits a test runs into on purpose (`resend-limit`, `forgot-password-limit`) are an email's,
 and every test uses fresh emails. A test uses as few emails, sign-ins and links as its scenario
 needs; a new one that signs up, mails, opens a link or creates an organisation counts against
@@ -203,6 +205,13 @@ its send button and waits for the gateway's answer), `resetRequested` (its messa
 `src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
 (sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
 `openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
+and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
+form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for
+`deletionRequested`, the form's message), `openDeletionMail` (opens the link of the deletion
+mail, held to its declaration), `deleteAccount` (presses the button of `/delete-account` and
+confirms the frame's question, checked for its code `delete-account`) and `accountDeleted` (the
+page's message once the account is gone).
 `src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
 names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
