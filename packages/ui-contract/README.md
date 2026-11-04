@@ -301,6 +301,11 @@ for Bun.
     an anchor shows its facts), `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
+    `settledProblems(contract, settled)`: the e2e harness's check of a `SettledState` against
+    the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids`), one line
+    per problem: of the screen's anchors rendered only where listed, one visible where the
+    state does not render it, and one the state renders that is not on the page or hidden,
+    unless it, or an anchor it is under, has `roles`, `own` or a `dataId`.
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
@@ -395,6 +400,13 @@ for Bun.
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`).
+  What a state renders, read from a flow or from an app's machine config alike:
+  `renderedAt(config, value)` returns the `RenderedAt` of XState's state value (`listed`, the
+  names any state lists in `meta.renders`; `rendered`, those the states the machine is in
+  list); `isListed(at, anchor)` (rendered only where listed: a state lists it or an anchor it
+  is under) and `isRendered(at, anchor)` (no state lists it, or this state lists it or an
+  anchor it is under). Rendered means visible to the user.
   The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
   suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
   the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
@@ -402,7 +414,9 @@ for Bun.
   The page helper's contract: `PAGE_HELPER` (`__perch.ui`), `ANCHOR_ATTRIBUTES` (the
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
-  `Window` for any code that imports them.
+  `Window` for any code that imports them. The report of a settled state to an e2e run:
+  `SETTLED_STATE` (`__perchSettledState`, the binding the run exposes, declared on `Window`),
+  `SettledState` (the screen, the state value as `SettledValue` and the `RenderedPage`).
 - `./machines`: a flow in XState, for the check and for an app's own machines.
   `walk(flow)` builds the flow with `setup({ guards, actions, actors }).createMachine` (a stub
   per guard, per effect and per `invoke.src`), reaches every state, a parallel state's regions

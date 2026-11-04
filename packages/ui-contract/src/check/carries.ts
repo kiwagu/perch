@@ -8,19 +8,12 @@
  * defines.
  */
 
-import { VISIBILITY_VALUES } from '../anchors'
+import { isUnder, VISIBILITY_VALUES } from '../anchors'
 
 import { type Contract, declaredAnchors, has, isValueOf, visibilityButtonsOf } from './contract'
 
 /** What an anchor carries a value of: its `data-code`, its `data-state` or its `data-value`. */
 export type Carried = 'code' | 'state' | 'value'
-
-/**
- * Whether `other` is `anchor` itself or an anchor under it (`<anchor>.<rest>`): a declared
- * anchor nested in it, such as a composite's item under its list, or a part derived from it.
- */
-export const isUnder = (anchor: string, other: string): boolean =>
-  other === anchor || other.startsWith(`${anchor}.`)
 
 /**
  * Whether `anchor`, or an anchor under it, carries `value` as its `carried`: a code of its
