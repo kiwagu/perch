@@ -32,26 +32,35 @@ connection, a batch its device pushes there may still be accepted: that window b
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
 creations, the invites of it, its removals, its departure) run one after the other, each once
 the one before it and its notification have settled, so the directory and the organisation's
-database end as the last change left them and its devices hear the lists in that order. This
-holds within one gateway process; gateways in several processes would need a durable revision
-of the memberships.
+database end as the last change left them and its devices hear the lists in that order. An
+invite, a removal and a departure also run, inside the identity's turn, in the turn of each
+organisation they change, and decide there from the rows as they are then: an invite or a
+removal is refused when its organisation went (`no-such-tenant`) or its admin is one no more,
+and a departure counts who else belongs. This holds within one gateway process; gateways in
+several processes would need a durable revision of the memberships.
 An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
 the directory's memberships and their roles: `blocked` is true while it is the only admin of a
 ready organisation with other members, and `leave` takes every organisation it is the only member
 of whole, of any status (its database, its memberships and its directory row in one transaction,
 then the cached connection), and takes it out of every other one (its member row, then its
 membership, so a run again after a failure finds what is left; its notes stay).
-`Organisations.leaveAll` runs that departure as a change of the identity's memberships, so an
-invite of it waits; it revokes no region and tells nobody, as the caller closes the identity's
-connections first and the other members read the members when they ask.
+`Organisations.leaveAll` runs that departure in the identity's turn and the turns of its
+organisations, so an invite of it waits, and so does any change of another identity there;
+`leave` reads the rows again in those turns and is refused `last-admin`, changing nothing, while
+the identity is the only admin of a ready organisation with others in it. It revokes no region
+and tells nobody, as the caller closes the identity's connections first and the other members
+read the members when they ask.
 `Organisations` (`organisations/service.ts`) checks what is asked and orders the changes; each
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 `OrganisationInvitation` (`invitation.ts`), `OrganisationRemoval` (`removal.ts`), and
 `MembershipListeners` (`listeners.ts`), who hears the changes. They read the directory through
-`OrganisationLookup` and an organisation's `member` rows through `TenantMembers`; `KeyedTurns`
-(`src/keyed-turns.ts`) runs one identity's changes one at a time. The identity an invite names
-is found by its email, in any case, through the auth module's one lookup (`identityByEmail`,
-`src/auth/identity-by-email.ts`); an email no identity has is refused `no-such-identity` here.
+`OrganisationLookup` and an organisation's `member` rows through `TenantMembers`;
+`MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a
+`KeyedTurns` (`src/keyed-turns.ts`), an identity's always taken first and several
+organisations' in the order of their ids, so no two changes wait for each other. The identity
+an invite names is found by its email, in any case, through the auth module's one lookup
+(`identityByEmail`, `src/auth/identity-by-email.ts`); an email no identity has is refused
+`no-such-identity` here.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the

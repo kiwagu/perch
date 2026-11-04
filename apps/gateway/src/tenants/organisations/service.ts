@@ -1,15 +1,14 @@
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { KeyedTurns } from '../../keyed-turns'
-import { AccountDeparture } from '../account-departure'
+import { AccountDeparture, type DepartureError } from '../account-departure'
 import { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
-import type { Member } from '../organisation-rows'
+import type { Member, Tenant } from '../organisation-rows'
 import type { TenantDatabases } from '../tenant-databases'
 import { TenantMembers } from '../tenant-members'
 
@@ -17,6 +16,7 @@ import { OrganisationCreation } from './creation'
 import { OrganisationInvitation } from './invitation'
 import { type MembershipListener, MembershipListeners } from './listeners'
 import { OrganisationRemoval } from './removal'
+import { MembershipTurns } from './turns'
 
 export interface OrganisationsOptions {
   /** The directory database, opened as the gateway's namespace user. */
@@ -43,9 +43,12 @@ const MAX_NAME = 80
  * The changes of one identity's memberships (its creations, the invites of it, its removals
  * and its departure) run one after the other, each once the one before it, its notification
  * included, has settled: the directory and the organisation's database end as the last one left
- * them, and the listeners hear the lists in that order. This orders them within one gateway
- * process only; gateways running in several processes would need a durable revision of the
- * memberships.
+ * them, and the listeners hear the lists in that order. An invite, a removal and a departure run
+ * in the turn of each organisation they change too (`MembershipTurns`), and decide there from
+ * the rows as they are then: an invite or a removal is refused when its organisation is gone or
+ * its admin no longer one, a departure when it would leave the others without an admin. This
+ * orders them within one gateway process only; gateways running in several processes would need
+ * a durable revision of the memberships.
  */
 export class Organisations {
   readonly #lookup: OrganisationLookup
@@ -55,8 +58,7 @@ export class Organisations {
   readonly #invitation: OrganisationInvitation
   readonly #removal: OrganisationRemoval
   readonly #departure: AccountDeparture
-  /** Settles once the changes of an identity's memberships asked so far have; gone when idle. */
-  readonly #changes = new KeyedTurns<IdentityId>()
+  readonly #turns = new MembershipTurns()
 
   constructor(options: OrganisationsOptions) {
     const { directory, databases, revoke } = options
@@ -99,7 +101,7 @@ export class Organisations {
       return errAsync(refused('invalid-name'))
     }
 
-    return this.#serialize(identity, () =>
+    return this.#turns.ofIdentity(identity, () =>
       this.#creation
         .create(identity, key, name)
         .andThen((tenant) =>
@@ -126,11 +128,13 @@ export class Organisations {
         this.#lookup.identityByEmail(email).map((identity) => ({ tenant, identity })),
       )
       .andThen(({ tenant, identity }) =>
-        this.#serialize(identity.id, () =>
-          this.#invitation
-            .admit(tenant, identity.id)
-            .andThen(() => this.#listeners.tell(identity.id))
-            .map((): Member => ({ identity, role: 'member' })),
+        this.#turns.ofIdentity(identity.id, () =>
+          this.#asAdmin(actor, tenant, (current) =>
+            this.#invitation
+              .admit(current, identity.id)
+              .andThen(() => this.#listeners.tell(identity.id))
+              .map((): Member => ({ identity, role: 'member' })),
+          ),
         ),
       )
   }
@@ -150,16 +154,28 @@ export class Organisations {
       .tenantOf(key)
       .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
       .andThen((tenant) => (identity === actor ? errAsync(refused('self')) : okAsync(tenant)))
-      .andThen((tenant) => this.#serialize(identity, () => this.#removal.remove(tenant, identity)))
+      .andThen((tenant) =>
+        this.#turns.ofIdentity(identity, () =>
+          this.#asAdmin(actor, tenant, (current) => this.#removal.remove(current, identity)),
+        ),
+      )
   }
 
   /**
    * Takes `identity`, whose account goes, out of every organisation (`AccountDeparture.leave`)
-   * as a change of its memberships: an invite of it asked meanwhile waits for it. It revokes no
+   * in its turn and the turns of its organisations: an invite of it asked meanwhile waits for it,
+   * and so does a change of another identity in one of them. Refused `last-admin`, changing
+   * nothing, while it is the only admin of a ready organisation with others in it. It revokes no
    * region and tells nobody: the caller closes the identity's connections beforehand.
    */
-  leaveAll(identity: IdentityId): ResultAsync<void, DataError> {
-    return this.#serialize(identity, () => this.#departure.leave(identity))
+  leaveAll(identity: IdentityId): ResultAsync<void, DepartureError> {
+    return this.#turns.ofIdentity(identity, () =>
+      this.#departure
+        .organisationsOf(identity)
+        .andThen((tenants) =>
+          this.#turns.ofTenants(tenants, () => this.#departure.leave(identity)),
+        ),
+    )
   }
 
   /** The members of the organisation with their emails, for its admins, the earliest first. */
@@ -182,13 +198,25 @@ export class Organisations {
   }
 
   /**
-   * Runs `work`, a change of the memberships of `identity`, once the changes of that identity
-   * asked before it have settled; the next one waits for it, whatever its outcome.
+   * Runs `work`, a change of the organisation's memberships `actor` asked, in the organisation's
+   * turn, once it found that the organisation is still the one asked of and `actor` still one of
+   * its admins: a change that settled meanwhile (a departure that took the organisation whole,
+   * or `actor` out of it) refuses it as the checks before the turn would have.
    */
-  #serialize<T, E extends OrganisationError>(
-    identity: IdentityId,
-    work: () => ResultAsync<T, E>,
-  ): ResultAsync<T, E> {
-    return new ResultAsync(this.#changes.run(identity, work))
+  #asAdmin<T>(
+    actor: IdentityId,
+    tenant: Tenant,
+    work: (tenant: Tenant) => ResultAsync<T, OrganisationError>,
+  ): ResultAsync<T, OrganisationError> {
+    return this.#turns.ofTenants([tenant.id], () =>
+      this.#lookup
+        .tenantOf(tenant.key)
+        .andThen((current) =>
+          current.id === tenant.id
+            ? this.#lookup.adminOf(actor, current)
+            : errAsync(refused('no-such-tenant')),
+        )
+        .andThen(work),
+    )
   }
 }

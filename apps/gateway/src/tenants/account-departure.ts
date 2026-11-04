@@ -1,4 +1,4 @@
-import { err, ok, okAsync, type Result, type ResultAsync } from 'neverthrow'
+import { err, errAsync, ok, okAsync, type Result, type ResultAsync } from 'neverthrow'
 
 import {
   type DataError,
@@ -41,6 +41,19 @@ type DepartingMembership = z.output<typeof departingMembership>
 
 const departingMemberships = z.array(departingMembership)
 
+/** A departure refused: the identity is the only admin of a ready organisation with others in it. */
+export interface DepartureRefusal {
+  readonly kind: 'refused'
+  readonly code: 'last-admin'
+}
+
+export type DepartureError = DepartureRefusal | DataError
+
+/** Whether the identity's departure would leave the others of this organisation without an admin. */
+function lastAdmin(row: DepartingMembership): boolean {
+  return row.status === 'ready' && row.role === 'admin' && row.admins === 1 && row.members > 1
+}
+
 export interface AccountDepartureOptions {
   /** The directory database, opened as the gateway's namespace user. */
   readonly directory: LocalDb
@@ -52,8 +65,12 @@ export interface AccountDepartureOptions {
  * of an organisation is the directory's word: its memberships and their roles. An organisation
  * the identity is the only member of goes whole, of any status, one still provisioning too; in
  * any other its member row leaves the organisation's database, then its membership goes, and
- * its notes stay. Its connections are the caller's to close beforehand, and the
- * other members are told nothing: they read the members when they ask for them.
+ * its notes stay. Its connections are the caller's to close beforehand, and the other members
+ * are told nothing: they read the members when they ask for them.
+ *
+ * `leave` decides from who else belongs to each organisation, so it runs in the identity's turn
+ * and in the turns of its organisations (`Organisations.leaveAll`): no other change of their
+ * memberships moves those rows between its read and its writes.
  */
 export class AccountDeparture {
   readonly #directory: LocalDb
@@ -71,31 +88,35 @@ export class AccountDeparture {
    * departure would leave them without an admin.
    */
   blocked(identity: IdentityId): ResultAsync<boolean, DataError> {
-    return this.#departing(identity).map((rows) =>
-      rows.some(
-        (row) =>
-          row.status === 'ready' && row.role === 'admin' && row.admins === 1 && row.members > 1,
-      ),
-    )
+    return this.#departing(identity).map((rows) => rows.some(lastAdmin))
+  }
+
+  /** The ids of the organisations the identity belongs to, of any status. */
+  organisationsOf(identity: IdentityId): ResultAsync<readonly string[], DataError> {
+    return this.#departing(identity).map((rows) => rows.map((row) => row.tenant))
   }
 
   /**
    * Every membership of the identity goes, one organisation after the other, the first failure
-   * answering. An organisation it is the only member of goes whole: its database, its
-   * memberships and its directory row in one transaction, then the cached connection to it. In
-   * any other its member row goes first and its membership last, so a run again after a failure
-   * still finds every organisation it has not left yet and completes the departure; a run after
-   * a success finds nothing and changes nothing.
+   * answering; while the identity is the only admin of a ready organisation with others in it,
+   * the departure is refused `last-admin` and nothing changes. An organisation it is the only
+   * member of goes whole: its database, its memberships and its directory row in one
+   * transaction, then the cached connection to it. In any other its member row goes first and
+   * its membership last, so a run again after a failure still finds every organisation it has
+   * not left yet and completes the departure; a run after a success finds nothing and changes
+   * nothing.
    */
-  leave(identity: IdentityId): ResultAsync<void, DataError> {
+  leave(identity: IdentityId): ResultAsync<void, DepartureError> {
     return this.#departing(identity).andThen((rows) =>
-      rows.reduce(
-        (done, row) =>
-          done.andThen(() =>
-            row.members === 1 ? this.#removeTenant(row) : this.#leaveTenant(identity, row),
+      rows.some(lastAdmin)
+        ? errAsync<void, DepartureError>({ kind: 'refused', code: 'last-admin' })
+        : rows.reduce(
+            (done, row) =>
+              done.andThen(() =>
+                row.members === 1 ? this.#removeTenant(row) : this.#leaveTenant(identity, row),
+              ),
+            okAsync<void, DepartureError>(undefined),
           ),
-        okAsync<void, DataError>(undefined),
-      ),
     )
   }
 

@@ -1,216 +1,24 @@
 import { ok } from 'neverthrow'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  type DataError,
-  type LocalDb,
-  openLocalDb,
-  recordId,
-  tenantDatabase,
-} from '@workspace/data'
-import { nodeEngines } from '@workspace/data/engines/node'
-import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
-import {
-  type IdentityId,
-  identityIdFactory,
-  membershipIdFactory,
-  noteIdFactory,
-  tenantIdFactory,
-} from '@workspace/ids'
-import { manualClock } from '@workspace/replica/testing'
+import { recordId } from '@workspace/data'
+import { membershipIdFactory, tenantIdFactory } from '@workspace/ids'
 
-import identityRow from '../auth/__fixtures__/identity-row.surql'
-import { DIRECTORY, NAMESPACE } from '../config'
+import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
 
-import directoryRows from './__fixtures__/directory-rows.surql'
-import memberRows from './__fixtures__/member-rows.surql'
+import { closeDepartures, departureHarness } from './__fixtures__/departures'
 import membershipPromote from './__fixtures__/membership-promote.surql'
-import membershipRows from './__fixtures__/membership-rows.surql'
-import namespaceInfo from './__fixtures__/namespace-info.surql'
-import noteRows from './__fixtures__/note-rows.surql'
-import noteWrite from './__fixtures__/note-write.surql'
 import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
-import tenantRows from './__fixtures__/tenant-rows.surql'
-import { AccountDeparture } from './account-departure'
-import { Organisations } from './organisations'
+import departingMembershipsStatement from './surql/departing-memberships.surql'
 import memberRemoveStatement from './surql/member-remove.surql'
 import membershipAddStatement from './surql/membership-add.surql'
 import membershipRemoveStatement from './surql/membership-remove.surql'
+import membershipsOfStatement from './surql/memberships-of.surql'
 import tenantRemoveStatement from './surql/tenant-remove.surql'
-import { TenantDatabases } from './tenant-databases'
 
-/** Closes what a test opened, the organisations' databases before the directory. */
-const cleanups: Array<() => Promise<void>> = []
+afterEach(closeDepartures)
 
-/** Failures of the tenant databases that no test expected. */
-const failures: DataError[] = []
-
-afterEach(async () => {
-  for (const cleanup of cleanups.splice(0).reverse()) {
-    await cleanup()
-  }
-
-  expect(failures.splice(0)).toEqual([])
-})
-
-/**
- * A departure over an embedded directory, with each organisation's database on an embedded
- * engine of its own (a connection opened anew after an eviction starts empty), the organisations
- * that set the scene up, and three identities: ann, bob and cat. A test can make one statement
- * fail on the departure's directory or on the organisations' databases, as a broken database
- * would.
- */
-async function harness() {
-  const directory = (
-    await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema: readSchema('directory') })
-  )._unsafeUnwrap()
-  const opened: string[] = []
-  /** The statement the departure's directory and the organisations' databases refuse, if any. */
-  let refusedStatement: string | undefined
-  const refusing = (text: string) => {
-    if (text === refusedStatement) {
-      throw new Error('the database refused the statement')
-    }
-  }
-  const databases = new TenantDatabases({
-    open: (key) => {
-      opened.push(key)
-
-      return openLocalDb({
-        engines: nodeEngines(),
-        url: 'mem://',
-        namespace: NAMESPACE,
-        database: tenantDatabase(key),
-        schema: readSchema('tenant'),
-      }).map((local) => interceptQueries(local, refusing))
-    },
-    clock: manualClock(),
-    onError: (error) => failures.push(error),
-  })
-
-  cleanups.push(
-    () => directory.close(),
-    () => databases.close(),
-  )
-
-  const organisations = new Organisations({ directory, databases, revoke: async () => {} })
-  const departure = new AccountDeparture({
-    directory: interceptQueries(directory, refusing),
-    databases,
-  })
-
-  /** An identity written straight into the directory. */
-  const identity = async (email: string): Promise<IdentityId> => {
-    const key = identityIdFactory.create()
-
-    await directory.db.query(identityRow, { key, email })
-
-    return key
-  }
-
-  const ann = await identity('ann@example.test')
-  const bob = await identity('bob@example.test')
-  const cat = await identity('cat@example.test')
-
-  /** `creator` creates the organisation `key`, for a test to start from. */
-  const founded = async (creator: IdentityId, key: string) =>
-    (await organisations.create({ identity: creator, key, name: key }))._unsafeUnwrap()
-
-  /** `actor` invites the identity that signs in with `email` into `key`. */
-  const invited = async (actor: IdentityId, key: string, email: string) =>
-    (await organisations.invite({ actor, key, email }))._unsafeUnwrap()
-
-  /** Runs `work` on the organisation's database, holding it meanwhile. */
-  const inTenant = async <T>(key: string, work: (local: LocalDb) => Promise<T>): Promise<T> => {
-    const handle = (await databases.acquire(key))._unsafeUnwrap()
-
-    try {
-      return await work(handle.local)
-    } finally {
-      handle.release()
-    }
-  }
-
-  /** The members the organisation's own database holds, admins first. */
-  const membersIn = (key: string) =>
-    inTenant(key, async (local) => {
-      const [rows] = await local.db.query<[Array<{ identity: string; role: string }>]>(memberRows)
-
-      return rows
-    })
-
-  /** The notes the organisation's own database holds, with their authors. */
-  const notesIn = (key: string) =>
-    inTenant(key, async (local) => {
-      const [rows] = await local.db.query<[Array<{ author: string; text: string }>]>(noteRows)
-
-      return rows
-    })
-
-  /** `author` writes a note in the organisation's database. */
-  const noted = (key: string, author: IdentityId, text: string) =>
-    inTenant(key, (local) =>
-      local.db.query(noteWrite, { id: noteIdFactory.create(), author, text }),
-    )
-
-  /** The definition of the organisation's database in the namespace, if it is defined. */
-  const definitionOf = async (key: string) => {
-    const [namespace] =
-      await directory.db.query<[{ databases: Record<string, string | undefined> }]>(namespaceInfo)
-
-    return namespace.databases[tenantDatabase(key)]
-  }
-
-  /** The directory's row of the organisation with `key`, if any. */
-  const tenantRowOf = async (key: string) => {
-    const [rows] = await directory.db.query<[Array<{ status: string }>]>(tenantRows, { key })
-
-    return rows
-  }
-
-  /** The roles `identity` holds in the organisation with `key`, by the directory. */
-  const rolesIn = async (identity: IdentityId, key: string) => {
-    const [rows] = await directory.db.query<[Array<{ role: string }>]>(membershipRows, {
-      identity: recordId('identity', identity),
-      key,
-    })
-
-    return rows.map((row) => row.role)
-  }
-
-  /** Every organisation's key and every membership's role the directory holds. */
-  const everything = async () => {
-    const [tenants, memberships] =
-      await directory.db.query<[Array<{ key: string }>, Array<{ role: string }>]>(directoryRows)
-
-    return { tenants: tenants.map((row) => row.key).sort(), memberships: memberships.length }
-  }
-
-  /** `statement` is refused from now on; `undefined` refuses none. */
-  const refuse = (statement: string | undefined) => {
-    refusedStatement = statement
-  }
-
-  return {
-    organisations,
-    departure,
-    directory,
-    opened,
-    ann,
-    bob,
-    cat,
-    founded,
-    invited,
-    membersIn,
-    notesIn,
-    noted,
-    definitionOf,
-    tenantRowOf,
-    rolesIn,
-    everything,
-    refuse,
-  }
-}
+const lastAdmin = { kind: 'refused', code: 'last-admin' }
 
 describe('AccountDeparture', () => {
   it('takes an organisation the identity is the only member of whole: its database, its row and its membership, and its key is free again', async () => {
@@ -225,12 +33,12 @@ describe('AccountDeparture', () => {
       definitionOf,
       tenantRowOf,
       rolesIn,
-    } = await harness()
+    } = await departureHarness()
 
     await founded(ann, 't1')
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await definitionOf('t1')).toBeUndefined()
     expect(await tenantRowOf('t1')).toEqual([])
     expect(await rolesIn(ann, 't1')).toEqual([])
@@ -247,14 +55,20 @@ describe('AccountDeparture', () => {
     expect(await membersIn('t1')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
-  it('is blocked while the identity is the only admin of a ready organisation with other members', async () => {
-    const { departure, ann, bob, founded, invited } = await harness()
+  it('is blocked while the identity is the only admin of a ready organisation with other members, and a departure then is refused, changing nothing', async () => {
+    const { organisations, departure, ann, bob, founded, invited, everything, definitionOf } =
+      await departureHarness()
 
+    await founded(ann, 't1')
     await founded(ann, 't2')
     await invited(ann, 't2', 'bob@example.test')
 
     expect(await departure.blocked(ann)).toEqual(ok(true))
     expect(await departure.blocked(bob)).toEqual(ok(false))
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toEqual(lastAdmin)
+    // Not even the organisation it alone belongs to went.
+    expect(await everything()).toEqual({ tenants: ['t1', 't2'], memberships: 3 })
+    expect(await definitionOf('t1')).toBeDefined()
   })
 
   it('takes the identity out of an organisation others belong to: its membership and member row go, the others and its notes stay', async () => {
@@ -270,14 +84,14 @@ describe('AccountDeparture', () => {
       noted,
       definitionOf,
       rolesIn,
-    } = await harness()
+    } = await departureHarness()
     const t3 = await founded(bob, 't3')
 
     await invited(bob, 't3', 'ann@example.test')
     await noted('t3', ann, 'written by ann')
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
     expect(await rolesIn(bob, 't3')).toEqual(['admin'])
     expect(await organisations.membershipsOf(bob)).toEqual(ok([t3]))
@@ -287,24 +101,35 @@ describe('AccountDeparture', () => {
   })
 
   it('leaves again as a no-op once every membership is gone', async () => {
-    const { departure, ann, bob, founded, invited, membersIn, everything } = await harness()
+    const { organisations, ann, bob, founded, invited, membersIn, everything } =
+      await departureHarness()
 
     await founded(ann, 't1')
     await founded(bob, 't3')
     await invited(bob, 't3', 'ann@example.test')
 
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     const left = await everything()
 
     expect(left).toEqual({ tenants: ['t3'], memberships: 1 })
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await everything()).toEqual(left)
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
   it('is not blocked by an organisation that has another admin, which the identity then leaves', async () => {
-    const { departure, directory, ann, bob, cat, founded, invited, membersIn, rolesIn } =
-      await harness()
+    const {
+      organisations,
+      departure,
+      directory,
+      ann,
+      bob,
+      cat,
+      founded,
+      invited,
+      membersIn,
+      rolesIn,
+    } = await departureHarness()
 
     await founded(ann, 't4')
     await invited(ann, 't4', 'cat@example.test')
@@ -312,15 +137,15 @@ describe('AccountDeparture', () => {
     await directory.db.query(membershipPromote, { identity: recordId('identity', cat), key: 't4' })
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(cat, 't4')).toEqual(['admin'])
     expect(await rolesIn(bob, 't4')).toEqual(['member'])
     expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
   })
 
   it('counts only ready organisations for the block, and takes one still provisioning whole', async () => {
-    const { departure, directory, ann, founded, invited, definitionOf, everything } =
-      await harness()
+    const { organisations, departure, directory, ann, founded, invited, definitionOf, everything } =
+      await departureHarness()
 
     await founded(ann, 't5')
     await invited(ann, 't5', 'bob@example.test')
@@ -329,37 +154,39 @@ describe('AccountDeparture', () => {
     await directory.db.query(tenantInterrupt, { key: 't6' })
 
     expect(await departure.blocked(ann)).toEqual(ok(false))
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await definitionOf('t6')).toBeUndefined()
     expect(await everything()).toEqual({ tenants: ['t5'], memberships: 1 })
   })
 
   it('completes a departure whose removal of an organisation failed when it runs again', async () => {
-    const { departure, ann, founded, definitionOf, everything, refuse } = await harness()
+    const { organisations, ann, founded, definitionOf, everything, refuse } =
+      await departureHarness()
 
     await founded(ann, 't1')
     refuse(tenantRemoveStatement)
 
-    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject({
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
     expect(await everything()).toEqual({ tenants: ['t1'], memberships: 1 })
 
     refuse(undefined)
 
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await definitionOf('t1')).toBeUndefined()
     expect(await everything()).toEqual({ tenants: [], memberships: 0 })
   })
 
   it('completes a departure whose removal of a member row failed when it runs again', async () => {
-    const { departure, ann, bob, founded, invited, membersIn, rolesIn, refuse } = await harness()
+    const { organisations, ann, bob, founded, invited, membersIn, rolesIn, refuse } =
+      await departureHarness()
 
     await founded(bob, 't3')
     await invited(bob, 't3', 'ann@example.test')
     refuse(memberRemoveStatement)
 
-    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject({
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
     // The membership stays until the member row went: the next run still finds the organisation.
@@ -367,19 +194,20 @@ describe('AccountDeparture', () => {
 
     refuse(undefined)
 
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
   it('completes a departure whose removal of a membership failed after the member row went', async () => {
-    const { departure, ann, bob, founded, invited, membersIn, rolesIn, refuse } = await harness()
+    const { organisations, ann, bob, founded, invited, membersIn, rolesIn, refuse } =
+      await departureHarness()
 
     await founded(bob, 't3')
     await invited(bob, 't3', 'ann@example.test')
     refuse(membershipRemoveStatement)
 
-    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject({
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
       code: 'data:WRITE_FAILED',
     })
     expect(await rolesIn(ann, 't3')).toEqual(['member'])
@@ -387,14 +215,14 @@ describe('AccountDeparture', () => {
 
     refuse(undefined)
 
-    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
     expect(await rolesIn(ann, 't3')).toEqual([])
     expect(await rolesIn(bob, 't3')).toEqual(['admin'])
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
   it('answers an error, never a guess, for a membership whose organisation is gone', async () => {
-    const { departure, directory, ann } = await harness()
+    const { organisations, departure, directory, ann } = await departureHarness()
 
     await directory.db.query(membershipAddStatement, {
       id: membershipIdFactory.create(),
@@ -409,6 +237,213 @@ describe('AccountDeparture', () => {
     }
 
     expect((await departure.blocked(ann))._unsafeUnwrapErr()).toMatchObject(unknown)
-    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject(unknown)
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject(unknown)
+  })
+})
+
+describe('AccountDeparture beside other changes of the same organisation', () => {
+  it('of the two admins departing at once beside a member, one leaves and the other is refused: the member keeps an admin', async () => {
+    const {
+      organisations,
+      departure,
+      directory,
+      ann,
+      bob,
+      cat,
+      founded,
+      invited,
+      membersIn,
+      rolesIn,
+      sentCount,
+      hold,
+    } = await departureHarness()
+
+    await founded(ann, 't4')
+    await invited(ann, 't4', 'cat@example.test')
+    await invited(ann, 't4', 'bob@example.test')
+    await directory.db.query(membershipPromote, { identity: recordId('identity', cat), key: 't4' })
+    expect(await departure.blocked(ann)).toEqual(ok(false))
+    expect(await departure.blocked(cat)).toEqual(ok(false))
+
+    const held = hold(memberRemoveStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await held.waiting
+
+    const reads = sentCount(departingMembershipsStatement)
+    const catLeaves = organisations.leaveAll(cat)
+
+    // Cat's departure reads its organisations while ann is still an admin there.
+    await vi.waitFor(() => expect(sentCount(departingMembershipsStatement)).toBe(reads + 1))
+    held.release()
+
+    expect(await annLeaves).toEqual(ok(undefined))
+    expect((await catLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
+    expect(await rolesIn(ann, 't4')).toEqual([])
+    expect(await rolesIn(cat, 't4')).toEqual(['admin'])
+    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
+  })
+
+  it('of the two admins departing at once from an organisation of theirs alone, the second takes it whole: nothing is left behind', async () => {
+    const {
+      organisations,
+      directory,
+      ann,
+      cat,
+      founded,
+      invited,
+      definitionOf,
+      everything,
+      sentCount,
+      hold,
+    } = await departureHarness()
+
+    await founded(ann, 't7')
+    await invited(ann, 't7', 'cat@example.test')
+    await directory.db.query(membershipPromote, { identity: recordId('identity', cat), key: 't7' })
+
+    const held = hold(memberRemoveStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await held.waiting
+
+    const reads = sentCount(departingMembershipsStatement)
+    const catLeaves = organisations.leaveAll(cat)
+
+    await vi.waitFor(() => expect(sentCount(departingMembershipsStatement)).toBe(reads + 1))
+    held.release()
+
+    expect(await annLeaves).toEqual(ok(undefined))
+    expect(await catLeaves).toEqual(ok(undefined))
+    expect(await everything()).toEqual({ tenants: [], memberships: 0 })
+    expect(await definitionOf('t7')).toBeUndefined()
+  })
+
+  it('two members departing at once leave the organisation with its admin and nothing of theirs', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      cat,
+      founded,
+      invited,
+      membersIn,
+      everything,
+      sentCount,
+      hold,
+    } = await departureHarness()
+
+    await founded(bob, 't5')
+    await invited(bob, 't5', 'ann@example.test')
+    await invited(bob, 't5', 'cat@example.test')
+
+    const held = hold(memberRemoveStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await held.waiting
+
+    const reads = sentCount(departingMembershipsStatement)
+    const catLeaves = organisations.leaveAll(cat)
+
+    await vi.waitFor(() => expect(sentCount(departingMembershipsStatement)).toBe(reads + 1))
+    held.release()
+
+    expect(await annLeaves).toEqual(ok(undefined))
+    expect(await catLeaves).toEqual(ok(undefined))
+    expect(await everything()).toEqual({ tenants: ['t5'], memberships: 1 })
+    expect(await membersIn('t5')).toEqual([{ identity: bob, role: 'admin' }])
+  })
+
+  it('a removal asked by an admin whose departure settled meanwhile is refused, and the member stays', async () => {
+    const {
+      organisations,
+      directory,
+      ann,
+      bob,
+      cat,
+      founded,
+      invited,
+      membersIn,
+      rolesIn,
+      sentCount,
+      hold,
+    } = await departureHarness()
+
+    await founded(ann, 't4')
+    await invited(ann, 't4', 'cat@example.test')
+    await invited(ann, 't4', 'bob@example.test')
+    await directory.db.query(membershipPromote, { identity: recordId('identity', cat), key: 't4' })
+
+    const held = hold(memberRemoveStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await held.waiting
+
+    const reads = sentCount(membershipsOfStatement)
+    const removal = organisations.remove({ actor: ann, key: 't4', identity: bob })
+
+    // The removal found ann an admin before her departure settled.
+    await vi.waitFor(() => expect(sentCount(membershipsOfStatement)).toBe(reads + 1))
+    held.release()
+
+    expect(await annLeaves).toEqual(ok(undefined))
+    expect((await removal)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'not-a-member' })
+    expect(await rolesIn(bob, 't4')).toEqual(['member'])
+    expect((await membersIn('t4')).map((row) => row.identity).sort()).toEqual([bob, cat].sort())
+  })
+
+  it('an invite into an organisation a departure is taking whole is refused once it went', async () => {
+    const { organisations, ann, bob, founded, everything, sentCount, hold } =
+      await departureHarness()
+
+    await founded(ann, 't1')
+
+    const held = hold(tenantRemoveStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await held.waiting
+
+    const lookups = sentCount(identityByEmailStatement)
+    const invite = organisations.invite({ actor: ann, key: 't1', email: 'bob@example.test' })
+
+    // The invite found the organisation and bob before the departure took it.
+    await vi.waitFor(() => expect(sentCount(identityByEmailStatement)).toBe(lookups + 1))
+    held.release()
+
+    expect(await annLeaves).toEqual(ok(undefined))
+    expect((await invite)._unsafeUnwrapErr()).toEqual({ kind: 'refused', code: 'no-such-tenant' })
+    expect(await everything()).toEqual({ tenants: [], memberships: 0 })
+    expect(await organisations.membershipsOf(bob)).toEqual(ok([]))
+  })
+
+  it('a departure asked while an invite into its organisation is under way is refused once the invite made it the last admin', async () => {
+    const { organisations, ann, bob, founded, membersIn, rolesIn, sentCount, hold } =
+      await departureHarness()
+
+    await founded(ann, 't1')
+
+    const held = hold(membershipAddStatement)
+    const invite = organisations.invite({ actor: ann, key: 't1', email: 'bob@example.test' })
+
+    // The invite holds the organisation's turn before bob's membership is written.
+    await held.waiting
+
+    const reads = sentCount(departingMembershipsStatement)
+    const annLeaves = organisations.leaveAll(ann)
+
+    await vi.waitFor(() => expect(sentCount(departingMembershipsStatement)).toBe(reads + 1))
+    held.release()
+
+    expect(await invite).toEqual(
+      ok({ identity: { id: bob, email: 'bob@example.test' }, role: 'member' }),
+    )
+    expect((await annLeaves)._unsafeUnwrapErr()).toEqual(lastAdmin)
+    expect(await rolesIn(ann, 't1')).toEqual(['admin'])
+    expect(await rolesIn(bob, 't1')).toEqual(['member'])
+    expect(await membersIn('t1')).toEqual([
+      { identity: ann, role: 'admin' },
+      { identity: bob, role: 'member' },
+    ])
   })
 })
