@@ -28,10 +28,17 @@ export const FIELD_KINDS: ReadonlySet<string> = new Set([
   'switch',
 ])
 
+/**
+ * Whether `other` is `anchor` itself or an anchor under it (`<anchor>.<rest>`): a declared
+ * anchor nested in it, such as a composite's item under its list, or a part derived from it.
+ */
+export const isUnder = (anchor: string, other: string): boolean =>
+  other === anchor || other.startsWith(`${anchor}.`)
+
 /** The longest screen name the anchor starts with on a segment boundary, if any. */
 export const screenOf = (anchor: string, screenNames: readonly string[]): string | undefined =>
   screenNames
-    .filter((name) => anchor === name || anchor.startsWith(`${name}.`))
+    .filter((name) => isUnder(name, anchor))
     .reduce<string | undefined>(
       (longest, name) => (longest === undefined || name.length > longest.length ? name : longest),
       undefined,

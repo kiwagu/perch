@@ -48,6 +48,7 @@ beforeEach(async () => {
           settings,
           keptAccountStart(memoryStorage()),
           (run) => run(() => opened.session.flush()),
+          () => 'system',
         ),
     )
 
@@ -89,7 +90,7 @@ describe('UserModule', () => {
     ).toMatchObject([{ locale: 'es' }])
   })
 
-  it('routes guests to sign-in and to the verification of their email, anyone to the recovery of a password, and signed-in users to their profile and their settings', () => {
+  it('routes guests to sign-in, the verification of their email and the request of a reset mail, anyone to the links that set a password, confirm an email or delete an account, and signed-in users to their profile and their settings', () => {
     expect(
       UserModule.routes.map((route) => ({
         path: route.path,
@@ -98,12 +99,12 @@ describe('UserModule', () => {
         search: route.search === undefined ? undefined : Object.keys(route.search.shape),
       })),
     ).toEqual([
-      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: undefined },
+      { path: '/sign-in', page: 'SignInPage', guard: 'guest', search: ['email'] },
       { path: '/verify-email', page: 'VerifyEmailPage', guard: 'guest', search: ['token'] },
       {
         path: '/forgot-password',
         page: 'ForgotPasswordPage',
-        guard: undefined,
+        guard: 'guest',
         search: ['email'],
       },
       {
@@ -118,11 +119,18 @@ describe('UserModule', () => {
         guard: undefined,
         search: ['token'],
       },
+      {
+        path: '/delete-account',
+        page: 'DeleteAccountPage',
+        guard: undefined,
+        search: ['token'],
+      },
       { path: '/me', page: 'ProfilePage', guard: 'authenticated', search: undefined },
       { path: '/settings', page: 'SettingsPage', guard: 'authenticated', search: undefined },
     ])
     expect(Object.keys(UserModule.declarations).sort()).toEqual([
       'ConfirmEmailPage',
+      'DeleteAccountPage',
       'ForgotPasswordPage',
       'ProfilePage',
       'ResetPasswordPage',

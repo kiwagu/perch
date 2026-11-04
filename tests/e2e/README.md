@@ -50,20 +50,23 @@ tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
-`change-email-refused`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
-a new version, offline, an outdated protocol, the sync status), and `organisation/flows/` (two
-accounts, each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set
+`change-email-refused`, `delete-account-refused`, `delete-link-used`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
+a new version, offline, an outdated protocol, the sync status), `app-shell/flows/` (a guest
+across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
+its own). `bun run test:e2e --grep @smoke` runs the first set
 on both projects.
 
 The suite runs from the front's one client address, so its tests, on every worker, share the
 gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
-credential checks (sign-ups, sign-ins, verifications and changes of a password or an email, 20
-per ten seconds) set the number of workers: with two, a run makes at most 17 in any ten seconds;
-three reached 22 and four had a sign-in refused. The others the run spends as a whole, in one
-window of each, and stays under them in whatever order the workers take the tests: the mails
-of sign-ups, resends, reset requests and email changes (about 120 of 200 per quarter hour), the
-attempts at a reset link (10 of 20 per ten minutes) and at a confirmation link (7 of 20), the
-organisations created (16 of 30 an hour) and the invitations (7 of 60 per ten minutes). The
+credential checks (sign-ups, sign-ins, verifications, changes of a password or an email and
+requests to delete an account, 20 per ten seconds) set the number of workers: with two, a run
+made at most 17 in any ten seconds when it was measured, before the deletion of an account added
+its three requests; three workers reached 22 and four had a sign-in refused. The others
+the run spends as a whole, in one window of each, and stays under them in whatever order the
+workers take the tests: the mails of sign-ups, resends, reset requests, email changes and
+deletion requests (about 140 of 200 per quarter hour), the attempts at a reset link (10 of 20
+per ten minutes), at a confirmation link (7 of 20) and at a deletion link (7 of 20), the
+organisations created (19 of 30 an hour) and the invitations (9 of 60 per ten minutes). The
 limits a test runs into on purpose (`resend-limit`, `forgot-password-limit`) are an email's,
 and every test uses fresh emails. A test uses as few emails, sign-ins and links as its scenario
 needs; a new one that signs up, mails, opens a link or creates an organisation counts against
@@ -106,6 +109,12 @@ these.
   account left.
 - `user/flows/two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
+- `user/flows/theme-across-tabs` and `language-across-tabs`: a theme or a language chosen on
+  `/settings` in one tab shows in the account's other tab of the browser within 5 seconds of the
+  choice, without a reload; the theme is the account's on the next device it signs in on, and
+  one chosen there reaches both tabs.
+- `app-shell/flows/theme-across-guest-tabs`: a theme a guest chooses in the frame of one tab
+  shows in the browser's other guest tab within 5 seconds of the choice, without a reload.
 - `user/flows/offline-edit`: B edits offline while A edits online; both changes meet once B
   is back.
 - `user/flows/one-leader-per-browser`: two tabs of one browser share one sync leader; the
@@ -196,6 +205,13 @@ its send button and waits for the gateway's answer), `resetRequested` (its messa
 `src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
 (sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
 `openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
+and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
+form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for
+`deletionRequested`, the form's message), `openDeletionMail` (opens the link of the deletion
+mail, held to its declaration), `deleteAccount` (presses the button of `/delete-account` and
+confirms the frame's question, checked for its code `delete-account`) and `accountDeleted` (the
+page's message once the account is gone).
 `src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
 names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
@@ -228,10 +244,21 @@ seen there and holds it to its declaration). A failure prints no address, link o
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
-  Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
+  Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
   `playwright.config.ts`, measured against the credential limit above), and its log is
   `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
+- The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
+  request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes
+  or changes its address, and every container started or stopped on the host adds or removes one,
+  a stand of another checkout or another project's alike. So the launcher runs Playwright under
+  pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into a network namespace
+  once, so the browser sees a network that stays the same, and forwards the loopback ports of
+  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
+  address does not lead to the host's loopback either). IPv4 only: inside,
+  `localhost` resolves to ::1 first, where the front does not listen. Without pasta the launcher
+  stops before the build and names the package; it never runs the browser on the host's network.
+  `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
   their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
@@ -244,5 +271,6 @@ seen there and holds it to its declaration). A failure prints no address, link o
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
-- `bun run test` (here): the reporter's unit tests (`bun test ./scripts`).
+- `bun run test` (here): the unit tests of the reporter and of the browser's network
+  (`bun test ./scripts`).
 - `bun run typecheck`, `bun run lint`.

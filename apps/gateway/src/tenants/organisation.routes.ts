@@ -93,7 +93,9 @@ export interface OrganisationRoutesOptions {
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
- *   hour per identity and 30 per client address.
+ *   hour per identity and 30 per client address. A caller whose account was deleted while the
+ *   creation waited for it answers 401 `unauthorized`, as a token that holds no session does,
+ *   and nothing is created.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
  * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
@@ -146,7 +148,12 @@ export function organisationRoutes(
     // The identity goes last: it is the one whose session the token holds, whatever the body holds.
     return (await organisations.create({ ...body.data, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
-      errorResponse,
+      // An identity gone by the creation's turn had its account deleted after its session was
+      // read: the session went with it, so the answer is the one to a token that holds none.
+      (error) =>
+        'kind' in error && error.code === 'no-such-identity'
+          ? bearerRefused()
+          : errorResponse(error),
     )
   }
 

@@ -1,13 +1,16 @@
+import type { ResultAsync } from 'neverthrow'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
+import type { BusError } from '@workspace/cqrs'
 import { useLocale } from '@workspace/i18n'
+import type { SettingsId } from '@workspace/ids'
 
 import { useFieldClears } from '../../../../../platform/field-clears'
 import { useSetLocale } from '../../../../../platform/i18n'
-import { trackedStore, useLanguageWrites } from '../../../../../platform/language-writes'
 import { useService, useShape } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
+import { trackedStore, useSettingsWrites } from '../../../../../platform/settings-writes'
 import { useDeviceTheme } from '../../../../../platform/theme'
 import { settingsShape } from '../../../application/settings/settings.model.gen'
 import { SETTINGS_SERVICE } from '../../../application/settings/settings.service'
@@ -16,6 +19,7 @@ import {
   type SettingsValues,
 } from '../../../application/settings/settings-machine'
 
+import { DeletionFormView } from './deletion-form.view'
 import { type EmailFormValues, EmailFormView } from './email-form.view'
 import { type PasswordFormValues, PasswordFormView } from './password-form.view'
 import { SettingsView } from './settings.view'
@@ -24,9 +28,9 @@ const EMPTY_PASSWORDS: PasswordFormValues = { current: '', password: '', confirm
 const EMPTY_EMAIL: EmailFormValues = { email: '', password: '' }
 
 /**
- * The settings screen: its flow run as its machine over the device's theme, the account's settings
- * and the account's password and email, whose forms' values the page holds so that the flow's
- * `clear` empties them.
+ * The settings screen: its flow run as its machine over the account's settings, the theme this
+ * device shows and the account's password, email and deletion, whose forms' values the page holds
+ * so that the flow's `clear` empties them.
  */
 export function SettingsContainer() {
   const session = useService(SESSION)
@@ -39,9 +43,10 @@ export function SettingsContainer() {
   const device = useDeviceTheme()
   const locale = useLocale()
   const setLocale = useSetLocale()
-  const writes = useLanguageWrites()
+  const writes = useSettingsWrites()
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
   const [email, setEmail] = useState(EMPTY_EMAIL)
+  const [deletionPassword, setDeletionPassword] = useState('')
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
   const live = useRef<SettingsValues & { readonly store: typeof row }>({
     held: false,
@@ -52,25 +57,36 @@ export function SettingsContainer() {
 
   live.current = { ...live.current, held: row !== undefined, account: user?.id, store: row }
 
-  const machine = useMemo(
-    () =>
-      createSettingsMachine({
-        values: () => live.current,
-        setTheme: device.set,
-        // The frame learns of the write, so its echo is not taken for another device's language.
-        storeLocale: trackedStore(writes, (chosen) => {
-          const stored = live.current.store
+  const machine = useMemo(() => {
+    /** A store into the settings on the device, noting the account it began for. */
+    const intoSettings =
+      <T,>(store: (id: SettingsId, value: T) => ResultAsync<void, BusError>) =>
+      (value: T) => {
+        const stored = live.current.store
 
-          live.current = { ...live.current, storingFor: live.current.account }
+        live.current = { ...live.current, storingFor: live.current.account }
 
-          return settings.updateLocale({ id: stored?.id ?? never(), locale: chosen })
-        }),
-        changePassword: (currentPassword, password) =>
-          session.changePassword(currentPassword, password),
-        changeEmail: (address, password) => session.changeEmail(address, password),
-      }),
-    [device.set, settings, writes, session],
-  )
+        return store(stored?.id ?? never(), value)
+      }
+
+    return createSettingsMachine({
+      values: () => live.current,
+      setTheme: device.set,
+      // The frame learns of each write, so its echo is not taken for another tab's or device's.
+      storeTheme: trackedStore(
+        writes.theme,
+        intoSettings((id, theme) => settings.updateTheme({ id, theme })),
+      ),
+      storeLocale: trackedStore(
+        writes.locale,
+        intoSettings((id, locale) => settings.updateLocale({ id, locale })),
+      ),
+      changePassword: (currentPassword, password) =>
+        session.changePassword(currentPassword, password),
+      changeEmail: (address, password) => session.changeEmail(address, password),
+      requestAccountDeletion: (password) => session.requestAccountDeletion(password),
+    })
+  }, [device.set, settings, writes, session])
   const { state, send, submit, actor } = useScreenMachine(machine)
 
   // A chosen language is spoken at once, while its store runs.
@@ -80,7 +96,7 @@ export function SettingsContainer() {
     return () => spoken.unsubscribe()
   }, [actor, setLocale])
 
-  // A changed password empties its form, as the flow says.
+  // A changed password empties its form, and a deletion link sent its password, as the flow says.
   useFieldClears(actor, {
     'user.settings.password.current-password-input': () =>
       setPasswords((now) => ({ ...now, current: '' })),
@@ -88,6 +104,7 @@ export function SettingsContainer() {
       setPasswords((now) => ({ ...now, password: '' })),
     'user.settings.password.password-confirmation-input': () =>
       setPasswords((now) => ({ ...now, confirmation: '' })),
+    'user.settings.deletion.password-input': () => setDeletionPassword(''),
   })
 
   return (
@@ -146,6 +163,16 @@ export function SettingsContainer() {
             email: email.email,
             password: email.password,
           })
+        }
+      />
+      <DeletionFormView
+        password={deletionPassword}
+        error={state.context.deletionError}
+        message={state.context.deletionMessage}
+        canSend={state.can({ type: 'user.settings.deletion.send-button', password: '' })}
+        onChange={setDeletionPassword}
+        onSend={() =>
+          submit({ type: 'user.settings.deletion.send-button', password: deletionPassword })
         }
       />
     </div>

@@ -24,9 +24,9 @@ server writes a region's records too: a change of its own to one record, made as
 reserved for the server and bound to no identity, takes the same way as a device's batch. A hub holds
 the authoritative document of every region a device subscribes to, handles one region's
 work at a time, sends each accepted batch to the region's other subscribers and drops a
-region from memory once nobody has subscribed for a while; each region's log lives in the
-database the gateway names for it (an identity's private regions in one, each organisation's
-tenant region in its own). On the device, a sync engine keeps
+region from memory once nobody has subscribed for a while, or at once when it is retired; each
+region's log lives in the database the gateway names for it (an identity's private regions in
+one, each organisation's tenant region in its own). On the device, a sync engine keeps
 each region in step with the gateway over one WebSocket: it pushes the outbox a batch at a
 time, imports what the gateway sends, pulls what is missing, rolls a rejected batch back with
 an inverse commit, and runs passes on a cadence that follows the tab and the channel.
@@ -40,7 +40,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `compactIfLong(limit)` (compacts once the log holds more than `limit` rows past the snapshot,
   and leaves it for later while imported updates wait for their history), `close()`. A document
   opens from the snapshot and the rows after it. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
-  the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
+  the cursor only when nothing is left pending (while a local update fails to persist, the server's
+  update is held back behind it and fails as such), `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
@@ -63,7 +64,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (7), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (8), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
@@ -104,9 +105,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `foreign-owner` for a record that breaks the owner rule: in a private region an identity
   reference other than the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
   member reference is not the pushing member, or an edit that changes the member a record
-  references). The ability is judged on the record as it is, the one being updated or deleted
-  as it was before the batch and a new one as the batch writes it; a table that declares no
-  abilities refuses every client write. A record's field shapes are checked first: a text,
+  references, and `readonly-field` for an update of an existing record that changes a field the
+  schema marks `readonly` (judged after the owner rule; a record the batch creates sets such
+  fields freely, and a change followed by its inverse in one batch is no change)). The ability
+  is judged on the record as it is, the one being updated or deleted as it was before the
+  batch and a new one as the batch writes it; a table that declares no abilities refuses every
+  client write. A record's field shapes are checked first: a text,
   list or counter field holds the mergeable container of its kind, every other field a plain
   value, whatever the content. A record the batch leaves as it was is then no change and
   is neither judged nor written, which is what lets a device undo a refused change: the batch
@@ -124,7 +128,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   assumes no layout of its own), `acquire(region)` resolves to a `RegionDatabase` (`local`,
   `release()`); `singleDatabase(local)` keeps every region in one database. `RegionHub` (`RegionHubOptions`: `databases`, schema, `Clock`, idle time, log length
   that asks for a compaction, `onError`) holds a region's database from its load until it
-  unloads (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
+  unloads or is retired (or the hub closes): `subscribe(region, actor, subscriber, vv)` answers with the
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
   (`Actor`: its identity id and its `Ability`); a subscription after `close()` is answered with
   an internal error before anything else, and a private region other than the actor's own with
@@ -137,7 +141,16 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `writeRecord(region, write)` (below), `pull`, `compact` (stores its own document's snapshot at the proposed row),
   `heads(regions)` (an unloaded region's from its own database, one query per database; 0
   for a region without a log or one `regionRefOf` does not know), `unsubscribe`,
-  `loadedRegions()`, `close()`; a `Subscriber` receives `ServerMessage`s through `send`.
+  `retire(region)` (below), `loadedRegions()`, `close()` (it waits for the retires under way); a
+  `Subscriber` receives `ServerMessage`s through `send`. `retire(region)` lets a region go at
+  once, for a region whose database is removed: the work asked of it before runs first and
+  settles as it would have, then its database is released and a scheduled unload is cancelled. A
+  subscription or a write asked from then on, also while the retire waits, holds the region
+  afresh and loads it from its database once the retire settled, so a region made again under the
+  same id never gets the retired document, and `heads` reads its head from the database. The
+  devices still subscribed go with the region, told nothing (the caller ends their connections
+  first), and a push, pull or compaction they send afterwards is answered as not subscribed. A
+  region the hub does not hold is left as it is; a release that throws is a `data:WRITE_FAILED`.
   `writeRecord(region, write)` makes a change of the server's own to one record of a region and
   resolves to its number in the log. A `RecordWrite` names the record's `table` and `id` and the
   fields to `set`, each to a `FieldValue`: a plain field's value, a `Date` for a datetime, the id
@@ -157,9 +170,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   What a server write means for the record: a plain field is last-writer-wins, as a device's
   write is (Loro orders two concurrent writes of a field by Lamport time, then by peer, and
   `SERVER_PEER` is the largest peer Loro allows, so the server's value wins a tie); a text field
-  is replaced through its mergeable text and merges with concurrent edits. The gateway does not
-  hold devices to read-only fields, so a device's concurrent write of the same field is accepted
-  whatever the contract says, and every copy converges on the one value Loro picks. A device's
+  is replaced through its mergeable text and merges with concurrent edits. A device's change
+  of a field the schema marks `readonly` is refused (`readonly-field`), so the server's value
+  stands. The device undoes the refused change and keeps every change of other peers it already
+  holds: when the server's write reached the device before the undo, the undo keeps the server's
+  value and is accepted; an undo that restores the old value against the server's new one is
+  refused again, and the device reloads the region from the server. A device's
   later batches touching the record are checked as before and pass: the server binds no peer
   and keeps the region's owner rule. On a device the change is an ordinary update, stored in the
   local log, imported and projected, so compaction and snapshots treat it like any other row on
@@ -210,9 +226,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails subscribes again at once, on every full pass and on a reconnect, until the
-  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
-  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  import that fails is reported, unless a local update that failed to persist held it back (its
+  write heard of that failure, and the engine reports it once), and subscribes again at once, on
+  every full pass and on a reconnect, until the answer to a subscription imports in full: nothing
+  tells a pull's answer from the updates the gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
   connection goes with the document's version and the first update after it is its answer, and
   any later one there (a recovery, a region replaced, a subscription sent again) goes without a
   version, the snapshot that only such a subscription gets being its answer; only
@@ -267,7 +284,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
   its records and every field with its kind: a text, list or counter container, a reference, a
-  datetime or a plain value; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
+  datetime or a plain value, and optionally `readonly: true`, which a device sets only when it
+  creates the record; `fieldOf(schema, table, field)`, `readonlyFieldsOf(schema, table)`,
+  `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands

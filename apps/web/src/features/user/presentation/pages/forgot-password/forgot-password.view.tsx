@@ -1,4 +1,4 @@
-import { type ComponentType, useId, useState } from 'react'
+import { type ComponentType, useId } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
@@ -11,8 +11,10 @@ import { Input } from '@workspace/ui/components/ui/input'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 export interface ForgotPasswordViewProps {
-  /** The email the field starts with: the one the sign-in page carried over, or none. */
-  readonly startEmail: string
+  /** What the email field holds: at first the one the sign-in page carried over, or none. */
+  readonly email: string
+  /** The email field as typed. */
+  readonly onEmailChange: (email: string) => void
   /** The code the message shows once the mail was asked for. */
   readonly message?: 'check-your-mail' | undefined
   /** The address the mail was asked for, which the message names. */
@@ -37,7 +39,6 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
 export function ForgotPasswordView(props: ForgotPasswordViewProps) {
   const t = useT()
   const emailId = useId()
-  const [email, setEmail] = useState(props.startEmail)
   const Link = props.link ?? PlainLink
   const error = props.error ? errorOf(t, props.error) : undefined
 
@@ -49,7 +50,7 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Form onSubmit={() => props.onSend(email)} data-testid="user.forgot-password.form">
+        <Form onSubmit={() => props.onSend(props.email)} data-testid="user.forgot-password.form">
           <FieldGroup>
             <p className="text-sm text-muted-foreground">{t('user.forgot-password.hint')}</p>
             {props.message ? (
@@ -75,8 +76,8 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
               <FieldLabel htmlFor={emailId}>{t('user.forgot-password.email')}</FieldLabel>
               <Input
                 id={emailId}
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
+                value={props.email}
+                onChange={(event) => props.onEmailChange(event.target.value)}
                 type="email"
                 autoComplete="email"
                 required

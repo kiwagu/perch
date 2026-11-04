@@ -160,6 +160,39 @@ actions:
       - name: email-changed
         to: account
         language: account
+  request-account-deletion:
+    description: Asks to delete the signed-in account; the mail below goes to its email, and the page its link opens deletes the account on a press.
+    params:
+      password:
+        type: string
+        description: The password the account has now, which confirms the request.
+    result: "the mail below is on its way to the account's email, its link replacing the link of an earlier request, and the account stays as it is until the button of the page that link opens is pressed; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; an account that is the only administrator of an organisation with other members answers last-admin and sends nothing, until those members are removed; one account asks three deletions within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails"
+    codes:
+      - invalid-credentials
+      - last-admin
+      - rate-limited
+      - failed
+    mail:
+      to: account
+      language: account
+      link: { screen: user.delete-account, search: token }
+  delete-account:
+    description: Deletes an account for good, with the token the link of its deletion mail carries, on the press of the page's button.
+    params:
+      token:
+        type: string
+        description: The token the link of the deletion mail carries in the address of /delete-account.
+    result: "the account is gone for good, with its profile and its settings, its sessions, so every device of the account is signed out, this one too when it is, and its memberships; each organisation it was the only member of goes with it, its data too; the other organisations keep what it wrote there, without it as a member; its email can sign up again at once, and gets the notice below; nothing brings the account back. A link unknown, used before or replaced by a newer one, or one whose account changed its password or its email since the mail was sent, answers link-invalid; one older than an hour link-expired, since what it does cannot be undone; an account that became the only administrator of an organisation with other members since the mail was sent answers last-admin and deletes nothing. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    codes:
+      - link-invalid
+      - link-expired
+      - last-admin
+      - rate-limited
+      - failed
+    notices:
+      - name: account-deleted
+        to: account
+        language: account
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -196,7 +229,7 @@ actions:
       theme:
         type: string
         description: "light, dark, or system: the device's own setting, followed as it changes."
-    result: the app shows the theme at once and this device keeps it, the account's other devices untouched
+    result: the app shows the theme at once and this device keeps it; the other tabs of this browser where no account is signed in show it too
     codes: []
   reload:
     description: Loads the page again from the server.
@@ -280,6 +313,8 @@ events:
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
+  password-reset: Another tab of this browser set a new password through the link of a reset mail; the answer names no account.
+  theme-set: Another tab of this browser chose the theme of this device.
   change-rejected: The server refused a change, and this device undid it.
   changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
   crashed: The open screen failed to render.

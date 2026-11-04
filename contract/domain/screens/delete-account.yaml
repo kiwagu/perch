@@ -1,0 +1,80 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: user.delete-account
+title: Delete the account
+description: "What the link of an account deletion mail opens: it says what goes with the account, and one button deletes it for good, signing every device of it out; a link that does not work says why."
+flag: null
+bindings:
+  - path: /delete-account
+    roles: [ guest, identity ]
+    history: push
+    search:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: The token the deletion mail carries in its link.
+          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJwdXJwb3NlIjoiZGVsZXRlLWFjY291bnQifQ.c2lnbmF0dXJl ]
+      additionalProperties: false
+entry: [ user.delete-account.delete-button ]
+anchors:
+  user.delete-account.delete-button:
+    kind: button
+    description: Deletes the account the mail was sent to; the page says what goes with it.
+    binding: { action: platform.delete-account }
+  user.delete-account.message:
+    kind: message
+    description: Says the account is gone, with its data, and every device of it is signed out.
+    codes: [ account-deleted ]
+  user.delete-account.sign-in-link:
+    kind: link
+    description: Leads to the sign-in page; the device signed in to the account is signed out by the deletion, so it sees the link too.
+    binding: { route: /sign-in }
+    roles: [ guest ]
+  user.delete-account.error:
+    kind: error
+states:
+  ready: "What goes with the account, and the button that deletes it."
+flow:
+  initial: asking
+  meta:
+    guards:
+      linkUnusable: { codes: [ link-invalid, link-expired ] }
+  states:
+    asking:
+      description: "The page says what goes with the account: its data, its sessions, and the organisations it is the only member of; the button deletes it."
+      meta: { renders: [ user.delete-account.delete-button ] }
+      on:
+        user.delete-account.delete-button: deleting
+    deleting:
+      meta: { renders: [ user.delete-account.delete-button ] }
+      entry:
+        - clear: user.delete-account.error
+      invoke:
+        src: platform.delete-account
+        input: { token: { search: token } }
+        onDone:
+          target: done
+          actions:
+            - show: { user.delete-account.message: [ account-deleted ] }
+        onError:
+          - target: link-dead
+            guard: linkUnusable
+            actions:
+              - show: user.delete-account.error
+          - target: asking
+            description: "The error says why nothing was deleted; the button stays, so the same link works again within its hour, once the other members are removed."
+            actions:
+              - show: user.delete-account.error
+    link-dead:
+      description: The error says the link does not work; a new one is asked for from the settings.
+      type: final
+    done:
+      description: "The message says the account is gone, beside user.delete-account.sign-in-link for a guest; the device signed in to the account is signed out by the deletion and keeps the message; another account signed in on this device stays, with no link."
+      type: final
+      meta: { renders: [ user.delete-account.sign-in-link ] }
+wireframe: |-
+  - heading "Delete the account" [level=1]
+  - paragraph: This deletes the account this mail was sent to, with its data, signs every device of it out, and deletes the organisations it is the only member of. It cannot be undone.
+  - button "Delete the account"

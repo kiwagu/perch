@@ -7,7 +7,10 @@
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
  * It also runs the flow's effects on the frame (`frame-effects.ts`): a toast, the notice and its
- * clearing, so no container subscribes to them by hand.
+ * clearing, so no container subscribes to them by hand. And it brings the platform's events
+ * (`platform-events.port.ts`) to the machine while it runs, each carrying what the screen's fields
+ * hold as it comes (`fields`, by anchor, as the container gives them), for a move it makes; a
+ * state that does not handle one lets it pass.
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -26,7 +29,10 @@ import { questionOf } from './confirmations'
 import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
+import { useService } from './module'
 import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
+import { PLATFORM_EVENTS } from './platform-events.port'
+import { sendPlatformEvents } from './platform-events-input'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -90,8 +96,21 @@ const endedBy = (type: string): string | undefined =>
 const controlOf = (event: { readonly type: unknown }): string =>
   typeof event.type === 'string' ? event.type : ''
 
-export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
+/**
+ * Runs `machine` for a screen; `fields` is what the screen's fields hold now, by anchor, for the
+ * moves a platform event makes (a field the flow's move names and the container leaves out fails
+ * that move).
+ */
+export function useScreenMachine<TMachine extends AnyStateMachine>(
+  machine: TMachine,
+  fields?: FieldValues,
+) {
   const navigate = useNavigate()
+  const platform = useService(PLATFORM_EVENTS)
+  // Read when an event comes, so a render with new values subscribes nothing.
+  const held = useRef(fields)
+
+  held.current = fields
   const guard = useLeaveGuard()
   const confirmation = useConfirmGuard()
   const ask = useCallback(
@@ -194,6 +213,8 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
 
     return () => moved.unsubscribe()
   }, [actor, navigate])
+
+  useEffect(() => sendPlatformEvents(platform, actor, () => held.current), [actor, platform])
 
   /**
    * Sends `event` and resolves with the outcome of the actions it started, once the machine took

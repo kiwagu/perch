@@ -961,6 +961,35 @@ describe('region sync through the gateway', () => {
     expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
   })
 
+  it('reports a change of a read-only field as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoDevices()
+
+    // The server alone changes an email: a device's change is refused, and the device undoes it.
+    a.region.recordMap(profileKey).set('email', 'ann@new.example.test')
+    a.region.doc.commit()
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: a.region.ref.id, reason: 'readonly-field', detail: `${profileKey}.email` },
+      },
+    ])
+    expect(a.region.recordJson(profileKey)).toMatchObject({ email: 'ann@example.test' })
+    expect(b.region.recordJson(profileKey)).toMatchObject({ email: 'ann@example.test' })
+
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({
+      name: 'Ana',
+      email: 'ann@example.test',
+    })
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+  })
+
   describe('a refused batch the push limit fills', () => {
     it('pushes the refused rows of a full batch and their undo together, and keeps syncing', async () => {
       const { a, b, settle, errors, annsNote, anns } = await annsNoteThenOffline(3)

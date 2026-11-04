@@ -24,7 +24,7 @@ function renderView(props: Partial<SettingsViewProps> = {}) {
 }
 
 describe('SettingsView', () => {
-  it("shows the device's theme and the account's language, each by its value", () => {
+  it("shows the account's theme and language, each by its value", () => {
     renderView({ theme: 'dark', locale: 'es' })
 
     expect(screen.getByTestId('user.settings.heading').textContent).toBe('Settings')

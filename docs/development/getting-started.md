@@ -11,7 +11,9 @@
   dev` needs it too: it reads this checkout's stand from `mcproc --json describe`.
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
   self-signed certificate is made, and the browser asks to accept it once.
-- `bunx playwright install` for the browsers the e2e specs run in.
+- `bunx playwright install` for the browsers the e2e specs run in, and pasta (package `passt`,
+  `sudo apt install passt` on Debian or Ubuntu), the rootless network namespace the e2e launcher
+  runs the browser in, so the host's containers coming and going cannot abort its requests.
 - The SurrealDB CLI (`surreal`) for the git hooks that validate staged `.surql` files.
 - Screenshot baselines of the e2e specs are git-ignored and rebuilt per machine: the first run
   writes them. A machine that kept baselines from an older layout rebuilds them with

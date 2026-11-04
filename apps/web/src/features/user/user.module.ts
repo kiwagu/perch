@@ -10,6 +10,7 @@ import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-email.service'
 import { ConfirmEmailContainer } from './presentation/pages/confirm-email/confirm-email.container'
+import { DeleteAccountContainer } from './presentation/pages/delete-account/delete-account.container'
 import { ForgotPasswordContainer } from './presentation/pages/forgot-password/forgot-password.container'
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
@@ -49,21 +50,29 @@ export const UserModule = defineModule({
     ForgotPasswordPage: ForgotPasswordContainer,
     ResetPasswordPage: ResetPasswordContainer,
     ConfirmEmailPage: ConfirmEmailContainer,
+    DeleteAccountPage: DeleteAccountContainer,
     ProfilePage: ProfileContainer,
     SettingsPage: SettingsContainer,
   },
   routes: [
-    { path: '/sign-in', page: 'SignInPage', guard: 'guest' },
+    // A page that moves here may carry the email typed there.
+    {
+      path: '/sign-in',
+      page: 'SignInPage',
+      guard: 'guest',
+      search: z.object({ email: z.string().max(254).optional() }),
+    },
     {
       path: '/verify-email',
       page: 'VerifyEmailPage',
       guard: 'guest',
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
-    // Open to anyone: a signed-in device may ask for the mail too.
+    // A guest's: a signed-in account changes its password in its settings.
     {
       path: '/forgot-password',
       page: 'ForgotPasswordPage',
+      guard: 'guest',
       search: z.object({ email: z.string().max(254).optional() }),
     },
     // Open to anyone: a reset of the account signed in here signs this device out.
@@ -76,6 +85,12 @@ export const UserModule = defineModule({
     {
       path: '/confirm-email',
       page: 'ConfirmEmailPage',
+      search: z.object({ token: z.string().min(1).max(4096).optional() }),
+    },
+    // Open to anyone: the link deletes the account its mail was sent to, whoever is signed in here.
+    {
+      path: '/delete-account',
+      page: 'DeleteAccountPage',
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
