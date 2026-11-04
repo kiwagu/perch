@@ -1,6 +1,7 @@
 import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import type { LocalDb } from '@workspace/data'
 import { idSchemas } from '@workspace/ids'
 
 import {
@@ -11,7 +12,7 @@ import {
   signUpOn,
 } from '../__fixtures__/auth-instance'
 
-import { DELETION_LINK_LIFETIME_MS } from './account-deletions'
+import { AccountDeletions, DELETION_LINK_LIFETIME_MS } from './account-deletions'
 import { changeKey } from './change-token'
 import { deletionKey } from './deletion-token'
 
@@ -23,6 +24,25 @@ afterEach(async () => {
 
 const ANN = 'ann@example.test'
 const MINUTE_MS = 60 * 1000
+
+/** The directory with every query answering `answer`, as a driver that answers an unexpected shape. */
+function answering(local: LocalDb, answer: unknown): LocalDb {
+  const query = () =>
+    Object.assign(Promise.resolve(answer), { retry: () => Promise.resolve(answer) })
+  const db = new Proxy(local.db, {
+    get(target, property) {
+      if (property === 'query') {
+        return query
+      }
+
+      const value: unknown = Reflect.get(target, property)
+
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value
+    },
+  })
+
+  return { ...local, db }
+}
 
 async function harness() {
   const opened = await openAuth()
@@ -92,5 +112,23 @@ describe('AccountDeletions', () => {
 
     ;(await accountDeletions.cancel(identity))._unsafeUnwrap()
     expect((await accountDeletions.claim(third))._unsafeUnwrap()).toBe(false)
+  })
+
+  it('answers a data error, not false, for an answer of the directory that is not a list of rows', async () => {
+    const { local, clock, identity, claimsOf, accountDeletions } = await harness()
+    const claims = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
+    const claimOn = (answer: unknown) =>
+      new AccountDeletions({
+        directory: answering(local, answer),
+        secret: AUTH_SECRET,
+        clock,
+      }).claim(claims)
+
+    for (const answer of [[], [undefined], [null], [{}], ['deleted'], [[1]]]) {
+      expect((await claimOn(answer))._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
+    }
+
+    expect((await claimOn([[]]))._unsafeUnwrap()).toBe(false)
+    expect((await claimOn([[{ id: 'verification:one' }]]))._unsafeUnwrap()).toBe(true)
   })
 })

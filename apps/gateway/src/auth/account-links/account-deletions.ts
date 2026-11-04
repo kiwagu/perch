@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 
-import { ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { type IdentityId, verificationIdFactory } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
+import { z } from '@workspace/zod'
 
 import { writing } from '../device-session-rows'
 import accountDeletionAskStatement from '../surql/account-deletion-ask.surql'
@@ -17,6 +18,13 @@ import {
   readDeletionToken,
   signDeletionToken,
 } from './deletion-token'
+
+/**
+ * What `account-deletion-claim.surql` answers: the rows it deleted, none when no deletion of the
+ * identity was pending under the link. A row needs to be a row, nothing more: its values are not
+ * read.
+ */
+const deletedRows = z.array(z.object({}))
 
 /** How long a deletion link deletes the account after it was asked: an hour. */
 export const DELETION_LINK_LIFETIME_MS = 60 * 60 * 1000
@@ -113,7 +121,8 @@ export class AccountDeletions {
   /**
    * Spends the pending deletion `claims` names: true when it was pending and is spent now, false
    * when it was not (used before, replaced by a newer deletion, or ended by a change of the
-   * password or of the email).
+   * password or of the email). An answer of the directory that is not a list of rows is an error,
+   * never a link that deletes nothing.
    */
   claim(claims: DeletionClaims): ResultAsync<boolean, DataError> {
     return writing(
@@ -124,6 +133,17 @@ export class AccountDeletions {
         })
         .retry(),
       `the deletion of the account of ${claims.identity} could not be spent`,
-    ).map(([deleted]) => Array.isArray(deleted) && deleted.length > 0)
+    ).andThen(([deleted]) => {
+      const rows = deletedRows.safeParse(deleted)
+
+      return rows.success
+        ? okAsync<boolean, DataError>(rows.data.length > 0)
+        : errAsync<boolean, DataError>(
+            dataError(
+              'data:QUERY_FAILED',
+              'the answer to the spending of a deletion of an account has an unknown shape',
+            ),
+          )
+    })
   }
 }
