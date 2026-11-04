@@ -25,18 +25,21 @@ export interface SessionAccountDeps {
    */
   readonly signOutOf: (identity: IdentityId) => Promise<void>
   /**
-   * Names the session open on this device now, before a reset ends it: its sign-out as the
-   * channel's 4002 does, run only while that session is still the one open, which resolves once
-   * done and never rejects; undefined with nobody signed in.
+   * Names the session open on this device now, before a reset asked with its `token` ends it: its
+   * sign-out as the channel's 4002 does, run only while that session is still the one open and
+   * the browser still keeps `token`, which resolves once done and never rejects; undefined with
+   * nobody signed in.
    */
-  readonly resetHere: () => (() => Promise<void>) | undefined
+  readonly resetHere: (token: string) => (() => Promise<void>) | undefined
 }
 
 /**
- * The calls about an account that sign nothing in or out: the mails of a password reset and the
- * links they carry, the changes of the signed-in account's password and email, the confirmation of
- * a new email and the deletion of the account. The signed-in account's own calls present the
- * session this device holds; the others, which come with a link or an email, present none.
+ * The calls about an account, which sign nothing in: the mails of a password reset and the links
+ * they carry, the changes of the signed-in account's password and email, the confirmation of a
+ * new email and the deletion of the account. The signed-in account's own calls present the
+ * session this device holds, and so does the reset when a session is open, to hear whether it
+ * ended it; the others, which come with a link or an email, present none. Only the gateway's
+ * answer to a reset or a deletion signs this device out, as the channel would.
  */
 export class SessionAccount {
   readonly #deps: SessionAccountDeps
@@ -58,8 +61,9 @@ export class SessionAccount {
    * signs out here as on the 4002, and one of another account stays. Resolves once that ran.
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError> {
-    const signOut = this.#deps.resetHere()
-    const session = signOut === undefined ? undefined : this.#openSession()
+    const open = this.#openSession()
+    const signOut = open === undefined ? undefined : this.#deps.resetHere(open.token)
+    const session = signOut === undefined ? undefined : open
 
     return this.#deps.auth
       .resetPassword(token, password, session)

@@ -9,7 +9,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { savedIdentity } from '../storage'
+import { savedIdentity, savedToken } from '../storage'
 
 import type { SessionHost } from './host'
 import type { TransportContext } from './options'
@@ -62,19 +62,22 @@ export class SessionElsewhere {
   }
 
   /**
-   * Names the session open now, for a reset of a password asked with it: the sign-out it gives
-   * runs as when the channel hears the 4002 (the sign-in page says `password-changed-elsewhere`),
-   * which this device may never hear (no Web Locks, or its WebSocket blocked), and only while that
-   * session is still the one open: one signed in since stays. Undefined with nobody signed in.
+   * Names the session open now, for a reset of a password asked with its `token`: the sign-out it
+   * gives runs as when the channel hears the 4002 (the sign-in page says
+   * `password-changed-elsewhere`), which this device may never hear (no Web Locks, or its
+   * WebSocket blocked), and only while that session is still the one open and the browser still
+   * keeps that token: a sign-in made since, in this tab or another one that saved its new token
+   * for the same account, stays. Undefined with nobody signed in.
    */
-  resetHere(): (() => Promise<void>) | undefined {
+  resetHere(token: string): (() => Promise<void>) | undefined {
     const asking = this.#host.open()
 
     if (asking === undefined) {
       return undefined
     }
 
-    const still = () => this.#host.open() === asking
+    const still = () =>
+      this.#host.open() === asking && savedToken(this.#host.options.storage) === token
 
     return () => this.#outElsewhere(asking.space.identity.id, still, 'password-changed-elsewhere')
   }

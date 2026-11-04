@@ -220,7 +220,8 @@ modeling stage.
   The reset presents this device's session when one is open, and the gateway's 200 says whether
   that session was among those it ended (`{ signedOut }`; a 200 that does not is
   `data:AUTH_FAILED`): when it was, the session signs out here at once as on the channel's 4002,
-  which a browser without Web Locks never hears; another account signed in here stays. The
+  which a browser without Web Locks never hears, unless the browser keeps another token by then
+  (a sign-in made since, in another tab too); another account signed in here stays. The
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
