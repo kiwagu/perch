@@ -18,7 +18,11 @@ import { createGatewayRoot } from '../../src/composition/root'
 import { gatewayConfig } from '../../src/config'
 import { SmtpMailer } from '../../src/mail'
 import { startServer } from '../../src/server'
-import { profileCreate, profileRename } from '../../src/sync/__fixtures__/profile'
+import {
+  profileChangeEmail,
+  profileCreate,
+  profileRename,
+} from '../../src/sync/__fixtures__/profile'
 
 import { accessSteps } from './access'
 import type { SmokeDevice } from './device'
@@ -174,6 +178,21 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
     check(
       doc2.recordJson(`profile/${profileId}`)?.['name'] === 'Smoke renamed',
       'device 2 does not see the new name',
+    )
+  })
+
+  await step("device 1 changed the profile's email: rejected as readonly-field", async () => {
+    const changed = await profileChangeEmail(doc1, profileId, `changed-${credentials.email}`)
+
+    device1.send({ type: 'push', region, batch: 3, updates: [unwrap(changed)] })
+
+    const rejected = await device1.next('reject')
+
+    check(
+      rejected.batch === 3 &&
+        rejected.reason === 'readonly-field' &&
+        rejected.detail === `profile/${profileId}.email`,
+      `rejected batch ${rejected.batch} for ${rejected.reason} (${rejected.detail})`,
     )
   })
 

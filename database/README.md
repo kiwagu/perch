@@ -7,11 +7,13 @@ what every database has, `schema/directory` the directory database (accounts, or
 and memberships) and `schema/tenant` the database of one organisation (`t_<key>`). A
 database's schema is the common files and then its own, each set in file name order. Comment
 annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`,
-`-- @owner`, `-- @can`) tell the modeling stage how the table replicates, which id prefix its
-keys use and who may write it. The same schema is applied to the local replica and to a
-server, and the replica schema generated from it is the one description of replicated tables
-that every runtime reads. Notes carry their write rules there: a member creates notes and
+`-- @owner`, `-- @can`, `-- @readonly`) tell the modeling stage how the table replicates, which
+id prefix its keys use and who may write it. The same schema is applied to the local replica
+and to a server, and the replica schema generated from it is the one description of replicated
+tables that every runtime reads. Notes carry their write rules there: a member creates notes and
 edits or deletes only those it wrote (`-- @owner author`), an admin edits or deletes any note.
+A field marked `-- @readonly` is set by a device only when it creates the record; after that
+only the gateway's own writes change it (the profile's email through the confirmation flow).
 
 ## Key exports
 
