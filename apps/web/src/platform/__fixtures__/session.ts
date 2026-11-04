@@ -35,6 +35,8 @@ export function fakeSession(): { readonly session: SessionPort } {
       changePassword: refused,
       changeEmail: refused,
       confirmEmail: refused,
+      requestAccountDeletion: refused,
+      deleteAccount: refused,
       signOut: refused,
       signingOutEverywhere: () => refused,
       current: () => undefined,

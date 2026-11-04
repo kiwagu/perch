@@ -19,6 +19,7 @@ export type DataErrorCode =
   | 'data:LINK_EXPIRED'
   | 'data:PASSWORD_REJECTED'
   | 'data:EMAIL_INVALID'
+  | 'data:LAST_ADMIN'
 
 export interface DataError {
   readonly code: DataErrorCode

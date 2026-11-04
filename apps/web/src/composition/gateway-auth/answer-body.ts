@@ -1,6 +1,6 @@
 /**
- * The body of a gateway answer, read once and never quoted: the code a refusal names, and what a
- * link the gateway refused means.
+ * The body of a gateway answer, read once and never quoted: the code a refusal names, what a link
+ * the gateway refused means, and what a conflict means.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -27,4 +27,22 @@ export const linkRefusedBy = (response: Response): ResultAsync<DataError, never>
     code === 'link-expired'
       ? dataError('data:LINK_EXPIRED', 'the link is past its lifetime')
       : dataError('data:LINK_INVALID', 'the gateway refused the link'),
+  )
+
+/**
+ * What a 409 means: `last-admin` an account that is the only administrator of an organisation
+ * with other members, which blocks its deletion until those members are removed; any other code
+ * is `otherwise`, the call's own reading of an answer it does not know.
+ */
+export const conflictRefusedBy = (
+  response: Response,
+  otherwise: DataError,
+): ResultAsync<DataError, never> =>
+  refusalCode(response).map((code) =>
+    code === 'last-admin'
+      ? dataError(
+          'data:LAST_ADMIN',
+          'the account is the only administrator of an organisation with other members',
+        )
+      : otherwise,
   )

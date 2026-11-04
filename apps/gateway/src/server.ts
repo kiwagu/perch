@@ -1,8 +1,9 @@
 /**
  * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes and Better Auth's sign-up, sign-in, verification and resend under `/auth`, the device
- * routes in front so the two sign-outs under `/auth` are the gateway's own; and the sync
- * connection of each device over a WebSocket at `/sync`.
+ * routes and the auth mount under `/auth` (Better Auth's sign-up, sign-in, verification and
+ * resend, and the gateway's own recovery and changes of a password and an email and deletion of an
+ * account), the device routes in front so the two sign-outs under `/auth` are the gateway's own;
+ * and the sync connection of each device over a WebSocket at `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
@@ -36,8 +37,8 @@ interface SocketData {
 
 /**
  * The largest request body the server reads: a body is a sign-up's name, email and password, a
- * sign-in's email and password, a verification link's token, an email to send it to again, an
- * organisation's key and name, or an email to invite.
+ * sign-in's email and password, a link's token, an email to send a link to again, a password with
+ * a new password or a new email, an organisation's key and name, or an email to invite.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -80,7 +81,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   // The device routes come first: `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` are
   // theirs; the auth mount answers every other path under `/auth/`, handing Better Auth only its
   // sign-up, sign-in, verification and resend, and answering the recovery and the changes of a
-  // password and an email itself.
+  // password and an email and the deletion of an account itself.
   const routes: readonly Route[] = [
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
@@ -93,6 +94,9 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       passwords: root.passwords,
       resets: root.resets,
       emailChanges: root.emailChanges,
+      deletions: root.deletions,
+      departure: root.departure,
+      teardown: root.teardown,
       mails: root.mails,
       profiles: root.profiles,
       limits: root.limits,
