@@ -419,8 +419,10 @@ error carries one.
   `RESET_PASSWORD_PATH`, `CONFIRM_EMAIL_PATH` and `FORGOT_PASSWORD_PATH` (`account-mails.ts`),
   `AccountPasswords` (`account-passwords.ts`: `requestReset`, `hash`, `reset`, `change`,
   `matches`), `ResetLinks` (`read`, `keepNewest`), `EmailChanges` (`ask`, `cancel`,
-  `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`) and the token of a verification link
-  (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
+  `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`), `AccountDeletions` (`ask`,
+  `cancel`, `read`, `claim`; `DELETION_LINK_LIFETIME_MS`: the one pending deletion link of an
+  account, which a change of the password or of the email ends) and the token of a verification
+  link (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
   (`account-locale.ts`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
@@ -480,7 +482,8 @@ error carries one.
   the notices with their recipient and language, the old address's notice holding no part of the
   new email, and that nothing of an email, a token or a password reaches a log;
   `account-links/reset-links.spec.ts`,
-  `account-links/email-changes.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,
+  `account-links/email-changes.spec.ts`, `account-links/account-deletions.spec.ts`,
+  `account-links/deletion-token.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,
   `reset-mail.spec.ts`, `profile-emails.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
