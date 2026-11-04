@@ -111,6 +111,7 @@ describe('the account starts of a browser', () => {
       ofA.settings,
       keptAccountStart(storage),
       accountStartTurns(locks, () => a.session.flush()),
+      () => 'system',
     )
     // Tab B's creation of the settings is late: it goes through only once tab A edited them.
     const startsOfB = new AccountStartService(
@@ -127,6 +128,7 @@ describe('the account starts of a browser', () => {
       },
       keptAccountStart(storage),
       accountStartTurns(locks, () => b.session.flush()),
+      () => 'system',
     )
 
     keptAccountStart(storage).keep(annStart)
@@ -150,7 +152,7 @@ describe('the account starts of a browser', () => {
     expect(created).toEqual([])
     expect((await b.session.flush()).isOk()).toBe(true)
     expect((await ofA.settings.read({ identity: ann.identity.id }))._unsafeUnwrap()).toEqual([
-      { id, locale: 'en' },
+      { id, locale: 'en', theme: 'system' },
     ])
     expect((await ofB.profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toHaveLength(1)
     expect(keptAccountStart(storage).kept()).toBeUndefined()
@@ -166,6 +168,7 @@ describe('the account starts of a browser', () => {
       runner: a.session.runner,
       commands: a.commands,
       settings: ofA.settings,
+      theme: () => 'system',
       storage,
       locks,
       clock: a.clock,
@@ -294,6 +297,7 @@ describe('a start a sign-in learnt of', () => {
       runner: world.session.runner,
       commands: options.commands ? options.commands(world.commands) : world.commands,
       settings: services.settings,
+      theme: () => 'system',
       storage: world.storage,
       locks: options.locks,
       clock: world.clock,
@@ -349,7 +353,7 @@ describe('a start a sign-in learnt of', () => {
 
     // Its start found both records pulled: the change stands, and there is one of each.
     expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
-      { id: row?.id, locale: 'en' },
+      { id: row?.id, locale: 'en', theme: 'system' },
     ])
     expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
   })
@@ -458,7 +462,7 @@ describe('a start a sign-in learnt of', () => {
 
     await vi.waitFor(() => expect(keptAccountStart(second.world.storage).kept()).toBeUndefined())
     expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
-      { id, locale: 'en' },
+      { id, locale: 'en', theme: 'system' },
     ])
     expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
   })
@@ -504,6 +508,7 @@ describe("a start that waits for the pull, by its engine's word", () => {
       runner: world.session.runner,
       commands: world.commands,
       settings: services.settings,
+      theme: () => 'system',
       storage,
       locks: undefined,
       clock: world.clock,

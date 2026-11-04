@@ -51,8 +51,9 @@ again or replaced, or of several mails of one run (`resend-same-answer`, `resend
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
 `change-email-refused`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
-a new version, offline, an outdated protocol, the sync status), and `organisation/flows/` (two
-accounts, each in a browser of its own). `bun run test:e2e --grep @smoke` runs the first set
+a new version, offline, an outdated protocol, the sync status), `app-shell/flows/` (a guest
+across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
+its own). `bun run test:e2e --grep @smoke` runs the first set
 on both projects.
 
 The suite runs from the front's one client address, so its tests, on every worker, share the
@@ -106,6 +107,12 @@ these.
   account left.
 - `user/flows/two-devices`: a bio written on device A reaches device B, which signs in after
   it; a name changed on B reaches A within 5 seconds.
+- `user/flows/theme-across-tabs` and `language-across-tabs`: a theme or a language chosen on
+  `/settings` in one tab shows in the account's other tab of the browser within 5 seconds of the
+  choice, without a reload; the theme is the account's on the next device it signs in on, and
+  one chosen there reaches both tabs.
+- `app-shell/flows/theme-across-guest-tabs`: a theme a guest chooses in the frame of one tab
+  shows in the browser's other guest tab within 5 seconds of the choice, without a reload.
 - `user/flows/offline-edit`: B edits offline while A edits online; both changes meet once B
   is back.
 - `user/flows/one-leader-per-browser`: two tabs of one browser share one sync leader; the

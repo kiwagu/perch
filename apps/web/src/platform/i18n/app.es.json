@@ -15,6 +15,7 @@
   "app.shell.leave.leave": "Salir",
   "app.shell.leave.stay": "Quedarse",
   "app.shell.locale-not-stored": "El idioma se aplica en este dispositivo, pero no se pudo guardar en tu cuenta.",
+  "app.shell.theme-not-stored": "El tema se aplica en este dispositivo, pero no se pudo guardar en tu cuenta.",
   "app.shell.locale.en": "English",
   "app.shell.locale.es": "Español",
   "app.shell.theme": "Tema",

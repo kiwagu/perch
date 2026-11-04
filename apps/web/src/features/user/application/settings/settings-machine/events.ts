@@ -62,6 +62,8 @@ export interface SettingsMachineDeps {
   readonly values: () => SettingsValues
   /** Shows a theme on this device and keeps it there. */
   readonly setTheme: (theme: Theme) => void
+  /** Stores the theme in the account's settings. */
+  readonly storeTheme: (theme: Theme) => ResultAsync<void, unknown>
   /** Stores the language in the account's settings. */
   readonly storeLocale: (locale: Locale) => ResultAsync<void, unknown>
   /** Changes the account's password, signing its other devices out. */

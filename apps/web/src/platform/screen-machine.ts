@@ -32,6 +32,7 @@ import { isLeavingControl } from './leaving'
 import { useService } from './module'
 import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
 import { PLATFORM_EVENTS } from './platform-events.port'
+import { sendPlatformEvents } from './platform-events-input'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -213,18 +214,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
     return () => moved.unsubscribe()
   }, [actor, navigate])
 
-  // A machine that ended takes no event any more.
-  useEffect(() => {
-    const target: Pick<AnyActorRef, 'send'> = actor
-
-    return platform.listen((event) => {
-      const now: AnyMachineSnapshot = actor.getSnapshot()
-
-      if (now.status === 'active') {
-        target.send(held.current === undefined ? event : { ...event, fields: held.current })
-      }
-    })
-  }, [actor, platform])
+  useEffect(() => sendPlatformEvents(platform, actor, () => held.current), [actor, platform])
 
   /**
    * Sends `event` and resolves with the outcome of the actions it started, once the machine took

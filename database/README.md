@@ -34,7 +34,7 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
   schema defines no access method, so no record user signs in to a server. Then `profile` (its
   owner reads it; only the gateway writes it, through replication; a bio holds at most 2000
-  characters), `settings` (an account's settings, today its language, one row per identity in
+  characters), `settings` (an account's settings, today its language and its theme, one row per identity in
   its private region; its owner reads it, only the gateway writes it, through replication),
   `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
   name, namespace, database and status; closed to every record user) and `membership` (an
