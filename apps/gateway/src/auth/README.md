@@ -345,7 +345,21 @@ as the verification mail does: its settings' once it has settings, its sign-up's
 that could not be read send nothing (`mail:LOCALE_UNREADABLE`), and a mail that could not be read,
 written or sent is logged by its code, never with its address, its name or its link. A notice of a
 changed password links to the front's `/forgot-password`; the notice of a changed email carries
-no link.
+no link. Every mail about an account reads whom it goes to in one place (`accountAddressee`,
+`account-addressee.ts`): the account's email, its own name and that language.
+
+A deleted account leaves no row of itself in the directory (`AccountTeardown`,
+`account-teardown.ts`). Whom its notice goes to is read first, while the account exists
+(`addressee`, as every mail reads it). Then one transaction (`remove`,
+`surql/account-teardown.surql`) deletes its sessions, its credential row, its pending change of
+email, its pending deletion and its reset links, its profile and settings, and the server's copy
+of its private region (head, snapshots, update log, projected records, bound peers), the identity
+last: all of them or none, and removing an account that is gone already succeeds and changes
+nothing. The caller ends the account's sessions and closes its sockets first, so its private
+region is idle (an idle region unloads without writing, and the region hub is not asked), and
+takes the account out of its organisations first (`Organisations.leaveAll`, `src/tenants`): the
+removal touches no membership, organisation or organisation database, and refuses an identity
+that still has a membership, with nothing deleted.
 
 Nothing Better Auth reports reaches a log as it said it. Its logger and its error hook are the
 gateway's (`auth-log.ts`): an error is logged as a code from a fixed table
@@ -424,7 +438,9 @@ error carries one.
   account, which a change of the password or of the email ends) and the token of a verification
   link (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
-  (`account-locale.ts`),
+  (`account-locale.ts`), `accountAddressee` (`account-addressee.ts`: whom a mail about an
+  account goes to), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
+  `DeletedAccount`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
@@ -442,12 +458,13 @@ error carries one.
   identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
   the move of an identity's email with the end of its reset links, the hash on a credential
-  row, an email's account, its hash and its start as a sign-in reads them, and the two
+  row, an email's account, its hash and its start as a sign-in reads them, the two
   transactions of a
-  new password: a reset's and a change's).
+  new password: a reset's and a change's, and the removal of a deleted account's rows).
 - Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
-  these options.
+  these options; a deleted account's rows of `profile`, `settings` and the `_replica_*` tables of
+  its private region are removed here too.
 - Built by the composition root, `src/composition/root.ts`.
 
 ## Commands
@@ -484,6 +501,8 @@ error carries one.
   `account-links/reset-links.spec.ts`,
   `account-links/email-changes.spec.ts`, `account-links/account-deletions.spec.ts`,
   `account-links/deletion-token.spec.ts`, `account-mails.spec.ts`, `account-passwords.spec.ts`,
+  `account-teardown.spec.ts` (every row of an account removed in one transaction and none of
+  another's, a second removal changing nothing, a membership refusing it, the addressee),
   `reset-mail.spec.ts`, `profile-emails.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,

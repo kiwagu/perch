@@ -1,22 +1,18 @@
-import { err, ok, type ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import type { LocalDb } from '@workspace/data'
 import {
   renderConfirmEmailMail,
   renderEmailChangedNotice,
   renderPasswordChangedNotice,
   renderResetPasswordMail,
 } from '@workspace/email'
-import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import type { IdentityId } from '@workspace/ids'
-import { z } from '@workspace/zod'
 
 import type { MailError, MailMessage, MailPort } from '../mail'
 
-import { accountLocale } from './account-locale'
+import { type AccountAddressee, type AddresseeUnread, accountAddressee } from './account-addressee'
 import type { AuthLog } from './auth-log'
-import { reading } from './device-session-rows'
-import identityMailStatement from './surql/identity-mail.surql'
 
 /** The front's screen a reset link opens: it sets a new password with the link's token. */
 export const RESET_PASSWORD_PATH = '/reset-password'
@@ -31,24 +27,20 @@ export const FORGOT_PASSWORD_PATH = '/forgot-password'
 export const tokenLink = (publicUrl: string, path: string, token: string): string =>
   `${publicUrl}${path}?${new URLSearchParams({ token }).toString()}`
 
-/** The account a mail is about, as the directory keeps it. */
-const identityRow = z.object({
-  email: z.string(),
-  name: z.string(),
-  locale: z.enum(SUPPORTED_LOCALES),
-})
-
-/** What a mail needs of its account: its email, its own name, and the language it reads. */
-interface MailedAccount {
-  readonly email: string
-  readonly name: string
-  readonly locale: Locale
-}
-
 /** A mail that could not be read, written or sent: logged by its code alone. */
 interface MailFailure {
   readonly code: string
   readonly message: string
+}
+
+/**
+ * A mail whose account could not be read: `mail:SEND_FAILED` for the account itself (gone too),
+ * `mail:LOCALE_UNREADABLE` for the language its settings name.
+ */
+function unreadAccount({ part }: AddresseeUnread): MailFailure {
+  return part === 'account'
+    ? { code: 'mail:SEND_FAILED', message: 'the account of a mail could not be read' }
+    : { code: 'mail:LOCALE_UNREADABLE', message: 'the language of a mail could not be read' }
 }
 
 export interface AccountMailsOptions {
@@ -127,12 +119,12 @@ export class AccountMails {
   #start(
     identity: IdentityId,
     what: string,
-    write: (account: MailedAccount) => ResultAsync<MailMessage, MailFailure>,
+    write: (account: AccountAddressee) => ResultAsync<MailMessage, MailFailure>,
   ): void {
-    const { log, mail } = this.#options
+    const { directory, log, mail } = this.#options
 
-    void this.#account(identity)
-      .mapErr((error): MailFailure => error)
+    void accountAddressee(directory, identity)
+      .mapErr(unreadAccount)
       .andThen(write)
       .andThen((message) => mail.send(message).mapErr((error: MailError): MailFailure => error))
       .match(
@@ -140,45 +132,5 @@ export class AccountMails {
         (error) => log.error({ code: error.code }, `${what} did not go out`),
       )
       .catch(() => log.error({ code: 'mail:SEND_FAILED' }, `${what} failed`))
-  }
-
-  /** The account's email, name and language; settings that could not be read fail. */
-  #account(identity: IdentityId): ResultAsync<MailedAccount, MailFailure> {
-    const { directory } = this.#options
-
-    return reading(
-      directory.db.query<[unknown]>(identityMailStatement, { identity }),
-      'the account of a mail could not be read',
-    )
-      .mapErr(
-        (): MailFailure => ({
-          code: 'mail:SEND_FAILED',
-          message: 'the account of a mail could not be read',
-        }),
-      )
-      .andThen(([value]) => {
-        const row = identityRow.safeParse(value)
-
-        return row.success
-          ? ok(row.data)
-          : err<never, MailFailure>({
-              code: 'mail:SEND_FAILED',
-              message: 'the account of a mail could not be read',
-            })
-      })
-      .andThen((row) =>
-        accountLocale(directory, identity)
-          .mapErr(
-            (_: DataError): MailFailure => ({
-              code: 'mail:LOCALE_UNREADABLE',
-              message: 'the language of a mail could not be read',
-            }),
-          )
-          .map((settings) => ({
-            email: row.email,
-            name: row.name,
-            locale: settings ?? row.locale,
-          })),
-      )
   }
 }
