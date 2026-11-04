@@ -2,13 +2,15 @@ import { createActor } from 'xstate'
 
 import type { DeviceInstall } from '../../../../../platform/install'
 import type { Theme } from '../../../../../platform/theme'
-import { LocaleWrites } from '../../../application/locale-writes'
-import type { SelfReloads } from '../../../application/shell.machine'
+import { NOTHING_SEEN } from '../../../application/setting-writes'
+import type { SelfReloads } from '../../../application/shell-machine'
 import { type ShellFrame, type ShellLive, shellFrameMachine } from '../shell-frame'
 
 export interface OpenedFrameOptions {
   /** Where a theme chosen in the frame goes. */
   readonly setTheme?: (theme: Theme) => void
+  /** What shows a theme another tab chose. */
+  readonly followTheme?: () => void
   /** What loads the page again; nothing by default. */
   readonly reload?: () => void
   /** The updates the tab loaded the page again for by itself; none by default, kept in memory. */
@@ -39,7 +41,7 @@ function startedFrame(account: string | undefined, options: OpenedFrameOptions):
   const live: ShellLive = {
     account,
     stored: undefined,
-    writes: LocaleWrites.none,
+    writes: NOTHING_SEEN,
     generation: 0,
     signOutHere: undefined,
     renderAgain: undefined,
@@ -48,6 +50,7 @@ function startedFrame(account: string | undefined, options: OpenedFrameOptions):
   const actor = createActor(
     shellFrameMachine(live, {
       setTheme: options.setTheme ?? (() => {}),
+      followTheme: options.followTheme ?? (() => {}),
       reload: options.reload ?? (() => {}),
       selfReloads: options.selfReloads ?? memorySelfReloads(),
       install: options.install ?? {

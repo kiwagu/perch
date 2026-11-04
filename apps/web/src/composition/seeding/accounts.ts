@@ -116,7 +116,11 @@ const ensureProfile = (
       ).map(() => profile.id),
     )
 
-/** The account's settings as the catalog describes them: created when missing, its language set. */
+/**
+ * The account's settings as the catalog describes them: created when missing, its language set,
+ * its theme the device's own setting, as for an account a device that shows no theme of its own
+ * starts.
+ */
 const ensureSettings = (
   device: SeedDevice,
   user: AuthUser,
@@ -128,6 +132,7 @@ const ensureSettings = (
         id: settingsIdFactory.create(),
         identity: user.id,
         locale: input.locale,
+        theme: 'system',
       })
     }
 

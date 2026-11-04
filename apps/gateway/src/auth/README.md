@@ -133,7 +133,7 @@ identity's). While the account has not started, the answer also carries `start`:
 signed up in. The account has not started while its profile or its settings have not reached the
 directory: the region hub projects the rows of the identity's private region there, so a row a
 device created and pushed is found by the identity. The device that gets `start` creates the
-settings (`locale`) and the profile (`name`, the account's email) under ids derived from the
+settings (`locale`, and the `theme` that device shows) and the profile (`name`, the account's email) under ids derived from the
 identity, as the device that verifies the email by the sign-up mail's link does with the answer of
 that verification; several devices that sign in before either row arrives all get it, and their
 creations converge on the same records. This is how an account whose email a reset verified (it

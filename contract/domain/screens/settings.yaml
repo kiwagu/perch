@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: the theme of this device (light, dark, or the device's own), the language of the account, which follows it across its devices, and the account's password and email."
+description: "The signed-in account's settings: its theme (light, dark, or the device's own setting) and its language, which follow it across its tabs and devices, and its password and email."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form ]
@@ -10,11 +10,12 @@ anchors:
     kind: heading
   user.settings.theme-select:
     kind: select
-    description: The theme of this device, kept on this device.
+    description: "The theme of the account, stored in its settings, so its other tabs and devices show it too; it takes no choice before the settings are on this device."
     binding:
-      action: platform.theme.set
-      params:
-        theme: user.settings.theme-select
+      - model: settings.theme
+      - action: settings.updateTheme
+        params:
+          theme: user.settings.theme-select
     dataValue: true
     derived: [ option ]
   user.settings.locale-select:
@@ -113,17 +114,31 @@ flow:
       description: The settings of the signed-in account and of this device.
       states:
         theme:
-          description: The theme of this device.
+          description: The theme of the account.
           initial: idle
           states:
             idle:
               on:
-                user.settings.theme-select: applying
-            applying:
+                user.settings.theme-select:
+                  target: storing
+                  guard: settingsHeld
+                  description: The app shows the chosen theme at once.
+            storing:
               invoke:
-                src: platform.theme.set
+                src: settings.updateTheme
                 input: { theme: user.settings.theme-select }
-                onDone: idle
+                toast: false
+                onDone:
+                  target: idle
+                  description: The settings hold the chosen theme, and the account's other tabs and devices show it.
+                onError:
+                  - target: idle
+                    guard: accountLeft
+                    description: The account signed out meanwhile; its notice went with it, and nothing is shown.
+                  - target: idle
+                    description: The app keeps showing the chosen theme on this device, and the notice says the settings could not store it.
+                    actions:
+                      - show: { app-shell.notice-message: [ theme-not-stored ] }
         language:
           description: The language of the account.
           initial: idle

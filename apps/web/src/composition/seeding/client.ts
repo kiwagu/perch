@@ -187,6 +187,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     gatewayAuth: gatewayAuth(options.gatewayUrl, fetcher),
     // The client names itself with an id minted into its memory storage, as a browser does.
     deviceLabel: 'Seed client',
+    // The client shows nothing: an account it starts follows each device's own setting.
+    theme: () => 'system',
     online: () => true,
     onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
