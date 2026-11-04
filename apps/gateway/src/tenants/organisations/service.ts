@@ -4,6 +4,7 @@ import type { DataError, LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
+import type { RegionHub } from '@workspace/replica/server'
 
 import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
 import { OrganisationLookup } from '../organisation-lookup'
@@ -27,6 +28,8 @@ export interface OrganisationsOptions {
    * connections at once; resolves once none of them may name it any more.
    */
   readonly revoke: (identity: IdentityId, region: string) => Promise<void>
+  /** The region hub, which lets go of the region of an organisation a departure takes whole. */
+  readonly hub: Pick<RegionHub, 'retire'>
 }
 
 /** The longest name an organisation may have, in characters. */
@@ -61,7 +64,7 @@ export class Organisations {
   readonly #turns = new MembershipTurns()
 
   constructor(options: OrganisationsOptions) {
-    const { directory, databases, revoke } = options
+    const { directory, databases, revoke, hub } = options
     const lookup = new OrganisationLookup(directory)
     const members = new TenantMembers(databases)
     const listeners = new MembershipListeners(lookup)
@@ -72,7 +75,7 @@ export class Organisations {
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
     this.#invitation = new OrganisationInvitation({ directory, lookup, members })
     this.#removal = new OrganisationRemoval({ directory, members, listeners, revoke })
-    this.#departure = new AccountDeparture({ directory, databases })
+    this.#departure = new AccountDeparture({ directory, databases, hub })
   }
 
   /** The ready organisations `identity` belongs to, with its role in each, by key. */

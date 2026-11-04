@@ -3,13 +3,16 @@
  * directory with each organisation's database on an embedded engine of its own (a connection
  * opened anew after an eviction starts empty), three identities, and what a test reads back. A
  * test can make one statement fail or wait, on the directory or on the organisations' databases,
- * as a broken or slow database would, and count what was sent to the directory.
+ * as a broken or slow database would, and count what was sent to the directory. The hub holds no
+ * region here: it keeps which regions it was asked to retire, and a test can make that fail.
  */
 
+import { errAsync, okAsync } from 'neverthrow'
 import { expect } from 'vitest'
 
 import {
   type DataError,
+  dataError,
   type LocalDb,
   openLocalDb,
   recordId,
@@ -98,6 +101,17 @@ export async function departureHarness() {
     () => databases.close(),
   )
 
+  let retireFails = false
+  /** A hub that keeps each region it is asked to retire among the statements sent, in order. */
+  const hub = {
+    retire: (region: string) => {
+      sent.push(`retire ${region}`)
+
+      return retireFails
+        ? errAsync(dataError('data:WRITE_FAILED', `could not release the database of ${region}`))
+        : okAsync(undefined)
+    },
+  }
   const organisations = new Organisations({
     directory: interceptQueries(directory, (text) => {
       sent.push(text)
@@ -106,8 +120,9 @@ export async function departureHarness() {
     }),
     databases,
     revoke: async () => {},
+    hub,
   })
-  const departure = new AccountDeparture({ directory, databases })
+  const departure = new AccountDeparture({ directory, databases, hub })
 
   /** An identity written straight into the directory. */
   const identity = async (email: string): Promise<IdentityId> => {
@@ -209,6 +224,17 @@ export async function departureHarness() {
 
     /** How many times the organisations sent `statement` to the directory so far. */
     sentCount: (statement: string) => sent.filter((text) => text === statement).length,
+
+    /**
+     * What the organisations sent to the directory and the regions they asked the hub to retire
+     * (`retire <region>`), in order, of what `kept` keeps.
+     */
+    sentOf: (kept: (text: string) => boolean) => sent.filter(kept),
+
+    /** Every retire fails from now on, as a hub whose release throws; `false` lets them be. */
+    failRetires: (fails: boolean) => {
+      retireFails = fails
+    },
 
     /** `statement` is refused from now on; `undefined` refuses none. */
     refuse: (statement: string | undefined) => {

@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow'
+import { ok, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -156,6 +156,8 @@ async function harness() {
     revoke: async (identity, region) => {
       steps.push(`revoke ${identity} ${region}`)
     },
+    // No device subscribes to a region here: the hub has none to let go of.
+    hub: { retire: () => okAsync(undefined) },
   })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 

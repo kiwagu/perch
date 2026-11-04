@@ -175,11 +175,12 @@ export function createGatewayRoot(
       directory: local,
       databases,
       revoke: (identity, region) => connections.revoke(identity, region),
+      hub,
     })
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
-    const departure = new AccountDeparture({ directory: local, databases })
+    const departure = new AccountDeparture({ directory: local, databases, hub })
 
     // One account's work, one turn at a time: the auth mount's and the profile's email's.
     const accountTurns = new KeyedTurns<string>()

@@ -7,10 +7,12 @@ import {
   type LocalDb,
   recordId,
   tenantDatabase,
+  tenantRegionId,
 } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import { tenantRole } from '@workspace/replica/protocol'
+import type { RegionHub } from '@workspace/replica/server'
 import { z } from '@workspace/zod'
 
 import { reading, writing } from './organisation-rows'
@@ -70,6 +72,8 @@ export interface AccountDepartureOptions {
   /** The directory database, opened as the gateway's namespace user. */
   readonly directory: LocalDb
   readonly databases: Pick<TenantDatabases, 'acquire' | 'evict'>
+  /** The region hub, which lets go of the region of an organisation that goes whole. */
+  readonly hub: Pick<RegionHub, 'retire'>
 }
 
 /**
@@ -88,11 +92,13 @@ export class AccountDeparture {
   readonly #directory: LocalDb
   readonly #members: TenantMembers
   readonly #databases: Pick<TenantDatabases, 'evict'>
+  readonly #hub: Pick<RegionHub, 'retire'>
 
   constructor(options: AccountDepartureOptions) {
     this.#directory = options.directory
     this.#members = new TenantMembers(options.databases)
     this.#databases = options.databases
+    this.#hub = options.hub
   }
 
   /**
@@ -114,10 +120,11 @@ export class AccountDeparture {
    * the departure is refused `last-admin` and nothing changes, `before` not run. Otherwise
    * `before` runs first, ahead of every write: its error stops the departure there, and its value
    * is the answer once every membership went. An organisation it is the only member of goes
-   * whole: its database, its memberships and its directory row in one transaction, then the
-   * cached connection to it. In any other its member row goes first and its membership last, so a
-   * run again after a failure still finds every organisation it has not left yet and completes
-   * the departure; a run after a success finds nothing and changes nothing.
+   * whole: the hub lets go of its region first, then its database, its memberships and its
+   * directory row go in one transaction, then the cached connection to it. In any other its
+   * member row goes first and its membership last, so a run again after a failure still finds
+   * every organisation it has not left yet and completes the departure; a run after a success
+   * finds nothing and changes nothing.
    */
   leave<T, Stop>(
     identity: IdentityId,
@@ -161,17 +168,29 @@ export class AccountDeparture {
     })
   }
 
-  /** The organisation goes whole, and so does the cached connection to its database. */
+  /**
+   * The organisation goes whole. The hub lets go of its region first, while the key is still
+   * taken: the document it held (notes and all) would otherwise stay in memory until its idle
+   * unload, and an organisation created again under the key at once would subscribe to it.
+   * Nobody subscribes to it meanwhile: its only member's connections were closed before the
+   * departure. A retire that fails stops the departure with nothing of the organisation removed.
+   * Then its database, its memberships and its directory row go, and the cached connection.
+   */
   #removeTenant(row: DepartingMembership): ResultAsync<void, DataError> {
-    return writing(
-      this.#directory.db
-        .query(tenantRemoveStatement, {
-          tenant: recordId('tenant', row.tenant),
-          database: row.database,
-        })
-        .retry(),
-      `could not remove organisation ${row.key}`,
-    ).map(() => this.#databases.evict(row.key))
+    return this.#hub
+      .retire(tenantRegionId(row.key))
+      .andThen(() =>
+        writing(
+          this.#directory.db
+            .query(tenantRemoveStatement, {
+              tenant: recordId('tenant', row.tenant),
+              database: row.database,
+            })
+            .retry(),
+          `could not remove organisation ${row.key}`,
+        ),
+      )
+      .map(() => this.#databases.evict(row.key))
   }
 
   /**

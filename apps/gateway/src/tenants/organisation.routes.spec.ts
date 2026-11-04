@@ -446,6 +446,7 @@ describe('organisationRoutes', () => {
         directory,
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
+        hub: root.hub,
       }),
       routeOptions(new RequestLimits({ clock: manualClock() })),
     )
@@ -473,6 +474,7 @@ describe('organisationRoutes', () => {
         directory,
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
+        hub: root.hub,
       })
       const routes = organisationRoutes(
         root.sessions,

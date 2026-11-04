@@ -236,8 +236,10 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
 
   onTestFinished(() => databases.close())
 
-  const organisations = new Organisations({ directory, databases, revoke: async () => {} })
-  const departure = new AccountDeparture({ directory, databases })
+  // No device subscribes to a region here: the hub has none to let go of.
+  const hub = { retire: () => okAsync(undefined) }
+  const organisations = new Organisations({ directory, databases, revoke: async () => {}, hub })
+  const departure = new AccountDeparture({ directory, databases, hub })
 
   return {
     organisations,

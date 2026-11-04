@@ -222,6 +222,7 @@ async function openGateway(options: GatewayOptions = {}) {
     directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,
     databases,
     revoke: (identity, region) => connections.revoke(identity, region),
+    hub,
   })
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
@@ -1177,6 +1178,53 @@ describe('SyncConnection', () => {
     // Ann's memberships did not change: her connection hears nothing and keeps the region.
     expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates'])
     expect(annsDevice.unsubscribed).toEqual([])
+  })
+
+  it("lets go of the document of an organisation its only member's departure takes whole: one created again at once under its key starts empty", async () => {
+    const { gateway, anns, bobs } = await withAcme(false)
+    const annsDevice = open(gateway)
+
+    await hello(annsDevice.connection, anns.token)
+    await annsDevice.connection.receive(
+      encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+    )
+    await annsDevice.connection.receive(
+      encode({
+        type: 'push',
+        region: 'tenant:acme',
+        batch: 1,
+        updates: [await acmeNote(anns.identity.id, 'from ann')],
+      }),
+    )
+    expect(annsDevice.socket.sent).toContainEqual(
+      expect.objectContaining({ type: 'ack', batch: 1, head: 1 }),
+    )
+
+    // Ann's account goes: her connections close first, as its deletion closes them, and the hub
+    // would keep the region's document until its idle unload; then she leaves Acme, its only member.
+    await gateway.connections.close(anns.identity.id, undefined, CLOSE.revoked)
+    ;(await gateway.organisations.leaveAll(anns.identity.id))._unsafeUnwrap()
+    ;(
+      await gateway.organisations.create({ identity: bobs.identity.id, key: 'acme', name: 'Acme' })
+    )._unsafeUnwrap()
+
+    const bobsDevice = open(gateway)
+
+    await hello(bobsDevice.connection, bobs.token)
+    await bobsDevice.connection.receive(
+      encode({ type: 'subscribe', region: 'tenant:acme', vv: null }),
+    )
+
+    const answer = bobsDevice.socket.sent.find(
+      (message): message is Extract<ServerMessage, { type: 'updates' }> =>
+        message.type === 'updates' && message.region === 'tenant:acme',
+    )
+    const replica = RegionDoc.inMemory('tenant', 'tenant:acme')
+
+    replica.doc.import(answer?.bytes ?? new Uint8Array())
+
+    expect(answer).toEqual(expect.objectContaining({ head: 0, snapshot: true }))
+    expect(replica.records().keys()).toEqual([])
   })
 
   it('tells the removed device and leaves the region when the removal fails to delete the member row', async () => {

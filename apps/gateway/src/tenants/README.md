@@ -41,9 +41,13 @@ several processes would need a durable revision of the memberships.
 An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
 the directory's memberships and their roles: `blocked` is true while it is the only admin of a
 ready organisation with other members, and `leave` takes every organisation it is the only member
-of whole, of any status (its database, its memberships and its directory row in one transaction,
-then the cached connection), and takes it out of every other one (its member row, then its
-membership, so a run again after a failure finds what is left; its notes stay).
+of whole, of any status, and takes it out of every other one (its member row, then its
+membership, so a run again after a failure finds what is left; its notes stay). An organisation
+that goes whole has its region retired at the hub first (`RegionHub.retire`), while its key is
+still taken, so no document of it stays in memory for an organisation created again under the
+key to subscribe to; a retire that fails stops the departure with nothing removed. Then its
+database, its memberships and its directory row go in one transaction, then the cached
+connection.
 `Organisations.leaveAll` runs that departure in the identity's turn and the turns of its
 organisations, so an invite of it and a creation by it wait, and so does any change of another
 identity there; `leave` reads the rows again in those turns and is refused `last-admin`, changing

@@ -222,6 +222,41 @@ describe('AccountDeparture', () => {
     expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
+  it("lets the hub go of the region of an organisation that goes whole before its database goes, and of no other organisation's", async () => {
+    const { organisations, ann, bob, founded, invited, sentOf } = await departureHarness()
+
+    await founded(ann, 't1')
+    await founded(bob, 't3')
+    await invited(bob, 't3', 'ann@example.test')
+
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
+    expect(sentOf((text) => text.startsWith('retire ') || text === tenantRemoveStatement)).toEqual([
+      'retire tenant:t1',
+      tenantRemoveStatement,
+    ])
+  })
+
+  it('a retire that fails stops the departure with nothing of the organisation removed, and a run again completes it', async () => {
+    const { organisations, ann, founded, definitionOf, everything, sentCount, failRetires } =
+      await departureHarness()
+
+    await founded(ann, 't1')
+    failRetires(true)
+
+    expect((await organisations.leaveAll(ann))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    expect(sentCount(tenantRemoveStatement)).toBe(0)
+    expect(await everything()).toEqual({ tenants: ['t1'], memberships: 1 })
+    expect(await definitionOf('t1')).toBeDefined()
+
+    failRetires(false)
+
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
+    expect(await everything()).toEqual({ tenants: [], memberships: 0 })
+    expect(await definitionOf('t1')).toBeUndefined()
+  })
+
   it('answers an error, never a guess, for a membership whose organisation is gone', async () => {
     const { organisations, departure, directory, ann } = await departureHarness()
 
