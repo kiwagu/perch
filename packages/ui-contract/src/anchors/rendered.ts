@@ -63,11 +63,11 @@ function activeAt(config: unknown, value: unknown): unknown[] {
 
     return [
       parallel,
-      ...entriesOf(regions).map(([region, state]) =>
-        typeof state === 'string'
-          ? fieldOf(fieldOf(fieldOf(fieldOf(parallel, 'states'), region), 'states'), state)
-          : undefined,
-      ),
+      ...entriesOf(fieldOf(parallel, 'states')).map(([region, node]) => {
+        const state = fieldOf(regions, region)
+
+        return typeof state === 'string' ? fieldOf(fieldOf(node, 'states'), state) : undefined
+      }),
     ]
   })
 }

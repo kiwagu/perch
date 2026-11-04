@@ -303,9 +303,10 @@ for Bun.
     problems when it finds any, or loads the contract and does all three.
     `settledProblems(contract, settled)`: the e2e harness's check of a `SettledState` against
     the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids`), one line
-    per problem: of the screen's anchors rendered only where listed, one visible where the
-    state does not render it, and one the state renders that is not on the page or hidden,
-    unless it, or an anchor it is under, has `roles`, `own` or a `dataId`.
+    per problem: of the screen's anchors rendered only where listed, with their derived parts,
+    one visible where the state does not render it, and one the state renders that is not on
+    the page or hidden, unless it, or an anchor it is under, has `roles`, `own` or a `dataId`,
+    or it is a part shown on demand (`option`, `item`, `error-message`).
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,

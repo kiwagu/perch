@@ -18,7 +18,10 @@ const FLOW = {
           initial: 'closed',
           states: { closed: {}, open: { meta: { renders: ['x.y.form'] } } },
         },
-        side: { initial: 'idle', states: { idle: {} } },
+        side: {
+          initial: 'idle',
+          states: { idle: {}, busy: { meta: { renders: ['x.y.side-list'] } } },
+        },
       },
     },
   },
@@ -84,6 +87,14 @@ describe('what a state renders', () => {
     expect(renderedAt(undefined, 'sign-in')).toEqual({ listed: [], rendered: [] })
   })
 
+  it("reads the regions in the config's order, whatever the order of the value's keys", () => {
+    expect(renderedAt(FLOW, { viewing: { side: 'busy', form: 'open' } }).rendered).toEqual([
+      'x.y.panel',
+      'x.y.form',
+      'x.y.side-list',
+    ])
+  })
+
   it('lists each name once', () => {
     expect(renderedAt(FLOW, 'sign-in').listed).toEqual([
       'x.y.forgot-link',
@@ -92,6 +103,7 @@ describe('what a state renders', () => {
       'x.y.resend-button',
       'x.y.panel',
       'x.y.form',
+      'x.y.side-list',
     ])
     expect(renderedAt(FLOW, 'check-mail').rendered).toEqual([
       'x.y.forgot-link',

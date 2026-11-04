@@ -12,6 +12,7 @@ const FLOW = {
     'sign-in': { meta: { renders: ['x.y.forgot-link'] } },
     'sign-up': { meta: { renders: ['x.y.name-input', 'x.y.rule-list'] } },
     listing: { meta: { renders: ['x.y.item'] } },
+    confirming: { meta: { renders: ['x.y.leave-dialog', 'x.y.mode-select'] } },
     viewing: {
       type: 'parallel',
       states: {
@@ -42,7 +43,9 @@ const CONTRACT: SettledContract = {
   ids: {
     'x.y.email-input': { screen: 'x.y' },
     'x.y.forgot-link': { screen: 'x.y' },
-    'x.y.name-input': { screen: 'x.y' },
+    'x.y.name-input': { screen: 'x.y', derived: ['visibility-button', 'error-message'] },
+    'x.y.leave-dialog': { screen: 'x.y', derived: ['confirm-button', 'cancel-button'] },
+    'x.y.mode-select': { screen: 'x.y', derived: ['option', 'toggle-button'] },
     'x.y.rule-list': { screen: 'x.y' },
     'x.y.rule-list.length-item': { screen: 'x.y' },
     'x.y.form': { screen: 'x.y', roles: ['member'] },
@@ -68,6 +71,7 @@ const SIGN_IN = [shown('x.y.email-input'), shown('x.y.forgot-link')]
 const SIGN_UP = [
   shown('x.y.email-input'),
   shown('x.y.name-input'),
+  shown('x.y.name-input.visibility-button'),
   shown('x.y.rule-list'),
   shown('x.y.rule-list.length-item'),
 ]
@@ -98,6 +102,7 @@ describe('a settled state held to what it renders', () => {
       ),
     ).toEqual([
       'x.y in sign-up: "x.y.name-input" is hidden, but the state renders it',
+      'x.y in sign-up: "x.y.name-input.visibility-button" is not on the page, but the state renders it',
       'x.y in sign-up: "x.y.rule-list" is not on the page, but the state renders it',
       'x.y in sign-up: "x.y.rule-list.length-item" is not on the page, but the state renders it',
     ])
@@ -113,6 +118,36 @@ describe('a settled state held to what it renders', () => {
       'x.y in sign-in: "x.y.name-input.visibility-button" is visible, but the state does not render it',
     ])
     expect(settledProblems(CONTRACT, settled('sign-in', [shown('x.y.forgot-link')]))).toEqual([])
+  })
+
+  it("holds a rendered anchor's derived parts with it, save those a page shows on demand", () => {
+    expect(
+      settledProblems(
+        CONTRACT,
+        settled('confirming', [
+          shown('x.y.email-input'),
+          shown('x.y.leave-dialog'),
+          shown('x.y.leave-dialog.confirm-button'),
+          hidden('x.y.leave-dialog.cancel-button'),
+          shown('x.y.mode-select'),
+        ]),
+      ),
+    ).toEqual([
+      'x.y in confirming: "x.y.leave-dialog.cancel-button" is hidden, but the state renders it',
+      'x.y in confirming: "x.y.mode-select.toggle-button" is not on the page, but the state renders it',
+    ])
+    expect(
+      settledProblems(
+        CONTRACT,
+        settled('confirming', [
+          shown('x.y.leave-dialog'),
+          shown('x.y.leave-dialog.confirm-button'),
+          shown('x.y.leave-dialog.cancel-button'),
+          shown('x.y.mode-select'),
+          shown('x.y.mode-select.toggle-button'),
+        ]),
+      ),
+    ).toEqual([])
   })
 
   it('lets data decide whether a rendered anchor with roles or own, an entry or what is under them shows', () => {

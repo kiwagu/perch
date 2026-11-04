@@ -1233,11 +1233,12 @@ build reports to it each settled state of a screen's machine, once the page has 
 the screen, the state value and the page as the helper reads it then (`SettledState`). The
 harness holds every report to the manifest the stand serves (`settledProblems`), and a test
 fails at its end when a state it passed through broke it. Of the anchors a screen renders only
-where listed, one the state does not render is not visible, and one it renders is on the page
-and visible, unless data decides whether it shows: an anchor with `roles` or `own`, an entry
-of a list (`dataId`), or an anchor nested under one of these, which only the first holds. The
-anchors every state renders are not held: a message shows when it carries a code, and an error
-when there is one.
+where listed, with their derived parts, one the state does not render is not visible, and one
+it renders is on the page and visible, unless data decides whether it shows: an anchor with
+`roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these, which
+only the first holds, as are the parts a page shows on demand (a select's `option`, a
+composite's `item`, a field's `error-message`). The anchors every state renders are not held:
+a message shows when it carries a code, and an error when there is one.
 
 ## Coverage
 

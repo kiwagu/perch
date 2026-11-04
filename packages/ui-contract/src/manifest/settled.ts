@@ -1,11 +1,12 @@
 /**
  * The e2e harness's check of a settled state: what the page shows once a screen's machine has
  * settled in a state, held to what that state renders (`meta.renders`, read by `renderedAt`).
- * Only the anchors of the screen that render only where listed are held; those every state
- * renders are not. Rendered means visible to the user: an anchor the state does not render is
- * not visible, absent from the page or hidden on it; one it renders is on the page and visible,
- * unless data decides whether it shows (an anchor with `roles` or `own`, an entry of a list,
- * `dataId`, or an anchor nested under one of these), where only the first holds.
+ * Only the anchors of the screen that render only where listed are held, with their derived
+ * parts; those every state renders are not. Rendered means visible to the user: an anchor the
+ * state does not render is not visible, absent from the page or hidden on it; one it renders is
+ * on the page and visible, unless data decides whether it shows (an anchor with `roles` or
+ * `own`, an entry of a list, `dataId`, or an anchor nested under one of these), where only the
+ * first holds. A derived part the page shows on demand is held to the first only as well.
  */
 
 import {
@@ -23,9 +24,15 @@ import type { Manifest } from './manifest.types'
 export interface SettledContract {
   readonly screens: readonly { readonly id: string; readonly flow?: unknown }[]
   readonly ids: Readonly<
-    Record<string, Pick<Manifest['ids'][string], 'screen' | 'roles' | 'own' | 'dataId'>>
+    Record<string, Pick<Manifest['ids'][string], 'screen' | 'derived' | 'roles' | 'own' | 'dataId'>>
   >
 }
+
+/**
+ * The derived parts a page shows on demand, never with their base alone: a select's options
+ * while it is open, a composite's entries (its data), a field's error text when it has one.
+ */
+const ON_DEMAND: ReadonlySet<string> = new Set(['option', 'item', 'error-message'])
 
 /** `sign-up`, or `viewing (form: open, notes: idle)` for a parallel state. */
 const stateText = (value: SettledValue): string =>
@@ -59,6 +66,15 @@ const decidedByData = (contract: SettledContract, anchor: string): boolean =>
     ([, { roles, own, dataId }]) => roles !== undefined || own === true || dataId !== undefined,
   )
 
+/** The anchors of `screen` a page shows with their base: each declared one, then its parts. */
+const anchorsOf = (contract: SettledContract, screen: string): string[] =>
+  Object.entries(contract.ids)
+    .filter(([, { screen: of }]) => of === screen)
+    .flatMap(([anchor, { derived }]) => [
+      anchor,
+      ...(derived ?? []).filter((suffix) => !ON_DEMAND.has(suffix)).map((s) => `${anchor}.${s}`),
+    ])
+
 /** What the page of a settled state shows against what the state renders, one line each. */
 export function settledProblems(contract: SettledContract, settled: SettledState): string[] {
   const screen = contract.screens.find(({ id }) => id === settled.screen)
@@ -76,15 +92,12 @@ export function settledProblems(contract: SettledContract, settled: SettledState
     .filter((anchor) => screenOf(contract, anchor) === settled.screen && !isRendered(at, anchor))
     .map((anchor) => `${where}: "${anchor}" is visible, but the state does not render it`)
 
-  const unshown = Object.entries(contract.ids)
+  const unshown = anchorsOf(contract, settled.screen)
     .filter(
-      ([anchor, { screen: of }]) =>
-        of === settled.screen &&
-        isListed(at, anchor) &&
-        isRendered(at, anchor) &&
-        !decidedByData(contract, anchor),
+      (anchor) =>
+        isListed(at, anchor) && isRendered(at, anchor) && !decidedByData(contract, anchor),
     )
-    .flatMap(([anchor]) => {
+    .flatMap((anchor) => {
       const elements = anchors.filter((each) => each.anchor === anchor)
 
       if (elements.length === 0) {
