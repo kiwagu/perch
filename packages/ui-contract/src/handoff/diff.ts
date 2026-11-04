@@ -16,12 +16,8 @@ import { type Contract, codesOf, declaredAnchors } from '../check'
 import type { Activity, AnchorDef, Flow } from '../files'
 
 import { branchesOf } from './activities'
+import { byName, type Change, changeOf } from './change'
 import { flowLines } from './flow-lines'
-
-export interface Change {
-  added: string[]
-  removed: string[]
-}
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
@@ -62,8 +58,6 @@ export interface ContractChanges {
   flows: Record<string, Change>
 }
 
-const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
-
 /** How each leave that would lose unsaved input asks, as `<leave>: <how>`; none when undeclared. */
 const unsavedInputOf = (contract: Contract | undefined): string[] =>
   Object.entries(contract?.screens.platform.unsavedInput ?? {}).map(
@@ -75,16 +69,6 @@ const noticesOf = (contract: Contract | undefined): string[] =>
   Object.entries(contract?.screens.platform.actions ?? {}).flatMap(([action, { notices }]) =>
     (notices ?? []).map(({ name }) => `${action}.${name}`),
   )
-
-function changeOf(before: readonly string[], after: readonly string[]): Change {
-  const was = new Set(before)
-  const is = new Set(after)
-
-  return {
-    added: [...is].filter((name) => !was.has(name)).sort(byName),
-    removed: [...was].filter((name) => !is.has(name)).sort(byName),
-  }
-}
 
 /** Each anchor with the screen it is declared in and its kind. */
 const anchorsOf = (contract: Contract | undefined): Map<string, string> =>

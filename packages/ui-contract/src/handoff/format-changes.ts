@@ -1,6 +1,7 @@
 /** The changes of the contract as the hand-over block: a summary line, then one line per list. */
 
-import type { Change, ContractChanges } from './diff'
+import type { Change } from './change'
+import type { ContractChanges } from './diff'
 
 /** The lists in the order of the block, each with its singular and plural noun. */
 const LISTS = [
