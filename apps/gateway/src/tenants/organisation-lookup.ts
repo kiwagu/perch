@@ -88,6 +88,21 @@ export class OrganisationLookup {
     )
   }
 
+  /**
+   * `identity`, while the directory still holds it; one whose account went is refused
+   * `no-such-identity`.
+   */
+  existing(identity: IdentityId): ResultAsync<IdentityId, OrganisationError> {
+    return reading(
+      this.#directory.db.query<[IdentityRow[]]>(identitiesByIdStatement, {
+        ids: [recordId('identity', identity)],
+      }),
+      `could not read identity ${identity}`,
+    ).andThen(([rows]) =>
+      rows.length > 0 ? okAsync(identity) : errAsync(refused('no-such-identity')),
+    )
+  }
+
   /** The role the directory holds for `identity` in the organisation; none when it is no member. */
   roleOf(tenant: Tenant, identity: IdentityId): ResultAsync<TenantRole | undefined, DataError> {
     return reading(

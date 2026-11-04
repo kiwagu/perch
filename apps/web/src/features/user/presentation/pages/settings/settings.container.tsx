@@ -19,6 +19,7 @@ import {
   type SettingsValues,
 } from '../../../application/settings/settings-machine'
 
+import { DeletionFormView } from './deletion-form.view'
 import { type EmailFormValues, EmailFormView } from './email-form.view'
 import { type PasswordFormValues, PasswordFormView } from './password-form.view'
 import { SettingsView } from './settings.view'
@@ -28,8 +29,8 @@ const EMPTY_EMAIL: EmailFormValues = { email: '', password: '' }
 
 /**
  * The settings screen: its flow run as its machine over the account's settings, the theme this
- * device shows and the account's password and email, whose forms' values the page holds so that
- * the flow's `clear` empties them.
+ * device shows and the account's password, email and deletion, whose forms' values the page holds
+ * so that the flow's `clear` empties them.
  */
 export function SettingsContainer() {
   const session = useService(SESSION)
@@ -45,6 +46,7 @@ export function SettingsContainer() {
   const writes = useSettingsWrites()
   const [passwords, setPasswords] = useState(EMPTY_PASSWORDS)
   const [email, setEmail] = useState(EMPTY_EMAIL)
+  const [deletionPassword, setDeletionPassword] = useState('')
   // What the machine's guards read, current before it is asked: kept beside it, never in its context.
   const live = useRef<SettingsValues & { readonly store: typeof row }>({
     held: false,
@@ -82,6 +84,7 @@ export function SettingsContainer() {
       changePassword: (currentPassword, password) =>
         session.changePassword(currentPassword, password),
       changeEmail: (address, password) => session.changeEmail(address, password),
+      requestAccountDeletion: (password) => session.requestAccountDeletion(password),
     })
   }, [device.set, settings, writes, session])
   const { state, send, submit, actor } = useScreenMachine(machine)
@@ -93,7 +96,7 @@ export function SettingsContainer() {
     return () => spoken.unsubscribe()
   }, [actor, setLocale])
 
-  // A changed password empties its form, as the flow says.
+  // A changed password empties its form, and a deletion link sent its password, as the flow says.
   useFieldClears(actor, {
     'user.settings.password.current-password-input': () =>
       setPasswords((now) => ({ ...now, current: '' })),
@@ -101,6 +104,7 @@ export function SettingsContainer() {
       setPasswords((now) => ({ ...now, password: '' })),
     'user.settings.password.password-confirmation-input': () =>
       setPasswords((now) => ({ ...now, confirmation: '' })),
+    'user.settings.deletion.password-input': () => setDeletionPassword(''),
   })
 
   return (
@@ -159,6 +163,16 @@ export function SettingsContainer() {
             email: email.email,
             password: email.password,
           })
+        }
+      />
+      <DeletionFormView
+        password={deletionPassword}
+        error={state.context.deletionError}
+        message={state.context.deletionMessage}
+        canSend={state.can({ type: 'user.settings.deletion.send-button', password: '' })}
+        onChange={setDeletionPassword}
+        onSend={() =>
+          submit({ type: 'user.settings.deletion.send-button', password: deletionPassword })
         }
       />
     </div>

@@ -29,4 +29,9 @@ export const CONFIRM_TEXTS: Readonly<Record<string, ConfirmWords>> = {
     body: (t) => t('app.shell.confirm.devices-revoke.body'),
     confirm: (t) => t('app.shell.confirm.devices-revoke.confirm'),
   },
+  'delete-account': {
+    title: (t) => t('app.shell.confirm.delete-account.title'),
+    body: (t) => t('app.shell.confirm.delete-account.body'),
+    confirm: (t) => t('app.shell.confirm.delete-account.confirm'),
+  },
 }

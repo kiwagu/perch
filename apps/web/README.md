@@ -71,7 +71,16 @@ modeling stage.
   that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
   profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
-  the session. Until the sign-in is whole its token
+  the session. `requestAccountDeletion(password)` asks
+  `POST /backend/auth/request-account-deletion` with this device's session token for the mail
+  whose link deletes the account (202; the account stays as it is), and `deleteAccount(token)`
+  sends that link's token to `POST /backend/auth/delete-account` with no session (200): both read
+  a 409 `last-admin` as `data:LAST_ADMIN`; the request reads a wrong password as
+  `data:INVALID_CREDENTIALS`, the deletion a link the gateway refuses as `data:LINK_EXPIRED` or
+  `data:LINK_INVALID`. The gateway ends the deleted account's sessions and its 200 names the
+  account (a 200 that does not is `data:AUTH_FAILED`): a session open here for that account signs
+  out at once as on the channel's 4001, which a browser without Web Locks never hears, and
+  another account signed in here stays. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
   still open and no other tab saved another account, saves the memberships, the token and the
@@ -284,7 +293,8 @@ modeling stage.
   `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
   (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added, or still be its flow at the
-  branch's base); running every flow and
+  branch's base or at the branch's HEAD, the contract it was built from,
+  `__fixtures__/machine-flows.ts`); running every flow and
   activity in XState is the contract check's, not the app's.
   The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
   lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the

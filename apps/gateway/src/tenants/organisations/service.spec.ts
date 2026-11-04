@@ -1,4 +1,4 @@
-import { ok } from 'neverthrow'
+import { ok, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -21,29 +21,29 @@ import {
   deviceHeaders,
   mailsOf,
   signUpOn,
-} from '../auth/__fixtures__/auth-instance'
-import { createAuthInstance } from '../auth/auth-instance'
-import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
-import { DIRECTORY, NAMESPACE } from '../config'
-import { Outbox } from '../mail/__fixtures__/outbox'
+} from '../../auth/__fixtures__/auth-instance'
+import { createAuthInstance } from '../../auth/auth-instance'
+import identityByEmailStatement from '../../auth/surql/identity-by-email.surql'
+import { DIRECTORY, NAMESPACE } from '../../config'
+import { Outbox } from '../../mail/__fixtures__/outbox'
+import directoryRows from '../__fixtures__/directory-rows.surql'
+import identityForget from '../__fixtures__/identity-forget.surql'
+import memberClear from '../__fixtures__/member-clear.surql'
+import memberForget from '../__fixtures__/member-forget.surql'
+import memberRows from '../__fixtures__/member-rows.surql'
+import membershipRows from '../__fixtures__/membership-rows.surql'
+import namespaceInfo from '../__fixtures__/namespace-info.surql'
+import tenantInterrupt from '../__fixtures__/tenant-interrupt.surql'
+import tenantRows from '../__fixtures__/tenant-rows.surql'
+import tenantSweep from '../__fixtures__/tenant-sweep.surql'
+import type { OrganisationRefusalCode } from '../organisation-refusal'
+import memberRemoveStatement from '../surql/member-remove.surql'
+import membershipAddStatement from '../surql/membership-add.surql'
+import membershipRemoveStatement from '../surql/membership-remove.surql'
+import membershipsOfStatement from '../surql/memberships-of.surql'
+import { TenantDatabases } from '../tenant-databases'
 
-import directoryRows from './__fixtures__/directory-rows.surql'
-import identityForget from './__fixtures__/identity-forget.surql'
-import memberClear from './__fixtures__/member-clear.surql'
-import memberForget from './__fixtures__/member-forget.surql'
-import memberRows from './__fixtures__/member-rows.surql'
-import membershipRows from './__fixtures__/membership-rows.surql'
-import namespaceInfo from './__fixtures__/namespace-info.surql'
-import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
-import tenantRows from './__fixtures__/tenant-rows.surql'
-import tenantSweep from './__fixtures__/tenant-sweep.surql'
-import type { OrganisationRefusalCode } from './organisation-refusal'
-import { Organisations } from './organisations'
-import memberRemoveStatement from './surql/member-remove.surql'
-import membershipAddStatement from './surql/membership-add.surql'
-import membershipRemoveStatement from './surql/membership-remove.surql'
-import membershipsOfStatement from './surql/memberships-of.surql'
-import { TenantDatabases } from './tenant-databases'
+import { Organisations } from './service'
 
 /** Closes what a test opened, the organisations' databases before the directory. */
 const cleanups: Array<() => Promise<void>> = []
@@ -156,6 +156,8 @@ async function harness() {
     revoke: async (identity, region) => {
       steps.push(`revoke ${identity} ${region}`)
     },
+    // No device subscribes to a region here: the hub has none to let go of.
+    hub: { retire: () => okAsync(undefined) },
   })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 
@@ -671,6 +673,59 @@ describe('Organisations', () => {
       [bob.id, [joined]],
     ])
     expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
+  })
+
+  it('an invite of an identity waits for its departure under way, which revokes nothing and tells nobody', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      heard,
+      steps,
+      membersIn,
+      founded,
+      invited,
+      holdInTenants,
+      onDirectoryQuery,
+    } = await harness()
+    const acme = await founded()
+
+    await invited('bob@example.test')
+    heard.splice(0)
+
+    const held = holdInTenants(memberRemoveStatement)
+    const departure = organisations.leaveAll(bob.id)
+
+    await held.waiting
+
+    const directorySteps: string[] = []
+
+    onDirectoryQuery((text) => directorySteps.push(text))
+
+    const invite = organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
+
+    // The invite finds bob, then waits for the departure: it writes no membership meanwhile.
+    await vi.waitFor(() => expect(directorySteps).toContain(identityByEmailStatement))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(directorySteps).not.toContain(membershipAddStatement)
+
+    held.release()
+
+    expect(await departure).toEqual(ok(undefined))
+    expect(await invite).toEqual(
+      ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }),
+    )
+
+    const joined: Membership = { tenant: acme.tenant, role: 'member' }
+
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
+    expect(await membersIn('acme')).toEqual([
+      { identity: ann.id, role: 'admin' },
+      { identity: bob.id, role: 'member' },
+    ])
+    // Only the invite told bob's listeners; the departure took no region from any connection.
+    expect(heard).toEqual([[bob.id, [joined]]])
+    expect(steps).toEqual(['member-remove'])
   })
 
   it('removes an identity that is not a member: nothing changes, and its listener hears the memberships it has', async () => {
