@@ -30,17 +30,19 @@ all the same; asking again completes it. Until the revoke reaches the removed id
 connection, a batch its device pushes there may still be accepted: that window between the
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
 creations, the invites of it, its removals, its departure) run one after the other, each once
-the one before it and its notification have settled, so the directory and the organisation's database end as
-the last change left them and its devices hear the lists in that order. This holds within one
-gateway process; gateways in several processes would need a durable revision of the memberships.
+the one before it and its notification have settled, so the directory and the organisation's
+database end as the last change left them and its devices hear the lists in that order. This
+holds within one gateway process; gateways in several processes would need a durable revision
+of the memberships.
 An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
 the directory's memberships and their roles: `blocked` is true while it is the only admin of a
 ready organisation with other members, and `leave` takes every organisation it is the only member
 of whole, of any status (its database, its memberships and its directory row in one transaction,
-then the cached connection), and takes it out of every other one (its membership, then its member
-row; its notes stay). `Organisations.leaveAll` runs that departure as a change of the identity's
-memberships, so an invite of it waits; it revokes no region and tells nobody, as the caller
-closes the identity's connections first and the other members read the members when they ask.
+then the cached connection), and takes it out of every other one (its member row, then its
+membership, so a run again after a failure finds what is left; its notes stay).
+`Organisations.leaveAll` runs that departure as a change of the identity's memberships, so an
+invite of it waits; it revokes no region and tells nobody, as the caller closes the identity's
+connections first and the other members read the members when they ask.
 `Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
 rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes
 one at a time. The identity an invite names is found by its email, in any case, through the

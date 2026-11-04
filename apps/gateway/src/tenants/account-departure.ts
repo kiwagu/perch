@@ -51,8 +51,8 @@ export interface AccountDepartureOptions {
  * The organisations of an identity whose account goes. Who is the only member or the last admin
  * of an organisation is the directory's word: its memberships and their roles. An organisation
  * the identity is the only member of goes whole, of any status, one still provisioning too; in
- * any other the identity's membership goes, then its member row leaves the organisation's
- * database, and its notes stay. Its connections are the caller's to close beforehand, and the
+ * any other its member row leaves the organisation's database, then its membership goes, and
+ * its notes stay. Its connections are the caller's to close beforehand, and the
  * other members are told nothing: they read the members when they ask for them.
  */
 export class AccountDeparture {
@@ -82,11 +82,10 @@ export class AccountDeparture {
   /**
    * Every membership of the identity goes, one organisation after the other, the first failure
    * answering. An organisation it is the only member of goes whole: its database, its
-   * memberships and its directory row in one transaction, then the cached connection to it. A
-   * run again after a failure completes what the directory still holds. A member row whose
-   * removal failed once its membership was gone is not found again: it stays behind like the row
-   * of an identity that is gone, which the members list leaves out. A run after a success finds
-   * nothing and changes nothing.
+   * memberships and its directory row in one transaction, then the cached connection to it. In
+   * any other its member row goes first and its membership last, so a run again after a failure
+   * still finds every organisation it has not left yet and completes the departure; a run after
+   * a success finds nothing and changes nothing.
    */
   leave(identity: IdentityId): ResultAsync<void, DataError> {
     return this.#departing(identity).andThen((rows) =>
@@ -134,16 +133,21 @@ export class AccountDeparture {
     ).map(() => this.#databases.evict(row.key))
   }
 
-  /** The identity's membership goes, then its member row leaves the organisation's database. */
+  /**
+   * The identity's member row leaves the organisation's database, then its membership goes: the
+   * membership is what a run again finds, so it goes last.
+   */
   #leaveTenant(identity: IdentityId, row: DepartingMembership): ResultAsync<void, DataError> {
-    return writing(
-      this.#directory.db
-        .query(membershipRemoveStatement, {
-          identity: recordId('identity', identity),
-          tenant: recordId('tenant', row.tenant),
-        })
-        .retry(),
-      `could not remove the membership of ${identity} in ${row.key}`,
-    ).andThen(() => this.#members.remove(row.key, identity))
+    return this.#members.remove(row.key, identity).andThen(() =>
+      writing(
+        this.#directory.db
+          .query(membershipRemoveStatement, {
+            identity: recordId('identity', identity),
+            tenant: recordId('tenant', row.tenant),
+          })
+          .retry(),
+        `could not remove the membership of ${identity} in ${row.key}`,
+      ).map(() => undefined),
+    )
   }
 }

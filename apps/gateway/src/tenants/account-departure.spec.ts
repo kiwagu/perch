@@ -33,7 +33,9 @@ import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
 import tenantRows from './__fixtures__/tenant-rows.surql'
 import { AccountDeparture } from './account-departure'
 import { Organisations } from './organisations'
+import memberRemoveStatement from './surql/member-remove.surql'
 import membershipAddStatement from './surql/membership-add.surql'
+import membershipRemoveStatement from './surql/membership-remove.surql'
 import tenantRemoveStatement from './surql/tenant-remove.surql'
 import { TenantDatabases } from './tenant-databases'
 
@@ -55,15 +57,21 @@ afterEach(async () => {
  * A departure over an embedded directory, with each organisation's database on an embedded
  * engine of its own (a connection opened anew after an eviction starts empty), the organisations
  * that set the scene up, and three identities: ann, bob and cat. A test can make one statement
- * of the departure fail on the directory, as a broken database would.
+ * fail on the departure's directory or on the organisations' databases, as a broken database
+ * would.
  */
 async function harness() {
   const directory = (
     await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema: readSchema('directory') })
   )._unsafeUnwrap()
   const opened: string[] = []
-  /** The statement the directory refuses to the departure, if any. */
+  /** The statement the departure's directory and the organisations' databases refuse, if any. */
   let refusedStatement: string | undefined
+  const refusing = (text: string) => {
+    if (text === refusedStatement) {
+      throw new Error('the database refused the statement')
+    }
+  }
   const databases = new TenantDatabases({
     open: (key) => {
       opened.push(key)
@@ -74,7 +82,7 @@ async function harness() {
         namespace: NAMESPACE,
         database: tenantDatabase(key),
         schema: readSchema('tenant'),
-      })
+      }).map((local) => interceptQueries(local, refusing))
     },
     clock: manualClock(),
     onError: (error) => failures.push(error),
@@ -87,11 +95,7 @@ async function harness() {
 
   const organisations = new Organisations({ directory, databases, revoke: async () => {} })
   const departure = new AccountDeparture({
-    directory: interceptQueries(directory, (text) => {
-      if (text === refusedStatement) {
-        throw new Error('the database refused the statement')
-      }
-    }),
+    directory: interceptQueries(directory, refusing),
     databases,
   })
 
@@ -182,7 +186,7 @@ async function harness() {
     return { tenants: tenants.map((row) => row.key).sort(), memberships: memberships.length }
   }
 
-  /** The directory refuses `statement` to the departure from now on; `undefined` refuses none. */
+  /** `statement` is refused from now on; `undefined` refuses none. */
   const refuse = (statement: string | undefined) => {
     refusedStatement = statement
   }
@@ -346,6 +350,47 @@ describe('AccountDeparture', () => {
     expect(await departure.leave(ann)).toEqual(ok(undefined))
     expect(await definitionOf('t1')).toBeUndefined()
     expect(await everything()).toEqual({ tenants: [], memberships: 0 })
+  })
+
+  it('completes a departure whose removal of a member row failed when it runs again', async () => {
+    const { departure, ann, bob, founded, invited, membersIn, rolesIn, refuse } = await harness()
+
+    await founded(bob, 't3')
+    await invited(bob, 't3', 'ann@example.test')
+    refuse(memberRemoveStatement)
+
+    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    // The membership stays until the member row went: the next run still finds the organisation.
+    expect(await rolesIn(ann, 't3')).toEqual(['member'])
+
+    refuse(undefined)
+
+    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await rolesIn(ann, 't3')).toEqual([])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+  })
+
+  it('completes a departure whose removal of a membership failed after the member row went', async () => {
+    const { departure, ann, bob, founded, invited, membersIn, rolesIn, refuse } = await harness()
+
+    await founded(bob, 't3')
+    await invited(bob, 't3', 'ann@example.test')
+    refuse(membershipRemoveStatement)
+
+    expect((await departure.leave(ann))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    expect(await rolesIn(ann, 't3')).toEqual(['member'])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
+
+    refuse(undefined)
+
+    expect(await departure.leave(ann)).toEqual(ok(undefined))
+    expect(await rolesIn(ann, 't3')).toEqual([])
+    expect(await rolesIn(bob, 't3')).toEqual(['admin'])
+    expect(await membersIn('t3')).toEqual([{ identity: bob, role: 'admin' }])
   })
 
   it('answers an error, never a guess, for a membership whose organisation is gone', async () => {
