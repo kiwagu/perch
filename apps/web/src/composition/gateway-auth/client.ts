@@ -12,7 +12,7 @@ import { accountChangeOf } from './account-change'
 import { accountDeletedOf, type DeletedAccount } from './account-deletion'
 import { type EmailConfirmation, emailConfirmationOf } from './email-confirmation'
 import { mailRequested } from './mail-request'
-import { passwordResetOf } from './password-reset'
+import { type PasswordReset, passwordResetOf } from './password-reset'
 import { signedOutOf } from './sign-out'
 import { signedUpOf } from './sign-up'
 import { deviceHeaders, type NamedDevice, type SignedInDevice, signedIn } from './signed-in'
@@ -55,15 +55,20 @@ export interface GatewayAuth {
    */
   requestPasswordReset(email: string): ResultAsync<void, DataError>
   /**
-   * Sets `password` as the account's new one with a reset link's `token`; nothing is signed in,
-   * and the gateway signs every device of the account out. A password that breaks the rules fails
+   * Sets `password` as the account's new one with a reset link's `token`, presenting the `session`
+   * this device holds when it has one; nothing is signed in, and the gateway signs every device of
+   * the account out, answering whether `session` was among them. A password that breaks the rules fails
    * as `data:PASSWORD_REJECTED` (the link still works), a link past its hour as
    * `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as
    * `data:LINK_INVALID`, a request to wait as `data:RATE_LIMITED`, an unreachable gateway as
    * `data:OFFLINE`, and any other answer as `data:AUTH_FAILED` naming its status, never the token
    * or the password.
    */
-  resetPassword(token: string, password: string): ResultAsync<void, DataError>
+  resetPassword(
+    token: string,
+    password: string,
+    session?: AccountSession,
+  ): ResultAsync<PasswordReset, DataError>
   /**
    * Changes the password of the account `session` is signed in to: the gateway signs its other
    * devices out and keeps this one signed in. A wrong current password fails as
@@ -221,10 +226,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       post('request-password-reset', { email }).andThen((answer) =>
         mailRequested(answer, 'the reset mail'),
       ),
-    resetPassword: (token, password) =>
+    resetPassword: (token, password, session) =>
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
-        : post('reset-password', { token, password }).andThen(passwordResetOf),
+        : post(
+            'reset-password',
+            { token, password },
+            session === undefined ? {} : bearer(session),
+          ).andThen(passwordResetOf),
     changePassword: (input, session) =>
       post('change-password', input, bearer(session)).andThen((answer) =>
         accountChangeOf(answer, 204),

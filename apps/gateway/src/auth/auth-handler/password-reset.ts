@@ -3,6 +3,7 @@ import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { bearerCaller } from '../bearer-caller'
 
 import { until } from './floor'
 import type { AuthMountDeps } from './mount'
@@ -76,8 +77,12 @@ export async function requestPasswordReset(
  * the password, ends every session of the account and its pending change of email, all or none
  * (`AccountPasswords.reset`; 500 `internal` with nothing changed when it fails). Once it
  * committed, the account's sockets close with 4002 and the notice of a changed password starts
- * (`afterPasswordChange`): 204 with no body. Nothing is signed in, whatever session the request
- * carries.
+ * (`afterPasswordChange`): 200 `{ signedOut }`, true when the session the request carries (its
+ * token and device, as on the device routes) was the account's, so one of those ended, and false
+ * for another account's, a dead one or none: a device signed in to the account signs out with no
+ * channel to hear the 4002. That session is read in the account's turn, before the reset ends it;
+ * one that could not be read answers 500 `internal`, nothing changed. Nothing is signed in,
+ * whatever session the request carries.
  */
 export async function resetPassword(
   deps: AuthMountDeps,
@@ -124,6 +129,12 @@ export async function resetPassword(
   }
 
   return deps.accounts.run(identity, async () => {
+    const caller = await bearerCaller(deps.sessions, request)
+
+    if (caller.kind === 'failed') {
+      return internal()
+    }
+
     // The link is judged again at its spending, on the clock as it is then: it may have been
     // spent, replaced or expired while the reset waited for the account.
     const reset = await deps.passwords.reset(identity, token, hash.value)
@@ -138,6 +149,6 @@ export async function resetPassword(
 
     await afterPasswordChange(deps, identity, 'every')
 
-    return new Response(null, { status: 204 })
+    return Response.json({ signedOut: caller.kind === 'caller' && caller.identity === identity })
   })
 }

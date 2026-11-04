@@ -193,9 +193,10 @@ function credentialChecked(
  *   for a body that names no email.
  * - `POST /auth/request-password-reset` `{ email }` (`requestPasswordReset`): 202 with no body,
  *   alike for any email, no sooner than `RESET_REQUEST_FLOOR_MS` after it began.
- * - `POST /auth/reset-password` `{ token, password }` (`resetPassword`): 204, every session of
- *   the account ended and its sockets closed with 4002; 400 `password-rejected`, 401
- *   `link-invalid` or `link-expired`.
+ * - `POST /auth/reset-password` `{ token, password }`, with the device's token when it has one
+ *   (`resetPassword`): 200 `{ signedOut }`, every session of the account ended and its sockets
+ *   closed with 4002, `signedOut` saying whether the request's own session was one of them; 400
+ *   `password-rejected`, 401 `link-invalid` or `link-expired`.
  * - `POST /auth/change-password` `{ currentPassword, password }`, with the device's token
  *   (`changePassword`): 204, every other session of the account ended and its sockets closed
  *   with 4002; 400 `invalid-credentials` or `password-rejected`.
