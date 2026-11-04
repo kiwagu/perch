@@ -51,7 +51,7 @@ anchors:
     derived: [ option ]
   app-shell.locale-select:
     kind: select
-    description: "The language of the app for a guest, the one a new account starts with: a choice applies at once; a signed-in account chooses its language on its settings screen, and a language another device stores applies here too."
+    description: "The language of the app for a guest, the one a new account starts with: a choice applies at once; a signed-in account chooses its language on its settings screen, and a language another device stores applies here too. A device whose saved account's data is not open (the app starting, the data failing to open, the sign-out from there) is a guest to the frame: the select shows, and a choice made there applies with no settings to store it."
     binding:
       - model: settings.locale
       - action: settings.updateLocale
