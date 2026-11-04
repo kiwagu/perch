@@ -132,6 +132,7 @@ flow:
       passwordsDiffer: the new password typed again is not the same as the new password
       confirmationStrays: "the new password typed again is no longer how the new password begins: a character differs, or it is longer"
       confirmationFollows: the new password typed again is how the new password begins, all of it or a part, or is empty
+      deletionBlocked: { codes: [ last-admin ] }
   states:
     viewing:
       type: parallel
@@ -286,10 +287,17 @@ flow:
                     - show: { user.settings.deletion.message: [ check-your-mail ] }
                     - clear: user.settings.deletion.password-input
                 onError:
-                  target: idle
-                  actions:
-                    - clear: user.settings.deletion.message
-                    - show: user.settings.deletion.error
+                  - target: idle
+                    guard: deletionBlocked
+                    description: "The password was right, but the account is the only admin of an organisation with other members: nothing more can be done here, so the password is emptied and leaving for the organisation page asks nothing."
+                    actions:
+                      - clear: user.settings.deletion.message
+                      - show: user.settings.deletion.error
+                      - clear: user.settings.deletion.password-input
+                  - target: idle
+                    actions:
+                      - clear: user.settings.deletion.message
+                      - show: user.settings.deletion.error
             sent:
               description: The mail is on its way; a second press sends a fresh link, which replaces the first.
               on:

@@ -24,6 +24,6 @@ Where: [/settings] on device A (user A, administrator) and [/org] on device B (u
 7. On device B, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 
 ### Expected result
-- After step 4 [user.settings.deletion.error] carries [code:last-admin] on device A, and no [mail:request-account-deletion] reaches user A's email
+- After step 4 [user.settings.deletion.error] carries [code:last-admin] on device A, [user.settings.deletion.password-input] is empty, and no [mail:request-account-deletion] reaches user A's email
 - After step 6 [user.delete-account.message] carries [code:account-deleted] on device A
 - After step 7 [app-shell.toast] carries [code:organisation-created] on device B and [organisation.page.heading] shows the organisation name: the key was freed with user A's organisation
