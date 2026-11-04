@@ -10,11 +10,13 @@
 -- @can admin create, update, delete
 DEFINE TABLE OVERWRITE note SCHEMAFULL PERMISSIONS NONE;
 
+-- @readonly
 DEFINE FIELD OVERWRITE author ON note TYPE record<member>;
 -- @crdt text
 DEFINE FIELD OVERWRITE text ON note TYPE string
   ASSERT string::len($value) > 0
   AND string::len($value) <= 500;
+-- @readonly
 DEFINE FIELD OVERWRITE created_at ON note TYPE datetime
   DEFAULT time::now()
   READONLY;
