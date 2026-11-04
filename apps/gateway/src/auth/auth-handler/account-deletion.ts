@@ -1,4 +1,4 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
@@ -7,7 +7,9 @@ import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import type { DepartureError } from '../../tenants/account-departure'
 import type { DeletionClaims } from '../account-links'
+import type { DeletedAccount } from '../account-teardown'
 
 import type { AuthMountDeps } from './mount'
 import { confirmPassword } from './password-confirmation'
@@ -19,6 +21,13 @@ const deleteBody = z.object({ token: z.string().min(1).max(4096) })
 
 /** 409 `last-admin`: the account is the only admin of an organisation with other members. */
 const lastAdmin = (): Response => refused(409, 'last-admin')
+
+/** The stop of a deletion whose link was no longer pending when the departure came to spend it. */
+interface LinkSpent {
+  readonly kind: 'link-spent'
+}
+
+const LINK_SPENT: LinkSpent = { kind: 'link-spent' }
 
 /**
  * Asks to delete the caller's account (`{ password }`, with the device's token and
@@ -137,18 +146,18 @@ export async function deleteAccount(
 
 /**
  * In the account's turn. The link is judged again on the clock as it is then (401 `link-expired`
- * when it expired while the deletion waited for the account). An account that is the only admin
- * of an organisation with other members answers 409 `last-admin` with nothing changed and its link
- * still pending, so the same link deletes the account once those members are removed. The pending
- * deletion the token names is spent then (401 `link-invalid` when it was not pending: used before,
- * replaced by a newer one, or ended by a change of the password or of the email). Whom the notice
- * goes to is read while the account exists; every session of the account ends and every socket of
- * it closes with 4001 before any row goes; the account leaves its organisations, and its own rows
- * are removed while no invite of it can land (`Organisations.leaveAll`, its continuation). An
- * account that became the only admin of an organisation with other members meanwhile answers 409
- * `last-admin` there, its sessions ended already. Once the account is gone the notice starts to
- * the email it had, and it answers 200 `{ identity }`: the account that was deleted, so the page
- * can tell whether this device was signed in to it.
+ * when it expired while the deletion waited for the account). The rest runs in the turns of the
+ * account's memberships (`AccountDepartures.leave`), whose check decides: an account that is the
+ * only admin of an organisation with other members answers 409 `last-admin` with nothing changed,
+ * its link still pending and its sessions alive, so the same link deletes the account once those
+ * members are removed. Only once the departure is allowed, and before it writes anything, does
+ * the deletion take effect (`spend`): the pending deletion is spent (401 `link-invalid` when it
+ * was not pending: used before, replaced by a newer one, or ended by a change of the password or
+ * of the email, nothing changed), whom the notice goes to is read while the account exists, every
+ * session of the account ends and every socket of it closes with 4001. Then the account leaves
+ * its organisations and its own rows are removed, while no invite of it can land. Once the account is gone the notice starts to the email it had, and it answers 200
+ * `{ identity }`: the account that was deleted, so the page can tell whether this device was
+ * signed in to it.
  */
 async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
   const claims = await judged(deps, token)
@@ -158,49 +167,59 @@ async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
   }
 
   const { identity } = claims
-  const blocked = await deps.departure.blocked(identity)
-
-  if (blocked.isErr()) {
-    return internal()
-  }
-
-  if (blocked.value) {
-    return lastAdmin()
-  }
-
-  const claimed = await deps.deletions.claim(claims)
-
-  if (claimed.isErr()) {
-    return internal()
-  }
-
-  if (!claimed.value) {
-    return refused(401, 'link-invalid')
-  }
-
-  const addressee = await deps.teardown.addressee(identity)
-
-  if (addressee.isErr()) {
-    return internal()
-  }
-
-  const ended = await deps.sessions.revokeAll(identity)
-
-  if (ended.isErr()) {
-    return internal()
-  }
-
-  await deps.connections.close(identity, undefined, CLOSE.revoked)
-
-  const left = await deps.departure.leave(identity, () => deps.teardown.remove(identity))
+  const left = await deps.departure.leave(identity, {
+    before: () => spend(deps, claims),
+    after: () => deps.teardown.remove(identity),
+  })
 
   if (left.isErr()) {
-    return 'kind' in left.error ? lastAdmin() : internal()
+    return refusalOf(left.error)
   }
 
-  deps.mails.accountDeleted(addressee.value)
+  deps.mails.accountDeleted(left.value)
 
   return Response.json({ identity })
+}
+
+/**
+ * Where a deletion takes effect, in the turns of the account's memberships once its departure is
+ * allowed: the pending deletion `claims` names is spent (`LINK_SPENT` when it was not pending,
+ * nothing else done), then whom the notice goes to is read, every session of the account ends
+ * and every socket of it closes with 4001, so no device holds the account while its rows go.
+ * Answers whom the notice goes to.
+ */
+function spend(
+  deps: AuthMountDeps,
+  claims: DeletionClaims,
+): ResultAsync<DeletedAccount, LinkSpent | DataError> {
+  const { identity } = claims
+
+  return deps.deletions
+    .claim(claims)
+    .andThen((claimed) =>
+      claimed
+        ? deps.teardown.addressee(identity)
+        : errAsync<DeletedAccount, LinkSpent | DataError>(LINK_SPENT),
+    )
+    .andThen((addressee) => deps.sessions.revokeAll(identity).map(() => addressee))
+    .andThen((addressee) =>
+      // The registry's closes never reject.
+      ResultAsync.fromSafePromise(deps.connections.close(identity, undefined, CLOSE.revoked)).map(
+        () => addressee,
+      ),
+    )
+}
+
+/**
+ * The answer to a deletion that did not happen: 409 `last-admin` for a departure the check
+ * refused, 401 `link-invalid` for a link no longer pending, 500 `internal` for a failure.
+ */
+function refusalOf(error: DepartureError | LinkSpent): Response {
+  if (!('kind' in error)) {
+    return internal()
+  }
+
+  return error.kind === 'refused' ? lastAdmin() : refused(401, 'link-invalid')
 }
 
 /**

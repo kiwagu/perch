@@ -58,7 +58,8 @@ export interface GatewayRoot {
   /**
    * The organisations a deleted account leaves: whether it is the only admin of one with other
    * members, read from the directory's memberships (`AccountDeparture.blocked`), and its departure
-   * in the turns of the organisations' memberships (`Organisations.leaveAll`).
+   * with the steps of the deletion in the turns of the organisations' memberships
+   * (`Organisations.leaveAll`).
    */
   readonly departure: AccountDepartures
   /** Whom the notice of a deleted account goes to, and the removal of the account's own rows. */
@@ -219,7 +220,7 @@ export function createGatewayRoot(
       }),
       departure: {
         blocked: (identity) => departure.blocked(identity),
-        leave: (identity, then) => organisations.leaveAll(identity, then),
+        leave: (identity, steps) => organisations.leaveAll(identity, steps),
       },
       teardown: new AccountTeardown(local),
       mails: new AccountMails({

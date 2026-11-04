@@ -1,9 +1,12 @@
 import type { ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
+import { interceptQueries } from '@workspace/data/testing'
 import { CLOSE } from '@workspace/replica/protocol'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import departingMembershipsStatement from '../../tenants/surql/departing-memberships.surql'
+import membershipAddStatement from '../../tenants/surql/membership-add.surql'
 import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
 
 import {
@@ -201,10 +204,12 @@ describe('authHandler, the deletion of an account by its link', () => {
 
     expect(answer?.status).toBe(200)
     expect(await answer?.json()).toEqual({ identity: ann.identity })
+    // The sessions end and the sockets close inside the departure, once it is allowed and before
+    // it writes (`Organisations.leaveAll`'s `before`), and the rows go after it.
     expect(mounted.steps).toEqual([
+      'departure',
       'sessions ended',
       `sockets closed ${CLOSE.revoked}`,
-      'departure',
       'rows removed',
     ])
     expect(mounted.closes).toEqual([[ann.identity, undefined, CLOSE.revoked]])
@@ -357,6 +362,80 @@ describe('authHandler, the deletion of an account by its link', () => {
     expect((await mounted.sessions.read(ann.tokens.get('laptop') ?? '')).kind).toBe('session')
     expect(mounted.closes).toEqual([])
     expect(mounted.outbox.to(ANN)).toHaveLength(2)
+
+    await done(
+      mounted.organisations.remove({ actor: ann.identity, key: 'acme', identity: bob.identity }),
+    )
+
+    expect((await mounted.route(press(token), FROM))?.status).toBe(200)
+    expect((await mounted.sessions.identityOf(ANN))._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it('answers last-admin to a press an invitation overtook before the turns of its memberships, spending nothing: the link stays pending and the sessions alive, and it deletes once the member is removed', async () => {
+    /** The steps the mount kept so far, once it is up. */
+    const watched = { steps: (): readonly string[] => [] }
+    /** The reads of the departing memberships since the press asked for the departure. */
+    let departureReads = 0
+    /** Holds the next membership an invite writes, while it is set. */
+    let held: { readonly gate: Promise<void>; readonly reached: () => void } | undefined
+    const mounted = await mountedOnRealAuth({
+      organisationsDirectory: (local) =>
+        interceptQueries(local, (text) => {
+          if (text === departingMembershipsStatement && watched.steps().includes('departure')) {
+            departureReads += 1
+          }
+
+          if (text === membershipAddStatement && held !== undefined) {
+            const { gate, reached } = held
+
+            held = undefined
+            reached()
+
+            return gate
+          }
+        }),
+    })
+
+    watched.steps = () => mounted.steps
+
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const bob = await signedInOn(mounted, BOB, ['desk'])
+
+    await done(mounted.organisations.create({ identity: ann.identity, key: 'acme', name: 'Acme' }))
+
+    const token = await deletionLink(mounted, ann.on('laptop'))
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const writing = new Promise<void>((reached) => {
+      held = { gate, reached }
+    })
+    // Bob's invitation holds acme's turn, his membership not written yet.
+    const invite = done(
+      mounted.organisations.invite({ actor: ann.identity, key: 'acme', email: BOB }),
+    )
+
+    await writing
+    mounted.steps.splice(0)
+
+    const pressing = mounted.route(press(token), FROM)
+
+    // The press's departure found acme and waits for its turn, which the invitation holds.
+    await vi.waitFor(() => expect(departureReads).toBe(1))
+    release()
+    await invite
+
+    const refusal = await pressing
+
+    expect(refusal?.status).toBe(409)
+    expect(await refusal?.json()).toEqual({ code: 'last-admin' })
+    // Nothing of the deletion took effect.
+    expect(mounted.steps).toEqual(['departure'])
+    expect(mounted.closes).toEqual([])
+    expect(ann.sockets.get('laptop')?.ended).toEqual([])
+    expect((await mounted.sessions.read(ann.tokens.get('laptop') ?? '')).kind).toBe('session')
+    expect(await stillThere(mounted, ann)).toBe(true)
 
     await done(
       mounted.organisations.remove({ actor: ann.identity, key: 'acme', identity: bob.identity }),

@@ -8,7 +8,7 @@ import type { KeyedTurns } from '../../keyed-turns'
 import type { RequestLimits } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import type { ConnectionRegistry } from '../../sync/connections'
-import type { DepartureError } from '../../tenants/account-departure'
+import type { DepartureError, DepartureSteps } from '../../tenants/account-departure'
 import type { AccountDeletions, EmailChanges, ResetLinks } from '../account-links'
 import type { AccountMails } from '../account-mails'
 import type { AccountPasswords } from '../account-passwords'
@@ -39,16 +39,17 @@ const DELETE_ACCOUNT_PATH = '/auth/delete-account'
 
 /**
  * The organisations of an account whose deletion is asked: whether it is the only admin of a
- * ready organisation with other members (`blocked`), and its departure from every one of them,
- * which runs `then` once the account left while no invite of it can land
- * (`Organisations.leaveAll`).
+ * ready organisation with other members (`blocked`, a read that decides nothing for a deletion),
+ * and its departure from every one of them (`Organisations.leaveAll`), which decides that in the
+ * turns of its memberships and runs `steps` there: `before` once it is allowed, ahead of every
+ * write, and `after` once the account left, while no invite of it can land.
  */
 export interface AccountDepartures {
   blocked(identity: IdentityId): ResultAsync<boolean, DataError>
-  leave(
+  leave<T, Stop>(
     identity: IdentityId,
-    then: () => ResultAsync<void, DataError>,
-  ): ResultAsync<void, DepartureError>
+    steps: DepartureSteps<T, Stop>,
+  ): ResultAsync<T, DepartureError | Stop>
 }
 
 /**

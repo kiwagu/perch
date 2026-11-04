@@ -5,7 +5,7 @@ import type { IdentityId } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { AccountDeparture, type DepartureError } from '../account-departure'
+import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
 import { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
 import type { Member, Tenant } from '../organisation-rows'
@@ -173,23 +173,38 @@ export class Organisations {
 
   /**
    * Takes `identity`, whose account goes, out of every organisation (`AccountDeparture.leave`)
-   * in its turn and the turns of its organisations: an invite of it asked meanwhile waits for it,
-   * and so does a change of another identity in one of them. Refused `last-admin`, changing
-   * nothing, while it is the only admin of a ready organisation with others in it. Once it left,
-   * `then` runs while those turns are still held, so what follows the departure (the removal of
-   * the account's own rows) ends before an invite of it can write anything; its failure is the
-   * answer, and nothing runs it after a refusal. It revokes no region and tells nobody: the caller
-   * closes the identity's connections beforehand.
+   * in its turn and the turns of its organisations: an invite of it, a creation by it, and a
+   * change of another identity in one of them, asked meanwhile, wait for it. Refused `last-admin`,
+   * changing nothing, while it is the only admin of a ready organisation with others in it: that
+   * check is the one that decides, made from the rows as they are in those turns. `steps` run in
+   * the same turns (`DepartureSteps`): `before` once the departure was found allowed, ahead of
+   * every write, so what must not happen to an identity that stays (ending its sessions, spending
+   * a link) happens only when it leaves, and its stop changes nothing; `after` once it left, so
+   * what follows the departure (the removal of the account's own rows) ends before an invite of
+   * it can write anything. It answers what `before` answers. It revokes no region and tells
+   * nobody: the caller closes the identity's connections.
    */
-  leaveAll(
+  leaveAll(identity: IdentityId): ResultAsync<void, DepartureError>
+  leaveAll<T, Stop>(
     identity: IdentityId,
-    then: () => ResultAsync<void, DataError> = () => okAsync(undefined),
-  ): ResultAsync<void, DepartureError> {
+    steps: DepartureSteps<T, Stop>,
+  ): ResultAsync<T, DepartureError | Stop>
+  leaveAll<T, Stop>(
+    identity: IdentityId,
+    steps?: DepartureSteps<T, Stop>,
+  ): ResultAsync<T | undefined, DepartureError | Stop> {
+    const before = steps?.before ?? (() => okAsync(undefined))
+    const after = steps?.after ?? (() => okAsync(undefined))
+
     return this.#turns.ofIdentity(identity, () =>
       this.#departure
         .organisationsOf(identity)
         .andThen((tenants) =>
-          this.#turns.ofTenants(tenants, () => this.#departure.leave(identity).andThen(then)),
+          this.#turns.ofTenants(tenants, () =>
+            this.#departure
+              .leave<T | undefined, Stop>(identity, before)
+              .andThen((value) => after().map(() => value)),
+          ),
         ),
     )
   }

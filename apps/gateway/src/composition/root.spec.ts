@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { ok } from 'neverthrow'
+import { ok, okAsync } from 'neverthrow'
 import { afterAll, afterEach, describe, expect, it } from 'vitest'
 
 import { applySchema } from '@workspace/data'
@@ -138,9 +138,12 @@ describe('createGatewayRoot', () => {
       expect(await root.teardown.addressee(identity)).toEqual(
         ok({ email: ann.email, name: 'Ann', locale: 'en' }),
       )
-      expect(await root.departure.leave(identity, () => root.teardown.remove(identity))).toEqual(
-        ok(undefined),
-      )
+      expect(
+        await root.departure.leave(identity, {
+          before: () => okAsync('allowed'),
+          after: () => root.teardown.remove(identity),
+        }),
+      ).toEqual(ok('allowed'))
       expect(await root.organisations.membershipsOf(identity)).toEqual(ok([]))
       expect(await root.sessions.identityOf(ann.email)).toEqual(ok(undefined))
     } finally {

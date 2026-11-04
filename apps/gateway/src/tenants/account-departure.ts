@@ -49,6 +49,18 @@ export interface DepartureRefusal {
 
 export type DepartureError = DepartureRefusal | DataError
 
+/**
+ * What a departure runs in the turns it holds besides its own writes. `before` runs once the
+ * departure was found allowed and before it writes anything: its value is the departure's answer,
+ * and its error stops the departure with nothing of the organisations changed, a `Stop` of the
+ * caller's own type telling a stop it chose apart from a failure (`DataError`). `after` runs once
+ * the identity left, its failure the departure's answer.
+ */
+export interface DepartureSteps<T, Stop> {
+  readonly before: () => ResultAsync<T, Stop | DataError>
+  readonly after: () => ResultAsync<void, DataError>
+}
+
 /** Whether the identity's departure would leave the others of this organisation without an admin. */
 function lastAdmin(row: DepartingMembership): boolean {
   return row.status === 'ready' && row.role === 'admin' && row.admins === 1 && row.members > 1
@@ -99,23 +111,31 @@ export class AccountDeparture {
   /**
    * Every membership of the identity goes, one organisation after the other, the first failure
    * answering; while the identity is the only admin of a ready organisation with others in it,
-   * the departure is refused `last-admin` and nothing changes. An organisation it is the only
-   * member of goes whole: its database, its memberships and its directory row in one
-   * transaction, then the cached connection to it. In any other its member row goes first and
-   * its membership last, so a run again after a failure still finds every organisation it has
-   * not left yet and completes the departure; a run after a success finds nothing and changes
-   * nothing.
+   * the departure is refused `last-admin` and nothing changes, `before` not run. Otherwise
+   * `before` runs first, ahead of every write: its error stops the departure there, and its value
+   * is the answer once every membership went. An organisation it is the only member of goes
+   * whole: its database, its memberships and its directory row in one transaction, then the
+   * cached connection to it. In any other its member row goes first and its membership last, so a
+   * run again after a failure still finds every organisation it has not left yet and completes
+   * the departure; a run after a success finds nothing and changes nothing.
    */
-  leave(identity: IdentityId): ResultAsync<void, DepartureError> {
+  leave<T, Stop>(
+    identity: IdentityId,
+    before: DepartureSteps<T, Stop>['before'],
+  ): ResultAsync<T, DepartureError | Stop> {
     return this.#departing(identity).andThen((rows) =>
       rows.some(lastAdmin)
-        ? errAsync<void, DepartureError>({ kind: 'refused', code: 'last-admin' })
-        : rows.reduce(
-            (done, row) =>
-              done.andThen(() =>
-                row.members === 1 ? this.#removeTenant(row) : this.#leaveTenant(identity, row),
-              ),
-            okAsync<void, DepartureError>(undefined),
+        ? errAsync<T, DepartureError | Stop>({ kind: 'refused', code: 'last-admin' })
+        : before().andThen((value) =>
+            rows
+              .reduce(
+                (done, row) =>
+                  done.andThen(() =>
+                    row.members === 1 ? this.#removeTenant(row) : this.#leaveTenant(identity, row),
+                  ),
+                okAsync<void, DataError>(undefined),
+              )
+              .map(() => value),
           ),
     )
   }

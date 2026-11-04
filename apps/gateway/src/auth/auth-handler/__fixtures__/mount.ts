@@ -204,6 +204,11 @@ export const READBACK_FAILURE = 'MARKER the session of marker-ann@example.test t
 export interface RealMountOptions extends OpenAuthOptions {
   /** The readback of the session a verification signed in fails, with `READBACK_FAILURE`. */
   readonly readbackFails?: boolean
+  /**
+   * What the organisations reach the directory through, made from the directory: a test watches
+   * or holds their queries with it.
+   */
+  readonly organisationsDirectory?: (local: LocalDb) => LocalDb
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -238,7 +243,7 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
     organisations,
     departure: {
       blocked: (identity) => departure.blocked(identity),
-      leave: (identity, then) => organisations.leaveAll(identity, then),
+      leave: (identity, steps) => organisations.leaveAll(identity, steps),
     } satisfies AuthMountDeps['departure'],
   }
 }
@@ -249,8 +254,8 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
  * whose every close the mount asks for is also kept (`closes`), real limits on the instance's
  * clock, the accounts' turns (`turns`), which a test may hold to make work wait, and the
  * organisations (`organisations`) an account's deletion leaves. What a deletion does to the
- * account is kept in order (`steps`): its sessions ended, its sockets closed, its departure from
- * the organisations asked, its rows removed.
+ * account is kept in order (`steps`): its departure from the organisations asked, its sessions
+ * ended, its sockets closed, its rows removed.
  */
 export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const opened = await openAuth(
@@ -274,8 +279,9 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   /** The identities whose profile was asked to follow their email, in order. */
   const followed: IdentityId[] = []
   const steps: string[] = []
-  const { organisations, departure } = organisationsOver(opened.local, (code) =>
-    failures.push(code),
+  const { organisations, departure } = organisationsOver(
+    options.organisationsDirectory?.(opened.local) ?? opened.local,
+    (code) => failures.push(code),
   )
   const teardown = new AccountTeardown(opened.local)
   const route = authHandler({
@@ -299,10 +305,10 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     deletions: accounts.accountDeletions,
     departure: {
       blocked: (identity) => departure.blocked(identity),
-      leave: (identity, then) => {
+      leave: (identity, departureSteps) => {
         steps.push('departure')
 
-        return departure.leave(identity, then)
+        return departure.leave(identity, departureSteps)
       },
     },
     teardown: {

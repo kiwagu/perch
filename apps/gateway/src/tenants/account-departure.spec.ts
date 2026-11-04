@@ -1,7 +1,7 @@
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { dataError, recordId } from '@workspace/data'
+import { type DataError, dataError, recordId } from '@workspace/data'
 import { membershipIdFactory, tenantIdFactory } from '@workspace/ids'
 
 import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
@@ -450,47 +450,63 @@ describe('AccountDeparture beside other changes of the same organisation', () =>
   })
 })
 
-describe('Organisations.leaveAll and what runs after the departure', () => {
-  it('runs the continuation once the identity left, still in its turn: an invite of it asked meanwhile waits, then finds no identity', async () => {
+/** Steps of a departure that do nothing, but for `after` when one is named. */
+const steps = (after: () => ResultAsync<void, DataError> = () => okAsync(undefined)) => ({
+  before: () => okAsync(undefined),
+  after,
+})
+
+/** A step a test holds: `reached` once it runs, until `release`. */
+function heldStep() {
+  let release = (): void => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  let reached = (): void => {}
+  const running = new Promise<void>((resolve) => {
+    reached = resolve
+  })
+
+  return { gate, running, reached: () => reached(), release: () => release() }
+}
+
+describe('Organisations.leaveAll and what runs in its turns', () => {
+  it('runs `after` once the identity left, still in its turn: an invite of it asked meanwhile waits, then finds no identity', async () => {
     const { organisations, directory, ann, bob, founded, invited, membersIn, rolesIn, sentCount } =
       await departureHarness()
 
     await founded(ann, 't1')
     await invited(ann, 't1', 'bob@example.test')
 
-    let release = (): void => {}
-    const gate = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    let reached = (): void => {}
-    const continuing = new Promise<void>((resolve) => {
-      reached = resolve
-    })
-    /** Bob's roles in t1 as the continuation found them. */
+    const held = heldStep()
+    /** Bob's roles in t1 as `after` found them. */
     const found: string[][] = []
-    const bobLeaves = organisations.leaveAll(bob, () =>
-      ResultAsync.fromSafePromise(
-        (async () => {
-          found.push(await rolesIn(bob, 't1'))
-          reached()
-          await gate
-          await directory.db.query(identityForget, { identity: recordId('identity', bob) })
-        })(),
+    const bobLeaves = organisations.leaveAll(
+      bob,
+      steps(() =>
+        ResultAsync.fromSafePromise(
+          (async () => {
+            found.push(await rolesIn(bob, 't1'))
+            held.reached()
+            await held.gate
+            await directory.db.query(identityForget, { identity: recordId('identity', bob) })
+          })(),
+        ),
       ),
     )
 
-    await continuing
+    await held.running
 
     const lookups = sentCount(identityByEmailStatement)
     const additions = sentCount(membershipAddStatement)
     const invite = organisations.invite({ actor: ann, key: 't1', email: 'bob@example.test' })
 
-    // The invite finds bob, then waits for the continuation: it writes no membership meanwhile.
+    // The invite finds bob, then waits for `after`: it writes no membership meanwhile.
     await vi.waitFor(() => expect(sentCount(identityByEmailStatement)).toBe(lookups + 1))
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(sentCount(membershipAddStatement)).toBe(additions)
 
-    release()
+    held.release()
 
     expect(await bobLeaves).toEqual(ok(undefined))
     expect(found).toEqual([[]])
@@ -503,34 +519,97 @@ describe('Organisations.leaveAll and what runs after the departure', () => {
     expect(await membersIn('t1')).toEqual([{ identity: ann, role: 'admin' }])
   })
 
-  it('runs no continuation for a departure refused last-admin', async () => {
+  it('runs `before` once the departure is allowed and ahead of its writes, and answers what it answers', async () => {
+    const { organisations, ann, bob, founded, invited, everything } = await departureHarness()
+
+    await founded(ann, 't1')
+    await founded(bob, 't3')
+    await invited(bob, 't3', 'ann@example.test')
+
+    /** The organisations and memberships as `before` found them. */
+    const found: Array<Awaited<ReturnType<typeof everything>>> = []
+    const left = await organisations.leaveAll(ann, {
+      before: () =>
+        ResultAsync.fromSafePromise(
+          (async () => {
+            found.push(await everything())
+
+            return 'answered by before'
+          })(),
+        ),
+      after: () => okAsync(undefined),
+    })
+
+    expect(left).toEqual(ok('answered by before'))
+    expect(found).toEqual([{ tenants: ['t1', 't3'], memberships: 3 }])
+    expect(await everything()).toEqual({ tenants: ['t3'], memberships: 1 })
+  })
+
+  it('changes nothing and runs no `after` when `before` stops the departure, answering its stop', async () => {
+    const { organisations, ann, bob, founded, invited, everything, definitionOf } =
+      await departureHarness()
+
+    await founded(ann, 't1')
+    await founded(bob, 't3')
+    await invited(bob, 't3', 'ann@example.test')
+
+    const stop = { kind: 'stopped-by-the-caller' } as const
+    let ran = false
+    const left = await organisations.leaveAll(ann, {
+      before: () => errAsync(stop),
+      after: () => {
+        ran = true
+
+        return okAsync(undefined)
+      },
+    })
+
+    expect(left._unsafeUnwrapErr()).toBe(stop)
+    expect(ran).toBe(false)
+    expect(await everything()).toEqual({ tenants: ['t1', 't3'], memberships: 3 })
+    expect(await definitionOf('t1')).toBeDefined()
+  })
+
+  it('runs neither step for a departure refused last-admin', async () => {
     const { organisations, ann, founded, invited, everything } = await departureHarness()
 
     await founded(ann, 't1')
     await invited(ann, 't1', 'bob@example.test')
 
-    let ran = false
-    const refusal = await organisations.leaveAll(ann, () => {
-      ran = true
+    const ran: string[] = []
+    const refusal = await organisations.leaveAll(ann, {
+      before: () => {
+        ran.push('before')
 
-      return okAsync(undefined)
+        return okAsync(undefined)
+      },
+      after: () => {
+        ran.push('after')
+
+        return okAsync(undefined)
+      },
     })
 
     expect(refusal._unsafeUnwrapErr()).toEqual(lastAdmin)
-    expect(ran).toBe(false)
+    expect(ran).toEqual([])
     expect(await everything()).toEqual({ tenants: ['t1'], memberships: 2 })
   })
 
-  it("answers the continuation's failure once the identity left", async () => {
+  it('answers the failure of `after` once the identity left', async () => {
     const { organisations, ann, founded, everything } = await departureHarness()
 
     await founded(ann, 't1')
 
-    const failure = dataError('data:WRITE_FAILED', 'the continuation failed')
+    const failure = dataError('data:WRITE_FAILED', 'after failed')
 
-    expect((await organisations.leaveAll(ann, () => errAsync(failure)))._unsafeUnwrapErr()).toBe(
-      failure,
-    )
+    expect(
+      (
+        await organisations.leaveAll(
+          ann,
+          steps(() => errAsync(failure)),
+        )
+      )._unsafeUnwrapErr(),
+    ).toBe(failure)
     expect(await everything()).toEqual({ tenants: [], memberships: 0 })
   })
 })

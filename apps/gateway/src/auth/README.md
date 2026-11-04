@@ -370,17 +370,20 @@ session needed. It takes one of its address's 20 attempts in 10 minutes first (4
 with a key derived from the auth secret, `account-links/deletion-token.ts`, so neither Better
 Auth's verification nor the confirmation of an email takes it, nor it one of theirs) and 401
 `link-expired` for one asked an hour ago or more (`DELETION_LINK_LIFETIME_MS`). In the account's
-turn the token is judged again on the clock as it is then. An account that is the only admin of an
-organisation with other members answers 409 `last-admin` before its link is spent, so the same
-link deletes it once those members are removed. The pending deletion is spent then
-(`AccountDeletions.claim`, once: 401 `link-invalid` when it was used, replaced, or ended by a
-change of the password or of the email). Whom the notice goes to is read while the account exists
-(`AccountTeardown.addressee`); every session of the account ends (`AuthSessions.revokeAll`) and
-every socket of it closes with 4001 before any row goes; the account leaves its organisations and
-its own rows are removed while the turns of its memberships are still held
-(`Organisations.leaveAll` with `AccountTeardown.remove` as its continuation, `src/tenants`), so no
-invite of it lands in between. A departure refused there, the account having become the last admin
-of an organisation with others meanwhile, answers 409 `last-admin`, its sessions ended already.
+turn the token is judged again on the clock as it is then. The rest runs in the turns of the
+account's memberships (`Organisations.leaveAll`, `src/tenants`), whose check, made from the rows
+as they are there, is the one that decides: an account that is the only admin of an organisation
+with other members answers 409 `last-admin` with nothing changed, its link still pending and its
+sessions alive, so the same link deletes it once those members are removed, an invitation that
+overtook the press included. Only once the departure is allowed, and before it writes anything,
+does the deletion take effect (the departure's `before` step): the pending deletion is spent
+(`AccountDeletions.claim`, once: 401 `link-invalid`, nothing changed, when it was used, replaced,
+or ended by a change of the password or of the email), whom the notice goes to is read while the
+account exists (`AccountTeardown.addressee`), every session of the account ends
+(`AuthSessions.revokeAll`) and every socket of it closes with 4001. The departure then takes the
+account out of its organisations and its own rows are removed (its `after` step,
+`AccountTeardown.remove`) while those turns are still held, so no invite of it lands in
+between: one that waited finds the identity gone and is refused.
 The notice of a deleted account then starts to the email it had (`AccountMails.accountDeleted`),
 and it answers 200 `{ identity }`, so the page can tell whether its device was signed in to the
 deleted account. A failure of the gateway answers 500 `internal`. Better Auth's own deletion of a
@@ -545,7 +548,8 @@ error carries one.
   `last-admin` with no mail), the newest link only, the link spent once, judged again when it
   waited for its account, expired after an hour and ended by a change of the password, the
   sessions ended and the sockets closed with 4001 before the rows go, the organisations left,
-  `last-admin` at the press keeping the link, the notice in the account's language, the email
+  `last-admin` at the press keeping the link and the sessions, an invitation that overtook the
+  press included, the notice in the account's language, the email
   free to sign up again, and Better Auth's `/delete-user` out of reach;
   `account-links/reset-links.spec.ts`,
   `account-links/email-changes.spec.ts`, `account-links/account-deletions.spec.ts`,
