@@ -1,9 +1,10 @@
 /**
  * The flows of the UI contract the app's machines are held to, for `machines.spec.ts`. On a
  * branch the pre-commit hook sets `CONTRACT_AHEAD=1` and names the branch's merge base with
- * `main` (`CONTRACT_AHEAD_BASE`): a business commit may change a flow before its implementation,
- * so a machine may lack what its flow added (`aheadOf`), or still be exactly its screen's flow
- * as the contract had it at the base, or at the branch's own HEAD, the contract the app was
+ * `main` (`CONTRACT_AHEAD_BASE`) and the commit the branch is at (`CONTRACT_AHEAD_HEAD`): a
+ * business commit may change a flow before its implementation, so a machine may lack what its
+ * flow added (`aheadOf`), or still be exactly its screen's flow as the contract had it at the
+ * base, or at the branch's own HEAD, the contract the app was
  * built from: a business commit taken onto a branch whose implementation already follows an
  * earlier one changes a flow the base may not have at all. A machine that equals none of them
  * is held to its flow now, which it fails. On `main` and in `bun run check` every machine is held

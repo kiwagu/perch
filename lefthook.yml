@@ -61,7 +61,9 @@ pre-commit:
     # On a branch an app's machine may lag its flow (a business commit before its
     # implementation): it lacks what the flow added and does nothing the flow does not say, or it
     # is still its screen's flow at the branch's merge base with main (during a merge, the base
-    # the merge's commit will have); a branch whose merge base cannot be found fails here. A commit on main, the landing, and one on a detached HEAD hold
+    # the merge's commit will have) or at the commit the branch is at, and a route may still read
+    # as its binding did at that base; the script names both commits, so the test cache keys on
+    # them. A branch whose merge base cannot be found fails here. A commit on main, the landing, and one on a detached HEAD hold
     # every machine to its whole flow (scripts/contract-ahead.ts).
     - name: unit tests
       run: . scripts/ensure-path.sh && bun run scripts/contract-ahead.ts bun run test

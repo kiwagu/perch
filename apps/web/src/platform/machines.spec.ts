@@ -10,8 +10,9 @@
  * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a
  * machine may lack what its flow added but does nothing the flow does not say, or is still
  * exactly its screen's flow at the branch's base (`CONTRACT_AHEAD_BASE`) or at the branch's
- * HEAD, the contract the app was built from (`__fixtures__/machine-flows.ts`); `bun run check`
- * and a commit on `main` hold every machine to its whole flow.
+ * HEAD, the contract the app was built from (`CONTRACT_AHEAD_HEAD`,
+ * `__fixtures__/machine-flows.ts`); `bun run check` and a commit on `main` hold every machine
+ * to its whole flow.
  */
 
 import { join } from 'node:path'
@@ -45,8 +46,15 @@ const ROOT = join(import.meta.dirname, '../../../..')
 /** The merge base of the branch with `main`, which the pre-commit hook names on a branch. */
 const BASE = process.env['CONTRACT_AHEAD_BASE']
 
+/**
+ * The commit the branch is at, which the hook names too rather than this spec reading git's
+ * HEAD itself: the test cache keys on the name, so a pass never carries into a later state whose
+ * files are the same but whose HEAD holds another contract.
+ */
+const HEAD = process.env['CONTRACT_AHEAD_HEAD']
+
 const AT_BASE = flowsAt(BASE, ROOT)
-const AT_HEAD = flowsAt('HEAD', ROOT)
+const AT_HEAD = flowsAt(HEAD, ROOT)
 
 const { screens, problems } = loadScreens(ROOT)
 

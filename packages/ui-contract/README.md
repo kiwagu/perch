@@ -328,10 +328,17 @@ for Bun.
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than
     one, as order runs the machine; so a screen file written shorter that loads to the same
-    flow shows no change);
+    flow shows no change); the platform actions by name, added and removed; per platform
+    action either side holds, the lines of the action added and removed (an action one side
+    lacks has none, so an action added or removed whole shows every line, its mail among them),
+    `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
+    <type>`, `result: <text>`, `code <code>`, `role <role>`, `mail to <to> language
+    <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
+    <screen>]`, descriptions aside;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
-    line per list that is not empty, the transitions as `transitions added in <activity>` and
-    the lines of a flow as `flow lines added in <screen>`.
+    line per list that is not empty, the transitions as `transitions added in <activity>`,
+    the lines of a flow as `flow lines added in <screen>` and those of a platform action as
+    `platform action lines added in <action>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -451,7 +458,8 @@ for Bun.
   parts, the codes, the states and the error fields the anchors both hold gain or lose
   (derived ones included), the fields that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each, and the lines changed in each screen's flow included; prints
+  transitions changed in each, the lines changed in each screen's flow, and the platform
+  actions with the lines changed in each, its mail among them, included; prints
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of
   `bun run contract:diff main` in its description.
