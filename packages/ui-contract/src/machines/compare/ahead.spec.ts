@@ -79,6 +79,44 @@ describe('a machine that lags its flow', () => {
     expect(app).toEqual(aheadOf(app, projected(FLOW)))
   })
 
+  it('may lack a clear of a field the flow added, and clears no field the flow does not', () => {
+    const emptied = (anchor: string) => ({ type: 'clear', params: { anchor } }) as const
+    const flow = projected({
+      ...BEHIND,
+      states: {
+        ...BEHIND.states,
+        saving: {
+          invoke: {
+            src: 'sample.save',
+            onDone: {
+              target: 'editing',
+              actions: [emptied('sample.password-input'), show(['saved'])],
+            },
+            onError: { target: 'editing' },
+          },
+        },
+      },
+    })
+    const lagging = projected(BEHIND)
+    const elsewhere = projected(
+      behindWith((states) => {
+        states['saving'] = {
+          invoke: {
+            src: 'sample.save',
+            onDone: {
+              target: 'editing',
+              actions: [emptied('sample.email-input'), show(['saved'])],
+            },
+            onError: { target: 'editing' },
+          },
+        }
+      }),
+    )
+
+    expect(lagging).toEqual(aheadOf(lagging, flow))
+    expect(elsewhere).not.toEqual(aheadOf(elsewhere, flow))
+  })
+
   it('may lack a state or a region named like a property every object has', () => {
     const flow = projected({
       ...FLOW,

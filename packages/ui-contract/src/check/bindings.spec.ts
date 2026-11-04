@@ -87,6 +87,49 @@ describe('bindingsProblems', () => {
       `${AT}["sample.save-button"].binding.params.title: "tab" is not a search parameter of every route of the screen`,
     ])
   })
+  it('starts a field with a search parameter every route of the screen declares', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').binding = [
+      { search: 'tab' },
+      { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+    ]
+    anchorIn(contract, 'sample.mode-select').binding = { search: 'tab' }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('starts only a field with a search parameter, and only one every route declares', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').binding = { search: 'token' }
+    anchorIn(contract, 'sample.save-button').binding = { search: 'tab' }
+    anchorIn(contract, 'sample.list').binding = { search: 'tab' }
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.search-input': { kind: 'input', binding: { search: 'tab' } },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["app-shell.search-input"].binding.search: "tab" is not a search parameter of every route of the screen',
+      `${AT}["sample.title-input"].binding.search: "token" is not a search parameter of every route of the screen`,
+      `${AT}["sample.save-button"].binding.search: a button starts with no search parameter: only a field holds a value to start with`,
+      `${AT}["sample.list"].binding.search: a list starts with no search parameter: only a field holds a value to start with`,
+    ])
+  })
+  it('never starts a secret field with a search parameter: a secret never comes from a URL', () => {
+    const contract = sampleContract()
+
+    Object.assign(anchorIn(contract, 'sample.title-input'), {
+      secret: true,
+      binding: [
+        { search: 'tab' },
+        { action: 'thing.updateThing', params: { title: 'sample.title-input' } },
+      ],
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.title-input"].binding[0].search: a secret field starts with no search parameter: a secret never comes from a URL`,
+    ])
+  })
   it('reports a name of the object prototype as unknown, never as found or thrown', () => {
     const contract = sampleContract()
 

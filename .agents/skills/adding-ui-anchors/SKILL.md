@@ -55,7 +55,8 @@ code and the tests follow; the checks hold them to the contract.
 2. **The model.** A field or an action the screen needs goes into its entity of
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
    `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
-   mail declares it under `mail`.
+   mail declares it under `mail`, and one that sends a mail that only tells, with no token,
+   lists it under `notices` (`references/patterns.md`, "A notice mail").
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -63,12 +64,14 @@ code and the tests follow; the checks hold them to the contract.
    another anchor plus a derived suffix: the entries of a list `x.list` are
    `x.list.<object>-item`, never `x.list.item`.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
-   `description`, its `binding` (the model field, the action with its params, a route, or a
-   list of them), and its `codes` (an error's `fields` with them: the field each code
+   `description`, its `binding` (the model field, the action with its params, a route, the
+   search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
-   actions its part binds, the codes of a `show` in an `onError` when they are the failure's,
+   actions its part binds and of the actions its flow invokes against it, with the codes its
+   flow shows on it, the codes of a `show` in an `onError` when they are the failure's (or,
+   on a branch guarded by failure code, the guard's, and after it the failure's other codes),
    the region of a button bound to one action when it only runs the action, and the toast of a
    mutation's success (one per operation, where it ends, a chain of actions named by the control
    that starts it; one event starting several at once is refused; on by default for an action of the
@@ -76,64 +79,102 @@ code and the tests follow; the checks hold them to the contract.
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
    bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). Add its
+   its anchor to run it without asking). A button may leave out the params the fields of its
+   part pass to its action in their own bindings; a param it writes wins over theirs, key by key
+   (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
+   `locale: app-shell.locale-select`, which no field passes). A request leaves out its failure:
+   an invoke whose action fails with codes clears its part's error on entry and goes back the
+   one way it came, on a control, showing the failure there; a state where its area starts,
+   one a platform or data event enters, or one with no single way back writes its `onError`,
+   and one written as its target alone gets the show on its part's error, else on
+   `<screen>.error` (also when no control enters it and its input names no field, as a request
+   a link starts). A list the platform declares as a composite is never written: the secret input
+   writes `composite: password-rules` in place of the password rule list and its items. A
+   `description` the engine says itself is left out too (a heading, a link to a screen, a secret
+   input, an error, a composite's anchors), and `bun run contract:coverage --descriptions` lists
+   the written ones to drop. Add its
    events to the `flow` (XState's language: see the pattern
    "A machine from the flow"; an area of the screen independent of the others is a region
    of its parallel state, and an event belongs to one area; write it in the shorter forms
    of `contract/README.md` where they fit, a transition as its target, an effect by its
    name, a region by its pattern or by its button, and read the expansion with `bun run
-   contract:flow <screen>`) and the element to the `wireframe`. A
-   new code, state or choice value goes into its table of the vocabulary in the same change:
-   those tables are business, like the screen file. The toast codes the contract derives for
+   contract:flow <screen>`) and the element to the `wireframe`. An anchor that only some
+   states render goes into `meta.renders` of each state that renders it; one no state lists
+   is rendered in every state, a listed anchor brings the anchors declared under it
+   (`<anchor>.<rest>`, a list's items), and a state that handles its event must list it or an
+   anchor it is under, or its parallel state must (`references/patterns.md`, "What a state
+   renders"); rendered means visible, so an anchor kept in the DOM but hidden in a state is
+   not listed there. A guard that tells the failures of an invoke apart takes their codes,
+   `{ codes: [ … ] }`, guards only branches of that invoke's `onError`, and a bare `show` on
+   its branch shows them (`references/patterns.md`, "A guard by failure code"). A new code,
+   state or choice value goes into its table of the vocabulary in the same change: those
+   tables are business, like the screen file. The toast codes the contract derives for
    mutations' successes (an action of the model, or a platform action the platform's `toasts`
    lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
    words are written, in the frame's map. A field holds input by itself; only a
    field whose own change runs its action (a select that applies at once) carries
-   `holdsInput={false}` in the JSX, and the contract derives which. A password input that
-   shows what it holds on demand lists `derived: [ visibility-button ]`: the eye is
+   `holdsInput={false}` in the JSX, and the contract derives which. A field that holds a
+   secret says `secret: true`, and a password input that shows what it holds on demand lists
+   `derived: [ visibility-button ]` beside it: the eye is
    presentation only, never an event of the flow (`references/patterns.md`, "A password
    input's eye").
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
-   bracket references; it names a mail by the action that sends it, `[mail:<action>]`. When it cannot be written from the contract, the scenario has found a
+   bracket references; it names a mail by the action that sends it, `[mail:<action>]`, and a
+   notice by its action and its name, `[notice:<action>.<name>]`. A code, a state or a value
+   speaks of the anchor its text names last before it, which must carry it (or an anchor
+   under it, such as a list's items), so write the anchor first: `[user.settings.theme-select]
+   shows [value:dark]`; a mail or a notice named in between ends that pairing. When it cannot be written from the contract, the scenario has found a
    gap: go back to steps 2 to 4, never work around it in the test. A gap the contract cannot
    close in this change is signalled, never emulated: `.cursor/rules/contract-gap-no-emulation.mdc`.
    **Commit the contract**, each layer on its own branch and no implementation in either
    (the layers and branches of `.cursor/rules/ui-contract.mdc`; the app's runtime of the
-   contract and the specs that hold the app to it are meta). A new facet first: the meta
+   contract and the specs that hold the app to it are the implementation's). A new facet
+   first: the meta
    change (`@workspace/ui-contract`, the generated schemas, the vocabulary's grammar, the
    docs about them) goes on `feat/contract-first-pass`, after a merge of the latest `main` into it, and
    lands on `main` as its own squash after the developer's go on those meta commits by hash
    (one round at a time; a commit added after the hand-over needs a new one, and a change its
-   review brings is a commit of its own on top, never an amend). Then the
-   feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main` merged in
-   after that landing, takes the business change (the screen files, the activities, the
-   platform, the model, the scenarios). On the branch the hook lets the contract run ahead of the app (an anchor
-   declared, not rendered yet, passes; an app's machine may lack what its flow added, and does
-   nothing the flow does not say, or is still its flow at the branch's base; a scenario may
-   wait for its test, which the landing on
-   `main` requires). A rename or a removal keeps the old name declared in
-   this commit; its drop, after the implementation, is part of what the review approves.
-   **Then stop for review** (the gate of the same rule): hand the developer
-   the output of `bun run contract:diff main`, the contract commits by hash with their diff
-   and the meta landing they build on, the reason for every change and the gaps signalled (`references/templates.md`, "Review"),
-   ask for the OK on those commits, and wait. Nothing below starts before it, not even a
-   test's scaffold. The OK covers those commits, and the one it approves in advance: the last
-   business commit of a rename or a removal, which drops the old names the review listed and
-   nothing else. A change the review brings (one the developer asks for, or one an answer to
-   their question leads to) is a new commit on top of the ones under review, never an amend
-   or a re-cut, and the OK is then asked on all of them. Any other contract commit made,
-   re-cut, amended or rebased after the OK, even with its files unchanged, stops here again,
-   and so does a return to the code after other work.
+   review brings is a commit of its own on top, never an amend). Then the business change
+   (the screen files, the activities, the platform, the model, the scenarios, the rows of the
+   vocabulary's tables) goes on the contract trunk, `contract/trunk`
+   (`.cursor/rules/branch-reuse-first.mdc`), in the developer's modeling session, after the
+   trunk has merged `main` with that landing: one card's commits, each decision a commit of
+   its own on top, never an amend. On the trunk, as on any branch, the hook lets the contract
+   run ahead of the app (an anchor declared, not rendered yet, passes; an app's machine may
+   lack what its flow added, and does nothing the flow does not say, or is still its flow at
+   the branch's base; a scenario may wait for its test, which the landing on `main`
+   requires), but it cannot drop a name the app still renders: a rename or a removal keeps the
+   old name declared, and the card lists it for the drop after the implementation.
+   **Then the review** (the gate of the same rule): show the developer the output of
+   `bun run contract:diff main` with the diff, change the contract until they say it is
+   right, and note on the card its trunk commits, oldest first, with that OK. Nothing below
+   starts before it, not even a test's scaffold. The OK covers the card's commits, and the one
+   it approves in advance: the last business commit of a rename or a removal, which drops the
+   old names the card listed and nothing else.
+   **Then the take**, on the feature's own branch with `main` merged in:
+   `git cherry-pick --no-commit <the card's trunk commits, oldest first>`, then one
+   `git commit` named for the card's goal, which runs the hook; where a commit of the card
+   sits next to another card's lines, the take keeps this card's lines only. The card notes
+   the take's hash. A business commit written on the feature's branch instead, a feature
+   begun there before the trunk or an amendment the developer allows there, **stops for
+   review**: hand the developer the output of `bun run contract:diff main`, the contract
+   commits by hash with their diff and the meta landing they build on, the reason for every
+   change and the gaps signalled (`references/templates.md`, "Review"), ask for the OK on
+   those commits, and wait. A change that review brings (one the developer asks for, or one
+   an answer to their question leads to) is a new commit on top of the ones under review,
+   never an amend or a re-cut, and the OK is then asked on all of them. Any other contract
+   commit made, re-cut, amended or rebased after that OK, even with its files unchanged,
+   stops here again, and so does a return to the code after other work.
 6. **The code**, after the developer's OK on the contract commits beneath it, in commits of its own (the code, its tests, an
    app machine's entry in `APP_MACHINES`, and an example of a meta doc that quotes the code it
    changes), never with any other business or meta change. Once the code no longer renders a
-   renamed or removed name, a last business commit drops it from the contract: the review of
-   step 5 approved it, so it needs no new stop. Any other contract change found from here on
-   is a commit of its own and goes back to steps 2 to 5 and their stop; a meta one goes
-   through `feat/contract-first-pass` and its landing, then `main` is merged into this
-   branch. Put the literal on the semantic element, in one of the four
+   renamed or removed name, a last business commit on this branch drops it from the
+   contract: the OK of step 5 approved it, so it needs no new stop. Any other contract change
+   found from here on goes back to steps 2 to 5 on the trunk and is taken as one more commit;
+   a meta one goes through `feat/contract-first-pass` and its landing, then `main` is merged
+   into the trunk and into this branch. Put the literal on the semantic element, in one of the four
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the

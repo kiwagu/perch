@@ -51,8 +51,20 @@ export const bindingRefSchema = z
         route: z.string().regex(/^\//).describe('The path of a binding the anchor navigates to.'),
       })
       .describe('The anchor navigates to a route.'),
+    z
+      .strictObject({
+        search: z
+          .string()
+          .regex(/^[a-z][a-zA-Z0-9]*$/)
+          .describe('The name of a search parameter every route of the screen declares.'),
+      })
+      .describe(
+        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+      ),
   ])
-  .describe('What the anchor is bound to: a model field, an action or a route.')
+  .describe(
+    'What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with.',
+  )
 
 export const anchorBindingSchema = z
   .union([
@@ -98,6 +110,18 @@ export const asksSchema = z
     "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
   )
 
+/** Where a derived anchor of a composite comes from, written by the loader only. */
+export const derivedFromSchema = z
+  .strictObject({
+    composite: kebabNameSchema.describe('The composite that derives the anchor.'),
+    item: kebabNameSchema
+      .optional()
+      .describe('The item of the composite the anchor stands for; absent: the list.'),
+  })
+  .describe(
+    'Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it.',
+  )
+
 export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
@@ -113,6 +137,12 @@ export const anchorDefSchema = z
       .optional()
       .describe(
         'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
+      ),
+    secret: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
       ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
     fields: z
@@ -138,6 +168,12 @@ export const anchorDefSchema = z
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
+    composite: kebabNameSchema
+      .optional()
+      .describe(
+        'The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.',
+      ),
+    derivedFrom: derivedFromSchema.optional(),
   })
   .describe('One declared anchor.')
 
@@ -145,7 +181,8 @@ export const anchorDefSchema = z
  * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
  * and the loader derives them from the actions its part binds; a field may leave `holdsInput`
  * out, and the loader derives it from its kind and its bindings; a control never writes `asks`,
- * which the loader derives from its action, and may ban it with `confirm: false`.
+ * which the loader derives from its action, and may ban it with `confirm: false`; no anchor writes
+ * `derivedFrom`, which the loader writes on the anchors it derives from a composite.
  */
 export const authoredAnchorDefSchema = anchorDefSchema
   .extend({
@@ -174,5 +211,5 @@ export const authoredAnchorDefSchema = anchorDefSchema
         "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
       ),
   })
-  .omit({ asks: true })
+  .omit({ asks: true, derivedFrom: true })
   .describe('One declared anchor, as a screen file writes it.')

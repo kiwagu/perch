@@ -1,12 +1,12 @@
 import { z } from '@workspace/zod'
 
-import type { SessionNotice } from '../../platform/session.port'
+import { SESSION_NOTICES, type SessionNotice } from '../../platform/session.port'
 
 import type { KeyValueStorage } from './key-value'
 
 const NOTICE_KEY = 'perch.session.notice'
 
-const sessionNotice = z.enum(['resend-after-sign-in', 'signed-out-elsewhere', 'delete-pending'])
+const sessionNotice = z.enum(SESSION_NOTICES)
 
 /** Leaves the sign-in page a word about how the last session ended. */
 export function saveNotice(storage: KeyValueStorage, notice: SessionNotice): void {

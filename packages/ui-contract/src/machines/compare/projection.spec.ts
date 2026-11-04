@@ -57,3 +57,66 @@ describe('the projection of a machine config', () => {
     expect(projected(opened.config)).not.toEqual(projected(flow))
   })
 })
+
+describe('the projection of a navigate', () => {
+  it('holds the field a search value takes, as it holds a literal', () => {
+    const config = (anchor: string) =>
+      ({
+        initial: 'form',
+        states: {
+          form: {
+            on: {
+              'sample.forgot-link': {
+                target: 'gone',
+                actions: [
+                  {
+                    type: 'navigate',
+                    params: { to: '/forgot', search: { email: { anchor } } },
+                  },
+                ],
+              },
+            },
+          },
+          gone: { type: 'final' },
+        },
+      }) as const
+    const flow = flowSchema.parse(config('sample.email-input'))
+
+    expect(projected(createMachine(config('sample.email-input')).config)).toEqual(projected(flow))
+    expect(projected(createMachine(config('sample.name-input')).config)).not.toEqual(
+      projected(flow),
+    )
+  })
+})
+
+describe('the projection of a clear', () => {
+  it('holds the field a clear empties, as it holds an anchor whose code it clears', () => {
+    const config = (anchor: string) =>
+      ({
+        initial: 'form',
+        states: {
+          form: { on: { 'sample.save-button': { target: 'saving' } } },
+          saving: {
+            invoke: {
+              src: 'platform.change-password',
+              onDone: {
+                target: 'form',
+                actions: [
+                  { type: 'clear', params: { anchor: 'sample.error' } },
+                  { type: 'clear', params: { anchor } },
+                ],
+              },
+            },
+          },
+        },
+      }) as const
+    const flow = flowSchema.parse(config('sample.password-input'))
+
+    expect(projected(createMachine(config('sample.password-input')).config)).toEqual(
+      projected(flow),
+    )
+    expect(projected(createMachine(config('sample.email-input')).config)).not.toEqual(
+      projected(flow),
+    )
+  })
+})

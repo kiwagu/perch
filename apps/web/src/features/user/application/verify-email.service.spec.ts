@@ -122,7 +122,13 @@ describe('VerifyEmailService on a session', () => {
     })
     service = new VerifyEmailService(
       opened.session,
-      new AccountStartService(profiles, settings, keptHere(), (run) => run()),
+      new AccountStartService(
+        profiles,
+        settings,
+        keptHere(),
+        (run) => run(() => opened.session.flush()),
+        () => 'system',
+      ),
     )
   })
 

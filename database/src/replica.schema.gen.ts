@@ -3,7 +3,7 @@
 import type { ReplicaSchema } from '@workspace/replica'
 
 export const replicaSchema: ReplicaSchema = {
-  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, created_at: { kind: 'datetime' }, text: { kind: 'text' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },
-  profile: { region: 'private', fields: { bio: { kind: 'text' }, created_at: { kind: 'datetime' }, identity: { kind: 'record', table: 'identity' } } },
-  settings: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' } } },
+  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member', readonly: true }, created_at: { kind: 'datetime', readonly: true }, text: { kind: 'text' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },
+  profile: { region: 'private', fields: { bio: { kind: 'text' }, created_at: { kind: 'datetime', readonly: true }, email: { kind: 'plain', readonly: true }, identity: { kind: 'record', table: 'identity', readonly: true }, name: { kind: 'plain' } } },
+  settings: { region: 'private', fields: { identity: { kind: 'record', table: 'identity', readonly: true }, locale: { kind: 'plain' }, theme: { kind: 'plain' } } },
 }

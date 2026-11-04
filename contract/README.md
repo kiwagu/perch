@@ -45,29 +45,36 @@ developer approved; the code takes no architectural decision of its own.
 3. **The scenario.** The behaviour as a person would check it by hand, written from the
    contract alone, in `tests/e2e/scenarios/`.
    **Then the review.** The contract is committed first, a layer per commit and no
-   implementation in either (the app's runtime of the contract and its specs are meta). A
+   implementation in either (the app's runtime of the contract and its specs are the
+   implementation's). A
    new facet's meta change (the engine: `@workspace/ui-contract`, the generated schemas, the
    vocabulary's grammar, this README) goes on `feat/contract-first-pass`, after a merge of the latest
    `main` into it, and lands on `main` as its own squash after the developer's go on those
    meta commits by hash (one round at a time; a commit added after the hand-over needs a new
-   one, and a change its review brings is a commit of its own on top, never an amend). The feature's own branch (`.cursor/rules/branch-reuse-first.mdc`), with `main`
-   merged in after that landing, then takes the business change (the screen files, the
-   activities, the platform, the model, the scenarios), the entry point of a feature. The change stops here: the developer reads the contract diff
-   (`bun run contract:diff main`, the contract commits by hash with their diff, the meta
-   landing they build on, the reason for every change, the gaps signalled) and gives an OK on those commits or asks for changes
-   to the contract. A change the review brings is a commit of its own on top of the ones
-   under review, never an amend, and the OK is then asked on all of them. The OK covers those
-   commits, and the last business commit of a rename
-   or a removal that drops the old names the review listed. Any other contract commit made,
-   re-cut, amended or rebased after it, even with its files unchanged, and a return to the
-   implementation after other work, stop here again. The code and the tests,
-   a test's scaffold included, start only after the OK, in commits of their own. A rename or a
-   removal keeps the old name declared until the code no longer renders it, then a last
-   business commit drops it, approved with the first, with no new stop; any other contract
-   change found while writing the code is a commit of its own and goes back to step 1 and
-   stops again, a meta one through `feat/contract-first-pass` and its landing, after which
-   `main` is merged into the feature branch. A fix that brings the code back to what the
-   contract already says, correctly, has no contract diff and no stop.
+   one, and a change its review brings is a commit of its own on top, never an amend). The
+   business change (the screen files, the activities, the platform, the model, the
+   scenarios, the rows of the vocabulary's tables), the entry point of a feature, is then
+   modelled on the contract trunk, `contract/trunk` (`.cursor/rules/branch-reuse-first.mdc`),
+   with `main` merged in after that landing: the developer's modeling session, in the trunk's
+   own worktree and never reading the code, commits it under the feature's card, each
+   decision a commit of its own on top, never an amend. The developer reads the contract diff
+   (`bun run contract:diff main`, the commits by hash with their diff, the meta landing they
+   build on, the reason for every change, the gaps signalled) and says when the card's
+   contract is right: that is the OK, and the card names it with its trunk commits. The
+   feature's own branch then takes the card as one business commit (`git cherry-pick
+   --no-commit` of the card's commits, oldest first, then one `git commit` through the hook),
+   and the code and the tests, a test's scaffold included, start on top of it, in commits of
+   their own. The OK covers the card's commits, and the last business commit of a rename or a
+   removal, written on the feature's branch, which drops the old names the card listed: a
+   rename or a removal keeps the old name declared until the code no longer renders it, then
+   that commit drops it, with no new stop. Any other contract change found while writing the
+   code goes back to step 1 on the trunk and is taken as one more commit, a meta one through
+   `feat/contract-first-pass` and its landing, after which `main` is merged into the trunk and
+   into the feature branch. A business commit written on the feature's branch instead, a
+   feature begun there before the trunk or an amendment the developer allows there, stops
+   here for the developer's OK on its hash, as `.cursor/rules/ui-contract.mdc` says. A fix that
+   brings the code back to what the contract already says, correctly, has no contract diff and
+   no stop.
 4. **The code.** The view renders exactly the anchors of the screen file, and
    `bun run contract:check:sources` holds it to them.
 5. **The tests.** The test of the scenario uses the anchors, codes, states and values of the
@@ -88,7 +95,8 @@ The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
   the derived suffixes, the attributes, the app, container and row states, the codes, the
-  choice values, the screen names, the roles and the anchors the shell reserves). Its
+  choice values, the screen names, the roles, the anchors the shell reserves and the
+  platform's composites). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
   heading. The grammar, the kinds, the suffixes, the attributes and the contract version are
   the engine's (meta); every other table is content a feature adds with the screen file that
@@ -106,8 +114,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen may run (signing up, in and out, organisations, devices), the events it raises
   in a flow (the local data opened, or could not be), `leaving`, the actions whose run
   leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
-  first, `toasts`, the platform actions whose success toasts with their codes, the reserved
-  anchors and the readiness line.
+  first, `toasts`, the platform actions whose success toasts with their codes, `composites`,
+  the lists with their items a screen derives by opting in (see "What a screen leaves out"),
+  the reserved anchors and the readiness line.
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
   mail goes to, or `account`, the signed-in account's own email; `language`, the parameter
@@ -120,6 +129,31 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen whose every route declares that search parameter. A scenario names the mail by its action, `[mail:sign-up]`, and a
   test that reads a mail holds it to its declaration: its recipient, the path and the search
   parameter of its link, and the language of its HTML.
+
+  A mail that only tells is a notice, and an action declares the ones it sends under
+  `notices`, a list. A `mail` carries a token the user acts on; a notice carries none, so
+  nothing in it acts: a password changed, an email changed. Each notice has a `name`,
+  kebab-case and unique within the action; `to` and `language`, as a mail's, where `account` is
+  the account the action acts on, its email as it was before the action changed anything (a
+  notice of a changed email goes to the old address); and, when it has one, a plain `link` to
+  a `screen`, never with a `search`. A password-changed notice links to the reset of a
+  password, for an owner who did not change it:
+
+  ```yaml
+  reset-password:
+    # description, params, result, codes
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.reset-password }
+  ```
+
+  `account` is reserved on an action that sends a notice too. The check holds `to` and
+  `language` as a mail's, wants the names unique within the action, and holds a link to a
+  screen with a route, every route of which needs no parameter, as the link carries none (no
+  `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
+  names a notice by its action and its name, `[notice:reset-password.password-changed]`.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
   actions, how each field merges).
@@ -273,6 +307,15 @@ An anchor's `binding` says what the element does or shows:
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
 - `{ route: /path }`: the path of a binding of some screen.
+- `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
+  switch): the field starts with the value of that search parameter of the route the screen
+  was opened at, and the user may change it; every binding of the screen declares it under
+  `search`. It sits in a list beside the action the field gives its value to: the email a
+  link carried into `/forgot-password?email=...` fills the email input the request is sent
+  with, `[ { search: email }, { action: platform.request-password-reset, params: { email:
+  user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the
+  value there (`{ anchor: <field> }`, below). A `secret` field never takes it: a secret is
+  never filled from a URL.
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
@@ -280,18 +323,25 @@ values the element carries), `fields` (an error's codes, each with the field of 
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
-values), `derived` (the suffixes it renders; an `input` alone may render `visibility-button`,
-see "Anchors"), `roles` (who sees it; absent: every role of the
+values), `derived` (the suffixes it renders; a secret `input` alone may render
+`visibility-button`, see "Anchors"), `roles` (who sees it; absent: every role of the
 screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
-what is typed; derived, see "What a screen leaves out"), `source` (where a list's entries come
-from).
+what is typed; derived, see "What a screen leaves out"), `secret` (`true` on a field that
+holds a secret: a password, its confirmation, a current password, anything that never leaves
+the page but in the request of the action that takes it; only a field has it, no navigate
+carries it into a search and no search parameter starts it), `composite` (on a secret input:
+the composite of the platform it opts into, see "What a screen leaves out"), `source` (where a
+list's entries come from). An anchor's `description` says what it is for; where the engine can
+say it, the file leaves it out.
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
 
 A screen's `flow` is an XState v5 machine config, in the subset `createMachine` takes as
-written: the app carries it into `setup({ guards, actions, actors }).createMachine(flow)`
-unchanged, as it carries a binding into the router.
+written: `contract:check` runs it in `setup({ guards, actions, actors }).createMachine(flow)`,
+with a stub per guard, effect and invoked actor, and an app that builds its own machine for the
+screen holds it to the flow with the engine's comparison (`@workspace/ui-contract/machines`),
+as it holds its router to the bindings.
 
 - `initial` and `states`. A state has a `description`, `type: final` where the flow ends
   (the app has left the screen, or stops), `entry` and `exit` effects, `on` and `invoke`.
@@ -299,10 +349,11 @@ unchanged, as it carries a binding into the router.
   of a screen (the organisation page's create form, new note, notes' items, invitation and
   members): its `states` are its regions, two or more, all active at once. A region has a
   `description`, an `initial` and its `states`, plain states that never end, carry no
-  `meta.address` (the address is the screen's state) and hold no states of their own. The
-  parallel state has a `description`, `on`, `entry`, `exit` and `meta.address`, never an
-  `initial` or an `invoke`; its own `on` applies whichever state each region is in. Entering
-  it starts every region at its `initial`; leaving it leaves every region.
+  `meta.address` (the address is the screen's state; their `meta` holds `renders` alone) and
+  hold no states of their own. The parallel state has a `description`, `on`, `entry`, `exit`,
+  `meta.address` and `meta.renders`, never an `initial` or an `invoke`; its own `on` applies
+  whichever state each region is in. Entering it starts every region at its `initial`;
+  leaving it leaves every region.
 - `on` maps an event to one transition, or to a list of guarded ones in XState's order, the
   one without a guard last. An event is the user acting on a declared anchor (a derived one
   through its base's `derived`; typing, for a field), a platform event of `platform.yaml`
@@ -319,9 +370,16 @@ unchanged, as it carries a binding into the router.
   its `initial`. Within a parallel state an event
   belongs to one area, one region or the state's own `on`, never two; the same event may
   appear in several states of one region.
-- A guard is a camelCase name that the root `meta.guards` declares with what it holds
-  (`holdsUnsentChanges: this device holds changes the server has not received`); the app
-  implements it.
+- A guard is a camelCase name that the root `meta.guards` declares with what it holds: a
+  sentence (`holdsUnsentChanges: this device holds changes the server has not received`), or
+  the failure codes it takes, `{ codes: [ <code>, ... ] }`, when it tells the failures of an
+  action apart: it holds when the action failed with one of them. A guard by failure code
+  guards only branches of an invoke's `onError` (a region written `by` its button included),
+  and each of its codes is one the invoked action fails with, listed once; the sign-in screen
+  may write `emailNotVerified: { codes: [ email-not-verified ] }` for the branch of
+  `signing-in` that leads to `unverified`. A bare `show` on such a branch shows the guard's
+  codes (see "What a screen leaves out"). An activity's guards are sentences. The app
+  implements every guard.
 - A control whose anchor is an event of the flow (a button, a select, a switch) is enabled
   exactly while a state the machine is in handles that event (`snapshot.can` in XState), and
   disabled otherwise: the profile's Save is disabled while it saves because neither
@@ -330,9 +388,22 @@ unchanged, as it carries a binding into the router.
   the machine does not enable it: it is always enabled.
 - The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
-  } }`, an anchor that carries codes shows none until one is shown again; and `{ type:
-  navigate, params: { to, search } }`, the app moves to that binding. The app implements
-  all three.
+  } }`, an anchor that carries codes shows none until one is shown again; a field is emptied;
+  and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app
+  implements all three. The codes come first: a `clear` of an anchor that carries codes,
+  whatever its kind and its screen, a field included, means it shows none until one is shown
+  again. A field that carries none (an input, a textarea, a select, a checkbox, a radio or a
+  switch, a `secret` one included) is emptied, and only on the flow's own screen: it returns
+  to its empty or initial value and holds no input any more, as if nothing was typed; a form
+  empties its passwords this way once the action that took them succeeds. A `clear` never
+  names a `visibility-button`, nor a button, a list, a link or any other anchor unless it
+  carries codes. Each value of a navigate's `search` is a search key of the binding it moves to,
+  given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
+  flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
+  radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
+  value would stay in the address, the browser's history and the logs). A link that carries
+  the email typed so far to the page that asks for a password reset:
+  `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
   anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
@@ -347,6 +418,62 @@ unchanged, as it carries a binding into the router.
   transient state is exempt and no flow holds it: whether a password input shows what it
   holds, which the input keeps itself and its `visibility-button` toggles (see "Anchors").
   No state declares an address yet.
+- An anchor that only some states render, those states list in `meta.renders`: a plain
+  state of the root, a parallel state or a state of a region. An anchor no state of the flow
+  lists is rendered in every state. An anchor a state lists is rendered only where it is
+  listed: in a plain state of the root that lists it, and in a state of a region that lists it
+  or whose parallel state does. A name is an anchor its screen declares, listed once; a
+  derived part is rendered with its base, so a state lists the base
+  (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also
+  renders the anchors declared under it (`<anchor>.<rest>`, as a scenario's codes and states
+  speak of them): `user.sign-in.password-rule-list` brings the six items of the composite with
+  it, so a state lists the list alone, never the list and one of its items in one list, and an
+  anchor declared under a listed one is rendered only where its container is, or where a
+  state lists it itself. A plain state of the root or a state of a region that handles an
+  event on an anchor only some states render renders that anchor (for an event on a derived
+  part or on an anchor declared under another, through the anchor it is under), since a
+  control the user acts on is on the page; a state may render a control it does not handle,
+  which is then disabled. The events of a parallel state's own `on` are not held to this, and
+  neither are the effects: a `show` or a `clear` may name an anchor its state does not render.
+  The states of a region written by its pattern or by its button, or derived by the loader,
+  list nothing: an area that renders something in some of its states only is written in full.
+  For the modes of the sign-in screen (the rest of its flow left out):
+
+  ```yaml
+  flow:
+    initial: sign-in
+    states:
+      sign-in:
+        meta:
+          renders: [ user.sign-in.forgot-link ]
+      sign-up:
+        meta:
+          renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+      check-mail:
+        meta:
+          renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ]
+      # signing-in as sign-in; password-weak, passwords-differ and signing-up as sign-up;
+      # unverified and resending as check-mail
+  ```
+
+  The form, the email and password inputs and the submit and toggle buttons are listed by no
+  state, so every state renders them; the forgot link is rendered only in the states that
+  list it, and the password rule list with its items only in the states of the mode sign-up.
+  `passwords-differ` handles `user.sign-in.password-confirmation-input`; without its list,
+  `contract:check` would say `"user.sign-in.password-confirmation-input" is handled here but
+  not rendered: only the states that list it in meta.renders render it`. A state that runs an
+  action lists what stays on the page while it runs: `signing-up` lists the rule list, the
+  confirmation and the name input, or they would go while the account is created.
+  `contract:diff` lists each entry as a line `<state path> renders <anchor>`.
+
+  Rendered means visible to the user. An anchor a state renders is on the page and seen; one
+  it does not render is not seen: absent from the page, or kept in it hidden (`hidden`,
+  `display: none` or `visibility: hidden`, as the page helper's `visible` reads it), as a form
+  that keeps what was typed into it while it is closed. The app reads what a state renders
+  from its machine, whose states carry the flow's `meta.renders`, through the engine's
+  `renderedAt` and `isRendered` (`@workspace/ui-contract/anchors`), never from a flag of its
+  own, as it reads which controls are enabled; an e2e run holds the page to it in every state
+  a test passes through (see "The manifest").
 
 A screen file may write its flow shorter, and leave out what the contract says elsewhere
 (below); the loader expands it into the config above before anything reads it, so the
@@ -357,8 +484,9 @@ run contract:flow <screen>` prints it. The shorter forms are four:
   `onDone: { target: idle }`.
 - An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it
   carries, in its order (in the `onError` of an invoke, one of the codes the failure of its
-  action shows); `show: { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `navigate:
-  <path>` or `navigate: { to, search }`.
+  action shows, narrowed by a guard by failure code; see "What a screen leaves out"); `show:
+  { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `navigate: <path>` or `navigate:
+  { to, search }`.
 - A region written by its pattern, a shape that two regions or more of the screens share,
   named by what the area does. A shape that one region has is written in full until a
   second one shares it.
@@ -406,21 +534,36 @@ out, and the loader derives it, the same way every time:
   field's name is kebab-case in a code. So `note.createNote` fails with `forbidden`,
   `text-required`, `text-too-long` and `failed`, and a `maxLength` added to a field adds its
   code wherever an action sets the field.
+- **A button's params.** A `button` whose binding names an action gets, for that action, every
+  param the fields of its part (`<part>.<name>`: an input, a textarea, a select, a checkbox, a
+  radio or a switch) pass in their own bindings of it. The email and password inputs of
+  `user.sign-in` pass `email` and `password` to `platform.sign-in`, so
+  `user.sign-in.submit-button` binds it as `action: platform.sign-in` alone. A param the button
+  writes wins, key by key, so a value no field of its part passes stays written: its binding of
+  `platform.sign-up` keeps `locale: app-shell.locale-select`, an anchor of the frame. Two fields
+  that pass one param with different values are a problem of the button until it writes that
+  param.
 - **An error's codes and fields.** An error `<part>.error` that writes no `codes` carries the
-  codes of the failures of the actions the anchors of its part bind (`<part>.<name>`, in the
-  order they are declared), each once, `failed` last. One that writes no `fields` maps each
-  code of a field to the control its binding passes for that field (`name-too-long` to
+  codes of three sources, each once, `failed` last: the failures of the actions the anchors of
+  its part bind (`<part>.<name>`, in the order they are declared); then the failures of the
+  actions the flow invokes and shows on it, by a written `onError` in any form or by the
+  request pattern below, a region written `by` a button included; then the codes the flow
+  shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a
+  transition. So `user.reset-password.error` may leave its codes out: the failures of
+  `platform.reset-password`, which the anchors beside it bind, then `passwords-differ`, which
+  its flow shows on it, then `failed`. One that writes no `fields` maps each code of a field to
+  the control its binding or the invoke passes for that field (`name-too-long` to
   `user.profile.name-input`), when that control is a field of the screen; a code that two
-  bindings pass from two controls concerns the form. What the file writes wins.
+  sources pass from two controls concerns the form. What the file writes wins.
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
-  `radio`, `switch`) holds input: what is typed into it stays until an action takes it, so a
-  leave with it typed loses it, and the app is to ask before such a leave. A field one of whose
-  bindings runs an action that takes the field itself as a parameter, an action no other
-  anchor of its screen runs with it (the language select, the organisation select), applies
-  at once and holds none; a field whose action a submit button also runs with it (the
-  sign-in email) holds input. The loader sets `holdsInput` on every field; a written value
-  wins. The manifest carries it, and `contract:diff` lists the
-  fields that start or stop holding input.
+  `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a
+  `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask
+  before such a leave. A field one of whose bindings runs an action that takes the field
+  itself as a parameter, an action no other anchor of its screen runs with it (the language
+  select, the organisation select), applies at once and holds none; a field whose action a
+  submit button also runs with it (the sign-in email) holds input. The loader sets
+  `holdsInput` on every field; a written value wins. The manifest carries it, and
+  `contract:diff` lists the fields that start or stop holding input.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
   a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
@@ -434,7 +577,41 @@ out, and the loader derives it, the same way every time:
   not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
   it.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
-  codes the failure of the invoked action shows.
+  codes the failure of the invoked action shows. In an `onError` list with a branch guarded
+  by failure code, a bare `show` on that branch shows the guard's codes, and one on a later
+  branch, unguarded or guarded by a sentence, the failure's codes but those the branches
+  guarded by code before it take; a branch before the first one guarded by code shows the
+  whole failure, and a `show` that names its codes keeps them. So where the state
+  `signing-in` of `user.sign-in` writes `show: user.sign-in.error` on both of its branches,
+  with `emailNotVerified: { codes: [ email-not-verified ] }`, the first shows
+  `email-not-verified` and the second `invalid-credentials`, `rate-limited`, `other-account`
+  and `failed`; a screen may write the codes out instead, and what it writes wins. The error's
+  own codes are not narrowed: it carries every code of the failure, whichever branch shows it.
+  A bare `show` after branches guarded by code that take every code of the failure is
+  refused: that branch names the codes it shows.
+- **The outcome of a request.** An invoke whose action fails with codes and that writes no
+  `onError` follows the pattern of a request: entering its state clears the error its failure
+  shows on (unless the state's `entry` clears it already), and a failure goes back the one way
+  it came, showing its codes on that error. The way back is the one sibling state whose
+  transitions on controls enter the invoking state: only a control makes one, so a state a
+  platform event or a data event enters has none. The error is `<part>.error` of the part
+  those controls sit in (of the fields the invoke's `input` names, when no control enters it),
+  else `<screen>.error`; with no part at all, no control entering it and its `input` naming no
+  field (a request a link starts, its input a search parameter), it is `<screen>.error`. So
+  the state `changing` of `user.settings` may leave out its `entry`
+  and its `onError`: the loader clears `user.settings.password.error` on entry and adds the
+  `onError` back to `kept`, the one state whose `user.settings.password.save-button` enters it,
+  showing the failure of `platform.change-password` on that error. An `onError` written as its
+  target alone (a `description` beside it changes nothing) keeps that target and still gets the
+  show, with no clear on entry; one with actions, or a guarded list (the state `resetting` of
+  `user.reset-password`), is written in full and wins. A state with no single way back writes
+  its `onError`, and the check names the reason when it does not: one where its flow or its
+  region starts (even when a sibling enters it too), one two states enter, one an invoke's
+  outcome enters, one a platform event or a data event enters, one entered from outside its
+  area. So does a state whose failure finds no error, its target alone written or not. A state
+  with no way back may write its `onError` as its target alone, which still gets the show: a
+  request a link starts where its flow starts writes `onError: <state>`, and its failure shows
+  on `<screen>.error`. An action that fails with no code gets nothing.
 - **The region of a button.** A button bound to one action that no state of the flow
   handles gets its region, when the root of the flow has one parallel state. The region is
   named by the button without its screen and its kind (`organisation.notes.add-button` gives
@@ -496,12 +673,73 @@ out, and the loader derives it, the same way every time:
   one line a screen writes is `confirm: false` on the control, which runs the action without
   asking; on a control that runs no destructive action it bans nothing and is refused. Without
   a confirmation on the frame nothing asks.
+- **A composite of the platform.** A list with its items that several screens show, where the
+  policy behind it lives in the platform, is declared once in `platform.yaml` under
+  `composites`: its `description`, its `list` (the last segment of the list, ending in
+  `-list`), its `itemState` (a row state each item takes once what it says holds) and its
+  `items`, each by name with its description. A secret input opts in with `composite: <name>`,
+  and the loader declares on its screen `<screen>.<list>` (kind `list`, the composite's
+  description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description,
+  `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. The rules a new password
+  keeps, which `user.sign-in`, `user.reset-password` and `user.settings` each show under their
+  new password, in `domain/platform.yaml`:
+
+  ```yaml
+  composites:
+    password-rules:
+      description: The rules a new password keeps, each marked once the password typed keeps it.
+      list: password-rule-list
+      itemState: met
+      items:
+        length: 10 to 35 characters.
+        digit: At least one digit.
+  ```
+
+  The new password of `domain/screens/reset-password.yaml` opts in, and its screen gets
+  `user.reset-password.password-rule-list`, `user.reset-password.password-rule-list.length-item`
+  and `user.reset-password.password-rule-list.digit-item`, none of them written:
+
+  ```yaml
+  user.reset-password.password-input:
+    kind: input
+    secret: true
+    composite: password-rules
+    binding:
+      action: platform.reset-password
+      params:
+        password: user.reset-password.password-input
+    derived: [ visibility-button ]
+  ```
+
+  The derived list and items are declared anchors like any other: the flow's guards, the
+  scenarios, the tests and the sources name them as they name any. An unknown composite, an
+  opt-in on anything but a secret input, a second opt-in of one composite on a screen, a
+  written anchor whose id a composite derives, two composites deriving one anchor and a
+  `derivedFrom` a screen file writes are problems. The vocabulary's "Composites" table names
+  each composite with what it is for; the manifest lists them in `contract.composites`, the
+  declarations under `platform.composites`, and `contract:diff` reports a composite added or
+  removed. A composite declared and used by no screen is no problem: `contract:coverage`
+  notes it (`composite <name> is declared and used by no screen`).
+- **A description the engine can say.** An anchor's `description` may be left out where the
+  engine says it: a `heading` names its screen by its title; a `link` whose one binding is a
+  route to a screen's path leads to that screen; a secret `input` holds a secret the user
+  types and never shows; an `error` says why the actions bound beside it, then those its flow
+  invokes against it, did not go through,
+  each of its codes with its meaning from the vocabulary's "Codes" table, the one place a
+  code's meaning lives; and a composite's anchors carry the platform's descriptions. The
+  manifest carries the written description, a secret input's with `(type password)` appended
+  once, else the derived one, and gives each derived part in `contract.derivedParts` the
+  meaning of its suffix. `bun run contract:coverage --descriptions` lists the written
+  descriptions the engine would say itself, for the developer to drop.
 
 What stays in a screen is what a tester or a user can tell apart: the areas and their
 states, where each control leads, a success or a failure that goes elsewhere than the derived
 one or shows something else, guards, confirmations and chains of actions. `bun run
 contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or
-derived, so a constraint added to the model shows on review as the codes it adds.
+derived, so a constraint added to the model shows on review as the codes it adds, and the lines
+of each screen's flow, its states' addresses, what they render and what each guard by failure
+code takes among them, and every line of a flow added to or removed from a screen,
+descriptions aside, so a screen written shorter that loads to the same flow shows no change.
 
 ## Activities
 
@@ -528,8 +766,8 @@ state is a visit to a screen:
   list of guarded ones in XState's order.
 
 An activity has no effects, no `invoke`, no `entry` or `exit`: it says where the task leads,
-and the screens do the work. It goes into `setup({ guards }).createMachine(activity)` as
-written, as the flows do. The file follows the layout of a screen file, with keys in the
+and the screens do the work. `contract:check` runs it in
+`setup({ guards }).createMachine(activity)` as written, as it runs the flows. The file follows the layout of a screen file, with keys in the
 order `id`, `title`, `description`, `roles`, `data`, `initial`, `meta`, `states`, and each
 state's `meta` on one line. An excerpt of `domain/activities/session.yaml`, the session of an
 account from the sign-in page to the profile and the devices page and back to the sign-in
@@ -610,7 +848,8 @@ renders itself: `user.profile.sign-out-dialog.confirm-button`,
 
 One derived part is presentation only: `visibility-button`, the eye a password input renders
 beside itself, which shows what the input holds as typed or hides it again. The input
-declares it, `derived: [ visibility-button ]`, and only an `input` may. Its `data-value`
+declares it, `derived: [ visibility-button ]`, and only a secret `input` may (`secret: true`):
+on any other field there is nothing hidden for it to show. Its `data-value`
 names what a click does: `show` while the input hides its value, `hide` while it shows it;
 the two values are the suffix's own, never rows of "Choice values". Whether the field shows
 its value is held by the field itself, the one transient state a flow never holds, so the
@@ -819,7 +1058,26 @@ Where: [/me] then [user.profile.save-button]
 Brackets reference the contract, and the contract check resolves each one: `[<anchor>]` (a
 declared anchor, or one derived from a declared base with a suffix it lists), `[/path]` (the
 path of a binding), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and
-`[mail:<action>]` (a platform action that declares the mail it sends).
+`[mail:<action>]` (a platform action that declares the mail it sends) and
+`[notice:<action>.<name>]` (a notice of that name the platform action declares).
+
+In one text (the `Where` line, the scenario sentence, a step or an expected result), a
+`[code:…]`, a `[state:…]` or a `[value:…]` speaks of the anchor the text names last before
+it, and the check wants it to be one that anchor carries: a code of its codes, written or derived,
+a state of its `states`, a value of its choice values, its own or those of an anchor declared
+under it (`<anchor>.<rest>`: the items of a composite's list, the options of a select, the
+eye of an input). So `[user.sign-in.mail-message] carries [code:check-your-mail]` holds, and
+`every item of [user.sign-in.password-rule-list] carries [state:met]` holds through the
+list's items, while `[user.confirm-email.error] carries [code:welcome]` is a problem,
+`user.confirm-email.error never carries code welcome`. A route is read past: in `wait for
+[app-shell.status] to reach [state:ready] on [/me]` the state is the status's. A
+`[mail:…]` or a `[notice:…]` ends the pairing until the text names an anchor again, since
+what follows speaks of the mail or the notice (its language, its link). With no anchor before
+it in its text, a code, a state or a value need only be one of the contract. Write the anchor
+first, then its code, its state or its value: a value written before its anchor pairs with an
+anchor the text named earlier, if any. `Choose [value:dark] in [user.settings.theme-select]`
+holds the value to the contract alone, and `[user.settings.theme-select] shows [value:dark]`
+holds it to the select.
 
 The test pairs with the scenario by its path and names it on its first line,
 `// scenario: user/base/edit-profile-name`, with one `test.step` per step.
@@ -839,14 +1097,33 @@ gap is fixed in the contract files first, never worked around in a test.
   and holds its shape, and each screen file is named by its first binding; every anchor
   follows the grammar, starts with its screen's id and is declared once; every kind,
   suffix, state, code, role and choice value is in the vocabulary, and every code of the
-  vocabulary is used; every binding points at a field, an action or a route that exists,
+  vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
+  every route of the screen declares, which only a field that holds no secret starts with;
+  `secret` is on a field alone, and a `visibility-button` on a secret input alone;
+  a `composite` is on a secret input alone, names a composite of the platform, is opted into
+  once per screen and derives no anchor the file writes or another composite derives, and no
+  file writes `derivedFrom`; the platform's composites and the rows of the vocabulary's
+  "Composites" name each other, each item state a row state;
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
-  constant or a search parameter,
+  constant or a search parameter, and a parameter two fields of a button's part pass with
+  different values written by the button,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
-  actions, anchors with their codes and bindings that exist, reaches each of its states
-  and leaves each one that is not final; every action of `leaving` exists and is listed
+  actions, anchors with their codes and bindings that exist (a clear's anchor one that carries
+  codes, else a field of the flow's own screen, never a `visibility-button`, a navigate's
+  search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
+  that holds no secret),
+  reaches each of its states
+  and leaves each one that is not final, lists in a state's `meta.renders` anchors its own
+  screen declares (a derived part's base, never the part), each once and never beside an
+  anchor it is declared under, renders in a plain state of the root or a state of a region
+  every anchor only some states render that it handles (one declared under a listed anchor
+  through that anchor), guards by failure code only branches of an invoke's `onError`, each code of such a
+  guard one its action fails with and listed once, and every invoke whose action fails with
+  codes writes its `onError` in full or has what the request pattern needs: the one way back
+  and an error when it writes none, an error when it writes its target alone; every action of `leaving`
+  exists and is listed
   once, every action of `toasts` is an action of the platform, the frame's confirmation is
   declared by the frame alone, once, reserved, with both answers and no action of its own,
   and `leaving` comes with
@@ -854,10 +1131,13 @@ gap is fixed in the contract files first, never worked around in a test.
   code and both answers that runs no action of its own; every mail a platform action declares
   goes to a parameter of the action or the account, takes its language from a parameter or
   the account, and links to a screen whose every route declares the search parameter that
-  carries its token; the versions agree; the generated schemas
+  carries its token; every notice it declares has a name no other notice of the action has,
+  goes and takes its language as a mail does, and links, when it does, to a screen whose
+  every route needs no parameter; the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
-  "Activities"); every bracket reference of a scenario resolves, the activity it names
-  exists, and every device acts as a role of the vocabulary.
+  "Activities"); every bracket reference of a scenario resolves, each code, state or value
+  one the anchor named last before it in its text carries (see "Scenarios"), the activity it
+  names exists, and every device acts as a role of the vocabulary.
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
@@ -879,8 +1159,16 @@ gap is fixed in the contract files first, never worked around in a test.
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
-  (`CONTRACT_AHEAD_BASE`), so a business commit may change a transition the app has not
-  changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of
+  `main` compares the app it brings with the flows it brings) or at the commit the branch is at
+  (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
+  taken onto a branch whose app already follows its first, changes a flow the base may not have
+  at all), so a business commit may change a transition the app has not changed yet. The app's
+  routes likewise: a binding may wait for its route, and a route that still reads as its
+  binding did at the merge base (the same screen, the same path) is held to that binding as it
+  was there. The hook names both commits, and the cache of the unit tests keys on them, so a
+  pass never carries into another branch state with the same files. A branch whose merge base
+  with a local `main` cannot be found fails the
   hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
@@ -891,7 +1179,16 @@ gap is fixed in the contract files first, never worked around in a test.
   `data-state` or `data-value`, `.not` included. Every anchor must be declared, or derived
   from a declared base with a suffix it lists; every code must be a code of the contract (a
   row of the vocabulary or a derived toast code), and every state and value in the
-  vocabulary, or `show` and `hide` once an input renders a `visibility-button`. A plain string or a template without `${}` is a literal; an anchor built with
+  vocabulary, or `show` and `hide` once an input renders a `visibility-button`. A code, a
+  state or a value asserted on an anchor must be one that anchor carries, as in a scenario: in
+  a selector string, `[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]`, the
+  attribute selectors of one element pair with its `data-testid`, and a space, a combinator,
+  a comma or a `:has(` leads to another element; a `toHaveAttribute('data-code',
+  'text-required')` pairs with the last `getByTestId('<anchor>')` of the receiver of its
+  `expect(...)`, `page.getByTestId('organisation.notes.error')`, when every step after it
+  narrows what it found (`first`, `last`, `nth`, `filter`, `and`). A receiver held in a
+  variable or built by a helper pairs with nothing and is held to the contract alone. A plain
+  string or a template without `${}` is a literal; an anchor built with
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
@@ -912,12 +1209,15 @@ stands serve it at `/ui-manifest/manifest.json`, with
 `PERCH_UI_MANIFEST=0` on a stand answers 404 there.
 
 It is what a tool outside the repository reads: the vocabulary as tables with prose
-instructions for an agent (`derivedParts` gives each derived suffix the kind of its part and,
-for a `visibility-button`, its values), the screens (each binding with its `example` link), the platform
-section and the activities verbatim,
+instructions for an agent (`derivedParts` gives each derived suffix the kind of its part, the
+meaning of the suffix as its `description` and, for a `visibility-button`, its values;
+`composites` is the vocabulary's table of the platform's composites, whose declarations are
+under `platform.composites`), the screens (each binding with its `example` link, each anchor
+with its description, written or derived), the platform section and the activities verbatim,
 the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
-its kind, its screen and its attributes, one entry per line, so a search for an anchor in
-the manifest shows its facts.
+its kind, its screen and its attributes (a secret input's `composite`, and `derivedFrom` on
+the anchors a composite derives: `{ composite }` on its list, `{ composite, item }` on an
+item), one entry per line, so a search for an anchor in the manifest shows its facts.
 
 On a development build, and on a production build made with `PERCH_UI_HOOKS=1` (the e2e
 stand's), `window.__perch.ui.anchors()` lists the anchors the page renders now, each with
@@ -927,6 +1227,18 @@ URL. Without the helper, the names a page renders are still there:
 ```js
 ;[...document.querySelectorAll('[data-testid]')].map((element) => element.dataset.testid)
 ```
+
+An e2e run exposes the binding `window.__perchSettledState` (`SETTLED_STATE`), and such a
+build reports to it each settled state of a screen's machine, once the page has rendered it:
+the screen, the state value and the page as the helper reads it then (`SettledState`). The
+harness holds every report to the manifest the stand serves (`settledProblems`), and a test
+fails at its end when a state it passed through broke it. Of the anchors a screen renders only
+where listed, with their derived parts, one the state does not render is not visible, and one
+it renders is on the page and visible, unless data decides whether it shows: an anchor with
+`roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these, which
+only the first holds, as are the parts a page shows on demand (a select's `option`, a
+composite's `item`, a field's `error-message`). The anchors every state renders are not held:
+a message shows when it carries a code, and an error when there is one.
 
 ## Coverage
 
@@ -947,6 +1259,9 @@ block into `COVERAGE.md`. It is a report, not a gate.
 2. **The controls**, the secondary measure: per feature module and for the UI kit, how many
    controls carry an anchor, which are left unmarked and which are declared off the
    coverage. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`.
+
+After the totals, a note names each composite the platform declares and no screen opts into,
+which fails nothing.
 
 A control that is not a test target is declared off the coverage by a marker right before
 its element, with only white space between, and its reason on the marker line itself, at
@@ -971,9 +1286,11 @@ inside it, holds none) makes the command fail and write nothing.
 This is the delivery of a finished change; the review before the code is described in "The
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
-renamed, the derived parts, the codes and the error fields the anchors both sides hold gain or
-lose, and the
-transitions added or removed in each activity both sides hold), and below
+renamed, the composites added or removed, the derived parts, the codes, the states and the
+error fields the anchors both sides hold gain or lose, the platform actions added or removed
+and the notices they declare, the transitions added or removed in each activity both sides
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
+the lines of each platform action added, removed or changed), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1001,8 +1318,30 @@ takes an anchor removed and one added for a rename when they are the only ones o
 screen and kind. The derived parts of an anchor are listed by name,
 `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input). The codes and the
 error fields of an anchor are those the loader gives it,
-written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`. The tests are in this repository, so the same change updates them, and
-the consumers check fails until it does.
+written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
+`<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
+notice is listed by its action and its name, `<action>.<name>`. A composite is listed by its
+name. A screen's flow is listed as `flow lines added in <screen id>` and `flow lines
+removed in <screen id>`, one line per fact the flow says: its initial state and each
+region's, each guard by failure code with the codes it takes (`guard emailNotVerified takes
+email-not-verified`; a guard's sentence is prose and has no line), each state's address,
+each anchor a state renders (`check-mail renders user.sign-in.resend-button`, a state of a
+region by its path, `viewing.create-form.open`), each `entry` and `exit` effect, each
+transition on an event with its target, guard and effects, each invoke with its input as
+JSON and its outcomes, each final state. Where order runs the machine (the guarded
+alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
+sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
+change nothing that runs, so a screen file written shorter that loads to the same flow shows
+no change. A platform action is listed by its name, and its lines as `platform action lines
+added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
+each parameter with its type (`param email: string`), its result (`result: <the text>`, the
+one prose that stays, since it says what holds once the action succeeds), each code its failure
+shows (`code rate-limited`), each role that may run it, its mail (`mail to email language
+locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
+opens and the search parameter that carries the token) and each notice (`notice
+password-changed to account language account link user.forgot-password`). An action added or
+removed whole shows every line, as nothing else in the summary says its mail. The tests are in
+this repository, so the same change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 

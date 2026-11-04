@@ -1,31 +1,37 @@
 /**
  * What a change does to the contract, for its hand-over: the screens, anchors, codes,
  * entities, fields and activities one contract adds or removes against another, the anchors
- * it renames, the derived parts (a password input's visibility-button among them), the codes and
- * the error fields it adds or removes on the anchors both hold (written or derived, so a
- * constraint added to the model shows as the code it gives), the
- * fields that start or stop holding input, the actions that leave what the user typed behind
- * and how each leave that would lose it asks, and the transitions it adds or removes in each
- * activity both contracts hold.
+ * it renames, the derived parts (a password input's visibility-button among them), the
+ * composites the platform declares, the codes, the states and the error fields it adds or
+ * removes on the anchors both hold (written or derived, so a constraint added to the model
+ * shows as the code it gives), the fields that start or stop holding input, the actions that
+ * leave what the user typed behind and how each leave that would lose it asks, the notices the
+ * platform actions declare, the transitions it adds or removes in each activity both contracts
+ * hold, the lines of the flow it adds or removes in each screen both hold (a flow added or
+ * removed whole, every line; so a contract written shorter that loads to the same flows shows no
+ * change), the platform actions it adds or removes, and the lines of each platform action it
+ * adds, removes or changes: its parameters, result, codes, roles, mail and notices.
  */
 
 import { type Contract, codesOf, declaredAnchors } from '../check'
-import type { Activity, AnchorDef } from '../files'
+import type { Activity, AnchorDef, Flow } from '../files'
 
+import { actionLines } from './action-lines'
 import { branchesOf } from './activities'
-
-export interface Change {
-  added: string[]
-  removed: string[]
-}
+import { byName, type Change, changeOf } from './change'
+import { flowLines } from './flow-lines'
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
   /** As `<anchor>.<suffix>`, the derived parts the anchors both contracts hold render. */
   derived: Change
+  /** By name, the composites the platform declares. */
+  composites: Change
   codes: Change
   /** As `<anchor> <code>`, on the anchors both contracts hold (a renamed one by its new name). */
   anchorCodes: Change
+  /** As `<anchor> <state>`, the data-states of the anchors both contracts hold, renamed as above. */
+  anchorStates: Change
   /** As `<error> <code> -> <field>`, on the errors both contracts hold. */
   errorFields: Change
   /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
@@ -36,15 +42,49 @@ export interface ContractChanges {
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
   unsavedInput: Change
+  /** As `<action>.<name>`, the notices the platform actions declare. */
+  notices: Change
   screens: Change
   entities: Change
   /** As `entity.field`. */
   fields: Change
   /** By id; per activity both hold, its transitions as `<state> on <anchor> -> <target>`. */
   activities: Change & { transitions: Record<string, Change> }
+  /**
+   * Per screen both contracts hold with a flow on either side, by its id, the lines of the flow
+   * (`flowLines`: initial states, the codes each guard by failure code takes, addresses,
+   * entries, exits, transitions with their targets, guards and effects, invokes and their
+   * outcomes, final states; descriptions and guard sentences aside), a flow
+   * one side lacks having none.
+   */
+  flows: Record<string, Change>
+  /** By name, the platform actions. */
+  actions: Change
+  /**
+   * Per platform action either contract holds, by its name, the lines of the action
+   * (`actionLines`: its parameters with their types, its result, its codes, its roles, its mail
+   * and its notices; descriptions aside), an action one side lacks having none, so an action
+   * added or removed whole shows every line: nothing else in the summary says its mail.
+   */
+  actionLines: Record<string, Change>
 }
 
-const byName = (a: string, b: string): number => a.localeCompare(b, 'en')
+/** The platform actions of a contract by name; none for a contract left undefined. */
+const actionsOf = (contract: Contract | undefined) => contract?.screens.platform.actions ?? {}
+
+/** Per platform action either contract holds, by its name, the lines added and removed. */
+function actionLineChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['actionLines'] {
+  const was = actionsOf(before)
+  const is = actionsOf(after)
+  const names = [...new Set([...Object.keys(was), ...Object.keys(is)])].sort(byName)
+
+  return Object.fromEntries(
+    names.map((name) => [name, changeOf(actionLines(was[name]), actionLines(is[name]))]),
+  )
+}
 
 /** How each leave that would lose unsaved input asks, as `<leave>: <how>`; none when undeclared. */
 const unsavedInputOf = (contract: Contract | undefined): string[] =>
@@ -52,15 +92,11 @@ const unsavedInputOf = (contract: Contract | undefined): string[] =>
     ([leave, how]) => `${leave}: ${how}`,
   )
 
-function changeOf(before: readonly string[], after: readonly string[]): Change {
-  const was = new Set(before)
-  const is = new Set(after)
-
-  return {
-    added: [...is].filter((name) => !was.has(name)).sort(byName),
-    removed: [...was].filter((name) => !is.has(name)).sort(byName),
-  }
-}
+/** The notices the platform actions declare, as `<action>.<name>`; none when undeclared. */
+const noticesOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.actions ?? {}).flatMap(([action, { notices }]) =>
+    (notices ?? []).map(({ name }) => `${action}.${name}`),
+  )
 
 /** Each anchor with the screen it is declared in and its kind. */
 const anchorsOf = (contract: Contract | undefined): Map<string, string> =>
@@ -175,6 +211,35 @@ function activityChanges(
   }
 }
 
+/** Each screen's flow, by the screen's id, undefined for a screen without one. */
+const flowsOf = (contract: Contract | undefined): Map<string, Flow | undefined> =>
+  new Map((contract?.screens.screens ?? []).map(({ id, flow }) => [id, flow]))
+
+/** The lines of a flow, none for a screen without one. */
+const linesOf = (flow: Flow | undefined): string[] => (flow === undefined ? [] : flowLines(flow))
+
+/**
+ * Per screen both contracts hold, with a flow on either side, the lines of the flow added and
+ * removed: a flow one side lacks has no lines, so a flow added or removed whole shows every line.
+ * A screen added or removed whole is a change of `screens` alone.
+ */
+function flowChanges(
+  before: Contract | undefined,
+  after: Contract | undefined,
+): ContractChanges['flows'] {
+  const was = flowsOf(before)
+
+  return Object.fromEntries(
+    [...flowsOf(after)].flatMap(([id, flow]) => {
+      const old = was.get(id)
+
+      return !was.has(id) || (old === undefined && flow === undefined)
+        ? []
+        : [[id, changeOf(linesOf(old), linesOf(flow))]]
+    }),
+  )
+}
+
 /** The changes from `before` to `after`; a contract left undefined is an empty one. */
 export function diffContracts(
   before: Contract | undefined,
@@ -185,11 +250,16 @@ export function diffContracts(
   return {
     anchors,
     derived: carriedChanges(before, after, anchors.renamed, (def) => def.derived ?? [], '.'),
+    composites: changeOf(
+      Object.keys(before?.screens.platform.composites ?? {}),
+      Object.keys(after?.screens.platform.composites ?? {}),
+    ),
     codes: changeOf(
       before === undefined ? [] : [...codesOf(before.vocabulary, before.screens)],
       after === undefined ? [] : [...codesOf(after.vocabulary, after.screens)],
     ),
     anchorCodes: carriedChanges(before, after, anchors.renamed, (def) => def.codes ?? []),
+    anchorStates: carriedChanges(before, after, anchors.renamed, (def) => def.states ?? []),
     errorFields: carriedChanges(before, after, anchors.renamed, (def) =>
       Object.entries(def.fields ?? {}).map(([code, field]) => `${code} -> ${field}`),
     ),
@@ -204,6 +274,7 @@ export function diffContracts(
       after?.screens.platform.leaving ?? [],
     ),
     unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
+    notices: changeOf(noticesOf(before), noticesOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),
@@ -214,5 +285,8 @@ export function diffContracts(
     ),
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
+    flows: flowChanges(before, after),
+    actions: changeOf(Object.keys(actionsOf(before)), Object.keys(actionsOf(after))),
+    actionLines: actionLineChanges(before, after),
   }
 }

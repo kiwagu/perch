@@ -14,10 +14,18 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
     onToggleMode: vi.fn(),
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
+    onForgot: vi.fn((_email: string) => {}),
   }
 
   renderWithProviders(
-    <SignInView mode="sign-in" showResend={false} can={() => true} {...handlers} {...props} />,
+    <SignInView
+      startEmail=""
+      mode="sign-in"
+      showResend={false}
+      can={() => true}
+      {...handlers}
+      {...props}
+    />,
     { locale, es },
   )
 
@@ -51,6 +59,29 @@ function markedMet(): string[] {
   )
 
   return RULE_ITEMS.filter((testId) => screen.getByTestId(testId).getAttribute('data-state'))
+}
+
+/** The text tones a rule item can take: muted, the success tone, or red. */
+const TONES = ['text-muted-foreground', 'text-success', 'text-destructive']
+
+/**
+ * The tones that apply to a rule item in the state it carries, the one that shows last: its plain
+ * classes, then its variants of that state. Tailwind's `data-[state=…]:` rule also selects the
+ * attribute and comes after the plain utilities, so it wins while it applies.
+ */
+function tonesOf(testId: string): string[] {
+  const item = screen.getByTestId(testId)
+  const state = item.getAttribute('data-state')
+  const classes = [...item.classList]
+  const variant = state ? `data-[state=${state}]:` : undefined
+  const applied = [
+    ...classes.filter((name) => !name.startsWith('data-[')),
+    ...classes.flatMap((name) =>
+      variant && name.startsWith(variant) ? [name.slice(variant.length)] : [],
+    ),
+  ]
+
+  return applied.filter((name) => TONES.includes(name))
 }
 
 /** The notice of the last session, once it carries `code`. */
@@ -97,6 +128,22 @@ describe('SignInView', () => {
     expect(onToggleMode).toHaveBeenCalledExactlyOnceWith({
       password: 'secret-ann',
       confirmation: '',
+    })
+  })
+
+  it('starts with the email a page carried over, and signs in with the email as typed', () => {
+    const { onSubmit } = renderView({ startEmail: 'ann@example.test' })
+
+    expect(input('user.sign-in.email-input').value).toBe('ann@example.test')
+
+    type('user.sign-in.password-input', 'secret-ann')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    expect(onSubmit).toHaveBeenCalledWith({
+      email: 'ann@example.test',
+      password: 'secret-ann',
+      confirmation: '',
+      name: '',
     })
   })
 
@@ -193,15 +240,27 @@ describe('SignInView', () => {
     expect(markedMet()).toEqual([CHARACTERS, DIGIT, UPPERCASE, LOWERCASE, SYMBOL])
   })
 
+  it('shows a kept rule in the success tone and one not kept yet muted, never red', () => {
+    renderView({ mode: 'sign-up' })
+    type('user.sign-in.password-input', 'abcdefghij')
+
+    expect(tonesOf(LENGTH)).toEqual(['text-muted-foreground', 'text-success'])
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground'])
+
+    type('user.sign-in.password-input', 'abcdefghij!')
+
+    expect(tonesOf(SYMBOL)).toEqual(['text-muted-foreground', 'text-success'])
+  })
+
   it('reads each rule with whether it is met, the icons left out', () => {
     renderView({ mode: 'sign-up' })
     type('user.sign-in.password-input', 'abcdefghij')
 
     expect(screen.getByTestId(LENGTH).textContent).toBe(
-      `${en['user.sign-in.password-rule.length']}${en['user.sign-in.password-rule.met']}`,
+      `${en['user.password-rule.length']}${en['user.password-rule.met']}`,
     )
     expect(screen.getByTestId(SYMBOL).textContent).toBe(
-      `${en['user.sign-in.password-rule.symbol']}${en['user.sign-in.password-rule.not-met']}`,
+      `${en['user.password-rule.symbol']}${en['user.password-rule.not-met']}`,
     )
     expect(
       screen
@@ -215,13 +274,13 @@ describe('SignInView', () => {
 
     expect(RULE_ITEMS.map((testId) => screen.getByTestId(testId).textContent)).toEqual(
       [
-        es['user.sign-in.password-rule.length'],
-        es['user.sign-in.password-rule.characters'],
-        es['user.sign-in.password-rule.digit'],
-        es['user.sign-in.password-rule.uppercase'],
-        es['user.sign-in.password-rule.lowercase'],
-        es['user.sign-in.password-rule.symbol'],
-      ].map((text) => `${text}${es['user.sign-in.password-rule.not-met']}`),
+        es['user.password-rule.length'],
+        es['user.password-rule.characters'],
+        es['user.password-rule.digit'],
+        es['user.password-rule.uppercase'],
+        es['user.password-rule.lowercase'],
+        es['user.password-rule.symbol'],
+      ].map((text) => `${text}${es['user.password-rule.not-met']}`),
     )
   })
 
@@ -257,12 +316,14 @@ describe('SignInView', () => {
 
   it('describes the password typed again by its error exactly while the passwords differ', () => {
     const props: SignInViewProps = {
+      startEmail: '',
       mode: 'sign-up',
       showResend: false,
       can: () => true,
       onSubmit: () => Promise.resolve(true),
       onToggleMode: () => {},
       onTypePassword: () => {},
+      onForgot: () => {},
       onResend: () => Promise.resolve(true),
     }
     const describedBy = () =>
@@ -433,6 +494,68 @@ describe('SignInView', () => {
 
     expect(noticeWith('signed-out-elsewhere').textContent).toBe(
       'You were signed out from another device.',
+    )
+  })
+
+  it('shows each password as typed on a click of its eye, and hides it again on the next', () => {
+    const onTypePassword = renderView({ mode: 'sign-up' }).onTypePassword
+
+    for (const testId of [
+      'user.sign-in.password-input',
+      'user.sign-in.password-confirmation-input',
+    ]) {
+      const eye = screen.getByTestId(`${testId}.visibility-button`)
+
+      type(testId, 'Secret-ann1')
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.show'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('text')
+      expect(input(testId).value).toBe('Secret-ann1')
+      expect(eye.getAttribute('data-value')).toBe('hide')
+      expect(eye.getAttribute('aria-label')).toBe(en['user.password.hide'])
+
+      fireEvent.click(eye)
+
+      expect(input(testId).type).toBe('password')
+      expect(eye.getAttribute('data-value')).toBe('show')
+    }
+
+    // The eye is presentation only: the flow hears the keystrokes, never the clicks.
+    expect(onTypePassword).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers to ask for a reset mail in the mode sign-in, carrying the email as typed', () => {
+    const { onForgot } = renderView()
+
+    type('user.sign-in.email-input', 'ann@example.test')
+    fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
+
+    expect(onForgot).toHaveBeenCalledWith('ann@example.test')
+  })
+
+  it('offers no reset mail in the mode sign-up', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(screen.queryByTestId('user.sign-in.forgot-link')).toBeNull()
+  })
+
+  it('says the device was signed out because the password changed', () => {
+    renderView({ notice: 'password-changed-elsewhere' })
+
+    expect(noticeWith('password-changed-elsewhere').textContent).toBe(
+      'Your password was changed, so you were signed out. Sign in with the new password.',
+    )
+  })
+
+  it('says a new password was set in another tab, naming no account', () => {
+    renderView({ notice: 'password-reset-elsewhere' })
+
+    expect(noticeWith('password-reset-elsewhere').textContent).toBe(
+      'A new password was set in another tab. Sign in with it.',
     )
   })
 

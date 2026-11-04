@@ -7,7 +7,7 @@ import { THEMES, type Theme } from '../../../../../platform/theme'
 export interface SettingsViewProps {
   readonly theme: Theme
   readonly locale: Locale
-  /** Whether the screen's flow takes a theme now: the select is enabled while it does. */
+  /** Whether the screen's flow takes a theme now: none before the settings arrive, or while one is stored. */
   readonly canChooseTheme: boolean
   /** Whether the screen's flow takes a language now: none before the settings arrive, or while one is stored. */
   readonly canChooseLocale: boolean
@@ -15,7 +15,7 @@ export interface SettingsViewProps {
   readonly onLocale: (locale: Locale) => void
 }
 
-/** The theme of this device and the language of the account, each applied as it is chosen. */
+/** The theme and the language of the account, each applied as it is chosen. */
 export function SettingsView(props: SettingsViewProps) {
   const t = useT()
   const themes = THEMES.map((theme) => ({

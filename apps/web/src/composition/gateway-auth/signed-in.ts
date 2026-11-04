@@ -3,8 +3,15 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, type DataErrorCode, dataError } from '@workspace/data'
+import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
+
+/** The account as it signed up: its name and its language, which its profile and settings start from. */
+export interface AccountSignedUpAs {
+  readonly name: string
+  readonly locale: Locale
+}
 
 /**
  * A device the gateway signed in: who it is and the session token it presents. The session reads
@@ -14,6 +21,12 @@ export interface SignedInDevice {
   readonly identity: AuthUser
   /** The raw session token of the answer's body, as the gateway keeps it for the device. */
   readonly token: string
+  /**
+   * What the account starts from, when a sign-in found it has no settings or profile at the
+   * gateway yet: a reset verified its email, or the device that verified it has not synced its
+   * start yet.
+   */
+  readonly start?: AccountSignedUpAs
 }
 
 /** The device a sign-in or verification names: the browser's own id, and a label for people to read. */
@@ -41,6 +54,7 @@ export interface ClientAnswer {
 const signedInAccount = z.object({
   token: z.string().min(1),
   user: z.object({ id: idSchemas.identity.schema, email: z.string() }),
+  start: z.object({ name: z.string().min(1), locale: z.enum(SUPPORTED_LOCALES) }).optional(),
 })
 
 /** The statuses the gateway refuses a sign-in with, and what each means here. */
@@ -75,6 +89,7 @@ export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, Data
     ? okAsync({
         identity: { id: parsed.data.user.id, email: parsed.data.user.email },
         token: parsed.data.token,
+        ...(parsed.data.start === undefined ? {} : { start: parsed.data.start }),
       })
     : errAsync(
         dataError(

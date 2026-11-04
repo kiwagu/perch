@@ -1,7 +1,8 @@
 /**
  * What the platform offers every screen: its actions, the events it raises in a flow, the
  * actions that leave what the user typed behind and how every leave that would lose it asks
- * first, its reserved anchors, its status line.
+ * first, the composites it declares once for the screens that opt in, its reserved anchors, its
+ * status line.
  */
 
 import { z } from '@workspace/zod'
@@ -16,7 +17,7 @@ import {
 } from '../../names.schema'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
-import { platformMailSchema } from './mail'
+import { platformMailSchema, platformNoticeSchema } from './mail'
 
 const actionParameterSchema = z
   .strictObject({
@@ -35,6 +36,13 @@ const platformActionSchema = z
     codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
+    notices: z
+      .array(platformNoticeSchema)
+      .min(1)
+      .optional()
+      .describe(
+        'The notices the action sends, when it sends any: mails that only tell, with no token, each by its name.',
+      ),
   })
   .describe('One platform action.')
 
@@ -73,6 +81,35 @@ const unsavedInputSchema = z
     'Every leave that would lose what the user typed and did not save, and how the app asks first: through the question, by the browser, never, or it cannot.',
   )
 
+/** A composite the platform declares once, derived into every screen that opts in. */
+export const platformCompositeSchema = z
+  .strictObject({
+    description: z
+      .string()
+      .min(1)
+      .describe('What the composite is, for a reader: the list it derives carries it.'),
+    list: kebabNameSchema
+      .regex(/-list$/)
+      .describe(
+        'The last segment of the list the composite derives on a screen, `<screen>.<list>`: a `list`, so it ends with `-list` (`password-rule-list`).',
+      ),
+    itemState: stateSchema.describe(
+      'The data-state each item takes once what it says holds: a row state of the vocabulary (`met`).',
+    ),
+    items: z
+      .record(kebabNameSchema, z.string().min(1))
+      .refine((items) => Object.keys(items).length > 0, { message: 'a composite has items' })
+      .meta({ minProperties: 1 })
+      .describe(
+        'The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state.',
+      ),
+  })
+  .describe(
+    'A composite the platform declares once where its policy lives: a list with its items, derived into every screen whose field opts in with `composite: <name>`.',
+  )
+
+export type PlatformComposite = z.infer<typeof platformCompositeSchema>
+
 export const platformSchema = z
   .strictObject({
     actions: z
@@ -95,6 +132,12 @@ export const platformSchema = z
       .optional()
       .describe(
         'The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.',
+      ),
+    composites: z
+      .record(kebabNameSchema, platformCompositeSchema)
+      .optional()
+      .describe(
+        'The composites by name: a list with its items the platform declares once (`password-rules`), derived into every screen whose secret input writes `composite: <name>`.',
       ),
     unsavedInput: unsavedInputSchema.optional(),
     reserved: z

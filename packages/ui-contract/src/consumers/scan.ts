@@ -4,26 +4,31 @@
  * `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]`, in
  * double or single quotes; and the value a
  * `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not`
- * included. An argument is a plain string or a template literal without `${}`, or a `+` chain
- * of them read as the one string it folds to, a TypeScript wrapper around it (`as const`,
- * parentheses) changing nothing; a `+` chain is read whole, as a template is, and a selector
- * is located by the lines of the source, whatever escapes its literal holds. Nothing else is
- * read: a `data-id` is data, and no helper is followed (a `notice(page, '<code>')` is not
- * read). An anchor built at runtime (a `getByTestId` of anything but such a string, a
- * `data-testid` selector whose value or closing quote an expression supplies) is a problem,
- * since no check can follow it; a code, a state or a value from an expression is a parameter
- * of the test and passes.
+ * included. A code, a state or a value carries the anchor it is asserted on when the test says
+ * which: a `data-testid` selector of the same element in the same string, or the last
+ * `getByTestId('<anchor>')` of the receiver's call chain (`receiver.ts`); a receiver held in a
+ * variable or built by a helper says none. An argument is a plain string or a template literal
+ * without `${}`, or a `+` chain of them read as the one string it folds to, a TypeScript
+ * wrapper around it (`as const`, parentheses) changing nothing; a `+` chain is read whole, as a
+ * template is, and a selector is located by the lines of the source, whatever escapes its
+ * literal holds. Nothing else is read: a `data-id` is data, and no helper is followed (a
+ * `notice(page, '<code>')` is not read). An anchor built at runtime (a `getByTestId` of
+ * anything but such a string, a `data-testid` selector whose value or closing quote an
+ * expression supplies) is a problem, since no check can follow it; a code, a state or a value
+ * from an expression is a parameter of the test and passes.
  */
 
 import { readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
-import { type Argument, type Expression, parseSync, Visitor } from 'oxc-parser'
+import { type CallExpression, type Expression, parseSync, Visitor } from 'oxc-parser'
 
 import { filesUnder, type Problem } from '../files'
 import type { Reference } from '../scenarios'
 
+import { elementAnchors } from './elements'
 import { chainOf, EXPRESSION, foldedText, operandPieces, type Piece } from './pieces'
+import { assertedAnchor, calleeName } from './receiver'
 import { sourceOffset } from './source-offset'
 
 /** Where the e2e tests are, from the repository root. */
@@ -35,6 +40,8 @@ export interface ConsumedLiteral {
   readonly kind: Exclude<Reference['kind'], 'route'>
   readonly value: string
   readonly line: number
+  /** The anchor a code, a state or a value is asserted on, when the test says which. */
+  readonly of?: string
 }
 
 export interface Consumed {
@@ -93,30 +100,49 @@ export function collectFromTest(text: string, file: string): Consumed {
     return line(pieces[0]?.start ?? 0)
   }
 
-  /** A literal of `kind` at line `at`, or, built at runtime, a problem when it is an anchor. */
-  const found = (kind: ConsumedLiteral['kind'], value: string | undefined, at: number): void => {
+  /**
+   * A literal of `kind` at line `at`, asserted on the anchor `of` if any, or, built at runtime,
+   * a problem when it is an anchor.
+   */
+  const found = (
+    kind: ConsumedLiteral['kind'],
+    value: string | undefined,
+    at: number,
+    of?: string,
+  ): void => {
     if (value !== undefined) {
-      consumed.literals.push({ kind, value, line: at })
+      consumed.literals.push({ kind, value, line: at, ...(of === undefined ? {} : { of }) })
     } else if (kind === 'anchor') {
       consumed.problems.push({ file, line: at, message: RUNTIME_TEST_ANCHOR })
     }
   }
 
-  /** The selectors of a string expression, each at the line its `[` is on. */
+  /**
+   * The selectors of a string expression, each at the line its `[` is on; a code, a state or a
+   * value asserted on the anchor of the `data-testid` selector of the same element.
+   */
   const selectors = (pieces: readonly Piece[]): void => {
     const joined = pieces.map((piece) => piece.text).join('')
     const complete = new Set<number>()
-
-    for (const match of joined.matchAll(SELECTOR)) {
-      const [, attribute = '', , value = ''] = match
-      const kind = kindOf(attribute)
+    const matches = [...joined.matchAll(SELECTOR)].map((match) => {
+      const [whole, attribute = '', , value = ''] = match
 
       complete.add(match.index)
 
-      if (kind !== undefined) {
-        found(kind, value.includes(EXPRESSION) ? undefined : value, lineIn(pieces, match.index))
+      return {
+        kind: kindOf(attribute),
+        value: value.includes(EXPRESSION) ? undefined : value,
+        at: match.index,
+        end: match.index + whole.length,
       }
-    }
+    })
+    const anchors = elementAnchors(joined, matches)
+
+    matches.forEach(({ kind, value, at }, index) => {
+      if (kind !== undefined) {
+        found(kind, value, lineIn(pieces, at), kind === 'anchor' ? undefined : anchors[index])
+      }
+    })
 
     for (const match of joined.matchAll(OPEN_TEST_ID)) {
       if (!complete.has(match.index)) {
@@ -143,32 +169,32 @@ export function collectFromTest(text: string, file: string): Consumed {
     selectors(operands.flatMap(operandPieces))
   }
 
-  /** `toHaveAttribute('data-<attribute>', <value>)`: the value, at its line. */
-  const asserted = ([name, value]: readonly Argument[]): void => {
+  /**
+   * `toHaveAttribute('data-<attribute>', <value>)`: the value, at its line, asserted on the
+   * anchor of the receiver's last `getByTestId` when the check can read it.
+   */
+  const asserted = (matcher: CallExpression): void => {
+    const [name, value] = matcher.arguments
     const attribute = foldedText(name)
     const kind = attribute?.startsWith(DATA) ? kindOf(attribute.slice(DATA.length)) : undefined
 
     if (kind !== undefined && value !== undefined) {
-      found(kind, foldedText(value), line(value.start))
+      const of = kind === 'anchor' ? undefined : assertedAnchor(matcher)
+
+      found(kind, foldedText(value), line(value.start), of)
     }
   }
 
   new Visitor({
     CallExpression(node) {
-      const { callee } = node
-      const name =
-        callee.type === 'Identifier'
-          ? callee.name
-          : callee.type === 'MemberExpression' && !callee.computed
-            ? callee.property.name
-            : undefined
+      const name = calleeName(node)
 
       if (name === 'getByTestId') {
         const [argument] = node.arguments
 
         found('anchor', foldedText(argument), line(argument?.start ?? node.start))
       } else if (name === 'toHaveAttribute') {
-        asserted(node.arguments)
+        asserted(node)
       }
     },
     BinaryExpression(node) {

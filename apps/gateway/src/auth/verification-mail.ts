@@ -6,6 +6,7 @@ import { z } from '@workspace/zod'
 
 import type { MailPort } from '../mail'
 
+import { signVerificationToken, verificationKey } from './account-links'
 import { accountLocale } from './account-locale'
 import type { AuthLog } from './auth-log'
 
@@ -26,6 +27,8 @@ export interface VerificationMailerOptions {
   readonly directory: LocalDb
   /** The front's origin, with no trailing slash: the base of the link. */
   readonly publicUrl: string
+  /** Better Auth's secret, from which the key of the link's token is derived. */
+  readonly secret: string
   /** Hears a mail that did not go out, by its code; the request that asked for it was answered already. */
   readonly log: AuthLog
 }
@@ -34,7 +37,12 @@ export interface VerificationMailerOptions {
 export const verificationLink = (publicUrl: string, token: string): string =>
   `${publicUrl}${VERIFY_EMAIL_PATH}?${new URLSearchParams({ token }).toString()}`
 
-/** Writes and sends one verification mail; every failure is logged by its code alone. */
+/**
+ * Writes and sends one verification mail; every failure is logged by its code alone. Its link's
+ * token names the account the mail goes to beside Better Auth's own token
+ * (`signVerificationToken`), so the link verifies that account alone, never another that holds
+ * the email later.
+ */
 async function deliver(
   options: VerificationMailerOptions,
   user: unknown,
@@ -67,10 +75,14 @@ async function deliver(
     return
   }
 
+  const linked = await signVerificationToken(
+    { purpose: 'verify-email', identity: id, token },
+    verificationKey(options.secret),
+  )
   const sent = await renderVerificationMail({
     to: email,
     name,
-    link: verificationLink(options.publicUrl, token),
+    link: verificationLink(options.publicUrl, linked),
     locale: settings.value ?? locale,
   }).andThen((message) => options.mail.send(message))
 
@@ -82,9 +94,9 @@ async function deliver(
 /**
  * Better Auth's `sendVerificationEmail`: it starts the mail and returns at once, so a sign-up or a
  * resend answers as soon whether a mail goes out or not. The mail speaks the account's language
- * and links to the front's own screen with the token; Better Auth's `url`, the gateway's own
- * verifying GET, is not used. A mail that cannot be written or sent is reported by its code,
- * never with its address or token.
+ * and links to the front's own screen with a token naming the account and Better Auth's token;
+ * Better Auth's `url`, the gateway's own verifying GET, is not used. A mail that cannot be
+ * written or sent is reported by its code, never with its address or token.
  */
 export function verificationMailer(options: VerificationMailerOptions) {
   return (data: { readonly user: unknown; readonly token: string }): Promise<void> => {

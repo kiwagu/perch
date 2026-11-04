@@ -12,6 +12,8 @@ const AT = 'contract/domain/screens/sample/$key.yaml:1: flow'
 const show = (anchor: string, codes: string[]) =>
   ({ type: 'show', params: { anchor, codes } }) as const
 
+const clear = (anchor: string) => ({ type: 'clear', params: { anchor } }) as const
+
 describe('flowProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -176,20 +178,141 @@ describe('flowProblems', () => {
       `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
-  it('holds a clear to a declared anchor that carries codes', () => {
+  it('carries into a search what a field of the screen holds', () => {
     const contract = sampleContract()
     const editing = flowStateIn(contract, 'editing')
 
-    editing.entry = [
-      { type: 'clear', params: { anchor: 'sample.gone-message' } },
-      { type: 'clear', params: { anchor: 'sample.page' } },
-      { type: 'clear', params: { anchor: 'sample.save-button' } },
+    editing.exit = [
+      {
+        type: 'navigate',
+        params: { to: '/sample/$key', search: { tab: { anchor: 'sample.title-input' } } },
+      },
+      {
+        type: 'navigate',
+        params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
+      },
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('carries into a search only what a field of its own screen holds, under a key of the binding', () => {
+    const contract = sampleContract()
+    const navigate = (search: Record<string, { anchor: string }>) =>
+      ({ type: 'navigate', params: { to: '/sample/$key', search } }) as const
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    flowStateIn(contract, 'editing').exit = [
+      navigate({ tab: { anchor: 'sample.gone-input' } }),
+      navigate({ tab: { anchor: 'sample.save-button' } }),
+      navigate({ tab: { anchor: 'sample.list' } }),
+      navigate({ tab: { anchor: 'sample.title-input.visibility-button' } }),
+      navigate({ tab: { anchor: 'app-shell.status' } }),
+      navigate({ page: { anchor: 'sample.title-input' } }),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
+      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
+      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
+      `${AT}.states.editing.exit[3].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
+      `${AT}.states.editing.exit[4].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
+      `${AT}.states.editing.exit[5].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+    ])
+  })
+  it('carries an email typed into a search, never a secret field', () => {
+    const contract = sampleContract()
+    const navigate = (anchor: string) =>
+      ({ type: 'navigate', params: { to: '/sample/$key', search: { tab: { anchor } } } }) as const
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.email-input': { kind: 'input' },
+      'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
+      'sample.password-confirmation-input': { kind: 'input', secret: true },
+    })
+    flowStateIn(contract, 'editing').exit = [
+      navigate('sample.email-input'),
+      navigate('sample.password-input'),
+      navigate('sample.password-confirmation-input'),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
+      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
+    ])
+  })
+  it('takes a clear of an anchor that carries codes, or of a field, a secret one included', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.form.error': { kind: 'error', codes: ['failed'] },
+      'sample.notice-message': { kind: 'message', codes: ['saved'] },
+      'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
+    })
+    flowStateIn(contract, 'editing').entry = [
+      clear('sample.form.error'),
+      clear('sample.notice-message'),
+      clear('sample.save-button'),
+      clear('sample.title-input'),
+      clear('sample.password-input'),
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses a clear of an anchor that is no field and carries no code, and says what it may name', () => {
+    const contract = sampleContract()
+    const may =
+      'a clear names a field, which it empties, or an anchor that carries codes, which then shows none'
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    flowStateIn(contract, 'editing').entry = [
+      clear('sample.gone-message'),
+      clear('sample.page'),
+      clear('sample.a-button'),
+      clear('sample.list'),
+      clear('sample.home-link'),
+      clear('sample.title-input.visibility-button'),
     ]
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.entry[0].params.anchor: "sample.gone-message" is not a declared anchor`,
-      `${AT}.states.editing.entry[1].params.anchor: "sample.page" carries no code to clear`,
+      `${AT}.states.editing.entry[1].params.anchor: "sample.page" is no field and carries no code: ${may}`,
+      `${AT}.states.editing.entry[2].params.anchor: "sample.a-button" is no field and carries no code: ${may}`,
+      `${AT}.states.editing.entry[3].params.anchor: "sample.list" is no field and carries no code: ${may}`,
+      `${AT}.states.editing.entry[4].params.anchor: "sample.home-link" is no field and carries no code: ${may}`,
+      `${AT}.states.editing.entry[5].params.anchor: "sample.title-input.visibility-button" is a visibility-button, presentation only: ${may}`,
     ])
+  })
+  it("refuses a clear of another screen's field that carries no code: a flow empties a field of its own screen", () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.search-input': { kind: 'input' },
+    })
+    flowStateIn(contract, 'editing').exit = [clear('app-shell.search-input')]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.exit[0].params.anchor: "app-shell.search-input" is a field of another screen that carries no code: a clear empties a field of the flow's own screen`,
+    ])
+  })
+  it('keeps the code meaning first: a field that carries codes, on any screen, shows none', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.code-input': { kind: 'input', codes: ['failed'] },
+    })
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.code-input': { kind: 'input', codes: ['failed'] },
+    })
+    flowStateIn(contract, 'editing').exit = [
+      clear('sample.code-input'),
+      clear('app-shell.code-input'),
+    ]
+
+    expect(printed(contract)).toEqual([])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {
     const contract = sampleContract()

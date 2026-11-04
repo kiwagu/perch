@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "lefthook install",
     "build": "bun run scripts/build-capped.ts",
-    "dev": "bun run scripts/turbo-with-exclude.ts dev",
+    "dev": "bun run scripts/dev/cli.ts",
     "typecheck": "turbo run typecheck typecheck:root",
     "lint": "turbo run lint lint:root lint:surql",
     "test": "turbo run test test:root --concurrency=4",

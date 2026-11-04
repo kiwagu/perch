@@ -6,6 +6,7 @@ import { type DataError, openLocalDb } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
 import { ACTIONS, type Scope, type TableAbilities, TENANT_ROLES } from '@workspace/kernel'
 
+import { annotatedReadonlyFields } from './readonly-fields'
 import { type FieldType, parseTypeString } from './type-string'
 
 export type RegionName = 'private' | 'public' | 'tenant'
@@ -19,6 +20,8 @@ export interface TableModel {
   readonly replicate?: 'none'
   readonly idPrefix?: string
   readonly crdt?: Readonly<Record<string, CrdtKind>>
+  /** The fields a device sets only when it creates the record (`-- @readonly`). */
+  readonly readonlyFields?: readonly string[]
   readonly abilities?: TableAbilities
 }
 
@@ -305,6 +308,13 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
       }
     }
 
+    const readonlyFields = annotatedReadonlyFields(
+      name,
+      rawFields,
+      annotations.fields,
+      region !== undefined,
+      problems,
+    )
     const abilities = parseAbilities(name, own, rawFields, region, replicate === 'none', problems)
 
     tables[name] = {
@@ -314,6 +324,7 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
       ...(replicate === 'none' ? { replicate: 'none' as const } : {}),
       ...(idPrefix ? { idPrefix } : {}),
       ...(Object.keys(crdt).length > 0 ? { crdt } : {}),
+      ...(readonlyFields.length > 0 ? { readonlyFields } : {}),
       ...(abilities ? { abilities } : {}),
     }
   }

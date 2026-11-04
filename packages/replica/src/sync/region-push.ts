@@ -1,6 +1,7 @@
 import { type DataError, dataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { MAX_PUSH_UPDATES } from '../protocol'
 import type { OutboxRow, RegionDoc } from '../region-doc'
 
 import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
@@ -42,8 +43,11 @@ export interface RegionPushOptions {
   /** Times how long a push waits for its answer. */
   readonly clock: Clock
   readonly onError: (error: DataError) => void
-  /** How many outbox rows one push carries at most, outside a rollback's recovery push. */
-  readonly batchRows: number
+  /**
+   * How many outbox rows one push carries at most, outside a rollback's recovery push: an integer
+   * from 1 to the protocol's limit, which it is by default.
+   */
+  readonly batchRows: number | undefined
   readonly gate: PushGate
   /** The outbox row of the latest rollback's inverse: until it is acknowledged, a push carries every row up to it. */
   readonly recoveryThrough: () => number
@@ -74,11 +78,17 @@ export class RegionPush {
   readonly #pushed = new Map<number, readonly OutboxRow[]>()
 
   constructor(options: RegionPushOptions) {
+    const batchRows = options.batchRows ?? MAX_PUSH_UPDATES
+
+    if (!Number.isInteger(batchRows) || batchRows < 1 || batchRows > MAX_PUSH_UPDATES) {
+      throw new RangeError(`batchRows must be an integer from 1 to ${MAX_PUSH_UPDATES}`)
+    }
+
     this.#region = options.region
     this.#transport = options.transport
     this.#clock = options.clock
     this.#onError = options.onError
-    this.#batchRows = options.batchRows
+    this.#batchRows = batchRows
     this.#gate = options.gate
     this.#recoveryThrough = options.recoveryThrough
     this.#propose = options.propose

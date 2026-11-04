@@ -3,8 +3,11 @@
  * platform file, the activities and the model) and the scenario files of
  * `tests/e2e/scenarios/`: the vocabulary as tables with instructions, the screens verbatim
  * with an example link on each binding, the platform section and the activities verbatim,
- * the scenarios parsed, every declared anchor by name with its screen, each derived suffix
- * with the kind and values of the part it marks, and the model document.
+ * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
+ * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
+ * the kind, meaning and values of the part it marks, the composites of the vocabulary, and the
+ * model document. An anchor the screen file leaves undescribed carries the description the
+ * engine says of it.
  */
 
 import {
@@ -18,6 +21,10 @@ import {
 import {
   type Activity,
   CONFIRM_RULE_ROW,
+  type DescriptionContext,
+  derivedDescriptionOf,
+  describedOf,
+  failuresOf,
   type Model,
   type Screen,
   type ScreensFile,
@@ -71,7 +78,10 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             roles,
             own,
             holdsInput,
+            secret,
             asks,
+            composite,
+            derivedFrom,
           },
         ]) => [
           anchor,
@@ -88,7 +98,10 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
             ...(holdsInput === undefined ? {} : { holdsInput }),
+            ...(secret === undefined ? {} : { secret }),
             ...(asks === undefined ? {} : { asks }),
+            ...(composite === undefined ? {} : { composite }),
+            ...(derivedFrom === undefined ? {} : { derivedFrom }),
           },
         ],
       ),
@@ -96,11 +109,21 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
   )
 }
 
-/** The screens as written, each binding with its example link (`exampleOf`). */
-const screensOf = (screens: readonly Screen[]): Manifest['screens'] =>
+/**
+ * The screens as written, each binding with its example link (`exampleOf`) and each anchor with
+ * the description it carries (`describedOf`): the written one, else the one the engine says.
+ */
+const screensOf = (screens: readonly Screen[], context: DescriptionContext): Manifest['screens'] =>
   screens.map((screen) => ({
     ...screen,
     bindings: screen.bindings.map((binding) => ({ ...binding, example: exampleOf(binding).link })),
+    anchors: Object.fromEntries(
+      Object.entries(screen.anchors).map(([anchor, def]) => {
+        const description = describedOf(def, derivedDescriptionOf(anchor, def, screen, context))
+
+        return [anchor, description === undefined ? def : { ...def, description }]
+      }),
+    ),
   }))
 
 const routeParamsOf = (screens: readonly Screen[]): Manifest['routeParams'] =>
@@ -112,13 +135,17 @@ const routeParamsOf = (screens: readonly Screen[]): Manifest['routeParams'] =>
     ),
   )
 
-/** Each derived suffix with the part it marks: its kind, and the values its suffix defines. */
+/**
+ * Each derived suffix with the part it marks: its kind, the meaning of its suffix and the values
+ * its suffix defines.
+ */
 const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =>
   Object.fromEntries(
-    Object.keys(vocabulary.suffixes).map((suffix) => [
+    Object.entries(vocabulary.suffixes).map(([suffix, description]) => [
       suffix,
       {
         kind: kindOf(suffix),
+        description,
         ...(suffix === VISIBILITY_BUTTON ? { values: { ...VISIBILITY_VALUES } } : {}),
       },
     ]),
@@ -165,6 +192,7 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     roles: vocabulary.roles,
     screenNames: vocabulary.screenNames,
     reserved: Object.keys(vocabulary.reserved),
+    composites: vocabulary.composites,
     pageHelper: PAGE_HELPER,
     instructions: instructionsOf(vocabulary, screens.platform, READY),
   }
@@ -185,7 +213,11 @@ export function buildManifest({
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
-    screens: screensOf(screens.screens),
+    screens: screensOf(screens.screens, {
+      screens: screens.screens,
+      codes: vocabulary.codes,
+      failureOf: failuresOf(model, screens.platform.actions),
+    }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens.screens),
     platform: screens.platform,

@@ -6,6 +6,7 @@ import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { readVerificationToken, verificationKey } from '../account-links'
 import type { AuthInstance } from '../auth-instance'
 
 /** The session a verification signed in and its account, as the device and its screens need them. */
@@ -31,8 +32,18 @@ const signedInAnswer = z.object({
   }),
 })
 
-/** What a verification link's token names. */
+/** What Better Auth's verification token names. */
 const tokenClaims = z.object({ email: z.string() })
+
+/** A verification as its link was mailed: the account it went to, and Better Auth's token. */
+export interface MailedVerification {
+  /** The account the mail went to: the only one the link verifies. */
+  readonly identity: IdentityId
+  /** Better Auth's own token, which names the email alone and verifies it. */
+  readonly token: string
+  /** The email Better Auth's token names, in lower case; none once that token is past its lifetime. */
+  readonly email: string | undefined
+}
 
 /**
  * The session Better Auth signed in at a verification, read by the signed token of its answer
@@ -66,14 +77,31 @@ export function readSignedIn(
 }
 
 /**
- * The email a verification link's token names, in lower case, read with Better Auth's secret as
- * Better Auth reads it; none for a token it did not sign, or one past its lifetime.
+ * The email Better Auth's verification token names, in lower case, read with Better Auth's secret
+ * as Better Auth reads it; none for a token it did not sign, or one past its lifetime.
  */
-export async function readVerificationEmail(
-  token: string,
-  secret: string,
-): Promise<string | undefined> {
+async function readVerificationEmail(token: string, secret: string): Promise<string | undefined> {
   const claims = tokenClaims.safeParse(await verifyJWT(token, secret))
 
   return claims.success ? claims.data.email.toLowerCase() : undefined
+}
+
+/**
+ * The verification a link's token names, read with the key derived from Better Auth's secret
+ * (`verificationKey`): the account the mail went to, Better Auth's token, and the email that token
+ * names; none for a token the gateway did not sign as a verification link's.
+ */
+export async function readMailedVerification(
+  token: string,
+  secret: string,
+): Promise<MailedVerification | undefined> {
+  const claims = await readVerificationToken(token, verificationKey(secret))
+
+  return claims === undefined
+    ? undefined
+    : {
+        identity: claims.identity,
+        token: claims.token,
+        email: await readVerificationEmail(claims.token, secret),
+      }
 }

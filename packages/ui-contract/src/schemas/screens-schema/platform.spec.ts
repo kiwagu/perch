@@ -66,3 +66,75 @@ describe('platformSchema mail', () => {
     }
   })
 })
+
+describe('platformSchema notices', () => {
+  const sending = (notices: unknown) =>
+    platformSchema.safeParse({ ...PLATFORM, actions: { send: { ...ACTION, notices } } }).success
+
+  it('accepts notices to a parameter or the account, with a plain link or none', () => {
+    expect(
+      sending([
+        { name: 'password-changed', to: 'account', language: 'account' },
+        {
+          name: 'email-changed',
+          to: 'email',
+          language: 'locale',
+          link: { screen: 'user.reset-password' },
+        },
+      ]),
+    ).toBe(true)
+  })
+  it('refuses a link with a search, a key of its own, a name out of kebab-case or no notice', () => {
+    for (const notices of [
+      [
+        {
+          name: 'password-changed',
+          to: 'account',
+          language: 'account',
+          link: { screen: 'user.reset-password', search: 'token' },
+        },
+      ],
+      [{ name: 'password-changed', to: 'account', language: 'account', subject: 'x' }],
+      [{ name: 'passwordChanged', to: 'account', language: 'account' }],
+      [{ to: 'account', language: 'account' }],
+      [],
+    ]) {
+      expect(sending(notices), JSON.stringify(notices)).toBe(false)
+    }
+  })
+})
+
+describe('platformSchema composites', () => {
+  const composites = (value: unknown) =>
+    platformSchema.safeParse({ ...PLATFORM, composites: value }).success
+
+  it('accepts a composite with its list, its item state and its items', () => {
+    expect(
+      composites({
+        'password-rules': {
+          description: 'The rules a new password keeps.',
+          list: 'password-rule-list',
+          itemState: 'met',
+          items: { length: '10 to 35 characters.', digit: 'At least one digit.' },
+        },
+      }),
+    ).toBe(true)
+  })
+  it('refuses a list that is not a list, an item out of kebab-case, a key of its own, no items', () => {
+    const base = {
+      description: 'The rules.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: '10 to 35 characters.' },
+    }
+
+    for (const composite of [
+      { ...base, list: 'password-rules' },
+      { ...base, items: { Length: 'x' } },
+      { ...base, items: {} },
+      { ...base, kind: 'list' },
+    ]) {
+      expect(composites({ 'password-rules': composite }), JSON.stringify(composite)).toBe(false)
+    }
+  })
+})

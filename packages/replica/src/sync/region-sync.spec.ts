@@ -29,6 +29,8 @@ import {
   writeBio,
   writeName,
 } from './__fixtures__/devices'
+import { holdOn } from './__fixtures__/held-statement'
+import { serverHistory } from './__fixtures__/server-history'
 import { RegionSync } from './region-sync'
 import type { SyncTransport } from './transport'
 
@@ -49,6 +51,8 @@ async function alone(
     readonly wrap?: (local: LocalDb) => LocalDb
     /** Hears each message as it is sent. */
     readonly onSend?: (message: ClientMessage) => void
+    /** The sync takes another's place on the connection. */
+    readonly replacing?: boolean
   } = {},
 ) {
   const clock = manualClock()
@@ -92,9 +96,13 @@ async function alone(
     onError: (error) => errors.push(error),
     // Only an engine replaces a region's document.
     onReset: () => {},
+    replacing: options.replacing ?? false,
   })
   const count = (type: ClientMessage['type']) =>
     sent.filter((message) => message.type === type).length
+  /** The version each subscription went with, null for none. */
+  const versions = () =>
+    sent.flatMap((message) => (message.type === 'subscribe' ? [message.vv] : []))
 
   /** The batch number of the last push sent. */
   const lastBatch = (): number => {
@@ -118,27 +126,10 @@ async function alone(
     region,
     sync,
     count,
+    versions,
     lastBatch,
     otherTab,
     reconnects: () => recycled.count,
-  }
-}
-
-/** Server updates of the profile: a later one that needs an earlier one, and all of it. */
-function serverHistory() {
-  const author = new LoroDoc()
-
-  author.getMap('records').setContainer(profileKey, new LoroMap()).set('name', 'Ann')
-  author.commit()
-
-  const first = author.version()
-
-  ;(author.getMap('records').get(profileKey) as LoroMap).set('name', 'Ana')
-  author.commit()
-
-  return {
-    gap: new Uint8Array(author.export({ mode: 'update', from: first })),
-    all: new Uint8Array(author.export({ mode: 'update' })),
   }
 }
 
@@ -221,7 +212,7 @@ describe('region sync on its own', () => {
     expect(errors).toEqual([])
   })
 
-  it('pulls once when an import first fails, and leaves the repeats to the full pass', async () => {
+  it('subscribes again once when an import first fails, and leaves the repeats to the full pass', async () => {
     let failImport = false
     const { sync, count, errors, region } = await alone({
       persisted: true,
@@ -232,7 +223,7 @@ describe('region sync on its own', () => {
           }
         }),
     })
-    const { all } = serverHistory()
+    const { all, snapshot } = serverHistory()
 
     sync.subscribe()
     await sync.handle(updates(emptyRegion, 0, true))
@@ -240,51 +231,29 @@ describe('region sync on its own', () => {
     failImport = true
     await sync.handle(updates(all, 2))
 
-    expect(count('pull')).toBe(1)
+    expect(count('subscribe')).toBe(2)
     expect(errors).toHaveLength(1)
 
-    // The pull's answer fails again: nothing is sent at network round-trip rate.
-    await sync.handle(updates(all, 2))
+    // The answer fails again: nothing is sent at network round-trip rate.
+    await sync.handle(updates(snapshot, 2, true))
 
-    expect(count('pull')).toBe(1)
+    expect(count('subscribe')).toBe(2)
     expect(errors).toHaveLength(2)
 
     sync.retryPull()
 
-    expect(count('pull')).toBe(2)
+    expect(count('subscribe')).toBe(3)
 
     failImport = false
-    await sync.handle(updates(all, 2))
+    await sync.handle(updates(snapshot, 2, true))
 
     expect(region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
 
     sync.retryPull()
 
-    expect(count('pull')).toBe(2)
+    expect(count('subscribe')).toBe(3)
+    expect(count('pull')).toBe(0)
   })
-
-  /** A database that holds `statement` once `holding` is set, until `release`; `reached` resolves once held. */
-  function holdOn(statement: string) {
-    let release = (): void => {}
-    let reach = (): void => {}
-    const gate = { holding: false }
-    const held = new Promise<void>((resolve) => {
-      release = resolve
-    })
-    const reached = new Promise<void>((resolve) => {
-      reach = resolve
-    })
-    const wrap = (local: LocalDb) =>
-      interceptQueries(local, (text) => {
-        if (gate.holding && text === statement) {
-          reach()
-
-          return held
-        }
-      })
-
-    return { gate, wrap, reached, release }
-  }
 
   it('sends nothing for its region once retired, though an import under way ends after it', async () => {
     const hold = holdOn(importStatement)
@@ -569,6 +538,259 @@ describe('region sync on its own', () => {
     expect(reconnects()).toBe(1)
     expect((await region.outbox(10))._unsafeUnwrap()).toHaveLength(1)
   })
+
+  describe('whether it caught up with the gateway', () => {
+    it('is caught up once the answer to its subscription is imported in full, not while it is imported', async () => {
+      const hold = holdOn(importStatement)
+      const { sync } = await alone({ persisted: true, wrap: hold.wrap })
+      const { snapshot } = serverHistory()
+
+      sync.subscribe()
+
+      expect(sync.caughtUp()).toBe(false)
+
+      hold.gate.holding = true
+      const handled = sync.handle(updates(snapshot, 2, true))
+
+      await hold.reached
+
+      expect(sync.caughtUp()).toBe(false)
+
+      hold.gate.holding = false
+      hold.release()
+      await handled
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up after its answer and the answer to its recovery both failed to import, until a full pass subscribes again', async () => {
+      let failImport = true
+      const { sync, count, errors } = await alone({
+        persisted: true,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failImport && text === importStatement) {
+              throw new Error('the store refused the write')
+            }
+          }),
+      })
+      const { snapshot } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(count('subscribe')).toBe(2)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(snapshot, 2, true))
+
+      // Nothing more goes out and nothing waits for an answer, so a settled check counts it quiet.
+      expect(errors).toHaveLength(2)
+      expect(sync.quiet()).toBe(true)
+      expect(sync.caughtUp()).toBe(false)
+
+      failImport = false
+      sync.retryPull()
+
+      expect(count('subscribe')).toBe(3)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up after a failed answer while an update sent before the answer to its recovery imports in full, until that answer does', async () => {
+      let failImport = true
+      const { sync, count, region } = await alone({
+        persisted: true,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failImport && text === importStatement) {
+              throw new Error('the store refused the write')
+            }
+          }),
+      })
+      const { snapshot } = serverHistory()
+      // Another device's first change: it needs nothing the region lacks.
+      const other = new LoroDoc()
+
+      other.getMap('records').setContainer('profile/prf_2', new LoroMap()).set('name', 'Bo')
+      other.commit()
+
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(count('subscribe')).toBe(2)
+
+      failImport = false
+      await sync.handle(updates(new Uint8Array(other.export({ mode: 'update' })), 3))
+
+      expect(region.recordJson('profile/prf_2')).toMatchObject({ name: 'Bo' })
+      expect(region.recordJson(profileKey)).toBeUndefined()
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(snapshot, 3, true))
+
+      expect(region.recordJson(profileKey)).toMatchObject({ name: 'Ana' })
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('counts no answer to a pull as the recovery of a failed import', async () => {
+      let failImport = true
+      const { sync, count } = await alone({
+        persisted: true,
+        wrap: (local) =>
+          interceptQueries(local, (text) => {
+            if (failImport && text === importStatement) {
+              throw new Error('the store refused the write')
+            }
+          }),
+      })
+      const { snapshot } = serverHistory()
+      // Two batches of another device, the second needing the first.
+      const other = new LoroDoc()
+
+      other.getMap('records').setContainer('profile/prf_2', new LoroMap()).set('name', 'Bo')
+      other.commit()
+
+      const first = new Uint8Array(other.export({ mode: 'update' }))
+      const before = other.version()
+
+      ;(other.getMap('records').get('profile/prf_2') as LoroMap).set('name', 'Bob')
+      other.commit()
+
+      const second = new Uint8Array(other.export({ mode: 'update', from: before }))
+
+      // The answer and the answer to the recovery both fail to import.
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(count('subscribe')).toBe(2)
+
+      failImport = false
+      await sync.handle(updates(second, 4))
+
+      expect(count('pull')).toBe(1)
+
+      // What the pull is answered with completes the history, and what the failed imports carried is still missing.
+      await sync.handle(updates(first, 4))
+
+      expect(sync.caughtUp()).toBe(false)
+
+      sync.retryPull()
+      await sync.handle(updates(snapshot, 4, true))
+
+      expect(count('subscribe')).toBe(3)
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('counts only a snapshot as the answer to a subscription the connection may hold already', async () => {
+      const { sync, versions } = await alone()
+      const { all, snapshot } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+
+      // Welcomed again on the same connection: the gateway still holds the region's subscription.
+      sync.welcome(true)
+
+      expect(versions()).toEqual([null, null])
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('counts only a snapshot as the answer when it replaces a sync of the region on the connection', async () => {
+      const { sync, versions, region } = await alone({ replacing: true })
+      const { all, snapshot } = serverHistory()
+
+      // The document the replacement opened holds what the region had.
+      region.doc.import(all)
+      sync.subscribe()
+
+      expect(versions()).toEqual([null])
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up while the pull a probe asked for is out, until its answer is imported', async () => {
+      const { sync, count } = await alone()
+      const { all } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(emptyRegion, 0, true))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      // The server's head is ahead of the cursor: what moved it never arrived.
+      sync.catchUp(2)
+
+      expect(count('pull')).toBe(1)
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is not caught up once the channel fell, until the subscription of the next connection is answered', async () => {
+      const { sync, versions } = await alone()
+      const { all, snapshot } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      sync.channelDown()
+
+      expect(sync.caughtUp()).toBe(false)
+
+      sync.welcome(true)
+
+      // The first subscription on a connection goes with the document's version, and the first
+      // update after it answers it.
+      expect(versions()[1]).not.toBeNull()
+      expect(sync.caughtUp()).toBe(false)
+
+      await sync.handle(updates(all, 2))
+
+      expect(sync.caughtUp()).toBe(true)
+    })
+
+    it('is never caught up while the welcome leaves it out, nor once it is retired', async () => {
+      const { sync } = await alone()
+      const { snapshot } = serverHistory()
+
+      sync.subscribe()
+      await sync.handle(updates(snapshot, 2, true))
+      sync.welcome(false)
+
+      expect(sync.caughtUp()).toBe(false)
+
+      sync.welcome(true)
+      await sync.handle(updates(snapshot, 2, true))
+
+      expect(sync.caughtUp()).toBe(true)
+
+      sync.retire()
+
+      expect(sync.caughtUp()).toBe(false)
+    })
+  })
 })
 
 describe('region sync through the gateway', () => {
@@ -616,15 +838,15 @@ describe('region sync through the gateway', () => {
     expect(b.region.pulled()).toBe(a.region.pulled())
   })
 
-  it('keeps pulling after an import failed until what it carried arrives, whatever imports cleanly meanwhile', async () => {
-    let failImport = false
+  it('keeps subscribing again after an import failed until what it carried arrives, whatever imports cleanly meanwhile', async () => {
+    let failImports = 0
     const gateway = await openGateway()
     const a = await openDevice(gateway)
     const b = await openDevice(gateway, {
       wrap: (local) =>
         interceptQueries(local, (text) => {
-          if (failImport && text === importStatement) {
-            failImport = false
+          if (failImports > 0 && text === importStatement) {
+            failImports -= 1
             throw new Error('the store refused the write')
           }
         }),
@@ -643,15 +865,15 @@ describe('region sync through the gateway', () => {
     c.transport.goOffline()
     writeBio(c.region, 'from c')
 
-    // b fails to store the batch that names the profile Ana, and the pull it sends at once is refused.
-    failImport = true
-    gateway.stub.refuseNextPull()
+    // b fails to store the batch that names the profile Ana, and the answer to the subscription
+    // it sends at once.
+    failImports = 2
     writeName(a.region, 'Ana')
     a.engine.localWrite()
     await vi.waitFor(() =>
       expect(b.errors.map((error) => error.code)).toEqual([
         'data:WRITE_FAILED',
-        'data:QUERY_FAILED',
+        'data:WRITE_FAILED',
       ]),
     )
 
@@ -662,7 +884,7 @@ describe('region sync through the gateway', () => {
 
     expect(b.region.recordJson(profileKey)).toMatchObject({ name: 'Ann' })
 
-    // The next full pass pulls again, and the name arrives.
+    // The next full pass subscribes again, and the name arrives.
     b.engine.visibility('hidden')
     b.engine.visibility('visible')
     await b.engine.settled(60_000)
@@ -736,6 +958,35 @@ describe('region sync through the gateway', () => {
 
     expect(a.region.recordJson(bobs)).toMatchObject({ text: 'mine' })
     expect(a.region.recordJson(anns)).toMatchObject({ text: 'hello' })
+    expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
+  })
+
+  it('reports a change of a read-only field as a push rejection, undoes it and keeps syncing', async () => {
+    const { a, b, settle, errors } = await twoDevices()
+
+    // The server alone changes an email: a device's change is refused, and the device undoes it.
+    a.region.recordMap(profileKey).set('email', 'ann@new.example.test')
+    a.region.doc.commit()
+    a.engine.localWrite()
+    await settle()
+
+    expect(errors()).toMatchObject([
+      {
+        code: 'data:PUSH_REJECTED',
+        cause: { region: a.region.ref.id, reason: 'readonly-field', detail: `${profileKey}.email` },
+      },
+    ])
+    expect(a.region.recordJson(profileKey)).toMatchObject({ email: 'ann@example.test' })
+    expect(b.region.recordJson(profileKey)).toMatchObject({ email: 'ann@example.test' })
+
+    writeName(a.region, 'Ana')
+    a.engine.localWrite()
+    await settle()
+
+    expect(b.region.recordJson(profileKey)).toMatchObject({
+      name: 'Ana',
+      email: 'ann@example.test',
+    })
     expect(errors().map((error) => error.code)).toEqual(['data:PUSH_REJECTED'])
   })
 

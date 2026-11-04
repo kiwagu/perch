@@ -29,7 +29,7 @@ import type { AppEvent } from '../../platform/events.port'
 import { type CommandLogger, createCommandBus } from '../commands'
 import type { GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
-import type { TransportContext } from '../session'
+import type { SessionOptions, TransportContext } from '../session'
 import { SessionService } from '../session'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
@@ -39,6 +39,10 @@ import { QueryTracker } from './query-tracker'
 export interface TestWorldOptions {
   /** The browser's storage; tabs of one browser share it. */
   readonly storage?: MemoryStorage
+  /** Hears the start of an account a sign-in learnt of; the world records it by default. */
+  readonly keepAccountStart?: SessionOptions['keepAccountStart']
+  /** Hears each sync state the session reports, after the world records it. */
+  readonly onSyncState?: SessionOptions['onSyncState']
   /**
    * Whether the device reaches the gateway stub (the default); offline, its channel never comes
    * up and the browser says it is offline.
@@ -156,6 +160,8 @@ export interface TestWorld {
   readonly published: AppEvent[]
   /** The sync states the session reported, oldest first. */
   readonly states: SyncState[]
+  /** The starts of accounts a sign-in learnt of, oldest first. */
+  readonly startsKept: Array<Parameters<SessionOptions['keepAccountStart']>>
   /** The identities whose databases were opened, in order. */
   opened(): IdentityId[]
   /** The identities whose databases were deleted, in order. */
@@ -213,6 +219,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   const failures: DataError[] = []
   const published: AppEvent[] = []
   const states: SyncState[] = []
+  const startsKept: Array<Parameters<SessionOptions['keepAccountStart']>> = []
   const opened: IdentityId[] = []
   const destroyed: IdentityId[] = []
   const localsDeleted: IdentityId[] = []
@@ -225,6 +232,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
+    keepAccountStart: options.keepAccountStart ?? ((user, from) => startsKept.push([user, from])),
     listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
     openLocal: (identity) =>
       (options.refusedIdentities?.includes(identity)
@@ -307,7 +315,10 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
         return () => visibilityListeners.delete(listener)
       },
     },
-    onSyncState: (state) => states.push(state),
+    onSyncState: (state) => {
+      states.push(state)
+      options.onSyncState?.(state)
+    },
     onError: (error) => failures.push(error),
     publish: (event) => published.push(event),
   })
@@ -330,6 +341,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
     failures,
     published,
     states,
+    startsKept,
     opened: () => [...opened],
     destroyed: () => [...destroyed],
     localsDeleted: () => [...localsDeleted],

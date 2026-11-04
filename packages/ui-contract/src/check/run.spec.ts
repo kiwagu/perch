@@ -99,6 +99,26 @@ describe('checkContract', () => {
       'tests/e2e/scenarios/sample/base/thing.md:18: steps[1]: [sample.title-input.confirm-button] is not a declared anchor',
     ])
   })
+  it('refuses a notice whose link carries a search: a notice carries no token', () => {
+    const notice = (link: string): string =>
+      `    codes:\n      - failed\n    notices:\n      - name: signed-out\n        to: account\n        language: account\n        link: ${link}\n`
+
+    edit(PLATFORM_FILE, (text) =>
+      text.replace('    codes:\n      - failed\n', notice('{ screen: sample }')),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].notices[0].link.screen: the route "/sample/$key" of "sample" needs a parameter, and a notice\'s link carries none',
+    ])
+
+    edit(PLATFORM_FILE, (text) =>
+      text.replace('{ screen: sample }', '{ screen: sample, search: key }'),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].notices[0].link: Unrecognized key: "search"',
+    ])
+  })
   it('refuses a permission role of the model that the vocabulary does not list', () => {
     edit(MODEL_FILE, (text) => text.replace('"member": { "create"', '"memebr": { "create"'))
 

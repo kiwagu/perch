@@ -70,12 +70,21 @@ describe('parseVocabulary', () => {
   it('reads the reserved anchors', () => {
     expect(vocabulary.reserved).toEqual({ 'sample.status': 'the readiness line' })
   })
+  it('reads the composites', () => {
+    expect(vocabulary.composites).toEqual({ 'password-rules': 'the rules a new password keeps' })
+  })
   it('reports a missing section', () => {
     const markdown = fixture.replace(/## Row states\n[\s\S]*?(?=## Codes)/, '')
 
     expect(parseVocabulary(markdown).problems.map((problem) => problem.message)).toEqual([
       'missing section "Row states"',
     ])
+  })
+  it('reads a vocabulary written before the composites as one without composites', () => {
+    const older = parseVocabulary(fixture.replace(/\n## Composites\n[\s\S]*$/, ''))
+
+    expect(older.problems).toEqual([])
+    expect(older.vocabulary.composites).toEqual({})
   })
   it('reports an unknown section by line', () => {
     const markdown = `${fixture}\n## Extra\n\nMore text.\n`

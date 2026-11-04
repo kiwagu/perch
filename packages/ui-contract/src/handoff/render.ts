@@ -2,7 +2,8 @@
  * The coverage measure as text: the block of the coverage note, the model's measure first
  * (fields and actions bound, a table per entity, then the transitions of each activity its
  * scenarios walk), then the code's (controls marked per module, the unmarked and the ignored
- * controls, anchors and scenarios per screen); and the lists `ui-contract coverage
+ * controls, anchors and scenarios per screen), with a note after the totals for each composite
+ * declared and used by no screen, which fails nothing; and the lists `ui-contract coverage
  * --unmarked` prints, one `file:line: <element>` per control.
  */
 
@@ -73,6 +74,17 @@ function activitiesTotal(activities: CoverageMeasure['activities']): string {
     : `; activities ${activities.length}, transitions walked ${walked}/${transitions}`
 }
 
+/** A note per composite declared and used by no screen; none when each is used. */
+export const compositeNotes = ({ unusedComposites }: CoverageMeasure): string[] =>
+  unusedComposites.map((name) => `Note: composite ${name} is declared and used by no screen.`)
+
+/** The paragraph of the notes after the totals, when there is any. */
+function notesSection(measure: CoverageMeasure): string[] {
+  const notes = compositeNotes(measure)
+
+  return notes.length === 0 ? [] : [...notes, '']
+}
+
 /** The block of the note: the totals, the model, the activities, the controls, the screens. */
 export function renderCoverage(
   measure: CoverageMeasure,
@@ -89,6 +101,7 @@ export function renderCoverage(
     '',
     `Totals: fields bound ${boundShare(fields)}, actions bound ${boundShare(actions)}${activitiesTotal(measure.activities)}; controls marked ${marked}/${controls}, ignored ${ignored}.`,
     '',
+    ...notesSection(measure),
     '## Model',
     '',
     ...modelSection(measure.model),
