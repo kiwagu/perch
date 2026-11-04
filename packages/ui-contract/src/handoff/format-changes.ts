@@ -1,6 +1,7 @@
 /** The changes of the contract as the hand-over block: a summary line, then one line per list. */
 
-import type { Change, ContractChanges } from './diff'
+import type { Change } from './change'
+import type { ContractChanges } from './diff'
 
 /** The lists in the order of the block, each with its singular and plural noun. */
 const LISTS = [
@@ -16,6 +17,7 @@ const LISTS = [
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
+  ['actions', 'platform action', 'platform actions'],
   ['notices', 'notice', 'notices'],
   ['entities', 'entity', 'entities'],
   ['fields', 'field', 'fields'],
@@ -46,8 +48,8 @@ function linesOf(
 }
 
 /**
- * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, then
- * the lines changed in each screen's flow.
+ * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, the
+ * lines changed in each screen's flow, and the lines changed in each platform action.
  */
 const listsOf = (changes: ContractChanges) => [
   ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
@@ -56,6 +58,9 @@ const listsOf = (changes: ContractChanges) => [
   ),
   ...Object.entries(changes.flows).flatMap(([id, change]) =>
     linesOf(change, 'flow line', 'flow lines', ` in ${id}`),
+  ),
+  ...Object.entries(changes.actionLines).flatMap(([name, change]) =>
+    linesOf(change, 'platform action line', 'platform action lines', ` in ${name}`),
   ),
 ]
 

@@ -36,8 +36,11 @@
     },
     "lint": {},
     "test": {
+      "dependsOn": ["^build"]
+    },
+    "@workspace/web#test": {
       "dependsOn": ["^build"],
-      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE"]
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
     },
     "model": {
       "dependsOn": ["^build"],

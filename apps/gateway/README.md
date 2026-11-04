@@ -115,7 +115,8 @@ the update; each device's next hello is then refused with 4401.
   refused 403, until a verification that names one); then the reset of a password on a fresh
   identity with a phone's socket open (a reset request answered 202 with no body for it and for
   an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
-  new password with 204, which closes the phone's socket with 4002 and refuses its token at
+  new password with 200 and `signedOut` false, as opened with no session, which closes the
+  phone's socket with 4002 and refuses its token at
   hello, refuses the old password, signs in with the new one and mails the notice of a changed
   password; the same link again answered 401 `link-invalid`); then on another identity its device
   sessions: a hello
