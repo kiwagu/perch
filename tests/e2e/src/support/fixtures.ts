@@ -1,18 +1,10 @@
-import {
-  type Browser,
-  type BrowserContext,
-  type BrowserContextOptions,
-  test as base,
-  expect,
-  type Page,
-  type TestStepInfo,
-} from '@playwright/test'
+import { test as base, expect, type Page, type TestStepInfo } from '@playwright/test'
 
 import type { SeedAccount } from '@workspace/seed/catalog'
 
+import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
-import { type SecurityWatch, watchSecurity } from './security'
 
 export { expect }
 
@@ -184,71 +176,16 @@ export function pageLoads(page: Page): () => number {
   return () => loads
 }
 
-/** The browsers of the running test: the step check looks at every page they have open. */
-const browsers = new Set<BrowserContext>()
-
-/** The front every stand serves the app from, the origin the security check holds to its headers. */
-function frontOf(baseURL: string | undefined): string {
-  if (baseURL === undefined) {
-    throw new Error('the e2e projects give every browser the base URL of the front')
-  }
-
-  return new URL(baseURL).origin
-}
-
-/** Fails the test with every problem a browser reported against the front's security policy. */
-function expectSecure(problems: readonly string[]): void {
-  expect(
-    problems,
-    'the front sends its security headers and no page or worker breaks its policy',
-  ).toEqual([])
-}
-
-/**
- * A browser context of the test's own, opened on first use and watched by the security check
- * from before its first page; `close` closes it if it opened, then fails the test with the
- * problems it reported until then.
- */
-function ownBrowser(
-  browser: Browser,
-  options: BrowserContextOptions,
-  front: string,
-): { open(): Promise<Page>; close(): Promise<void> } {
-  let opened: Promise<{ page: Page; security: SecurityWatch }> | undefined
-
-  return {
-    open: async () => {
-      opened ??= browser.newContext(options).then(async (context) => {
-        browsers.add(context)
-        const security = await watchSecurity(context, front)
-
-        return { page: await context.newPage(), security }
-      })
-
-      return (await opened).page
-    },
-    close: async () => {
-      if (opened) {
-        const { page, security } = await opened
-        const context = page.context()
-        const problems = security.problems()
-
-        browsers.delete(context)
-        await context.close()
-        expectSecure(problems)
-      }
-    },
-  }
-}
-
 const extended = base.extend<Fixtures>({
+  // Every browser of a test is watched from before its first page: the front's security policy,
+  // and what each page shows in each state of its screen it settled in (`browsers.ts`).
   page: async ({ page, baseURL }, use) => {
-    const security = await watchSecurity(page.context(), frontOf(baseURL))
+    const watch = await watchBrowser(page.context(), frontOf(baseURL))
 
     browsers.add(page.context())
     await use(page)
     browsers.clear()
-    expectSecure(security.problems())
+    expectWatched(await watch.problems())
   },
   signedIn: async ({ page }, use) => {
     await use(await signUp(page))

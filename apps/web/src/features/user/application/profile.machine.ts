@@ -280,6 +280,7 @@ export function createProfileMachine(deps: ProfileMachineDeps) {
                 },
               },
               confirming: {
+                meta: { renders: ['user.profile.sign-out-dialog'] },
                 on: {
                   'user.profile.sign-out-dialog.confirm-button': { target: 'signing-out-anyway' },
                   'user.profile.sign-out-dialog.cancel-button': { target: 'idle' },

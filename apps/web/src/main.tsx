@@ -33,8 +33,10 @@ import { NoticeProvider } from './platform/notices'
 import { PLATFORM_EVENTS } from './platform/platform-events.port'
 import { sendPlatformEvents } from './platform/platform-events-input'
 import { createAppRouter } from './platform/router'
+import { rendersIn } from './platform/screen-renders'
 import { ServicesProvider } from './platform/services'
 import { SettingsWritesContext } from './platform/settings-writes'
+import { useSettledReport } from './platform/settled-report'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -149,6 +151,9 @@ function App(props: { readonly reload: () => void }) {
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+
+  // Development and e2e builds report each state of the frame the page settles in.
+  useSettledReport('app-shell', state.value, () => actor.getSnapshot().value)
   // The settings screen's stores, kept by the frame to tell their echo from another tab's or device's.
   const settingsWrites = useMemo(() => frameSettingsWrites(made.live), [made])
 
@@ -234,6 +239,7 @@ function App(props: { readonly reload: () => void }) {
     return (
       <ShellView
         status={unrouted ?? 'opening'}
+        renders={rendersIn(made.machine.config, state.value)}
         signedIn={false}
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}

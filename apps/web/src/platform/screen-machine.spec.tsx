@@ -89,7 +89,7 @@ const machine = setup({
     },
     'saving-two': { invoke: { src: 'save', input: () => ({ fail: false }), onDone: 'idle' } },
     out: {},
-    deleted: {},
+    deleted: { meta: { renders: ['x.deleted-message'] } },
     moved: {},
     finished: { type: 'final' },
   },
@@ -178,7 +178,7 @@ const held: { screen?: Screen; watched?: Watched; type?: (email: string) => void
 /** A page whose email field the test types into, which a platform event carries for its move. */
 function Page() {
   const [email, setEmail] = useState('ann@example.test')
-  const running = useScreenMachine(machine, { 'x.y.email-input': email })
+  const running = useScreenMachine('x', machine, { 'x.y.email-input': email })
 
   held.screen = running
   held.type = setEmail
@@ -187,7 +187,7 @@ function Page() {
 }
 
 function WatchedPage() {
-  const running = useScreenMachine(watched)
+  const running = useScreenMachine('x', watched)
 
   held.watched = running
 
@@ -507,5 +507,14 @@ describe('useScreenMachine', () => {
       false,
     )
     expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
+
+  it("tells what the machine's state renders, read from its states' meta.renders", async () => {
+    const { running } = await open(passing())
+
+    expect(running.renders('x.deleted-message')).toBe(false)
+    expect(running.renders('x.y.email-input')).toBe(true)
+    expect(await act(() => running.submit({ type: 'organisation.notes.delete-button' }))).toBe(true)
+    expect(held.screen?.renders('x.deleted-message')).toBe(true)
   })
 })
