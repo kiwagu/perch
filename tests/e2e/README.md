@@ -235,10 +235,21 @@ seen there and holds it to its declaration). A failure prints no address, link o
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
-  Playwright; extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
+  Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
   `playwright.config.ts`, measured against the credential limit above), and its log is
   `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
+- The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
+  request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes
+  or changes its address, and every container started or stopped on the host adds or removes one,
+  a stand of another checkout or another project's alike. So the launcher runs Playwright under
+  pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into a network namespace
+  once, so the browser sees a network that stays the same, and forwards the loopback ports of
+  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
+  address does not lead to the host's loopback either). IPv4 only: inside,
+  `localhost` resolves to ::1 first, where the front does not listen. Without pasta the launcher
+  stops before the build and names the package; it never runs the browser on the host's network.
+  `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
   their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
@@ -251,5 +262,6 @@ seen there and holds it to its declaration). A failure prints no address, link o
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
-- `bun run test` (here): the reporter's unit tests (`bun test ./scripts`).
+- `bun run test` (here): the unit tests of the reporter and of the browser's network
+  (`bun test ./scripts`).
 - `bun run typecheck`, `bun run lint`.
