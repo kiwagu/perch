@@ -224,6 +224,8 @@ describe('authHandler, the reset of a password', () => {
     expect(fromBob?.status).toBe(200)
     expect(await fromBob?.json()).toEqual({ signedOut: false })
     expect((await mounted.sessions.read(bob.tokens.get('desk') ?? '')).kind).not.toBe('none')
+    // The notice of the changed password goes after the answer: past it, the next mail is the link.
+    await mounted.outbox.next(ANN, 2)
 
     const fromNobody = await mounted.route(reset(await resetLink(mounted)), FROM)
 
