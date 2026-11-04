@@ -8,13 +8,20 @@ function forwarded(args: readonly string[]): string | undefined {
 }
 
 describe('the e2e run in a network namespace of its own', () => {
-  it("runs the command under pasta on IPv4 only, with the host's setup copied in and nothing forwarded into the namespace", () => {
+  it("runs the command under pasta on IPv4 only, with the host's setup copied in, no gateway or resolver of the host and nothing forwarded into the namespace", () => {
     const args = isolatedCommand(['bunx', 'playwright', 'test', '--grep', '@smoke'], {
       E2E_BASE_URL: 'https://localhost:5493',
       MAILBOX_URL: 'http://127.0.0.1:1090',
     })
 
-    expect(args.slice(0, 4)).toEqual(['pasta', '--quiet', '--ipv4-only', '--config-net'])
+    expect(args.slice(0, 5)).toEqual([
+      'pasta',
+      '--quiet',
+      '--ipv4-only',
+      '--config-net',
+      '--no-map-gw',
+    ])
+    expect(args[args.indexOf('--dns') + 1]).toBe('none')
     expect(args[args.indexOf('--tcp-ports') + 1]).toBe('none')
     expect(args[args.indexOf('--udp-ports') + 1]).toBe('none')
     expect(args[args.indexOf('--udp-ns') + 1]).toBe('none')

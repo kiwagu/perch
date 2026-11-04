@@ -245,7 +245,8 @@ seen there and holds it to its declaration). A failure prints no address, link o
   a stand of another checkout or another project's alike. So the launcher runs Playwright under
   pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into a network namespace
   once, so the browser sees a network that stays the same, and forwards the loopback ports of
-  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way. IPv4 only: inside,
+  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
+  address does not lead to the host's loopback either). IPv4 only: inside,
   `localhost` resolves to ::1 first, where the front does not listen. Without pasta the launcher
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.

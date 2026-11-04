@@ -5,7 +5,10 @@
  * or another project's, adds or removes one. So Playwright runs in a network namespace of its own,
  * made by pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into it once, so
  * the browser sees a network (`navigator.onLine`) that never changes afterwards, and forwards the
- * loopback ports of the run's addresses to the host, and no other port in either direction.
+ * loopback ports of the run's addresses to the host, and no other port in either direction; its
+ * gateway address does not stand for the host either (`--no-map-gw`), so nothing else of the
+ * host's loopback is reachable from inside, the host's resolver included: the namespace gets no
+ * DNS (`--dns none`), as the run's addresses are loopback ones `/etc/hosts` names.
  * IPv4 only: inside, `localhost` resolves to ::1 first, which pasta would forward to the host's
  * ::1, where the stand's front does not listen.
  */
@@ -41,6 +44,9 @@ export function isolatedCommand(command: readonly string[], env: NodeJS.ProcessE
     '--quiet',
     '--ipv4-only',
     '--config-net',
+    '--no-map-gw',
+    '--dns',
+    'none',
     '--tcp-ports',
     'none',
     '--udp-ports',
