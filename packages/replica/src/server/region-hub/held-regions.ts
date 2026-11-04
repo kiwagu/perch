@@ -1,48 +1,31 @@
-import type { LoroDoc } from 'loro-crdt'
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 
-import type { DataError } from '@workspace/data'
+import { type DataError, dataError } from '@workspace/data'
 
-import type { Clock } from '../clock'
-import type { RegionRef } from '../region-doc'
+import type { Clock } from '../../clock'
+import type { RegionRef } from '../../region-doc'
+import type { RegionDatabases } from '../region-databases'
+import { RegionLog } from '../region-log'
 
-import type { RegionDatabase, RegionDatabases } from './region-databases'
-import { RegionLog } from './region-log'
-import {
-  type Actor,
-  deliver,
-  notSubscribed,
-  type Subscriber,
-  type Subscription,
-} from './subscription'
-
-/** A region's log and its authoritative document, and the hold on the database that keeps them. */
-export interface Loaded {
-  readonly log: RegionLog
-  readonly doc: LoroDoc
-  readonly database: RegionDatabase
-}
-
-/** What the hub keeps of one region, from the first subscription until it unloads the region. */
-export interface RegionState {
-  readonly ref: RegionRef
-  /** Devices whose subscription was answered: each receives the batches the others push. */
-  readonly subscribers: Map<string, Subscription>
-  /** Devices whose subscription waits in the queue for its answer. */
-  readonly joining: Map<string, Subscription>
-  /** How many writes of the server's own are asked of the region and not settled yet. */
-  writes: number
-  /** Settles once the work asked of the region so far has; the next work waits for it. */
-  queue: Promise<void>
-  /** The region's log and document, once the first subscription has loaded them. */
-  loaded: Loaded | undefined
-  /** Cancels the unload scheduled when the last device left. */
-  unload: (() => void) | undefined
-}
+import type { Loaded, RegionState } from './region-state'
+import { type Actor, deliver, notSubscribed, type Subscriber } from './subscription'
 
 /** Nobody subscribes to the region or waits to, and no write is asked of it. */
 function idle(state: RegionState): boolean {
   return state.subscribers.size === 0 && state.joining.size === 0 && state.writes === 0
+}
+
+/** Lets go of the database a retired region held, if it was loaded; a release that throws fails. */
+function release(regionId: string, loaded: Loaded | undefined): ResultAsync<void, DataError> {
+  try {
+    loaded?.database.release()
+
+    return okAsync(undefined)
+  } catch (cause) {
+    return errAsync(
+      dataError('data:WRITE_FAILED', `could not release the database of region ${regionId}`, cause),
+    )
+  }
 }
 
 export interface HeldRegionsOptions {
@@ -57,11 +40,13 @@ export interface HeldRegionsOptions {
 /**
  * The regions a hub holds, by id: each from its first subscription or write, with its subscribers,
  * its queue of work (one piece at a time, in the order asked) and, once loaded, its log and document
- * from its own database, held until the region unloads. A region nobody subscribes to or writes any
- * more unloads after an idle time, and its database is released.
+ * from its own database, held until the region unloads or is retired. A region nobody subscribes
+ * to or writes any more unloads after an idle time, and its database is released.
  */
 export class HeldRegions {
   readonly #regions = new Map<string, RegionState>()
+  /** The retires not settled yet, by region: a region held again starts its queue behind one. */
+  readonly #retiring = new Map<string, Promise<void>>()
   readonly #databases: RegionDatabases
   readonly #clock: Clock
   readonly #idleUnloadMs: number
@@ -85,14 +70,14 @@ export class HeldRegions {
     return this.#regions.get(regionId)
   }
 
-  /** Holds a region not held yet: nobody subscribed, nothing loaded. */
+  /** Holds a region not held yet: nobody subscribed, nothing loaded, its work after any retire. */
   hold(ref: RegionRef): RegionState {
     const state: RegionState = {
       ref,
       subscribers: new Map(),
       joining: new Map(),
       writes: 0,
-      queue: Promise.resolve(),
+      queue: this.#retiring.get(ref.id) ?? Promise.resolve(),
       loaded: undefined,
       unload: undefined,
     }
@@ -220,11 +205,11 @@ export class HeldRegions {
   /**
    * Schedules the region's unload once no device subscribes to it and no write is asked of it.
    * The unload runs in the region's queue, after the work asked before it, and only if it is
-   * still idle; it releases the region's database. Once closed, nothing is scheduled: closing
-   * released every database.
+   * still idle and held; it releases the region's database. A region no longer held schedules
+   * nothing: the retire or the close that let it go releases its database.
    */
   unloadWhenIdle(state: RegionState): void {
-    if (this.#closed || state.unload || !idle(state)) {
+    if (state.unload || !idle(state) || this.#regions.get(state.ref.id) !== state) {
       return
     }
 
@@ -240,14 +225,53 @@ export class HeldRegions {
     })
   }
 
+  /**
+   * Lets the region go at once: a subscription or a write asked from then on holds it afresh,
+   * and its work waits for the retire, then loads the region from its database. The work asked
+   * before runs first and settles as it would have; then the retire releases the database. The
+   * devices still subscribed go with the region, told nothing (the caller ends their connections
+   * first): a push, pull or compaction they send afterwards is answered as not subscribed. A
+   * scheduled unload is cancelled, and a region not held is left as it is. A release that throws
+   * fails the retire.
+   */
+  retire(regionId: string): ResultAsync<void, DataError> {
+    const state = this.#regions.get(regionId)
+
+    if (!state) {
+      return okAsync(undefined)
+    }
+
+    this.#regions.delete(regionId)
+    state.unload?.()
+    state.unload = undefined
+
+    const retired = this.#queued(state, () => {
+      const loaded = state.loaded
+
+      state.loaded = undefined
+
+      return release(regionId, loaded)
+    })
+    const settled = state.queue
+
+    this.#retiring.set(regionId, settled)
+    void settled.then(() => {
+      if (this.#retiring.get(regionId) === settled) {
+        this.#retiring.delete(regionId)
+      }
+    })
+
+    return retired
+  }
+
   /** How many regions have their document in memory. */
   loadedRegions(): number {
     return [...this.#regions.values()].filter((state) => state.loaded).length
   }
 
   /**
-   * Cancels the scheduled unloads, drops every region, waits for the work under way, then
-   * releases the databases of the regions it held; it holds no region from then on.
+   * Cancels the scheduled unloads, drops every region, waits for the work under way and the
+   * retires, then releases the databases of the regions it held; it holds no region from then on.
    */
   async close(): Promise<void> {
     this.#closed = true
@@ -260,7 +284,7 @@ export class HeldRegions {
       state.unload?.()
     }
 
-    await Promise.all(states.map((state) => state.queue))
+    await Promise.all([...states.map((state) => state.queue), ...this.#retiring.values()])
 
     for (const state of states) {
       state.loaded?.database.release()

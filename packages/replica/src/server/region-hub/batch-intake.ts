@@ -2,13 +2,13 @@ import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 
-import { messageOf } from '../failure'
-import type { RejectReason, ServerMessage } from '../protocol'
-import type { ReplicaSchema } from '../schema'
+import { messageOf } from '../../failure'
+import type { RejectReason, ServerMessage } from '../../protocol'
+import type { ReplicaSchema } from '../../schema'
+import { validateBatch } from '../batch-validator'
+import { batchWriter } from '../batch-writer'
 
-import { validateBatch } from './batch-validator'
-import { batchWriter } from './batch-writer'
-import type { Loaded, RegionState } from './held-regions'
+import type { Loaded, RegionState } from './region-state'
 import type { Actor, Subscriber } from './subscription'
 
 /** The longest `detail` a reject carries. */
