@@ -910,7 +910,8 @@ describe('a write of the server to a record', () => {
     forger.setPeerId(SERVER_PEER)
     const from = forger.version()
 
-    // The forged edit sets a field devices may change: one of the email would be refused as read-only first.
+    // A forged edit of a field devices may change: one of `email` would be refused as read-only
+    // before the peer check.
     ;(forger.getMap('records').get('profile/prf_1') as LoroMap).set('name', 'Eve')
     forger.commit()
     ;(await hub.push(region.id, a, 2, [forger.export({ mode: 'update', from })]))._unsafeUnwrap()

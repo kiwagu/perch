@@ -162,8 +162,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `SERVER_PEER` is the largest peer Loro allows, so the server's value wins a tie); a text field
   is replaced through its mergeable text and merges with concurrent edits. A device's change
   of a field the schema marks `readonly` is refused (`readonly-field`), so the server's value
-  stands; when the server wrote the field while a device's refused change was being undone, the
-  undo is refused too and the device reloads the region from the server. A device's
+  stands. The device undoes the refused change and keeps every change of other peers it already
+  holds: when the server's write reached the device before the undo, the undo keeps the server's
+  value and is accepted; an undo that restores the old value against the server's new one is
+  refused again, and the device reloads the region from the server. A device's
   later batches touching the record are checked as before and pass: the server binds no peer
   and keeps the region's owner rule. On a device the change is an ordinary update, stored in the
   local log, imported and projected, so compaction and snapshots treat it like any other row on
