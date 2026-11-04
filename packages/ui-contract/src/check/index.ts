@@ -1,5 +1,6 @@
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
+export { anchorCarries, type Carried } from './carries'
 export { confirmationsProblems } from './confirmations'
 export {
   bindingRefsOf,
@@ -35,7 +36,7 @@ export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
 export { checkContract, loadContract } from './run'
 export { runsProblems } from './runs'
-export { referenceResolver, scenariosProblems, textsOf } from './scenarios'
+export { pairingResolver, referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
 export { toastsProblems } from './toasts'

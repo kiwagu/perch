@@ -11,6 +11,9 @@ import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { linkToken, Outbox } from '../../mail/__fixtures__/outbox'
+import { EmailChanges, ResetLinks, verificationClaims } from '../account-links'
+import { AccountMails } from '../account-mails'
+import { AccountPasswords } from '../account-passwords'
 import { type AuthInstance, createAuthInstance } from '../auth-instance'
 import type { AuthLog } from '../auth-log'
 import { DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
@@ -41,6 +44,8 @@ export interface AuthLogLine {
 export interface OpenedAuth {
   readonly auth: AuthInstance
   readonly local: LocalDb
+  /** Where the instance's log lines go, as the gateway's mails log theirs too. */
+  readonly log: AuthLog
   /** The clock of the session hooks; a test moves it to mark when an ending happens. */
   readonly clock: ManualClock
   /** Where the instance's mails go, oldest first. */
@@ -83,7 +88,34 @@ export async function openAuth(options: OpenAuthOptions = {}): Promise<OpenedAut
 
   OUTBOXES.set(auth, outbox)
 
-  return { auth, local, clock, outbox, logs, close: () => local.close() }
+  return { auth, local, log, clock, outbox, logs, close: () => local.close() }
+}
+
+/**
+ * The gateway's services of passwords, account links and account mails over an instance the
+ * fixture opened: its directory, its clock, its outbox and its log, as the composition root builds
+ * them over the gateway's own.
+ */
+export function accountServicesOf(opened: OpenedAuth) {
+  return {
+    passwords: new AccountPasswords({
+      auth: opened.auth,
+      directory: opened.local,
+      clock: opened.clock,
+    }),
+    resets: new ResetLinks(opened.local),
+    emailChanges: new EmailChanges({
+      directory: opened.local,
+      secret: AUTH_SECRET,
+      clock: opened.clock,
+    }),
+    mails: new AccountMails({
+      mail: opened.outbox,
+      directory: opened.local,
+      publicUrl: ORIGIN,
+      log: opened.log,
+    }),
+  }
 }
 
 /** Names where the mails of an instance the fixture did not open go (a gateway root's). */
@@ -105,6 +137,19 @@ export function outboxOf(auth: AuthInstance): Outbox {
 /** The headers of a request from device `id`, labelled `label`, sent from the trusted origin. */
 export function deviceHeaders(id: string, label = 'Firefox on Linux'): Headers {
   return new Headers({ [DEVICE_HEADER]: id, [DEVICE_LABEL_HEADER]: label, origin: ORIGIN })
+}
+
+/**
+ * Better Auth's own token inside the token of a verification link (`token`), which a spec hands
+ * Better Auth's endpoint when it calls it directly; the mount reads the link's token itself. The
+ * claims are read without the key, so the token of any instance's link reads; the test fails for
+ * a token that names none.
+ */
+export function betterAuthToken(token: string): string {
+  const [, payload] = token.split('.')
+
+  return verificationClaims.parse(JSON.parse(Buffer.from(payload ?? '', 'base64url').toString()))
+    .token
 }
 
 /**
@@ -135,7 +180,7 @@ export async function signUpOn(
     headers,
   })
 
-  const token = linkToken(await outbox.next(email, seen))
+  const token = betterAuthToken(linkToken(await outbox.next(email, seen)))
   const { headers: answered } = await auth.api.verifyEmail({
     query: { token },
     headers,

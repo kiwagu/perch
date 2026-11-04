@@ -10,10 +10,10 @@
  */
 
 import { isRecord, listOf, recordOf } from '../../../records'
+import { enteredBy, type Place } from '../../flow-places'
 import type { Expansion } from '../expansion'
 
 import { codeOf, operationCodeOf } from './codes'
-import { enteredBy, type Place } from './places'
 
 /** A state of the flow: where it stands, and its path in the screen file. */
 interface Located {

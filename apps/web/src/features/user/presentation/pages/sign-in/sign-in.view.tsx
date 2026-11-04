@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -8,9 +9,19 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import type { SessionNotice } from '../../../../../platform/session.port'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
+import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
-import { PasswordRuleList } from './password-rule-list'
+/** The rules of a new password the list shows at sign-up, each with its item's anchor. */
+const RULES = [
+  { rule: 'length', testId: 'user.sign-in.password-rule-list.length-item' },
+  { rule: 'characters', testId: 'user.sign-in.password-rule-list.characters-item' },
+  { rule: 'digit', testId: 'user.sign-in.password-rule-list.digit-item' },
+  { rule: 'uppercase', testId: 'user.sign-in.password-rule-list.uppercase-item' },
+  { rule: 'lowercase', testId: 'user.sign-in.password-rule-list.lowercase-item' },
+  { rule: 'symbol', testId: 'user.sign-in.password-rule-list.symbol-item' },
+] as const
 
 /** The anchor of the form's error, drawn above the fields or under the field its code concerns. */
 const SIGN_IN_ERROR_TEST_ID = 'user.sign-in.error'
@@ -30,15 +41,19 @@ export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-
 export type PasswordField = keyof Passwords
 
 export interface SignInViewProps {
+  /** The email the field starts with: the one a page that moved here carried over, or none. */
+  readonly startEmail: string
   readonly mode: 'sign-in' | 'sign-up'
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
   /**
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
-   * another device signed it out.
+   * another device signed it out, `password-changed-elsewhere` once a change of the account's
+   * password did, `password-reset-elsewhere` once another tab set a new password through a reset
+   * link, `delete-pending` while another tab still holds the data of the account signed out.
    */
-  readonly notice?: 'resend-after-sign-in' | 'signed-out-elsewhere' | 'delete-pending' | undefined
+  readonly notice?: SessionNotice | undefined
   /** The code of the message asking to open the verification mail, once a sign-up or a resend went through. */
   readonly mail?: 'check-your-mail' | undefined
   /** The address that mail went to, which `check-your-mail` names. */
@@ -55,6 +70,8 @@ export interface SignInViewProps {
   readonly onTypePassword: (field: PasswordField, passwords: Passwords) => void
   /** Sends the verification mail to `email` again: resolves whether it did. */
   readonly onResend: (email: string) => Promise<boolean>
+  /** Moves to asking for a reset mail, carrying the email as typed. */
+  readonly onForgot: (email: string) => void
 }
 
 /** The contract code of a refusal, with its text. */
@@ -96,6 +113,10 @@ function noticeText(
       return t('user.sign-in.notice.resend-after-sign-in')
     case 'signed-out-elsewhere':
       return t('user.sign-in.notice.signed-out-elsewhere')
+    case 'password-changed-elsewhere':
+      return t('user.sign-in.notice.password-changed-elsewhere')
+    case 'password-reset-elsewhere':
+      return t('user.sign-in.notice.password-reset-elsewhere')
     case 'delete-pending':
       return t('user.sign-in.notice.delete-pending')
   }
@@ -109,7 +130,7 @@ export function SignInView(props: SignInViewProps) {
   // The rules of a new password describe the password while an account is created.
   const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
-    email: '',
+    email: props.startEmail,
     password: '',
     confirmation: '',
     name: '',
@@ -184,29 +205,52 @@ export function SignInView(props: SignInViewProps) {
             </Field>
             <Field>
               <FieldLabel htmlFor={ids.password}>{t('user.sign-in.password')}</FieldLabel>
-              <Input
+              <PasswordInput
                 {...password('password')}
-                type="password"
                 autoComplete={signingUp ? 'new-password' : 'current-password'}
                 required
                 aria-describedby={signingUp ? rulesId : undefined}
-                data-testid="user.sign-in.password-input"
+                showLabel={t('user.password.show')}
+                hideLabel={t('user.password.hide')}
+                testId="user.sign-in.password-input"
               />
-              {signingUp ? <PasswordRuleList id={rulesId} password={values.password} /> : null}
+              {signingUp ? (
+                <PasswordRuleList
+                  id={rulesId}
+                  password={values.password}
+                  testId="user.sign-in.password-rule-list"
+                  items={RULES}
+                />
+              ) : null}
+              {signingUp ? null : (
+                // The flow moves, carrying the email typed; the address is there for a new tab.
+                <a
+                  href="/forgot-password"
+                  className="self-start text-sm underline"
+                  onClick={(event) => {
+                    event.preventDefault()
+                    props.onForgot(values.email)
+                  }}
+                  data-testid="user.sign-in.forgot-link"
+                >
+                  {t('user.sign-in.forgot')}
+                </a>
+              )}
             </Field>
             {signingUp ? (
               <Field data-invalid={concerns === 'confirmation' ? true : undefined}>
                 <FieldLabel htmlFor={ids.confirmation}>
                   {t('user.sign-in.password-confirmation')}
                 </FieldLabel>
-                <Input
+                <PasswordInput
                   {...password('confirmation')}
-                  type="password"
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
                   aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
-                  data-testid="user.sign-in.password-confirmation-input"
+                  showLabel={t('user.password.show')}
+                  hideLabel={t('user.password.hide')}
+                  testId="user.sign-in.password-confirmation-input"
                 />
                 {error && concerns === 'confirmation' ? (
                   <FieldError

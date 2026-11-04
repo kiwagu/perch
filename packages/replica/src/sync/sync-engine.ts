@@ -61,6 +61,13 @@ export interface SyncEngine {
    */
   settled(timeoutMs: number): Promise<void>
   /**
+   * Resolves once `region` has caught up with the gateway on the current connection: the welcome
+   * named it, it still syncs, its subscription was answered and every update since was imported in
+   * full. A reconnect or a reload starts it over. Rejects after `timeoutMs` on the clock; never
+   * resolves for a region that stopped, one the welcome left out, or one the engine does not hold.
+   */
+  caughtUp(region: string, timeoutMs: number): Promise<void>
+  /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
    * sign this device out; resolves `signed-out` only when the gateway ended the channel with the
    * sign-out close, which means the session ended. Any other close after the sign-out was
@@ -170,6 +177,10 @@ class Engine implements SyncEngine {
     return this.#settling.settled(timeoutMs)
   }
 
+  caughtUp(region: string, timeoutMs: number): Promise<void> {
+    return this.#settling.caughtUp(region, timeoutMs)
+  }
+
   channelStopped(): boolean {
     return this.#signOutFlow.channelStopped()
   }
@@ -232,9 +243,9 @@ class Engine implements SyncEngine {
   /**
    * The channel ended for good. A refused protocol stops syncing and is reported: this
    * application is older than the gateway, and only a reload brings one that speaks its
-   * protocol; nothing on the device changes. A device signed out from another one stops syncing
-   * without a report: the transport tells the app, whose token no longer works. A refused token
-   * and a sign-out are the app's to act on.
+   * protocol; nothing on the device changes. A device signed out from another one, or by a
+   * change of the account's password, stops syncing without a report: the transport tells the
+   * app, whose token no longer works. A refused token and a sign-out are the app's to act on.
    */
   #ended(reason: EndReason): void {
     match(reason)
@@ -247,7 +258,7 @@ class Engine implements SyncEngine {
           ),
         )
       })
-      .with('revoked', () => this.#stopPasses())
+      .with(P.union('revoked', 'password-changed'), () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
   }

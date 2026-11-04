@@ -12,6 +12,7 @@ import accountRefuseStatement from './__fixtures__/account-refuse.surql'
 import {
   AUTH_SECRET,
   AUTH_URL,
+  betterAuthToken,
   CLOCK_START,
   deviceHeaders,
   type OpenAuthOptions,
@@ -494,7 +495,7 @@ describe('createAuthInstance', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const token = linkToken(await outbox.next('ann@example.test'))
+    const token = betterAuthToken(linkToken(await outbox.next('ann@example.test')))
 
     await expect(
       auth.api.verifyEmail({
@@ -707,7 +708,7 @@ describe('createAuthInstance, the verification of an email', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const token = linkToken(await outbox.next('ann@example.test'))
+    const token = betterAuthToken(linkToken(await outbox.next('ann@example.test')))
     const first = await auth.api.verifyEmail({
       query: { token },
       headers: deviceHeaders('phone', 'Phone'),
@@ -745,7 +746,7 @@ describe('createAuthInstance, the verification of an email', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const [, payload] = linkToken(await outbox.next('ann@example.test')).split('.')
+    const [, payload] = betterAuthToken(linkToken(await outbox.next('ann@example.test'))).split('.')
     const claims = JSON.parse(Buffer.from(payload ?? '', 'base64url').toString('utf8')) as {
       iat: number
       exp: number

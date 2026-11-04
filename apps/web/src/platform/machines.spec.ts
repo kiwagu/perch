@@ -16,18 +16,22 @@
 
 import { join } from 'node:path'
 
-import { okAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
+import { dataError } from '@workspace/data'
 import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
 
-import { LocaleWrites } from '../features/app-shell/application/locale-writes'
-import { createShellMachine } from '../features/app-shell/application/shell.machine'
+import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
+import { createShellMachine } from '../features/app-shell/application/shell-machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
+import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
+import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
-import { createSettingsMachine } from '../features/user/application/settings/settings.machine'
+import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
+import { createSettingsMachine } from '../features/user/application/settings/settings-machine'
 import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
 import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
@@ -82,12 +86,13 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       values: () => ({
         account: undefined,
         stored: undefined,
-        writes: LocaleWrites.none,
+        writes: NOTHING_SEEN,
         unsaved: false,
       }),
       signOutHere: () => okAsync(undefined),
       reload: () => {},
       setTheme: () => {},
+      followTheme: () => {},
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
     }),
@@ -114,11 +119,23 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       verify: () => okAsync({ kind: 'verified-before' }),
       resend: () => okAsync(undefined),
     }),
+  'user.confirm-email': () =>
+    createConfirmEmailMachine({
+      token: 't',
+      confirm: () => errAsync(dataError('data:LINK_INVALID', 'not in this spec')),
+      current: () => undefined,
+    }),
+  'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
+  'user.reset-password': () =>
+    createResetPasswordMachine({ token: 't', reset: () => okAsync(undefined) }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
       setTheme: () => {},
+      storeTheme: () => okAsync(undefined),
       storeLocale: () => okAsync(undefined),
+      changePassword: () => okAsync(undefined),
+      changeEmail: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({

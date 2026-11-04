@@ -20,6 +20,9 @@ import type { WriteBarrier } from './write-barrier'
 
 export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
+/** Why the gateway signed the device out, as the sign-in page says it. */
+export type ElsewhereNotice = 'signed-out-elsewhere' | 'password-changed-elsewhere'
+
 export interface SessionSignOutOptions {
   readonly host: SessionHost
   readonly barrier: WriteBarrier
@@ -106,13 +109,14 @@ export class SessionSignOut {
 
   /**
    * The gateway refused the identity's token, which will not work again, or signed the device
-   * out from another one: the device signs out here, without the gateway, behind the same write
+   * out from another one or because the account's password changed: the device signs out here,
+   * without the gateway, behind the same write
    * barrier as a sign-out, and leaves nothing to sign out. Its data for the identity goes with the
    * token only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
    * any; otherwise (or when that cannot be read) the database stays, and the sign-in page says
    * that signing in again as the identity sends the changes.
    */
-  refused(identity: IdentityId, notice?: 'signed-out-elsewhere'): ResultAsync<void, DataError> {
+  refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<void, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
 

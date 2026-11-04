@@ -10,8 +10,10 @@ export {
   UI_KIT_DIR,
   UI_KIT_MODULE,
 } from './coverage'
+export { listDescriptions } from './descriptions'
 export { type ContractChanges, diffContracts } from './diff'
+export { flowLines } from './flow-lines'
 export { formatChanges } from './format-changes'
 export { type BoundMember, type ModelCoverage, modelCoverage } from './model'
 export { COVERAGE_END, COVERAGE_START, replaceCoverageBlock } from './note'
-export { listControls, renderCoverage } from './render'
+export { compositeNotes, listControls, renderCoverage } from './render'

@@ -51,10 +51,18 @@ export function renderMail(
   element: ReactElement,
   link: string,
 ): ResultAsync<RenderedBody, MailWriteError> {
+  return renderBody(element).andThen((body) =>
+    carriesLink(body, link) ? okAsync(body) : errAsync(LINK_LOST),
+  )
+}
+
+/**
+ * `element`, a mail's whole document, as minified HTML and as plain text, with no check of what it
+ * holds; `mail:RENDER_FAILED` and nothing of its cause when the render fails.
+ */
+export function renderBody(element: ReactElement): ResultAsync<RenderedBody, MailWriteError> {
   return ResultAsync.fromPromise(
     Promise.all([render(element, { pretty: false }), render(element, { plainText: true })]),
     (): MailWriteError => RENDER_FAILED,
-  ).andThen(([html, text]) =>
-    carriesLink({ html, text }, link) ? okAsync({ html, text }) : errAsync(LINK_LOST),
-  )
+  ).map(([html, text]) => ({ html, text }))
 }

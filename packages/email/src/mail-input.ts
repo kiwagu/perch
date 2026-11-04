@@ -21,13 +21,20 @@ export interface MailInput {
  * that is an http or https address (`mail:LINK_INVALID` otherwise). Neither error names the input.
  */
 export function checkMailInput({ locale, link }: MailInput): Result<Locale, MailWriteError> {
+  return checkLocale(locale).andThen((supported) => {
+    const url = URL.parse(link)
+
+    return url !== null && LINK_SCHEMES.has(url.protocol) ? ok(supported) : err(LINK_INVALID)
+  })
+}
+
+/**
+ * The language a mail is written in, once it is one the mails are written in
+ * (`mail:LOCALE_UNSUPPORTED` otherwise, naming nothing of it): the whole input of a notice that
+ * carries no link.
+ */
+export function checkLocale(locale: string): Result<Locale, MailWriteError> {
   const supported = SUPPORTED_LOCALES.find((each) => each === locale)
 
-  if (supported === undefined) {
-    return err(LOCALE_UNSUPPORTED)
-  }
-
-  const url = URL.parse(link)
-
-  return url !== null && LINK_SCHEMES.has(url.protocol) ? ok(supported) : err(LINK_INVALID)
+  return supported === undefined ? err(LOCALE_UNSUPPORTED) : ok(supported)
 }

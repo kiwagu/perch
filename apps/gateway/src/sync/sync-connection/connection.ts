@@ -25,6 +25,10 @@ function endReason(code: number): string {
     return REASON.signedOut
   }
 
+  if (code === CLOSE.passwordChanged) {
+    return REASON.passwordChanged
+  }
+
   return code === SUPERSEDED ? REASON.superseded : REASON.revoked
 }
 

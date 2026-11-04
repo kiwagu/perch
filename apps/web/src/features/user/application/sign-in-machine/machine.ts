@@ -28,6 +28,20 @@ function emailInput({ event }: { readonly event: SignInEvent }): { readonly emai
   return { email: event.email }
 }
 
+/** The move to the page that asks for a reset mail, carrying the email typed. */
+const toForgotPassword = {
+  target: 'forgot-password',
+  actions: [
+    {
+      type: 'navigate',
+      params: {
+        to: '/forgot-password',
+        search: { email: { anchor: 'user.sign-in.email-input' } },
+      },
+    },
+  ],
+} as const
+
 /** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
 const showError = (...codes: readonly string[]) =>
   ({ type: 'show', params: { anchor: SIGN_IN_ERROR, codes } }) as const
@@ -57,9 +71,10 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * asking to check the mail, and a sign-in of an account not verified yet offers the resend. At
  * sign-up the password is held to the rules of a new password and the password typed again is
  * compared, as either is typed and on the switch into sign-up, and the submit is held while the
- * password breaks a rule or the two differ. Its `show` and `clear` keep the codes of the form's own
- * error and mail message for the view and emit any other; its `navigate` emits the path, for the
- * host to move to.
+ * password breaks a rule or the two differ. In the mode sign-in the forgot-link moves to the page
+ * that asks for a reset mail, carrying the email typed. Its `show` and `clear` keep the codes of
+ * the form's own error and mail message for the view and emit any other; its `navigate` emits the
+ * path with the fields its event carries, for the host to move with.
  */
 export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'signUp' | 'resend'>) {
   return setup({
@@ -111,7 +126,12 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.emit({ type: 'clear', ...params })
         }
       }),
-      navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
+      // The fields the event carries go with the move: its search takes the email typed from them.
+      navigate: emit(({ event }, params: NavigateParams) => ({
+        type: 'navigate' as const,
+        ...params,
+        ...('fields' in event ? { fields: event.fields } : {}),
+      })),
     },
   }).createMachine({
     id: 'user.sign-in',
@@ -120,6 +140,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     states: {
       'sign-in': {
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.toggle-button': intoSignUp(clearError),
           'user.sign-in.submit-button': { target: 'signing-in' },
         },
@@ -220,6 +241,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       },
       'check-mail': {
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in', actions: [clearMail] },
           'user.sign-in.toggle-button': intoSignUp(clearMail),
@@ -227,6 +249,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       },
       unverified: {
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in' },
           'user.sign-in.toggle-button': intoSignUp(clearError),
@@ -248,6 +271,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       done: { type: 'final' },
+      'forgot-password': { type: 'final' },
     },
   })
 }

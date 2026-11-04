@@ -1,0 +1,114 @@
+import { afterEach, describe, expect, it } from 'vitest'
+
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
+import { savedIdentity } from '../storage'
+
+const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
+
+const worlds: TestWorld[] = []
+
+afterEach(async () => {
+  const closing = worlds.splice(0)
+
+  await Promise.all(closing.map((world) => world.close()))
+
+  for (const world of closing) {
+    expect(world.failures).toEqual([])
+  }
+})
+
+async function signedIn() {
+  const auth = fakeGatewayAuth()
+  const world = await openTestWorld({ auth, online: false })
+
+  worlds.push(world)
+  expect((await signUpVerified(world.session, auth, annSignUp)).isOk()).toBe(true)
+  auth.requests.splice(0)
+
+  return { ...world, auth }
+}
+
+describe("a change of the signed-in account's password or email", () => {
+  it('asks the gateway with the session this device holds, and stays signed in', async () => {
+    const { session, auth, storage } = await signedIn()
+    const token = storage.get('perch.session.token')
+    const device = storage.get('perch.device.id')
+
+    expect((await session.changePassword(annSignUp.password, 'Secret-new1')).isOk()).toBe(true)
+    expect((await session.changeEmail('ann.new@example.test', 'Secret-new1')).isOk()).toBe(true)
+    expect(auth.requests).toEqual([
+      { kind: 'change-password', token, device },
+      { kind: 'change-email', email: 'ann.new@example.test', token },
+    ])
+    expect(session.current()?.email).toBe(annSignUp.email)
+  })
+
+  it('keeps the gateway refusal', async () => {
+    const { session } = await signedIn()
+
+    expect(
+      (await session.changePassword('Wrong-pass1', 'Secret-new1'))._unsafeUnwrapErr().code,
+    ).toBe('data:INVALID_CREDENTIALS')
+  })
+
+  it('asks nothing while nobody is signed in on this device', async () => {
+    const auth = fakeGatewayAuth()
+    const world = await openTestWorld({ auth, online: false })
+
+    worlds.push(world)
+
+    expect(
+      (await world.session.changePassword('Secret-ann1', 'Secret-new1'))._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+    expect(auth.requests).toEqual([])
+  })
+})
+
+describe('the confirmation of a new email', () => {
+  it('keeps the new email of the account signed in here, signing nothing in or out', async () => {
+    const { session, auth, storage } = await signedIn()
+    const me = session.current() ?? expect.unreachable('signed in')
+
+    expect((await session.changeEmail('Ann.New@example.test', annSignUp.password)).isOk()).toBe(
+      true,
+    )
+
+    const confirmed = await session.confirmEmail(auth.confirmationLinkFor(annSignUp.email))
+
+    expect(confirmed._unsafeUnwrap()).toEqual({ identity: me.id, email: 'ann.new@example.test' })
+    expect(savedIdentity(storage)).toEqual({ id: me.id, email: 'ann.new@example.test' })
+    expect(session.current()?.id).toBe(me.id)
+  })
+
+  it("leaves the browser's account alone when another account's email changed", async () => {
+    const { session, auth, storage } = await signedIn()
+    const me = session.current() ?? expect.unreachable('signed in')
+    const bob = { email: 'bob@example.test', password: 'Secret-bob1', name: 'Bob', locale: 'en' }
+
+    expect((await verifiedElsewhere(auth, bob)).isOk()).toBe(true)
+
+    // Bob asks for the change on his own device, and his link is opened in Ann's browser.
+    const bobDevice = await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' })
+    const bobSession = bobDevice._unsafeUnwrap()
+
+    expect(
+      (
+        await auth.changeEmail(
+          { email: 'bob.new@example.test', password: bob.password },
+          { token: bobSession.token, device: 'bob-device' },
+        )
+      ).isOk(),
+    ).toBe(true)
+    expect((await session.confirmEmail(auth.confirmationLinkFor(bob.email))).isOk()).toBe(true)
+    expect(savedIdentity(storage)).toEqual({ id: me.id, email: annSignUp.email })
+  })
+
+  it('keeps the refusal of a link that does not work', async () => {
+    const { session } = await signedIn()
+
+    expect((await session.confirmEmail('confirm-unknown'))._unsafeUnwrapErr().code).toBe(
+      'data:LINK_INVALID',
+    )
+  })
+})

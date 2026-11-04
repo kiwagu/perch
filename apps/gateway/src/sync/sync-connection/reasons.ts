@@ -17,6 +17,7 @@ export const REASON = {
   forbidden: 'the region is not open to this device',
   signedOut: 'signed out',
   revoked: 'signed out from another device',
+  passwordChanged: 'signed out because the password changed',
   revokeFailed: 'revoke failed',
   failed: 'the gateway failed to handle the message',
   superseded: 'another connection of this device took over',

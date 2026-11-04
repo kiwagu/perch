@@ -27,6 +27,13 @@ a composite renders on its own: `user.profile.sign-out-dialog.confirm-button`,
 its `derived`. A rendered anchor, base or derived, has up to 5 segments and matches
 `^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`.
 
+A composite's anchors are declared anchors the loader derives, not derived parts. A secret
+`input` that opts into a composite of the platform (`composite: password-rules`) declares on
+its screen `<screen>.<list>`, a `list`, and `<screen>.<list>.<item>-item`, an `item` per item
+of the composite: `user.settings.password-rule-list.digit-item` is screen `user.settings`,
+kind `item`. They follow the grammar above, no screen file writes them, and "Composites" names
+each composite.
+
 Every anchor is declared once, in one screen file. On a page it marks one element, except
 an `item`, `row` or `option`, which marks every entry of its list, table or select and
 tells them apart by `data-id` (an entity) or `data-value` (a choice). No declared anchor
@@ -144,7 +151,7 @@ container state.
 |---|---|---|
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
-| `met` | `user.sign-in.password-rule-list.length-item`, `user.sign-in.password-rule-list.characters-item`, `user.sign-in.password-rule-list.digit-item`, `user.sign-in.password-rule-list.uppercase-item`, `user.sign-in.password-rule-list.lowercase-item`, `user.sign-in.password-rule-list.symbol-item` | the password typed keeps this rule |
+| `met` | each item of the composite `password-rules` | the password typed keeps this rule |
 
 ## Codes
 
@@ -159,26 +166,33 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `theme-not-stored` | `app-shell.notice-message` | the chosen theme applies on this device, but the account's settings could not store it |
 | `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
 | `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
+| `password-changed-elsewhere` | `user.sign-in.notice-message` | the account's password changed on another device or through a reset link, which signed this device out; it signs in with the new password |
+| `password-reset-elsewhere` | `user.sign-in.notice-message` | a new password was set in another tab of this browser through the link of a reset mail, which the tab that asked for the mail follows; the account signs in with it |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
-| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message` | a mail whose link verifies the email typed is on its way, if that email has an account waiting for it; the same words when it has none, so the page tells nobody which emails have accounts |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet); the same words when it has none, so the page tells nobody which emails have accounts |
 | `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
 | `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
-| `link-invalid` | `user.verify-email.error` | the link is not one a verification mail carried, or its account is gone |
-| `link-expired` | `user.verify-email.error` | the link is older than a day; the same page sends a new one |
-| `invalid-credentials` | `user.sign-in.error` | the email or the password is wrong |
+| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
+| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is too old: a verification or confirmation link after a day, a reset link after an hour; a new one is asked for |
+| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error` | the email or the password is wrong |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
-| `passwords-differ` | `user.sign-in.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
-| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error` | too many attempts were made, so the user waits and tries again |
+| `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
+| `email-invalid` | `user.settings.email.error` | the new email is not an email |
+| `password-reset` | `user.reset-password.message` | the password is the new one and every device of the account is signed out; the account signs in with it |
+| `email-changed` | `user.confirm-email.message` | the account's email is the new one, which signs it in from now on |
+| `passwords-differ` | `user.sign-in.error`, `user.reset-password.error`, `user.settings.password.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
@@ -216,9 +230,9 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.settings.locale-select.option` | `en` | the option makes the account speak English |
 | `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
-| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
-| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
-| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
+| `user.settings.theme-select.option` | `light` | the option shows the account light, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `dark` | the option shows the account dark, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `system` | the option shows the account as each device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -235,11 +249,14 @@ screen name of its own.
 | `app-shell` | the frame around every screen, with the navigation, the language, the status and the notices |
 | `user.sign-in` | the page that signs an account in or creates one (`/sign-in`) |
 | `user.verify-email` | the page the link of a verification mail opens, which verifies the email and signs the account in (`/verify-email`) |
+| `user.forgot-password` | the page that asks for a mail whose link sets a new password (`/forgot-password`) |
+| `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
+| `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account and of this device: the theme and the language (`/settings`) |
+| `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email (`/settings`) |
 
 ## Roles
 
@@ -265,7 +282,7 @@ included.
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
-| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
+| `app-shell.theme-select` | the theme of this device for a guest, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |
@@ -279,3 +296,13 @@ included.
 | `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
 | `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
+
+## Composites
+
+What the platform declares once and a screen derives by opting in (`platform.yaml`
+`composites`): the list with its items, their descriptions and their item state, so no screen
+repeats them. A row names the composite and what it is for.
+
+| Composite | Meaning |
+|---|---|
+| `password-rules` | the rules a new password keeps, listed under the field that takes it, each marked once the password typed keeps it |
