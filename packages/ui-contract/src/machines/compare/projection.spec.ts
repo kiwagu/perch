@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMachine } from 'xstate'
 
+import { renderedAt } from '../../anchors'
 import { flowSchema } from '../../schemas'
 
 import { beyondTheSubset } from './beyond'
@@ -92,6 +93,22 @@ describe('the projection of what a state renders', () => {
     for (const anchors of [['sample.name-input'], ['sample.name-input', 'sample.email-input']]) {
       expect(projected(createMachine(config(anchors)).config)).not.toEqual(projected(flow))
     }
+  })
+
+  it('reads a list as the app does: an anchor twice is once, and a bare string lists nothing', () => {
+    const once = flowSchema.parse(config(['sample.name-input']))
+    const bare = {
+      initial: 'editing',
+      states: { editing: { meta: { renders: 'sample.name-input' } } },
+    }
+
+    expect(
+      projected(createMachine(config(['sample.name-input', 'sample.name-input'])).config),
+    ).toEqual(projected(once))
+    expect(projected(bare)).not.toEqual(
+      projected({ ...bare, states: { editing: { meta: { renders: ['sample.name-input'] } } } }),
+    )
+    expect(renderedAt(bare, 'editing').listed).toEqual([])
   })
 })
 

@@ -1,3 +1,4 @@
+import { listedBy } from '../../anchors'
 import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 
 export interface ProjectedEffect {
@@ -46,11 +47,12 @@ const effectsIn = (actions: unknown): ProjectedEffect[] =>
     .filter(({ type }) => type === 'show' || type === 'clear' || type === 'navigate')
     .map(({ type, params }) => ({ type, params }))
 
-/** The anchors a state lists in `meta.renders`, in one order whatever order it lists them in. */
+/**
+ * The anchors a state lists in `meta.renders`, read as `renderedAt` reads them (`listedBy`),
+ * each once and in one order whatever order it lists them in: the list is a set.
+ */
 const rendersIn = (state: Readonly<Record<string, unknown>>): string[] =>
-  listOf(recordOf(state['meta'])['renders'])
-    .filter((anchor): anchor is string => typeof anchor === 'string')
-    .sort((a, b) => a.localeCompare(b))
+  [...new Set(listedBy(state))].sort((a, b) => a.localeCompare(b))
 
 const transitionsIn = (value: unknown): ProjectedTransition[] =>
   listOf(value).map((each) =>

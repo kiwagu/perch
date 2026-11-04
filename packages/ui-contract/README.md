@@ -407,7 +407,9 @@ for Bun.
   names any state lists in `meta.renders`; `rendered`, those the states the machine is in
   list); `isListed(at, anchor)` (rendered only where listed: a state lists it or an anchor it
   is under) and `isRendered(at, anchor)` (no state lists it, or this state lists it or an
-  anchor it is under). Rendered means visible to the user.
+  anchor it is under). Rendered means visible to the user. `listedBy(state)` is how all of them
+  read one state's list (an array of its own, its strings alone), the comparison of machines
+  included.
   The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
   suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
   the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
