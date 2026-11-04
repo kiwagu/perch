@@ -1259,10 +1259,10 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the
-notices of the platform actions added or removed, the
-transitions added or removed in each activity both sides hold, and the lines of the flow
-added or removed in each screen both sides hold with a flow), and below
+error fields the anchors both sides hold gain or lose, the platform actions added or removed
+and the notices they declare, the transitions added or removed in each activity both sides
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
+the lines of each platform action added, removed or changed), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1304,8 +1304,16 @@ JSON and its outcomes, each final state. Where order runs the machine (the guard
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
 sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
 change nothing that runs, so a screen file written shorter that loads to the same flow shows
-no change. The tests are in this repository, so the same change updates them, and the
-consumers check fails until it does.
+no change. A platform action is listed by its name, and its lines as `platform action lines
+added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
+each parameter with its type (`param email: string`), its result (`result: <the text>`, the
+one prose that stays, since it says what holds once the action succeeds), each code its failure
+shows (`code rate-limited`), each role that may run it, its mail (`mail to email language
+locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
+opens and the search parameter that carries the token) and each notice (`notice
+password-changed to account language account link user.forgot-password`). An action added or
+removed whole shows every line, as nothing else in the summary says its mail. The tests are in
+this repository, so the same change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 
