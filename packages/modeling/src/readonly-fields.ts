@@ -5,8 +5,9 @@ export type FieldAnnotations = ReadonlyMap<string, ReadonlyMap<string, readonly 
  * The fields of `table` annotated `-- @readonly`, in the order the structure lists them: a
  * device sets such a field when it creates the record and never changes it after, so the
  * replica schema marks it and the gateway refuses a batch that changes it. The annotation takes
- * no value and belongs to a replicated table; anything else is reported as a problem and the
- * field is not marked.
+ * no value, belongs to a replicated table and marks a top-level field (the table model nests a
+ * dotted field and drops a wildcard one, so the replica schema could not carry the mark);
+ * anything else is reported as a problem and the field is not marked.
  */
 export function annotatedReadonlyFields(
   table: string,
@@ -28,7 +29,11 @@ export function annotatedReadonlyFields(
 
     if (!replicated) {
       problems.push(
-        `table ${table}: field ${field.name}: @readonly belongs to a replicated table, not to -- @replicate none`,
+        `table ${table}: field ${field.name}: -- @readonly needs a replicated table (-- @region)`,
+      )
+    } else if (field.name.includes('.') || field.name.includes('*')) {
+      problems.push(
+        `table ${table}: field ${field.name}: -- @readonly marks a top-level field only`,
       )
     } else if (value !== undefined) {
       problems.push(

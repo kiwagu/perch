@@ -93,6 +93,8 @@ describe('parseStructure', () => {
           fields: [
             { name: 'n', kind: 'int' },
             { name: 'o', kind: 'string' },
+            { name: 'p', kind: 'object' },
+            { name: 'p.q', kind: 'string' },
           ],
         },
         c: { fields: [] },
@@ -108,6 +110,9 @@ describe('parseStructure', () => {
       'DEFINE FIELD n ON b TYPE int;',
       '-- @readonly yes',
       'DEFINE FIELD o ON b TYPE string;',
+      'DEFINE FIELD p ON b TYPE object;',
+      '-- @readonly',
+      'DEFINE FIELD p.q ON b TYPE string;',
       '-- @region private',
       'DEFINE TABLE c;',
       '-- @replicate none',
@@ -120,8 +125,9 @@ describe('parseStructure', () => {
       'table a: declare exactly one of -- @region <private|public|tenant> or -- @replicate none',
       'table b: field n is int, a @crdt text field must be a string',
       'table b: field o: -- @readonly takes no value, got "yes"',
+      'table b: field p.q: -- @readonly marks a top-level field only',
       'table c: a replicated table needs -- @id <prefix>',
-      'table d: field m: @readonly belongs to a replicated table, not to -- @replicate none',
+      'table d: field m: -- @readonly needs a replicated table (-- @region)',
     ])
   })
 

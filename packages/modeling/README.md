@@ -35,17 +35,18 @@ TypeScript or React code.
   holds a record's author; `-- @can <member|admin> <action>[:own], …` (one line per role,
   actions `create`, `update`, `delete`, `:own` limiting the role to the records it owns)
   declares who may write a tenant table. The rules are emitted into the replica schema as
-  `owner` and `can`. `-- @readonly` above a field of a replicated table marks a field a device
-  sets only when it creates the record; the replica schema carries it as `readonly: true` and
-  the gateway refuses a batch that changes it.
+  `owner` and `can`. `-- @readonly` above a top-level field of a replicated table marks a field
+  a device sets only when it creates the record; the replica schema carries it as
+  `readonly: true` and the gateway refuses a batch that changes it.
   Problems: `-- @owner <field> must name a record<member> field`; `-- @can needs "<member|admin>
   <action>[:own], …", got "<line>"`; `-- @can <role>: unknown action "<item>"`; `-- @can <role>:
   create:own is not allowed, a created record is owned by its author`; `-- @can <role>: <item>
   needs -- @owner <field>`; `-- @can <role> is declared twice`; `@owner and @can belong to a
   replicated table, not to -- @replicate none`; `@owner and @can belong to a tenant table;
   <private|public> tables declare none`; `table <t>: field <f>: -- @readonly takes no value,
-  got "<value>"`; `table <t>: field <f>: @readonly belongs to a replicated table, not to --
-  @replicate none`.
+  got "<value>"`; `table <t>: field <f>: -- @readonly needs a replicated table (-- @region)`;
+  `table <t>: field <f>: -- @readonly marks a top-level field only` (a dotted or wildcard
+  field name).
 - `inferResultType`, `tablesOf`, `compileCommand`, `checkIdRegistry`, `collect`, the emitters.
 
 ## Commands

@@ -44,7 +44,25 @@ describe('annotatedReadonlyFields', () => {
       annotatedReadonlyFields('profile', fields, annotated({ email: [''] }), false, problems),
     ).toEqual([])
     expect(problems).toEqual([
-      'table profile: field email: @readonly belongs to a replicated table, not to -- @replicate none',
+      'table profile: field email: -- @readonly needs a replicated table (-- @region)',
+    ])
+  })
+
+  it('reports the annotation on a nested or wildcard field, which a device cannot be refused', () => {
+    const problems: string[] = []
+
+    expect(
+      annotatedReadonlyFields(
+        'profile',
+        [{ name: 'address' }, { name: 'address.city' }, { name: 'tags.*' }],
+        annotated({ 'address.city': [''], 'tags.*': [''] }),
+        true,
+        problems,
+      ),
+    ).toEqual([])
+    expect(problems).toEqual([
+      'table profile: field address.city: -- @readonly marks a top-level field only',
+      'table profile: field tags.*: -- @readonly marks a top-level field only',
     ])
   })
 
