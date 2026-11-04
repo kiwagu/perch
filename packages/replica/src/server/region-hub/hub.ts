@@ -3,18 +3,19 @@ import { errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 
-import type { Clock } from '../clock'
-import { COMPACTION_LOG_LIMIT } from '../compaction-limit'
-import type { CompactionOutcome, ServerMessage } from '../protocol'
-import type { RegionRef } from '../region-doc'
-import { privateRegionId } from '../region-ref'
-import type { ReplicaSchema } from '../schema'
+import type { Clock } from '../../clock'
+import { COMPACTION_LOG_LIMIT } from '../../compaction-limit'
+import type { ServerMessage } from '../../protocol'
+import type { RegionRef } from '../../region-doc'
+import { privateRegionId } from '../../region-ref'
+import type { ReplicaSchema } from '../../schema'
+import type { FieldValue, RecordWrite } from '../record-write'
+import type { RegionDatabases } from '../region-databases'
+import { storedHeads } from '../stored-heads'
 
 import { type BatchIntake, takeInBatch } from './batch-intake'
+import { type CompactionIntake, takeInCompaction } from './compaction-intake'
 import { HeldRegions } from './held-regions'
-import type { FieldValue, RecordWrite } from './record-write'
-import type { RegionDatabases } from './region-databases'
-import { storedHeads } from './stored-heads'
 import { type Actor, deliver, type Subscriber } from './subscription'
 import { takeInWrite } from './write-intake'
 
@@ -57,16 +58,6 @@ function exportFrom(doc: LoroDoc, from: VersionVector | null): Uint8Array<ArrayB
 }
 
 /**
- * A full snapshot of the authoritative document: as it is, or as it was at `version`, a
- * version its history holds (a fork at that point keeps the whole history before it).
- */
-function snapshotAt(doc: LoroDoc, version: VersionVector | undefined): Uint8Array {
-  const at = version ? doc.forkAt(doc.vvToFrontiers(version)) : doc
-
-  return at.export({ mode: 'snapshot' })
-}
-
-/**
  * The server's copy of every region a device subscribes to: the region's log and its
  * authoritative document in memory, from the region's own database, held while the region is
  * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
@@ -82,6 +73,7 @@ export class RegionHub {
   readonly #databases: RegionDatabases
   readonly #onError: (error: DataError) => void
   readonly #intake: BatchIntake
+  readonly #compactions: CompactionIntake
 
   constructor(options: RegionHubOptions) {
     this.#databases = options.databases
@@ -97,6 +89,7 @@ export class RegionHub {
       compactionLogLimit: options.compactionLogLimit ?? COMPACTION_LOG_LIMIT,
       send: (subscriber, message) => this.#send(subscriber, message),
     }
+    this.#compactions = { send: this.#intake.send, onError: options.onError }
   }
 
   /**
@@ -261,36 +254,15 @@ export class RegionHub {
     )
   }
 
-  /**
-   * Hands a subscribed device's compaction proposal to the region's log and answers with the
-   * outcome. An accepted proposal is stored as the hub's own snapshot of the region at that
-   * row, never as the device's bytes. A snapshot the log refuses to read (it does not decode,
-   * or it is shallow) is answered as a version mismatch, which the device treats the same way,
-   * and reported.
-   */
+  /** Takes in a subscribed device's compaction proposal; the contract is `takeInCompaction`'s. */
   compact(
     regionId: string,
     subscriber: Subscriber,
     covers: number,
     proposal: Uint8Array,
   ): ResultAsync<void, DataError> {
-    return this.#held.subscribed(regionId, subscriber, (_, { log, doc }) =>
-      log
-        .compact(covers, proposal, (version) =>
-          snapshotAt(doc, covers === log.head() ? undefined : version),
-        )
-        .orElse((error) => {
-          if (error.code !== 'data:WRITE_REJECTED') {
-            return errAsync(error)
-          }
-
-          this.#onError(error)
-
-          return okAsync<CompactionOutcome, DataError>('version-mismatch')
-        })
-        .map((outcome) =>
-          this.#send(subscriber, { type: 'compaction', region: regionId, covers, outcome }),
-        ),
+    return this.#held.subscribed(regionId, subscriber, (_, loaded) =>
+      takeInCompaction(this.#compactions, { regionId, subscriber, covers, proposal }, loaded),
     )
   }
 

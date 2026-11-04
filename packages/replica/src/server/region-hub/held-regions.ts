@@ -1,44 +1,14 @@
-import type { LoroDoc } from 'loro-crdt'
 import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 
-import type { Clock } from '../clock'
-import type { RegionRef } from '../region-doc'
+import type { Clock } from '../../clock'
+import type { RegionRef } from '../../region-doc'
+import type { RegionDatabases } from '../region-databases'
+import { RegionLog } from '../region-log'
 
-import type { RegionDatabase, RegionDatabases } from './region-databases'
-import { RegionLog } from './region-log'
-import {
-  type Actor,
-  deliver,
-  notSubscribed,
-  type Subscriber,
-  type Subscription,
-} from './subscription'
-
-/** A region's log and its authoritative document, and the hold on the database that keeps them. */
-export interface Loaded {
-  readonly log: RegionLog
-  readonly doc: LoroDoc
-  readonly database: RegionDatabase
-}
-
-/** What the hub keeps of one region, from the first subscription until it unloads the region. */
-export interface RegionState {
-  readonly ref: RegionRef
-  /** Devices whose subscription was answered: each receives the batches the others push. */
-  readonly subscribers: Map<string, Subscription>
-  /** Devices whose subscription waits in the queue for its answer. */
-  readonly joining: Map<string, Subscription>
-  /** How many writes of the server's own are asked of the region and not settled yet. */
-  writes: number
-  /** Settles once the work asked of the region so far has; the next work waits for it. */
-  queue: Promise<void>
-  /** The region's log and document, once the first subscription has loaded them. */
-  loaded: Loaded | undefined
-  /** Cancels the unload scheduled when the last device left. */
-  unload: (() => void) | undefined
-}
+import type { Loaded, RegionState } from './region-state'
+import { type Actor, deliver, notSubscribed, type Subscriber } from './subscription'
 
 /** Nobody subscribes to the region or waits to, and no write is asked of it. */
 function idle(state: RegionState): boolean {

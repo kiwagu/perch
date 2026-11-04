@@ -4,14 +4,13 @@ import type { DataError, LocalDb } from '@workspace/data'
 import { interceptQueries, openTestDb } from '@workspace/data/testing'
 import { defineAbilityFor, OWNER_ABILITY } from '@workspace/kernel'
 
-import { replicaSchema } from '../../__fixtures__/note'
-import type { ServerMessage } from '../../protocol'
-import type { RegionRef } from '../../region-doc'
-import { type ManualClock, manualClock } from '../../testing/manual-clock'
-import { type RegionDatabases, singleDatabase } from '../region-databases'
-import { type Actor, RegionHub, type Subscriber } from '../region-hub'
-
-import { nameIn } from './log'
+import { replicaSchema } from '../../../__fixtures__/note'
+import type { ServerMessage } from '../../../protocol'
+import type { RegionRef } from '../../../region-doc'
+import { type ManualClock, manualClock } from '../../../testing/manual-clock'
+import { nameIn } from '../../__fixtures__/log'
+import { type RegionDatabases, singleDatabase } from '../../region-databases'
+import { type Actor, RegionHub, type Subscriber } from '../hub'
 
 /** The identity id of the owner of the private region the hub tests use. */
 export const actor: Actor = { id: 'idn_a', ability: OWNER_ABILITY }

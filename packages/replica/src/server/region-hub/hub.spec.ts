@@ -5,8 +5,24 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { LocalDb } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
 
-import bumpHeadStatement from '../__fixtures__/bump-head.surql'
-import { noteCreate, noteUpdate } from '../__fixtures__/note'
+import bumpHeadStatement from '../../__fixtures__/bump-head.surql'
+import { noteCreate, noteUpdate } from '../../__fixtures__/note'
+import {
+  countRows,
+  forgedHistory,
+  nameIn,
+  profileIn,
+  storedEmail,
+  storedProfile,
+  storedSnapshot,
+} from '../__fixtures__/log'
+import type { RecordWrite } from '../record-write'
+import { type RegionDatabases, singleDatabase } from '../region-databases'
+import { RegionLog } from '../region-log'
+import { SERVER_PEER } from '../server-peer'
+import acceptStatement from '../surql/server-accept.surql'
+import headsStatement from '../surql/server-heads.surql'
+import loadStatement from '../surql/server-load.surql'
 
 import {
   actor,
@@ -25,23 +41,7 @@ import {
   subscriber,
   underPeerOf,
 } from './__fixtures__/hub'
-import {
-  countRows,
-  forgedHistory,
-  nameIn,
-  profileIn,
-  storedEmail,
-  storedProfile,
-  storedSnapshot,
-} from './__fixtures__/log'
-import type { RecordWrite } from './record-write'
-import { type RegionDatabases, singleDatabase } from './region-databases'
-import type { RegionHub, Subscriber } from './region-hub'
-import { RegionLog } from './region-log'
-import { SERVER_PEER } from './server-peer'
-import acceptStatement from './surql/server-accept.surql'
-import headsStatement from './surql/server-heads.surql'
-import loadStatement from './surql/server-load.surql'
+import type { RegionHub, Subscriber } from './hub'
 
 afterEach(closeHubs)
 
