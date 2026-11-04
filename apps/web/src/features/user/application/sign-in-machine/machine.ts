@@ -139,6 +139,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     context: { error: undefined, mail: undefined, sentTo: undefined },
     states: {
       'sign-in': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
         on: {
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.toggle-button': intoSignUp(clearError),
@@ -146,6 +147,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'sign-up': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         on: {
           'user.sign-in.toggle-button': { target: 'sign-in', actions: [clearError] },
           'user.sign-in.password-confirmation-input': {
@@ -165,6 +173,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       // The list marks the rules the password keeps; the password typed again waits to be judged,
       // and the submit is not taken.
       'password-weak': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         on: {
           'user.sign-in.password-input': [
             { guard: 'passwordBreaksRules' },
@@ -175,6 +190,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'passwords-differ': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         entry: [showError('passwords-differ')],
         exit: [clearError],
         on: {
@@ -190,6 +212,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'signing-in': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
         entry: [clearError],
         invoke: {
           src: 'platform.sign-in',
@@ -217,6 +240,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'signing-up': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         entry: [clearError],
         invoke: {
           src: 'platform.sign-up',
@@ -240,6 +270,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'check-mail': {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         on: {
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
@@ -248,6 +279,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       unverified: {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         on: {
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
@@ -256,6 +288,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       resending: {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         entry: [clearError],
         invoke: {
           src: 'platform.resend-verification',
@@ -270,8 +303,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           },
         },
       },
-      done: { type: 'final' },
-      'forgot-password': { type: 'final' },
+      done: { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
+      'forgot-password': { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
     },
   })
 }

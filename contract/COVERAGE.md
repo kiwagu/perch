@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 11 screens, 148 anchors and 62 codes.
+The contract declares 12 screens, 157 anchors and 67 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 60/61, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 63/64, ignored 2.
 
 ## Model
 
@@ -39,8 +39,10 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | id | field | unbound |
 | identity | field | unbound |
 | locale | field | `app-shell.locale-select`, `user.settings.locale-select` |
+| theme | field | `app-shell.theme-select`, `user.settings.theme-select` |
 | createSettings | action | unbound |
 | updateLocale | action | `app-shell.locale-select`, `user.settings.locale-select` |
+| updateTheme | action | `user.settings.theme-select` |
 
 ### note
 
@@ -68,9 +70,9 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
-| user | 28 | 28 | 0 | 100% |
+| user | 31 | 31 | 0 | 100% |
 | ui kit | 4 | 3 | 2 | 75% |
-| all | 61 | 60 | 2 | 98% |
+| all | 64 | 63 | 2 | 98% |
 
 ### Unmarked
 
@@ -90,15 +92,16 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 1 |
-| app-shell | 21 | 53 |
+| app-shell | 21 | 63 |
 | user.confirm-email | 5 | 4 |
+| user.delete-account | 4 | 5 |
 | device | 10 | 1 |
-| user.forgot-password | 6 | 10 |
-| user.profile | 10 | 44 |
-| organisation | 30 | 10 |
-| user.reset-password | 15 | 8 |
-| user.settings | 22 | 13 |
-| user.sign-in | 19 | 35 |
+| user.forgot-password | 6 | 11 |
+| user.profile | 10 | 50 |
+| organisation | 30 | 12 |
+| user.reset-password | 15 | 9 |
+| user.settings | 27 | 21 |
+| user.sign-in | 19 | 40 |
 | user.verify-email | 7 | 6 |
 
 <!-- coverage:end -->

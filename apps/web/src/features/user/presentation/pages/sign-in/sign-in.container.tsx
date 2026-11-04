@@ -29,19 +29,12 @@ export function SignInContainer() {
   // The word left for the page stays on it while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
-  const { state, send, submit, actor } = useScreenMachine(machine)
+  const { state, send, submit, actor, renders } = useScreenMachine('user.sign-in', machine)
   const locale = useLocale()
-  // The mode is the state: sign-up only while creating an account (the password breaking a rule
-  // and the passwords differing among them), sign-in otherwise (asking to check the mail and
-  // offering the resend among them, the values kept, and done, which only a sign-in reaches).
-  const mode = (['sign-up', 'password-weak', 'passwords-differ', 'signing-up'] as const).some(
-    (name) => state.matches(name),
-  )
-    ? 'sign-up'
-    : 'sign-in'
-  const showResend = (['check-mail', 'unverified', 'resending'] as const).some((name) =>
-    state.matches(name),
-  )
+  // The mode sign-up is where the state renders the fields of a new account, sign-in elsewhere
+  // (asking to check the mail and offering the resend among them, the values kept, and done,
+  // which only a sign-in reaches).
+  const mode = renders('user.sign-in.name-input') ? 'sign-up' : 'sign-in'
   // Whether the state handles a button's event; what the event carries does not decide it.
   const can = (control: SignInControl) =>
     state.can(
@@ -64,7 +57,7 @@ export function SignInContainer() {
       notice={notice}
       mail={state.context.mail}
       sentTo={state.context.sentTo}
-      showResend={showResend}
+      renders={renders}
       can={can}
       // The password typed again goes beside the form, never in it. A submit that finds the two
       // differing asks for nothing, so what was typed stays unsaved.

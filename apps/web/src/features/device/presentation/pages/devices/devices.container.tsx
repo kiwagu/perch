@@ -71,13 +71,13 @@ export function DevicesContainer() {
       }),
     [devices],
   )
-  const { state, send } = useScreenMachine(machine)
+  const { state, send, renders } = useScreenMachine('device', machine)
 
   return (
     <DevicesView
       devices={list}
       can={(event) => state.can(event)}
-      confirming={state.matches('confirming')}
+      confirming={renders('device.everywhere.dialog')}
       onRevoke={(device) => send({ type: 'device.list.revoke-button', device: device.id })}
       onOpenEverywhere={() => send({ type: 'device.everywhere.open-button' })}
       onSignOutEverywhere={() => send({ type: 'device.everywhere.dialog.confirm-button' })}

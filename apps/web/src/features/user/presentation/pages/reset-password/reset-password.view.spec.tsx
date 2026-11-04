@@ -6,18 +6,31 @@ import { renderWithProviders } from '../../../../../test-utils'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import es from '../../i18n/user.es.json'
 
-import { ResetPasswordView, type ResetPasswordViewProps } from './reset-password.view'
+import {
+  type ResetPasswordListed,
+  ResetPasswordView,
+  type ResetPasswordViewProps,
+} from './reset-password.view'
 
+/** What a state renders of the anchors only some render: `anchor` alone. */
+const only = (anchor: ResetPasswordListed) => (asked: ResetPasswordListed) => asked === anchor
+
+/** Renders the view in a state that renders the form, unless `props` says otherwise. */
 function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = {
     onTypePassword: vi.fn(),
     onSubmit: vi.fn(() => Promise.resolve(true)),
   }
 
-  renderWithProviders(<ResetPasswordView linkDead={false} canSubmit {...handlers} {...props} />, {
-    locale,
-    es,
-  })
+  renderWithProviders(
+    <ResetPasswordView
+      renders={only('user.reset-password.form')}
+      canSubmit
+      {...handlers}
+      {...props}
+    />,
+    { locale, es },
+  )
 
   return handlers
 }
@@ -99,7 +112,7 @@ describe('ResetPasswordView', () => {
   ])(
     'takes the form away for a link that does not work, offering a new one: %s',
     (failure, code) => {
-      renderView({ error: failure, linkDead: true })
+      renderView({ error: failure, renders: only('user.reset-password.forgot-link') })
 
       expect(screen.getByTestId('user.reset-password.error').getAttribute('data-code')).toBe(code)
       expect(screen.getByTestId('user.reset-password.forgot-link').getAttribute('href')).toBe(
@@ -110,7 +123,7 @@ describe('ResetPasswordView', () => {
   )
 
   it('says the password is the new one beside the link to sign in', () => {
-    renderView({ message: 'password-reset' })
+    renderView({ message: 'password-reset', renders: only('user.reset-password.sign-in-link') })
 
     expect(screen.getByTestId('user.reset-password.message').getAttribute('data-code')).toBe(
       'password-reset',

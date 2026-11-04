@@ -28,8 +28,11 @@ const fieldOf = (value: unknown, key: string): unknown => {
   return Object.hasOwn(record, key) ? record[key] : undefined
 }
 
-/** The names a state lists in `meta.renders`. */
-function listedBy(state: unknown): string[] {
+/**
+ * The names a state lists in `meta.renders`: a list of its own, its strings alone, as the app,
+ * the e2e harness and the comparison of machines read it.
+ */
+export function listedBy(state: unknown): string[] {
   const renders = fieldOf(fieldOf(state, 'meta'), 'renders')
 
   return Array.isArray(renders)
