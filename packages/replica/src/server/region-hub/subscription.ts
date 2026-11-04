@@ -1,7 +1,7 @@
 import { type DataError, dataError } from '@workspace/data'
 import type { Ability } from '@workspace/kernel'
 
-import type { ServerMessage } from '../protocol'
+import type { ServerMessage } from '../../protocol'
 
 /** One device's end of its subscriptions. */
 export interface Subscriber {
