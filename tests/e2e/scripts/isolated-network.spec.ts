@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 
 import { isolatedCommand } from './isolated-network'
 
@@ -26,12 +27,24 @@ describe('the e2e run in a network namespace of its own', () => {
     expect(args[args.indexOf('--udp-ports') + 1]).toBe('none')
     expect(args[args.indexOf('--udp-ns') + 1]).toBe('none')
     expect(args.slice(args.indexOf('--') + 1)).toEqual([
+      '/bin/sh',
+      '-c',
+      'exec "$@"',
+      'sh',
       'bunx',
       'playwright',
       'test',
       '--grep',
       '@smoke',
     ])
+  })
+
+  it('hands the command to the shell it starts with every argument as given', () => {
+    const args = isolatedCommand(['printf', '%s|', 'a b', "it's", '$HOME', '*'], {})
+    const [shell = '', ...rest] = args.slice(args.indexOf('--') + 1)
+    const printed = spawnSync(shell, rest, { encoding: 'utf8' })
+
+    expect(printed.stdout).toBe("a b|it's|$HOME|*|")
   })
 
   it('forwards the loopback ports of the front and the mailbox, and no other address of the environment', () => {

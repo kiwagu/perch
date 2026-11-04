@@ -10,7 +10,9 @@
  * host's loopback is reachable from inside, the host's resolver included: the namespace gets no
  * DNS (`--dns none`), as the run's addresses are loopback ones `/etc/hosts` names.
  * IPv4 only: inside, `localhost` resolves to ::1 first, which pasta would forward to the host's
- * ::1, where the stand's front does not listen.
+ * ::1, where the stand's front does not listen. The command starts through `/bin/sh`: the AppArmor
+ * profile Debian and Ubuntu ship for pasta lets it execute only what lies under /bin and /usr/bin,
+ * so it would refuse `bunx` in ~/.bun/bin, while the shell it starts may run anything.
  */
 
 import { spawnSync } from 'node:child_process'
@@ -56,6 +58,10 @@ export function isolatedCommand(command: readonly string[], env: NodeJS.ProcessE
     '--udp-ns',
     'none',
     '--',
+    '/bin/sh',
+    '-c',
+    'exec "$@"',
+    'sh',
     ...command,
   ]
 }
