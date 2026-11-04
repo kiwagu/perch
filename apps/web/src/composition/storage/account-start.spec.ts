@@ -5,7 +5,12 @@ import { identityIdFactory } from '@workspace/ids'
 import { ACCOUNT_START_KEY, keptAccountStart } from './account-start'
 import { memoryStorage } from './key-value'
 
-const start = { identity: identityIdFactory.create(), name: 'Ann', locale: 'es' as const }
+const start = {
+  identity: identityIdFactory.create(),
+  name: 'Ann',
+  locale: 'es' as const,
+  afterPull: false,
+}
 
 describe('the kept account start', () => {
   it('keeps one start for the tabs of the browser until it is forgotten', () => {

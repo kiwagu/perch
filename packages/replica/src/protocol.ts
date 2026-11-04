@@ -3,12 +3,13 @@ import { err, ok, type Result } from 'neverthrow'
 import { TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 7
+export const PROTOCOL_VERSION = 8
 
 /**
  * Close codes of the gateway: a message the protocol refuses, a session token it refuses, a
- * region of somebody else, a hello that did not come in time, a sign-out, and a device signed out
- * from another device (one device, or every device of the identity).
+ * region of somebody else, a hello that did not come in time, a sign-out, a device signed out
+ * from another device (one device, or every device of the identity), and a device signed out
+ * because the account's password changed (by a reset link, or on another device).
  */
 export const CLOSE = {
   protocol: 4400,
@@ -17,6 +18,7 @@ export const CLOSE = {
   timeout: 4408,
   signedOut: 4000,
   revoked: 4001,
+  passwordChanged: 4002,
 } as const
 
 /** The id a device names itself with: the browser's own stable id, minted on first use. */
@@ -52,7 +54,11 @@ const head = z.int().nonnegative()
 
 const batch = z.int().positive()
 
-/** `foreign-peer`: the batch brings changes under a Loro peer another identity writes as in the region. */
+/**
+ * `foreign-peer`: the batch brings changes under a Loro peer another identity writes as in the
+ * region. `readonly-field`: the batch changes a field of an existing record that devices may
+ * not change (the detail names `<record key>.<field>`); the server alone sets such a field.
+ */
 export const rejectReason = z.enum([
   'malformed',
   'pending-dependencies',
@@ -61,6 +67,7 @@ export const rejectReason = z.enum([
   'forbidden-action',
   'invalid-record',
   'foreign-peer',
+  'readonly-field',
 ])
 
 export const compactionOutcome = z.enum(['accepted', 'stale', 'beyond-head', 'version-mismatch'])

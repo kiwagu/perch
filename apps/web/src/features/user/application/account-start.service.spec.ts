@@ -5,6 +5,7 @@ import { type AuthUser, dataError } from '@workspace/data'
 import { identityIdFactory, profileIdFactory, settingsIdFactory } from '@workspace/ids'
 
 import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
+import type { Theme } from '../../../platform/theme'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
 import {
@@ -19,8 +20,11 @@ import { type NewSettings, SettingsService } from './settings/settings.service'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
-/** Each turn at once: a single tab. */
-const inTurn: StartTurns = (run) => run()
+/** The theme the device shows as an account starts there. */
+const shows = (): Theme => 'dark'
+
+/** Each turn at once: a single tab, whose store shows what its document holds. */
+const inTurn: StartTurns = (run) => run(() => okAsync(undefined))
 
 /** The one start a browser keeps, in memory. */
 function keptHere(): KeptStartPort & { readonly now: () => AccountStart | undefined } {
@@ -56,7 +60,7 @@ function records() {
       refuseProfile = refuse
     },
     settings: {
-      read: () => okAsync(settings.map(({ id, locale }) => ({ id, locale }))),
+      read: () => okAsync(settings.map(({ id, locale, theme }) => ({ id, locale, theme }))),
       createSettings: (row: NewSettings) => {
         settings.push(row)
         created.push('settings')
@@ -87,7 +91,7 @@ describe('AccountStartService', () => {
   it('starts a new account with its settings, then its profile, under ids derived from its identity, and keeps nothing once both exist', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
     expect((await starts.start(ann, { name: 'Ann', locale: 'es' })).isOk()).toBe(true)
     expect(held.created).toEqual(['settings', 'profile'])
@@ -95,7 +99,7 @@ describe('AccountStartService', () => {
     const [settings] = held.settingsRows()
     const [profile] = held.profileRows()
 
-    expect(settings).toMatchObject({ identity: ann.id, locale: 'es' })
+    expect(settings).toMatchObject({ identity: ann.id, locale: 'es', theme: 'dark' })
     expect(profile).toMatchObject({ identity: ann.id, name: 'Ann', email: ann.email })
     // The same ids on every device: the identity's own, under each record's prefix.
     expect(settingsIdFactory.is(settings?.id)).toBe(true)
@@ -108,7 +112,7 @@ describe('AccountStartService', () => {
   it('refuses a name the profile would refuse before it writes or keeps anything', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
     expect((await starts.start(ann, { name: '  ', locale: 'en' }))._unsafeUnwrapErr().code).toBe(
       'profile:NAME_REQUIRED',
@@ -120,7 +124,7 @@ describe('AccountStartService', () => {
   it('keeps a start whose profile could not be created, and the next open of its space here creates exactly that profile', async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
     held.refuseProfiles(true)
 
@@ -128,7 +132,7 @@ describe('AccountStartService', () => {
       'data:WRITE_FAILED',
     )
     expect(held.created).toEqual(['settings'])
-    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: false })
 
     held.refuseProfiles(false)
 
@@ -145,12 +149,12 @@ describe('AccountStartService', () => {
   it("creates nothing on the open of another account's space, nor where nothing was kept", async () => {
     const kept = keptHere()
     const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
     const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
     expect((await starts.resume(ann)).isOk()).toBe(true)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
 
     expect((await starts.resume(bob)).isOk()).toBe(true)
     expect(held.created).toEqual([])
@@ -164,10 +168,11 @@ describe('AccountStartService', () => {
       letRun = resolve
     })
     // The turn comes once another tab's turn ended.
-    const later: StartTurns = (run) => ResultAsync.fromSafePromise(waiting).andThen(() => run())
-    const starts = new AccountStartService(held.profiles, held.settings, kept, later)
+    const later: StartTurns = (run) =>
+      ResultAsync.fromSafePromise(waiting).andThen(() => run(() => okAsync(undefined)))
+    const starts = new AccountStartService(held.profiles, held.settings, kept, later, shows)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
 
     const resuming = starts.resume(ann)
 
@@ -177,6 +182,186 @@ describe('AccountStartService', () => {
 
     expect((await resuming).isOk()).toBe(true)
     expect(held.created).toEqual([])
+  })
+})
+
+describe('AccountStartService, for a start a sign-in learnt of', () => {
+  it('keeps it until the pull, creating nothing as the space opens, and only what is missing after', async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: true })
+
+    // The space opens before the device pulled: nothing is created.
+    expect((await starts.resume(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual([])
+
+    // The pull brought the settings another device made: only the profile is missing.
+    expect(
+      (
+        await held.settings.createSettings({
+          id: settingsIdFactory.create(),
+          identity: ann.id,
+          locale: 'en',
+          theme: 'light',
+        })
+      ).isOk(),
+    ).toBe(true)
+    held.created.splice(0)
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['profile'])
+    expect(held.settingsRows()).toHaveLength(1)
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it('keeps nothing for a name the profile would refuse', () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+
+    expect(starts.keepAfterPull(ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code).toBe(
+      'profile:NAME_REQUIRED',
+    )
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it("finishes after the pull a start the first verification kept, and nobody else's", async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+    const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
+
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
+
+    expect((await starts.resumeAfterPull(bob)).isOk()).toBe(true)
+    expect(held.created).toEqual([])
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['settings', 'profile'])
+  })
+})
+
+/**
+ * The account's records in a document whose projection lags: a create the document refuses for a
+ * record it holds, while the store the reads see shows only what was projected so far.
+ */
+function lagging() {
+  const inDocument = { settings: [] as NewSettings[], profiles: [] as NewProfile[] }
+  let shown = { settings: [] as NewSettings[], profiles: [] as NewProfile[] }
+  const created: string[] = []
+  const exists = (key: string) =>
+    errAsync(dataError('data:WRITE_REJECTED', `${key} already exists`))
+
+  return {
+    created,
+    inDocument,
+    /** The projection catches up with the document. */
+    project: () => {
+      shown = { settings: [...inDocument.settings], profiles: [...inDocument.profiles] }
+
+      return okAsync(undefined)
+    },
+    settings: {
+      read: () => okAsync(shown.settings.map(({ id, locale, theme }) => ({ id, locale, theme }))),
+      createSettings: (row: NewSettings) => {
+        if (inDocument.settings.some(({ id }) => id === row.id)) {
+          return exists(row.id)
+        }
+
+        inDocument.settings.push(row)
+        created.push('settings')
+
+        return okAsync(undefined)
+      },
+    },
+    profiles: {
+      read: () =>
+        okAsync(
+          shown.profiles.map(({ id, name, email }) => ({
+            id,
+            name,
+            email,
+            created_at: new Date(),
+          })),
+        ),
+      createProfile: (row: NewProfile) => {
+        if (inDocument.profiles.some(({ id }) => id === row.id)) {
+          return exists(row.id)
+        }
+
+        inDocument.profiles.push(row)
+        created.push('profile')
+
+        return okAsync(undefined)
+      },
+    },
+  }
+}
+
+describe('AccountStartService over a projection that lags', () => {
+  /** The settings another device made, which this device pulled into its document. */
+  const pulledSettings = (held: ReturnType<typeof lagging>) => {
+    held.inDocument.settings.push({
+      id: settingsIdFactory.brand(`stg_${ann.id.slice(ann.id.indexOf('_') + 1)}`),
+      identity: ann.id,
+      locale: 'en',
+      theme: 'light',
+    })
+  }
+
+  it('creates nothing over a record its document holds once its turn projected it first', async () => {
+    const held = lagging()
+    const kept = keptHere()
+    // The turn projects what the tab pulled before the start reads, as the browser's turns do.
+    const projecting: StartTurns = (run) => held.project().andThen(() => run(held.project))
+    const starts = new AccountStartService(held.profiles, held.settings, kept, projecting, shows)
+
+    pulledSettings(held)
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['profile'])
+    expect(held.inDocument.settings).toMatchObject([{ locale: 'en' }])
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it('counts a create the document refuses for a record it holds as done, once projected', async () => {
+    const held = lagging()
+    const kept = keptHere()
+    // The record reaches the document after the read: the turn's first projection missed it.
+    const late: StartTurns = (run) => run(held.project)
+    const starts = new AccountStartService(held.profiles, held.settings, kept, late, shows)
+
+    pulledSettings(held)
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['profile'])
+    expect(held.inDocument.settings).toHaveLength(1)
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it('keeps the start when a create fails and no record shows after it', async () => {
+    const held = lagging()
+    const kept = keptHere()
+    const failing = {
+      ...held.profiles,
+      createProfile: () => errAsync(dataError('data:WRITE_FAILED', 'not written')),
+    }
+    const starts = new AccountStartService(
+      failing,
+      held.settings,
+      kept,
+      (run) => run(held.project),
+      shows,
+    )
+
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+
+    expect((await starts.resumeAfterPull(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(kept.now()).toMatchObject({ identity: ann.id, afterPull: true })
   })
 })
 
@@ -228,6 +413,7 @@ describe('AccountStartService on a session', () => {
       settings,
       kept,
       inTurn,
+      shows,
     )
 
     expect((await failing.start(user, { name: 'Ann', locale: 'es' })).isErr()).toBe(true)
@@ -244,7 +430,7 @@ describe('AccountStartService on a session', () => {
     expect((await failing.resume(user)).isOk()).toBe(true)
     expect((await opened.session.flush()).isOk()).toBe(true)
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
-      { locale: 'es' },
+      { locale: 'es', theme: 'dark' },
     ])
     expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann', email: input.email },

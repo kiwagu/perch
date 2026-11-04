@@ -4,13 +4,14 @@
  * it is read only through its schema and an error names the status alone.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { answerBody, linkRefusedBy } from './answer-body'
 import type { SignedInDevice } from './signed-in'
 
 /** The account a first verification signed this device in to, as its sign-up named it. */
@@ -47,14 +48,7 @@ const verifiedAnswer = z.union([
   z.object({ token: z.null() }),
 ])
 
-/** The codes the gateway refuses a verification link's token with. */
-const linkRefusal = z.object({ code: z.enum(['link-invalid', 'link-expired']) })
-
 const linkInvalid = () => dataError('data:LINK_INVALID', 'the gateway refused the link')
-
-/** The body of an answer as JSON, `undefined` when it has none. */
-const bodyOf = (response: Response): ResultAsync<unknown, never> =>
-  ResultAsync.fromSafePromise((response.json() as Promise<unknown>).catch(() => undefined))
 
 /** The outcome a verification's 200 carries. */
 function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
@@ -92,16 +86,12 @@ function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
  */
 export function verificationOf(response: Response): ResultAsync<EmailVerification, DataError> {
   if (response.status === 200) {
-    return bodyOf(response).andThen(outcomeOf)
+    return answerBody(response).andThen(outcomeOf)
   }
 
   if (response.status === 401) {
-    return bodyOf(response).andThen((body) =>
-      errAsync(
-        linkRefusal.safeParse(body).data?.code === 'link-expired'
-          ? dataError('data:LINK_EXPIRED', 'the link is past its lifetime')
-          : linkInvalid(),
-      ),
+    return linkRefusedBy(response).andThen((refused) =>
+      errAsync<EmailVerification, DataError>(refused),
     )
   }
 

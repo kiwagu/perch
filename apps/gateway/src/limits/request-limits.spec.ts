@@ -309,3 +309,130 @@ describe('RequestLimits', () => {
     ).toEqual({ allowed: false, retryAfterMs: 60 * minute })
   })
 })
+
+describe('RequestLimits, the mails and links of a password and an email', () => {
+  it('takes three reset mails of an email within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
+    const { clock, limits } = limitsOn()
+
+    expect(answers(3, () => limits.resetMail(FROM, 'ann@example.test').allowed)).toEqual([
+      true,
+      true,
+      true,
+    ])
+    await clock.advance(5 * minute)
+    expect(limits.resetMail(FROM, 'ann@example.test')).toEqual({
+      allowed: false,
+      retryAfterMs: 10 * minute,
+    })
+    // An email's resends of its verification mail are another limit.
+    expect(limits.verificationMail(FROM, 'ann@example.test')).toEqual({ allowed: true })
+    // The address took four of its 200: 196 more fit, the refused reset's place given back.
+    expect(answers(196, () => limits.verificationMail(FROM).allowed)).toEqual(
+      answers(196, () => true),
+    )
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    await clock.advance(10 * minute)
+    expect(limits.resetMail(ELSEWHERE, 'ann@example.test')).toEqual({ allowed: true })
+  })
+
+  it("shares the address's budget of mails among sign-ups, resends, resets and email changes", () => {
+    const { limits } = limitsOn()
+
+    answers(50, () => limits.verificationMail(FROM))
+    answers(50, (n) => limits.verificationMail(FROM, `resend-${n}@example.test`))
+    answers(50, (n) => limits.resetMail(FROM, `reset-${n}@example.test`))
+    answers(50, (n) =>
+      limits.emailChangeMail(FROM, idSchemas.identity.schema.parse(`idn_change_${n}`)),
+    )
+
+    expect(limits.resetMail(FROM, 'fresh@example.test').allowed).toBe(false)
+    expect(limits.emailChangeMail(FROM, bob).allowed).toBe(false)
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    // Neither refusal took anything of the email's or the identity's own limit.
+    expect(answers(3, () => limits.resetMail(ELSEWHERE, 'fresh@example.test').allowed)).toEqual([
+      true,
+      true,
+      true,
+    ])
+    expect(answers(3, () => limits.emailChangeMail(ELSEWHERE, bob).allowed)).toEqual([
+      true,
+      true,
+      true,
+    ])
+  })
+
+  it('takes three email changes of an identity within 15 minutes and refuses the fourth', async () => {
+    const { clock, limits } = limitsOn()
+
+    expect(answers(3, () => limits.emailChangeMail(FROM, ann).allowed)).toEqual([true, true, true])
+    await clock.advance(minute)
+    expect(limits.emailChangeMail(ELSEWHERE, ann)).toEqual({
+      allowed: false,
+      retryAfterMs: 14 * minute,
+    })
+    expect(limits.emailChangeMail(FROM, bob)).toEqual({ allowed: true })
+    await clock.advance(14 * minute)
+    expect(limits.emailChangeMail(FROM, ann)).toEqual({ allowed: true })
+  })
+
+  it('takes three deletion requests of an identity within 15 minutes, refuses the fourth, and the refused one costs its address nothing', async () => {
+    const { clock, limits } = limitsOn()
+
+    expect(answers(3, () => limits.deletionMail(FROM, ann).allowed)).toEqual([true, true, true])
+    await clock.advance(minute)
+    expect(limits.deletionMail(ELSEWHERE, ann)).toEqual({
+      allowed: false,
+      retryAfterMs: 14 * minute,
+    })
+    expect(limits.deletionMail(FROM, bob)).toEqual({ allowed: true })
+    // An identity's changes of its email are another limit.
+    expect(limits.emailChangeMail(FROM, ann)).toEqual({ allowed: true })
+    // The refused request took none of ELSEWHERE's 200 mails.
+    expect(answers(200, () => limits.verificationMail(ELSEWHERE).allowed)).toEqual(
+      answers(200, () => true),
+    )
+    await clock.advance(14 * minute)
+    expect(limits.deletionMail(FROM, ann)).toEqual({ allowed: true })
+  })
+
+  it("counts the deletion mails toward the address's budget of mails", () => {
+    const { limits } = limitsOn()
+
+    answers(150, () => limits.verificationMail(FROM))
+    answers(50, (n) =>
+      limits.deletionMail(FROM, idSchemas.identity.schema.parse(`idn_deletion_${n}`)),
+    )
+
+    expect(limits.deletionMail(FROM, ann).allowed).toBe(false)
+    expect(limits.verificationMail(FROM).allowed).toBe(false)
+    // The refusal took nothing of the identity's own limit.
+    expect(answers(3, () => limits.deletionMail(ELSEWHERE, ann).allowed)).toEqual([
+      true,
+      true,
+      true,
+    ])
+  })
+
+  it.each([
+    ['passwordReset', ['emailConfirmation', 'accountDeletion']],
+    ['emailConfirmation', ['passwordReset', 'accountDeletion']],
+    ['accountDeletion', ['passwordReset', 'emailConfirmation']],
+  ] as const)(
+    'takes 20 attempts of %s per address within 10 minutes, refused or not, apart from %j',
+    async (kind, others) => {
+      const { clock, limits } = limitsOn()
+
+      expect(answers(20, () => limits[kind](FROM).allowed)).toEqual(answers(20, () => true))
+      await clock.advance(4 * minute)
+      expect(limits[kind](FROM)).toEqual({ allowed: false, retryAfterMs: 6 * minute })
+      expect(limits[kind](ELSEWHERE)).toEqual({ allowed: true })
+
+      for (const other of others) {
+        expect(limits[other](FROM)).toEqual({ allowed: true })
+      }
+
+      await clock.advance(6 * minute)
+      expect(limits[kind](FROM)).toEqual({ allowed: true })
+    },
+  )
+})

@@ -1,11 +1,13 @@
-/** `ui-contract coverage [--write] [--json] [--unmarked]`. */
+/** `ui-contract coverage [--write] [--json] [--unmarked] [--descriptions]`. */
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { COVERAGE_FILE } from '../files'
 import {
+  compositeNotes,
   listControls,
+  listDescriptions,
   measureCoverage,
   renderCoverage,
   replaceCoverageBlock,
@@ -41,6 +43,12 @@ export function coverage(argv: readonly string[]): number {
     return 0
   }
 
+  if (argv.includes('--descriptions')) {
+    console.log(listDescriptions(contract))
+
+    return 0
+  }
+
   const block = renderCoverage(measure, totals)
 
   if (!argv.includes('--write')) {
@@ -53,6 +61,10 @@ export function coverage(argv: readonly string[]): number {
 
   writeFileSync(path, replaceCoverageBlock(readFileSync(path, 'utf8'), block))
   console.log(`ui-contract: wrote ${COVERAGE_FILE}`)
+
+  for (const note of compositeNotes(measure)) {
+    console.log(`ui-contract: ${note}`)
+  }
 
   return 0
 }

@@ -11,7 +11,7 @@ import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { serviceWorkerReload } from './composition/service-worker'
-import { LocaleWrites } from './features/app-shell/application/locale-writes'
+import { NOTHING_SEEN } from './features/app-shell/application/setting-writes'
 import { ConfirmGuard } from './features/app-shell/presentation/confirm-guard/confirm-guard.container'
 import { CrashSignal } from './features/app-shell/presentation/crash/crash-signal'
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
@@ -19,7 +19,7 @@ import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-tex
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
 import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
-  frameLanguageWrites,
+  frameSettingsWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
@@ -29,10 +29,12 @@ import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
-import { LanguageWritesContext } from './platform/language-writes'
 import { NoticeProvider } from './platform/notices'
+import { PLATFORM_EVENTS } from './platform/platform-events.port'
+import { sendPlatformEvents } from './platform/platform-events-input'
 import { createAppRouter } from './platform/router'
 import { ServicesProvider } from './platform/services'
+import { SettingsWritesContext } from './platform/settings-writes'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -84,7 +86,7 @@ function bootOnce(): Promise<Boot> {
   // its WASM engines load only when a space opens, so nothing loads them until someone is signed in.
   booting ??= import('./composition/browser')
     .then(({ bootBrowser }) =>
-      bootBrowser().match<Boot>(
+      bootBrowser(() => theme.current()).match<Boot>(
         ({ services, opened, warm }) => ({
           status: 'started',
           services,
@@ -128,7 +130,7 @@ function App(props: { readonly reload: () => void }) {
     const live: ShellLive = {
       account: undefined,
       stored: undefined,
-      writes: LocaleWrites.none,
+      writes: NOTHING_SEEN,
       generation: 0,
       signOutHere: undefined,
       renderAgain: undefined,
@@ -137,13 +139,18 @@ function App(props: { readonly reload: () => void }) {
 
     return {
       live,
-      machine: shellFrameMachine(live, { setTheme: device.set, install, reload: props.reload }),
+      machine: shellFrameMachine(live, {
+        setTheme: device.set,
+        followTheme: device.follow,
+        install,
+        reload: props.reload,
+      }),
     }
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
-  // The settings screen's stores of the language, kept by the frame to tell their echo from another device's.
-  const languageWrites = useMemo(() => frameLanguageWrites(made.live), [made])
+  // The settings screen's stores, kept by the frame to tell their echo from another tab's or device's.
+  const settingsWrites = useMemo(() => frameSettingsWrites(made.live), [made])
 
   useEffect(() => {
     const spoken = actor.on('speak', ({ locale }) => setLocale(locale))
@@ -201,6 +208,16 @@ function App(props: { readonly reload: () => void }) {
     }
   }, [made, send])
 
+  // The facts another tab of this browser sets reach the frame's flow once the services exist,
+  // in every state, as they reach a screen's.
+  useEffect(
+    () =>
+      started === undefined
+        ? undefined
+        : sendPlatformEvents(started.services.container.get(PLATFORM_EVENTS), actor),
+    [started, actor],
+  )
+
   // A guest's sign-in opens the engines: they load once the frame and its page are up, so they
   // never compete with them.
   useEffect(() => {
@@ -234,11 +251,11 @@ function App(props: { readonly reload: () => void }) {
 
   return (
     <ShellFrameContext.Provider value={frame}>
-      <LanguageWritesContext.Provider value={languageWrites}>
+      <SettingsWritesContext.Provider value={settingsWrites}>
         <ServicesProvider services={started.services}>
           <RouterProvider router={started.router} />
         </ServicesProvider>
-      </LanguageWritesContext.Provider>
+      </SettingsWritesContext.Provider>
     </ShellFrameContext.Provider>
   )
 }

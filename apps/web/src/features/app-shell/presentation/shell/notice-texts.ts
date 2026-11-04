@@ -8,4 +8,5 @@ export const NOTICE_TEXTS: Texts = {
   'change-rejected': (t) => t('app.shell.rejected'),
   'changes-reloaded': (t) => t('app.shell.reloaded'),
   'locale-not-stored': (t) => t('app.shell.locale-not-stored'),
+  'theme-not-stored': (t) => t('app.shell.theme-not-stored'),
 }

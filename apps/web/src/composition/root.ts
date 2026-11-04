@@ -35,9 +35,11 @@ import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { type AppEvent, EVENTS } from '../platform/events.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
+import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { SYNC_STATUS } from '../platform/sync-status.port'
+import type { Theme } from '../platform/theme'
 
 import { accountStarts } from './account-starts'
 import { type CommandLogger, createCommandBus } from './commands'
@@ -46,6 +48,7 @@ import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
+import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
 import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
 import { syncStatus } from './sync-status'
@@ -65,6 +68,8 @@ export interface AppRootOptions {
   readonly gatewayAuth: GatewayAuth
   /** The label sign-ins and verifications give this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
+  /** The theme this device shows now, which the settings of an account it starts begin with. */
+  readonly theme: () => Theme
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean
   /** Hears the browser's network come or go (its `online` and `offline` events). */
@@ -179,7 +184,10 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     onSyncState: (state) => {
       options.onSyncState(state)
       sync.syncState(state)
+      starts.syncState(state)
     },
+    // The start of an account a sign-in learnt of waits for this device's first pull.
+    keepAccountStart: (user, from) => starts.keepAfterPull(user, from),
     onError: options.onError,
     publish: (event) => {
       void events.publish([event]).match(
@@ -217,9 +225,12 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   // Listening before the session restores: the start of the page finishes a start kept here.
   const starts = accountStarts({
     session,
+    space: () => session.space(),
+    clock: options.clock,
     runner: session.runner,
     commands,
     settings,
+    theme: options.theme,
     storage: options.storage,
     locks: options.locks,
     logger: options.logger,
@@ -232,11 +243,13 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(COMMANDS, () => commands)
     .singleton(EVENTS, () => events)
     .singleton(SETTINGS_SERVICE, () => settings)
-    .singleton(ACCOUNT_START_SERVICE, () => starts)
+    .singleton(ACCOUNT_START_SERVICE, () => starts.service)
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)
+    // The facts another tab of the browser sets, which the screens' flows hear.
+    .singleton(PLATFORM_EVENTS, () => platformEvents(options.storage))
 
   step('restore-session')
 

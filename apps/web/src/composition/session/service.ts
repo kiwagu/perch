@@ -4,6 +4,7 @@ import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/d
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
+  EmailConfirmed,
   EmailVerified,
   SessionNotice,
   SessionPort,
@@ -11,13 +12,15 @@ import type {
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace } from '../identity-space'
-import { forgetNotice, IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity, savedNotice } from '../storage'
+import { IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
 
+import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
 import { SessionSignIn } from './sign-in'
+import { SignInNotice } from './sign-in-notice'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
 import { SpaceDeletion } from './space-deletion'
 import { SessionState } from './state'
@@ -48,19 +51,30 @@ export class SessionService implements SessionPort {
   readonly #options: SessionOptions
   readonly #state: SessionState
   readonly #organisations: SessionOrganisations
+  readonly #account: SessionAccount
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   readonly #elsewhere: SessionElsewhere
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
+  readonly #signInNotice: SignInNotice
+  /** The sign-ins this tab started that are running now. */
+  #signingInHere = 0
 
   constructor(options: SessionOptions) {
     this.#options = options
+    this.#signInNotice = new SignInNotice(options.storage)
     // The organisations follow every change of identity, once the subscribers heard of it.
     this.#state = new SessionState(options, this.#transitions, () => this.#organisations.tell())
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
       open: () => this.#state.open(),
+    })
+    this.#account = new SessionAccount({
+      auth: options.auth,
+      storage: options.storage,
+      signedIn: () => this.#state.open() !== undefined,
+      signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
     })
 
     const barrier = new WriteBarrier({
@@ -121,6 +135,7 @@ export class SessionService implements SessionPort {
         }
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
+      this.subscribe((user) => user && this.#signInNotice.signedIn(user.id)),
     ]
   }
 
@@ -142,17 +157,51 @@ export class SessionService implements SessionPort {
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    return this.#transitions.serially((generation) => this.#signingIn.signIn(input, generation))
+    return this.#transitions.serially((generation) =>
+      this.#here(() => this.#signingIn.signIn(input, generation)),
+    )
   }
 
   verifyEmail(token: string): ResultAsync<EmailVerified, DataError> {
     return this.#transitions.serially((generation) =>
-      verifyEmail(this.#signingIn, this.#options.auth, token, generation),
+      this.#here(() => verifyEmail(this.#signingIn, this.#options.auth, token, generation)),
     )
+  }
+
+  signingInHere(): boolean {
+    return this.#signingInHere > 0
   }
 
   resendVerification(email: string): ResultAsync<void, DataError> {
     return this.#options.auth.resendVerification(email)
+  }
+
+  requestPasswordReset(email: string): ResultAsync<void, DataError> {
+    return this.#account.requestPasswordReset(email)
+  }
+
+  resetPassword(token: string, password: string): ResultAsync<void, DataError> {
+    return this.#account.resetPassword(token, password)
+  }
+
+  changePassword(currentPassword: string, password: string): ResultAsync<void, DataError> {
+    return this.#account.changePassword(currentPassword, password)
+  }
+
+  changeEmail(email: string, password: string): ResultAsync<void, DataError> {
+    return this.#account.changeEmail(email, password)
+  }
+
+  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
+    return this.#account.confirmEmail(token)
+  }
+
+  requestAccountDeletion(password: string): ResultAsync<void, DataError> {
+    return this.#account.requestAccountDeletion(password)
+  }
+
+  deleteAccount(token: string): ResultAsync<void, DataError> {
+    return this.#account.deleteAccount(token)
   }
 
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
@@ -217,11 +266,26 @@ export class SessionService implements SessionPort {
   }
 
   notice(): SessionNotice | undefined {
-    return savedNotice(this.#options.storage)
+    return this.#signInNotice.read()
   }
 
   clearNotice(): void {
-    forgetNotice(this.#options.storage)
+    this.#signInNotice.take()
+  }
+
+  leaveNotice(notice: SessionNotice): void {
+    this.#signInNotice.leave(notice, this.current()?.id)
+  }
+
+  /** Runs a sign-in this tab started; `signingInHere` says so while it runs. */
+  #here<T>(run: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
+    const done = () => {
+      this.#signingInHere -= 1
+    }
+
+    this.#signingInHere += 1
+
+    return run().andTee(done).orTee(done)
   }
 
   protocolRefused(): boolean {

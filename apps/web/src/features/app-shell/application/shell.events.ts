@@ -2,7 +2,7 @@ import { okAsync } from 'neverthrow'
 
 import type { EventsPort } from '../../../platform/events.port'
 
-import type { ShellEvent } from './shell.machine'
+import type { ShellEvent } from './shell-machine'
 
 /**
  * The bus's refusals as the frame's platform events: a change the gateway refused, and refused

@@ -46,13 +46,13 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 7 only', () => {
+  it('takes a hello of protocol 8 only', () => {
     const hello = (protocol: number) =>
       JSON.stringify({ type: 'hello', protocol, token: 't', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(7)
-    expect(decodeMessage(clientMessage, hello(7)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(6)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(8)
+    expect(decodeMessage(clientMessage, hello(8)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(7)).isErr()).toBe(true)
   })
 
   it('takes a hello that carries the session token, and no access or refresh key', () => {
@@ -117,6 +117,10 @@ describe('sync protocol', () => {
 
   it('closes a device signed out from another one with 4001', () => {
     expect(CLOSE.revoked).toBe(4001)
+  })
+
+  it('closes a device signed out by a change of its password with 4002', () => {
+    expect(CLOSE.passwordChanged).toBe(4002)
   })
 
   it('refuses text that is not JSON', () => {

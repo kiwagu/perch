@@ -40,6 +40,20 @@ export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
   )
 }
 
+/**
+ * Keeps the new email of `identity` while it is the one signed in on this browser, as its email's
+ * confirmation answered; the tabs hear the identity's record change, and stay with it.
+ */
+export function saveIdentityEmail(
+  storage: KeyValueStorage,
+  identity: AuthUser['id'],
+  email: string,
+): void {
+  if (savedIdentity(storage)?.id === identity) {
+    storage.set(IDENTITY_KEY, JSON.stringify({ id: identity, email }))
+  }
+}
+
 /** The identity signed in on this browser; a kept value that does not describe one is none. */
 export function savedIdentity(storage: KeyValueStorage): AuthUser | undefined {
   const text = storage.get(IDENTITY_KEY)

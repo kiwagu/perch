@@ -7,6 +7,10 @@ import type { Translate } from '@workspace/i18n'
 export const PAGE_TITLES: Readonly<Record<string, (t: Translate) => string>> = {
   '/sign-in': (t) => t('app.title.user.sign-in'),
   '/verify-email': (t) => t('app.title.user.verify-email'),
+  '/forgot-password': (t) => t('app.title.user.forgot-password'),
+  '/reset-password': (t) => t('app.title.user.reset-password'),
+  '/confirm-email': (t) => t('app.title.user.confirm-email'),
+  '/delete-account': (t) => t('app.title.user.delete-account'),
   '/me': (t) => t('app.title.user.profile'),
   '/org': (t) => t('app.title.organisation'),
   '/devices': (t) => t('app.title.device'),

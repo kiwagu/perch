@@ -1,10 +1,10 @@
 import { keepsPasswordRules } from '@workspace/kernel'
-import type { Clock } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 
+import { until } from './floor'
 import type { AuthMountDeps } from './mount'
 import { refusalOf, withJsonBody } from './requests'
 
@@ -21,17 +21,6 @@ export const SIGN_UP_FLOOR_MS = 800
  * taken by, and the password the rules of a new password are checked on.
  */
 const signUpBody = z.object({ email: z.string().min(1).max(320), password: z.string() })
-
-/** Resolves at `deadline` on `clock`, at once when it has passed. */
-function until(clock: Clock, deadline: number): Promise<void> {
-  const remaining = deadline - clock.now()
-
-  return remaining <= 0
-    ? Promise.resolve()
-    : new Promise((resolve) => {
-        clock.schedule(remaining, resolve)
-      })
-}
 
 /**
  * Hands Better Auth a sign-up, once the client address's verification mails took it (every sign-up

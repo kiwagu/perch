@@ -1,12 +1,20 @@
 /**
  * The codes and fields of an error anchor, derived when the screen file leaves them out. An
- * error `<part>.error` shows the failures of the actions the anchors beside it bind
- * (`<part>.<name>`, in the order they are declared, each binding in its order):
+ * error `<part>.error` shows what three sources give, in this order:
  *
- * - its `codes` are the codes of those failures, each once, `failed` last;
- * - its `fields` map each code a field of the model gives to the control that binding passes
- *   for the field's parameter, when that control is a field of the screen; a code two bindings
- *   pass from two different controls concerns the form, so it is left out.
+ * - the failures of the actions the anchors beside it bind (`<part>.<name>`, in the order they
+ *   are declared, each binding in its order);
+ * - the failures of the actions the screen's flow invokes and shows on the error, by a written
+ *   `onError`, the request pattern or a region written `by` a button (`flow-errors.ts`), in the
+ *   order the flow writes them;
+ * - the codes the flow shows on the error explicitly, anywhere.
+ *
+ * So:
+ *
+ * - its `codes` are the codes of those sources, each once, `failed` last;
+ * - its `fields` map each code a field of the model gives to the control that binding or invoke
+ *   passes for the field's parameter, when that control is a field of the screen; a code two
+ *   sources pass from two different controls concerns the form, so it is left out.
  *
  * What the file writes wins: written `codes` stay, and written `fields` stay. Derived fields
  * cover only the codes the anchor carries.
@@ -16,6 +24,7 @@ import { FIELD_KINDS } from '../../anchors'
 import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 
 import { type FailureOf, failureCodes, unionOf } from './failures'
+import { type FlowSources, flowSourcesOf } from './flow-errors'
 
 const ERROR = 'error'
 const FAILED = 'failed'
@@ -42,37 +51,43 @@ const actionsOf = (def: unknown) =>
         : [],
     )
 
-/** The derived codes and fields of the error `error`, before what the file writes. */
+/**
+ * The derived codes and fields of the error `error`, before what the file writes: the actions
+ * bound beside it, then those the flow invokes against it, then the codes the flow shows on it.
+ */
 function derivedOf(
   error: string,
   anchors: Readonly<Record<string, unknown>>,
   failureOf: FailureOf,
+  sources: FlowSources,
 ) {
   const lists: Array<readonly string[]> = []
   const fields = new Map<string, string | null>()
+  const actions = [
+    ...besideOf(error, anchors).flatMap(([, def]) => actionsOf(def)),
+    ...(sources.invoked.get(error) ?? []),
+  ]
 
-  for (const [, def] of besideOf(error, anchors)) {
-    for (const { action, params } of actionsOf(def)) {
-      const failure = failureOf(action)
+  for (const { action, params } of actions) {
+    const failure = failureOf(action)
 
-      lists.push(failureCodes(failure))
+    lists.push(failureCodes(failure))
 
-      for (const [param, codes] of Object.entries(
-        typeof failure === 'object' ? failure.params : {},
-      )) {
-        const control = params[param]
-        const kind = typeof control === 'string' ? recordOf(anchors[control])['kind'] : undefined
+    for (const [param, codes] of Object.entries(
+      typeof failure === 'object' ? failure.params : {},
+    )) {
+      const control = params[param]
+      const kind = typeof control === 'string' ? recordOf(anchors[control])['kind'] : undefined
 
-        for (const code of typeof kind === 'string' && FIELD_KINDS.has(kind) ? codes : []) {
-          const known = fields.get(code)
+      for (const code of typeof kind === 'string' && FIELD_KINDS.has(kind) ? codes : []) {
+        const known = fields.get(code)
 
-          fields.set(code, known === undefined || known === control ? String(control) : null)
-        }
+        fields.set(code, known === undefined || known === control ? String(control) : null)
       }
     }
   }
 
-  const codes = unionOf(lists)
+  const codes = unionOf([...lists, sources.shown.get(error) ?? []])
 
   return {
     codes: codes.includes(FAILED) ? [...codes.filter((code) => code !== FAILED), FAILED] : codes,
@@ -85,8 +100,9 @@ function errorOf(
   def: Readonly<Record<string, unknown>>,
   anchors: Readonly<Record<string, unknown>>,
   failureOf: FailureOf,
+  sources: FlowSources,
 ): Readonly<Record<string, unknown>> {
-  const derived = derivedOf(error, anchors, failureOf)
+  const derived = derivedOf(error, anchors, failureOf, sources)
   const written = def['codes']
   const codes: unknown = written ?? (derived.codes.length === 0 ? undefined : derived.codes)
   const carried = new Set(Array.isArray(codes) ? codes : [])
@@ -111,12 +127,16 @@ export function withDerivedErrors(screen: unknown, failureOf: FailureOf): unknow
     return screen
   }
 
+  const sources = flowSourcesOf(screen, failureOf)
+
   return {
     ...screen,
     anchors: Object.fromEntries(
       entriesOf(anchors).map(([name, def]) => [
         name,
-        isRecord(def) && def['kind'] === ERROR ? errorOf(name, def, anchors, failureOf) : def,
+        isRecord(def) && def['kind'] === ERROR
+          ? errorOf(name, def, anchors, failureOf, sources)
+          : def,
       ]),
     ),
   }

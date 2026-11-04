@@ -1,7 +1,7 @@
 // scenario: user/base/settings
 import { appReady, expect, signUp, test } from '../../support/fixtures'
 
-test.describe('Choose the theme of this device and the language of the account', {
+test.describe('Choose the theme and the language of the account', {
   tag: '@smoke',
 }, () => {
   test('A signed-in user chooses the dark theme and Spanish, and both stay after a reload', async ({
@@ -29,6 +29,8 @@ test.describe('Choose the theme of this device and the language of the account',
         .click()
       // Expected: After step 2 [user.settings.theme-select] shows [value:dark]
       await expect(theme).toHaveAttribute('data-value', 'dark')
+      // The store has ended once the select takes a choice again: the reload below cannot race it.
+      await expect(theme).toBeEnabled()
     })
 
     await test.step('3. Choose [value:es] in [user.settings.locale-select]', async () => {

@@ -10,9 +10,12 @@ import { z } from '@workspace/zod'
 
 import type { MailPort } from '../mail'
 
+import { ResetLinks } from './account-links'
+import { AccountMails } from './account-mails'
 import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
 import { hashPassword, verifyPassword } from './password-hash'
+import { RESET_LINK_LIFETIME_S, resetMailer } from './reset-mail'
 import { sessionHooks } from './session-hooks'
 import { verificationMailer } from './verification-mail'
 
@@ -65,6 +68,21 @@ export function authOptions(options: AuthInstanceOptions) {
       // No session before the email is verified: a sign-up answers with no token, a taken email
       // as a new one, and a sign-in of an unverified account is refused after its password.
       requireEmailVerification: true,
+      // A reset link lives an hour; each request's link replaces the account's earlier ones, and
+      // its mail links to the front's own screen.
+      resetPasswordTokenExpiresIn: RESET_LINK_LIFETIME_S,
+      sendResetPassword: resetMailer({
+        links: new ResetLinks(options.local),
+        mails: new AccountMails({
+          mail: options.mail,
+          directory: options.local,
+          publicUrl: options.publicUrl,
+          log: options.log,
+        }),
+      }),
+      // Better Auth's own ending at a reset deletes the sessions' rows in bulk; the gateway ends
+      // every session of the account itself, by its own update, and closes their sockets.
+      revokeSessionsOnPasswordReset: false,
     },
     emailVerification: {
       // Every sign-up sends the mail; a taken email's sends none.
@@ -79,6 +97,7 @@ export function authOptions(options: AuthInstanceOptions) {
         mail: options.mail,
         directory: options.local,
         publicUrl: options.publicUrl,
+        secret: options.secret,
         log: options.log,
       }),
     },
@@ -110,7 +129,13 @@ export function authOptions(options: AuthInstanceOptions) {
       // session hooks keep them: a delete ends the row instead.
     },
     account: AUTH_MODELS.account,
-    verification: AUTH_MODELS.verification,
+    verification: {
+      ...AUTH_MODELS.verification,
+      // Better Auth deletes every expired row whenever it looks a value up, so a reset link past
+      // its hour would read as one nobody had. The rows stay instead: an account keeps one reset
+      // link and one pending change of its email at most, each replaced by the next.
+      disableCleanup: true,
+    },
     advanced: {
       database: { generateId: generateAuthId },
     },
@@ -118,9 +143,17 @@ export function authOptions(options: AuthInstanceOptions) {
     // them in one call, which the session hooks can refuse only at its first row, so it may end
     // none. Bulk endings go through the gateway's own update by identity, `/revoke-other-sessions`
     // included. This guards the HTTP handler only: `auth.api` calls still reach these endpoints.
-    // `/change-password` ends the other sessions through the same bulk delete, so it fails open: it
-    // stays off until a password change ends them through the gateway's own update.
-    disabledPaths: ['/revoke-sessions', '/revoke-other-sessions', '/change-password'],
+    // `/change-password` ends the other sessions through the same bulk delete when it is asked
+    // to, and sets the password apart from them: the gateway changes a password itself, the new
+    // password and every ending in one transaction (`AccountPasswords`). `/change-email` signs a
+    // device in at its confirmation and mails through the verification mail: the gateway asks for
+    // and confirms a change itself (`EmailChanges`).
+    disabledPaths: [
+      '/revoke-sessions',
+      '/revoke-other-sessions',
+      '/change-password',
+      '/change-email',
+    ],
     // Better Auth's limiter restarts its count only after a pause as long as its window, so it
     // refuses an address's 21st request however slowly the 20 before it came; the auth mount
     // applies the gateway's fixed windows instead.

@@ -13,7 +13,12 @@ import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
 
 import { type SessionRevoke, type SignOutEnding, toSessionRevoke, toSignOutEnding } from './endings'
 import { readSession, type SessionRead } from './read'
-import { readSignedIn, readVerificationEmail, type SignedInAccount } from './verification'
+import {
+  type MailedVerification,
+  readMailedVerification,
+  readSignedIn,
+  type SignedInAccount,
+} from './verification'
 
 export interface AuthSessionsOptions {
   /** The Better Auth instance, which reads a session by its token. */
@@ -22,7 +27,7 @@ export interface AuthSessionsOptions {
   readonly directory: LocalDb
   /** The moment a session ends at. */
   readonly clock: Clock
-  /** Better Auth's secret, which signs a verification link's token. */
+  /** Better Auth's secret, which signs its verification token, and keys the link's around it. */
   readonly secret: string
 }
 
@@ -34,7 +39,7 @@ export interface AuthSessionsOptions {
  * rows instead (the session hooks turn a single delete into such an update, but not a delete of
  * several), so none of them is called here. Better Auth reads the row at every read, with no
  * cache, so an ended session reads as none at once. It also reads what a verification needs: the
- * session it signed in, the identity of an email, the email of a link's token. Nothing here logs,
+ * session it signed in, the identity of an email, what a link's token names. Nothing here logs,
  * and no error carries a token or an address.
  */
 export class AuthSessions {
@@ -113,11 +118,11 @@ export class AuthSessions {
   }
 
   /**
-   * The email a verification link's token names, in lower case, or none
-   * (`readVerificationEmail`).
+   * The verification a link's token names: the account its mail went to, Better Auth's token and
+   * its email; none for a token the gateway did not sign as a link's (`readMailedVerification`).
    */
-  verificationEmail(token: string): Promise<string | undefined> {
-    return readVerificationEmail(token, this.#secret)
+  verificationOf(token: string): Promise<MailedVerification | undefined> {
+    return readMailedVerification(token, this.#secret)
   }
 
   #now(): Date {

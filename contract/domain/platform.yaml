@@ -9,7 +9,7 @@ actions:
         description: The email of the new account.
       password:
         type: string
-        description: "The password of the new account: 10 to 35 characters, only Latin letters, digits and the 32 symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~, with at least one digit, one uppercase letter, one lowercase letter and one symbol. A password that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password."
+        description: The password of the new account, kept to the composite password-rules; one that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password.
       name:
         type: string
         description: The name of the profile, 1 to 80 characters.
@@ -36,7 +36,7 @@ actions:
       password:
         type: string
         description: The password of the account.
-    result: the device is signed in, the app moves to /me with code welcome; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
+    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
     codes:
       - invalid-credentials
       - email-not-verified
@@ -49,7 +49,7 @@ actions:
       token:
         type: string
         description: The token the link of the verification mail carries in the address of /verify-email.
-    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened again after that answers verified-before and signs nothing in; a link older than a day answers link-expired"
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired"
     codes:
       - link-invalid
       - link-expired
@@ -70,6 +70,129 @@ actions:
       to: email
       language: account
       link: { screen: user.verify-email, search: token }
+  request-password-reset:
+    description: Sends the mail whose link sets a new password for an account.
+    params:
+      email:
+        type: string
+        description: The email of the account.
+    result: "the mail below is on its way when the email has an account, and its link replaces the links of earlier requests, so only the newest works; an unknown email gets the same answer, in the same time, and no mail, so the answer tells nobody which emails have accounts; one email takes three requests within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails, shared with sign-up and the resend of a verification mail"
+    codes:
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.reset-password, search: token }
+  reset-password:
+    description: Sets a new password for an account with the token its reset mail carries, and signs every device of the account out.
+    params:
+      token:
+        type: string
+        description: The token the link of the reset mail carries in the address of /reset-password.
+      password:
+        type: string
+        description: The new password, kept to the composite password-rules.
+    result: "the account's password is the new one, its email is verified when it was not yet, since only that mailbox got the link (its first sign-in then creates the account's settings and profile, as the link of the sign-up mail would have), every other reset link of the account stops working, and every device signed in to the account is signed out, this one too when it is: the page then keeps its message; nothing is signed in by it. A link unknown, used before or replaced by a newer one answers link-invalid, one older than an hour link-expired, and a password that breaks the rules password-rejected, the old password then unchanged. A network address takes twenty attempts within ten minutes, refused or not, and the next answers rate-limited"
+    codes:
+      - link-invalid
+      - link-expired
+      - password-rejected
+      - rate-limited
+      - failed
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.forgot-password }
+  change-password:
+    description: Changes the signed-in account's password, signing its other devices out.
+    params:
+      currentPassword:
+        type: string
+        description: The password the account has now.
+      password:
+        type: string
+        description: The new password, kept to the composite password-rules.
+    result: "the password is the new one, every reset link of the account stops working, every other device of the account is signed out and this one stays signed in; a wrong current password answers invalid-credentials and counts toward the account's failed sign-ins, ten within a quarter of an hour, after which it answers rate-limited until the quarter of an hour has passed; a password that breaks the rules answers password-rejected; the password stays unchanged on any refusal"
+    codes:
+      - invalid-credentials
+      - password-rejected
+      - rate-limited
+      - failed
+    notices:
+      - name: password-changed
+        to: account
+        language: account
+        link: { screen: user.forgot-password }
+  change-email:
+    description: Asks to change the signed-in account's email; the mail below goes to the new email, and its link makes the change.
+    params:
+      email:
+        type: string
+        description: The new email.
+      password:
+        type: string
+        description: The password the account has now, which confirms the request.
+    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, and the account keeps its email until that link is opened; a new email that has an account already gets the same answer, in the same time, and no mail; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; one account asks three changes within a quarter of an hour, and a fourth answers rate-limited and sends nothing; an email that is not an email answers email-invalid; the mails count toward the network address's budget of mails"
+    codes:
+      - invalid-credentials
+      - email-invalid
+      - rate-limited
+      - failed
+    mail:
+      to: email
+      language: account
+      link: { screen: user.confirm-email, search: token }
+  confirm-email:
+    description: Changes an account's email to the new one, with the token the link of its confirmation mail carries.
+    params:
+      token:
+        type: string
+        description: The token the link of the confirmation mail carries in the address of /confirm-email.
+    result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; every reset link of the account stops working, since it went to the old email; the old email gets the notice below, which names neither the new email nor any part of it; the device that opens the link is not signed in by it. A link unknown, used before or replaced by a newer one, one whose account changed its email or its password since the mail was sent, or one whose new email has got an account meanwhile, answers link-invalid; one older than a day link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    codes:
+      - link-invalid
+      - link-expired
+      - rate-limited
+      - failed
+    notices:
+      - name: email-changed
+        to: account
+        language: account
+  request-account-deletion:
+    description: Asks to delete the signed-in account; the mail below goes to its email, and the page its link opens deletes the account on a press.
+    params:
+      password:
+        type: string
+        description: The password the account has now, which confirms the request.
+    result: "the mail below is on its way to the account's email, its link replacing the link of an earlier request, and the account stays as it is until the button of the page that link opens is pressed; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; an account that is the only administrator of an organisation with other members answers last-admin and sends nothing, until those members are removed; one account asks three deletions within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails"
+    codes:
+      - invalid-credentials
+      - last-admin
+      - rate-limited
+      - failed
+    mail:
+      to: account
+      language: account
+      link: { screen: user.delete-account, search: token }
+  delete-account:
+    description: Deletes an account for good, with the token the link of its deletion mail carries, on the press of the page's button.
+    params:
+      token:
+        type: string
+        description: The token the link of the deletion mail carries in the address of /delete-account.
+    result: "the account is gone for good, with its profile and its settings, its sessions, so every device of the account is signed out, this one too when it is, and its memberships; each organisation it was the only member of goes with it, its data too; the other organisations keep what it wrote there, without it as a member; its email can sign up again at once, and gets the notice below; nothing brings the account back. A link unknown, used before or replaced by a newer one, or one whose account changed its password or its email since the mail was sent, answers link-invalid; one older than an hour link-expired, since what it does cannot be undone; an account that became the only administrator of an organisation with other members since the mail was sent answers last-admin and deletes nothing. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    codes:
+      - link-invalid
+      - link-expired
+      - last-admin
+      - rate-limited
+      - failed
+    notices:
+      - name: account-deleted
+        to: account
+        language: account
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -106,7 +229,7 @@ actions:
       theme:
         type: string
         description: "light, dark, or system: the device's own setting, followed as it changes."
-    result: the app shows the theme at once and this device keeps it, the account's other devices untouched
+    result: the app shows the theme at once and this device keeps it; the other tabs of this browser where no account is signed in show it too
     codes: []
   reload:
     description: Loads the page again from the server.
@@ -190,6 +313,8 @@ events:
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
+  password-reset: Another tab of this browser set a new password through the link of a reset mail; the answer names no account.
+  theme-set: Another tab of this browser chose the theme of this device.
   change-rejected: The server refused a change, and this device undid it.
   changes-reloaded: The server refused the undo too, so this device loaded the data again and the later changes it had not sent were lost.
   crashed: The open screen failed to render.
@@ -210,6 +335,7 @@ toasts:
   organisations.invite: invited
   organisations.remove: member-removed
   devices.revoke: device-signed-out
+  change-password: password-changed
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere
@@ -224,6 +350,18 @@ unsavedInput:
   state: never
   flow: never
   elsewhere: cannot
+composites:
+  password-rules:
+    description: The rules a new password keeps, each marked once the password typed keeps it.
+    list: password-rule-list
+    itemState: met
+    items:
+      length: 10 to 35 characters.
+      characters: "Only Latin letters, digits and the symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~ (no spaces); met once something is typed and every character is one of them."
+      digit: At least one digit.
+      uppercase: At least one uppercase letter.
+      lowercase: At least one lowercase letter.
+      symbol: At least one of the symbols.
 reserved:
   - app-shell.status
   - app-shell.notice-message

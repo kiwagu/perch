@@ -250,6 +250,19 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
+  it('stops on 4002 and reports password-changed: the password of the account changed', async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4002)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: password-changed', 'down'])
+    expect(ended).toEqual(['password-changed'])
+    expect(sockets.length).toBe(1)
+  })
+
   it('connects again after 4408, a hello the gateway stopped waiting for', async () => {
     const { clock, sockets, transport, socket, events } = harness()
 

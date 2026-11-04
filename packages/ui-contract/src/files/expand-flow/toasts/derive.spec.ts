@@ -20,6 +20,7 @@ const expansionWith = (
   screen,
   toast,
   platformToasts,
+  codeGuards: new Map(),
   issues: [],
   toasts: [],
   writtenToasts: [],

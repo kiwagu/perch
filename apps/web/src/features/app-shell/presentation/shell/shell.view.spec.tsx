@@ -200,11 +200,12 @@ describe('ShellView', () => {
       'app-shell.nav.devices-link',
       'app-shell.nav.settings-link',
     ])
-    // The settings screen takes a signed-in account's language.
+    // The settings screen takes a signed-in account's language and theme.
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+    expect(screen.queryByTestId('app-shell.theme-select')).toBeNull()
   })
 
-  it("shows anyone the device's theme, a guest and a signed-in account alike", () => {
+  it("shows a guest the device's theme, and a signed-in account no theme select", () => {
     const { unmount } = renderShell({ theme: 'dark' })
     const select = screen.getByTestId('app-shell.theme-select')
 
@@ -214,7 +215,7 @@ describe('ShellView', () => {
 
     renderShell({ signedIn: true, activePath: '/me', theme: 'light' })
 
-    expect(screen.getByTestId('app-shell.theme-select').getAttribute('data-value')).toBe('light')
+    expect(screen.queryByTestId('app-shell.theme-select')).toBeNull()
   })
 
   it('takes a theme choice only while the frame takes one', () => {
