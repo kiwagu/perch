@@ -216,7 +216,12 @@ modeling stage.
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
-  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below). The container's runner and write
+  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below).
+  The reset presents this device's session when one is open, and the gateway's 200 says whether
+  that session was among those it ended (`{ signedOut }`; a 200 that does not is
+  `data:AUTH_FAILED`): when it was, the session signs out here at once as on the channel's 4002,
+  which a browser without Web Locks never hears; another account signed in here stays. The
+  container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). The root makes the app's domain event bus (`EventBus` of

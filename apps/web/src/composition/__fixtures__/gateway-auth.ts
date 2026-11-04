@@ -254,7 +254,7 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return okAsync(undefined)
     },
-    resetPassword: (link, password) => {
+    resetPassword: (link, password, session) => {
       requests.push({ kind: 'reset', token: link })
 
       const email = resets.get(link)
@@ -268,7 +268,16 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       resets.delete(link)
       accounts.set(email, { ...account, password, verified: true })
 
-      return okAsync(undefined)
+      // It ends every session of the account, the one presented with it among them when it was one.
+      const signedOut = session !== undefined && sessions.get(session.token) === email
+
+      for (const [given, of] of sessions) {
+        if (of === email) {
+          sessions.delete(given)
+        }
+      }
+
+      return okAsync({ signedOut })
     },
     changePassword: (input, session) => {
       requests.push({ kind: 'change-password', token: session.token, device: session.device })

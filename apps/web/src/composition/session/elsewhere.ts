@@ -61,6 +61,24 @@ export class SessionElsewhere {
     return this.#outElsewhere(identity)
   }
 
+  /**
+   * Names the session open now, for a reset of a password asked with it: the sign-out it gives
+   * runs as when the channel hears the 4002 (the sign-in page says `password-changed-elsewhere`),
+   * which this device may never hear (no Web Locks, or its WebSocket blocked), and only while that
+   * session is still the one open: one signed in since stays. Undefined with nobody signed in.
+   */
+  resetHere(): (() => Promise<void>) | undefined {
+    const asking = this.#host.open()
+
+    if (asking === undefined) {
+      return undefined
+    }
+
+    const still = () => this.#host.open() === asking
+
+    return () => this.#outElsewhere(asking.space.identity.id, still, 'password-changed-elsewhere')
+  }
+
   /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
   protocolRefused(): boolean {
     return this.#protocolRefused

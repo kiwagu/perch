@@ -582,7 +582,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
 
     const answer = await route(verify(token, 'phone'), FROM)
     const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
@@ -622,7 +622,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
     insert.release()
 
     const answer = await verifying
@@ -660,7 +660,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
 
     const change = (
       await mounted.emailChanges.ask(ann, ANN, 'ann.moved@example.test')

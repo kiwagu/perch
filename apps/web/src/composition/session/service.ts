@@ -75,6 +75,7 @@ export class SessionService implements SessionPort {
       storage: options.storage,
       signedIn: () => this.#state.open() !== undefined,
       signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
+      resetHere: () => this.#elsewhere.resetHere(),
     })
 
     const barrier = new WriteBarrier({

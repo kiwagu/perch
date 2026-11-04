@@ -247,7 +247,12 @@ the account signs in from then on, its first sign-in carrying `start`) and delet
 change of email: all of them or none, so a failure (500 `internal`) leaves the password, the link, the
 sessions and the pending change as they were. Once it committed, the account's sockets close with
 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`) and the notice of a
-changed password starts (`afterPasswordChange`): 204 with no body, and nothing is signed in.
+changed password starts (`afterPasswordChange`): 200 `{ signedOut }`, and nothing is signed in.
+`signedOut` is true when the session the request carries (its token and `X-Perch-Device`, read as
+the device routes read them, in the turn and before the reset ends it) was the account's, and
+false for another account's, a dead one or none, so a device signed in to the account signs out
+even with no channel to hear the 4002; a session that could not be read answers 500 `internal`,
+nothing changed.
 A sign-in takes no turn of the account, so it runs alike, and as soon, whether its email has an
 account and whatever work of that account is under way (`auth-handler/sign-in.ts`). It reads the
 email's account and the hash of its password before Better Auth checks the password
