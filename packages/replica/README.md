@@ -40,7 +40,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `compactIfLong(limit)` (compacts once the log holds more than `limit` rows past the snapshot,
   and leaves it for later while imported updates wait for their history), `close()`. A document
   opens from the snapshot and the rows after it. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
-  the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
+  the cursor only when nothing is left pending (while a local update fails to persist, the server's
+  update is held back behind it and fails as such), `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
@@ -210,9 +211,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails subscribes again at once, on every full pass and on a reconnect, until the
-  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
-  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  import that fails is reported, unless a local update that failed to persist held it back (its
+  write heard of that failure, and the engine reports it once), and subscribes again at once, on
+  every full pass and on a reconnect, until the answer to a subscription imports in full: nothing
+  tells a pull's answer from the updates the gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
   connection goes with the document's version and the first update after it is its answer, and
   any later one there (a recovery, a region replaced, a subscription sent again) goes without a
   version, the snapshot that only such a subscription gets being its answer; only
