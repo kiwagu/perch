@@ -28,7 +28,8 @@ over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
-`contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt invokes
+`contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
+state, sign-up where it renders the fields of a new account, an attempt invokes
 `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it holds the
 password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
 and compares the password typed again as either password is typed and on the switch into

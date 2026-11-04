@@ -35,7 +35,10 @@ export interface ProfileViewProps {
   /** Saves the form: resolves whether it saved, and the fields then hold no unsaved input. */
   readonly onSave: () => Promise<boolean>
   readonly onSignOut: () => void
-  /** The flow asks before signing out: this device holds changes it could not send. */
+  /**
+   * Whether the flow's state renders the dialog that asks before signing out: this device holds
+   * changes it could not send.
+   */
   readonly confirmSignOut?: boolean
   readonly onConfirmSignOut: () => void
   readonly onCancelSignOut: () => void

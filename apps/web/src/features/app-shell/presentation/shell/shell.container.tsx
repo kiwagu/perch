@@ -18,6 +18,7 @@ import { type InstallOffer, useDeviceInstall } from '../../../../platform/instal
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
+import { rendersIn } from '../../../../platform/screen-renders'
 import { SERVED_BUILD } from '../../../../platform/served-build.port'
 import { SESSION } from '../../../../platform/session.port'
 import { SYNC_STATUS, type SyncStatus } from '../../../../platform/sync-status.port'
@@ -136,7 +137,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   live.unsaved = unsaved
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
-  const frameState = useSelector(actor, (state) => state).value
+  const frameSnapshot = useSelector(actor, (state) => state)
+  const frameState = frameSnapshot.value
   // A signed-in account's data still opening: the frame shows no message of the platform yet, so
   // what the platform says reaches the frame's flow once the data is open.
   const dataOpening = actor.getSnapshot().matches('opening-data')
@@ -292,6 +294,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   return (
     <ShellView
       status={dataOpening ? 'opening-data' : 'ready'}
+      renders={rendersIn(frameSnapshot.machine.config, frameState)}
       signedIn={user !== undefined}
       activePath={pathname}
       canChooseLocale={canChoose}

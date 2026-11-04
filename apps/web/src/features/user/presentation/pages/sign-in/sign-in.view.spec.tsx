@@ -6,9 +6,30 @@ import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
-import { SignInView, type SignInViewProps } from './sign-in.view'
+import { type SignInListed, SignInView, type SignInViewProps } from './sign-in.view'
 
-function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 'en') {
+/** What the states of each mode render, as the flow lists them, the resend button aside. */
+const RENDERS: Readonly<Record<SignInViewProps['mode'], readonly SignInListed[]>> = {
+  'sign-in': ['user.sign-in.forgot-link'],
+  'sign-up': [
+    'user.sign-in.password-rule-list',
+    'user.sign-in.password-confirmation-input',
+    'user.sign-in.name-input',
+  ],
+}
+
+/**
+ * Renders the view in the mode `props` gives (sign-in by default), with what a state of that mode
+ * renders; `resend` renders the resend button too, as the states asking to check the mail do.
+ */
+function renderView(
+  { resend = false, ...props }: Partial<SignInViewProps> & { readonly resend?: boolean } = {},
+  locale: 'en' | 'es' = 'en',
+) {
+  const rendered = new Set<SignInListed>([
+    ...RENDERS[props.mode ?? 'sign-in'],
+    ...(resend ? (['user.sign-in.resend-button'] as const) : []),
+  ])
   const handlers = {
     onSubmit: vi.fn(() => Promise.resolve(true)),
     onToggleMode: vi.fn(),
@@ -21,7 +42,7 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
     <SignInView
       startEmail=""
       mode="sign-in"
-      showResend={false}
+      renders={(anchor) => rendered.has(anchor)}
       can={() => true}
       {...handlers}
       {...props}
@@ -318,7 +339,7 @@ describe('SignInView', () => {
     const props: SignInViewProps = {
       startEmail: '',
       mode: 'sign-up',
-      showResend: false,
+      renders: (anchor) => RENDERS['sign-up'].includes(anchor),
       can: () => true,
       onSubmit: () => Promise.resolve(true),
       onToggleMode: () => {},
@@ -438,7 +459,7 @@ describe('SignInView', () => {
   })
 
   it('offers to send the mail again to the email typed', () => {
-    const { onResend, onSubmit } = renderView({ showResend: true })
+    const { onResend, onSubmit } = renderView({ resend: true })
 
     type('user.sign-in.email-input', 'ann@example.test')
 
@@ -455,7 +476,7 @@ describe('SignInView', () => {
 
   it('holds the resend while it cannot run', () => {
     const { onResend } = renderView({
-      showResend: true,
+      resend: true,
       can: (control) => control !== 'user.sign-in.resend-button',
     })
     const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement

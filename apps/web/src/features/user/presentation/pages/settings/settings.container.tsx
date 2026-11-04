@@ -87,7 +87,7 @@ export function SettingsContainer() {
       requestAccountDeletion: (password) => session.requestAccountDeletion(password),
     })
   }, [device.set, settings, writes, session])
-  const { state, send, submit, actor } = useScreenMachine(machine)
+  const { state, send, submit, actor } = useScreenMachine('user.settings', machine)
 
   // A chosen language is spoken at once, while its store runs.
   useEffect(() => {

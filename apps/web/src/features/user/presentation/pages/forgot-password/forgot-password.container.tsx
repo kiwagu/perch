@@ -25,7 +25,7 @@ export function ForgotPasswordContainer() {
     () => createForgotPasswordMachine({ request: (asked) => session.requestPasswordReset(asked) }),
     [session],
   )
-  const { state, submit } = useScreenMachine(machine, {
+  const { state, submit } = useScreenMachine('user.forgot-password', machine, {
     'user.forgot-password.email-input': email,
   })
 

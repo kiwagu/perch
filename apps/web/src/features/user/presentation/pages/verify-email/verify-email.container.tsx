@@ -38,18 +38,14 @@ function TokenExchange(props: { readonly token: string }) {
     () => createVerifyEmailMachine({ token, verify, resend: (email) => service.resend(email) }),
     [service, token, verify],
   )
-  const { state, submit } = useScreenMachine(machine)
-  const showForm = (['resend-offered', 'resending', 'sent'] as const).some((name) =>
-    state.matches(name),
-  )
+  const { state, submit, renders } = useScreenMachine('user.verify-email', machine)
 
   return (
     <VerifyEmailView
-      verifying={state.matches('verifying')}
+      renders={renders}
       message={state.context.message}
       sentTo={state.context.sentTo}
       error={state.context.error}
-      showForm={showForm}
       canResend={state.can({ type: 'user.verify-email.resend-button', email: '' })}
       onResend={(email) => submit({ type: 'user.verify-email.resend-button', email })}
       link={RouterLink}
