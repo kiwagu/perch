@@ -472,8 +472,9 @@ as it holds its router to the bindings.
   that keeps what was typed into it while it is closed. The app reads what a state renders
   from its machine, whose states carry the flow's `meta.renders`, through the engine's
   `renderedAt` and `isRendered` (`@workspace/ui-contract/anchors`), never from a flag of its
-  own, as it reads which controls are enabled; an e2e run holds the page to it in every state
-  a test passes through (see "The manifest").
+  own, as it reads which controls are enabled; the engine's comparison holds those lists to
+  the flow's (below), and an e2e run holds the page to them in every state a test passes
+  through (see "The manifest").
 
 A screen file may write its flow shorter, and leave out what the contract says elsewhere
 (below); the loader expands it into the config above before anything reads it, so the
@@ -516,8 +517,8 @@ a parallel state's regions each on its own with the others at their `initial`, a
 every transition and every guarded branch to its target with its effects. An app that
 builds its own machine for a screen holds it to the flow with the engine's comparison
 (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
-the machine has the config of its flow (on a branch, the flow less what it added and the
-machine has not built yet).
+the machine has the config of its flow, what each state renders included (on a branch, the
+flow less what it added and the machine has not built yet).
 
 ### What a screen leaves out
 
