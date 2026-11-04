@@ -23,21 +23,40 @@ const settledSchema: z.ZodType<SettledState> = z.object({
 })
 
 /** The manifest the stand serves, read once per worker: one stand serves a whole run. */
-let served: Manifest | undefined
+let served: Promise<Manifest> | undefined
 
-async function manifestOf(context: BrowserContext): Promise<Manifest> {
-  if (served === undefined) {
-    const response = await context.request.get(MANIFEST)
+async function fetchManifest(context: BrowserContext): Promise<Manifest> {
+  const response = await context.request.get(MANIFEST)
 
-    served = manifestSchema.parse(await response.json())
+  if (!response.ok()) {
+    throw new Error(`${MANIFEST} answered ${response.status()}`)
   }
+
+  return manifestSchema.parse(await response.json())
+}
+
+/** The manifest, its first read shared by the reports that wait for it; a failed read is retried. */
+function manifestOf(context: BrowserContext): Promise<Manifest> {
+  served ??= fetchManifest(context).catch((error: unknown) => {
+    served = undefined
+
+    throw error
+  })
 
   return served
 }
 
+/** A check that could not run, as the problem the test fails with. */
+const unchecked = (error: unknown): readonly string[] => [
+  `a settled state could not be checked: ${error instanceof Error ? error.message : String(error)}`,
+]
+
 /** The states a browser context's pages settled in while a test ran, held to the contract. */
 export interface SettledWatch {
-  /** The problems of every state reported so far, each once, the checks still running awaited. */
+  /**
+   * The problems of every state reported so far, each once: it awaits the checks still running,
+   * and those of the reports that came while it waited, until none is left.
+   */
   problems(): Promise<readonly string[]>
 }
 
@@ -50,13 +69,27 @@ export interface SettledWatch {
 export async function watchSettled(context: BrowserContext): Promise<SettledWatch> {
   const checks: Promise<readonly string[]>[] = []
 
-  // A report that does not parse fails the test at its end, as a problem would, never the page.
+  // A report that does not parse, or a manifest that cannot be read, fails the test at its end
+  // as a problem would, never the page, and never while the test runs on.
   const check = async (reported: unknown): Promise<readonly string[]> =>
     settledProblems(await manifestOf(context), settledSchema.parse(reported))
 
   await context.exposeBinding(SETTLED_STATE, (_source, reported: unknown) => {
-    checks.push(check(reported))
+    checks.push(check(reported).catch(unchecked))
   })
 
-  return { problems: async () => [...new Set((await Promise.all(checks)).flat())] }
+  return {
+    problems: async () => {
+      const found: string[] = []
+
+      for (let done = 0; done < checks.length; ) {
+        const waiting = checks.slice(done)
+
+        done = checks.length
+        found.push(...(await Promise.all(waiting)).flat())
+      }
+
+      return [...new Set(found)]
+    },
+  }
 }

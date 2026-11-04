@@ -116,8 +116,9 @@ export function reportSettled(page: SettlingPage, settling: Settling): () => voi
 }
 
 /**
- * In development and e2e builds (those with the page helper), reports each state of `screen`'s machine the page settles in:
- * `value` is the state the page renders now, `current` reads the machine's state when it settles.
+ * In development and e2e builds (those that install the page helper), reports each state of
+ * `screen`'s machine the page settles in: `value` is the state the page renders now, `current`
+ * reads the machine's state when it settles.
  */
 export function useSettledReport(
   screen: string,
