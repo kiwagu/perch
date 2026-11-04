@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createMachine } from 'xstate'
 
+import { renderedAt } from '../../anchors'
 import { flowSchema } from '../../schemas'
 
 import { beyondTheSubset } from './beyond'
@@ -55,6 +56,59 @@ describe('the projection of a machine config', () => {
     expect(beyondTheSubset(machine.config)).toEqual([])
     expect(projected(machine.config)).toEqual(projected(flow))
     expect(projected(opened.config)).not.toEqual(projected(flow))
+  })
+})
+
+describe('the projection of what a state renders', () => {
+  /** A form whose `editing` state renders `anchors`, in a region of `viewing` and at the root. */
+  const config = (anchors: readonly string[]) =>
+    ({
+      initial: 'editing',
+      states: {
+        editing: {
+          meta: { renders: anchors },
+          on: { 'sample.save-button': { target: 'viewing' } },
+        },
+        viewing: {
+          type: 'parallel',
+          states: {
+            notes: {
+              initial: 'idle',
+              states: { idle: {}, open: { meta: { renders: anchors } } },
+            },
+            form: { initial: 'closed', states: { closed: {} } },
+          },
+        },
+      },
+    }) as const
+  const flow = flowSchema.parse(config(['sample.name-input', 'sample.rule-list']))
+
+  it('holds the anchors each state lists, of the root and of a region, in any order', () => {
+    expect(
+      projected(createMachine(config(['sample.rule-list', 'sample.name-input'])).config),
+    ).toEqual(projected(flow))
+  })
+
+  it('tells a state that lists another anchor, or one fewer, from its flow', () => {
+    for (const anchors of [['sample.name-input'], ['sample.name-input', 'sample.email-input']]) {
+      expect(projected(createMachine(config(anchors)).config)).not.toEqual(projected(flow))
+    }
+  })
+
+  it('reads a list as the app does: an anchor twice is once, and a bare string lists nothing', () => {
+    const once = flowSchema.parse(config(['sample.name-input']))
+    const bare = {
+      initial: 'editing',
+      states: { editing: { meta: { renders: 'sample.name-input' } } },
+    }
+
+    expect(
+      projected(createMachine(config(['sample.name-input', 'sample.name-input'])).config),
+    ).toEqual(projected(once))
+    expect(projected(bare)).not.toEqual(
+      projected({ ...bare, states: { editing: { meta: { renders: ['sample.name-input'] } } } }),
+    )
+    expect(renderedAt(bare, 'editing').listed).toEqual([])
   })
 })
 
