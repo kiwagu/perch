@@ -40,7 +40,7 @@ anchors:
     roles: [ identity, member, admin ]
   app-shell.theme-select:
     kind: select
-    description: "The theme of this device for a guest: light, dark or the device's own setting, starting as the theme this device showed last; a choice applies at once, stays on this device, and is the theme an account created here starts with; a signed-in account chooses its theme on its settings screen, and the theme its settings store applies here too."
+    description: "The theme of this device for a guest: light, dark or the device's own setting, starting as the theme this device showed last; a choice applies at once, stays on this device, and is the theme an account created here starts with; a signed-in account chooses its theme on its settings screen, and the theme its settings store applies here too. A device whose saved account's data is not open (the app starting, the data failing to open, the sign-out from there) is a guest to the frame: the select shows, and a choice made there stays on this device with no settings to store it."
     binding:
       - model: settings.theme
       - action: platform.theme.set
