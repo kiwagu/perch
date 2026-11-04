@@ -456,6 +456,43 @@ describe('organisationRoutes', () => {
     expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
   })
 
+  it('answers 401 to a creation whose identity went before its turn, as to a token that holds no session, and creates nothing', async () => {
+    const { root, ann } = await harness()
+    // A directory where ann's identity is gone, as after her account's deletion: her session is
+    // still read on the root's, as one read before the deletion ended it.
+    const directory = (
+      await openTestDb({
+        namespace: NAMESPACE,
+        database: DIRECTORY,
+        schema: readSchema('directory'),
+      })
+    )._unsafeUnwrap()
+
+    try {
+      const organisations = new Organisations({
+        directory,
+        databases: root.databases,
+        revoke: (identity, region) => root.connections.revoke(identity, region),
+      })
+      const routes = organisationRoutes(
+        root.sessions,
+        organisations,
+        routeOptions(new RequestLimits({ clock: manualClock() })),
+      )
+      const refused = await routes(
+        request('POST', '/organisations', { as: ann, body: { key: 'acme', name: 'Acme' } }),
+        ADDRESS,
+      )
+
+      expect(await answer(refused)).toEqual({ status: 401, body: { code: 'unauthorized' } })
+      expect(refused?.headers.get('WWW-Authenticate')).toBe('Bearer')
+      expect((await organisations.membershipsOf(ann.identity.id))._unsafeUnwrap()).toEqual([])
+      expect((await root.organisations.membershipsOf(ann.identity.id))._unsafeUnwrap()).toEqual([])
+    } finally {
+      await directory.close()
+    }
+  })
+
   it('answers 405 with the methods a path takes to any other method', async () => {
     const { ann, bob, routes } = await harness()
 

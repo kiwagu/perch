@@ -45,7 +45,8 @@ of whole, of any status (its database, its memberships and its directory row in 
 then the cached connection), and takes it out of every other one (its member row, then its
 membership, so a run again after a failure finds what is left; its notes stay).
 `Organisations.leaveAll` runs that departure in the identity's turn and the turns of its
-organisations, so an invite of it waits, and so does any change of another identity there; `leave` reads the rows again in those turns and is refused `last-admin`, changing
+organisations, so an invite of it and a creation by it wait, and so does any change of another
+identity there; `leave` reads the rows again in those turns and is refused `last-admin`, changing
 nothing, while the identity is the only admin of a ready organisation with others in it. That
 check is the one that decides. The caller's steps run in the same turns (`DepartureSteps`):
 `before` once the departure is allowed and ahead of every write, its value the departure's answer
@@ -66,8 +67,10 @@ organisations' in the order of their ids, so no two changes wait for each other.
 an invite names is found by its email, in any case, through the auth module's one lookup
 (`identityByEmail`, `src/auth/identity-by-email.ts`); an email no identity has is refused
 `no-such-identity` here. The invite looks the email up again in the identity's turn and is
-refused `no-such-identity` when it no longer names that identity: an invite that waited for a
-departure whose `after` removed the identity writes no membership of an identity that is gone.
+refused `no-such-identity` when it no longer names that identity, and a creation reads its
+creator again in its turn (`OrganisationLookup.existing`) and is refused `no-such-identity` when
+it is gone: one that waited for a departure whose `after` removed the identity writes no
+membership of an identity that is gone and provisions nothing.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
@@ -78,7 +81,9 @@ invite an identity; and `DELETE /organisations/:key/members/:identity` lets an a
 member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
 a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
 `not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
-`key-taken`, `already-member` and `self`; an invitation or a creation over its limit answers 429
+`key-taken`, `already-member` and `self`, except a creation whose caller's identity went before
+its turn (its account deleted after its session was read), which answers 401 `unauthorized` as a
+token that holds no session does; an invitation or a creation over its limit answers 429
 (`rate-limited`, see `src/limits/README.md`); a failure of the gateway answers 500 (`internal`).
 
 ## Surface

@@ -155,7 +155,8 @@ export async function deleteAccount(
  * was not pending: used before, replaced by a newer one, or ended by a change of the password or
  * of the email, nothing changed), whom the notice goes to is read while the account exists, every
  * session of the account ends and every socket of it closes with 4001. Then the account leaves
- * its organisations and its own rows are removed, while no invite of it can land. Once the account is gone the notice starts to the email it had, and it answers 200
+ * its organisations and its own rows are removed, while no invite of it and no creation by it can
+ * land. Once the account is gone the notice starts to the email it had, and it answers 200
  * `{ identity }`: the account that was deleted, so the page can tell whether this device was
  * signed in to it.
  */

@@ -519,6 +519,40 @@ describe('Organisations.leaveAll and what runs in its turns', () => {
     expect(await membersIn('t1')).toEqual([{ identity: ann, role: 'admin' }])
   })
 
+  it('refuses a creation of the identity asked while `after` removes it, once it is gone, provisioning nothing', async () => {
+    const { organisations, directory, opened, bob, everything, definitionOf } =
+      await departureHarness()
+    const held = heldStep()
+    const bobLeaves = organisations.leaveAll(
+      bob,
+      steps(() =>
+        ResultAsync.fromSafePromise(
+          (async () => {
+            held.reached()
+            await held.gate
+            await directory.db.query(identityForget, { identity: recordId('identity', bob) })
+          })(),
+        ),
+      ),
+    )
+
+    await held.running
+
+    // A request of bob's let through before his sessions ended asks for a creation now.
+    const creation = organisations.create({ identity: bob, key: 't9', name: 'T9' })
+
+    held.release()
+
+    expect(await bobLeaves).toEqual(ok(undefined))
+    expect((await creation)._unsafeUnwrapErr()).toEqual({
+      kind: 'refused',
+      code: 'no-such-identity',
+    })
+    expect(await everything()).toEqual({ tenants: [], memberships: 0 })
+    expect(await definitionOf('t9')).toBeUndefined()
+    expect(opened).toEqual([])
+  })
+
   it('runs `before` once the departure is allowed and ahead of its writes, and answers what it answers', async () => {
     const { organisations, ann, bob, founded, invited, everything } = await departureHarness()
 

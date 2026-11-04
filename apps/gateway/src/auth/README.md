@@ -382,8 +382,8 @@ or ended by a change of the password or of the email), whom the notice goes to i
 account exists (`AccountTeardown.addressee`), every session of the account ends
 (`AuthSessions.revokeAll`) and every socket of it closes with 4001. The departure then takes the
 account out of its organisations and its own rows are removed (its `after` step,
-`AccountTeardown.remove`) while those turns are still held, so no invite of it lands in
-between: one that waited finds the identity gone and is refused.
+`AccountTeardown.remove`) while those turns are still held, so no invite of it and no creation
+by it lands in between: one that waited finds the identity gone and is refused.
 The notice of a deleted account then starts to the email it had (`AccountMails.accountDeleted`),
 and it answers 200 `{ identity }`, so the page can tell whether its device was signed in to the
 deleted account. A failure of the gateway answers 500 `internal`. Better Auth's own deletion of a

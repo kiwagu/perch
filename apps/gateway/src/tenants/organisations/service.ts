@@ -82,7 +82,9 @@ export class Organisations {
 
   /**
    * Creates an organisation with `identity` as its admin (`OrganisationCreation`), once its name
-   * is trimmed, and tells the creator's listeners.
+   * is trimmed, and tells the creator's listeners. In the identity's turn the identity is read
+   * again first: one whose account went while the creation waited for its departure (`leaveAll`)
+   * is refused `no-such-identity`, and nothing is provisioned for it.
    */
   create(input: {
     identity: IdentityId
@@ -102,8 +104,9 @@ export class Organisations {
     }
 
     return this.#turns.ofIdentity(identity, () =>
-      this.#creation
-        .create(identity, key, name)
+      this.#lookup
+        .existing(identity)
+        .andThen(() => this.#creation.create(identity, key, name))
         .andThen((tenant) =>
           this.#listeners.tell(identity).map((): Membership => ({ tenant, role: 'admin' })),
         ),
