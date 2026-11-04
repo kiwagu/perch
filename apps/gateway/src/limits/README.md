@@ -32,10 +32,11 @@ counted. A
 refusal answers 429 `{ "code": "rate-limited" }` with `Retry-After` in whole seconds (at least
 1), before the password is checked, and is not logged.
 Mails are limited to 200 per client address in 15 minutes (`ADDRESS_MAILS`): sign-ups, resends
-of the verification mail, requests for a reset mail and changes of an email together, every
-attempt counted whatever the email (`verificationMail(address)` for a sign-up's mail,
-`verificationMail(address, email)` for a resend, `resetMail(address, email)` for a reset mail,
-`emailChangeMail(address, identity)` for the confirmation of a new email): one client can make at
+of the verification mail, requests for a reset mail, changes of an email and requests to delete
+an account together, every attempt counted whatever the email (`verificationMail(address)` for a
+sign-up's mail, `verificationMail(address, email)` for a resend, `resetMail(address, email)` for a
+reset mail, `emailChangeMail(address, identity)` for the confirmation of a new email,
+`deletionMail(address, identity)` for the deletion mail): one client can make at
 most 200 such mails go out per quarter hour, where the credential limit alone would let 1,800
 sign-ups through. The auth mount charges every
 `POST /auth/sign-up/email` before it reads its body, a taken email's and one that names none
@@ -66,15 +67,18 @@ a fresh window.
 A request for a reset mail (`POST /auth/request-password-reset`) also takes one of its email's 3
 reset mails in 15 minutes (`EMAIL_RESET_MAILS`, the email in lower case), whatever the email, so
 the limit tells nothing about accounts; a change of an email (`POST /auth/change-email`) one of
-its account's 3 changes in 15 minutes (`IDENTITY_EMAIL_CHANGES`). Each is reserved after the
-address's mail, which is given back when the email's or the account's limit refuses. The
-attempts at a link are limited to 20 per client address in 10 minutes (`ADDRESS_LINK_ATTEMPTS`),
-the resets of a password (`passwordReset`, `POST /auth/reset-password`) and the confirmations of
-a new email (`emailConfirmation`, `POST /auth/confirm-email`) each on their own, every attempt
-counted, refused or not, before anything is read: a link's token is too long to guess, so the
-limit keeps one client from hammering the directory. A change of a password or of an email takes
-one of its address's credential checks, and its current password a place among its account's
-failed sign-ins, as a sign-in does.
+its account's 3 changes in 15 minutes (`IDENTITY_EMAIL_CHANGES`), and a request to delete an
+account (`POST /auth/request-account-deletion`) one of its account's 3 requests in 15 minutes
+(`IDENTITY_DELETION_REQUESTS`). Each is reserved after the address's mail, which is given back
+when the email's or the account's limit refuses. The attempts at a link are limited to 20 per
+client address in 10 minutes (`ADDRESS_LINK_ATTEMPTS`), the resets of a password
+(`passwordReset`, `POST /auth/reset-password`), the confirmations of a new email
+(`emailConfirmation`, `POST /auth/confirm-email`) and the deletions of an account
+(`accountDeletion`, `POST /auth/delete-account`) each on their own, every attempt counted,
+refused or not, before anything is read: a link's token is too long to guess, so the limit keeps
+one client from hammering the directory. A change of a password or of an email and a request to
+delete an account take one of their address's credential checks, and the current password a
+place among its account's failed sign-ins, as a sign-in does.
 Invitations, `POST /organisations/:key/members`, are limited to 30 attempts per inviting identity
 and 60 per client address in 10 minutes, so probing which emails have an account stays slow; the
 identity is charged first and the address only when the identity's limit allows. Every attempt
@@ -89,11 +93,11 @@ provisioned. A refusal answers 429 `rate-limited` with `Retry-After` and is not 
 
 - `RequestLimits` (`request-limits.ts`) with the windows it keeps (`CREDENTIAL_CHECKS`,
   `FAILED_SIGN_INS`, `ADDRESS_MAILS`, `EMAIL_VERIFICATION_MAILS`, `EMAIL_RESET_MAILS`,
-  `IDENTITY_EMAIL_CHANGES`, `ADDRESS_LINK_ATTEMPTS`, `IDENTITY_INVITES`, `ADDRESS_INVITES`,
-  `IDENTITY_ORGANISATIONS`, `ADDRESS_ORGANISATIONS`), over `FixedWindow` (`fixed-window.ts`);
-  `verificationMail` takes a sign-up's or a resend's mail, `resetMail` a reset mail,
-  `emailChangeMail` the confirmation of a new email, `passwordReset` and `emailConfirmation` an
-  attempt at a link.
+  `IDENTITY_EMAIL_CHANGES`, `IDENTITY_DELETION_REQUESTS`, `ADDRESS_LINK_ATTEMPTS`,
+  `IDENTITY_INVITES`, `ADDRESS_INVITES`, `IDENTITY_ORGANISATIONS`, `ADDRESS_ORGANISATIONS`), over
+  `FixedWindow` (`fixed-window.ts`); `verificationMail` takes a sign-up's or a resend's mail,
+  `resetMail` a reset mail, `emailChangeMail` the confirmation of a new email, `deletionMail` the
+  deletion mail, `passwordReset`, `emailConfirmation` and `accountDeletion` an attempt at a link.
 - `clientAddress` (`client-address.ts`) and `addressKey` (`address-key.ts`): the address a
   request counts under.
 - `tooMany` (`too-many.ts`): the 429 answer with `Retry-After`.
