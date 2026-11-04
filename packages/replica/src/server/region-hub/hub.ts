@@ -63,10 +63,10 @@ function exportFrom(doc: LoroDoc, from: VersionVector | null): Uint8Array<ArrayB
  * loaded. The work asked of one region (subscriptions, pulls, pushes and compactions, the load
  * that comes first) runs one piece at a time, in the order it was asked. A pushed batch is
  * checked on a fork of the document against the identity of the device that pushed it, and its
- * peers against the identities they write as, accepted by the log with its projection, then imported and sent to the region's other
- * subscribers. The server's own change to a record takes the same way, as the server's peer. A
- * region nobody subscribes to or writes any more is dropped from memory after an idle time, and
- * its database released.
+ * peers against the identities they write as, accepted by the log with its projection, then
+ * imported and sent to the region's other subscribers. The server's own change to a record takes
+ * the same way, as the server's peer. A region nobody subscribes to or writes any more is dropped
+ * from memory after an idle time, and its database released; a retired region, at once.
  */
 export class RegionHub {
   readonly #held: HeldRegions
@@ -264,6 +264,16 @@ export class RegionHub {
     return this.#held.subscribed(regionId, subscriber, (_, loaded) =>
       takeInCompaction(this.#compactions, { regionId, subscriber, covers, proposal }, loaded),
     )
+  }
+
+  /**
+   * Retires a region the caller has done with (its database removed, or about to be): the hub
+   * lets it go at once, and a subscription or a write asked from then on loads the region afresh
+   * from its database, never from the retired document. The caller ends the devices'
+   * connections to the region first; the contract is `HeldRegions.retire`'s.
+   */
+  retire(regionId: string): ResultAsync<void, DataError> {
+    return this.#held.retire(regionId)
   }
 
   /** How many regions have their document in memory. */

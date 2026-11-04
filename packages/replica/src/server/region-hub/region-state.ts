@@ -13,7 +13,10 @@ export interface Loaded {
   readonly database: RegionDatabase
 }
 
-/** What the hub keeps of one region, from the first subscription until it unloads the region. */
+/**
+ * What the hub keeps of one region, from its first subscription or write until it unloads the
+ * region or retires it.
+ */
 export interface RegionState {
   readonly ref: RegionRef
   /** Devices whose subscription was answered: each receives the batches the others push. */
