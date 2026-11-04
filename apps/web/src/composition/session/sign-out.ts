@@ -160,12 +160,8 @@ export class SessionSignOut {
         identity,
         () =>
           this.#unsentOrUnknown(open).andThen((unsent): ResultAsync<ForcedSignOut, DataError> => {
-            if (unsent) {
-              return okAsync(keep())
-            }
-
-            if (signedInSince()) {
-              return okAsync('signed-in-since')
+            if (unsent || signedInSince()) {
+              return okAsync(unsent ? keep() : 'signed-in-since')
             }
 
             if (notice) {
@@ -182,7 +178,8 @@ export class SessionSignOut {
 
   /**
    * Whether another tab saved a token since `ended`, the one the forced sign-out ends, signing in
-   * again: this tab then leaves its space, keeping the data and the keys.
+   * again: this tab then lifts the barrier while its hints are open (they close with its space),
+   * and leaves its space, keeping the data and the keys.
    */
   #signedInSince(open: OpenSpace, ended: string | undefined): boolean {
     const token = savedToken(this.#host.options.storage)
@@ -190,6 +187,8 @@ export class SessionSignOut {
     if (token === undefined || token === ended) {
       return false
     }
+
+    this.#barrier.release(open.hints)
 
     if (this.#host.open() === open) {
       this.#host.leaveAndTell()
