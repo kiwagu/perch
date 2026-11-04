@@ -137,12 +137,14 @@ export interface SessionPort {
    */
   requestAccountDeletion(password: string): ResultAsync<void, DataError>
   /**
-   * Deletes the account a deletion link's `token` names, whoever is signed in here. Nothing is
-   * signed out by the call itself: the gateway ends every session of the account, and this device
-   * hears so on its channel when it is signed in to it (4001). A link past its hour fails as
-   * `data:LINK_EXPIRED`, another the gateway refuses as `data:LINK_INVALID`, an account that
-   * became the only administrator of an organisation with other members as `data:LAST_ADMIN` (the
-   * link still works once those members are removed), and a request to wait as `data:RATE_LIMITED`.
+   * Deletes the account a deletion link's `token` names, whoever is signed in here. The gateway
+   * ends every session of the account; when this device is signed in to it, it signs out of it as
+   * when its channel hears so (4001), without waiting for a channel it may not have, and the
+   * sign-in page says `signed-out-elsewhere`; another account signed in here stays, and so does
+   * nobody. A link past its hour fails as `data:LINK_EXPIRED`, another the gateway refuses as
+   * `data:LINK_INVALID`, an account that became the only administrator of an organisation with
+   * other members as `data:LAST_ADMIN` (the link still works once those members are removed), and
+   * a request to wait as `data:RATE_LIMITED`.
    */
   deleteAccount(token: string): ResultAsync<void, DataError>
   /**

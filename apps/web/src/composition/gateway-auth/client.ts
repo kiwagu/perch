@@ -9,7 +9,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
 import { accountChangeOf } from './account-change'
-import { accountDeletedOf } from './account-deletion'
+import { accountDeletedOf, type DeletedAccount } from './account-deletion'
 import { type EmailConfirmation, emailConfirmationOf } from './email-confirmation'
 import { mailRequested } from './mail-request'
 import { passwordResetOf } from './password-reset'
@@ -104,14 +104,14 @@ export interface GatewayAuth {
   requestAccountDeletion(password: string, session: AccountSession): ResultAsync<void, DataError>
   /**
    * Deletes an account with the `token` of its deletion link, with no session; the gateway signs
-   * every device of the account out, and the answer names nothing. A link past its hour fails as
+   * every device of the account out, and the answer names the account. A link past its hour fails as
    * `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as
    * `data:LINK_INVALID`, an account that became the only administrator of an organisation with
    * other members as `data:LAST_ADMIN` (the link still works), a request to wait as
-   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer as
-   * `data:AUTH_FAILED` naming its status, never the token.
+   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer (a 200
+   * that does not name the account too) as `data:AUTH_FAILED` naming its status, never the token.
    */
-  deleteAccount(token: string): ResultAsync<void, DataError>
+  deleteAccount(token: string): ResultAsync<DeletedAccount, DataError>
   /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { identityIdFactory } from '@workspace/ids'
+
 import { fakeFetch, respond, respondText } from '../__fixtures__/gateway-fetch'
 import {
   keepsNothingOfTheRejection,
@@ -85,10 +87,14 @@ describe('gatewayAuth.requestAccountDeletion', () => {
 describe('gatewayAuth.deleteAccount', () => {
   const token = 'deletion-token-1'
 
-  it('deletes with the token alone, no credentials and no device', async () => {
-    const recorded = fakeFetch(respond(200, { identity: 'idn_whatever' }))
+  const identity = identityIdFactory.create()
 
-    expect((await gatewayAuth(BASE, recorded.fetcher).deleteAccount(token)).isOk()).toBe(true)
+  it('deletes with the token alone, no credentials and no device, and answers the account', async () => {
+    const recorded = fakeFetch(respond(200, { identity }))
+
+    expect(
+      (await gatewayAuth(BASE, recorded.fetcher).deleteAccount(token))._unsafeUnwrap(),
+    ).toEqual({ identity })
     expect(recorded.sent).toEqual([
       {
         url: `${BASE}/auth/delete-account`,
@@ -100,11 +106,20 @@ describe('gatewayAuth.deleteAccount', () => {
     ])
   })
 
-  it('is done by the 200 alone, whatever its body', async () => {
-    const { fetcher } = fakeFetch(respondText(200, 'deleted'))
+  it.each([
+    ['an identity that is none', respond(200, { identity: 'not-an-id' })],
+    ['no identity', respond(200, {})],
+    ['no JSON', respondText(200, 'deleted')],
+  ])(
+    'fails a 200 that carries %s as an answer that is not the outcome, naming no token',
+    async (_what, answer) => {
+      const { fetcher } = fakeFetch(answer)
+      const refused = (await gatewayAuth(BASE, fetcher).deleteAccount(token))._unsafeUnwrapErr()
 
-    expect((await gatewayAuth(BASE, fetcher).deleteAccount(token)).isOk()).toBe(true)
-  })
+      expect(refused.code).toBe('data:AUTH_FAILED')
+      namesNone(refused, token)
+    },
+  )
 
   it('refuses an empty token as a link that does not work, without asking the gateway', async () => {
     const recorded = fakeFetch(respond(200, {}))

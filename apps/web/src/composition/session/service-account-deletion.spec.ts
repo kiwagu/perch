@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
+import { savedIdentity } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -84,12 +85,76 @@ describe("the deletion of an account by its mailed link's", () => {
 
     expect((await session.deleteAccount(link)).isOk()).toBe(true)
     expect(auth.requests).toEqual([{ kind: 'delete', token: link }])
-    // The gateway signs the devices out, and this one hears so on its channel: the call itself
-    // changes nothing here.
-    expect(session.current()?.email).toBe(annSignUp.email)
     expect((await auth.signIn(annSignUp, { id: 'ann-2', label: 'Edge on Windows' })).isErr()).toBe(
       true,
     )
+  })
+
+  it('signs this browser out of the account it deleted, with no channel to hear the gateway', async () => {
+    const { session, auth, storage } = await signedIn()
+
+    expect((await session.requestAccountDeletion(annSignUp.password)).isOk()).toBe(true)
+    expect((await session.deleteAccount(auth.deletionLinkFor(annSignUp.email))).isOk()).toBe(true)
+
+    // As the channel's 4001 would have left it: nobody here, the token forgotten, the word set.
+    expect(session.current()).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(session.notice()).toBe('signed-out-elsewhere')
+  })
+
+  it('leaves another account signed in here alone', async () => {
+    const { session, auth, storage } = await signedIn()
+    const me = session.current() ?? expect.unreachable('signed in')
+    const bob = { email: 'bob@example.test', password: 'Secret-bob1', name: 'Bob', locale: 'en' }
+
+    expect((await verifiedElsewhere(auth, bob)).isOk()).toBe(true)
+
+    // Bob asks on his own device, and his link is opened in Ann's browser.
+    const bobSession = (
+      await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' })
+    )._unsafeUnwrap()
+
+    expect(
+      (
+        await auth.requestAccountDeletion(bob.password, {
+          token: bobSession.token,
+          device: 'bob-device',
+        })
+      ).isOk(),
+    ).toBe(true)
+    expect((await session.deleteAccount(auth.deletionLinkFor(bob.email))).isOk()).toBe(true)
+    expect(session.current()?.id).toBe(me.id)
+    expect(savedIdentity(storage)?.id).toBe(me.id)
+    expect(storage.get('perch.session.token')).toBeDefined()
+    expect(session.notice()).toBeUndefined()
+  })
+
+  it('changes nothing here when nobody is signed in', async () => {
+    const auth = fakeGatewayAuth()
+    const world = await openTestWorld({ auth, online: false })
+
+    worlds.push(world)
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+
+    const ann = (
+      await auth.signIn(annSignUp, { id: 'ann-device', label: 'Edge on Windows' })
+    )._unsafeUnwrap()
+
+    expect(
+      (
+        await auth.requestAccountDeletion(annSignUp.password, {
+          token: ann.token,
+          device: 'ann-device',
+        })
+      ).isOk(),
+    ).toBe(true)
+    expect((await world.session.deleteAccount(auth.deletionLinkFor(annSignUp.email))).isOk()).toBe(
+      true,
+    )
+    expect(world.session.current()).toBeUndefined()
+    expect(world.session.notice()).toBeUndefined()
+    expect(savedIdentity(world.storage)).toBeUndefined()
   })
 
   it('refuses the link a second time as one that does not work', async () => {

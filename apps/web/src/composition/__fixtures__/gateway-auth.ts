@@ -380,8 +380,9 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       requests.push({ kind: 'delete', token: link })
 
       const email = deletions.get(link)
+      const account = email === undefined ? undefined : accounts.get(email)
 
-      if (email === undefined || !accounts.has(email)) {
+      if (email === undefined || account === undefined) {
         return errAsync(dataError('data:LINK_INVALID', 'the gateway refused the link'))
       }
 
@@ -397,7 +398,7 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
         if (of === email) sessions.delete(given)
       }
 
-      return okAsync(undefined)
+      return okAsync({ identity: account.identity.id })
     },
     signOut: (signedOut, device) => {
       requests.push({ kind: 'sign-out', token: signedOut, device })

@@ -1,6 +1,7 @@
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
 
 import type { EmailConfirmed } from '../../platform/session.port'
 import type { AccountSession, GatewayAuth } from '../gateway-auth'
@@ -18,6 +19,11 @@ export interface SessionAccountDeps {
   readonly storage: KeyValueStorage
   /** Whether a session is open on this device now. */
   readonly signedIn: () => boolean
+  /**
+   * Signs this device out of the account `identity` if it is the one signed in here, as the
+   * channel's 4001 does; resolves once done, and never rejects.
+   */
+  readonly signOutOf: (identity: IdentityId) => Promise<void>
 }
 
 /**
@@ -82,11 +88,15 @@ export class SessionAccount {
 
   /**
    * Asks the gateway alone. The gateway ends every session of the account and closes its channels
-   * (4001), so a device signed in to it signs out as it does when another device signs it out;
-   * nothing is signed out here by the call.
+   * (4001), which this device may never hear (no Web Locks, or its WebSocket blocked): once the
+   * gateway answered with the account it deleted, a session open here for that account signs out
+   * as on the 4001, and another account's stays. Resolves once that ran, whichever of the two
+   * came first.
    */
   deleteAccount(token: string): ResultAsync<void, DataError> {
-    return this.#deps.auth.deleteAccount(token)
+    return this.#deps.auth
+      .deleteAccount(token)
+      .andThen(({ identity }) => ResultAsync.fromSafePromise(this.#deps.signOutOf(identity)))
   }
 
   /** The session this device is signed in with, for a change of its account; none signed in fails. */
