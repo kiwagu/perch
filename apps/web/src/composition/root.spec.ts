@@ -74,6 +74,7 @@ async function boot(
     deleteTenantLocal: () => okAsync(undefined),
     gatewayAuth: fakeGatewayAuth(),
     deviceLabel: 'Chrome on Linux',
+    theme: () => 'system',
     online: () => false,
     onOnlineChange: () => () => {},
     organisationsApi: (deps) =>
@@ -271,7 +272,7 @@ describe('createAppRoot', () => {
     ])
   })
 
-  it("finishes, as the saved identity's space opens, the start of its account this browser kept", async () => {
+  it("finishes, as the saved identity's space opens, the start of its account this browser kept, in the theme this device shows", async () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
@@ -283,7 +284,7 @@ describe('createAppRoot', () => {
       afterPull: false,
     })
 
-    const { result } = await boot(storage, [], [])
+    const { result } = await boot(storage, [], [], { theme: () => 'dark' })
 
     services = result._unsafeUnwrap()
 
@@ -297,7 +298,7 @@ describe('createAppRoot', () => {
     expect((await services.session.flush()).isOk()).toBe(true)
     expect(
       (await services.container.get(SETTINGS_SERVICE).read({ identity }))._unsafeUnwrap(),
-    ).toMatchObject([{ locale: 'es' }])
+    ).toMatchObject([{ locale: 'es', theme: 'dark' }])
     expect((await profiles.read({ identity }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann', email: ann.identity.email },
     ])

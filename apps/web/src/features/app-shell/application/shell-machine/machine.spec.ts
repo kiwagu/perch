@@ -4,10 +4,10 @@ import { createActor, waitFor } from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
-import type { Theme } from '../../../platform/theme'
+import type { Theme } from '../../../../platform/theme'
+import { type FrameWrites, NOTHING_SEEN } from '../setting-writes'
 
-import { LocaleWrites } from './locale-writes'
-import { createShellMachine, type ShellValues } from './shell.machine'
+import { createShellMachine, type ShellValues } from '.'
 
 /**
  * A frame over its machine: what the guards read and what the machine emitted; `reloadedFor`
@@ -17,12 +17,13 @@ function frame(reloadedFor: string[] = []) {
   let values: ShellValues = {
     account: undefined,
     stored: undefined,
-    writes: LocaleWrites.none,
+    writes: NOTHING_SEEN,
     unsaved: false,
   }
   const signOutHere = vi.fn(() => okAsync(undefined))
   const reload = vi.fn()
   const setTheme = vi.fn<(theme: Theme) => void>()
+  const followTheme = vi.fn<() => void>()
   const selfReloads = {
     done: (update: string) => reloadedFor.includes(update),
     mark: (update: string) => void reloadedFor.push(update),
@@ -37,6 +38,7 @@ function frame(reloadedFor: string[] = []) {
       signOutHere,
       reload,
       setTheme,
+      followTheme,
       selfReloads,
       install,
     }),
@@ -52,6 +54,7 @@ function frame(reloadedFor: string[] = []) {
     signOutHere,
     reload,
     setTheme,
+    followTheme,
     install,
     spoken,
     emitted,
@@ -60,17 +63,29 @@ function frame(reloadedFor: string[] = []) {
     },
     /** The account goes away, by its own sign-out or from another device. */
     signOut: () => {
-      values = { ...values, account: undefined, stored: undefined, writes: LocaleWrites.none }
+      values = { ...values, account: undefined, stored: undefined, writes: NOTHING_SEEN }
       actor.send({ type: 'platform.signed-out' })
     },
-    /** The settings arrive or change on this device, here or from another one. */
-    store: (stored: string) => {
-      values = { ...values, stored }
+    /** The stored language arrives or changes in this tab, from it, another tab or device. */
+    store: (locale: string) => {
+      values = { ...values, stored: { theme: 'system', ...values.stored, locale } }
       actor.send({ type: 'model.settings.locale' })
-      values = { ...values, writes: values.writes.arrived(stored) }
+      values = {
+        ...values,
+        writes: { ...values.writes, locale: values.writes.locale.arrived(locale) },
+      }
     },
-    /** This device's own writes of the language, as the settings screen tells them. */
-    write: (step: (writes: LocaleWrites) => LocaleWrites) => {
+    /** The stored theme arrives or changes in this tab, from it, another tab or device. */
+    storeTheme: (theme: string) => {
+      values = { ...values, stored: { locale: 'en', ...values.stored, theme } }
+      actor.send({ type: 'model.settings.theme' })
+      values = {
+        ...values,
+        writes: { ...values.writes, theme: values.writes.theme.arrived(theme) },
+      }
+    },
+    /** This tab's own writes of its settings, as the settings screen tells them. */
+    write: (step: (writes: FrameWrites) => FrameWrites) => {
       values = { ...values, writes: step(values.writes) }
     },
     /** A field starts holding unsaved input, or stops. */
@@ -172,14 +187,13 @@ describe('shell machine', () => {
     expect(failed.is('failed')).toBe(true)
   })
 
-  it('takes a theme while the signed-in data opens, and no message, crash or language', () => {
+  it('takes no theme, message, crash or language while the signed-in data opens', () => {
     const opening = frame()
 
     opening.signIn()
     opening.actor.send({ type: 'platform.started' })
-    opening.chooseTheme('dark')
 
-    expect(opening.setTheme).toHaveBeenCalledWith('dark')
+    expect(opening.canChooseTheme()).toBe(false)
     expect(opening.canChoose()).toBe(false)
     expect(opening.canUpdate()).toBe(false)
 
@@ -259,7 +273,7 @@ describe('shell machine', () => {
     expect(shell.emitted).toEqual([REJECTED, RELOADED])
   })
 
-  it('speaks a language stored that this device has not seen yet, once', () => {
+  it('speaks a language stored that this tab has not seen yet, once', () => {
     const shell = frame()
 
     shell.open()
@@ -271,25 +285,28 @@ describe('shell machine', () => {
     expect(shell.spoken).toEqual(['es', 'en'])
   })
 
-  it("takes this device's own writes coming back late for its own, a failed one too", () => {
+  it("takes this tab's own writes coming back late for its own, a failed one too", () => {
     const shell = frame()
 
     shell.open()
     shell.signIn()
     shell.store('en')
     // The settings screen stores es, then en, and en's store fails; es comes back late.
-    shell.write((writes) => writes.writing('es').writing('en').failed('en'))
+    shell.write((writes) => ({
+      ...writes,
+      locale: writes.locale.writing('es').writing('en').failed('en'),
+    }))
     shell.store('es')
 
     expect(shell.spoken).toEqual(['en'])
 
-    // Another device stores en afterwards: that one is spoken.
+    // Another tab or device stores en afterwards: that one is spoken.
     shell.store('en')
 
     expect(shell.spoken).toEqual(['en', 'en'])
   })
 
-  it('applies a theme chosen while the data opens, once open, signed in or not, and if it failed', () => {
+  it('applies a theme chosen while the app starts, once open, and when the data failed to open', () => {
     const opening = frame()
 
     opening.chooseTheme('dark')
@@ -307,6 +324,83 @@ describe('shell machine', () => {
     failed.chooseTheme('dark')
 
     expect(failed.setTheme).toHaveBeenCalledWith('dark')
+    expect(failed.is('failed')).toBe(true)
+  })
+
+  it('shows a theme stored that this tab has not seen yet, once, keeping it on the device', () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.storeTheme('dark')
+    shell.storeTheme('dark')
+    shell.storeTheme('light')
+
+    expect(shell.setTheme.mock.calls).toEqual([['dark'], ['light']])
+  })
+
+  it("takes this tab's own theme coming back for its own, and leaves the language alone", () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.storeTheme('system')
+    // The settings screen shows dark and stores it; it comes back.
+    shell.write((writes) => ({ ...writes, theme: writes.theme.writing('dark') }))
+    shell.storeTheme('dark')
+
+    expect(shell.setTheme.mock.calls).toEqual([['system']])
+    expect(shell.spoken).toEqual([])
+  })
+
+  it('shows a stored theme around a crash, the message staying', () => {
+    const shell = frame()
+
+    shell.open()
+    shell.signIn()
+    shell.actor.send({ type: 'platform.crashed' })
+    shell.storeTheme('dark')
+
+    expect(shell.setTheme).toHaveBeenCalledWith('dark')
+    expect(shell.is('crashed')).toBe(true)
+  })
+
+  it("follows a theme another tab chose for a guest's device, around a crash too, and not a signed-in account's", () => {
+    const guest = frame()
+
+    guest.actor.send({ type: 'platform.theme-set' })
+
+    expect(guest.followTheme).not.toHaveBeenCalled()
+
+    guest.open()
+    guest.actor.send({ type: 'platform.theme-set' })
+    guest.actor.send({ type: 'platform.crashed' })
+    guest.actor.send({ type: 'platform.theme-set' })
+
+    expect(guest.followTheme).toHaveBeenCalledTimes(2)
+    expect(guest.is('crashed')).toBe(true)
+
+    // A signed-in tab shows its account's theme, which it keeps on the device itself.
+    const signedIn = frame()
+
+    signedIn.open()
+    signedIn.signIn()
+    signedIn.actor.send({ type: 'platform.theme-set' })
+    signedIn.actor.send({ type: 'platform.crashed' })
+    signedIn.actor.send({ type: 'platform.theme-set' })
+
+    expect(signedIn.followTheme).not.toHaveBeenCalled()
+  })
+
+  it("follows a theme another tab chose while the saved account's data failed to open", () => {
+    const failed = frame()
+
+    failed.signIn()
+    failed.actor.send({ type: 'platform.started' })
+    failed.actor.send({ type: 'platform.open-failed' })
+    failed.actor.send({ type: 'platform.theme-set' })
+
+    expect(failed.followTheme).toHaveBeenCalledTimes(1)
     expect(failed.is('failed')).toBe(true)
   })
 

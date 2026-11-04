@@ -39,6 +39,7 @@ import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
 import { SESSION, type SessionPort } from '../platform/session.port'
 import { SYNC_STATUS } from '../platform/sync-status.port'
+import type { Theme } from '../platform/theme'
 
 import { accountStarts } from './account-starts'
 import { type CommandLogger, createCommandBus } from './commands'
@@ -67,6 +68,8 @@ export interface AppRootOptions {
   readonly gatewayAuth: GatewayAuth
   /** The label sign-ins and verifications give this browser, next to its own id: "Chrome on Linux". */
   readonly deviceLabel: string
+  /** The theme this device shows now, which the settings of an account it starts begin with. */
+  readonly theme: () => Theme
   /** Whether the browser says it has a network (`navigator.onLine`). */
   readonly online: () => boolean
   /** Hears the browser's network come or go (its `online` and `offline` events). */
@@ -227,6 +230,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     runner: session.runner,
     commands,
     settings,
+    theme: options.theme,
     storage: options.storage,
     locks: options.locks,
     logger: options.logger,

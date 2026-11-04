@@ -47,8 +47,9 @@ modeling stage.
   `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
   this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
   start is kept in `perch.session.account-start` (the identity, the name and the sign-up
-  language) until its settings and its profile both exist, and finished each time that
-  identity's space opens here again. The tabs take their turns under the Web Lock
+  language) until its settings (in that language and the theme the device shows as it creates
+  them) and its profile both exist, and finished each time that identity's space opens here
+  again. The tabs take their turns under the Web Lock
   `perch.session.account-start` (`oneTabAtATime`, the helper the sign-in lock runs on too): each
   reads the kept start and the account's records afresh in the local store they share, and
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
@@ -227,8 +228,9 @@ modeling stage.
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
   away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
-  screens' machines, from the facts of this browser no account owns, each a key of its storage
-  another tab set (`perch.password.reset` tells `platform.password-reset`); the storage's own
+  screens' machines and the frame's, from the facts of this browser no account owns, each a key
+  of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
+  `perch.theme` tells `platform.theme-set`); the storage's own
   event keeps it from echoing (a tab never hears its own write, a write that changes nothing and a
   value kept before the tab opened tell nothing), and a key removed elsewhere tells nothing either.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
@@ -242,16 +244,20 @@ modeling stage.
   and the current organisation), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
-  platform's events that reach the screens (`platform-events.port.ts`),
+  platform's events that reach the screens and the frame (`platform-events.port.ts`, sent to a
+  running machine by `platform-events-input.ts`, `sendPlatformEvents`, the one way both hear them),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
-  kept in this browser under `perch.theme`, shown as the class `dark` on `<html>` and following
-  the device's setting under the system's; the start makes it before the first frame and gives it
-  to views through `ThemeContext`, read with `useDeviceTheme()`), and this device's own writes of
-  the account's language (`language-writes.ts`: the settings screen's store tells the frame of
-  each write before it starts and when it failed, `trackedStore`, so a late echo of an earlier
-  write is not taken for another device's language; the start provides it over the frame's record). `ui-contract.ts` is
+  kept in this browser under `perch.theme` as the theme this device showed last, shown as the
+  class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
+  and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
+  tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
+  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
+  frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
+  earlier write is not taken for a value another tab or device stored; the start provides them
+  over the frame's record). `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then

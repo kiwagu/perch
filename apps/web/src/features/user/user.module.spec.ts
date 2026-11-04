@@ -48,6 +48,7 @@ beforeEach(async () => {
           settings,
           keptAccountStart(memoryStorage()),
           (run) => run(() => opened.session.flush()),
+          () => 'system',
         ),
     )
 

@@ -40,6 +40,16 @@ describe('the platform events of this browser', () => {
     expect(heard).toEqual([])
   })
 
+  it('tells a theme each time another tab chooses one', () => {
+    const storage = memoryStorage()
+    const { heard } = listening(storage)
+
+    storage.changeElsewhere('perch.theme', 'dark')
+    storage.changeElsewhere('perch.theme', 'light')
+
+    expect(heard).toEqual([{ type: 'platform.theme-set' }, { type: 'platform.theme-set' }])
+  })
+
   it('tells nothing when another tab removes the key', () => {
     const storage = memoryStorage()
     const { heard } = listening(storage)

@@ -17,12 +17,16 @@ import {
 function screen(
   options: {
     readonly store?: () => ResultAsync<void, unknown>
+    readonly storeTheme?: () => ResultAsync<void, unknown>
     readonly changePassword?: SettingsMachineDeps['changePassword']
     readonly changeEmail?: SettingsMachineDeps['changeEmail']
   } = {},
 ) {
   let values: SettingsValues = { held: true, account: 'idn_ann', storingFor: undefined }
   const setTheme = vi.fn<(theme: Theme) => void>()
+  const storeTheme = vi.fn<(theme: Theme) => ResultAsync<void, unknown>>(
+    options.storeTheme ?? (() => okAsync(undefined)),
+  )
   const storeLocale = vi.fn<(locale: Locale) => ResultAsync<void, unknown>>(
     options.store ?? (() => okAsync(undefined)),
   )
@@ -30,6 +34,11 @@ function screen(
     createSettingsMachine({
       values: () => values,
       setTheme,
+      storeTheme: (theme) => {
+        values = { ...values, storingFor: values.account }
+
+        return storeTheme(theme)
+      },
       storeLocale: (locale) => {
         values = { ...values, storingFor: values.account }
 
@@ -46,6 +55,7 @@ function screen(
   return {
     actor,
     setTheme,
+    storeTheme,
     storeLocale,
     emitted,
     set: (more: Partial<SettingsValues>) => {
@@ -60,14 +70,53 @@ const NOT_STORED = {
   codes: ['locale-not-stored'],
 }
 
+const THEME_NOT_STORED = {
+  type: 'show',
+  anchor: 'app-shell.notice-message',
+  codes: ['theme-not-stored'],
+}
+
 describe('settings machine', () => {
-  it('shows a chosen theme on the device at once', async () => {
-    const settings = screen()
+  it('shows a chosen theme at once and stores it, taking no other theme meanwhile', () => {
+    const settings = screen({ storeTheme: () => new ResultAsync(new Promise(() => {})) })
 
     settings.actor.send({ type: 'user.settings.theme-select', theme: 'dark' })
 
-    await waitFor(settings.actor, (state) => state.matches({ viewing: { theme: 'idle' } }))
     expect(settings.setTheme).toHaveBeenCalledWith('dark')
+    expect(settings.storeTheme).toHaveBeenCalledWith('dark')
+    expect(
+      settings.actor.getSnapshot().can({ type: 'user.settings.theme-select', theme: 'light' }),
+    ).toBe(false)
+    // The language is a region of its own: it still takes a choice.
+    expect(
+      settings.actor.getSnapshot().can({ type: 'user.settings.locale-select', locale: 'es' }),
+    ).toBe(true)
+  })
+
+  it('takes no theme before the settings are on the device', () => {
+    const settings = screen()
+
+    settings.set({ held: false })
+
+    expect(
+      settings.actor.getSnapshot().can({ type: 'user.settings.theme-select', theme: 'dark' }),
+    ).toBe(false)
+  })
+
+  it('says a theme the settings could not store, and nothing once the account left, keeping the theme shown', async () => {
+    const failing = screen({ storeTheme: () => errAsync(new Error('refused')) })
+
+    failing.actor.send({ type: 'user.settings.theme-select', theme: 'dark' })
+    await waitFor(failing.actor, (state) => state.matches({ viewing: { theme: 'idle' } }))
+    expect(failing.emitted).toContainEqual(THEME_NOT_STORED)
+    expect(failing.setTheme.mock.calls).toEqual([['dark']])
+
+    const left = screen({ storeTheme: () => errAsync(new Error('refused')) })
+
+    left.actor.send({ type: 'user.settings.theme-select', theme: 'dark' })
+    left.set({ account: undefined })
+    await waitFor(left.actor, (state) => state.matches({ viewing: { theme: 'idle' } }))
+    expect(left.emitted).not.toContainEqual(THEME_NOT_STORED)
   })
 
   it('speaks a chosen language at once and stores it, taking no other choice meanwhile', () => {
