@@ -14,7 +14,7 @@ export const profileSchema: ReplicaSchema = {
     fields: {
       identity: { kind: 'record', table: 'identity' },
       name: { kind: 'plain' },
-      email: { kind: 'plain' },
+      email: { kind: 'plain', readonly: true },
       bio: { kind: 'text' },
     },
   },
