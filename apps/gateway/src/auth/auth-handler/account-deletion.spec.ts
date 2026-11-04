@@ -3,14 +3,17 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { CLOSE } from '@workspace/replica/protocol'
+import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import departingMembershipsStatement from '../../tenants/surql/departing-memberships.surql'
 import membershipAddStatement from '../../tenants/surql/membership-add.surql'
+import tenantRemoveStatement from '../../tenants/surql/tenant-remove.surql'
 import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
 
 import {
   ANN,
+  heldQueries,
   holdTurn,
   mountedOnRealAuth,
   PASSWORD,
@@ -23,6 +26,7 @@ import {
   signInRequest,
   signUpRequest,
   turnsAsked,
+  welcomed,
 } from './__fixtures__/mount'
 import { SIGN_UP_FLOOR_MS } from './sign-up'
 
@@ -209,13 +213,18 @@ describe('authHandler, the deletion of an account by its link', () => {
     expect(await answer?.json()).toEqual({ identity: ann.identity })
     // The sessions end and the sockets close inside the departure, once it is allowed and before
     // it writes (`Organisations.leaveAll`'s `before`), and the rows go after it.
+    // Once the rows went, the sockets close once more: a device signed in meanwhile is closed too.
     expect(mounted.steps).toEqual([
       'departure',
       'sessions ended',
       `sockets closed ${CLOSE.revoked}`,
       'rows removed',
+      `sockets closed ${CLOSE.revoked}`,
     ])
-    expect(mounted.closes).toEqual([[ann.identity, undefined, CLOSE.revoked]])
+    expect(mounted.closes).toEqual([
+      [ann.identity, undefined, CLOSE.revoked],
+      [ann.identity, undefined, CLOSE.revoked],
+    ])
 
     for (const device of ['laptop', 'phone']) {
       expect(ann.sockets.get(device)?.ended).toEqual([CLOSE.revoked])
@@ -236,6 +245,46 @@ describe('authHandler, the deletion of an account by its link', () => {
     // The new account's verification mail, after the old one's three mails.
     await mounted.outbox.next(ANN, 3)
   }, 30_000)
+
+  it('closes with 4001, once the account is gone, a device that signed in while its departure was under way, and refuses a hello still in flight', async () => {
+    const held = heldQueries()
+    const mounted = await mountedOnRealAuth({ organisationsDirectory: held.directory })
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await done(mounted.organisations.create({ identity: ann.identity, key: 'solo', name: 'Solo' }))
+
+    const token = await deletionLink(mounted, ann.on('laptop'))
+    const removal = held.hold((text) => text === tenantRemoveStatement)
+    const pressing = mounted.route(press(token), FROM)
+
+    // The departure ended the sessions and closed the sockets, and waits to remove the
+    // organisation: the account and its password are still there.
+    await vi.waitFor(() => expect(removal.paused()).toBe(true))
+    expect(ann.sockets.get('laptop')?.ended).toEqual([CLOSE.revoked])
+
+    // A sign-in takes no turn of the account: another device signs in, and its socket says hello.
+    const signedIn = await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    expect(signedIn?.status).toBe(200)
+
+    const deskToken = z.object({ token: z.string() }).parse(await signedIn?.json()).token
+    const hello = mounted.registry.epoch()
+
+    expect((await mounted.sessions.read(deskToken)).kind).toBe('session')
+
+    const desk =
+      welcomed(mounted.registry, ann.identity, 'desk', hello) ??
+      expect.unreachable('the desk is welcomed')
+    // A third device's hello is under way: it read the epoch, its session not read yet.
+    const inFlight = mounted.registry.epoch()
+
+    removal.release()
+    expect((await pressing)?.status).toBe(200)
+    expect(desk.ended).toEqual([CLOSE.revoked])
+    expect((await mounted.sessions.read(deskToken)).kind).toBe('none')
+    expect(welcomed(mounted.registry, ann.identity, 'tablet', inFlight)).toBeUndefined()
+    expect(mounted.registry.forIdentity(ann.identity)).toEqual([])
+  })
 
   it('tells the email the account had, in its language, naming nothing else and carrying no link', async () => {
     const mounted = await mountedOnRealAuth()

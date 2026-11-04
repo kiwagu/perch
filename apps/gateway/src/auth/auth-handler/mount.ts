@@ -208,8 +208,9 @@ function credentialChecked(
  *   (`requestAccountDeletion`): 202 with no body once the deletion mail is on its way to the
  *   account's email; 400 `invalid-credentials`, 409 `last-admin`.
  * - `POST /auth/delete-account` `{ token }` (`deleteAccount`): 200 `{ identity }` once the account
- *   is gone, every session of it ended and its sockets closed with 4001 first; 401 `link-invalid`
- *   or `link-expired`, 409 `last-admin`.
+ *   is gone, every session of it ended and its sockets closed with 4001 first, and its sockets
+ *   closed with 4001 once more after its rows went; 401 `link-invalid` or `link-expired`, 409
+ *   `last-admin`.
  *
  * A limit that refuses answers 429 `rate-limited` with `Retry-After`, Better Auth not asked. Every
  * other refusal Better Auth answers reaches the client as its status and `{ code }` alone, a

@@ -386,7 +386,11 @@ account exists (`AccountTeardown.addressee`), every session of the account ends
 (`AuthSessions.revokeAll`) and every socket of it closes with 4001. The departure then takes the
 account out of its organisations and its own rows are removed (its `after` step,
 `AccountTeardown.remove`) while those turns are still held, so no invite of it and no creation
-by it lands in between: one that waited finds the identity gone and is refused.
+by it lands in between: one that waited finds the identity gone and is refused. Once the rows
+went, every socket of the account closes with 4001 once more: a sign-in takes no turn of the
+account, so a device can sign in while the departure runs and say hello before the rows go; the
+second close ends its socket, and the registry's epoch it moves refuses a hello still under way
+(one that starts later reads no session).
 The notice of a deleted account then starts to the email it had (`AccountMails.accountDeleted`),
 and it answers 200 `{ identity }`, so the page can tell whether its device was signed in to the
 deleted account. A failure of the gateway answers 500 `internal`. Better Auth's own deletion of a

@@ -162,7 +162,9 @@ export async function deleteAccount(
  * of the email, nothing changed), whom the notice goes to is read while the account exists, every
  * session of the account ends and every socket of it closes with 4001. Then the account leaves
  * its organisations and its own rows are removed, while no invite of it and no creation by it can
- * land. Once the account is gone the notice starts to the email it had, and it answers 200
+ * land, and its sockets close with 4001 once more: a sign-in takes no turn of the account, so a
+ * device may sign in while the departure runs and say hello before the rows go, and the second
+ * close ends its socket and refuses a hello still under way (the registry's epoch moves). Once the account is gone the notice starts to the email it had, and it answers 200
  * `{ identity }`: the account that was deleted, so the page can tell whether this device was
  * signed in to it.
  */
@@ -176,7 +178,7 @@ async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
   const { identity } = claims
   const left = await deps.departure.leave(identity, {
     before: () => spend(deps, token, claims),
-    after: () => deps.teardown.remove(identity),
+    after: () => deps.teardown.remove(identity).andThen(() => closed(deps, identity)),
   })
 
   if (left.isErr()) {
@@ -219,12 +221,16 @@ function spend(
         : errAsync<DeletedAccount, DeletionStop | DataError>(LINK_SPENT),
     )
     .andThen((addressee) => deps.sessions.revokeAll(identity).map(() => addressee))
-    .andThen((addressee) =>
-      // The registry's closes never reject.
-      ResultAsync.fromSafePromise(deps.connections.close(identity, undefined, CLOSE.revoked)).map(
-        () => addressee,
-      ),
-    )
+    .andThen((addressee) => closed(deps, identity).map(() => addressee))
+}
+
+/**
+ * Closes every socket of `identity` with 4001 and moves the registry's epoch against it, so a
+ * hello that read the epoch before is refused at its registration. The registry's closes never
+ * reject.
+ */
+function closed(deps: AuthMountDeps, identity: IdentityId): ResultAsync<void, never> {
+  return ResultAsync.fromSafePromise(deps.connections.close(identity, undefined, CLOSE.revoked))
 }
 
 /**

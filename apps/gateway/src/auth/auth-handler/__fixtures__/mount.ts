@@ -434,6 +434,34 @@ export function fakeConnection(): MembershipsListener & { readonly ended: number
 }
 
 /**
+ * A socket of `device` of `identity` whose hello read `epoch` (the registry's epoch now unless
+ * named), registered in `registry` as a hello registers it: a connection that records the codes it
+ * is closed with and leaves the registry at its first close, as a real one does once its socket
+ * closed. `undefined` when the registry refused it, a close of the device or of its identity having
+ * landed since `epoch`.
+ */
+export function welcomed(
+  registry: ConnectionRegistry,
+  identity: IdentityId,
+  device: string,
+  epoch: number = registry.epoch(),
+): ReturnType<typeof fakeConnection> | undefined {
+  const socket = fakeConnection()
+  let remove: (() => void) | undefined
+  const leaving: ReturnType<typeof fakeConnection> = {
+    ...socket,
+    end: async (code) => {
+      await socket.end(code)
+      remove?.()
+    },
+  }
+
+  remove = registry.add(identity, device, leaving, epoch)
+
+  return remove === undefined ? undefined : leaving
+}
+
+/**
  * What `run` resolves to, and everything printed meanwhile to the console or to the process's
  * output streams, as text: the printing itself is held back.
  */
@@ -509,7 +537,8 @@ export interface SignedInAccount {
 
 /**
  * Signs `email` up with `password`, verifies it through its mail on the first of `devices` and
- * signs it in on each other one, each device then saying hello with a socket in `registry`.
+ * signs it in on each other one, each device then saying hello with a socket in `registry`
+ * (`welcomed`).
  */
 export async function signedInOn(
   mounted: Awaited<ReturnType<typeof mountedOnRealAuth>>,
@@ -531,11 +560,15 @@ export async function signedInOn(
     tokens.set(device, signedIn.token)
   }
 
-  const sockets = new Map(devices.map((device) => [device, fakeConnection()] as const))
-
-  for (const [device, socket] of sockets) {
-    mounted.registry.add(identity, device, socket, mounted.registry.epoch())
-  }
+  const sockets = new Map(
+    devices.map(
+      (device) =>
+        [
+          device,
+          welcomed(mounted.registry, identity, device) ?? expect.unreachable('a socket welcomed'),
+        ] as const,
+    ),
+  )
 
   return {
     identity,
