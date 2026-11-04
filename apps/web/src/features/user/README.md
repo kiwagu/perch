@@ -100,12 +100,18 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   values the page holds, `useFieldClears`; a refusal shows under the field its code concerns) and
   the account's email (the new email and the current password, `platform.change-email`, which
   mails the new email a link that makes the change; the message `check-your-mail` names it, the
-  same words whether that email has an account or not), its screen's flow run as its machine
-  (`application/settings/settings-machine/`: the theme, language, password and email regions of
-  one parallel state, `machine.ts` assembling `password-region.ts` and `email-region.ts`, held to
-  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
-  `useScreenMachine`, which asks the leave guard before the language changes; its view is
-  `settings.view.tsx` with `password-form.view.tsx` and `email-form.view.tsx`.
+  same words whether that email has an account or not) and the account's deletion (the current
+  password, `platform.request-account-deletion`, which mails the account's own email the link of
+  the page that deletes it; the message `check-your-mail` says the account stays as it is until
+  that page's button is pressed, the flow's `clear` empties the password once the mail went out,
+  and a refusal (`invalid-credentials` under the field, `last-admin`, `rate-limited`, `failed`
+  above the form) keeps it as typed; another press sends a fresh link), its screen's flow run as
+  its machine (`application/settings/settings-machine/`: the theme, language, password, email and
+  deletion regions of one parallel state, `machine.ts` assembling `password-region.ts`,
+  `email-region.ts` and `deletion-region.ts`, held to `contract/domain/screens/settings.yaml` by
+  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
+  language changes; its view is `settings.view.tsx` with `password-form.view.tsx`,
+  `email-form.view.tsx` and `deletion-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.

@@ -20,6 +20,7 @@ function screen(
     readonly storeTheme?: () => ResultAsync<void, unknown>
     readonly changePassword?: SettingsMachineDeps['changePassword']
     readonly changeEmail?: SettingsMachineDeps['changeEmail']
+    readonly requestAccountDeletion?: SettingsMachineDeps['requestAccountDeletion']
   } = {},
 ) {
   let values: SettingsValues = { held: true, account: 'idn_ann', storingFor: undefined }
@@ -46,6 +47,7 @@ function screen(
       },
       changePassword: options.changePassword ?? (() => okAsync(undefined)),
       changeEmail: options.changeEmail ?? (() => okAsync(undefined)),
+      requestAccountDeletion: options.requestAccountDeletion ?? (() => okAsync(undefined)),
     }),
   ).start()
   const emitted: unknown[] = []
@@ -295,5 +297,108 @@ describe('the email region', () => {
       emailMessage: undefined,
       sentTo: undefined,
     })
+  })
+})
+
+describe('the deletion region', () => {
+  const SEND = { type: 'user.settings.deletion.send-button', password: 'Secret-ann1' } as const
+  const IDLE = { viewing: { deletion: 'idle' } } as const
+  const SENT = { viewing: { deletion: 'sent' } } as const
+  const PASSWORD_CLEARED = { type: 'clear', anchor: 'user.settings.deletion.password-input' }
+
+  it('sends the mail of the deletion link, says so and empties the password', async () => {
+    const requestAccountDeletion = vi.fn((_password: string) => okAsync(undefined))
+    const settings = screen({ requestAccountDeletion })
+
+    settings.actor.send(SEND)
+
+    expect(settings.actor.getSnapshot().can(SEND)).toBe(false)
+
+    const sent = await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(requestAccountDeletion).toHaveBeenCalledWith('Secret-ann1')
+    expect(sent.context).toMatchObject({
+      deletionError: undefined,
+      deletionMessage: 'check-your-mail',
+    })
+    expect(settings.emitted).toContainEqual(PASSWORD_CLEARED)
+    expect(sent.can(SEND)).toBe(true)
+  })
+
+  it.each([
+    'data:INVALID_CREDENTIALS',
+    'data:LAST_ADMIN',
+    'data:RATE_LIMITED',
+    'data:OFFLINE',
+  ] as const)('says why %s refused it and keeps the password as typed', async (code) => {
+    const settings = screen({
+      requestAccountDeletion: () => errAsync(dataError(code, 'refused')),
+    })
+
+    settings.actor.send(SEND)
+
+    const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    expect(refused.context).toMatchObject({ deletionError: code, deletionMessage: undefined })
+    expect(settings.emitted).not.toContainEqual(PASSWORD_CLEARED)
+    expect(refused.can(SEND)).toBe(true)
+  })
+
+  it('sends a fresh link on another press, and a refusal then takes the message away', async () => {
+    const answers = [
+      okAsync(undefined),
+      okAsync(undefined),
+      errAsync(dataError('data:RATE_LIMITED', 'busy')),
+    ]
+    const requestAccountDeletion = vi.fn(
+      (_password: string) => answers.shift() ?? okAsync(undefined),
+    )
+    const settings = screen({ requestAccountDeletion })
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    settings.actor.send(SEND)
+    expect(settings.actor.getSnapshot().matches({ viewing: { deletion: 'sending' } })).toBe(true)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+    expect(requestAccountDeletion).toHaveBeenCalledTimes(2)
+
+    settings.actor.send(SEND)
+
+    const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    expect(refused.context).toMatchObject({
+      deletionError: 'data:RATE_LIMITED',
+      deletionMessage: undefined,
+    })
+  })
+
+  it('forgets the last refusal as the next press goes out', async () => {
+    let refuse = true
+    const settings = screen({
+      requestAccountDeletion: () =>
+        refuse ? errAsync(dataError('data:INVALID_CREDENTIALS', 'wrong')) : okAsync(undefined),
+    })
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+    refuse = false
+    settings.actor.send(SEND)
+    expect(settings.actor.getSnapshot().context.deletionError).toBeUndefined()
+
+    const sent = await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(sent.context.deletionMessage).toBe('check-your-mail')
+  })
+
+  it('leaves the email region to its own press', async () => {
+    const settings = screen()
+
+    settings.actor.send(SEND)
+    await waitFor(settings.actor, (state) => state.matches(SENT))
+
+    expect(settings.actor.getSnapshot().matches({ viewing: { email: 'idle' } })).toBe(true)
+    expect(settings.actor.getSnapshot().context.emailMessage).toBeUndefined()
   })
 })

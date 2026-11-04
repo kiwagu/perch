@@ -113,5 +113,14 @@
   "user.settings.email.error.invalid-credentials": "The password is wrong.",
   "user.settings.email.error.email-invalid": "Enter an email.",
   "user.settings.email.error.rate-limited": "Too many attempts. Wait a quarter of an hour and try again.",
-  "user.settings.email.error.failed": "The mail was not sent. Try again."
+  "user.settings.email.error.failed": "The mail was not sent. Try again.",
+  "user.settings.deletion.title": "Delete the account",
+  "user.settings.deletion.warning": "The link we mail you deletes the account for good, with its data and the organisations it is the only member of. It cannot be undone. An account that is the only admin of an organisation with other members must remove them first.",
+  "user.settings.deletion.password": "Password",
+  "user.settings.deletion.send": "Send the deletion link",
+  "user.settings.deletion.message.check-your-mail": "Check your mail: a link that deletes the account is on its way to its email. Nothing changes until you open it and press its button.",
+  "user.settings.deletion.error.invalid-credentials": "The password is wrong.",
+  "user.settings.deletion.error.last-admin": "You're the only admin of an organisation that has other members. Remove them first.",
+  "user.settings.deletion.error.rate-limited": "Too many attempts. Wait a quarter of an hour and try again.",
+  "user.settings.deletion.error.failed": "The mail was not sent. Try again."
 }

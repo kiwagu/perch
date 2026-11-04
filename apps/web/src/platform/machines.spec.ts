@@ -136,6 +136,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       storeLocale: () => okAsync(undefined),
       changePassword: () => okAsync(undefined),
       changeEmail: () => okAsync(undefined),
+      requestAccountDeletion: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({
