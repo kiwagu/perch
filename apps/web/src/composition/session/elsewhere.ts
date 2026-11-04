@@ -15,7 +15,7 @@ import type { SessionHost } from './host'
 import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { SessionSignIn } from './sign-in'
-import type { ElsewhereNotice, SessionSignOut } from './sign-out'
+import type { ElsewhereNotice, ForcedSignOut, SessionSignOut } from './sign-out'
 import { sessionTransportContext } from './transport-context'
 
 export interface SessionElsewhereOptions {
@@ -94,7 +94,8 @@ export class SessionElsewhere {
           void this.#organisations.apply(memberships)
         }
       },
-      refused: () => void this.#forced(() => this.#signingOut.refused(identity)),
+      refused: () =>
+        void this.#forced(() => this.#signingOut.refused(identity).map(this.#followIfSignedIn)),
       revoked: () => void this.#outElsewhere(identity),
       passwordChanged: () =>
         void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
@@ -153,8 +154,20 @@ export class SessionElsewhere {
     notice: ElsewhereNotice = 'signed-out-elsewhere',
   ): Promise<void> {
     return this.#forced(() =>
-      still() ? this.#signingOut.refused(identity, notice) : okAsync(undefined),
+      still()
+        ? this.#signingOut.refused(identity, notice).map(this.#followIfSignedIn)
+        : okAsync(undefined),
     )
+  }
+
+  /**
+   * A forced sign-out another tab's sign-in overtook left this tab with no space: it follows what
+   * that tab saved, as on any sign-in made there (`follow`), in a turn of its own.
+   */
+  readonly #followIfSignedIn = (ended: ForcedSignOut): void => {
+    if (ended === 'signed-in-since') {
+      this.follow()
+    }
   }
 
   /**
