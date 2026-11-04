@@ -14,6 +14,7 @@ import type { Membership } from '@workspace/replica/protocol'
 
 import { KeyedTurns } from '../keyed-turns'
 
+import { AccountDeparture } from './account-departure'
 import { OrganisationLookup } from './organisation-lookup'
 import { type OrganisationError, refused } from './organisation-refusal'
 import { keyOf, type Member, type Tenant, takenIn, toTenant, writing } from './organisation-rows'
@@ -50,13 +51,14 @@ type Listener = (identity: IdentityId, memberships: readonly Membership[]) => Pr
  * nobody's, and its creator may run the creation again to finish it. A command that fails with
  * a `DataError` after some of its rows were written leaves those rows in place, and asking again
  * completes it: a creation by its creator, an invite, a removal. Each change of memberships
- * resolves once the listeners heard the identity's new memberships.
+ * but a departure resolves once the listeners heard the identity's new memberships.
  *
- * The changes of one identity's memberships (its creations, the invites of it and its
- * removals) run one after the other, each once the one before it, its notification included,
- * has settled: the directory and the organisation's database end as the last one left them,
- * and the listeners hear the lists in that order. This orders them within one gateway process
- * only; gateways running in several processes would need a durable revision of the memberships.
+ * The changes of one identity's memberships (its creations, the invites of it, its removals
+ * and its departure) run one after the other, each once the one before it, its notification
+ * included, has settled: the directory and the organisation's database end as the last one left
+ * them, and the listeners hear the lists in that order. This orders them within one gateway
+ * process only; gateways running in several processes would need a durable revision of the
+ * memberships.
  */
 export class Organisations {
   readonly #directory: LocalDb
@@ -64,6 +66,7 @@ export class Organisations {
   readonly #members: TenantMembers
   readonly #databases: Pick<TenantDatabases, 'acquire' | 'evict'>
   readonly #revoke: OrganisationsOptions['revoke']
+  readonly #departure: AccountDeparture
   readonly #listeners = new Set<Listener>()
   /** Settles once the changes of an identity's memberships asked so far have; gone when idle. */
   readonly #changes = new KeyedTurns<IdentityId>()
@@ -74,6 +77,10 @@ export class Organisations {
     this.#members = new TenantMembers(options.databases)
     this.#databases = options.databases
     this.#revoke = options.revoke
+    this.#departure = new AccountDeparture({
+      directory: options.directory,
+      databases: options.databases,
+    })
   }
 
   /** The ready organisations `identity` belongs to, with its role in each, by key. */
@@ -185,6 +192,15 @@ export class Organisations {
             .andThen(() => this.#leaveTenant(key, identity)),
         ),
       )
+  }
+
+  /**
+   * Takes `identity`, whose account goes, out of every organisation (`AccountDeparture.leave`)
+   * as a change of its memberships: an invite of it asked meanwhile waits for it. It revokes no
+   * region and tells nobody: the caller closes the identity's connections beforehand.
+   */
+  leaveAll(identity: IdentityId): ResultAsync<void, DataError> {
+    return this.#serialize(identity, () => this.#departure.leave(identity))
   }
 
   /** The members of the organisation with their emails, for its admins, the earliest first. */
@@ -353,10 +369,10 @@ export class Organisations {
    * Runs `work`, a change of the memberships of `identity`, once the changes of that identity
    * asked before it have settled; the next one waits for it, whatever its outcome.
    */
-  #serialize<T>(
+  #serialize<T, E extends OrganisationError>(
     identity: IdentityId,
-    work: () => ResultAsync<T, OrganisationError>,
-  ): ResultAsync<T, OrganisationError> {
+    work: () => ResultAsync<T, E>,
+  ): ResultAsync<T, E> {
     return new ResultAsync(this.#changes.run(identity, work))
   }
 }

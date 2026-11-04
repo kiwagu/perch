@@ -29,10 +29,18 @@ read again to be told, so a removal that fails after the directory (500) has rev
 all the same; asking again completes it. Until the revoke reaches the removed identity's
 connection, a batch its device pushes there may still be accepted: that window between the
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
-creations, the invites of it, its removals) run one after the other, each once the one before
-it and its notification have settled, so the directory and the organisation's database end as
+creations, the invites of it, its removals, its departure) run one after the other, each once
+the one before it and its notification have settled, so the directory and the organisation's database end as
 the last change left them and its devices hear the lists in that order. This holds within one
 gateway process; gateways in several processes would need a durable revision of the memberships.
+An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
+the directory's memberships and their roles: `blocked` is true while it is the only admin of a
+ready organisation with other members, and `leave` takes every organisation it is the only member
+of whole, of any status (its database, its memberships and its directory row in one transaction,
+then the cached connection), and takes it out of every other one (its membership, then its member
+row; its notes stay). `Organisations.leaveAll` runs that departure as a change of the identity's
+memberships, so an invite of it waits; it revokes no region and tells nobody, as the caller
+closes the identity's connections first and the other members read the members when they ask.
 `Organisations` reads the directory through `OrganisationLookup` and an organisation's `member`
 rows through `TenantMembers`; `KeyedTurns` (`src/keyed-turns.ts`) runs one identity's changes
 one at a time. The identity an invite names is found by its email, in any case, through the
@@ -56,18 +64,21 @@ a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 f
 - Routes: `GET /organisations`, `POST /organisations`, `GET /organisations/:key/members`,
   `POST /organisations/:key/members`, `DELETE /organisations/:key/members/:identity`
   (`organisation.routes.ts`).
-- Services: `Organisations` (`organisations.ts`), `TenantDatabases` (`tenant-databases.ts`),
-  `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers` (`tenant-members.ts`), the
-  refusal codes (`organisation-refusal.ts`) and the rows they read (`organisation-rows.ts`).
+- Services: `Organisations` (`organisations.ts`, `leaveAll` among its commands),
+  `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
+  (`tenant-databases.ts`), `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers`
+  (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
+  (`organisation-rows.ts`).
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
-- Queries: `surql/` (organisations, memberships, members, the organisation database's schema).
+- Queries: `surql/` (organisations, memberships, members, the organisation database's schema,
+  a departing identity's memberships and the removal of a whole organisation).
 - Built by the composition root, `src/composition/root.ts`; the sync registry hears the
   membership changes.
 
 ## Commands
 
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations.spec.ts`,
-  `organisation.routes.spec.ts`, `organisation.limits.spec.ts`, `organisation-rows.spec.ts`,
-  `region-databases.spec.ts`, `tenant-databases.spec.ts`), each organisation on an embedded
-  in-memory database of its own.
+  `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
+  `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`), each
+  organisation on an embedded in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.

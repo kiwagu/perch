@@ -673,6 +673,59 @@ describe('Organisations', () => {
     expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
   })
 
+  it('an invite of an identity waits for its departure under way, which revokes nothing and tells nobody', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      heard,
+      steps,
+      membersIn,
+      founded,
+      invited,
+      holdInTenants,
+      onDirectoryQuery,
+    } = await harness()
+    const acme = await founded()
+
+    await invited('bob@example.test')
+    heard.splice(0)
+
+    const held = holdInTenants(memberRemoveStatement)
+    const departure = organisations.leaveAll(bob.id)
+
+    await held.waiting
+
+    const directorySteps: string[] = []
+
+    onDirectoryQuery((text) => directorySteps.push(text))
+
+    const invite = organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
+
+    // The invite finds bob, then waits for the departure: it writes no membership meanwhile.
+    await vi.waitFor(() => expect(directorySteps).toContain(identityByEmailStatement))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(directorySteps).not.toContain(membershipAddStatement)
+
+    held.release()
+
+    expect(await departure).toEqual(ok(undefined))
+    expect(await invite).toEqual(
+      ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }),
+    )
+
+    const joined: Membership = { tenant: acme.tenant, role: 'member' }
+
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
+    expect(await membersIn('acme')).toEqual([
+      { identity: ann.id, role: 'admin' },
+      { identity: bob.id, role: 'member' },
+    ])
+    // Only the invite told bob's listeners; the departure took no region from any connection.
+    expect(heard).toEqual([[bob.id, [joined]]])
+    expect(steps).toEqual(['member-remove'])
+  })
+
   it('removes an identity that is not a member: nothing changes, and its listener hears the memberships it has', async () => {
     const { organisations, ann, cat, heard, membersIn, founded } = await harness()
 
