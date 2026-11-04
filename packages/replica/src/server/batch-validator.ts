@@ -7,7 +7,8 @@ import { splitRecordKey } from '../keys'
 import { toColumns } from '../projection-values'
 import type { RejectReason } from '../protocol'
 import type { RegionRef } from '../region-doc'
-import { fieldOf, type ReplicaSchema, tablesOf } from '../schema'
+import { sameValue } from '../same-value'
+import { fieldOf, type ReplicaSchema, readonlyFieldsOf, tablesOf } from '../schema'
 
 import type { AcceptPlan, DeletedRow, ProjectedRow } from './region-log'
 
@@ -50,34 +51,6 @@ function fromLoro<T>(call: () => T): Result<T, BatchRejection> {
     call,
     (cause): BatchRejection => ({ reason: 'malformed', detail: String(cause) }),
   )()
-}
-
-const isList = (value: unknown): value is readonly unknown[] => Array.isArray(value)
-
-const isObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
-  typeof value === 'object' && value !== null
-
-/** Whether two plain JSON values are the same, whatever the order of an object's keys. */
-function sameValue(a: unknown, b: unknown): boolean {
-  if (isList(a) || isList(b)) {
-    return (
-      isList(a) &&
-      isList(b) &&
-      a.length === b.length &&
-      a.every((item, index) => sameValue(item, b[index]))
-    )
-  }
-
-  if (isObject(a) && isObject(b)) {
-    const keys = Object.keys(a)
-
-    return (
-      keys.length === Object.keys(b).length &&
-      keys.every((key) => Object.hasOwn(b, key) && sameValue(a[key], b[key]))
-    )
-  }
-
-  return Object.is(a, b)
 }
 
 /**
@@ -272,7 +245,10 @@ function foreignOwner(
  * but the owner's, in a tenant region a new record names the pushing member and an existing
  * one keeps the members it named; and the member's ability allows the action on the record
  * (`forbidden-action`): a record is judged as it is, the one being changed or deleted as it
- * was, the new one as it is.
+ * was, the new one as it is. An updated record keeps the fields the schema marks read-only
+ * (`readonly-field`, judged after the owner rule): a device sets them when it creates a record
+ * and never changes them after, while the server's own writes, which do not pass here, set
+ * them freely.
  * The result is the plan the region's log accepts: the projection of each changed record, the
  * update bytes and the version after the batch. A refused batch is a value, never a throw
  * (bytes Loro throws on are `malformed`), and the authoritative document stays as it was
@@ -370,6 +346,18 @@ export function validateBatch(input: ValidateBatchInput): Result<ValidatedBatch,
 
     if (foreign) {
       return err({ reason: 'foreign-owner', detail: `${entry}.${foreign}` })
+    }
+
+    // An existing record keeps the fields devices may not change: the server alone sets them.
+    const kept =
+      prior === undefined
+        ? undefined
+        : readonlyFieldsOf(input.schema, split.table).find(
+            (field) => !sameValue(value[field], prior[field]),
+          )
+
+    if (kept !== undefined) {
+      return err({ reason: 'readonly-field', detail: `${entry}.${kept}` })
     }
 
     upserts.push({ ...split, entry, data: toColumns(input.schema, split.table, value) })
