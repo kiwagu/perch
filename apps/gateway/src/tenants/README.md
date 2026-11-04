@@ -47,9 +47,11 @@ membership, so a run again after a failure finds what is left; its notes stay).
 `Organisations.leaveAll` runs that departure in the identity's turn and the turns of its
 organisations, so an invite of it waits, and so does any change of another identity there;
 `leave` reads the rows again in those turns and is refused `last-admin`, changing nothing, while
-the identity is the only admin of a ready organisation with others in it. It revokes no region
-and tells nobody, as the caller closes the identity's connections first and the other members
-read the members when they ask.
+the identity is the only admin of a ready organisation with others in it. Once the identity left,
+a continuation the caller names runs while those turns are still held (the auth module removes
+the account's own rows there), and its failure is the answer; a refused departure runs none. It
+revokes no region and tells nobody, as the caller closes the identity's connections first and the
+other members read the members when they ask.
 `Organisations` (`organisations/service.ts`) checks what is asked and orders the changes; each
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 `OrganisationInvitation` (`invitation.ts`), `OrganisationRemoval` (`removal.ts`), and
@@ -60,7 +62,10 @@ change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 organisations' in the order of their ids, so no two changes wait for each other. The identity
 an invite names is found by its email, in any case, through the auth module's one lookup
 (`identityByEmail`, `src/auth/identity-by-email.ts`); an email no identity has is refused
-`no-such-identity` here.
+`no-such-identity` here. The invite looks the email up again in the identity's turn and is
+refused `no-such-identity` when it no longer names that identity: an invite that waited for a
+departure whose continuation removed the identity writes no membership of an identity that is
+gone.
 
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
