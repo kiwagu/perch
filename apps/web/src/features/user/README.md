@@ -77,6 +77,17 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   to the profile (this account: the session keeps the new email of the account signed in on this
   browser), to the sign-in page (nobody), or nowhere (another account); a refused link ends on its
   error;
+  `/delete-account` (no guard; search `token`) renders `DeleteAccountPage`, what an account
+  deletion mail's link opens (`application/delete-account.machine.ts`, the flow of
+  `contract/domain/screens/delete-account.yaml`): the page says what goes with the account (its
+  data, its sessions, the organisations it is the only member of) without naming it, and its
+  button, which the frame's confirmation `delete-account` asks before, runs `platform.delete-account`
+  with the address's token. It ends on `account-deleted`, beside the link to sign in for a guest
+  alone, or on a link that does not work (`link-invalid`, `link-expired`) with no button; any
+  other refusal (`last-admin`, `rate-limited`, `failed`) says why and offers the button again,
+  the same link working again within its hour. The deletion signs every device of the account out,
+  this one too when it is signed in to it, and the page keeps its message, which its machine holds
+  whatever the session does; the link to sign in follows who is signed in here;
   `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
@@ -129,9 +140,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
-  `user.reset-password`, `user.confirm-email`, `user.profile` and `user.settings` in
-  `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`, `forgot-password.yaml`,
-  `reset-password.yaml`, `confirm-email.yaml`, `me.yaml` and `settings.yaml`.
+  `user.reset-password`, `user.confirm-email`, `user.delete-account`, `user.profile` and
+  `user.settings` in `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`,
+  `forgot-password.yaml`, `reset-password.yaml`, `confirm-email.yaml`, `delete-account.yaml`,
+  `me.yaml` and `settings.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the

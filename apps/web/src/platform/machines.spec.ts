@@ -28,6 +28,7 @@ import { createShellMachine } from '../features/app-shell/application/shell-mach
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
+import { createDeleteAccountMachine } from '../features/user/application/delete-account.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
@@ -128,6 +129,8 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
   'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
   'user.reset-password': () =>
     createResetPasswordMachine({ token: 't', reset: () => okAsync(undefined) }),
+  'user.delete-account': () =>
+    createDeleteAccountMachine({ token: 't', deleteAccount: () => okAsync(undefined) }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
