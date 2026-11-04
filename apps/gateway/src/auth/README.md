@@ -376,9 +376,12 @@ as they are there, is the one that decides: an account that is the only admin of
 with other members answers 409 `last-admin` with nothing changed, its link still pending and its
 sessions alive, so the same link deletes it once those members are removed, an invitation that
 overtook the press included. Only once the departure is allowed, and before it writes anything,
-does the deletion take effect (the departure's `before` step): the pending deletion is spent
-(`AccountDeletions.claim`, once: 401 `link-invalid`, nothing changed, when it was used, replaced,
-or ended by a change of the password or of the email), whom the notice goes to is read while the
+does the deletion take effect (the departure's `before` step): the token is judged once more on
+the gateway's clock, as the departure may have waited for an organisation's turn past the link's
+hour (401 `link-expired`, nothing changed), and the pending deletion is spent
+(`AccountDeletions.claim`, once, and only before its `expires_at` on the gateway's clock: 401
+`link-invalid`, nothing changed, when it was used, replaced, or ended by a change of the password
+or of the email), whom the notice goes to is read while the
 account exists (`AccountTeardown.addressee`), every session of the account ends
 (`AuthSessions.revokeAll`) and every socket of it closes with 4001. The departure then takes the
 account out of its organisations and its own rows are removed (its `after` step,

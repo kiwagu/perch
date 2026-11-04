@@ -121,8 +121,9 @@ export class AccountDeletions {
   /**
    * Spends the pending deletion `claims` names: true when it was pending and is spent now, false
    * when it was not (used before, replaced by a newer deletion, or ended by a change of the
-   * password or of the email). An answer of the directory that is not a list of rows is an error,
-   * never a link that deletes nothing.
+   * password or of the email) or its hour has passed on the gateway's clock, however late the
+   * claim comes. An answer of the directory that is not a list of rows is an error, never a link
+   * that deletes nothing.
    */
   claim(claims: DeletionClaims): ResultAsync<boolean, DataError> {
     return writing(
@@ -130,6 +131,7 @@ export class AccountDeletions {
         .query<[unknown]>(accountDeletionClaimStatement, {
           identity: claims.identity,
           jti: claims.jti,
+          now: new Date(this.#clock.now()),
         })
         .retry(),
       `the deletion of the account of ${claims.identity} could not be spent`,

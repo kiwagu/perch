@@ -1,4 +1,5 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
@@ -22,12 +23,17 @@ const deleteBody = z.object({ token: z.string().min(1).max(4096) })
 /** 409 `last-admin`: the account is the only admin of an organisation with other members. */
 const lastAdmin = (): Response => refused(409, 'last-admin')
 
-/** The stop of a deletion whose link was no longer pending when the departure came to spend it. */
-interface LinkSpent {
-  readonly kind: 'link-spent'
+/**
+ * Why a deletion stopped when its departure came to spend its link: the link was no longer pending
+ * (`link-spent`), or its hour had passed while the departure waited for its turns
+ * (`link-expired`). Either stops it with nothing changed.
+ */
+interface DeletionStop {
+  readonly kind: 'link-spent' | 'link-expired'
 }
 
-const LINK_SPENT: LinkSpent = { kind: 'link-spent' }
+const LINK_SPENT: DeletionStop = { kind: 'link-spent' }
+const LINK_EXPIRED: DeletionStop = { kind: 'link-expired' }
 
 /**
  * Asks to delete the caller's account (`{ password }`, with the device's token and
@@ -169,7 +175,7 @@ async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
 
   const { identity } = claims
   const left = await deps.departure.leave(identity, {
-    before: () => spend(deps, claims),
+    before: () => spend(deps, token, claims),
     after: () => deps.teardown.remove(identity),
   })
 
@@ -184,23 +190,33 @@ async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
 
 /**
  * Where a deletion takes effect, in the turns of the account's memberships once its departure is
- * allowed: the pending deletion `claims` names is spent (`LINK_SPENT` when it was not pending,
- * nothing else done), then whom the notice goes to is read, every session of the account ends
- * and every socket of it closes with 4001, so no device holds the account while its rows go.
- * Answers whom the notice goes to.
+ * allowed. The link's `token` is judged once more on the gateway's clock, right before it is
+ * spent, since the departure may have waited for the turns past the link's hour (`LINK_EXPIRED`,
+ * nothing done); then the pending deletion `claims` names is spent (`LINK_SPENT` when it was not
+ * pending, or expired by the claim's own reading of the clock, nothing else done), whom the notice
+ * goes to is read, every session of the account ends and every socket of it closes with 4001, so
+ * no device holds the account while its rows go. Answers whom the notice goes to.
  */
 function spend(
   deps: AuthMountDeps,
+  token: string,
   claims: DeletionClaims,
-): ResultAsync<DeletedAccount, LinkSpent | DataError> {
+): ResultAsync<DeletedAccount, DeletionStop | DataError> {
   const { identity } = claims
 
   return deps.deletions
-    .claim(claims)
+    .read(token)
+    .andThen((read) =>
+      read.kind === 'deletion'
+        ? deps.deletions.claim(claims)
+        : errAsync<boolean, DeletionStop | DataError>(
+            read.kind === 'expired' ? LINK_EXPIRED : LINK_SPENT,
+          ),
+    )
     .andThen((claimed) =>
       claimed
         ? deps.teardown.addressee(identity)
-        : errAsync<DeletedAccount, LinkSpent | DataError>(LINK_SPENT),
+        : errAsync<DeletedAccount, DeletionStop | DataError>(LINK_SPENT),
     )
     .andThen((addressee) => deps.sessions.revokeAll(identity).map(() => addressee))
     .andThen((addressee) =>
@@ -213,14 +229,19 @@ function spend(
 
 /**
  * The answer to a deletion that did not happen: 409 `last-admin` for a departure the check
- * refused, 401 `link-invalid` for a link no longer pending, 500 `internal` for a failure.
+ * refused, 401 `link-invalid` for a link no longer pending, 401 `link-expired` for one whose hour
+ * passed while its departure waited, 500 `internal` for a failure.
  */
-function refusalOf(error: DepartureError | LinkSpent): Response {
+function refusalOf(error: DepartureError | DeletionStop): Response {
   if (!('kind' in error)) {
     return internal()
   }
 
-  return error.kind === 'refused' ? lastAdmin() : refused(401, 'link-invalid')
+  return match(error.kind)
+    .with('refused', () => lastAdmin())
+    .with('link-spent', () => refused(401, 'link-invalid'))
+    .with('link-expired', () => refused(401, 'link-expired'))
+    .exhaustive()
 }
 
 /**

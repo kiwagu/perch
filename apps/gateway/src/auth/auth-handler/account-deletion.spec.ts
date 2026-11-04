@@ -35,6 +35,9 @@ const ELSEWHERE = '203.0.113.8'
 /** An account of its own, which a test makes a member of Ann's organisation. */
 const BOB = 'bob@example.test'
 
+/** A third account, which a test invites into an organisation Ann belongs to. */
+const CAT = 'cat@example.test'
+
 const HOUR_MS = 60 * 60 * 1000
 const MINUTE_MS = 60 * 1000
 
@@ -443,6 +446,80 @@ describe('authHandler, the deletion of an account by its link', () => {
 
     expect((await mounted.route(press(token), FROM))?.status).toBe(200)
     expect((await mounted.sessions.identityOf(ANN))._unsafeUnwrap()).toBeUndefined()
+  })
+
+  it('answers link-expired to a link that expired while its departure waited for the turn of an organisation, spending nothing', async () => {
+    /** The steps the mount kept so far, once it is up. */
+    const watched = { steps: (): readonly string[] => [] }
+    /** The reads of the departing memberships since the press asked for the departure. */
+    let departureReads = 0
+    /** Holds the next membership an invite writes, while it is set. */
+    let held: { readonly gate: Promise<void>; readonly reached: () => void } | undefined
+    const mounted = await mountedOnRealAuth({
+      organisationsDirectory: (local) =>
+        interceptQueries(local, (text) => {
+          if (text === departingMembershipsStatement && watched.steps().includes('departure')) {
+            departureReads += 1
+          }
+
+          if (text === membershipAddStatement && held !== undefined) {
+            const { gate, reached } = held
+
+            held = undefined
+            reached()
+
+            return gate
+          }
+        }),
+    })
+
+    watched.steps = () => mounted.steps
+
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const bob = await signedInOn(mounted, BOB, ['desk'])
+
+    await signedInOn(mounted, CAT, ['tablet'])
+    await done(mounted.organisations.create({ identity: bob.identity, key: 'shared', name: 'S' }))
+    await done(mounted.organisations.invite({ actor: bob.identity, key: 'shared', email: ANN }))
+
+    const token = await deletionLink(mounted, ann.on('laptop'))
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const writing = new Promise<void>((reached) => {
+      held = { gate, reached }
+    })
+    // Bob's invitation of Cat holds the turn of the organisation Ann belongs to.
+    const invite = done(
+      mounted.organisations.invite({ actor: bob.identity, key: 'shared', email: CAT }),
+    )
+
+    await writing
+    mounted.steps.splice(0)
+
+    const pressing = mounted.route(press(token), FROM)
+
+    // The press's departure found the organisation and waits for its turn.
+    await vi.waitFor(() => expect(departureReads).toBe(1))
+    await mounted.clock.advance(HOUR_MS)
+    release()
+    await invite
+
+    const expired = await pressing
+
+    expect(expired?.status).toBe(401)
+    expect(await expired?.json()).toEqual({ code: 'link-expired' })
+    // Nothing of the deletion took effect.
+    expect(mounted.steps).toEqual(['departure'])
+    expect(mounted.closes).toEqual([])
+    expect((await mounted.sessions.read(ann.tokens.get('laptop') ?? '')).kind).toBe('session')
+    expect(await stillThere(mounted, ann)).toBe(true)
+    expect(
+      (await mounted.organisations.membershipsOf(ann.identity))
+        ._unsafeUnwrap()
+        .map((membership) => membership.tenant.key),
+    ).toEqual(['shared'])
   })
 
   it("answers link-invalid to a token the gateway did not sign as a deletion, a verification link's among them", async () => {

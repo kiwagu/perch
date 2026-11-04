@@ -114,6 +114,19 @@ describe('AccountDeletions', () => {
     expect((await accountDeletions.claim(third))._unsafeUnwrap()).toBe(false)
   })
 
+  it("spends no deletion past its hour on the gateway's clock, however late the claim comes", async () => {
+    const { accountDeletions, identity, claimsOf, clock } = await harness()
+    const expired = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
+
+    await clock.advance(DELETION_LINK_LIFETIME_MS)
+    expect((await accountDeletions.claim(expired))._unsafeUnwrap()).toBe(false)
+
+    const pending = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
+
+    await clock.advance(DELETION_LINK_LIFETIME_MS - 1)
+    expect((await accountDeletions.claim(pending))._unsafeUnwrap()).toBe(true)
+  })
+
   it('answers a data error, not false, for an answer of the directory that is not a list of rows', async () => {
     const { local, clock, identity, claimsOf, accountDeletions } = await harness()
     const claims = await claimsOf((await accountDeletions.ask(identity))._unsafeUnwrap())
