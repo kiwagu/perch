@@ -31,6 +31,7 @@ import {
   nameIn,
   profileIn,
   storedEmail,
+  storedProfile,
   storedSnapshot,
 } from './__fixtures__/log'
 import type { RecordWrite } from './record-write'
@@ -909,14 +910,15 @@ describe('a write of the server to a record', () => {
     forger.setPeerId(SERVER_PEER)
     const from = forger.version()
 
-    ;(forger.getMap('records').get('profile/prf_1') as LoroMap).set('email', 'eve@example.test')
+    // The forged edit sets a field devices may change: one of the email would be refused as read-only first.
+    ;(forger.getMap('records').get('profile/prf_1') as LoroMap).set('name', 'Eve')
     forger.commit()
     ;(await hub.push(region.id, a, 2, [forger.export({ mode: 'update', from })]))._unsafeUnwrap()
 
     expect(a.received.at(-1)).toMatchObject({ type: 'reject', batch: 2, reason: 'foreign-peer' })
     expect(b.received.filter((m) => m.type === 'updates' && m.head > 1)).toEqual([])
     expect(await countRows(local, '_replica_update')).toBe(1)
-    expect(await storedEmail(local, 'prf_1')).toBe('ann@example.test')
+    expect(await storedProfile(local, 'prf_1')).toMatchObject({ name: 'Ann' })
 
     // The server's own write under that peer is taken in as before.
     expect((await hub.writeRecord(region, emailWrite))._unsafeUnwrap()).toBe(2)

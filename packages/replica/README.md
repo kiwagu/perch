@@ -63,7 +63,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (7), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (8), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
@@ -104,9 +104,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `foreign-owner` for a record that breaks the owner rule: in a private region an identity
   reference other than the pushing identity, `ValidateBatchInput.actor`; in a tenant region a new record whose
   member reference is not the pushing member, or an edit that changes the member a record
-  references). The ability is judged on the record as it is, the one being updated or deleted
-  as it was before the batch and a new one as the batch writes it; a table that declares no
-  abilities refuses every client write. A record's field shapes are checked first: a text,
+  references, and `readonly-field` for an update of an existing record that changes a field the
+  schema marks `readonly` (judged after the owner rule; a record the batch creates sets such
+  fields freely, and a change followed by its inverse in one batch is no change)). The ability
+  is judged on the record as it is, the one being updated or deleted as it was before the
+  batch and a new one as the batch writes it; a table that declares no abilities refuses every
+  client write. A record's field shapes are checked first: a text,
   list or counter field holds the mergeable container of its kind, every other field a plain
   value, whatever the content. A record the batch leaves as it was is then no change and
   is neither judged nor written, which is what lets a device undo a refused change: the batch
@@ -157,9 +160,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   What a server write means for the record: a plain field is last-writer-wins, as a device's
   write is (Loro orders two concurrent writes of a field by Lamport time, then by peer, and
   `SERVER_PEER` is the largest peer Loro allows, so the server's value wins a tie); a text field
-  is replaced through its mergeable text and merges with concurrent edits. The gateway does not
-  hold devices to read-only fields, so a device's concurrent write of the same field is accepted
-  whatever the contract says, and every copy converges on the one value Loro picks. A device's
+  is replaced through its mergeable text and merges with concurrent edits. A device's change
+  of a field the schema marks `readonly` is refused (`readonly-field`), so the server's value
+  stands; when the server wrote the field while a device's refused change was being undone, the
+  undo is refused too and the device reloads the region from the server. A device's
   later batches touching the record are checked as before and pass: the server binds no peer
   and keeps the region's owner rule. On a device the change is an ordinary update, stored in the
   local log, imported and projected, so compaction and snapshots treat it like any other row on
@@ -267,7 +271,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   into column values (record ids, dates), shared by the projector and the server.
 - `ReplicaSchema` of `ReplicaTable`s: per replicated table, the region whose documents hold
   its records and every field with its kind: a text, list or counter container, a reference, a
-  datetime or a plain value; `fieldOf(schema, table, field)`, `tablesOf(schema, region)`.
+  datetime or a plain value, and optionally `readonly: true`, which a device sets only when it
+  creates the record; `fieldOf(schema, table, field)`, `readonlyFieldsOf(schema, table)`,
+  `tablesOf(schema, region)`.
 - `ReplicaOp`, `recordKey`, `splitRecordKey`.
 
 ## Commands
