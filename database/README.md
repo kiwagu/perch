@@ -7,11 +7,13 @@ what every database has, `schema/directory` the directory database (accounts, or
 and memberships) and `schema/tenant` the database of one organisation (`t_<key>`). A
 database's schema is the common files and then its own, each set in file name order. Comment
 annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`,
-`-- @owner`, `-- @can`) tell the modeling stage how the table replicates, which id prefix its
-keys use and who may write it. The same schema is applied to the local replica and to a
-server, and the replica schema generated from it is the one description of replicated tables
-that every runtime reads. Notes carry their write rules there: a member creates notes and
+`-- @owner`, `-- @can`, `-- @readonly`) tell the modeling stage how the table replicates, which
+id prefix its keys use and who may write it. The same schema is applied to the local replica
+and to a server, and the replica schema generated from it is the one description of replicated
+tables that every runtime reads. Notes carry their write rules there: a member creates notes and
 edits or deletes only those it wrote (`-- @owner author`), an admin edits or deletes any note.
+A field marked `-- @readonly` is set by a device only when it creates the record; after that
+only the gateway's own writes change it (the profile's email through the confirmation flow).
 
 ## Key exports
 
@@ -34,7 +36,7 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
   schema defines no access method, so no record user signs in to a server. Then `profile` (its
   owner reads it; only the gateway writes it, through replication; a bio holds at most 2000
-  characters), `settings` (an account's settings, today its language, one row per identity in
+  characters), `settings` (an account's settings, today its language and its theme, one row per identity in
   its private region; its owner reads it, only the gateway writes it, through replication),
   `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
   name, namespace, database and status; closed to every record user) and `membership` (an

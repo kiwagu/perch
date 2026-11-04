@@ -6,6 +6,7 @@ import { interceptQueries } from '@workspace/data/testing'
 import { replicaSchema } from '../__fixtures__/note'
 import { profileById, profileSchema } from '../__fixtures__/profile'
 import countsStatement from '../__fixtures__/replica-counts.surql'
+import { isHeldBack } from '../held-back'
 import { Projector } from '../projector'
 import { CLOSE } from '../protocol'
 import { RegionDoc } from '../region-doc'
@@ -407,6 +408,67 @@ describe('sync engine', () => {
     await expect(settling).rejects.toThrow('1000 ms')
     expect(await driven(gateway.clock, a.engine.signOut({ online: true }))).toBe('offline')
     expect(gateway.stub.signOuts()).toBe(0)
+    expect(a.errors).toEqual([
+      expect.objectContaining({
+        code: 'data:WRITE_FAILED',
+        message: `could not persist an update of ${regionId}`,
+      }),
+    ])
+  })
+
+  it("reports a local update that fails to persist once, though another device's updates arrive meanwhile", async () => {
+    let failAppend = false
+    const gateway = await openGateway()
+    const a = await openDevice(gateway, {
+      wrap: (local) =>
+        interceptQueries(local, (text) => {
+          if (failAppend && text === appendStatement) {
+            throw new Error('the disk is full')
+          }
+        }),
+    })
+    const b = await openDevice(gateway)
+
+    a.engine.start()
+    b.engine.start()
+    await settleAll([a, b])
+
+    failAppend = true
+    writeName(a.region, 'Ann')
+    a.engine.localWrite()
+
+    const settling = a.engine.settled(1_000)
+
+    await vi.waitFor(() => expect(a.errors).toHaveLength(1))
+
+    const imports: Array<ReturnType<RegionDoc['importRemote']>> = []
+    const importRemote = a.region.importRemote.bind(a.region)
+
+    vi.spyOn(a.region, 'importRemote').mockImplementation((bytes, head) => {
+      const importing = importRemote(bytes, head)
+
+      imports.push(importing)
+
+      return importing
+    })
+
+    // Each update of b reaches a while a's own is unstored: a's store holds every one back.
+    for (const name of ['Bea', 'Cid', 'Dan']) {
+      writeName(b.region, name)
+      b.engine.localWrite()
+      await b.engine.settled(1_000)
+    }
+
+    await vi.waitFor(() => expect(imports.length).toBeGreaterThanOrEqual(3))
+
+    // The pull awaited each import before this test did, so it has handled every one by now.
+    const outcomes = await Promise.all(imports)
+
+    expect(outcomes.every((outcome) => outcome.isErr() && isHeldBack(outcome.error))).toBe(true)
+
+    await gateway.clock.advance(1_000)
+
+    await expect(settling).rejects.toThrow('1000 ms')
     expect(a.errors).toEqual([
       expect.objectContaining({
         code: 'data:WRITE_FAILED',

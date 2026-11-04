@@ -11,6 +11,7 @@ import { replicaSchema } from '@workspace/database/replica-schema'
 import { LoroWritePath, type RegionDoc } from '@workspace/replica'
 
 import createProfileText from './create-profile.surql'
+import updateEmailText from './update-email.surql'
 import updateNameText from './update-name.surql'
 
 export interface ProfileInput {
@@ -60,6 +61,19 @@ const updateName: Command<{ readonly id: string; readonly name: string }> = {
   ops: [{ op: 'set', record: 'id', field: 'name', value: { param: 'name' } }],
 }
 
+const updateEmail: Command<{ readonly id: string; readonly email: string }> = {
+  id: 'gateway.fixture.updateEmail',
+  kind: 'command',
+  text: updateEmailText,
+  params: [
+    { name: 'id', type: 'record<profile>' },
+    { name: 'email', type: 'string' },
+  ],
+  tables: ['profile'],
+  region: 'private',
+  ops: [{ op: 'set', record: 'id', field: 'email', value: { param: 'email' } }],
+}
+
 /**
  * Runs `command` on the device's document and answers with the update it made, in a buffer
  * of its own, as a message holds Loro bytes.
@@ -91,4 +105,16 @@ export function profileRename(
   name: string,
 ): ResultAsync<Uint8Array<ArrayBuffer>, DataError> {
   return updateOf(doc, updateName, { id, name })
+}
+
+/**
+ * Changes the profile's email in the device's document, a field devices may not change, so the
+ * gateway refuses the update; answers with the update to push.
+ */
+export function profileChangeEmail(
+  doc: RegionDoc,
+  id: string,
+  email: string,
+): ResultAsync<Uint8Array<ArrayBuffer>, DataError> {
+  return updateOf(doc, updateEmail, { id, email })
 }

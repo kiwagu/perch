@@ -47,8 +47,9 @@ modeling stage.
   `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
   this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
   start is kept in `perch.session.account-start` (the identity, the name and the sign-up
-  language) until its settings and its profile both exist, and finished each time that
-  identity's space opens here again. The tabs take their turns under the Web Lock
+  language) until its settings (in that language and the theme the device shows as it creates
+  them) and its profile both exist, and finished each time that identity's space opens here
+  again. The tabs take their turns under the Web Lock
   `perch.session.account-start` (`oneTabAtATime`, the helper the sign-in lock runs on too): each
   reads the kept start and the account's records afresh in the local store they share, and
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
@@ -70,7 +71,16 @@ modeling stage.
   that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
   profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
-  the session. Until the sign-in is whole its token
+  the session. `requestAccountDeletion(password)` asks
+  `POST /backend/auth/request-account-deletion` with this device's session token for the mail
+  whose link deletes the account (202; the account stays as it is), and `deleteAccount(token)`
+  sends that link's token to `POST /backend/auth/delete-account` with no session (200): both read
+  a 409 `last-admin` as `data:LAST_ADMIN`; the request reads a wrong password as
+  `data:INVALID_CREDENTIALS`, the deletion a link the gateway refuses as `data:LINK_EXPIRED` or
+  `data:LINK_INVALID`. The gateway ends the deleted account's sessions and its 200 names the
+  account (a 200 that does not is `data:AUTH_FAILED`): a session open here for that account signs
+  out at once as on the channel's 4001, which a browser without Web Locks never hears, and
+  another account signed in here stays. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
   still open and no other tab saved another account, saves the memberships, the token and the
@@ -204,7 +214,9 @@ modeling stage.
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); a sign-in that finds another account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
-  another tab saved one meanwhile, whose new token is then left to sign out. The container's runner and write
+  another tab saved one meanwhile, whose new token is then left to sign out. A new password set
+  through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
+  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below). The container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). The root makes the app's domain event bus (`EventBus` of
@@ -224,23 +236,37 @@ modeling stage.
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. `<html data-boot-step>` shows the boot step; `data-sync-leader`
+  away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  screens' machines and the frame's, from the facts of this browser no account owns, each a key
+  of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
+  `perch.theme` tells `platform.theme-set`); the storage's own
+  event keeps it from echoing (a tab never hears its own write, a write that changes nothing and a
+  value kept before the tab opened tell nothing), and a key removed elsewhere tells nothing either.
+  `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
-  from module routes (each page inside its module's scope; a protected page left open is
-  checked again when the user signs out), the ports for the session (with the memberships
+  from module routes (each page inside its module's scope; a page left open is checked again
+  whenever the account changes: a protected page sends one signed out to sign-in, a guest page
+  one another tab signed in to the profile, while a sign-in of this tab's own,
+  `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
+  welcome), the ports for the session (with the memberships
   and the current organisation), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
-  (`served-build.port.ts`) and for the state of the sync (`sync-status.port.ts`),
+  (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
+  platform's events that reach the screens and the frame (`platform-events.port.ts`, sent to a
+  running machine by `platform-events-input.ts`, `sendPlatformEvents`, the one way both hear them),
   the notice and the toasts the shell shows (each raised by its contract code, the frame
   giving the words: `notices.tsx`, `toasts.tsx`, `texts.ts`), the language state and the
   app-wide catalogs, and the theme of this device (`theme.ts`: light, dark or the system's own,
-  kept in this browser under `perch.theme`, shown as the class `dark` on `<html>` and following
-  the device's setting under the system's; the start makes it before the first frame and gives it
-  to views through `ThemeContext`, read with `useDeviceTheme()`), and this device's own writes of
-  the account's language (`language-writes.ts`: the settings screen's store tells the frame of
-  each write before it starts and when it failed, `trackedStore`, so a late echo of an earlier
-  write is not taken for another device's language; the start provides it over the frame's record). `ui-contract.ts` is
+  kept in this browser under `perch.theme` as the theme this device showed last, shown as the
+  class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
+  and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
+  tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
+  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
+  frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
+  earlier write is not taken for a value another tab or device stored; the start provides them
+  over the frame's record). `ui-contract.ts` is
   the page helper of development and e2e builds: `main.tsx` installs it when the build
   constant `__PERCH_UI_HOOKS__` is true (`vite.config.ts`: development mode, or
   `PERCH_UI_HOOKS=1`, which the e2e launcher sets), and `window.__perch.ui.anchors()` then
@@ -267,7 +293,8 @@ modeling stage.
   `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
   (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added, or still be its flow at the
-  branch's base); running every flow and
+  branch's base or at the branch's HEAD, the contract it was built from,
+  `__fixtures__/machine-flows.ts`); running every flow and
   activity in XState is the contract check's, not the app's.
   The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
   lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the
@@ -284,11 +311,19 @@ modeling stage.
   field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
-  or actor; `false` when the state does not take the event; and the flow's effects on the
+  or actor; `false` when the state does not take the event; the platform's events reach the
+  machine while it runs, each carrying what the screen's fields hold, as the container gives them
+  (`useScreenMachine(machine, fields)`), for a move it makes, and a state that does not handle
+  one lets it pass; and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
-  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one code each, while
-  a screen's own anchors stay its container's to read); `leave-now.ts` is the unguarded move
-  for a leave nobody started here (`useLeaveNow()`); `search-start.ts` is a field's binding
+  `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
+  `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
+  page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
+  browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
+  with the browser's word, `perch.session.notice`, and says the browser's word on the device's
+  data, `resend-after-sign-in` or `delete-pending`, first, then the tab's own, then the
+  browser's other words, and takes both), one code each, while
+  a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,

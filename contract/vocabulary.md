@@ -166,36 +166,40 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `change-rejected` | `app-shell.notice-message` | the server refused a change and this device undid it |
 | `changes-reloaded` | `app-shell.notice-message` | the server refused a change again, and the later changes not sent yet were undone too |
 | `locale-not-stored` | `app-shell.notice-message` | the chosen language applies on this device, but the account's settings could not store it |
+| `theme-not-stored` | `app-shell.notice-message` | the chosen theme applies on this device, but the account's settings could not store it |
 | `profile-saved` | `app-shell.toast` | the profile was saved, said by Save itself when nothing changed |
 | `<object>-<verb>ed` | `app-shell.toast` | the outcome of an operation, derived once where it ends: for one action of the model its object, then the past of its verb (`note-created`, `note-updated`, `note-deleted`), or `<action>-done` for another verb; for a platform action the code the platform's `toasts` map gives it (`organisation-created`, `member-removed`, `device-signed-out`); for a chain of actions the part of the control that starts it, then the past of its verb (`user.profile.save-button` gives `profile-saved`) |
 | `<object>-<verb>` | `app-shell.confirmation` | the question before a destructive action, derived for each control that runs one: for an action of the model its object, then the verb (`note-delete`); for a platform action its name with `.` as `-` (`organisations-remove`, `devices-revoke`) |
 | `resend-after-sign-in` | `user.sign-in.notice-message` | the device was signed out while it held changes not sent yet, and signing in again as the same account sends them |
 | `signed-out-elsewhere` | `user.sign-in.notice-message` | another device of the account signed this one out |
 | `password-changed-elsewhere` | `user.sign-in.notice-message` | the account's password changed on another device or through a reset link, which signed this device out; it signs in with the new password |
+| `password-reset-elsewhere` | `user.sign-in.notice-message` | a new password was set in another tab of this browser through the link of a reset mail, which the tab that asked for the mail follows; the account signs in with it |
 | `delete-pending` | `user.sign-in.notice-message` | the device is signed out, and its data leaves it once the other tabs of the app are closed |
-| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet); the same words when it has none, so the page tells nobody which emails have accounts |
+| `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message`, `user.settings.deletion.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet), or to the signed-in account's own email for its deletion; the same words when the email typed has none, so the page tells nobody which emails have accounts |
 | `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
 | `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
-| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
-| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error` | the link is too old: a verification or confirmation link after a day, a reset link after an hour; a new one is asked for |
-| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error` | the email or the password is wrong |
+| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
+| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error` | the link is too old: a verification or confirmation link after a day, a reset or deletion link after an hour; a new one is asked for |
+| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error` | the email or the password is wrong |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error` | the new email is not an email |
 | `password-reset` | `user.reset-password.message` | the password is the new one and every device of the account is signed out; the account signs in with it |
 | `email-changed` | `user.confirm-email.message` | the account's email is the new one, which signs it in from now on |
+| `account-deleted` | `user.delete-account.message` | the account is gone for good, with its data, and every device of it is signed out; its email can sign up again |
 | `passwords-differ` | `user.sign-in.error`, `user.reset-password.error`, `user.settings.password.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
-| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error` | too many attempts were made, so the user waits and tries again |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
 | `already-member` | `organisation.invite.error` | the account is already a member of the organisation |
 | `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
+| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error` | the account is the only administrator of an organisation that has other members, so it cannot be deleted; the organisation page shows them, and the deletion goes through once they are removed |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
 | `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |
@@ -228,9 +232,9 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `app-shell.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
 | `user.settings.locale-select.option` | `en` | the option makes the account speak English |
 | `user.settings.locale-select.option` | `es` | the option makes the account speak Spanish |
-| `user.settings.theme-select.option` | `light` | the option shows the app light on this device |
-| `user.settings.theme-select.option` | `dark` | the option shows the app dark on this device |
-| `user.settings.theme-select.option` | `system` | the option shows the app as the device's own setting says, following it as it changes |
+| `user.settings.theme-select.option` | `light` | the option shows the account light, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `dark` | the option shows the account dark, in each of its tabs and on each of its devices |
+| `user.settings.theme-select.option` | `system` | the option shows the account as each device's own setting says, following it as it changes |
 | `user.sign-in.toggle-button` | `sign-up` | the button switches the form to creating an account |
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
@@ -254,7 +258,8 @@ screen name of its own.
 | `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account and of this device: the theme, the language, the password and the email (`/settings`) |
+| `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email, and the deletion of the account (`/settings`) |
+| `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
 
 ## Roles
 
@@ -280,7 +285,7 @@ included.
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
-| `app-shell.theme-select` | the theme of this device, for anyone, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
+| `app-shell.theme-select` | the theme of this device for a guest, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
 | `app-shell.leave-dialog` | the dialog that asks before a leave loses unsaved input, which carries `data-code` and renders `app-shell.leave-dialog.confirm-button` (leave) and `app-shell.leave-dialog.cancel-button` (stay) |

@@ -14,7 +14,7 @@ anchors:
   app-shell.notice-message:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
-    codes: [ welcome, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored ]
+    codes: [ welcome, devices-read-failed, device-sign-out-failed, change-rejected, changes-reloaded, locale-not-stored, theme-not-stored ]
   app-shell.toast:
     kind: toast
     description: The outcome of a mutation, shown for a short while in the tab that acted; a click dismisses one.
@@ -40,11 +40,13 @@ anchors:
     roles: [ identity, member, admin ]
   app-shell.theme-select:
     kind: select
-    description: "The theme of this device, for anyone, a guest included: light, dark or the device's own setting; a choice applies at once and stays on this device, the same theme the settings screen chooses."
+    description: "The theme of this device for a guest: light, dark or the device's own setting, starting as the theme this device showed last; a choice applies at once, stays on this device, and is the theme an account created here starts with; a signed-in account chooses its theme on its settings screen, and the theme its settings store applies here too."
     binding:
-      action: platform.theme.set
-      params:
-        theme: app-shell.theme-select
+      - model: settings.theme
+      - action: platform.theme.set
+        params:
+          theme: app-shell.theme-select
+    roles: [ guest ]
     dataValue: true
     derived: [ option ]
   app-shell.locale-select:
@@ -60,7 +62,7 @@ anchors:
     derived: [ option ]
   app-shell.sign-out-here-button:
     kind: button
-    description: Signs the saved account out on this device when its data could not be opened; shown only in the app state failed, and the changes this device has not sent are lost.
+    description: Signs the saved account out on this device when its data could not be opened, and the changes this device has not sent are lost.
     binding: { action: platform.sign-out }
   app-shell.crash-message:
     kind: message
@@ -68,7 +70,7 @@ anchors:
     codes: [ screen-crashed ]
   app-shell.reload-button:
     kind: button
-    description: Loads the page again, shown with app-shell.crash-message.
+    description: Loads the page again.
     binding: { action: platform.reload }
   app-shell.update-message:
     kind: message
@@ -105,7 +107,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the app is starting; no screen is rendered.
-  opening-data: "The navigation of the signed-in account, the theme select and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
+  opening-data: "The navigation of the signed-in account and the open screen, whose reads wait for the account's data; app-shell.status says the data is being opened. No notice, toast, message of the sync, update or install, or crash message shows yet."
   ready: The navigation for a signed-in account, the theme select, the language select, app-shell.sync-message for a signed-in account and the open screen, with app-shell.update-message when the page should load again and app-shell.install-message until the app is installed; app-shell.status is a visually hidden text.
   failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data; no screen and no sign-in form.
@@ -114,7 +116,8 @@ flow:
   meta:
     guards:
       signedOut: no account is signed in on this device
-      storedElsewhere: the stored language is one this device neither stored nor has seen yet
+      storedElsewhere: the stored language is one this tab neither stored nor has seen yet
+      themeStoredElsewhere: the stored theme is one this tab neither stored nor has seen yet
       protocolTaken: the server has not refused the sync protocol of the version this tab runs since the page loaded
       quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
   states:
@@ -135,21 +138,28 @@ flow:
         app-shell.theme-select: {}
     opening-data:
       description: The signed-in account's frame and the open screen, while its local data is being opened.
+      meta: { renders: [ app-shell.nav ] }
       on:
         platform.opened: ready
         platform.open-failed: failed
-        app-shell.theme-select: {}
     ready:
       description: The frame with the open screen.
+      meta: { renders: [ app-shell.nav ] }
       on:
         app-shell.locale-select:
           - target: ready
             guard: signedOut
             description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
         app-shell.theme-select: {}
+        platform.theme-set:
+          guard: signedOut
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
-          description: Another device stored a language; the app speaks it at once.
+          description: Another tab or device stored a language; the app speaks it at once.
+        model.settings.theme:
+          guard: themeStoredElsewhere
+          description: Another tab or device stored a theme; the app shows it at once.
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -202,7 +212,8 @@ flow:
         app-shell.install-button: installing
         app-shell.install-later-button: postponing
     crashed:
-      description: The open screen failed to render; the frame stays, with the navigation, the theme select and the language select.
+      description: The open screen failed to render; the frame stays.
+      meta: { renders: [ app-shell.nav, app-shell.reload-button ] }
       entry:
         - show: { app-shell.crash-message: [ screen-crashed ] }
       exit:
@@ -215,9 +226,15 @@ flow:
             guard: signedOut
             description: The screen renders again in the guest's chosen language, with no settings to store it.
         app-shell.theme-select: {}
+        platform.theme-set:
+          guard: signedOut
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
         model.settings.locale:
           guard: storedElsewhere
-          description: Another device stored a language; the app speaks it at once.
+          description: Another tab or device stored a language; the app speaks it at once.
+        model.settings.theme:
+          guard: themeStoredElsewhere
+          description: Another tab or device stored a theme; the app shows it at once.
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -257,6 +274,7 @@ flow:
             - show: { app-shell.sync-message: [ sync-stopped ] }
     reloading:
       description: The page loads again from the server.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -264,6 +282,7 @@ flow:
           description: Only while the page has not loaded again; the message stays.
     updating:
       description: The page loads again on the version the server serves.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.reload
         onDone:
@@ -271,6 +290,7 @@ flow:
           description: Only while the page has not loaded again; the update message stays.
     installing:
       description: The browser's own window asks the user to install the app.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.prompt
         onDone:
@@ -285,6 +305,7 @@ flow:
             - clear: app-shell.install-message
     postponing:
       description: The reminder is put off for three days on this device.
+      meta: { renders: [ app-shell.nav ] }
       invoke:
         src: platform.install.postpone
         onDone:
@@ -294,13 +315,17 @@ flow:
             - clear: app-shell.install-message
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
         app-shell.locale-select:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
         app-shell.theme-select: {}
+        platform.theme-set:
+          description: Another tab of this browser chose a theme for this device; the app shows it at once.
     signing-out:
+      meta: { renders: [ app-shell.sign-out-here-button ] }
       invoke:
         src: platform.sign-out
         onDone:

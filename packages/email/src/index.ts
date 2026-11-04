@@ -1,4 +1,12 @@
+export {
+  type AccountDeletedNoticeInput,
+  renderAccountDeletedNotice,
+} from './account-deleted-notice.render'
 export { type ConfirmEmailMailInput, renderConfirmEmailMail } from './confirm-email-mail.render'
+export {
+  type DeleteAccountMailInput,
+  renderDeleteAccountMail,
+} from './delete-account-mail.render'
 export {
   type EmailChangedNoticeInput,
   renderEmailChangedNotice,

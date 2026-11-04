@@ -24,12 +24,13 @@ import { SYNC_STATUS, type SyncStatus } from '../../../../platform/sync-status.p
 import { useDeviceTheme } from '../../../../platform/theme'
 import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
-import { LocaleWrites } from '../../application/locale-writes'
+import { NOTHING_SEEN } from '../../application/setting-writes'
 import { shellEvents } from '../../application/shell.events'
 
 import { pageTitle } from './page-title'
 import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
+import { deliverStored } from './stored-settings'
 
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
 
@@ -94,7 +95,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     (onChange) => session.subscribe(onChange),
     () => session.current(),
   )
-  const { actor, live } = useShellFrame()
+  const frame = useShellFrame()
+  const { actor, live } = frame
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
   const signedInAs = useRef<string | undefined>(undefined)
@@ -121,20 +123,20 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const unsaved = useUnsavedInput()
 
   // What the frame's machine reads, current before it is asked anything below: the account signed
-  // in and the language its settings hold here; another account, or none, starts knowing nothing
-  // of its stored language.
+  // in and the settings it holds here; another account, or none, starts knowing nothing of its
+  // stored settings.
   if (account.current !== user?.id) {
     account.current = user?.id
     live.generation += 1
-    live.writes = LocaleWrites.none
+    live.writes = NOTHING_SEEN
   }
 
   live.account = user?.id
-  live.stored = row?.locale
+  live.stored = row
   live.unsaved = unsaved
 
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
-  useSelector(actor, (state) => state)
+  const frameState = useSelector(actor, (state) => state).value
   // A signed-in account's data still opening: the frame shows no message of the platform yet, so
   // what the platform says reaches the frame's flow once the data is open.
   const dataOpening = actor.getSnapshot().matches('opening-data')
@@ -145,17 +147,20 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const canInstall = actor.getSnapshot().can({ type: 'app-shell.install-button' })
   const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
-  // The stored language arriving or changing, here or from another device: the frame's data event.
-  const stored = row?.locale
+  // The stored language and theme arriving or changing, from this tab or another, or another
+  // device: the frame's data events, handed again on each move of the frame, so a value that came
+  // while its state took none (the data still opening, the app being installed) reaches it once
+  // one does, the first read after the data opened counting as one this tab has not seen yet.
+  const storedLocale = row?.locale
+  const storedTheme = row?.theme
 
   useEffect(() => {
-    if (stored === undefined) {
-      return
-    }
+    deliverStored(frame, 'locale', storedLocale)
+  }, [frameState, user?.id, storedLocale, frame])
 
-    actor.send({ type: 'model.settings.locale' })
-    live.writes = live.writes.arrived(stored)
-  }, [user?.id, stored, actor, live])
+  useEffect(() => {
+    deliverStored(frame, 'theme', storedTheme)
+  }, [frameState, user?.id, storedTheme, frame])
 
   // The account going away, by its own sign-out or from another device: the frame's platform event.
   useEffect(() => {

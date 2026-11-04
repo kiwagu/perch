@@ -224,9 +224,10 @@ flow:
               on:
                 organisation.notes.edit-button:
                   target: editing
-                  description: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button.
+                  description: The edit field starts with the note's text.
                 organisation.notes.delete-button: deleting
             editing:
+              meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }
               on:
                 organisation.notes.save-button: saving
                 organisation.notes.edit-button:
@@ -236,6 +237,7 @@ flow:
                   target: deleting
                   description: Another note is deleted; the open edit form closes, and what was typed into it is dropped.
             saving:
+              meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }
               invoke:
                 src: note.updateNote
                 input: { id: organisation.notes.item, text: organisation.notes.edit-textarea }

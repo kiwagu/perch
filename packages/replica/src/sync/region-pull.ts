@@ -1,6 +1,7 @@
 import { type DataError, dataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { isHeldBack } from '../held-back'
 import type { RegionDoc } from '../region-doc'
 
 import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
@@ -101,7 +102,13 @@ export class RegionPull {
       const first = !this.#lost
 
       this.#lost = true
-      this.#onError(outcome.error)
+
+      // A local update that failed to persist held the server's back: its write heard of that
+      // failure and the engine reports it once while it lasts, so a report here would repeat it
+      // for every update the server sends meanwhile.
+      if (!isHeldBack(outcome.error)) {
+        this.#onError(outcome.error)
+      }
 
       if (first) {
         this.#resubscribe()

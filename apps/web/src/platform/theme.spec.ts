@@ -92,6 +92,40 @@ describe('createDeviceTheme', () => {
     ).toBe('system')
   })
 
+  it('follows the theme another tab kept, keeping nothing itself, and the system for anything else', () => {
+    const root = document.createElement('html')
+    const storage = memoryStorage()
+    const setItem = storage.setItem
+    let writes = 0
+    const counted = {
+      ...storage,
+      setItem: (key: string, value: string) => {
+        writes += 1
+        setItem(key, value)
+      },
+    }
+    const theme = createDeviceTheme({ storage: counted, dark: darkSetting(false).query, root })
+    let told = 0
+
+    theme.subscribe(() => {
+      told += 1
+    })
+    // Another tab of the browser chose dark.
+    storage.items.set('perch.theme', 'dark')
+    theme.follow()
+
+    expect(theme.current()).toBe('dark')
+    expect(root.classList.contains('dark')).toBe(true)
+    expect(told).toBe(1)
+    expect(writes).toBe(0)
+
+    storage.items.set('perch.theme', 'sepia')
+    theme.follow()
+
+    expect(theme.current()).toBe('system')
+    expect(root.classList.contains('dark')).toBe(false)
+  })
+
   it('still shows a theme on a browser that keeps no site data', () => {
     const root = document.createElement('html')
     const refusing = {

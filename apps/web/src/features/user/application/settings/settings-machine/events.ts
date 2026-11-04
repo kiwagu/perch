@@ -20,7 +20,8 @@ export interface SettingsValues {
 /**
  * The events of the screen's flow: a choice of theme or language, a keystroke in the new password
  * or the password typed again (both carried as typed), the password form's save with the current
- * password beside them, and the email form's send.
+ * password beside them, the email form's send, and the deletion form's send with the current
+ * password.
  */
 export type SettingsEvent =
   | { readonly type: 'user.settings.theme-select'; readonly theme: Theme }
@@ -36,6 +37,7 @@ export type SettingsEvent =
       readonly email: string
       readonly password: string
     }
+  | { readonly type: 'user.settings.deletion.send-button'; readonly password: string }
 
 /** What the screen keeps beside its state, for the view. */
 export interface SettingsContext {
@@ -47,6 +49,10 @@ export interface SettingsContext {
   readonly emailMessage: 'check-your-mail' | undefined
   /** The new email that mail went to, which the message names. */
   readonly sentTo: string | undefined
+  /** The code of the deletion form's last failure. */
+  readonly deletionError: string | undefined
+  /** The code of the deletion form's message, once the mail with the deletion link went out. */
+  readonly deletionMessage: 'check-your-mail' | undefined
 }
 
 /**
@@ -62,6 +68,8 @@ export interface SettingsMachineDeps {
   readonly values: () => SettingsValues
   /** Shows a theme on this device and keeps it there. */
   readonly setTheme: (theme: Theme) => void
+  /** Stores the theme in the account's settings. */
+  readonly storeTheme: (theme: Theme) => ResultAsync<void, unknown>
   /** Stores the language in the account's settings. */
   readonly storeLocale: (locale: Locale) => ResultAsync<void, unknown>
   /** Changes the account's password, signing its other devices out. */
@@ -71,4 +79,6 @@ export interface SettingsMachineDeps {
   ) => ResultAsync<void, SignInError>
   /** Asks to change the account's email: the mail goes to the new one. */
   readonly changeEmail: (email: string, password: string) => ResultAsync<void, SignInError>
+  /** Asks to delete the account: the mail with the link of the page that deletes it goes out. */
+  readonly requestAccountDeletion: (password: string) => ResultAsync<void, SignInError>
 }

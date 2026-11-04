@@ -1,45 +1,58 @@
 import { describe, expect, it } from 'vitest'
 
-import { LocaleWrites } from '../../application/locale-writes'
+import { NOTHING_SEEN } from '../../application/setting-writes'
 
-import { frameLanguageWrites, type ShellLive, tabSelfReloads } from './shell-frame'
+import { frameSettingsWrites, type ShellLive, tabSelfReloads } from './shell-frame'
 
 const live = (): ShellLive => ({
   account: 'idn_ann',
   stored: undefined,
-  writes: LocaleWrites.none,
+  writes: NOTHING_SEEN,
   generation: 0,
   signOutHere: undefined,
   renderAgain: undefined,
   unsaved: false,
 })
 
-describe('frameLanguageWrites', () => {
+describe('frameSettingsWrites', () => {
   it("keeps a write in the frame's record until it fails", () => {
     const frame = live()
-    const writes = frameLanguageWrites(frame)
-    const failed = writes.writing('es')
+    const writes = frameSettingsWrites(frame)
+    const failed = writes.locale.writing('es')
 
-    expect(frame.writes.elsewhere('es')).toBeUndefined()
+    expect(frame.writes.locale.elsewhere('es')).toBeUndefined()
 
     failed()
 
-    expect(frame.writes.elsewhere('es')).toBe('es')
+    expect(frame.writes.locale.elsewhere('es')).toBe('es')
+  })
+
+  it('keeps the writes of each setting apart', () => {
+    const frame = live()
+    const writes = frameSettingsWrites(frame)
+    const failed = writes.theme.writing('dark')
+
+    expect(frame.writes.theme.elsewhere('dark')).toBeUndefined()
+    expect(frame.writes.locale.elsewhere('en')).toBe('en')
+
+    failed()
+
+    expect(frame.writes.theme.elsewhere('dark')).toBe('dark')
   })
 
   it("leaves the next account's writes alone when an earlier account's write fails late", () => {
     const frame = live()
-    const writes = frameLanguageWrites(frame)
-    const failedForAnn = writes.writing('es')
+    const writes = frameSettingsWrites(frame)
+    const failedForAnn = writes.locale.writing('es')
 
     // Ann signs out and Bob signs in: the record starts afresh, and Bob writes es too.
     frame.generation += 1
-    frame.writes = LocaleWrites.none
-    writes.writing('es')
+    frame.writes = NOTHING_SEEN
+    writes.locale.writing('es')
     failedForAnn()
 
-    // Bob's es is still on its way: when it comes back, it is this device's own.
-    expect(frame.writes.elsewhere('es')).toBeUndefined()
+    // Bob's es is still on its way: when it comes back, it is this tab's own.
+    expect(frame.writes.locale.elsewhere('es')).toBeUndefined()
   })
 })
 

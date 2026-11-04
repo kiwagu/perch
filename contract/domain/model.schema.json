@@ -68,19 +68,23 @@
     },
     "settings": {
       "type": "object",
-      "description": "The settings of an account: what the app is like for it, today its language. One row per account, created with its profile on the first device that enters the account, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
+      "description": "The settings of an account: what the app is like for it, today its language and its theme. One row per account, created with its profile on the first device that enters the account, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
       "x-perch": {
         "table": "settings",
         "region": "private",
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value.",
-            "params": { "id": "$id", "identity": "identity", "locale": "locale" }
+            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account signed up with, and the theme that device shows.",
+            "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" }
           },
           "updateLocale": {
             "description": "Stores the language the account chose.",
             "params": { "id": "$id", "locale": "locale" }
+          },
+          "updateTheme": {
+            "description": "Stores the theme the account chose.",
+            "params": { "id": "$id", "theme": "theme" }
           }
         },
         "unique": [["identity"]]
@@ -100,9 +104,14 @@
           "description": "The language the account chose; it follows the account across devices.",
           "enum": ["en", "es"],
           "x-perch": { "crdt": "none" }
+        },
+        "theme": {
+          "description": "The theme the account chose: light, dark, or system (the device's own setting, followed as it changes); it follows the account across its tabs and devices.",
+          "enum": ["light", "dark", "system"],
+          "x-perch": { "crdt": "none" }
         }
       },
-      "required": ["id", "identity", "locale"],
+      "required": ["id", "identity", "locale", "theme"],
       "additionalProperties": false
     },
     "note": {

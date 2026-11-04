@@ -15,9 +15,10 @@ const schema: ReplicaSchema = {
   profile: {
     region: 'private',
     fields: {
-      identity: { kind: 'record', table: 'identity' },
+      identity: { kind: 'record', table: 'identity', readonly: true },
+      email: { kind: 'plain', readonly: true },
       bio: { kind: 'text' },
-      created_at: { kind: 'datetime' },
+      created_at: { kind: 'datetime', readonly: true },
     },
   },
 }
