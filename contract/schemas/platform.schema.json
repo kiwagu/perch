@@ -206,6 +206,62 @@
         "description": "A code of the vocabulary (data-code)."
       }
     },
+    "composites": {
+      "description": "The composites by name: a list with its items the platform declares once (`password-rules`), derived into every screen whose secret input writes `composite: <name>`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the composite is, for a reader: the list it derives carries it."
+          },
+          "list": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+              },
+              {
+                "pattern": "-list$"
+              }
+            ],
+            "description": "The last segment of the list the composite derives on a screen, `<screen>.<list>`: a `list`, so it ends with `-list` (`password-rule-list`)."
+          },
+          "itemState": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "The data-state each item takes once what it says holds: a row state of the vocabulary (`met`)."
+          },
+          "items": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minProperties": 1,
+            "description": "The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state."
+          }
+        },
+        "required": [
+          "description",
+          "list",
+          "itemState",
+          "items"
+        ],
+        "additionalProperties": false,
+        "description": "A composite the platform declares once where its policy lives: a list with its items, derived into every screen whose field opts in with `composite: <name>`."
+      }
+    },
     "unsavedInput": {
       "type": "object",
       "properties": {

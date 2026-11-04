@@ -1,14 +1,25 @@
 import type { ResultAsync } from 'neverthrow'
-import { assertEvent, enqueueActions, fromPromise, setup } from 'xstate'
+import { assertEvent, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import { failureOf, settled } from '../../../platform/actor-outcome'
-import type { ClearParams, ShowParams } from '../../../platform/flow-effects'
+import type {
+  ClearParams,
+  FieldValues,
+  NavigateParams,
+  ShowParams,
+} from '../../../platform/flow-effects'
 
 import type { SignInError } from './sign-in.service'
 
 /** The anchors whose codes the machine keeps for the view. */
 const ERROR = 'user.forgot-password.error'
 const MESSAGE = 'user.forgot-password.message'
+
+/** The email field, whose value the move to the sign-in page carries. */
+const EMAIL_INPUT = 'user.forgot-password.email-input'
+
+/** The sign-in page's notice, which the move leaves its word on. */
+const SIGN_IN_NOTICE = 'user.sign-in.notice-message'
 
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'forgot-password:UNKNOWN'
@@ -22,16 +33,28 @@ export interface ForgotPasswordContext {
   readonly sentTo: string | undefined
 }
 
-/** The events of the screen's flow: the user acts on these anchors. */
-export type ForgotPasswordEvent = {
-  readonly type: 'user.forgot-password.send-button'
-  readonly email: string
-}
+/**
+ * The events of the screen's flow: the user acts on the send button, and another tab of the
+ * browser set a new password, which comes with what the email field holds (`fields`).
+ */
+export type ForgotPasswordEvent =
+  | {
+      readonly type: 'user.forgot-password.send-button'
+      readonly email: string
+    }
+  | {
+      readonly type: 'platform.password-reset'
+      readonly fields: { readonly 'user.forgot-password.email-input': string }
+    }
 
-/** What the machine asks of its host: a code shown or cleared outside the page. */
+/**
+ * What the machine asks of its host: a code shown or cleared outside the page, a move to a path,
+ * with what the fields the move names hold.
+ */
 export type ForgotPasswordEmitted =
   | ({ readonly type: 'show' } & ShowParams)
   | ({ readonly type: 'clear' } & ClearParams)
+  | ({ readonly type: 'navigate'; readonly fields?: FieldValues } & NavigateParams)
 
 export interface ForgotPasswordMachineDeps {
   /** Asks for the mail whose link sets a new password; any email gets the same answer. */
@@ -51,8 +74,10 @@ function emailInput({ event }: { readonly event: ForgotPasswordEvent }): {
  * The page that asks for the mail of a password reset, as its screen's flow says: the send button
  * asks for it, the message asks to
  * open its link once the request went through, a refusal says why, and the button asks again as
- * often as it is pressed. Its `show` and `clear` keep the codes of the page's error and message for
- * the view and emit any other.
+ * often as it is pressed. Once the mail was asked for, a new password set in another tab of the
+ * browser ends the page: the sign-in page says why and starts with the email typed. Its `show`
+ * and `clear` keep the codes of the page's error and message for the view and emit any other; its
+ * `navigate` emits the path with the fields its event carries, for the host to move with.
  */
 export function createForgotPasswordMachine(deps: ForgotPasswordMachineDeps) {
   return setup({
@@ -90,6 +115,12 @@ export function createForgotPasswordMachine(deps: ForgotPasswordMachineDeps) {
           enqueue.emit({ type: 'clear', ...params })
         }
       }),
+      // The fields the event carries go with the move: its search takes the email typed from them.
+      navigate: emit(({ event }, params: NavigateParams) => ({
+        type: 'navigate' as const,
+        ...params,
+        ...('fields' in event ? { fields: event.fields } : {}),
+      })),
     },
   }).createMachine({
     id: 'user.forgot-password',
@@ -118,8 +149,24 @@ export function createForgotPasswordMachine(deps: ForgotPasswordMachineDeps) {
         },
       },
       sent: {
-        on: { 'user.forgot-password.send-button': { target: 'sending' } },
+        on: {
+          'user.forgot-password.send-button': { target: 'sending' },
+          'platform.password-reset': {
+            target: 'reset-elsewhere',
+            actions: [
+              {
+                type: 'show',
+                params: { anchor: SIGN_IN_NOTICE, codes: ['password-reset-elsewhere'] },
+              },
+              {
+                type: 'navigate',
+                params: { to: '/sign-in', search: { email: { anchor: EMAIL_INPUT } } },
+              },
+            ],
+          },
+        },
       },
+      'reset-elsewhere': { type: 'final' },
     },
   })
 }

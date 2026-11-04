@@ -6,40 +6,45 @@ import { z } from '@workspace/zod'
 
 export type SettingsParams = { identity: IdentityId }
 
-export type SettingsResult = Array<{ id: SettingsId; locale: string }>
+export type SettingsResult = Array<{ id: SettingsId; locale: string; theme: string }>
 
 export const SettingsParamsSchema = z.object({ identity: idSchemas.identity.schema })
 
 export const settingsShape: Shape<SettingsParams, SettingsResult> = {
   id: 'user.settings',
   kind: 'shape',
-  text: 'SELECT id, locale FROM settings WHERE identity = $identity LIMIT 1;',
+  text: 'SELECT\n  id,\n  locale,\n  theme\nFROM settings\nWHERE identity = $identity\nLIMIT 1;',
   params: [{ name: 'identity', type: 'record<identity>' }],
   tables: ['settings'],
 }
 
 export type SettingsShapeType = typeof settingsShape
 
-export type CreateSettingsParams = { id: SettingsId; identity: IdentityId; locale: 'en' | 'es' }
+export type CreateSettingsParams = { id: SettingsId; identity: IdentityId; locale: 'en' | 'es'; theme: 'light' | 'dark' | 'system' }
 
-export const CreateSettingsParamsSchema = z.object({ id: idSchemas.settings.schema, identity: idSchemas.identity.schema, locale: z.enum(['en', 'es']) })
+export const CreateSettingsParamsSchema = z.object({ id: idSchemas.settings.schema, identity: idSchemas.identity.schema, locale: z.enum(['en', 'es']), theme: z.enum(['light', 'dark', 'system']) })
 
 export type UpdateLocaleParams = { id: SettingsId; locale: 'en' | 'es' }
 
 export const UpdateLocaleParamsSchema = z.object({ id: idSchemas.settings.schema, locale: z.enum(['en', 'es']) })
 
+export type UpdateThemeParams = { id: SettingsId; theme: 'light' | 'dark' | 'system' }
+
+export const UpdateThemeParamsSchema = z.object({ id: idSchemas.settings.schema, theme: z.enum(['light', 'dark', 'system']) })
+
 export const settingsCommands: {
   readonly createSettings: Command<CreateSettingsParams>
   readonly updateLocale: Command<UpdateLocaleParams>
+  readonly updateTheme: Command<UpdateThemeParams>
 } = {
   createSettings: {
     id: 'user.settings.createSettings',
     kind: 'command',
-    text: 'CREATE $id SET identity = $identity, locale = $locale;',
-    params: [{ name: 'id', type: 'record<settings>' }, { name: 'identity', type: 'record<identity>' }, { name: 'locale', type: '\'en\' | \'es\'' }],
+    text: 'CREATE $id SET\n  identity = $identity,\n  locale = $locale,\n  theme = $theme;',
+    params: [{ name: 'id', type: 'record<settings>' }, { name: 'identity', type: 'record<identity>' }, { name: 'locale', type: '\'en\' | \'es\'' }, { name: 'theme', type: '\'light\' | \'dark\' | \'system\'' }],
     tables: ['settings'],
     region: 'private',
-    ops: [{ op: 'create', record: 'id', fields: { identity: { param: 'identity' }, locale: { param: 'locale' } } }],
+    ops: [{ op: 'create', record: 'id', fields: { identity: { param: 'identity' }, locale: { param: 'locale' }, theme: { param: 'theme' } } }],
     schema: CreateSettingsParamsSchema,
   },
   updateLocale: {
@@ -51,6 +56,16 @@ export const settingsCommands: {
     region: 'private',
     ops: [{ op: 'set', record: 'id', field: 'locale', value: { param: 'locale' } }],
     schema: UpdateLocaleParamsSchema,
+  },
+  updateTheme: {
+    id: 'user.settings.updateTheme',
+    kind: 'command',
+    text: 'UPDATE $id SET theme = $theme;',
+    params: [{ name: 'id', type: 'record<settings>' }, { name: 'theme', type: '\'light\' | \'dark\' | \'system\'' }],
+    tables: ['settings'],
+    region: 'private',
+    ops: [{ op: 'set', record: 'id', field: 'theme', value: { param: 'theme' } }],
+    schema: UpdateThemeParamsSchema,
   },
 }
 

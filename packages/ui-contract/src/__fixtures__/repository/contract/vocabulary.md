@@ -83,3 +83,8 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 |---|---|
 | `app-shell.status` | the readiness line |
 | `app-shell.notice-message` | the latest notice |
+
+## Composites
+
+| Composite | Meaning |
+|---|---|

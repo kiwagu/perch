@@ -159,16 +159,19 @@ export function ShellView(props: ShellViewProps) {
                 .exhaustive()}
             </p>
           ) : null}
-          {/* Anyone chooses the theme of this device here, as on the settings screen. */}
-          <OptionSelect
-            label={t('app.shell.theme')}
-            value={props.theme}
-            options={themes}
-            onChange={props.onThemeChange}
-            disabled={!props.canChooseTheme}
-            testId="app-shell.theme-select"
-            holdsInput={false}
-          />
+          {/* A guest chooses the theme of this device here; a signed-in account chooses its own on
+              its settings screen, and the frame shows it. */}
+          {props.signedIn ? null : (
+            <OptionSelect
+              label={t('app.shell.theme')}
+              value={props.theme}
+              options={themes}
+              onChange={props.onThemeChange}
+              disabled={!props.canChooseTheme}
+              testId="app-shell.theme-select"
+              holdsInput={false}
+            />
+          )}
           {/* A guest chooses the language here; a signed-in account does on its settings screen. */}
           {props.signedIn ? null : (
             <OptionSelect

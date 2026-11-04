@@ -103,3 +103,38 @@ describe('platformSchema notices', () => {
     }
   })
 })
+
+describe('platformSchema composites', () => {
+  const composites = (value: unknown) =>
+    platformSchema.safeParse({ ...PLATFORM, composites: value }).success
+
+  it('accepts a composite with its list, its item state and its items', () => {
+    expect(
+      composites({
+        'password-rules': {
+          description: 'The rules a new password keeps.',
+          list: 'password-rule-list',
+          itemState: 'met',
+          items: { length: '10 to 35 characters.', digit: 'At least one digit.' },
+        },
+      }),
+    ).toBe(true)
+  })
+  it('refuses a list that is not a list, an item out of kebab-case, a key of its own, no items', () => {
+    const base = {
+      description: 'The rules.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: '10 to 35 characters.' },
+    }
+
+    for (const composite of [
+      { ...base, list: 'password-rules' },
+      { ...base, items: { Length: 'x' } },
+      { ...base, items: {} },
+      { ...base, kind: 'list' },
+    ]) {
+      expect(composites({ 'password-rules': composite }), JSON.stringify(composite)).toBe(false)
+    }
+  })
+})

@@ -8,6 +8,8 @@ import { createForgotPasswordMachine } from './forgot-password.machine'
 import type { SignInError } from './sign-in.service'
 
 const SEND = 'user.forgot-password.send-button'
+const RESET = 'platform.password-reset'
+const EMAIL = 'user.forgot-password.email-input'
 
 /** The page over a request that answers as `answer` says, recording each email it asks for. */
 function page(answer: () => ResultAsync<void, SignInError> = () => okAsync(undefined)) {
@@ -69,5 +71,43 @@ describe('the forgot-password page', () => {
     expect(actor.getSnapshot().context.error).toBeUndefined()
     await waitFor(actor, (state) => state.matches('sent'))
     expect(request).toHaveBeenCalledTimes(3)
+  })
+
+  it('follows a new password set in another tab once the mail was asked for: the sign-in page says why and starts with the email in the field', async () => {
+    const { actor, emitted } = page()
+
+    actor.send({ type: SEND, email: 'ann@example.test' })
+    await waitFor(actor, (state) => state.matches('sent'))
+    actor.send({ type: RESET, fields: { [EMAIL]: 'ann@example.test' } })
+
+    expect(actor.getSnapshot().value).toBe('reset-elsewhere')
+    expect(actor.getSnapshot().status).toBe('done')
+    expect(emitted).toEqual([
+      {
+        type: 'show',
+        anchor: 'user.sign-in.notice-message',
+        codes: ['password-reset-elsewhere'],
+      },
+      {
+        type: 'navigate',
+        to: '/sign-in',
+        search: { email: { anchor: EMAIL } },
+        fields: { [EMAIL]: 'ann@example.test' },
+      },
+    ])
+  })
+
+  it('lets a new password set in another tab pass before the mail was asked for, and while it is', () => {
+    const { actor, emitted } = page()
+
+    actor.send({ type: RESET, fields: { [EMAIL]: '' } })
+
+    expect(actor.getSnapshot().value).toBe('idle')
+
+    actor.send({ type: SEND, email: 'ann@example.test' })
+    actor.send({ type: RESET, fields: { [EMAIL]: 'ann@example.test' } })
+
+    expect(actor.getSnapshot().value).toBe('sending')
+    expect(emitted).toEqual([])
   })
 })

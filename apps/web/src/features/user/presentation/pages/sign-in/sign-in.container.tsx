@@ -2,10 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { useLocale } from '@workspace/i18n'
 
-import { useLeaveNow } from '../../../../../platform/leave-now'
 import { useService } from '../../../../../platform/module'
-import { HOME_PATH } from '../../../../../platform/router'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
+import { useSearchStart } from '../../../../../platform/search-start'
 import { SESSION } from '../../../../../platform/session.port'
 import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
 import { createSignInMachine } from '../../../application/sign-in-machine'
@@ -18,20 +17,20 @@ const PASSWORD_INPUTS = {
   confirmation: 'user.sign-in.password-confirmation-input',
 } as const
 
+/**
+ * The sign-in page: its flow run as its machine, the email field starting with the email the
+ * address carries (`{ search: email }`), the word left for it read once. Another tab's sign-in
+ * takes it to the profile through the router's guard; its own goes on to its welcome.
+ */
 export function SignInContainer() {
   const service = useService(SIGN_IN_SERVICE)
   const session = useService(SESSION)
-  // The word the last session left stays on the page while it is open, and only once.
+  const startEmail = useSearchStart('email')
+  // The word left for the page stays on it while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
   const { state, send, submit, actor } = useScreenMachine(machine)
-  const leaveNow = useLeaveNow()
   const locale = useLocale()
-  const submitting = (['signing-in', 'signing-up', 'resending'] as const).some((name) =>
-    state.matches(name),
-  )
-  const done = state.matches('done')
-  const busy = submitting || done
   // The mode is the state: sign-up only while creating an account (the password breaking a rule
   // and the passwords differing among them), sign-in otherwise (asking to check the mail and
   // offering the resend among them, the values kept, and done, which only a sign-in reaches).
@@ -57,21 +56,9 @@ export function SignInContainer() {
     }
   }, [notice, session])
 
-  // Another tab signed someone in (one account per browser): the page follows it to the profile,
-  // unless the sign-in is this page's own, which goes on to its welcome. Nobody started that leave
-  // here, so it passes the frame's guard: what was typed cannot be kept.
-  useEffect(
-    () =>
-      session.subscribe((user) => {
-        if (user && !busy) {
-          leaveNow(HOME_PATH)
-        }
-      }),
-    [session, busy, leaveNow],
-  )
-
   return (
     <SignInView
+      startEmail={startEmail}
       mode={mode}
       error={state.context.error}
       notice={notice}

@@ -21,14 +21,11 @@ export const RESET_PASSWORDS_DIFFER = 'reset-password:PASSWORDS_DIFFER'
 /** The failures of a link that does not set a password: unknown, used, replaced, or too old. */
 const LINK_UNUSABLE: readonly string[] = ['data:LINK_INVALID', 'data:LINK_EXPIRED']
 
-/** What the codes of a failure of the reset may be, as the flow shows them. */
-const RESET_FAILURES = [
-  'link-invalid',
-  'link-expired',
-  'password-rejected',
-  'rate-limited',
-  'failed',
-]
+/** The codes the flow shows for a link that does not set a password. */
+const LINK_FAILURES = ['link-invalid', 'link-expired']
+
+/** The codes the flow shows for any other failure of the reset, which leaves the form as typed. */
+const KEPT_FAILURES = ['password-rejected', 'rate-limited', 'failed']
 
 export interface ResetPasswordContext {
   /** The code of the last failure, or of the password typed again differing. */
@@ -182,8 +179,8 @@ export function createResetPasswordMachine(deps: ResetPasswordMachineDeps) {
             actions: [{ type: 'show', params: { anchor: MESSAGE, codes: ['password-reset'] } }],
           },
           onError: [
-            { target: 'link-dead', guard: 'linkUnusable', actions: [showError(...RESET_FAILURES)] },
-            { target: 'kept', actions: [showError(...RESET_FAILURES)] },
+            { target: 'link-dead', guard: 'linkUnusable', actions: [showError(...LINK_FAILURES)] },
+            { target: 'kept', actions: [showError(...KEPT_FAILURES)] },
           ],
         },
       },

@@ -10,7 +10,7 @@ connection is the folder `sync-connection/`, entered through its `index.ts`; the
 has no `index.ts` yet: it predates the index rule and is imported file by file.
 
 Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
-device id at protocol 7; the gateway reads the session, checks the device, marks it seen and
+device id at protocol 8; the gateway reads the session, checks the device, marks it seen and
 welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
 profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
 auth module), without holding the hello. The session is read through Better Auth
@@ -87,7 +87,7 @@ reaches its logs.
   another connection or a new session of the device took over).
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
   closes them, tells them their identity's memberships and takes regions from them.
-- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 7.
+- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 8.
 
 ## Commands
 

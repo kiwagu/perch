@@ -15,7 +15,12 @@ import { PASSWORD_REGION } from './password-region'
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'settings:UNKNOWN'
 
-const NOT_STORED = {
+const THEME_NOT_STORED = {
+  type: 'show',
+  params: { anchor: 'app-shell.notice-message', codes: ['theme-not-stored'] },
+} as const
+
+const LOCALE_NOT_STORED = {
   type: 'show',
   params: { anchor: 'app-shell.notice-message', codes: ['locale-not-stored'] },
 } as const
@@ -34,8 +39,8 @@ export function createSettingsMachine(deps: SettingsMachineDeps) {
       emitted: {} as SettingsEmitted,
     },
     actors: {
-      'platform.theme.set': fromPromise<void, { readonly theme: Theme }>(async ({ input }) =>
-        deps.setTheme(input.theme),
+      'settings.updateTheme': fromPromise<void, { readonly theme: Theme }>(({ input }) =>
+        settled(deps.storeTheme(input.theme)),
       ),
       'settings.updateLocale': fromPromise<void, { readonly locale: Locale }>(({ input }) =>
         settled(deps.storeLocale(input.locale)),
@@ -86,6 +91,11 @@ export function createSettingsMachine(deps: SettingsMachineDeps) {
           enqueue.emit({ type: 'clear', ...params })
         }
       }),
+      // The chosen theme shows at once, while its store runs.
+      showChoice: ({ event }) => {
+        assertEvent(event, 'user.settings.theme-select')
+        deps.setTheme(event.theme)
+      },
       speakChoice: emit(({ event }) => {
         assertEvent(event, 'user.settings.locale-select')
 
@@ -109,17 +119,27 @@ export function createSettingsMachine(deps: SettingsMachineDeps) {
             initial: 'idle',
             states: {
               idle: {
-                on: { 'user.settings.theme-select': { target: 'applying' } },
+                on: {
+                  'user.settings.theme-select': {
+                    target: 'storing',
+                    guard: 'settingsHeld',
+                    actions: 'showChoice',
+                  },
+                },
               },
-              applying: {
+              storing: {
                 invoke: {
-                  src: 'platform.theme.set',
+                  src: 'settings.updateTheme',
                   input: ({ event }) => {
                     assertEvent(event, 'user.settings.theme-select')
 
                     return { theme: event.theme }
                   },
                   onDone: { target: 'idle' },
+                  onError: [
+                    { target: 'idle', guard: 'accountLeft' },
+                    { target: 'idle', actions: THEME_NOT_STORED },
+                  ],
                 },
               },
             },
@@ -147,7 +167,7 @@ export function createSettingsMachine(deps: SettingsMachineDeps) {
                   onDone: { target: 'idle' },
                   onError: [
                     { target: 'idle', guard: 'accountLeft' },
-                    { target: 'idle', actions: NOT_STORED },
+                    { target: 'idle', actions: LOCALE_NOT_STORED },
                   ],
                 },
               },

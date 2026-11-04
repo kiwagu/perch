@@ -21,13 +21,12 @@ import type { AccountSession } from '../gateway-auth'
 import type { IdentitySpace } from '../identity-space'
 import {
   deviceIdFrom,
-  forgetNotice,
   IDENTITY_KEY,
   MEMBERSHIPS_KEY,
   savedIdentity,
-  savedNotice,
   savedToken,
   saveIdentityEmail,
+  savePasswordReset,
 } from '../storage'
 
 import { SessionElsewhere } from './elsewhere'
@@ -35,6 +34,7 @@ import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
 import { SessionSignIn } from './sign-in'
+import { SignInNotice } from './sign-in-notice'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
 import { SpaceDeletion } from './space-deletion'
 import { SessionState } from './state'
@@ -70,9 +70,13 @@ export class SessionService implements SessionPort {
   readonly #elsewhere: SessionElsewhere
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
+  readonly #signInNotice: SignInNotice
+  /** The sign-ins this tab started that are running now. */
+  #signingInHere = 0
 
   constructor(options: SessionOptions) {
     this.#options = options
+    this.#signInNotice = new SignInNotice(options.storage)
     // The organisations follow every change of identity, once the subscribers heard of it.
     this.#state = new SessionState(options, this.#transitions, () => this.#organisations.tell())
     this.#organisations = new SessionOrganisations({
@@ -138,6 +142,7 @@ export class SessionService implements SessionPort {
         }
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
+      this.subscribe((user) => user && this.#signInNotice.signedIn(user.id)),
     ]
   }
 
@@ -159,13 +164,19 @@ export class SessionService implements SessionPort {
   }
 
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError> {
-    return this.#transitions.serially((generation) => this.#signingIn.signIn(input, generation))
+    return this.#transitions.serially((generation) =>
+      this.#here(() => this.#signingIn.signIn(input, generation)),
+    )
   }
 
   verifyEmail(token: string): ResultAsync<EmailVerified, DataError> {
     return this.#transitions.serially((generation) =>
-      verifyEmail(this.#signingIn, this.#options.auth, token, generation),
+      this.#here(() => verifyEmail(this.#signingIn, this.#options.auth, token, generation)),
     )
+  }
+
+  signingInHere(): boolean {
+    return this.#signingInHere > 0
   }
 
   resendVerification(email: string): ResultAsync<void, DataError> {
@@ -179,10 +190,12 @@ export class SessionService implements SessionPort {
 
   /**
    * Asks the gateway alone: it signs nothing in, and a device of the account it signs out, this one
-   * included, hears so on its channel (4002).
+   * included, hears so on its channel (4002). Once it did, the browser's other tabs hear of it.
    */
   resetPassword(token: string, password: string): ResultAsync<void, DataError> {
-    return this.#options.auth.resetPassword(token, password)
+    return this.#options.auth
+      .resetPassword(token, password)
+      .andTee(() => savePasswordReset(this.#options.storage))
   }
 
   /** Asks the gateway with this device's session; the other devices hear their sign-out (4002). */
@@ -261,11 +274,26 @@ export class SessionService implements SessionPort {
   }
 
   notice(): SessionNotice | undefined {
-    return savedNotice(this.#options.storage)
+    return this.#signInNotice.read()
   }
 
   clearNotice(): void {
-    forgetNotice(this.#options.storage)
+    this.#signInNotice.take()
+  }
+
+  leaveNotice(notice: SessionNotice): void {
+    this.#signInNotice.leave(notice, this.current()?.id)
+  }
+
+  /** Runs a sign-in this tab started; `signingInHere` says so while it runs. */
+  #here<T>(run: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
+    const done = () => {
+      this.#signingInHere -= 1
+    }
+
+    this.#signingInHere += 1
+
+    return run().andTee(done).orTee(done)
   }
 
   protocolRefused(): boolean {

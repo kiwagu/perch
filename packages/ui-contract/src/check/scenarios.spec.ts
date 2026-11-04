@@ -165,6 +165,110 @@ describe('scenariosProblems', () => {
       'tests/e2e/scenarios/sample/base/thing.md:20: expected[1]: [code:lost] is not a code of the vocabulary',
     ])
   })
+  it('pairs a code, a state or a value with the anchor named last before it in the text', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = [
+      '[sample.save-button] carries [code:devices-read-failed]',
+      '[app-shell.status] reaches [state:current]',
+      '[sample.mode-select] shows [value:k12]',
+      '[app-shell.status] reaches [state:ready] and [sample.save-button] carries [code:saved]',
+      '[sample.save-button] carries [code:saved] and [app-shell.status] is in [state:loading]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: sample.save-button never carries code devices-read-failed',
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[1]: app-shell.status never carries state current',
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[2]: sample.mode-select never carries value k12',
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[4]: app-shell.status never carries state loading',
+    ])
+  })
+  it('pairs in every text: the where, the scenario sentence and each step', () => {
+    const contract = sampleContract()
+    const scenario = firstScenario(contract)
+
+    scenario.where = '[/sample/$key] with [sample.list] in [state:current]'
+    scenario.scenario = 'A member sees [sample.thing-item] in [state:loading]'
+    scenario.steps = ['Wait for [app-shell.status] to reach [state:empty]']
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: where: sample.list never carries state current',
+      'tests/e2e/scenarios/sample/base/thing.md:1: scenario: sample.thing-item never carries state loading',
+      'tests/e2e/scenarios/sample/base/thing.md:1: steps[0]: app-shell.status never carries state empty',
+    ])
+  })
+  it('holds a code, a state or a value with no anchor before it to the contract alone', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).steps = [
+      'It shows [code:devices-read-failed] on [sample.save-button]',
+      'Choose [value:k12] in [sample.mode-select]',
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('reads past a route to the anchor before it', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = [
+      '[sample.save-button] on [/sample/$key] carries [code:devices-read-failed]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: sample.save-button never carries code devices-read-failed',
+    ])
+  })
+  it('pairs nothing after a mail or a notice until the text names an anchor again', () => {
+    const contract = sampleContract()
+
+    Object.assign(contract.screens.platform.actions, {
+      'invite.send': {
+        description: 'Sends an invitation.',
+        params: { email: { type: 'string', description: 'The address.' } },
+        result: 'a mail is on its way',
+        codes: ['failed'],
+        mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'tab' } },
+        notices: [{ name: 'sent', to: 'account', language: 'account' }],
+      },
+    })
+    firstScenario(contract).expected = [
+      '[sample.save-button] carries [code:saved], and [mail:invite.send] reaches the email in the language [value:a]',
+      '[sample.save-button] carries [code:saved], and [notice:invite.send.sent] reads [code:devices-read-failed]',
+      '[mail:invite.send] reaches the email, then [sample.save-button] carries [code:devices-read-failed]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[2]: sample.save-button never carries code devices-read-failed',
+    ])
+  })
+  it('pairs through the anchors under it: the items of a list, the options of a select, the eye of an input', () => {
+    const contract = sampleContract()
+    const anchors = screenIn(contract, 'sample').anchors
+
+    anchors['sample.list.first-item'] = { kind: 'item', states: ['current'] }
+    Object.assign(anchors['sample.title-input'] ?? {}, { derived: ['visibility-button'] })
+    firstScenario(contract).expected = [
+      'Every item of [sample.list] carries [state:current]',
+      '[sample.mode-select] shows [value:b] and [sample.key-select] shows [value:k3]',
+      '[sample.title-input] shows its eye with [value:show]',
+      '[sample.title-input.visibility-button] carries [value:hide]',
+    ]
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('leaves an unknown anchor and an unknown code to their own problem', () => {
+    const contract = sampleContract()
+
+    firstScenario(contract).expected = [
+      '[sample.gone-button] carries [code:saved]',
+      '[sample.save-button] carries [code:lost]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[0]: [sample.gone-button] is not a declared anchor',
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[1]: [code:lost] is not a code of the vocabulary',
+    ])
+  })
   it('resolves a derived anchor only through a suffix its base lists in derived', () => {
     const contract = sampleContract()
 

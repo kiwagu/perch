@@ -70,8 +70,8 @@ exports[`emitReplicaSchema > lists every field of replicated tables with its kin
 import type { ReplicaSchema } from '@workspace/replica'
 
 export const replicaSchema: ReplicaSchema = {
-  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member' }, text: { kind: 'text' }, created_at: { kind: 'datetime' } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },
-  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity' }, name: { kind: 'plain' }, bio: { kind: 'text' }, created_at: { kind: 'datetime' } } },
+  note: { region: 'tenant', fields: { author: { kind: 'record', table: 'member', readonly: true }, text: { kind: 'text' }, created_at: { kind: 'datetime', readonly: true } }, owner: 'author', can: { member: { create: 'any', update: 'own', delete: 'own' }, admin: { create: 'any', update: 'any', delete: 'any' } } },
+  profile: { region: 'private', fields: { identity: { kind: 'record', table: 'identity', readonly: true }, name: { kind: 'plain' }, bio: { kind: 'text' }, created_at: { kind: 'datetime', readonly: true } } },
 }
 "
 `;

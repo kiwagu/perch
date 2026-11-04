@@ -1,8 +1,10 @@
 /**
- * The theme of this device: light, dark, or the system's own, kept in this browser and shown as
- * the class `dark` on `<html>`, which the kit's dark colors follow. Under the system's theme the
- * page follows the device's setting as it changes. The settings screen chooses it
- * (`platform.theme.set`); the start makes it before the first frame, so the kept theme shows at once.
+ * The theme of this device: light, dark, or the system's own, shown as the class `dark` on
+ * `<html>`, which the kit's dark colors follow, and kept in this browser as the theme this device
+ * showed last. Under the system's theme the page follows the device's setting as it changes. A
+ * guest chooses it in the frame (`platform.theme.set`), and the other guest tabs of the browser
+ * follow it (`platform.theme-set`); a signed-in tab shows and keeps the account's theme. The start
+ * makes it before the first frame, so the kept theme shows at once, before any data opens.
  */
 
 import { createContext, useContext, useSyncExternalStore } from 'react'
@@ -11,7 +13,8 @@ export const THEMES = ['light', 'dark', 'system'] as const
 
 export type Theme = (typeof THEMES)[number]
 
-const KEY = 'perch.theme'
+/** The key the theme this device showed last is kept under, shared by the browser's tabs. */
+export const THEME_KEY = 'perch.theme'
 
 const isTheme = (value: unknown): value is Theme => THEMES.some((theme) => theme === value)
 
@@ -19,6 +22,8 @@ export interface DeviceTheme {
   current(): Theme
   /** Shows `theme` at once and keeps it on this device. */
   set(theme: Theme): void
+  /** Shows the theme this device keeps, which another tab of the browser chose; keeps nothing. */
+  follow(): void
   subscribe(listener: () => void): () => void
 }
 
@@ -34,19 +39,28 @@ export interface ThemeEnvironment {
 
 export function createDeviceTheme(env: ThemeEnvironment): DeviceTheme {
   const listeners = new Set<() => void>()
-  let theme: Theme = 'system'
+  /** The theme the browser keeps; a browser that keeps no site data keeps none. */
+  const kept = (): Theme => {
+    try {
+      const value = env.storage.getItem(THEME_KEY)
 
-  // A browser that keeps no site data still shows a theme, kept for this page only.
-  try {
-    const kept = env.storage.getItem(KEY)
-
-    theme = isTheme(kept) ? kept : 'system'
-  } catch {
-    theme = 'system'
+      return isTheme(value) ? value : 'system'
+    } catch {
+      return 'system'
+    }
   }
+  // A browser that keeps no site data still shows a theme, kept for this page only.
+  let theme: Theme = kept()
 
   const show = () => {
     env.root.classList.toggle('dark', theme === 'dark' || (theme === 'system' && env.dark.matches))
+  }
+  const shown = (next: Theme) => {
+    theme = next
+    show()
+    for (const listener of listeners) {
+      listener()
+    }
   }
 
   env.dark.addEventListener('change', show)
@@ -55,17 +69,14 @@ export function createDeviceTheme(env: ThemeEnvironment): DeviceTheme {
   return {
     current: () => theme,
     set: (next) => {
-      theme = next
       try {
-        env.storage.setItem(KEY, next)
+        env.storage.setItem(THEME_KEY, next)
       } catch {
         // Kept for this page only, as the browser keeps nothing.
       }
-      show()
-      for (const listener of listeners) {
-        listener()
-      }
+      shown(next)
     },
+    follow: () => shown(kept()),
     subscribe: (listener) => {
       listeners.add(listener)
 
@@ -89,8 +100,15 @@ export function browserTheme(): DeviceTheme {
 
 export const ThemeContext = createContext<DeviceTheme | undefined>(undefined)
 
-/** The device's theme and the way to choose another, for a view under the start's provider. */
-export function useDeviceTheme(): { readonly theme: Theme; readonly set: (theme: Theme) => void } {
+/**
+ * The device's theme, the way to choose another and to follow one another tab chose, for a view
+ * under the start's provider.
+ */
+export function useDeviceTheme(): {
+  readonly theme: Theme
+  readonly set: (theme: Theme) => void
+  readonly follow: () => void
+} {
   const device = useContext(ThemeContext)
 
   if (!device) {
@@ -102,5 +120,5 @@ export function useDeviceTheme(): { readonly theme: Theme; readonly set: (theme:
     () => device.current(),
   )
 
-  return { theme, set: device.set }
+  return { theme, set: device.set, follow: device.follow }
 }

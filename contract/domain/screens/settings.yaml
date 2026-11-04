@@ -1,26 +1,26 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: the theme of this device (light, dark, or the device's own), the language of the account, which follows it across its devices, and the account's password and email."
+description: "The signed-in account's settings: its theme (light, dark, or the device's own setting) and its language, which follow it across its tabs and devices, and its password and email."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form ]
 anchors:
   user.settings.heading:
     kind: heading
-    description: Names the screen.
   user.settings.theme-select:
     kind: select
-    description: "The theme of this device: a choice applies at once and stays on this device, the device's own setting followed live while it is system."
+    description: "The theme of the account, stored in its settings, so its other tabs and devices show it too; it takes no choice before the settings are on this device."
     binding:
-      action: platform.theme.set
-      params:
-        theme: user.settings.theme-select
+      - model: settings.theme
+      - action: settings.updateTheme
+        params:
+          theme: user.settings.theme-select
     dataValue: true
     derived: [ option ]
   user.settings.locale-select:
     kind: select
-    description: "The language of the account, the one its settings hold: a choice applies at once and is stored there, and the account's other devices speak it too; it takes no choice before the settings are on this device."
+    description: "The language of the account, stored in its settings, so its other devices speak it too; it takes no choice before the settings are on this device."
     binding:
       - model: settings.locale
       - action: settings.updateLocale
@@ -30,11 +30,11 @@ anchors:
     derived: [ option ]
   user.settings.password.form:
     kind: form
-    description: Changes the account's password; the account's other devices are signed out by it.
+    description: Changes the account's password.
   user.settings.password.current-password-input:
     kind: input
     secret: true
-    description: The password the account has now (type password).
+    description: The password the account has now.
     binding:
       action: platform.change-password
       params:
@@ -43,63 +43,31 @@ anchors:
   user.settings.password.new-password-input:
     kind: input
     secret: true
-    description: The new password (type password).
+    composite: password-rules
+    description: The new password.
     binding:
       action: platform.change-password
       params:
         password: user.settings.password.new-password-input
     derived: [ visibility-button ]
-  user.settings.password-rule-list:
-    kind: list
-    description: "The rules a new password keeps, under the new password, each rule marked once the password typed keeps it."
-  user.settings.password-rule-list.length-item:
-    kind: item
-    description: 10 to 35 characters.
-    states: [ met ]
-  user.settings.password-rule-list.characters-item:
-    kind: item
-    description: "Only Latin letters, digits and the symbols ! \" # $ % & ' ( ) * + , - . / : ; < = > ? @ [ \\ ] ^ _ ` { | } ~ (no spaces); met once something is typed and every character is one of them."
-    states: [ met ]
-  user.settings.password-rule-list.digit-item:
-    kind: item
-    description: At least one digit.
-    states: [ met ]
-  user.settings.password-rule-list.uppercase-item:
-    kind: item
-    description: At least one uppercase letter.
-    states: [ met ]
-  user.settings.password-rule-list.lowercase-item:
-    kind: item
-    description: At least one lowercase letter.
-    states: [ met ]
-  user.settings.password-rule-list.symbol-item:
-    kind: item
-    description: At least one of the symbols.
-    states: [ met ]
   user.settings.password.password-confirmation-input:
     kind: input
     secret: true
-    description: "The new password typed again (type password); never sent: the password changes only when the two are the same."
+    description: The new password typed again; never sent.
     derived: [ visibility-button ]
   user.settings.password.save-button:
     kind: button
-    description: "Changes the password; disabled while the new password breaks a rule, once the password typed again has strayed from it, and while it changes; a click while only a part of it is typed again says it differs and sends nothing."
-    binding:
-      action: platform.change-password
-      params:
-        currentPassword: user.settings.password.current-password-input
-        password: user.settings.password.new-password-input
+    description: Changes the password.
+    binding: { action: platform.change-password }
   user.settings.password.error:
     kind: error
-    description: "Why the password did not change: under the current password a wrong one, under the new password one it refused, under the password typed again one that differs."
-    codes: [ invalid-credentials, password-rejected, passwords-differ, rate-limited, failed ]
     fields:
       invalid-credentials: user.settings.password.current-password-input
       password-rejected: user.settings.password.new-password-input
       passwords-differ: user.settings.password.password-confirmation-input
   user.settings.email.form:
     kind: form
-    description: Asks to change the account's email; the change waits for the link of the mail sent to the new email.
+    description: Asks to change the account's email.
   user.settings.email.email-input:
     kind: input
     description: The new email (type email).
@@ -110,7 +78,7 @@ anchors:
   user.settings.email.password-input:
     kind: input
     secret: true
-    description: The password the account has now (type password), which confirms the request.
+    description: The password the account has now, which confirms the request.
     binding:
       action: platform.change-email
       params:
@@ -118,25 +86,19 @@ anchors:
     derived: [ visibility-button ]
   user.settings.email.send-button:
     kind: button
-    description: Sends the mail that confirms the new email; disabled while it is sent.
-    binding:
-      action: platform.change-email
-      params:
-        email: user.settings.email.email-input
-        password: user.settings.email.password-input
+    description: Sends the mail that confirms the new email.
+    binding: { action: platform.change-email }
   user.settings.email.message:
     kind: message
-    description: "Asks to open the link of the mail sent to the new email, once the request went through; the email changes only then. A new email that has an account already gets the same words, and no mail."
+    description: Asks to open the link of the mail sent to the new email; the email changes only then.
     codes: [ check-your-mail ]
   user.settings.email.error:
     kind: error
-    description: "Why the mail was not sent: under the password a wrong one, under the email one that is not an email."
     fields:
       invalid-credentials: user.settings.email.password-input
       email-invalid: user.settings.email.email-input
 flow:
   id: settings
-  description: The theme, the language, the password and the email are the regions of viewing, each in one of its states at a time.
   initial: viewing
   meta:
     guards:
@@ -152,19 +114,31 @@ flow:
       description: The settings of the signed-in account and of this device.
       states:
         theme:
-          description: The theme of this device.
+          description: The theme of the account.
           initial: idle
           states:
             idle:
               on:
-                user.settings.theme-select: applying
-            applying:
+                user.settings.theme-select:
+                  target: storing
+                  guard: settingsHeld
+                  description: The app shows the chosen theme at once.
+            storing:
               invoke:
-                src: platform.theme.set
+                src: settings.updateTheme
                 input: { theme: user.settings.theme-select }
+                toast: false
                 onDone:
                   target: idle
-                  description: The app shows the chosen theme, and this device keeps it.
+                  description: The settings hold the chosen theme, and the account's other tabs and devices show it.
+                onError:
+                  - target: idle
+                    guard: accountLeft
+                    description: The account signed out meanwhile; its notice went with it, and nothing is shown.
+                  - target: idle
+                    description: The app keeps showing the chosen theme on this device, and the notice says the settings could not store it.
+                    actions:
+                      - show: { app-shell.notice-message: [ theme-not-stored ] }
         language:
           description: The language of the account.
           initial: idle
@@ -174,7 +148,7 @@ flow:
                 user.settings.locale-select:
                   target: storing
                   guard: settingsHeld
-                  description: The app speaks the chosen language at once; before the account's settings arrive on this device, the select takes no choice.
+                  description: The app speaks the chosen language at once.
             storing:
               invoke:
                 src: settings.updateLocale
@@ -196,7 +170,7 @@ flow:
           initial: password-weak
           states:
             password-weak:
-              description: "The new password breaks a rule, or nothing is typed: the list marks the rules it keeps, the password typed again is not judged yet, and the save button is disabled."
+              description: "The new password breaks a rule, or nothing is typed: the list marks the rules it keeps, and the password typed again is not judged yet."
               on:
                 user.settings.password.new-password-input:
                   - guard: passwordBreaksRules
@@ -221,7 +195,6 @@ flow:
                     description: Only a part of the new password was typed again, so nothing is sent.
                   - target: changing
             passwords-differ:
-              description: "The error says the password typed again differs, under it, and the save button is disabled until the two agree again."
               entry:
                 - show: { user.settings.password.error: [ passwords-differ ] }
               exit:
@@ -236,34 +209,23 @@ flow:
                   target: kept
                   guard: confirmationFollows
             changing:
-              description: The password is being changed; the error of the last attempt goes.
-              entry:
-                - clear: user.settings.password.error
               invoke:
                 src: platform.change-password
                 input: { currentPassword: user.settings.password.current-password-input, password: user.settings.password.new-password-input }
                 onDone:
                   target: password-weak
-                  description: "The password is the new one: the toast says so, the form is emptied, and the account's other devices are signed out."
                   actions:
                     - clear: user.settings.password.current-password-input
                     - clear: user.settings.password.new-password-input
                     - clear: user.settings.password.password-confirmation-input
-                onError:
-                  target: kept
-                  description: The error says why the password did not change; the form stays as typed.
-                  actions:
-                    - show: user.settings.password.error
         email:
           description: Changing the account's email.
           initial: idle
           states:
             idle:
-              description: The form, nothing asked yet.
               on:
                 user.settings.email.send-button: sending
             sending:
-              description: The mail to the new email is being sent; the error of the last attempt goes.
               entry:
                 - clear: user.settings.email.error
               invoke:
@@ -279,7 +241,6 @@ flow:
                     - clear: user.settings.email.message
                     - show: user.settings.email.error
             sent:
-              description: The message asks to open the link of the mail sent to the new email; the send button sends it again.
               on:
                 user.settings.email.send-button: sending
 wireframe: |-

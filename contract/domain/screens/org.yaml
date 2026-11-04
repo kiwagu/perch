@@ -13,7 +13,7 @@ anchors:
     states: [ empty, error ]
   organisation.page.heading:
     kind: heading
-    description: "The name of the current organisation (platform data: the current membership)."
+    description: The name of the current organisation.
     roles: [ member, admin ]
   organisation.page.role-badge:
     kind: badge
@@ -22,7 +22,7 @@ anchors:
     dataValue: true
   organisation.page.current-select:
     kind: select
-    description: Chooses the current organisation; shown with two memberships or more, its options are the organisations by key.
+    description: Chooses the current organisation; shown with two memberships or more.
     binding:
       action: platform.organisations.select
       params:
@@ -39,29 +39,24 @@ anchors:
     description: Creates an organisation; shown without memberships, or after the toggle button.
   organisation.create.key-input:
     kind: input
-    description: "The key of the new organisation: 2 to 32 lowercase letters, digits and underscores, starting with a letter."
+    description: The key of the new organisation.
     binding:
       action: platform.organisations.create
       params:
         key: organisation.create.key-input
   organisation.create.name-input:
     kind: input
-    description: The name of the new organisation, at most 80 characters.
+    description: The name of the new organisation.
     binding:
       action: platform.organisations.create
       params:
         name: organisation.create.name-input
   organisation.create.error:
     kind: error
-    description: Why the last creation failed.
   organisation.create.submit-button:
     kind: button
-    description: Creates the organisation; disabled while it runs.
-    binding:
-      action: platform.organisations.create
-      params:
-        key: organisation.create.key-input
-        name: organisation.create.name-input
+    description: Creates the organisation.
+    binding: { action: platform.organisations.create }
   organisation.notes.section:
     kind: section
     description: The content of the notes card of the current organisation.
@@ -110,7 +105,7 @@ anchors:
     own: true
   organisation.notes.edit-textarea:
     kind: textarea
-    description: The text of the note being edited, at most 500 characters.
+    description: The text of the note being edited.
     binding: { model: note.text }
     roles: [ member, admin ]
   organisation.notes.save-button:
@@ -124,7 +119,7 @@ anchors:
     roles: [ member, admin ]
   organisation.notes.new-textarea:
     kind: textarea
-    description: The text of a new note, at most 500 characters.
+    description: The text of a new note.
     binding: { model: note.text }
     roles: [ member, admin ]
   organisation.notes.error:
@@ -133,7 +128,7 @@ anchors:
     roles: [ member, admin ]
   organisation.notes.add-button:
     kind: button
-    description: Adds the new note by the signed-in member and empties the textarea.
+    description: Adds the new note by the signed-in member.
     binding:
       action: note.createNote
       params:
@@ -176,11 +171,8 @@ anchors:
     roles: [ admin ]
   organisation.invite.submit-button:
     kind: button
-    description: Invites the account and empties the field; disabled while it runs.
-    binding:
-      action: platform.organisations.invite
-      params:
-        email: organisation.invite.email-input
+    description: Invites the account and empties the field.
+    binding: { action: platform.organisations.invite }
     roles: [ admin ]
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
@@ -224,8 +216,6 @@ flow:
                 onError:
                   target: open
                   description: The form stays open with what was typed.
-                  actions:
-                    - show: organisation.create.error
         note-items:
           description: The notes' items; one note is edited at a time, the one acted on last.
           initial: idle
@@ -234,9 +224,10 @@ flow:
               on:
                 organisation.notes.edit-button:
                   target: editing
-                  description: The item shows organisation.notes.edit-textarea with the text and organisation.notes.save-button.
+                  description: The edit field starts with the note's text.
                 organisation.notes.delete-button: deleting
             editing:
+              meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }
               on:
                 organisation.notes.save-button: saving
                 organisation.notes.edit-button:
@@ -246,27 +237,18 @@ flow:
                   target: deleting
                   description: Another note is deleted; the open edit form closes, and what was typed into it is dropped.
             saving:
+              meta: { renders: [ organisation.notes.edit-textarea, organisation.notes.save-button ] }
               invoke:
                 src: note.updateNote
                 input: { id: organisation.notes.item, text: organisation.notes.edit-textarea }
-                onDone:
-                  target: idle
-                  description: The item shows the new text.
-                onError:
-                  target: editing
-                  actions:
-                    - show: organisation.notes.error
+                onDone: idle
+                onError: editing
             deleting:
               invoke:
                 src: note.deleteNote
                 input: { id: organisation.notes.item }
-                onDone:
-                  target: idle
-                  description: The item leaves the list.
-                onError:
-                  target: idle
-                  actions:
-                    - show: organisation.notes.error
+                onDone: idle
+                onError: idle
         invite:
           by: organisation.invite.submit-button
           onDone:

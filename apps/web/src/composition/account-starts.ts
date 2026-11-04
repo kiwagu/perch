@@ -31,6 +31,7 @@ import {
 } from '../features/user/presentation/pages/profile/profile.model.gen'
 import type { CommandsPort } from '../platform/commands.port'
 import type { SessionPort } from '../platform/session.port'
+import type { Theme } from '../platform/theme'
 
 import type { CommandLogger } from './commands'
 import type { IdentitySpace, SyncState } from './identity-space'
@@ -90,6 +91,8 @@ export interface AccountStartsDeps {
   readonly runner: ShapeRunnerPort
   readonly commands: CommandsPort
   readonly settings: SettingsService
+  /** The theme this device shows now, which the settings of an account it starts begin with. */
+  readonly theme: () => Theme
   readonly storage: KeyValueStorage
   readonly locks: LockManagerLike | undefined
   readonly logger: Pick<CommandLogger, 'warn'>
@@ -117,6 +120,7 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
     deps.settings,
     kept,
     accountStartTurns(deps.locks, () => deps.session.flush()),
+    deps.theme,
   )
   const logged = (failure: { readonly code: string }) =>
     deps.logger.warn({ event: 'account-start', outcome: failure.code })

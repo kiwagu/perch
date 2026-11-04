@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
 
-import { trackedStore } from './language-writes'
+import { trackedStore } from './settings-writes'
 
 function record() {
   const events: string[] = []
@@ -35,7 +35,7 @@ describe('trackedStore', () => {
     expect(events).toEqual(['writing es', 'store es'])
   })
 
-  it('says a write that failed, so its language is not taken for one coming back', async () => {
+  it('says a write that failed, so its value is not taken for one coming back', async () => {
     const { events, writes } = record()
     const store = trackedStore(writes, () => errAsync(new Error('refused')))
 
