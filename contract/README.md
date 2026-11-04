@@ -1151,8 +1151,15 @@ gap is fixed in the contract files first, never worked around in a test.
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does
   not say, or is still exactly its screen's flow at the branch's merge base with `main`
   (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of
-  `main` compares the app it brings with the flows it brings), so a business commit may change
-  a transition the app has not changed yet, and a branch whose merge base with a local `main` cannot be found fails the
+  `main` compares the app it brings with the flows it brings) or at the commit the branch is at
+  (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
+  taken onto a branch whose app already follows its first, changes a flow the base may not have
+  at all), so a business commit may change a transition the app has not changed yet. The app's
+  routes likewise: a binding may wait for its route, and a route that still reads as its
+  binding did at the merge base (the same screen, the same path) is held to that binding as it
+  was there. The hook names both commits, and the cache of the unit tests keys on them, so a
+  pass never carries into another branch state with the same files. A branch whose merge base
+  with a local `main` cannot be found fails the
   hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A rename or a
   removal keeps the old name declared until the implementation has switched to the new name
   or stopped rendering the removed element, then a last business commit drops it.
