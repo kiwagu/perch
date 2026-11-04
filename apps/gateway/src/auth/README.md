@@ -339,14 +339,16 @@ account's email as it is then (a sign-in's `user.email`, a verification's answer
 fails is tried once more, then logged by its code; one the hub refuses is logged at once. The
 confirmation answered 200 already: the email did change.
 
-The mails of a reset, a confirmation and the two notices (`account-mails.ts`, written by
-`@workspace/email`) start at once and never hold the request, and speak the account's language,
-as the verification mail does: its settings' once it has settings, its sign-up's before; settings
-that could not be read send nothing (`mail:LOCALE_UNREADABLE`), and a mail that could not be read,
-written or sent is logged by its code, never with its address, its name or its link. A notice of a
-changed password links to the front's `/forgot-password`; the notice of a changed email carries
-no link. Every mail about an account reads whom it goes to in one place (`accountAddressee`,
-`account-addressee.ts`): the account's email, its own name and that language.
+The mails of a reset, a confirmation, a deletion and the three notices (`account-mails.ts`,
+written by `@workspace/email`) start at once and never hold the request, and speak the account's
+language, as the verification mail does: its settings' once it has settings, its sign-up's
+before; settings that could not be read send nothing (`mail:LOCALE_UNREADABLE`), and a mail that
+could not be read, written or sent is logged by its code, never with its address, its name or its
+link. A notice of a changed password links to the front's `/forgot-password`; the notices of a
+changed email and of a deleted account carry no link. Every mail about an account reads whom it
+goes to in one place (`accountAddressee`, `account-addressee.ts`): the account's email, its own
+name and that language. The notice of a deleted account is the one exception: it is written from
+the addressee read before the account went (`AccountTeardown.addressee`) and reads nothing.
 
 A deleted account leaves no row of itself in the directory (`AccountTeardown`,
 `account-teardown.ts`). Whom its notice goes to is read first, while the account exists
@@ -430,7 +432,8 @@ error carries one.
   (`password-hash.ts`), `AuthLog`, `authLogger` and `authErrorReporter` (`auth-log.ts`),
   `verificationMailer`, `verificationLink` and `VERIFY_EMAIL_PATH` (`verification-mail.ts`),
   `resetMailer` and `RESET_LINK_LIFETIME_S` (`reset-mail.ts`), `AccountMails`,
-  `RESET_PASSWORD_PATH`, `CONFIRM_EMAIL_PATH` and `FORGOT_PASSWORD_PATH` (`account-mails.ts`),
+  `RESET_PASSWORD_PATH`, `CONFIRM_EMAIL_PATH`, `DELETE_ACCOUNT_PATH` and `FORGOT_PASSWORD_PATH`
+  (`account-mails.ts`),
   `AccountPasswords` (`account-passwords.ts`: `requestReset`, `hash`, `reset`, `change`,
   `matches`), `ResetLinks` (`read`, `keepNewest`), `EmailChanges` (`ask`, `cancel`,
   `read`, `claim`, `move`; `CONFIRMATION_LINK_LIFETIME_MS`), `AccountDeletions` (`ask`,
