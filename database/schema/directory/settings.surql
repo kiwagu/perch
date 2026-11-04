@@ -11,6 +11,7 @@ DEFINE TABLE OVERWRITE settings SCHEMAFULL
     FOR select WHERE identity = $auth.id
     FOR create, update, delete NONE;
 
+-- @readonly
 DEFINE FIELD OVERWRITE identity ON settings TYPE record<identity>;
 DEFINE FIELD OVERWRITE locale ON settings TYPE string
   ASSERT $value IN ['en', 'es'];
