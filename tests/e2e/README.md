@@ -190,10 +190,22 @@ pages until the test lets them go, so a page cannot open an account's data meanw
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
+`src/support/browsers.ts`: what every browser a test opens is held to, from before its first
+page: `watchBrowser` (the front's security policy and the settled states), `expectWatched`
+(fails the test with what it reported) and `ownBrowser` (a browser context of the test's own,
+opened on first use and checked as it closes); the fixtures watch the test's own `page` the
+same way, and the step check reads `browsers`.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
-their workers report); the fixtures watch every browser a test opens.
+their workers report).
+`src/support/settled.ts`: `watchSettled`, which exposes `window.__perchSettledState` in every
+page of a browser context: the app's e2e build reports to it each state a screen's machine, or
+the frame's, settles in, with the page as `window.__perch.ui.anchors()` reads it then, and each
+report is held to the manifest the stand serves (`settledProblems` of `@workspace/ui-contract`).
+Of the anchors a screen renders only where its flow lists them, one the state does not render
+is not visible, and one it renders is on the page and visible; a test fails at its end with
+every problem a state it passed through showed, though no line of the test asks for it.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).

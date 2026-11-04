@@ -88,7 +88,7 @@ export function OrganisationContainer() {
       current: at,
     })
   }, [organisations, notes, session])
-  const { state, send, submit } = useScreenMachine(machine)
+  const { state, send, submit, renders } = useScreenMachine('organisation', machine)
   // An administrator sees the members: read when the page opens and after each change made here.
   const members = useMembers(
     organisations,
@@ -97,9 +97,8 @@ export function OrganisationContainer() {
   )
   const { errors } = state.context
   const shown = errors.of === key ? errors.codes : {}
-  const editing =
-    state.matches({ viewing: { 'note-items': 'editing' } }) ||
-    state.matches({ viewing: { 'note-items': 'saving' } })
+  // The note being edited shows its text area while the state renders it.
+  const editing = renders('organisation.notes.edit-textarea')
 
   return (
     <OrganisationView

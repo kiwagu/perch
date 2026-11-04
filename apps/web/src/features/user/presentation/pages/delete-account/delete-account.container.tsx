@@ -45,13 +45,13 @@ function AccountDeletion(props: { readonly token: string }) {
       }),
     [session, props.token],
   )
-  const { state, send } = useScreenMachine(machine)
+  const { state, send, renders } = useScreenMachine('user.delete-account', machine)
 
   return (
     <DeleteAccountView
       message={state.context.message}
       error={state.context.error}
-      linkDead={state.matches('link-dead')}
+      renders={renders}
       canDelete={state.can(DELETE_BUTTON)}
       guest={guest}
       onDelete={() => send(DELETE_BUTTON)}

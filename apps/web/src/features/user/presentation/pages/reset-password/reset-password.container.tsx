@@ -38,13 +38,13 @@ function ResetForm(props: { readonly token: string }) {
       }),
     [session, props.token],
   )
-  const { state, send, submit, actor } = useScreenMachine(machine)
+  const { state, send, submit, actor, renders } = useScreenMachine('user.reset-password', machine)
 
   return (
     <ResetPasswordView
       message={state.context.message}
       error={state.context.error}
-      linkDead={state.matches('link-dead')}
+      renders={renders}
       canSubmit={state.can({
         type: 'user.reset-password.submit-button',
         password: '',

@@ -98,9 +98,11 @@ export function createDeleteAccountMachine(deps: DeleteAccountMachineDeps) {
     context: { error: undefined, message: undefined },
     states: {
       asking: {
+        meta: { renders: ['user.delete-account.delete-button'] },
         on: { 'user.delete-account.delete-button': { target: 'deleting' } },
       },
       deleting: {
+        meta: { renders: ['user.delete-account.delete-button'] },
         entry: [{ type: 'clear', params: { anchor: ERROR } }],
         invoke: {
           src: 'platform.delete-account',
@@ -116,7 +118,7 @@ export function createDeleteAccountMachine(deps: DeleteAccountMachineDeps) {
         },
       },
       'link-dead': { type: 'final' },
-      done: { type: 'final' },
+      done: { type: 'final', meta: { renders: ['user.delete-account.sign-in-link'] } },
     },
   })
 }

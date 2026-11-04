@@ -129,12 +129,14 @@ export function createShellMachine(deps: ShellMachineDeps) {
         },
       },
       'opening-data': {
+        meta: { renders: ['app-shell.nav'] },
         on: {
           'platform.opened': { target: 'ready' },
           'platform.open-failed': { target: 'failed' },
         },
       },
       ready: {
+        meta: { renders: ['app-shell.nav'] },
         on: {
           'app-shell.locale-select': [
             { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
@@ -164,6 +166,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         },
       },
       crashed: {
+        meta: { renders: ['app-shell.nav', 'app-shell.reload-button'] },
         entry: CRASHED,
         exit: CRASH_GONE,
         on: {
@@ -191,12 +194,15 @@ export function createShellMachine(deps: ShellMachineDeps) {
         },
       },
       reloading: {
+        meta: { renders: ['app-shell.nav'] },
         invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
       },
       updating: {
+        meta: { renders: ['app-shell.nav'] },
         invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
       },
       installing: {
+        meta: { renders: ['app-shell.nav'] },
         invoke: {
           src: 'platform.install.prompt',
           onDone: { target: 'ready', actions: INSTALL_GONE },
@@ -204,12 +210,14 @@ export function createShellMachine(deps: ShellMachineDeps) {
         },
       },
       postponing: {
+        meta: { renders: ['app-shell.nav'] },
         invoke: {
           src: 'platform.install.postpone',
           onDone: { target: 'ready', actions: INSTALL_GONE },
         },
       },
       failed: {
+        meta: { renders: ['app-shell.sign-out-here-button'] },
         on: {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
@@ -218,6 +226,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         },
       },
       'signing-out': {
+        meta: { renders: ['app-shell.sign-out-here-button'] },
         invoke: {
           src: 'platform.sign-out',
           onDone: { target: 'signed-out', actions: TO_SIGN_IN },
