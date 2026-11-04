@@ -325,24 +325,39 @@ describe('the deletion region', () => {
     expect(sent.can(SEND)).toBe(true)
   })
 
-  it.each([
-    'data:INVALID_CREDENTIALS',
-    'data:LAST_ADMIN',
-    'data:RATE_LIMITED',
-    'data:OFFLINE',
-  ] as const)('says why %s refused it and keeps the password as typed', async (code) => {
+  it('says an account that is the last admin of others is refused, and empties the password', async () => {
     const settings = screen({
-      requestAccountDeletion: () => errAsync(dataError(code, 'refused')),
+      requestAccountDeletion: () => errAsync(dataError('data:LAST_ADMIN', 'other members')),
     })
 
     settings.actor.send(SEND)
 
     const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
 
-    expect(refused.context).toMatchObject({ deletionError: code, deletionMessage: undefined })
-    expect(settings.emitted).not.toContainEqual(PASSWORD_CLEARED)
+    expect(refused.context).toMatchObject({
+      deletionError: 'data:LAST_ADMIN',
+      deletionMessage: undefined,
+    })
+    expect(settings.emitted).toContainEqual(PASSWORD_CLEARED)
     expect(refused.can(SEND)).toBe(true)
   })
+
+  it.each(['data:INVALID_CREDENTIALS', 'data:RATE_LIMITED', 'data:OFFLINE'] as const)(
+    'says why %s refused it and keeps the password as typed',
+    async (code) => {
+      const settings = screen({
+        requestAccountDeletion: () => errAsync(dataError(code, 'refused')),
+      })
+
+      settings.actor.send(SEND)
+
+      const refused = await waitFor(settings.actor, (state) => state.matches(IDLE))
+
+      expect(refused.context).toMatchObject({ deletionError: code, deletionMessage: undefined })
+      expect(settings.emitted).not.toContainEqual(PASSWORD_CLEARED)
+      expect(refused.can(SEND)).toBe(true)
+    },
+  )
 
   it('sends a fresh link on another press, and a refusal then takes the message away', async () => {
     const answers = [

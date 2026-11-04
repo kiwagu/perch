@@ -115,8 +115,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   password, `platform.request-account-deletion`, which mails the account's own email the link of
   the page that deletes it; the message `check-your-mail` says the account stays as it is until
   that page's button is pressed, the flow's `clear` empties the password once the mail went out,
-  and a refusal (`invalid-credentials` under the field, `last-admin`, `rate-limited`, `failed`
-  above the form) keeps it as typed; another press sends a fresh link), its screen's flow run as
+  and so it does on `last-admin` above the form, a right password that nothing more can use here
+  (the guard `deletionBlocked`); any other refusal (`invalid-credentials` under the field,
+  `rate-limited`, `failed` above the form) keeps it as typed; another press sends a fresh link),
+  its screen's flow run as
   its machine (`application/settings/settings-machine/`: the theme, language, password, email and
   deletion regions of one parallel state, `machine.ts` assembling `password-region.ts`,
   `email-region.ts` and `deletion-region.ts`, held to `contract/domain/screens/settings.yaml` by
