@@ -279,7 +279,7 @@ flow:
         src: platform.reload
         onDone:
           target: crashed
-          description: Only while the page has not loaded again; the message stays.
+          description: Only while the page has not loaded again; the crash message shows again.
     updating:
       description: The page loads again on the version the server serves.
       meta: { renders: [ app-shell.nav ] }
