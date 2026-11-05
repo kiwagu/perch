@@ -176,6 +176,36 @@ const secretProblems = ({ screens }: Contract): Problem[] =>
   )
 
 /**
+ * `ranked` says a message shows the first of the codes raised before it shows, in the order of
+ * its `codes`: only a message ranks them, and a rank needs two codes or more, each once.
+ */
+function rankedProblems({ screens }: Contract): Problem[] {
+  const inScreens = locate(screens)
+
+  return declaredAnchors(screens).flatMap(({ def, at }) => {
+    if (def.ranked !== true) {
+      return []
+    }
+
+    if (def.kind !== 'message') {
+      return [inScreens([...at, 'ranked'], 'only a message ranks its codes')]
+    }
+
+    const codes = def.codes ?? []
+
+    if (codes.length < 2) {
+      return [inScreens([...at, 'ranked'], 'a ranked message carries two codes or more')]
+    }
+
+    return codes.flatMap((code, index) =>
+      codes.indexOf(code) < index
+        ? [inScreens([...at, 'codes', index], `"${code}" is ranked twice`)]
+        : [],
+    )
+  })
+}
+
+/**
  * The eye that shows or hides what a password input holds is derived by an input alone, and by a
  * secret one: on any other field there is nothing hidden for it to show.
  */
@@ -216,5 +246,6 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
   ...secretProblems(contract),
+  ...rankedProblems(contract),
   ...visibilityProblems(contract),
 ]

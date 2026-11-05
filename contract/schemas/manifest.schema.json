@@ -1081,6 +1081,11 @@
                     "description": "A code of the vocabulary (data-code)."
                   }
                 },
+                "ranked": {
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "fields": {
                   "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
                   "type": "object",
@@ -5485,6 +5490,11 @@
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
               "description": "A code of the vocabulary (data-code)."
             }
+          },
+          "ranked": {
+            "description": "The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it.",
+            "type": "boolean",
+            "const": true
           },
           "fields": {
             "description": "An error's codes, each with the field it concerns.",
