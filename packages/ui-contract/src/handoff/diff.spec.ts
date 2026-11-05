@@ -777,9 +777,11 @@ describe('diffContracts and the ranked messages', () => {
     const after = ranking()
     const anchor = after.screens.screens[0]?.anchors['sample.status-message']
 
-    if (anchor !== undefined) {
-      anchor.codes = ['failed', 'saved']
+    if (anchor === undefined) {
+      throw new Error('the fixture has no sample.status-message')
     }
+
+    anchor.codes = ['failed', 'saved']
 
     expect(formatChanges(diffContracts(before, after))).toBe('contract changes: none')
   })
