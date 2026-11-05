@@ -107,7 +107,7 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the app is starting, with the theme select and the language select; no screen is rendered.
-  opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, toast, crash message or message of the sync, update or install shows yet.
+  opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, crash message or message of the sync, update or install shows yet.
   ready: The open screen in the frame, with the navigation and the sync state for a signed-in account, the theme and language selects for a guest, the update and install messages when they apply.
   failed: app-shell.status says this device could not open the saved account's data, with app-shell.sign-out-here-button, the theme select and the language select; no screen is rendered.
   start-failed: app-shell.status says the app could not start on this device, with the theme select and the language select; no screen is rendered.
