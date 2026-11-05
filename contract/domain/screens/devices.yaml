@@ -84,7 +84,7 @@ flow:
         src: platform.sign-out-everywhere
         onDone:
           target: signed-out
-          description: Every device of the account signs out, this one included; the sign-in page says resend-after-sign-in instead when this device held changes not sent yet.
+          description: Every device of the account signs out, this one included.
           actions:
             - show: { user.sign-in.notice-message: [ signed-out-elsewhere ] }
             - navigate: /sign-in
