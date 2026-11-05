@@ -94,15 +94,15 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 1 |
-| app-shell | 21 | 63 |
+| app-shell | 21 | 65 |
 | user.confirm-email | 5 | 4 |
 | user.delete-account | 4 | 5 |
 | device | 10 | 1 |
 | user.forgot-password | 6 | 11 |
-| user.profile | 10 | 50 |
+| user.profile | 10 | 51 |
 | organisation | 30 | 12 |
 | user.reset-password | 15 | 9 |
-| user.settings | 27 | 21 |
+| user.settings | 27 | 22 |
 | user.sign-in | 19 | 40 |
 | user.verify-email | 7 | 6 |
 
