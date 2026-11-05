@@ -164,6 +164,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       questions: { added: [], removed: [] },
+      ranks: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
       notices: { added: [], removed: [] },
@@ -178,6 +179,7 @@ describe('diffContracts', () => {
       flows: { sample: { added: [], removed: [] } },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
+      descriptions: [],
     })
   })
   it('lists the composites, the states of the anchors both hold and the lines of each flow', () => {
@@ -447,7 +449,7 @@ describe('formatChanges', () => {
     const changes = diffContracts(undefined, fixtureContract())
 
     expect(formatChanges(changes).split('\n')).toEqual([
-      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 platform action added, 1 entity added, 5 fields added, 1 activity added, 3 platform action lines added in sign-out',
+      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 platform action added, 1 entity added, 5 fields added, 1 activity added, 3 platform action lines added in sign-out, 13 descriptions changed',
       'screens added: sample',
       'anchors added: sample.list, sample.list.row-item, sample.page, sample.save-button, sample.sign-out-button, sample.title-input',
       'codes added: failed, saved',
@@ -456,6 +458,36 @@ describe('formatChanges', () => {
       'fields added: thing.author, thing.created_at, thing.id, thing.size, thing.title',
       'activities added: thing',
       'platform action lines added in sign-out: code failed, param forgetUnsent: boolean, result: this device signs out',
+      'descriptions changed: activity thing new -> 62, activity thing data thing new -> 35, activity thing data thing.title new -> 27, activity thing state editing new -> 22, activity thing state editing on sample.save-button new -> 19, activity thing state saved new -> 31, model action thing.createThing new -> 13, model entity thing new -> 48, model field thing.id new -> 15, platform action sign-out new -> 22, platform action sign-out param forgetUnsent new -> 24, sample new -> 90, sample.page new -> 23',
+    ])
+  })
+  it('prints the descriptions changed last, each by its place with its length before and after', () => {
+    const before = fixtureContract()
+    const after = {
+      ...before,
+      descriptions: before.descriptions.flatMap((written) => {
+        switch (written.place) {
+          case 'sample.page':
+            return [{ ...written, text: `${written.text.slice(0, -1)}, with its form.` }]
+          case 'model field thing.id':
+            return []
+          default:
+            return [written]
+        }
+      }),
+    }
+
+    expect(formatChanges(diffContracts(before, after)).split('\n')).toEqual([
+      'contract changes: 2 descriptions changed',
+      'descriptions changed: model field thing.id 15 -> gone, sample.page 23 -> 38',
+    ])
+    expect(formatChanges(diffContracts(after, before)).split('\n')).toEqual([
+      'contract changes: 2 descriptions changed',
+      'descriptions changed: model field thing.id new -> 15, sample.page 38 -> 23',
+    ])
+    expect(diffContracts(before, after).descriptions).toEqual([
+      { place: 'model field thing.id', before: 15 },
+      { place: 'sample.page', before: 23, after: 38 },
     ])
   })
   it('prints the activities added and removed, then the transitions changed in each', () => {
@@ -695,6 +727,63 @@ describe('diffContracts and the questions before destructive actions', () => {
       added: ['thing-delete'],
       removed: [],
     })
+  })
+})
+
+describe('diffContracts and the ranked messages', () => {
+  /** The fixture contract with `sample.status-message`, its codes ranked in `order` when given. */
+  const ranking = (order?: readonly string[]): Contract => {
+    const contract = fixtureContract()
+    const [screen] = contract.screens.screens
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    screen.anchors['sample.status-message'] =
+      order === undefined
+        ? { kind: 'message', codes: ['saved', 'failed'] }
+        : { kind: 'message', codes: [...order], ranked: true }
+
+    return contract
+  }
+
+  it('lists a message that starts or stops ranking its codes, with its order', () => {
+    expect(diffContracts(ranking(), ranking(['saved', 'failed'])).ranks).toEqual({
+      added: ['sample.status-message ranks saved > failed'],
+      removed: [],
+    })
+    expect(diffContracts(ranking(['saved', 'failed']), ranking()).ranks).toEqual({
+      added: [],
+      removed: ['sample.status-message ranks saved > failed'],
+    })
+  })
+  it('lists a new order of a ranked message, which its codes alone do not show', () => {
+    const changes = diffContracts(ranking(['saved', 'failed']), ranking(['failed', 'saved']))
+
+    expect(changes.ranks).toEqual({
+      added: ['sample.status-message ranks failed > saved'],
+      removed: ['sample.status-message ranks saved > failed'],
+    })
+    expect(changes.anchorCodes).toEqual({ added: [], removed: [] })
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 ranked message added, 1 ranked message removed',
+      'ranked messages added: sample.status-message ranks failed > saved',
+      'ranked messages removed: sample.status-message ranks saved > failed',
+    ])
+  })
+  it('shows nothing for a new order of codes that are not ranked', () => {
+    const before = ranking()
+    const after = ranking()
+    const anchor = after.screens.screens[0]?.anchors['sample.status-message']
+
+    if (anchor === undefined) {
+      throw new Error('the fixture has no sample.status-message')
+    }
+
+    anchor.codes = ['failed', 'saved']
+
+    expect(formatChanges(diffContracts(before, after))).toBe('contract changes: none')
   })
 })
 

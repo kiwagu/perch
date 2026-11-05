@@ -43,7 +43,9 @@ export {
   activityFile,
   CONTRACT_DIR,
   COVERAGE_FILE,
+  DOMAIN_DIR,
   ENTITY_SCHEMA_FILE,
+  isBusinessFile,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
   PLATFORM_FILE,
@@ -95,3 +97,4 @@ export {
   VOCABULARY_SECTIONS,
   type Vocabulary,
 } from './vocabulary'
+export { readDescriptions, type WrittenDescription } from './written-descriptions'

@@ -43,6 +43,7 @@ export type ShellEvent =
   | { readonly type: 'platform.started' }
   | { readonly type: 'platform.opened' }
   | { readonly type: 'platform.open-failed' }
+  | { readonly type: 'platform.start-failed' }
   | { readonly type: 'platform.storage-blocked' }
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
   | { readonly type: 'app-shell.theme-select'; readonly theme: Theme }

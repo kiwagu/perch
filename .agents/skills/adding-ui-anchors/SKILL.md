@@ -64,9 +64,15 @@ code and the tests follow; the checks hold them to the contract.
    another anchor plus a derived suffix: the entries of a list `x.list` are
    `x.list.<object>-item`, never `x.list.item`.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
-   `description`, its `binding` (the model field, the action with its params, a route, the
+   `description` (what the element is for, in 200 characters at most, as every description of
+   `contract/domain` keeps; the hint of its field, which an editor shows, says what it leaves to
+   the structure, the platform, the model, the vocabulary and the flow, and `contract:diff`
+   shows its length before and after, `191 -> 340`), its `binding` (the
+   model field, the action with its params, a route, the
    search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
-   concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
+   concerns; `ranked: true` on a message whose codes more than one source may raise before it
+   shows, its `codes` then in rank order: of those raised, it shows the first),
+   `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds and of the actions its flow invokes against it, with the codes its
@@ -141,7 +147,8 @@ code and the tests follow; the checks hold them to the contract.
    vocabulary's tables) goes on the contract trunk, `contract/trunk`
    (`.cursor/rules/branch-reuse-first.mdc`), in the developer's modeling session, after the
    trunk has merged `main` with that landing: one card's commits, each decision a commit of
-   its own on top, never an amend. On the trunk, as on any branch, the hook lets the contract
+   its own on top, never an amend; the hook refuses a commit there that stages a file outside
+   the business layer, a merge aside. On the trunk, as on any branch, the hook lets the contract
    run ahead of the app (an anchor declared, not rendered yet, passes; an app's machine may
    lack what its flow added, and does nothing the flow does not say, or is still its flow at
    the branch's base; a scenario may wait for its test, which the landing on `main`
@@ -193,7 +200,8 @@ code and the tests follow; the checks hold them to the contract.
    bun run contract:coverage --write
    ```
 
-   Then `bun run check` before the commit.
+   Then `bun run check` before the commit; it fails a coverage block left behind
+   (`contract:coverage:check`), and so does the hook on `main`.
 9. **Hand over** the finished change: the output of `bun run contract:diff main` with the
    reason for each rename or removal (`references/templates.md`, "Hand-off"). This is the
    delivery; the review of step 5 came before the code.

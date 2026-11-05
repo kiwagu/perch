@@ -17,7 +17,10 @@ import {
 export interface SessionAccountDeps {
   readonly auth: GatewayAuth
   readonly storage: KeyValueStorage
-  /** Whether a session is open on this device now. */
+  /**
+   * Whether the session this browser keeps is the one of the account signed in here: its space
+   * open, or opening at the start. A session another tab saved for another account since is not.
+   */
   readonly signedIn: () => boolean
   /**
    * Signs this device out of the account `identity` if it is the one signed in here, as the
@@ -127,7 +130,7 @@ export class SessionAccount {
       : okAsync(session)
   }
 
-  /** The session this device is signed in with, if one is open. */
+  /** The session this device is signed in with, its account's space open or opening; none without. */
   #openSession(): AccountSession | undefined {
     const token = savedToken(this.#deps.storage)
 

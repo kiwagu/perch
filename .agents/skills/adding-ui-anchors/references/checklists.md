@@ -52,7 +52,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     `aria-label` from a translation key.
 14. **The checks.** `contract:check`, `contract:check:sources`, `contract:check:consumers`,
     `e2e:coverage`, then `contract:coverage --unmarked` (nothing unmarked) and
-    `contract:coverage --write`.
+    `contract:coverage --write`, which `contract:coverage:check` then finds current.
 15. **The hand-off.** The output of `bun run contract:diff main` (`templates.md`).
 
 ## A new field or action of an entity
@@ -153,4 +153,5 @@ means, so the same change:
 1. runs `bun run contract:coverage --unmarked` before and after;
 2. gives every element that entered or left the count an anchor or a marker with its reason;
 3. updates "How it is counted" and the specs beside the code;
-4. rewrites the block with `bun run contract:coverage --write`.
+4. rewrites the block with `bun run contract:coverage --write`; `bun run check` fails a block
+   left behind (`contract:coverage:check`).

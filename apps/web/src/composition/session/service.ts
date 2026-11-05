@@ -73,7 +73,14 @@ export class SessionService implements SessionPort {
     this.#account = new SessionAccount({
       auth: options.auth,
       storage: options.storage,
-      signedIn: () => this.#state.open() !== undefined,
+      // The account is signed in here while the start opens its space too: its own calls need only
+      // the session this browser keeps, never its data, as long as that session is still this
+      // account's and not one another tab saved for another account since.
+      signedIn: () => {
+        const here = this.#state.current()
+
+        return here !== undefined && savedIdentity(options.storage)?.id === here.id
+      },
       signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
       resetHere: (token) => this.#elsewhere.resetHere(token),
     })

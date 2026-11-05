@@ -56,15 +56,19 @@ developer approved; the code takes no architectural decision of its own.
    scenarios, the rows of the vocabulary's tables), the entry point of a feature, is then
    modelled on the contract trunk, `contract/trunk` (`.cursor/rules/branch-reuse-first.mdc`),
    with `main` merged in after that landing: the developer's modeling session, in the trunk's
-   own worktree and never reading the code, commits it under the feature's card, each
-   decision a commit of its own on top, never an amend. The developer reads the contract diff
-   (`bun run contract:diff main`, the commits by hash with their diff, the meta landing they
-   build on, the reason for every change, the gaps signalled) and says when the card's
-   contract is right: that is the OK, and the card names it with its trunk commits. The
-   feature's own branch then takes the card as one business commit (`git cherry-pick
-   --no-commit` of the card's commits, oldest first, then one `git commit` through the hook),
-   and the code and the tests, a test's scaffold included, start on top of it, in commits of
-   their own. The OK covers the card's commits, and the last business commit of a rename or a
+   own worktree, commits it under the feature's card, each decision a commit of its own on
+   top, never an amend; it may read the code, but writes none of it while it models, and the
+   hook refuses a trunk commit that stages anything but the business layer ("The checks").
+   The developer reads the contract diff (`bun run contract:diff main`, the commits by hash with
+   their diff, the meta landing they build on, the reason for every change, the gaps
+   signalled) and says when the card's contract is right: that is the OK, and the card names
+   it with its trunk commits. The feature's own branch then takes the card as one business
+   commit (`git cherry-pick --no-commit` of the card's commits, oldest first, then one
+   `git commit` through the hook), and the code and the tests, a test's scaffold included,
+   start on top of it, in commits of their own, which any session may write, the modeling
+   one included: the contract and the code are never written at the same time, and the
+   code never before its contract.
+   The OK covers the card's commits, and the last business commit of a rename or a
    removal, written on the feature's branch, which drops the old names the card listed: a
    rename or a removal keeps the old name declared until the code no longer renders it, then
    that commit drops it, with no new stop. Any other contract change found while writing the
@@ -177,10 +181,37 @@ Generated into `schemas/`, never edited by hand: `screen.schema.json` (one scree
 manifest). `bun run contract:schemas` writes them
 from the Zod sources of `@workspace/ui-contract`, and the contract check fails when they
 drift. `COVERAGE.md` is a note, not a contract file: `bun run contract:coverage --write`
-rewrites its block.
+rewrites its block, and `bun run contract:coverage:check` fails when the block is not what it
+would write (see "Coverage").
 
 The scenarios are part of the contract's input too, but they live in the e2e tree beside
 their tests, in `tests/e2e/scenarios/` (see "Scenarios").
+
+### Descriptions
+
+Each domain file says in prose what its parts are for, in its `description`s: a screen's own
+and each anchor's; a flow's own and each state's, region's and transition's, an outcome of an
+invoke among them; a route parameter's; a platform action's, each of its parameters' and a
+composite's; the model's own and each entity's, field's and action's; an activity's own and each
+piece of its data's, each visit's and each transition's. Four maps hold descriptions without
+the key: a screen's `states` (what is visible in each container state), the platform's `events`
+(what each means), a composite's `items` (each the description of the item anchor a screen
+derives from it) and the sentence guards of a `meta.guards` (a guard by failure code is
+structure). A platform action's `result` is no description: it is the action's behaviour, which
+the hand-over diff lists among the action's lines.
+
+A description says what its element is for, as a tester or a user tells it apart, and leaves
+out what the structure, another element, the platform, the model, the vocabulary or the flow
+already says, and what the engine says itself (see "What a screen leaves out"). The purpose of
+each field is the text its schema describes it with, which an editor shows as the field's hint:
+what the field is for, what it leaves to others and its budget, in one text. Every written
+description keeps at most 200 characters, whatever it describes, a screen's own included, and
+`contract:check` names one past it by its place and its length, with the purpose of its field.
+Written means as the file writes it: a description the engine derives, or that the loader fills
+in as it expands a shorter form, is no file's and keeps no budget. `contract:diff` lists each
+written description added, removed or changed by its place, with its length before and after
+(`app-shell.theme-select 191 -> 340`, `new -> 120`, `340 -> gone`), a shrink included, so a
+description that grows shows on review (see "Handing over a change").
 
 ### The layout of a screen file
 
@@ -239,7 +270,8 @@ anchors:
 
 A screen's `title` is what a reader calls it, and its `description` says what the screen is
 for: the task it serves and when it is shown, in one or two sentences, so an agent chooses
-the screen before it reads the anchors.
+the screen before it reads the anchors; never a list of its parts, which are its anchors, each
+with a description of its own.
 
 A screen's `bindings` are its routes in the router's format: `path` (static segments,
 `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a
@@ -319,7 +351,8 @@ An anchor's `binding` says what the element does or shows:
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
-values the element carries), `fields` (an error's codes, each with the field of its screen it
+values the element carries), `ranked` (`true` on a message whose `codes` are in rank order,
+see "Notices"), `fields` (an error's codes, each with the field of its screen it
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
@@ -740,7 +773,8 @@ contract:diff <ref>` lists the codes and the error fields the anchors gain or lo
 derived, so a constraint added to the model shows on review as the codes it adds, and the lines
 of each screen's flow, its states' addresses, what they render and what each guard by failure
 code takes among them, and every line of a flow added to or removed from a screen,
-descriptions aside, so a screen written shorter that loads to the same flow shows no change.
+descriptions aside, so a screen written shorter that loads to the same flow shows no change
+but the descriptions it stops writing, each listed as `<n> -> gone`.
 
 ## Activities
 
@@ -989,6 +1023,13 @@ that raised it (a notice an action raises just before its flow navigates shows o
 navigates to). Find it by its anchor and its code together, right after the action that
 raises it.
 
+A message whose codes more than one source may raise before it shows (an effect of the app
+and a `show` of a flow on its way there) says which one it shows in its structure:
+`ranked: true`, with its `codes` in rank order. Of the codes raised before it shows, it shows
+the first, and the others go with it. `contract:check` takes `ranked` on a message of two
+codes or more, each listed once, and `contract:diff` lists each ranked message with its order
+(see "Handing over a change").
+
 ## Scenarios
 
 A scenario is an instruction a person could follow by hand, one Markdown file each, in the
@@ -1101,6 +1142,7 @@ gap is fixed in the contract files first, never worked around in a test.
   vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
   every route of the screen declares, which only a field that holds no secret starts with;
   `secret` is on a field alone, and a `visibility-button` on a secret input alone;
+  `ranked` is on a message of two codes or more alone, each code listed once;
   a `composite` is on a secret input alone, names a composite of the platform, is opted into
   once per screen and derives no anchor the file writes or another composite derives, and no
   file writes `derivedFrom`; the platform's composites and the rows of the vocabulary's
@@ -1138,7 +1180,9 @@ gap is fixed in the contract files first, never worked around in a test.
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
-  names exists, and every device acts as a role of the vocabulary.
+  names exists, and every device acts as a role of the vocabulary; and every description the
+  domain files write keeps 200 characters, one past it named with the purpose of its field (see
+  "Descriptions").
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
@@ -1196,8 +1240,17 @@ gap is fixed in the contract files first, never worked around in a test.
 
 Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
 `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
-leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
+leaves it out, so a scenario may wait for its test. `bun run contract:coverage:check` runs
+where it runs and holds the block of `COVERAGE.md` to what `contract:coverage --write` writes
+(see "Coverage"). The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
+
+On `contract/trunk` the pre-commit hook first holds each commit to the business layer
+(`scripts/contract-trunk.ts`): a commit that stages a file outside `contract/domain/`,
+`contract/vocabulary.md` and `tests/e2e/scenarios/`, added, changed or deleted, a move counted
+by both its paths, fails, naming each such file and the branch it belongs on. The vocabulary
+counts whole, so an edit of its grammar there is the review's to see in the trunk's diff; a
+merge passes, as it brings `main` in with every layer.
 
 ## The manifest
 
@@ -1216,7 +1269,8 @@ meaning of the suffix as its `description` and, for a `visibility-button`, its v
 under `platform.composites`), the screens (each binding with its `example` link, each anchor
 with its description, written or derived), the platform section and the activities verbatim,
 the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
-its kind, its screen and its attributes (a secret input's `composite`, and `derivedFrom` on
+its kind, its screen and its attributes (a ranked message's `ranked`, a secret input's
+`composite`, and `derivedFrom` on
 the anchors a composite derives: `{ composite }` on its list, `{ composite, item }` on an
 item), one entry per line, so a search for an anchor in the manifest shows its facts.
 
@@ -1244,7 +1298,12 @@ a message shows when it carries a code, and an error when there is one.
 ## Coverage
 
 `bun run contract:coverage` prints how far the contract reaches, and `--write` puts the same
-block into `COVERAGE.md`. It is a report, not a gate.
+block into `COVERAGE.md`. It is a report, not a gate: no measure fails a commit. The block stays
+current, though: `bun run contract:coverage:check` (`ui-contract coverage --check`) fails when
+the block in `COVERAGE.md` is not what `--write` would write, naming that command, and says so
+in one line when it is. It runs in `bun run check` and in the pre-commit hook on a commit on
+`main`; on a branch, the contract trunk included, the hook leaves it out, so a block left behind
+fails `bun run check` before a landing, and the squash on `main`.
 
 1. **The model**, the measure of completeness: per entity of `model.schema.json`, each field
    and each action with the anchors whose `binding` names it, or `unbound`. A field may be
@@ -1288,10 +1347,12 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the platform actions added or removed
+error fields the anchors both sides hold gain or lose, the messages among them that rank their
+codes, with their order, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
-hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
-the lines of each platform action added, removed or changed), and below
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
+lines of each platform action added, removed or changed, and each written description added,
+removed or changed with its length before and after), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1321,6 +1382,9 @@ screen and kind. The derived parts of an anchor are listed by name,
 error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
+ranked message is listed with its order, `<anchor> ranks <code> > <code>`: a new order shows
+as its old line removed and its new one added, which its codes, compared as a set, do not
+show. A
 notice is listed by its action and its name, `<action>.<name>`. A composite is listed by its
 name. A screen's flow is listed as `flow lines added in <screen id>` and `flow lines
 removed in <screen id>`, one line per fact the flow says: its initial state and each
@@ -1331,9 +1395,9 @@ region by its path, `viewing.create-form.open`), each `entry` and `exit` effect,
 transition on an event with its target, guard and effects, each invoke with its input as
 JSON and its outcomes, each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
-sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
-change nothing that runs, so a screen file written shorter that loads to the same flow shows
-no change. A platform action is listed by its name, and its lines as `platform action lines
+sequence of more than one carries its position, `#<n>`. Descriptions are left out of a flow's
+lines, as they change nothing that runs, so a screen file written shorter that loads to the same
+flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
@@ -1341,8 +1405,17 @@ shows (`code rate-limited`), each role that may run it, its mail (`mail to email
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. The tests are in
-this repository, so the same change updates them, and the consumers check fails until it does.
+removed whole shows every line, as nothing else in the summary says its mail. Last, `descriptions
+changed:` lists, sorted by place, each description a domain file writes (see "Descriptions")
+that the change adds, removes or changes, with its length in characters before and after:
+`app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added,
+`340 -> gone` for one removed, and the same length on both sides for a text changed at its
+length. Its place names it alike at any ref (`app-shell.theme-select`, `user.profile` for the
+screen's own, `user.profile state loading` for a container state, `app-shell flow ready on
+platform.theme-set` for a transition, `platform event started`, `model field profile.name`), a
+renamed anchor's under its new name, so a description that grows clause by clause shows on
+review even where nothing that runs changed. The tests are in this repository, so the same
+change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 

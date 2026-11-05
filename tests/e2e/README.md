@@ -44,8 +44,8 @@ Each test carries the tag of its scenario's `tags`, written by hand in its `test
 `mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) but the tests named below, `organisation/base/`,
-`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation` and
-`open-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
+`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
+`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
@@ -268,7 +268,10 @@ seen there and holds it to its declaration). A failure prints no address, link o
   once, so the browser sees a network that stays the same, and forwards the loopback ports of
   `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
   address does not lead to the host's loopback either). IPv4 only: inside,
-  `localhost` resolves to ::1 first, where the front does not listen. Without pasta the launcher
+  `localhost` resolves to ::1 first, where the front does not listen. IPv6 is also switched off
+  inside before Playwright starts: the kernel gives the namespace's interface an IPv6 link-local
+  address whose duplicate address check ends a second or two later, an address change that
+  aborted the requests of the run's first test. Without pasta the launcher
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against

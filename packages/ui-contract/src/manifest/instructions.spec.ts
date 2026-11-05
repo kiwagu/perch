@@ -143,6 +143,11 @@ describe('instructionsOf', () => {
       'each marked `derivedFrom` with the composite and, for an item, its name',
     )
   })
+  it('says a ranked message shows the first of the codes raised before it shows', () => {
+    expect(instructions.screenMap).toContain(
+      '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it)',
+    )
+  })
   it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {
     expect(instructions.bindings).toContain(
       "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning",

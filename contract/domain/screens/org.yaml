@@ -181,7 +181,7 @@ states:
   error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the create form below it."
 flow:
   id: organisation
-  description: The page's independent areas, the create form, the new note, the notes' items, the invitation and the members, are the regions of viewing, each in one of its states at a time; choosing another organisation, or creating one, starts them all afresh.
+  description: The page's independent areas are the regions of viewing; choosing another organisation, or creating one, starts them all afresh.
   initial: viewing
   states:
     viewing:
