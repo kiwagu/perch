@@ -90,7 +90,7 @@ describe('a password reset in a browser signed in', () => {
     // As the channel's 4002 would have left it: nobody here, the token forgotten, the word set.
     expect(world.session.current()).toBeUndefined()
     expect(savedIdentity(world.storage)).toBeUndefined()
-    expect(savedToken(world.storage)).toBeUndefined()
+    expect(world.storage.get('perch.session.token')).toBeUndefined()
     expect(world.session.notice()).toBe('password-changed-elsewhere')
   })
 

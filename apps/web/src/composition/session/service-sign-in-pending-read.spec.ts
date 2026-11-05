@@ -119,7 +119,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     await settle()
 
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(savedToken(storage)).toBeUndefined()
+    expect(storage.get('perch.session.token')).toBeUndefined()
     expect(b.session.current()).toBeUndefined()
     expect(b.opened()).toEqual([])
 

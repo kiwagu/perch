@@ -99,7 +99,7 @@ describe("the deletion of an account by its mailed link's", () => {
     // As the channel's 4001 would have left it: nobody here, the token forgotten, the word set.
     expect(session.current()).toBeUndefined()
     expect(savedIdentity(storage)).toBeUndefined()
-    expect(savedToken(storage)).toBeUndefined()
+    expect(storage.get('perch.session.token')).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
   })
 
