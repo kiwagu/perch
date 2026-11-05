@@ -50,7 +50,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedTokenOf } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -162,9 +162,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     token: () => {
       const here = session.current()
 
-      return here !== undefined && savedIdentity(options.storage)?.id === here.id
-        ? savedToken(options.storage)
-        : undefined
+      return here === undefined ? undefined : savedTokenOf(options.storage, here.id)
     },
     device: () => deviceIdFrom(options.storage),
   }

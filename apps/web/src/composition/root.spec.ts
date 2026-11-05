@@ -30,6 +30,7 @@ import {
   memoryStorage,
   PASSWORD_RESET_KEY,
   saveDevice,
+  savedToken,
 } from './storage'
 
 let services: AppServices | undefined
@@ -201,7 +202,7 @@ describe('createAppRoot', () => {
     ])
     expect(deps?.device()).toBe(id)
     expect(devicesDeps?.device()).toBe(id)
-    expect(deps?.token()).toBe(storage.get('perch.session.token'))
+    expect(deps?.token()).toBe(savedToken(storage))
     expect(devicesDeps?.token()).toBe(deps?.token())
     // The memberships were read with the token the verification was given, naming this device.
     expect(organisationsFetch.sent).toEqual([

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
 import type { GatewayAuth } from '../gateway-auth'
-import { PASSWORD_RESET_KEY, savedIdentity, savedToken, TOKEN_KEY } from '../storage'
+import { PASSWORD_RESET_KEY, savedIdentity, savedToken, TOKEN_KEY, tokenRecord } from '../storage'
 
 const worlds: TestWorld[] = []
 
@@ -90,7 +90,7 @@ describe('a password reset in a browser signed in', () => {
     // As the channel's 4002 would have left it: nobody here, the token forgotten, the word set.
     expect(world.session.current()).toBeUndefined()
     expect(savedIdentity(world.storage)).toBeUndefined()
-    expect(world.storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(world.storage)).toBeUndefined()
     expect(world.session.notice()).toBe('password-changed-elsewhere')
   })
 
@@ -108,7 +108,7 @@ describe('a password reset in a browser signed in', () => {
 
     expect(world.session.current()?.id).toBe(me.id)
     expect(savedIdentity(world.storage)?.id).toBe(me.id)
-    expect(world.storage.get('perch.session.token')).toBeDefined()
+    expect(savedToken(world.storage)).toBeDefined()
     expect(world.session.notice()).toBeUndefined()
   })
 
@@ -140,7 +140,7 @@ describe('a password reset in a browser signed in', () => {
       { id: 'device-other-tab', label: 'Other tab' },
     )
 
-    world.storage.set(TOKEN_KEY, again._unsafeUnwrap().token)
+    world.storage.set(TOKEN_KEY, tokenRecord(me.id, again._unsafeUnwrap().token))
     answer()
     expect((await resetting).isOk()).toBe(true)
 

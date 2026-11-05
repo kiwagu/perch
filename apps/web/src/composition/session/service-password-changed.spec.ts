@@ -4,7 +4,7 @@ import { identityIdFactory } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
-import { type KeptDevice, memoryStorage, saveDevice } from '../storage'
+import { type KeptDevice, memoryStorage, saveDevice, savedToken } from '../storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -49,7 +49,7 @@ describe('a change of the password elsewhere', () => {
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(session.notice()).toBe('password-changed-elsewhere')
     // The session ended with the password: nothing waits to be signed out.
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()

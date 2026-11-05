@@ -104,7 +104,10 @@ modeling stage.
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
   "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
   same id in its hello and every organisation call sends it as `X-Perch-Device`. The
-  identity, its session token (`perch.session.token`, kept as it is until a sign-out)
+  identity, its session token (`perch.session.token`, kept until a sign-out together with the
+  identity it was issued to, `{ identity, token }`: the calls made for an identity, its own, the
+  organisation and device routes' and its channel's, read the token through its owner in one
+  step, never another account's that another tab saved since)
   and its memberships (`perch.session.memberships`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
@@ -218,9 +221,8 @@ modeling stage.
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
   sign-in is its own); an identity the tab shows without its space (the start opening it, or
   done without opening it) leaves at once when another tab signs it out, not behind the open,
-  which then attaches nothing, and the frame goes on as a guest's. The organisation and device
-  routes present the saved token only while it is the session of the identity the tab shows,
-  never one another tab saved since. A sign-in that finds another account saved is refused with
+  which then attaches nothing, and the frame goes on as a guest's. A sign-in that finds another
+  account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each

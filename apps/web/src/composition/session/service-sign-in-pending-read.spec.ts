@@ -27,6 +27,7 @@ import {
   savedTenantDatabases,
   savedToken,
   saveTenantDatabases,
+  tokenRecord,
 } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
@@ -118,7 +119,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     await settle()
 
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(b.session.current()).toBeUndefined()
     expect(b.opened()).toEqual([])
 
@@ -285,7 +286,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     const annToken = savedToken(storage) ?? expect.unreachable("Ann's token")
 
     // Another tab signs Ann in again meanwhile, with a token of its own.
-    storage.changeElsewhere('perch.session.token', 'token-of-the-other-tab')
+    storage.changeElsewhere('perch.session.token', tokenRecord(ann, 'token-of-the-other-tab'))
     fail()
 
     expect((await signingIn)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')

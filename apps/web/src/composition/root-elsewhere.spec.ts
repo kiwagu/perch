@@ -11,7 +11,14 @@ import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
 import type { AppRootOptions, AppServices } from './root'
-import { memoryStorage, saveDevice, savedIdentity } from './storage'
+import {
+  memoryStorage,
+  saveDevice,
+  savedIdentity,
+  savedToken,
+  TOKEN_KEY,
+  tokenRecord,
+} from './storage'
 
 let services: AppServices | undefined
 const cleanups: Array<() => Promise<void>> = []
@@ -85,6 +92,23 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     expect(tokens()).toEqual([undefined, undefined])
   })
 
+  it("presents no other account's token even read between another tab's writes, the identity saved still the tab's own", async () => {
+    const storage = memoryStorage()
+    const { overrides, tokens } = routes()
+
+    saveDevice(storage, ann)
+
+    const { result } = await bootRoot(cleanups, storage, [], [], overrides)
+
+    services = result._unsafeUnwrap()
+
+    // Another tab's sign-in of Bob wrote his token; it has not written his identity yet.
+    storage.set(TOKEN_KEY, tokenRecord(bob.identity.id, bob.token))
+
+    expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
+    expect(tokens()).toEqual([undefined, undefined])
+  })
+
   it('presents no token while the space opens once another tab saved another account, and offers no sign-out of that account when it does not open', async () => {
     const storage = memoryStorage()
     const deleted: IdentityId[] = []
@@ -118,7 +142,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     expect(failure).toMatchObject({ kind: 'open-failed', error: { code: 'data:OPEN_FAILED' } })
     expect(failure.kind === 'open-failed' ? failure.signOutHere : 'none').toBeUndefined()
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
-    expect(storage.get('perch.session.token')).toBe(bob.token)
+    expect(savedToken(storage)).toBe(bob.token)
     expect(deleted).toEqual([])
   })
 
@@ -147,7 +171,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
 
     expect((await (signOutHere ?? expect.unreachable('offered'))()).isOk()).toBe(true)
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
-    expect(storage.get('perch.session.token')).toBe(bob.token)
+    expect(savedToken(storage)).toBe(bob.token)
     expect(deleted).toEqual([])
   })
 

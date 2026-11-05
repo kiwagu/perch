@@ -27,11 +27,14 @@ import {
   memoryStorage,
   pendingRevokes,
   saveDevice,
+  savedIdentity,
   savedMemberships,
   savedTenantDatabases,
   savedToken,
   saveMemberships,
   TENANT_DATABASES_KEY,
+  TOKEN_KEY,
+  tokenRecord,
 } from '../storage'
 
 const ann: KeptDevice = {
@@ -317,7 +320,7 @@ describe('SessionService', () => {
     expect((await session.signOut())._unsafeUnwrap()).toBe('signed-out')
     expect(gateway.signOuts()).toBe(1)
     expect(destroyed()).toEqual([ann.identity.id])
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.identity')).toBeUndefined()
     // The gateway signed the token out: nothing waits to be signed out.
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
@@ -337,14 +340,14 @@ describe('SessionService', () => {
 
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
+    expect(savedToken(storage)).toBe(ann.token)
     expect(destroyed()).toEqual([])
 
     expect((await driveClock(session.signOut({ forgetUnsent: true })))._unsafeUnwrap()).toBe(
       'signed-out',
     )
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
@@ -450,7 +453,7 @@ describe('SessionService', () => {
     expect(stub.signOuts()).toBe(1)
     expect(destroyed()).toEqual([])
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
+    expect(savedToken(storage)).toBe(ann.token)
     expect(session.notice()).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
   })
@@ -608,7 +611,7 @@ describe('SessionService', () => {
     expect(a.destroyed()).toEqual([])
     expect(a.session.current()).toBeUndefined()
     expect(a.storage.get('perch.session.identity')).toBeUndefined()
-    expect(a.storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(a.storage)).toBeUndefined()
     expect(a.session.notice()).toBe('resend-after-sign-in')
     expect(a.storage.get('perch.session.signing-out')).toBeUndefined()
   })
@@ -930,7 +933,7 @@ describe('SessionService', () => {
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     expect(session.space()).toBeUndefined()
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.notice')).toBe('resend-after-sign-in')
     expect(session.notice()).toBe('resend-after-sign-in')
     await settle()
@@ -972,7 +975,7 @@ describe('SessionService', () => {
     await settle()
 
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
+    expect(savedToken(storage)).toBe(ann.token)
     expect(storage.get('perch.session.identity')).toContain(ann.identity.id)
     expect(session.notice()).toBeUndefined()
     expect(destroyed()).toEqual([])
@@ -986,13 +989,11 @@ describe('SessionService', () => {
 
     expect(context?.credentials()).toEqual({ token: ann.token })
 
-    // Another identity's token is not this channel's to present.
-    saveDevice(storage, {
-      identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
-      token: 'token-bob',
-      memberships: [],
-    })
+    // Another identity's token is not this channel's to present, even read while the identity
+    // saved is still its own: another tab's sign-in writes the token before the identity.
+    storage.set(TOKEN_KEY, tokenRecord(identityIdFactory.create(), 'token-bob'))
 
+    expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
     expect(context?.credentials()).toBeUndefined()
   })
 
@@ -1012,7 +1013,7 @@ describe('SessionService', () => {
     const storage = memoryStorage()
 
     storage.set('perch.session.identity', '{"id":"not-an-identity","email":"x"}')
-    storage.set('perch.session.token', 'token-x')
+    storage.set('perch.session.token', tokenRecord(identityIdFactory.create(), 'token-x'))
 
     const { session, opened } = await world({ storage })
 
@@ -1080,12 +1081,12 @@ describe('SessionService', () => {
 
     await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
 
-    const bobsToken = storage.get('perch.session.token')
+    const bobsToken = savedToken(storage)
     const second = session.signIn(annSignUp)
 
     // Ann's sign-in waits for Bob's: it has not touched the saved token.
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(storage.get('perch.session.token')).toBe(bobsToken)
+    expect(savedToken(storage)).toBe(bobsToken)
     holding.release()
 
     // One account per browser: Bob is signed in once Ann's turn comes.
@@ -1094,7 +1095,7 @@ describe('SessionService', () => {
     expect(session.current()?.email).toBe(bobSignUp.email)
     expect(session.space()?.identity.email).toBe(bobSignUp.email)
     expect(storage.get('perch.session.identity')).toContain(bobSignUp.email)
-    expect(storage.get('perch.session.token')).toBe(bobsToken)
+    expect(savedToken(storage)).toBe(bobsToken)
   })
 
   it('attaches nothing after close, neither the transition running nor those waiting behind it', async () => {
@@ -1626,8 +1627,8 @@ describe('SessionService devices', () => {
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
     // The token is dead, so nothing waits to be signed out; the browser keeps its id.
@@ -1647,7 +1648,7 @@ describe('SessionService devices', () => {
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
     await settle()
@@ -1659,7 +1660,7 @@ describe('SessionService devices', () => {
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
 
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([{ token: ann.token, device: id }])
 
     // Still offline at the next start: the token waits.
@@ -1702,7 +1703,7 @@ describe('SessionService devices', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(destroyed()).toEqual([])
     expect(session.notice()).toBe('resend-after-sign-in')
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([
       { token: ann.token, device: storage.get('perch.device.id') },
     ])
@@ -1850,7 +1851,7 @@ describe('SessionService devices', () => {
     expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
     expect(destroyed()).toEqual([ann.identity.id])
@@ -1882,7 +1883,7 @@ describe('SessionService devices', () => {
 
     expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
     expect(pendingRevokes(storage)).toEqual([])
     await settle()

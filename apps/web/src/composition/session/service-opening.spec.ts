@@ -12,7 +12,13 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
-import { type MemoryStorage, memoryStorage, saveDevice, savedIdentity } from '../storage'
+import {
+  type MemoryStorage,
+  memoryStorage,
+  saveDevice,
+  savedIdentity,
+  savedToken,
+} from '../storage'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -275,7 +281,7 @@ describe('another tab signing out the account whose space this tab has not opene
 
     expect((await tab.session.signOutUnopened(ann.identity.id)).isOk()).toBe(true)
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
-    expect(storage.get('perch.session.token')).toBe(bob.token)
+    expect(savedToken(storage)).toBe(bob.token)
     expect(tab.localsDeleted()).toEqual([])
   })
 })
