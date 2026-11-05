@@ -289,7 +289,7 @@ flow:
                 onError:
                   - target: idle
                     guard: deletionBlocked
-                    description: "The password was right, but the account is the only admin of an organisation with other members: nothing more can be done here, so the password is emptied and leaving for the organisation page asks nothing."
+                    description: The password was right, but the account is the only admin of an organisation with other members, so the password is emptied and leaving for the organisation page asks nothing.
                     actions:
                       - clear: user.settings.deletion.message
                       - show: user.settings.deletion.error
