@@ -144,4 +144,46 @@ describe('modelDescriptions', () => {
       },
     ])
   })
+  it("reads the subschemas of the document and of an entity beside their entities and fields, as the model's and the entity's", () => {
+    const model = {
+      description: 'The model.',
+      allOf: [{ description: 'A shape of the whole model.' }],
+      $defs: {
+        note: {
+          type: 'object',
+          description: 'A note.',
+          not: { description: 'A shape a note never has.' },
+          properties: { text: { type: 'string', description: 'Its text.' } },
+        },
+      },
+    }
+
+    expect(modelDescriptions(model)).toEqual([
+      { at: ['description'], kind: 'model', place: 'model', text: 'The model.' },
+      {
+        at: ['allOf', 0, 'description'],
+        kind: 'model',
+        place: 'model allOf 0',
+        text: 'A shape of the whole model.',
+      },
+      {
+        at: ['$defs', 'note', 'description'],
+        kind: 'entity',
+        place: 'model entity note',
+        text: 'A note.',
+      },
+      {
+        at: ['$defs', 'note', 'not', 'description'],
+        kind: 'entity',
+        place: 'model entity note not',
+        text: 'A shape a note never has.',
+      },
+      {
+        at: ['$defs', 'note', 'properties', 'text', 'description'],
+        kind: 'field',
+        place: 'model field note.text',
+        text: 'Its text.',
+      },
+    ])
+  })
 })

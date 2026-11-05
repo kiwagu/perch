@@ -71,21 +71,43 @@ function subschemasOf(schema: unknown): Subschema[] {
   })
 }
 
-/** The descriptions of a field's JSON Schema at `at`, its own and its subschemas'. */
-const fieldAt = (schema: unknown, at: readonly PropertyKey[], place: string): Found[] => [
-  ...describedAt(schema, at, 'field', place),
-  ...subschemasOf(schema).flatMap(([keys, subschema]) =>
-    fieldAt(subschema, [...at, ...keys], `${place} ${keys.map(String).join(' ')}`),
-  ),
+/** The descriptions of a JSON Schema at `at`, its own and its subschemas', all of one kind. */
+const schemaAt = (
+  schema: unknown,
+  at: readonly PropertyKey[],
+  kind: 'entity' | 'field' | 'model',
+  place: string,
+): Found[] => [
+  ...describedAt(schema, at, kind, place),
+  ...besideAt(schema, at, kind, place, new Set()),
 ]
+
+/**
+ * The descriptions of the subschemas of `schema` at `at`, save those under a keyword in
+ * `handled`, which the caller reads as what they are (the entities of the document's `$defs`,
+ * the fields of an entity's `properties`).
+ */
+const besideAt = (
+  schema: unknown,
+  at: readonly PropertyKey[],
+  kind: 'entity' | 'field' | 'model',
+  place: string,
+  handled: ReadonlySet<string>,
+): Found[] =>
+  subschemasOf(schema)
+    .filter(([keys]) => !handled.has(String(keys[0])))
+    .flatMap(([keys, subschema]) =>
+      schemaAt(subschema, [...at, ...keys], kind, `${place} ${keys.map(String).join(' ')}`),
+    )
 
 /** The descriptions of the entity `name` at `$defs.<name>`. */
 function entityAt(name: string, entity: unknown): Found[] {
   const at = ['$defs', name]
+  const place = `model entity ${name}`
   const { properties } = recordOf(entity)
 
   return [
-    ...describedAt(entity, at, 'entity', `model entity ${name}`),
+    ...describedAt(entity, at, 'entity', place),
     ...entriesOf(recordOf(recordOf(entity)['x-perch'])['actions']).flatMap(([action, def]) =>
       describedAt(
         def,
@@ -94,14 +116,19 @@ function entityAt(name: string, entity: unknown): Found[] {
         `model action ${name}.${action}`,
       ),
     ),
+    ...besideAt(entity, at, 'entity', place, new Set(['properties'])),
     ...entriesOf(properties).flatMap(([field, schema]) =>
-      fieldAt(schema, [...at, 'properties', field], `model field ${name}.${field}`),
+      schemaAt(schema, [...at, 'properties', field], 'field', `model field ${name}.${field}`),
     ),
   ]
 }
 
-/** The descriptions the model document `value` writes, in the order of the file. */
+/**
+ * The descriptions the model document `value` writes: its own, those of its other subschemas,
+ * then its entities'.
+ */
 export const modelDescriptions = (value: unknown): Found[] => [
   ...describedAt(value, [], 'model', 'model'),
+  ...besideAt(value, [], 'model', 'model', new Set(['$defs'])),
   ...entriesOf(recordOf(value)['$defs']).flatMap(([name, entity]) => entityAt(name, entity)),
 ]
