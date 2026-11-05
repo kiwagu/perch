@@ -1,13 +1,7 @@
 import type { IdentityId } from '@workspace/ids'
 
-import type { SessionNotice } from '../../platform/session.port'
+import { SESSION_NOTICES, type SessionNotice } from '../../platform/session.port'
 import { forgetNotice, type KeyValueStorage, savedNotice } from '../storage'
-
-/** The browser's words on what became of the device's data, which say more than any other. */
-const ABOUT_THE_DATA: ReadonlySet<SessionNotice> = new Set([
-  'resend-after-sign-in',
-  'delete-pending',
-])
 
 /** This tab's own word, with the account signed in here when it was left (none for a guest). */
 interface Own {
@@ -21,8 +15,8 @@ interface Own {
  * own holds what a screen of this tab showed there on its way (a fact of this tab's move, never
  * the browser's), in memory for the page's lifetime, so another tab's sign-in page cannot take it,
  * and a later write of the browser's slot cannot replace it; a sign-in of another account in this
- * tab drops it. The page decides as it reads: a word on the device's data wins, then this tab's
- * own, then the browser's; and it takes both.
+ * tab drops it. The page decides as it reads: of the two words it says the first by their rank
+ * (`SESSION_NOTICES`), and it takes both.
  */
 export class SignInNotice {
   readonly #storage: KeyValueStorage
@@ -46,13 +40,10 @@ export class SignInNotice {
 
   /** The word the sign-in page says now. */
   read(): SessionNotice | undefined {
+    const own = this.#own?.notice
     const browsers = savedNotice(this.#storage)
 
-    if (browsers !== undefined && ABOUT_THE_DATA.has(browsers)) {
-      return browsers
-    }
-
-    return this.#own?.notice ?? browsers
+    return SESSION_NOTICES.find((word) => word === own || word === browsers)
   }
 
   /** Takes both words away: the sign-in page said them. */

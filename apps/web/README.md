@@ -345,9 +345,8 @@ modeling stage.
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
   page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
   browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
-  with the browser's word, `perch.session.notice`, and says the browser's word on the device's
-  data, `resend-after-sign-in` or `delete-pending`, first, then the tab's own, then the
-  browser's other words, and takes both), one code each, while
+  with the browser's word, `perch.session.notice`, says the first of the two by the rank the
+  contract gives the anchor's codes, `SESSION_NOTICES`, and takes both), one code each, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).
