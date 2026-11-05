@@ -1,6 +1,7 @@
 /** The changes of the contract as the hand-over block: a summary line, then one line per list. */
 
 import type { Change } from './change'
+import type { DescriptionChange } from './description-changes'
 import type { ContractChanges } from './diff'
 
 /** The lists in the order of the block, each with its singular and plural noun. */
@@ -47,9 +48,25 @@ function linesOf(
     }))
 }
 
+/** A description changed, by its place: its length before and after, `new` or `gone` where it has none. */
+const lengthsOf = ({ place, before, after }: DescriptionChange): string =>
+  `${place} ${before ?? 'new'} -> ${after ?? 'gone'}`
+
+/** The descriptions changed as one list, when there are any. */
+const descriptionsOf = (changes: readonly DescriptionChange[]) =>
+  changes.length === 0
+    ? []
+    : [
+        {
+          summary: `${changes.length} ${changes.length === 1 ? 'description' : 'descriptions'} changed`,
+          line: `descriptions changed: ${changes.map(lengthsOf).join(', ')}`,
+        },
+      ]
+
 /**
  * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, the
- * lines changed in each screen's flow, and the lines changed in each platform action.
+ * lines changed in each screen's flow, the lines changed in each platform action, and last the
+ * descriptions changed, each with its length before and after.
  */
 const listsOf = (changes: ContractChanges) => [
   ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
@@ -62,6 +79,7 @@ const listsOf = (changes: ContractChanges) => [
   ...Object.entries(changes.actionLines).flatMap(([name, change]) =>
     linesOf(change, 'platform action line', 'platform action lines', ` in ${name}`),
   ),
+  ...descriptionsOf(changes.descriptions),
 ]
 
 /** The hand-over block: a summary line, then one line per list that is not empty. */

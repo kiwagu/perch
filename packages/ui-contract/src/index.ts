@@ -144,6 +144,7 @@ export {
   type CoverageMeasure,
   contractAt,
   countControls,
+  type DescriptionChange,
   diffContracts,
   FEATURES_DIR,
   type FileControl,

@@ -10,6 +10,7 @@ export {
   UI_KIT_DIR,
   UI_KIT_MODULE,
 } from './coverage'
+export { type DescriptionChange, descriptionChanges } from './description-changes'
 export { listDescriptions } from './descriptions'
 export { type ContractChanges, diffContracts } from './diff'
 export { flowLines } from './flow-lines'

@@ -66,7 +66,8 @@ code and the tests follow; the checks hold them to the contract.
 4. **The screen file.** Declare the anchor under the screen's `anchors`: its `kind`, a
    `description` (what the element is for, in 200 characters at most, as every description of
    `contract/domain` keeps; the hint of its field, which an editor shows, says what it leaves to
-   the structure, the platform, the model, the vocabulary and the flow), its `binding` (the
+   the structure, the platform, the model, the vocabulary and the flow, and `contract:diff`
+   shows its length before and after, `191 -> 340`), its `binding` (the
    model field, the action with its params, a route, the
    search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns), `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.

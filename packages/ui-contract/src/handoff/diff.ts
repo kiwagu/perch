@@ -9,8 +9,9 @@
  * platform actions declare, the transitions it adds or removes in each activity both contracts
  * hold, the lines of the flow it adds or removes in each screen both hold (a flow added or
  * removed whole, every line; so a contract written shorter that loads to the same flows shows no
- * change), the platform actions it adds or removes, and the lines of each platform action it
- * adds, removes or changes: its parameters, result, codes, roles, mail and notices.
+ * change), the platform actions it adds or removes, the lines of each platform action it adds,
+ * removes or changes (its parameters, result, codes, roles, mail and notices), and each
+ * description the files write that it adds, removes or changes, with its length on each side.
  */
 
 import { type Contract, codesOf, declaredAnchors } from '../check'
@@ -19,6 +20,7 @@ import type { Activity, AnchorDef, Flow } from '../files'
 import { actionLines } from './action-lines'
 import { branchesOf } from './activities'
 import { byName, type Change, changeOf } from './change'
+import { type DescriptionChange, descriptionChanges } from './description-changes'
 import { flowLines } from './flow-lines'
 
 export interface ContractChanges {
@@ -67,6 +69,8 @@ export interface ContractChanges {
    * added or removed whole shows every line: nothing else in the summary says its mail.
    */
   actionLines: Record<string, Change>
+  /** By place, each written description added, removed or changed, with its length on each side. */
+  descriptions: DescriptionChange[]
 }
 
 /** The platform actions of a contract by name; none for a contract left undefined. */
@@ -288,5 +292,6 @@ export function diffContracts(
     flows: flowChanges(before, after),
     actions: changeOf(Object.keys(actionsOf(before)), Object.keys(actionsOf(after))),
     actionLines: actionLineChanges(before, after),
+    descriptions: descriptionChanges(before, after, anchors.renamed),
   }
 }

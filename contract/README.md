@@ -206,7 +206,10 @@ what the field is for, what it leaves to others and its budget, in one text. Eve
 description keeps at most 200 characters, whatever it describes, a screen's own included, and
 `contract:check` names one past it by its place and its length, with the purpose of its field.
 Written means as the file writes it: a description the engine derives, or that the loader fills
-in as it expands a shorter form, is no file's and keeps no budget.
+in as it expands a shorter form, is no file's and keeps no budget. `contract:diff` lists each
+written description added, removed or changed by its place, with its length before and after
+(`app-shell.theme-select 191 -> 340`, `new -> 120`, `340 -> gone`), a shrink included, so a
+description that grows shows on review (see "Handing over a change").
 
 ### The layout of a screen file
 
@@ -767,7 +770,8 @@ contract:diff <ref>` lists the codes and the error fields the anchors gain or lo
 derived, so a constraint added to the model shows on review as the codes it adds, and the lines
 of each screen's flow, its states' addresses, what they render and what each guard by failure
 code takes among them, and every line of a flow added to or removed from a screen,
-descriptions aside, so a screen written shorter that loads to the same flow shows no change.
+descriptions aside, so a screen written shorter that loads to the same flow shows no change
+but the descriptions it stops writing, each listed as `<n> -> gone`.
 
 ## Activities
 
@@ -1326,8 +1330,9 @@ description (the screens, anchors, codes, entities, fields and activities added,
 renamed, the composites added or removed, the derived parts, the codes, the states and the
 error fields the anchors both sides hold gain or lose, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
-hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
-the lines of each platform action added, removed or changed), and below
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
+lines of each platform action added, removed or changed, and each written description added,
+removed or changed with its length before and after), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1367,9 +1372,9 @@ region by its path, `viewing.create-form.open`), each `entry` and `exit` effect,
 transition on an event with its target, guard and effects, each invoke with its input as
 JSON and its outcomes, each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
-sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
-change nothing that runs, so a screen file written shorter that loads to the same flow shows
-no change. A platform action is listed by its name, and its lines as `platform action lines
+sequence of more than one carries its position, `#<n>`. Descriptions are left out of a flow's
+lines, as they change nothing that runs, so a screen file written shorter that loads to the same
+flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
@@ -1377,8 +1382,17 @@ shows (`code rate-limited`), each role that may run it, its mail (`mail to email
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. The tests are in
-this repository, so the same change updates them, and the consumers check fails until it does.
+removed whole shows every line, as nothing else in the summary says its mail. Last, `descriptions
+changed:` lists, sorted by place, each description a domain file writes (see "Descriptions")
+that the change adds, removes or changes, with its length in characters before and after:
+`app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added,
+`340 -> gone` for one removed, and the same length on both sides for a text changed at its
+length. Its place names it alike at any ref (`app-shell.theme-select`, `user.profile` for the
+screen's own, `user.profile state loading` for a container state, `app-shell flow ready on
+platform.theme-set` for a transition, `platform event started`, `model field profile.name`), a
+renamed anchor's under its new name, so a description that grows clause by clause shows on
+review even where nothing that runs changed. The tests are in this repository, so the same
+change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 

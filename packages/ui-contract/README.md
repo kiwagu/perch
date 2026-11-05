@@ -97,11 +97,12 @@ for Bun.
     `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The place names it
     alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`,
     `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`,
-    `user.profile flow editing.save.saving-name onError #2`, `user.profile guard nameChanged`,
-    `user.sign-in binding /sign-in search email`, `platform action sign-up param email`,
-    `platform event started`, `platform composite password-rules`, `model`, `model entity
-    profile`, `model action profile.updateName`, `model field profile.name`, `activity session
-    state profile on <anchor> #1`. The `Contract` carries them as `descriptions`, read by
+    `user.profile flow editing.save`, `user.delete-account flow deleting onError #2` (the
+    second of its guarded alternatives), `user.profile guard nameChanged`, `user.sign-in
+    binding /sign-in search email`, `platform action sign-up param email`, `platform event
+    started`, `platform composite password-rules`, `model`, `model entity profile`, `model
+    action profile.updateName`, `model field profile.name`, `activity session state profile
+    on user.profile.sign-out-button`. The `Contract` carries them as `descriptions`, read by
     `loadContract`, so the contract at a git ref has those its files write there.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
@@ -369,11 +370,17 @@ for Bun.
     `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
     <type>`, `result: <text>`, `code <code>`, `role <role>`, `mail to <to> language
     <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
-    <screen>]`, descriptions aside;
+    <screen>]`, descriptions aside; and last `descriptions`, by `descriptionChanges(before,
+    after, renamed)` (`handoff/description-changes.ts`): sorted by place, each description of
+    `contract.descriptions` (`readDescriptions`, the reader the budget reads with) that one side
+    adds, removes or changes, a `DescriptionChange` `{ place, before?, after? }` with its length
+    in characters on each side it has, a renamed anchor's under its new name;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`,
     the lines of a flow as `flow lines added in <screen>` and those of a platform action as
-    `platform action lines added in <action>`.
+    `platform action lines added in <action>`, and last `descriptions changed: <place> <before>
+    -> <after>, ...`, `new` where it has no length before and `gone` where it has none after
+    (`app-shell.theme-select 191 -> 340`).
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -505,8 +512,9 @@ for Bun.
   parts, the codes, the states and the error fields the anchors both hold gain or lose
   (derived ones included), the fields that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each, the lines changed in each screen's flow, and the platform
-  actions with the lines changed in each, its mail among them, included; prints
+  transitions changed in each, the lines changed in each screen's flow, the platform
+  actions with the lines changed in each, its mail among them, and each written description
+  added, removed or changed with its length before and after, included; prints
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of
   `bun run contract:diff main` in its description.
