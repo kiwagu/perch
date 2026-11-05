@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: app-shell
 title: Application frame
-description: "The frame around every screen: the readiness status, the latest notice and the toasts, the navigation of a signed-in account, a guest's theme and language, this device's sync state, a reload when a screen crashes, a newer version is served or this version's sync protocol is refused, the reminder to install the app, and a way out of a device whose data will not open."
+description: "The frame around every screen: the app-wide status, messages, navigation and a guest's choices, whatever screen is open."
 frame: true
 flag: null
 bindings: []
