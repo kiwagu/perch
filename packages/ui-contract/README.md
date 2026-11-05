@@ -80,9 +80,11 @@ for Bun.
     problem of its file); both return beside their files `lines`, by id the line of each
     place of the file by its JSON path (`states.profile.on["user.profile.sign-out-button"]`,
     `steps[2]`), which the `Contract` carries as `activityLines` and `scenarioLines`. The
-    paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`, `MODEL_FILE`,
-    `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and the five
-    schema files.
+    paths: `CONTRACT_DIR`, `DOMAIN_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`,
+    `MODEL_FILE`, `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and
+    the five schema files; `isBusinessFile(path)` says whether a file is one of the business
+    layer's (a domain file, the vocabulary or a scenario): the only files a commit on the
+    contract trunk may stage.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
     fixed Markdown sections in any order) into a `Scenario` with `lines`, the line of each

@@ -57,8 +57,9 @@ developer approved; the code takes no architectural decision of its own.
    modelled on the contract trunk, `contract/trunk` (`.cursor/rules/branch-reuse-first.mdc`),
    with `main` merged in after that landing: the developer's modeling session, in the trunk's
    own worktree, commits it under the feature's card, each decision a commit of its own on
-   top, never an amend; it may read the code, but writes none of it while it models. The
-   developer reads the contract diff (`bun run contract:diff main`, the commits by hash with
+   top, never an amend; it may read the code, but writes none of it while it models, and the
+   hook refuses a trunk commit that stages anything but the business layer ("The checks").
+   The developer reads the contract diff (`bun run contract:diff main`, the commits by hash with
    their diff, the meta landing they build on, the reason for every change, the gaps
    signalled) and says when the card's contract is right: that is the OK, and the card names
    it with its trunk commits. The feature's own branch then takes the card as one business
@@ -1201,6 +1202,13 @@ Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for
 `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
 leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
+
+On `contract/trunk` the pre-commit hook first holds each commit to the business layer
+(`scripts/contract-trunk.ts`): a commit that stages a file outside `contract/domain/`,
+`contract/vocabulary.md` and `tests/e2e/scenarios/`, added, changed or deleted, a move counted
+by both its paths, fails, naming each such file and the branch it belongs on. The vocabulary
+counts whole, so an edit of its grammar there is the review's to see in the trunk's diff; a
+merge passes, as it brings `main` in with every layer.
 
 ## The manifest
 
