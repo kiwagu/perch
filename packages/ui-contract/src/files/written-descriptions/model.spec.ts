@@ -191,12 +191,20 @@ describe('modelDescriptions', () => {
       properties: {
         'a not': { description: 'First.' },
         a: { not: { description: 'Second.' } },
+        'say "hi"': { description: 'A name with quotes.' },
+        'back\\slash': { description: 'A name with a backslash.' },
+        '': { description: 'An empty name.' },
+        'a\ttab': { description: 'A name with a tab.' },
       },
     }
 
     expect(modelDescriptions(model).map(({ place }) => place)).toEqual([
       'model properties "a not"',
       'model properties a not',
+      'model properties "say \\"hi\\""',
+      'model properties back\\slash',
+      'model properties ""',
+      'model properties "a\\ttab"',
     ])
   })
 })
