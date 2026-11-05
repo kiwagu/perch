@@ -143,6 +143,12 @@ const idSchema = z
     screen: screenNameSchema.describe('The id of the screen that declares the anchor.'),
     binding: anchorBindingSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()

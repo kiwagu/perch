@@ -4,7 +4,8 @@
  * it renames, the derived parts (a password input's visibility-button among them), the
  * composites the platform declares, the codes, the states and the error fields it adds or
  * removes on the anchors both hold (written or derived, so a constraint added to the model
- * shows as the code it gives), the fields that start or stop holding input, the actions that
+ * shows as the code it gives), the fields that start or stop holding input, the messages that
+ * rank their codes, with their order, the actions that
  * leave what the user typed behind and how each leave that would lose it asks, the notices the
  * platform actions declare, the transitions it adds or removes in each activity both contracts
  * hold, the lines of the flow it adds or removes in each screen both hold (a flow added or
@@ -40,6 +41,11 @@ export interface ContractChanges {
   inputs: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
+  /**
+   * As `<anchor> ranks <code> > <code>`, the messages that rank their codes, each with its order:
+   * a new order shows as the old line removed and the new one added.
+   */
+  ranks: Change
   /** As the action's name, the actions that leave what the user typed behind. */
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
@@ -272,6 +278,9 @@ export function diffContracts(
     ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],
+    ),
+    ranks: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.ranked === true ? [`ranks ${(def.codes ?? []).join(' > ')}`] : [],
     ),
     leaving: changeOf(
       before?.screens.platform.leaving ?? [],
