@@ -141,7 +141,8 @@ code and the tests follow; the checks hold them to the contract.
    vocabulary's tables) goes on the contract trunk, `contract/trunk`
    (`.cursor/rules/branch-reuse-first.mdc`), in the developer's modeling session, after the
    trunk has merged `main` with that landing: one card's commits, each decision a commit of
-   its own on top, never an amend. On the trunk, as on any branch, the hook lets the contract
+   its own on top, never an amend; the hook refuses a commit there that stages a file outside
+   the business layer, a merge aside. On the trunk, as on any branch, the hook lets the contract
    run ahead of the app (an anchor declared, not rendered yet, passes; an app's machine may
    lack what its flow added, and does nothing the flow does not say, or is still its flow at
    the branch's base; a scenario may wait for its test, which the landing on `main`
