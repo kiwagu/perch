@@ -12,14 +12,16 @@ import { useSignedOutUnrouted } from './signed-out-unrouted'
 /** Who the session says is signed in, as its subscribers hear it. */
 type SignedIn = Parameters<Parameters<SessionPort['subscribe']>[0]>[0]
 
-/** A session whose subscribers the test tells who is signed in now. */
-function tellingSession(): {
+/** A session signed in as `now`, whose subscribers the test tells who is signed in next. */
+function tellingSession(now: SignedIn): {
   readonly session: SessionPort
   tell(user: SignedIn): void
 } {
   const listeners = new Set<(user: SignedIn) => void>()
+  let current = now
   const session: SessionPort = {
     ...fakeSession().session,
+    current: () => current,
     subscribe: (listener) => {
       listeners.add(listener)
 
@@ -30,6 +32,8 @@ function tellingSession(): {
   return {
     session,
     tell: (user) => {
+      current = user
+
       for (const listener of listeners) {
         listener(user)
       }
@@ -38,13 +42,14 @@ function tellingSession(): {
 }
 
 const ann: NonNullable<SignedIn> = { id: identityIdFactory.create(), email: 'ann@example.test' }
+const bob: NonNullable<SignedIn> = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
 describe('useSignedOutUnrouted', () => {
-  it('tells the frame the account went away while it renders no screen, and only then', () => {
-    const { session, tell } = tellingSession()
+  it('tells the frame the account it shows went away while it renders no screen, and only then', () => {
+    const { session, tell } = tellingSession(ann)
     const actor = { send: vi.fn() }
     const { rerender, unmount } = renderHook(
-      ({ noScreen }) => useSignedOutUnrouted(session, actor, noScreen),
+      ({ noScreen }) => useSignedOutUnrouted(session, actor, noScreen, () => ann.id),
       { initialProps: { noScreen: true } },
     )
 
@@ -62,9 +67,35 @@ describe('useSignedOutUnrouted', () => {
     unmount()
   })
 
+  it.each([
+    ['signed out', undefined],
+    ['signed out, and another account signed in since', bob],
+  ])(
+    'tells the frame, as it starts listening, that the account it shows went away before: %s',
+    (_, now) => {
+      const { session } = tellingSession(now)
+      const actor = { send: vi.fn() }
+      const { unmount } = renderHook(() => useSignedOutUnrouted(session, actor, true, () => ann.id))
+
+      expect(actor.send).toHaveBeenCalledExactlyOnceWith({ type: 'platform.signed-out' })
+      unmount()
+    },
+  )
+
+  it("tells the frame of a guest's start nothing as it starts listening", () => {
+    const { session } = tellingSession(undefined)
+    const actor = { send: vi.fn() }
+    const { unmount } = renderHook(() =>
+      useSignedOutUnrouted(session, actor, true, () => undefined),
+    )
+
+    expect(actor.send).not.toHaveBeenCalled()
+    unmount()
+  })
+
   it('hears nothing before the session exists', () => {
     const actor = { send: vi.fn() }
-    const { unmount } = renderHook(() => useSignedOutUnrouted(undefined, actor, true))
+    const { unmount } = renderHook(() => useSignedOutUnrouted(undefined, actor, true, () => ann.id))
 
     expect(actor.send).not.toHaveBeenCalled()
     unmount()
