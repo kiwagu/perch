@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { SESSION_NOTICES, type SessionNotice } from '../../platform/session.port'
 import { memoryStorage, savedNotice, saveNotice } from '../storage'
 
 import { SignInNotice } from './sign-in-notice'
@@ -9,7 +10,32 @@ import { SignInNotice } from './sign-in-notice'
 const ann = identityIdFactory.create()
 const bob = identityIdFactory.create()
 
+const SLOT = [undefined, ...SESSION_NOTICES]
+const PAIRS = SLOT.flatMap((own) => SLOT.map((browsers) => [own, browsers] as const))
+
+/** Where `word` stands in the rank of `SESSION_NOTICES`; no word stands after every word. */
+const standing = (word: SessionNotice | undefined): number =>
+  word === undefined ? SESSION_NOTICES.length : SESSION_NOTICES.indexOf(word)
+
 describe("the word of this tab's sign-in page", () => {
+  it.each(PAIRS)(
+    "says the first by the rank of this tab's own %s and the browser's %s",
+    (own, browsers) => {
+      const storage = memoryStorage()
+      const notice = new SignInNotice(storage)
+
+      if (own !== undefined) {
+        notice.leave(own, undefined)
+      }
+
+      if (browsers !== undefined) {
+        saveNotice(storage, browsers)
+      }
+
+      expect(notice.read()).toBe(standing(own) <= standing(browsers) ? own : browsers)
+    },
+  )
+
   it("says the browser's word while this tab left none, and takes it", () => {
     const storage = memoryStorage()
     const notice = new SignInNotice(storage)
