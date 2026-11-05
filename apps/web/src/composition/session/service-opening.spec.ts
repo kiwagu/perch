@@ -12,11 +12,23 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
-import { type MemoryStorage, memoryStorage, saveDevice } from '../storage'
+import {
+  type MemoryStorage,
+  memoryStorage,
+  saveDevice,
+  savedIdentity,
+  savedToken,
+} from '../storage'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   token: 'token-ann',
+  memberships: [],
+}
+
+const bob = {
+  identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+  token: 'token-bob',
   memberships: [],
 }
 
@@ -81,6 +93,18 @@ async function annOpeningHeld() {
   return { ...tab, storage, open: held.resolve }
 }
 
+/** Another tab of the browser signs the account out: the token goes, then the identity. */
+function signedOutElsewhere(storage: MemoryStorage): void {
+  storage.changeElsewhere('perch.session.token', undefined)
+  storage.changeElsewhere('perch.session.identity', undefined)
+}
+
+/** Another tab of the browser signs `device` in: kept in one step, the identity heard last. */
+function signedInElsewhere(storage: MemoryStorage, device: typeof bob): void {
+  saveDevice(storage, device)
+  storage.changeElsewhere('perch.session.identity', storage.get('perch.session.identity'))
+}
+
 describe("the start's open of the saved identity's space", () => {
   it('names the saved identity while the space opens, and reads and writes wait for it', async () => {
     const held = deferred()
@@ -125,7 +149,7 @@ describe("the start's open of the saved identity's space", () => {
     stop()
   })
 
-  it('leaves nobody current when the space does not open, and what waited for it refuses', async () => {
+  it('keeps the saved identity current when its space does not open, and what waited for it refuses', async () => {
     const { session } = await world({
       storage: annSaved(),
       online: false,
@@ -139,7 +163,9 @@ describe("the start's open of the saved identity's space", () => {
 
     expect((await restoring)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
     expect((await read)._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
-    expect(session.current()).toBeUndefined()
+    // The account is still signed in on this device: its frame says its data did not open.
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect(session.space()).toBeUndefined()
   })
 
   it('adopts an organisation created while the space opens, once it is open', async () => {
@@ -178,5 +204,84 @@ describe("the start's open of the saved identity's space", () => {
       (await session.runner.read(profileById, { id: profileIdFactory.create() }))._unsafeUnwrapErr()
         .code,
     ).toBe('data:QUERY_FAILED')
+  })
+})
+
+describe('another tab signing out the account whose space this tab has not opened', () => {
+  it('leaves at once while the space opens: the open attaches nothing, and the start ends with nobody signed in', async () => {
+    const { session, storage, open } = await annOpeningHeld()
+    const told: Array<string | undefined> = []
+
+    session.subscribe((user) => told.push(user?.id))
+
+    const restoring = session.restore()
+
+    signedOutElsewhere(storage)
+
+    // At once, not behind the open: nothing more is asked in the account's name.
+    expect(session.current()).toBeUndefined()
+    expect(told).toEqual([undefined])
+
+    open()
+
+    expect((await restoring)._unsafeUnwrap()).toBeUndefined()
+    expect(session.space()).toBeUndefined()
+    expect(session.current()).toBeUndefined()
+    expect(told).toEqual([undefined])
+  })
+
+  it('follows the account another tab signs in next, once the open it left has ended', async () => {
+    const { session, storage, open } = await annOpeningHeld()
+    const restoring = session.restore()
+
+    signedOutElsewhere(storage)
+    signedInElsewhere(storage, bob)
+
+    expect(session.current()).toBeUndefined()
+
+    open()
+
+    expect((await restoring).isOk()).toBe(true)
+    await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
+    expect(session.current()?.id).toBe(bob.identity.id)
+  })
+
+  it('leaves at once once the space did not open', async () => {
+    const storage = annSaved()
+    const { session } = await world({
+      storage,
+      online: false,
+      refusedIdentities: [ann.identity.id],
+    })
+    const told: Array<string | undefined> = []
+
+    session.subscribe((user) => told.push(user?.id))
+
+    expect((await session.restore()).isErr()).toBe(true)
+    expect(session.current()?.id).toBe(ann.identity.id)
+
+    signedOutElsewhere(storage)
+
+    expect(session.current()).toBeUndefined()
+    expect(told).toEqual([undefined])
+  })
+
+  it('signs out on this device only the account whose space did not open, never one saved since', async () => {
+    const storage = annSaved()
+    const tab = await world({
+      storage,
+      online: false,
+      refusedIdentities: [ann.identity.id],
+    })
+
+    expect((await tab.session.restore()).isErr()).toBe(true)
+
+    // Another tab signed Ann out and Bob in; this tab has not heard of it yet.
+    saveDevice(storage, bob)
+
+    expect((await tab.session.signOutUnopened(ann.identity.id)).isOk()).toBe(true)
+    expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
+    expect(savedToken(storage)).toBe(bob.token)
+    expect(tab.localsDeleted()).toEqual([])
   })
 })

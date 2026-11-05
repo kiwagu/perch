@@ -10,7 +10,15 @@ import {
   signUpVerified,
   type TestWorld,
 } from '../__fixtures__/session'
-import { memoryStorage, saveDevice, savedIdentity } from '../storage'
+import {
+  type MemoryStorage,
+  memoryStorage,
+  saveDevice,
+  savedIdentity,
+  savedToken,
+  TOKEN_KEY,
+  tokenRecord,
+} from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -78,7 +86,7 @@ async function annOpening() {
 describe("a change of the signed-in account's password or email", () => {
   it('asks the gateway with the session this device holds, and stays signed in', async () => {
     const { session, auth, storage } = await signedIn()
-    const token = storage.get('perch.session.token')
+    const token = savedToken(storage)
     const device = storage.get('perch.device.id')
 
     expect((await session.changePassword(annSignUp.password, 'Secret-new1')).isOk()).toBe(true)
@@ -117,7 +125,7 @@ describe("a change of the signed-in account's password or email", () => {
     expect(auth.requests).toEqual([
       {
         kind: 'change-password',
-        token: storage.get('perch.session.token'),
+        token: savedToken(storage),
         device: storage.get('perch.device.id'),
       },
     ])
@@ -127,33 +135,47 @@ describe("a change of the signed-in account's password or email", () => {
     expect((await restoring).isOk()).toBe(true)
   })
 
-  it("asks nothing with another account's session that another tab saved while the space opens", async () => {
-    const { auth, storage, session, open, restoring } = await annOpening()
+  it.each([
+    [
+      'signed Ann out and Bob in',
+      (storage: MemoryStorage) =>
+        saveDevice(storage, {
+          identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+          token: 'token-bob',
+          memberships: [],
+        }),
+    ],
+    [
+      "wrote Bob's token, not yet his identity",
+      (storage: MemoryStorage) =>
+        storage.set(TOKEN_KEY, tokenRecord(identityIdFactory.create(), 'token-bob')),
+    ],
+  ])(
+    "asks nothing with another account's session that another tab saved while the space opens: it %s",
+    async (_, saved) => {
+      const { auth, storage, session, open, restoring } = await annOpening()
 
-    // Another tab signed Ann out and Bob in; this tab follows once its start is done.
-    saveDevice(storage, {
-      identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
-      token: 'token-bob',
-      memberships: [],
-    })
+      // This tab follows once its start is done.
+      saved(storage)
 
-    const asked = [
-      await session.changePassword(annSignUp.password, 'Secret-new1'),
-      await session.changeEmail('ann.new@example.test', annSignUp.password),
-      await session.requestAccountDeletion(annSignUp.password),
-    ]
+      const asked = [
+        await session.changePassword(annSignUp.password, 'Secret-new1'),
+        await session.changeEmail('ann.new@example.test', annSignUp.password),
+        await session.requestAccountDeletion(annSignUp.password),
+      ]
 
-    expect(asked.map((answer) => answer._unsafeUnwrapErr().code)).toEqual([
-      'data:AUTH_FAILED',
-      'data:AUTH_FAILED',
-      'data:AUTH_FAILED',
-    ])
-    expect(auth.requests).toEqual([])
+      expect(asked.map((answer) => answer._unsafeUnwrapErr().code)).toEqual([
+        'data:AUTH_FAILED',
+        'data:AUTH_FAILED',
+        'data:AUTH_FAILED',
+      ])
+      expect(auth.requests).toEqual([])
 
-    open()
+      open()
 
-    expect((await restoring).isOk()).toBe(true)
-  })
+      expect((await restoring).isOk()).toBe(true)
+    },
+  )
 })
 
 describe('the confirmation of a new email', () => {

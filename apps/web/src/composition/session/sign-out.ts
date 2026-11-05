@@ -97,17 +97,15 @@ export class SessionSignOut {
     return ended.andTee(release).orTee(release)
   }
 
-  /** Signs out the saved identity whose space did not open; see `SessionService.signOutUnopened`. */
-  unopened(): ResultAsync<void, DataError> {
-    const identity = savedIdentity(this.#host.options.storage)
-
-    if (!identity || this.#host.open()) {
+  /** Signs out `identity`, still the saved one, whose space did not open; see `SessionService.signOutUnopened`. */
+  unopened(identity: IdentityId): ResultAsync<void, DataError> {
+    if (savedIdentity(this.#host.options.storage)?.id !== identity || this.#host.open()) {
       return okAsync(undefined)
     }
 
     this.#pendingRevoke.forgetKeys('live')
 
-    return this.#deletion.deleteUnopened(identity.id).map(() => undefined)
+    return this.#deletion.deleteUnopened(identity).map(() => undefined)
   }
 
   /**
