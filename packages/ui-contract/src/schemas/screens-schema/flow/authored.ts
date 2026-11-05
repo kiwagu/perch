@@ -13,7 +13,10 @@
  *   handles the button nowhere gets it, and `by: <button>` writes it with the outcomes the
  *   screen decides.
  * - In the `onError` of an invoke, `show: <anchor>` shows one of the codes the failure of its
- *   action shows.
+ *   action shows: on a branch a guard by failure code guards, one of that guard's codes; on a
+ *   later branch, one of those the code-guarded branches before it leave.
+ * - An invoke, or a region written `by` its button, may say `toast: false`: the success of its
+ *   action shows no derived toast.
  */
 
 import { z } from '@workspace/zod'
@@ -21,7 +24,7 @@ import { z } from '@workspace/zod'
 import { anchorSchema, codeSchema } from '../../../names.schema'
 import { routePathSchema } from '../binding'
 
-import { flowSchemaOf } from './build'
+import { flowSchemaOf, toastOptOutSchema } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
 import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
@@ -47,8 +50,12 @@ export const showSomeSchema = z
   .describe('`show: { <anchor>: [codes] }`: the anchor shows one of these codes.')
 
 export const clearShortSchema = z
-  .strictObject({ clear: anchorSchema.describe('The anchor that shows no code any more.') })
-  .describe('`clear: <anchor>`: the anchor stops showing its code.')
+  .strictObject({
+    clear: anchorSchema.describe(
+      'The field to empty, or the anchor that carries codes and shows none any more.',
+    ),
+  })
+  .describe('`clear: <anchor>`: a field is emptied, or the anchor stops showing its code.')
 
 export const navigateShortSchema = z
   .strictObject({
@@ -89,6 +96,7 @@ export const controlRegionSchema = z
       .describe(
         'What follows when the action fails; absent, back to `idle` with the error of the part (`<part>.error`) showing the codes of the failure; a transition without a target goes back to `idle` too.',
       ),
+    toast: toastOptOutSchema.exactOptional(),
   })
   .describe(
     'The region of a button bound to one action, with the outcomes the screen decides: the rest comes from its binding.',
@@ -113,6 +121,7 @@ export const draftPatternSchema = z
 export const authoredFlowSchema = flowSchemaOf({
   transition: authoredTransitionSchema,
   effect: authoredEffectSchema,
+  toastOptOut: true,
   region: (parts) =>
     z
       .union([draftPatternSchema, controlRegionSchema, parts.region])

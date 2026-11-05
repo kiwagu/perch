@@ -6,9 +6,8 @@ import { isTenantKey, TENANT_KEY_PATTERN } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { accountEmail } from '../auth/account-email'
+import type { AuthSessions } from '../auth/auth-sessions'
 import { bearerCaller, bearerRefused } from '../auth/bearer-caller'
-import type { DeviceSessions } from '../auth/device-sessions'
-import type { IdentitySessions } from '../auth/identity-sessions'
 import type { RequestLimits } from '../limits/request-limits'
 import { tooMany } from '../limits/too-many'
 import { readBody } from '../read-body'
@@ -40,7 +39,7 @@ type Target =
   | { readonly kind: 'members'; readonly key: string }
   | { readonly kind: 'member'; readonly key: string; readonly identity: string }
 
-/** Answers a request of the identity its access token signs in, from the client address `from`. */
+/** Answers a request of the identity whose session it carries, from the client address `from`. */
 type Handler = (identity: IdentityId, request: Request, from: string) => Promise<Response>
 
 /** What `pathname` names; an organisation's own path (`/organisations/:key`) is not served. */
@@ -88,14 +87,15 @@ export interface OrganisationRoutesOptions {
 }
 
 /**
- * The organisation routes over HTTP, for the identity the device's access token signs in
- * (`Authorization: Bearer <access>`) on the device it names in `X-Perch-Device`, whose session
- * must be live. A refresh key is not taken here: a device whose access token no longer works
- * renews its pair first.
+ * The organisation routes over HTTP, for the identity whose live session the device's token holds
+ * (`Authorization: Bearer <token>`, the raw session token) on the device it names in
+ * `X-Perch-Device`, which must be the device the session was opened on.
  *
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
- *   hour per identity and 30 per client address.
+ *   hour per identity and 30 per client address. A caller whose account was deleted while the
+ *   creation waited for it answers 401 `unauthorized`, as a token that holds no session does,
+ *   and nothing is created.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
  * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
@@ -103,7 +103,7 @@ export interface OrganisationRoutesOptions {
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
  *
  * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
- * token signs nobody in or whose device has no live session, 401 `unauthorized`; a request that
+ * token holds no live session, or one of another device, 401 `unauthorized`; a request that
  * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
  * a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited` with `Retry-After`,
  * before the service is asked and counted only once the body follows its schema; a failure of the
@@ -111,8 +111,7 @@ export interface OrganisationRoutesOptions {
  * is not answered here (`undefined`), so the server can try its other routes.
  */
 export function organisationRoutes(
-  sessions: Pick<IdentitySessions, 'authenticate'>,
-  devices: Pick<DeviceSessions, 'bind'>,
+  sessions: Pick<AuthSessions, 'read'>,
   organisations: Organisations,
   options: OrganisationRoutesOptions,
 ): (request: Request, from: string) => Promise<Response | undefined> {
@@ -146,10 +145,15 @@ export function organisationRoutes(
       return tooMany(allowance)
     }
 
-    // The identity goes last: it is the one the access token signs in, whatever the body holds.
+    // The identity goes last: it is the one whose session the token holds, whatever the body holds.
     return (await organisations.create({ ...body.data, identity })).match(
       (membership) => Response.json({ membership }, { status: 201 }),
-      errorResponse,
+      // An identity gone by the creation's turn had its account deleted after its session was
+      // read: the session went with it, so the answer is the one to a token that holds none.
+      (error) =>
+        'kind' in error && error.code === 'no-such-identity'
+          ? bearerRefused()
+          : errorResponse(error),
     )
   }
 
@@ -237,7 +241,7 @@ export function organisationRoutes(
       )
     }
 
-    const caller = await bearerCaller(sessions, devices, request)
+    const caller = await bearerCaller(sessions, request)
 
     return match(caller)
       .with({ kind: 'caller' }, ({ identity }) => handler(identity, request, from))

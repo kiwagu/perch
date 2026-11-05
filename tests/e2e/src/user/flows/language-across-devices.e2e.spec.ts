@@ -6,40 +6,51 @@ test.describe('Keep the language of an account on every device', { tag: '@full' 
     page,
     secondDevice,
   }) => {
-    await test.step('1. On device A, open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+    const select = page.getByTestId('user.settings.locale-select')
+
+    await test.step('1. On device A, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
+      await page.goto('/settings')
       await appReady(page)
-      await expect(page.getByTestId('user.profile.heading')).toBeVisible()
+      // The select takes a choice once the account's settings are on the device.
+      await expect(select).toBeEnabled()
     })
 
-    await test.step('2. On device A, choose [value:es] in [app-shell.locale-select]', async () => {
-      await page.getByTestId('app-shell.locale-select').click()
-      await page.locator('[data-testid="app-shell.locale-select.option"][data-value="es"]').click()
-      // Expected: After step 2 device A shows [app-shell.locale-select] with [value:es] at once
-      await expect(page.getByTestId('app-shell.locale-select')).toHaveAttribute('data-value', 'es')
+    await test.step('2. On device A, choose [value:es] in [user.settings.locale-select]', async () => {
+      await select.click()
+      await page
+        .locator('[data-testid="user.settings.locale-select.option"][data-value="es"]')
+        .click()
+      // Expected: After step 2 device A shows [user.settings.locale-select] with [value:es] at once
+      await expect(select).toHaveAttribute('data-value', 'es')
     })
 
     const deviceB =
-      await test.step('3. On device B, sign in with the same account and wait for [/me]', async () => {
+      await test.step('3. On device B, sign in with the same account, wait for [/me] and open [/settings]', async () => {
         const b = await secondDevice.signIn()
 
-        // Expected: After step 3 device B shows [app-shell.locale-select] with [value:es], with no
-        //   choice made on device B
-        await expect(b.getByTestId('app-shell.locale-select')).toHaveAttribute('data-value', 'es', {
-          timeout: 10_000,
-        })
+        await b.getByTestId('app-shell.nav.settings-link').click()
+        // Expected: After step 3 device B shows [user.settings.locale-select] with [value:es], with
+        //   no choice made on device B
+        await expect(b.getByTestId('user.settings.locale-select')).toHaveAttribute(
+          'data-value',
+          'es',
+          { timeout: 10_000 },
+        )
 
         return b
       })
 
-    await test.step('4. On device A, choose [value:en] in [app-shell.locale-select]', async () => {
+    await test.step('4. On device A, choose [value:en] in [user.settings.locale-select]', async () => {
       const loads = pageLoads(deviceB)
 
-      await page.getByTestId('app-shell.locale-select').click()
-      await page.locator('[data-testid="app-shell.locale-select.option"][data-value="en"]').click()
-      // Expected: After step 4 device B shows [app-shell.locale-select] with [value:en], without a
-      //   reload
-      await expect(deviceB.getByTestId('app-shell.locale-select')).toHaveAttribute(
+      await expect(select).toBeEnabled()
+      await select.click()
+      await page
+        .locator('[data-testid="user.settings.locale-select.option"][data-value="en"]')
+        .click()
+      // Expected: After step 4 device B shows [user.settings.locale-select] with [value:en], without
+      //   a reload
+      await expect(deviceB.getByTestId('user.settings.locale-select')).toHaveAttribute(
         'data-value',
         'en',
         { timeout: 10_000 },

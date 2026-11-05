@@ -19,16 +19,16 @@ Where: [/org] on device A (user A, administrator) and [/org] on device B (user B
 ## Scenario: A member changes only its own notes, an administrator any, and both see every change
 
 ### Steps
-1. On device B, sign up as user B and wait for [/me]
-2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
+1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
+2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]
 3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]
 4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 5. On device B, open [/org]
 6. On device B, enter the note by B into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 7. On device B, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by B into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]
 8. On device A, click [organisation.notes.edit-button] on the note by B, enter the note by B edited by A into [organisation.notes.edit-textarea] and click [organisation.notes.save-button]
-9. On device B, click [organisation.notes.delete-button] on the note by B
-10. On device A, click [organisation.notes.delete-button] on the note by A
+9. On device B, click [organisation.notes.delete-button] on the note by B and confirm with [app-shell.confirmation.confirm-button]
+10. On device A, click [organisation.notes.delete-button] on the note by A and confirm with [app-shell.confirmation.confirm-button]
 
 ### Expected result
 - After step 5 device B shows the note by A without [organisation.notes.mine-badge], [organisation.notes.edit-button] or [organisation.notes.delete-button]

@@ -1,44 +1,11 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
-import { MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
+import type { Effect, Flow, FlowState, FlowTransition } from '../files'
 import { fixtureContract } from '../manifest/manifest.fixture'
-import { git, repository, useRepositories, writeFiles } from '../repository.fixture'
 
-import { contractAt, diffContracts, formatChanges } from './diff'
-
-useRepositories()
-
-const FIXTURES = join(import.meta.dirname, '../__fixtures__')
-const SCENARIO = 'sample/base/thing'
-const SCREEN = 'contract/domain/screens/sample/$key.yaml'
-const ACTIVITY = 'contract/domain/activities/thing.yaml'
-
-const fixtureFiles = (): Record<string, string> => ({
-  [VOCABULARY_FILE]: readFileSync(join(FIXTURES, 'vocabulary.md'), 'utf8'),
-  [SCREEN]: readFileSync(join(FIXTURES, SCREEN), 'utf8'),
-  [ACTIVITY]: readFileSync(join(FIXTURES, ACTIVITY), 'utf8'),
-  [PLATFORM_FILE]: readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8'),
-  [MODEL_FILE]: readFileSync(join(FIXTURES, 'model.schema.json'), 'utf8'),
-  [scenarioFile(SCENARIO)]: readFileSync(join(FIXTURES, scenarioFile(SCENARIO)), 'utf8'),
-})
-
-/** A repository whose first commit has only a README and whose second adds `files`. */
-function history(files: Readonly<Record<string, string>>): string {
-  const root = repository({ 'README.md': '# sample\n' }, ['README.md'])
-
-  git(root, 'commit', '--quiet', '-m', 'first')
-  git(root, 'tag', 'first')
-
-  writeFiles(root, files)
-  git(root, 'add', '--all')
-  git(root, 'commit', '--quiet', '-m', 'second')
-
-  return root
-}
+import { diffContracts } from './diff'
+import { formatChanges } from './format-changes'
 
 /** The fixture contract with one anchor renamed, one code added and one field removed. */
 function changed(before: Contract): Contract {
@@ -69,6 +36,70 @@ function changed(before: Contract): Contract {
   thing.fields = fields
 
   return after
+}
+
+/**
+ * The fixture contract with the state of `sample.list` removed, a composite declared by the
+ * platform and the `saving` state failing back to itself rather than to `editing`.
+ */
+function reshaped(before: Contract): Contract {
+  const after = structuredClone(before)
+  const [screen] = after.screens.screens
+  const list = screen?.anchors['sample.list']
+  const saving = screen?.flow?.states['saving']
+  const onError = saving?.type === 'parallel' ? undefined : saving?.invoke?.onError
+
+  if (
+    screen === undefined ||
+    list === undefined ||
+    saving === undefined ||
+    saving.type === 'parallel' ||
+    saving.invoke === undefined ||
+    onError === undefined ||
+    Array.isArray(onError)
+  ) {
+    throw new Error('the fixture lost its list or its saving state')
+  }
+
+  const { states: _states, ...stateless } = list
+
+  screen.anchors['sample.list'] = stateless
+  saving.invoke.onError = { ...onError, target: 'saving' }
+  after.screens.platform.composites = {
+    'password-rules': {
+      description: 'The rules a new password meets.',
+      list: 'password-rule-list',
+      itemState: 'met',
+      items: { length: 'At least eight characters.' },
+    },
+  }
+
+  return after
+}
+
+/** The plain state `name` of a flow, for a spec to change. */
+function plainState(flow: Flow, name: string): FlowState {
+  const state = flow.states[name]
+
+  if (state === undefined || state.type === 'parallel') {
+    throw new Error(`the flow has no plain state ${name}`)
+  }
+
+  return state
+}
+
+/** The fixture contract with the flow of its sample screen changed by `change`. */
+function withFlow(base: Contract, change: (flow: Flow) => void): Contract {
+  const contract = structuredClone(base)
+  const flow = contract.screens.screens[0]?.flow
+
+  if (flow === undefined) {
+    throw new Error('the fixture has no flow')
+  }
+
+  change(flow)
+
+  return contract
 }
 
 /** A visit to the sample screen, as each state of the fixture's activity is. */
@@ -125,9 +156,17 @@ describe('diffContracts', () => {
         removed: [],
         renamed: [{ from: 'sample.save-button', to: 'sample.store-button' }],
       },
+      derived: { added: [], removed: [] },
+      composites: { added: [], removed: [] },
       codes: { added: ['spare'], removed: [] },
       anchorCodes: { added: [], removed: [] },
+      anchorStates: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
+      inputs: { added: [], removed: [] },
+      questions: { added: [], removed: [] },
+      leaving: { added: [], removed: [] },
+      unsavedInput: { added: [], removed: [] },
+      notices: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
@@ -136,6 +175,25 @@ describe('diffContracts', () => {
         removed: [],
         transitions: { thing: { added: [], removed: [] } },
       },
+      flows: { sample: { added: [], removed: [] } },
+      actions: { added: [], removed: [] },
+      actionLines: { 'sign-out': { added: [], removed: [] } },
+    })
+  })
+  it('lists the composites, the states of the anchors both hold and the lines of each flow', () => {
+    const changes = diffContracts(before, reshaped(before))
+
+    expect(changes.composites).toEqual({ added: ['password-rules'], removed: [] })
+    expect(changes.anchorStates).toEqual({ added: [], removed: ['sample.list loading'] })
+    expect(changes.flows).toEqual({
+      sample: {
+        added: ['saving onError -> saving show sample.save-button: failed'],
+        removed: ['saving onError -> editing show sample.save-button: failed'],
+      },
+    })
+    expect(diffContracts(reshaped(before), before).composites).toEqual({
+      added: [],
+      removed: ['password-rules'],
     })
   })
   it('lists the codes and the error fields gained or lost by the anchors both contracts hold', () => {
@@ -168,7 +226,152 @@ describe('diffContracts', () => {
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
     })
+    screen.anchors['sample.title-input'] = {
+      ...screen.anchors['sample.title-input'],
+      kind: 'input',
+      holdsInput: false,
+    }
+
+    expect(diffContracts(before, more).inputs).toEqual({
+      added: [],
+      removed: ['sample.title-input holds input'],
+    })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists the derived parts the anchors both contracts hold start or stop rendering', () => {
+    const eye = structuredClone(after)
+
+    Object.assign(eye.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    expect(diffContracts(after, eye).derived).toEqual({
+      added: ['sample.title-input.visibility-button'],
+      removed: [],
+    })
+    expect(diffContracts(eye, after).derived).toEqual({
+      added: [],
+      removed: ['sample.title-input.visibility-button'],
+    })
+    expect(formatChanges(diffContracts(after, eye)).split('\n')).toEqual([
+      'contract changes: 1 derived anchor added',
+      'derived anchors added: sample.title-input.visibility-button',
+    ])
+  })
+  it('lists a toast code a new model action derives as an anchor code added', () => {
+    const withToast = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+      const screen = contract.screens.screens[0]
+
+      if (screen === undefined) {
+        throw new Error('the fixture has no screen')
+      }
+
+      screen.anchors['sample.toast'] = {
+        kind: 'toast',
+        ...(codes.length > 0 ? { codes: [...codes] } : {}),
+      }
+
+      return contract
+    }
+
+    expect(diffContracts(withToast([]), withToast(['note-created'])).anchorCodes).toEqual({
+      added: ['sample.toast note-created'],
+      removed: [],
+    })
+  })
+  it('lists the codes of the contract, the derived toast codes in and the rule row out', () => {
+    const toasts = (codes: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      if (codes.length > 0) {
+        contract.vocabulary.codes['<object>-<verb>ed'] = {
+          where: 'app-shell.toast',
+          meaning: 'the success of an action of the model',
+        }
+      }
+
+      contract.screens.toasts = codes.map((code) => ({
+        anchor: 'app-shell.toast',
+        code,
+        action: `note.${code}`,
+      }))
+
+      return contract
+    }
+
+    expect(diffContracts(toasts([]), toasts(['note-created', 'note-deleted'])).codes).toEqual({
+      added: ['note-created', 'note-deleted'],
+      removed: [],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts([])).codes).toEqual({
+      added: [],
+      removed: ['note-created'],
+    })
+    expect(diffContracts(toasts(['note-created']), toasts(['note-updated'])).codes).toEqual({
+      added: ['note-updated'],
+      removed: ['note-created'],
+    })
+  })
+  it('lists how each leave that would lose unsaved input asks, as it changes', () => {
+    const asking = structuredClone(before)
+
+    asking.screens.platform.unsavedInput = {
+      question: 'sample.leave-dialog',
+      screen: 'question',
+      actions: 'question',
+      unload: 'browser',
+      state: 'never',
+      flow: 'never',
+      elsewhere: 'cannot',
+    }
+
+    const quieter = structuredClone(asking)
+
+    if (quieter.screens.platform.unsavedInput !== undefined) {
+      quieter.screens.platform.unsavedInput.unload = 'never'
+    }
+
+    expect(diffContracts(before, asking).unsavedInput.added).toEqual([
+      'actions: question',
+      'elsewhere: cannot',
+      'flow: never',
+      'question: sample.leave-dialog',
+      'screen: question',
+      'state: never',
+      'unload: browser',
+    ])
+    expect(diffContracts(asking, quieter).unsavedInput).toEqual({
+      added: ['unload: never'],
+      removed: ['unload: browser'],
+    })
+    expect(formatChanges(diffContracts(asking, quieter))).toContain(
+      'unsaved-input entries added: unload: never',
+    )
+  })
+  it('lists the notices each platform action declares, as they come and go', () => {
+    const noticing = (names: readonly string[]): Contract => {
+      const contract = structuredClone(before)
+
+      Object.assign(contract.screens.platform.actions['sign-out'] ?? {}, {
+        notices: names.map((name) => ({ name, to: 'account', language: 'account' })),
+      })
+
+      return contract
+    }
+
+    expect(diffContracts(before, noticing(['signed-out'])).notices).toEqual({
+      added: ['sign-out.signed-out'],
+      removed: [],
+    })
+    expect(diffContracts(noticing(['signed-out']), noticing(['password-changed'])).notices).toEqual(
+      { added: ['sign-out.password-changed'], removed: ['sign-out.signed-out'] },
+    )
+    expect(formatChanges(diffContracts(noticing(['signed-out']), before)).split('\n')).toEqual([
+      'contract changes: 1 notice removed, 1 platform action line removed in sign-out',
+      'notices removed: sign-out.signed-out',
+      'platform action lines removed in sign-out: notice signed-out to account language account',
+    ])
   })
   it('lists the activities added and removed, and the transitions changed in each on both sides', () => {
     expect(
@@ -215,38 +418,17 @@ describe('diffContracts', () => {
     ])
     expect(changes.anchors.removed).toEqual([])
     expect(changes.activities).toEqual({ added: ['thing'], removed: [], transitions: {} })
+    expect(changes.flows).toEqual({})
+    expect(changes.actions).toEqual({ added: ['sign-out'], removed: [] })
+    expect(changes.actionLines).toEqual({
+      'sign-out': {
+        added: ['code failed', 'param forgetUnsent: boolean', 'result: this device signs out'],
+        removed: [],
+      },
+    })
   })
   it('finds nothing between a contract and itself', () => {
     expect(formatChanges(diffContracts(before, before))).toBe('contract changes: none')
-  })
-})
-
-describe('contractAt', () => {
-  it('reads the contract files, the screen files, the activities and the scenarios at a ref', () => {
-    const contract = contractAt('HEAD', history(fixtureFiles()))
-
-    expect('missing' in contract ? [] : contract.activities.map(({ id }) => id)).toEqual(['thing'])
-    expect(contract).toEqual(fixtureContract())
-  })
-  it('finds no contract at a commit without the folder', () => {
-    expect(contractAt('first', history(fixtureFiles()))).toEqual({ missing: true })
-  })
-  it('refuses a ref that names no commit, and a contract that does not load', () => {
-    const { [MODEL_FILE]: _model, ...partial } = fixtureFiles()
-    const root = history(partial)
-
-    expect(() => contractAt('nowhere', root)).toThrow('"nowhere" names no commit')
-    expect(() => contractAt('HEAD', root)).toThrow(`HEAD has no ${MODEL_FILE}`)
-
-    const files = fixtureFiles()
-    const broken = history({
-      ...files,
-      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 2'),
-    })
-
-    expect(() => contractAt('HEAD', broken)).toThrow(
-      'the contract at HEAD does not load: contract/domain/platform.yaml:1: version:',
-    )
   })
 })
 
@@ -261,17 +443,19 @@ describe('formatChanges', () => {
       'fields removed: thing.title',
     ])
   })
-  it('counts in the plural and keeps the order screens, anchors, codes, entities, fields, activities', () => {
+  it('counts in the plural and keeps the order screens, anchors, codes, platform actions, entities, fields, activities', () => {
     const changes = diffContracts(undefined, fixtureContract())
 
     expect(formatChanges(changes).split('\n')).toEqual([
-      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 entity added, 5 fields added, 1 activity added',
+      'contract changes: 1 screen added, 6 anchors added, 2 codes added, 1 platform action added, 1 entity added, 5 fields added, 1 activity added, 3 platform action lines added in sign-out',
       'screens added: sample',
       'anchors added: sample.list, sample.list.row-item, sample.page, sample.save-button, sample.sign-out-button, sample.title-input',
       'codes added: failed, saved',
+      'platform actions added: sign-out',
       'entities added: thing',
       'fields added: thing.author, thing.created_at, thing.id, thing.size, thing.title',
       'activities added: thing',
+      'platform action lines added in sign-out: code failed, param forgetUnsent: boolean, result: this device signs out',
     ])
   })
   it('prints the activities added and removed, then the transitions changed in each', () => {
@@ -284,6 +468,332 @@ describe('formatChanges', () => {
       'activities removed: gone',
       'transitions added in thing: editing on sample.title-input -> saved, saved on sample.page -> editing',
       'transitions removed in thing: editing on sample.save-button -> saved',
+    ])
+  })
+  it('prints the composites, the anchor states and the flow lines changed in each screen', () => {
+    const before = fixtureContract()
+
+    expect(formatChanges(diffContracts(before, reshaped(before))).split('\n')).toEqual([
+      'contract changes: 1 composite added, 1 anchor state removed, 1 flow line added in sample, 1 flow line removed in sample',
+      'composites added: password-rules',
+      'anchor states removed: sample.list loading',
+      'flow lines added in sample: saving onError -> saving show sample.save-button: failed',
+      'flow lines removed in sample: saving onError -> editing show sample.save-button: failed',
+    ])
+  })
+})
+
+describe('diffContracts and the order and the inputs of a flow', () => {
+  const before = fixtureContract()
+  const given: FlowTransition = { guard: 'titleGiven', target: 'saving' }
+  const otherwise: FlowTransition = { target: 'editing' }
+  const clearError: Effect = { type: 'clear', params: { anchor: 'sample.save-button' } }
+  const showError: Effect = {
+    type: 'show',
+    params: { anchor: 'sample.save-button', codes: ['failed'] },
+  }
+  const flowsBetween = (from: (flow: Flow) => void, to: (flow: Flow) => void) =>
+    diffContracts(withFlow(before, from), withFlow(before, to)).flows
+
+  it('lists two guarded alternatives of an event swapped, as the first that holds is taken', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'editing').on = { 'sample.save-button': [given, otherwise] }
+        },
+        (flow) => {
+          plainState(flow, 'editing').on = { 'sample.save-button': [otherwise, given] }
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: [
+          'editing on sample.save-button #1 -> editing',
+          'editing on sample.save-button #2 -> saving [titleGiven]',
+        ],
+        removed: [
+          'editing on sample.save-button #1 -> saving [titleGiven]',
+          'editing on sample.save-button #2 -> editing',
+        ],
+      },
+    })
+  })
+  it('lists the anchors a state renders as a set: one listed more is a line, another order none', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'saving').meta = { renders: ['sample.list', 'sample.save-button'] }
+        },
+        (flow) => {
+          plainState(flow, 'saving').meta = {
+            renders: ['sample.title-input', 'sample.save-button', 'sample.list'],
+          }
+        },
+      ),
+    ).toEqual({ sample: { added: ['saving renders sample.title-input'], removed: [] } })
+  })
+  it('lists a guard written by failure code, and the codes it takes as they change', () => {
+    const guarded = (guard: string | { codes: string[] }) => (flow: Flow) => {
+      flow.meta = { guards: { titleGiven: 'the title input holds a title', limited: guard } }
+    }
+
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded({ codes: ['failed'] })),
+    ).toEqual({ sample: { added: ['guard limited takes failed'], removed: [] } })
+    expect(
+      flowsBetween(guarded({ codes: ['failed'] }), guarded({ codes: ['rate-limited', 'failed'] })),
+    ).toEqual({
+      sample: {
+        added: ['guard limited takes rate-limited, failed'],
+        removed: ['guard limited takes failed'],
+      },
+    })
+    expect(
+      flowsBetween(guarded('the network address tried too often'), guarded('it tried too often')),
+    ).toEqual({ sample: { added: [], removed: [] } })
+  })
+  it('lists two entry effects swapped, as the last one decides what shows', () => {
+    expect(
+      flowsBetween(
+        (flow) => {
+          plainState(flow, 'saving').entry = [clearError, showError]
+        },
+        (flow) => {
+          plainState(flow, 'saving').entry = [showError, clearError]
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: [
+          'saving entry #1 show sample.save-button: failed',
+          'saving entry #2 clear sample.save-button',
+        ],
+        removed: [
+          'saving entry #1 clear sample.save-button',
+          'saving entry #2 show sample.save-button: failed',
+        ],
+      },
+    })
+  })
+  it('lists an invoke whose input takes a parameter from elsewhere', () => {
+    expect(
+      flowsBetween(
+        () => undefined,
+        (flow) => {
+          const { invoke } = plainState(flow, 'saving')
+
+          if (invoke !== undefined) {
+            invoke.input = { title: { value: 'untitled' } }
+          }
+        },
+      ),
+    ).toEqual({
+      sample: {
+        added: ['saving invoke thing.updateThing {"title":{"value":"untitled"}}'],
+        removed: ['saving invoke thing.updateThing {"title":"sample.title-input"}'],
+      },
+    })
+  })
+})
+
+describe('diffContracts and a whole flow, and the addresses of its states', () => {
+  const before = fixtureContract()
+  const LINES = [
+    'editing on sample.save-button -> saving',
+    'initial editing',
+    'saving invoke thing.updateThing {"title":"sample.title-input"}',
+    'saving onDone -> editing show sample.save-button: saved navigate /sample/$key',
+    'saving onError -> editing show sample.save-button: failed',
+  ]
+  /** The fixture contract with no flow on its sample screen. */
+  const flowless = (): Contract => {
+    const contract = structuredClone(before)
+    const [screen] = contract.screens.screens
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    delete screen.flow
+
+    return contract
+  }
+
+  it('lists every line of a flow removed from a screen both contracts hold', () => {
+    expect(diffContracts(before, flowless()).flows).toEqual({
+      sample: { added: [], removed: LINES },
+    })
+  })
+  it('lists every line of a flow added to a screen both contracts hold', () => {
+    const changes = diffContracts(flowless(), before)
+
+    expect(changes.flows).toEqual({ sample: { added: LINES, removed: [] } })
+    expect(formatChanges(changes)).not.toBe('contract changes: none')
+  })
+  it('reports a screen added or removed whole under screens only', () => {
+    expect(diffContracts(undefined, before).flows).toEqual({})
+    expect(diffContracts(before, undefined).flows).toEqual({})
+  })
+  it("lists a state's address whose path or search value changes", () => {
+    const addressed = (path: string, search?: Record<string, string>) =>
+      withFlow(before, (flow) => {
+        plainState(flow, 'editing').meta = {
+          address: { path, ...(search === undefined ? {} : { search }) },
+        }
+      })
+
+    expect(diffContracts(addressed('/sample/$key'), addressed('/sample/$key/edit')).flows).toEqual({
+      sample: {
+        added: ['editing address /sample/$key/edit'],
+        removed: ['editing address /sample/$key'],
+      },
+    })
+    expect(
+      diffContracts(
+        addressed('/sample/$key', { tab: 'a' }),
+        addressed('/sample/$key', { tab: 'b' }),
+      ).flows,
+    ).toEqual({
+      sample: {
+        added: ['editing address /sample/$key {"tab":"b"}'],
+        removed: ['editing address /sample/$key {"tab":"a"}'],
+      },
+    })
+  })
+})
+
+describe('diffContracts and the questions before destructive actions', () => {
+  /** The fixture contract, `sample.save-button` asking with `code` when one is given. */
+  const asking = (code?: string): Contract => {
+    const contract = fixtureContract()
+    const anchor = contract.screens.screens[0]?.anchors['sample.save-button']
+
+    if (code !== undefined && anchor !== undefined) {
+      anchor.asks = { dialog: 'app-shell.confirmation', code }
+      contract.vocabulary.codes['<object>-<verb>'] = {
+        where: 'app-shell.confirmation',
+        meaning: 'the question before a destructive action',
+      }
+      contract.screens.questions = [
+        { anchor: 'app-shell.confirmation', code, action: 'thing.deleteThing' },
+      ]
+    }
+
+    return contract
+  }
+
+  it('lists a control that starts or stops asking, and the question codes, the rule row out', () => {
+    expect(diffContracts(asking(), asking('thing-delete')).questions).toEqual({
+      added: ['sample.save-button asks thing-delete'],
+      removed: [],
+    })
+    expect(diffContracts(asking('thing-delete'), asking()).questions).toEqual({
+      added: [],
+      removed: ['sample.save-button asks thing-delete'],
+    })
+    expect(diffContracts(asking(), asking('thing-delete')).codes).toEqual({
+      added: ['thing-delete'],
+      removed: [],
+    })
+  })
+})
+
+describe('diffContracts and the platform actions', () => {
+  const before = fixtureContract()
+
+  /** The platform action `name` of `contract`, for a spec to change. */
+  const actionOf = (contract: Contract, name: string) => {
+    const action = contract.screens.platform.actions[name]
+
+    if (action === undefined) {
+      throw new Error(`the contract has no platform action ${name}`)
+    }
+
+    return action
+  }
+
+  /**
+   * The fixture contract with `resend` added, an action that sends a mail, and the result and
+   * the description of `sign-out` rewritten.
+   */
+  const mailing = (): Contract => {
+    const contract = structuredClone(before)
+    const signOut = actionOf(contract, 'sign-out')
+
+    signOut.description = 'Signs this device out, at once.'
+    signOut.result = 'this device signs out and its data goes'
+    contract.screens.platform.actions['resend'] = {
+      description: 'Sends the mail again.',
+      params: { email: { type: 'string', description: 'The email of the account.' } },
+      result: 'the mail is on its way',
+      codes: ['failed'],
+      mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'token' } },
+    }
+
+    return contract
+  }
+  const RESEND_LINES = [
+    'code failed',
+    'mail to email language account link sample?token',
+    'param email: string',
+    'result: the mail is on its way',
+  ]
+
+  it('lists the actions added and removed, each with every line it declares', () => {
+    const added = diffContracts(before, mailing())
+    const removed = diffContracts(mailing(), before)
+
+    expect(added.actions).toEqual({ added: ['resend'], removed: [] })
+    expect(added.actionLines['resend']).toEqual({ added: RESEND_LINES, removed: [] })
+    expect(removed.actions).toEqual({ added: [], removed: ['resend'] })
+    expect(removed.actionLines['resend']).toEqual({ added: [], removed: RESEND_LINES })
+  })
+  it('lists the result of an action both hold as it changes, its description aside', () => {
+    expect(diffContracts(before, mailing()).actionLines['sign-out']).toEqual({
+      added: ['result: this device signs out and its data goes'],
+      removed: ['result: this device signs out'],
+    })
+  })
+  it('lists a parameter, a code and a role an action gains or loses', () => {
+    const changed = structuredClone(before)
+    const signOut = actionOf(changed, 'sign-out')
+
+    signOut.params = { everywhere: { type: 'boolean', description: 'Every device of it.' } }
+    signOut.codes = ['failed', 'rate-limited']
+    signOut.roles = ['admin']
+
+    expect(diffContracts(before, changed).actionLines['sign-out']).toEqual({
+      added: ['code rate-limited', 'param everywhere: boolean', 'role admin'],
+      removed: ['param forgetUnsent: boolean'],
+    })
+  })
+  it('lists a mail whose recipient, language or link changes, and a notice an action gains', () => {
+    const noticing = mailing()
+    const resend = actionOf(noticing, 'resend')
+
+    resend.mail = { to: 'email', language: 'email', link: { screen: 'sample', search: 'code' } }
+    actionOf(noticing, 'sign-out').notices = [
+      { name: 'signed-out', to: 'account', language: 'account', link: { screen: 'sample' } },
+    ]
+
+    expect(diffContracts(mailing(), noticing).actionLines).toEqual({
+      resend: {
+        added: ['mail to email language email link sample?code'],
+        removed: ['mail to email language account link sample?token'],
+      },
+      'sign-out': {
+        added: ['notice signed-out to account language account link sample'],
+        removed: [],
+      },
+    })
+  })
+  it('prints the actions added and removed, then the lines changed in each action', () => {
+    expect(formatChanges(diffContracts(before, mailing())).split('\n')).toEqual([
+      'contract changes: 1 platform action added, 4 platform action lines added in resend, 1 platform action line added in sign-out, 1 platform action line removed in sign-out',
+      'platform actions added: resend',
+      `platform action lines added in resend: ${RESEND_LINES.join(', ')}`,
+      'platform action lines added in sign-out: result: this device signs out and its data goes',
+      'platform action lines removed in sign-out: result: this device signs out',
     ])
   })
 })

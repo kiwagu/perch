@@ -2,12 +2,25 @@
  * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
  * words. Every kind, derived suffix, code, state, role and screen name the screens and the
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
- * permission to; every choice value belongs to an anchor that exists; every code listed is
+ * permission to; every choice value belongs to an anchor that exists and is no visibility-button,
+ * whose values its suffix defines; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
+ * The platform's composites and the vocabulary's "Composites" rows name each other both ways,
+ * and the item state of a composite is a row state.
+ * A code the loader derived on the toast anchor needs no row: the rule row
+ * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { screenOf } from '../anchors'
-import { jsonPath, MODEL_FILE, type Problem, type ScreensFile, VOCABULARY_FILE } from '../files'
+import { screenOf, VISIBILITY_BUTTON } from '../anchors'
+import {
+  CONFIRM_RULE_ROW,
+  jsonPath,
+  MODEL_FILE,
+  type Problem,
+  type ScreensFile,
+  TOAST_RULE_ROW,
+  VOCABULARY_FILE,
+} from '../files'
 
 import {
   type Contract,
@@ -18,6 +31,7 @@ import {
   knownAnchors,
   locate,
   statesOf,
+  visibilityButtonsOf,
 } from './contract'
 
 const FRAME_SCREEN = 'app-shell'
@@ -44,6 +58,17 @@ function screenProblems(contract: Contract): Problem[] {
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
   const anchors = declaredAnchors(screens)
+  // A code the loader derived on the toast anchor or the confirmation is vouched for by its rule
+  // row, not a row of its own.
+  const codesFor = (anchor: string): Readonly<Record<string, unknown>> => {
+    const derived = [...screens.toasts, ...screens.questions].filter(
+      (each) => each.anchor === anchor,
+    )
+
+    return derived.length === 0
+      ? vocabulary.codes
+      : { ...vocabulary.codes, ...Object.fromEntries(derived.map(({ code }) => [code, true])) }
+  }
 
   return screens.screens.flatMap((screen, index) => [
     ...(has(vocabulary.screenNames, screen.id)
@@ -64,7 +89,7 @@ function screenProblems(contract: Contract): Problem[] {
           ? []
           : [inScreens([...at, 'kind'], `"${def.kind}" is not a kind of the vocabulary`)]),
         ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
-        ...unlisted(def.codes, [...at, 'codes'], vocabulary.codes, 'a code'),
+        ...unlisted(def.codes, [...at, 'codes'], codesFor(anchor), 'a code'),
         ...unlisted(def.states, [...at, 'states'], states, 'a state'),
         ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
       ]),
@@ -90,8 +115,10 @@ const modelRoleProblems = ({ vocabulary, model }: Contract): Problem[] =>
       })),
   )
 
+const inVocabulary = (message: string): Problem => ({ file: VOCABULARY_FILE, message })
+
 function platformProblems({ vocabulary, screens }: Contract): Problem[] {
-  const { actions, status, reserved } = screens.platform
+  const { actions, composites, status, reserved } = screens.platform
   const inScreens = locate(screens)
   const unlisted = unlistedIn(inScreens)
   const appStates = Object.keys(vocabulary.appStates)
@@ -136,10 +163,27 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
             ),
           ]),
     ]),
+    ...Object.entries(composites ?? {}).flatMap(([name, { itemState }]) => [
+      ...(has(vocabulary.composites, name)
+        ? []
+        : [
+            inScreens(
+              ['platform', 'composites', name],
+              `"${name}" is not a composite of the vocabulary`,
+            ),
+          ]),
+      ...unlisted(
+        [itemState],
+        ['platform', 'composites', name, 'itemState'],
+        new Set(Object.keys(vocabulary.rowStates)),
+        'a row state',
+      ),
+    ]),
+    ...Object.keys(vocabulary.composites)
+      .filter((name) => !has(composites ?? {}, name))
+      .map((name) => inVocabulary(`composite "${name}" is documented but undeclared`)),
   ]
 }
-
-const inVocabulary = (message: string): Problem => ({ file: VOCABULARY_FILE, message })
 
 function validPattern(pattern: string): boolean {
   try {
@@ -153,6 +197,7 @@ function validPattern(pattern: string): boolean {
 
 function choiceValueProblems(contract: Contract): Problem[] {
   const known = knownAnchors(contract)
+  const visibilityButtons = visibilityButtonsOf(contract.screens)
 
   return Object.entries(contract.vocabulary.choiceValues).flatMap(([anchor, rows]) => {
     const values = Object.keys(rows)
@@ -170,6 +215,13 @@ function choiceValueProblems(contract: Contract): Problem[] {
       ...(known(anchor)
         ? []
         : [inVocabulary(`choice values of "${anchor}": no such anchor in the screens`)]),
+      ...(visibilityButtons.has(anchor)
+        ? [
+            inVocabulary(
+              `choice values of "${anchor}": a ${VISIBILITY_BUTTON} carries show or hide, the values of its suffix, and takes no rows`,
+            ),
+          ]
+        : []),
     ]
   })
 }
@@ -182,7 +234,31 @@ const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
     ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
+    ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
+    ...(screens.questions.length > 0 ? [CONFIRM_RULE_ROW] : []),
   ])
+
+/** Derived codes, the toasts' or the questions', want the vocabulary's rule row `row`. */
+function ruleRowProblems(
+  { vocabulary }: Contract,
+  noun: string,
+  derived: ReadonlyArray<{ readonly anchor: string; readonly code: string }>,
+  row: string,
+): Problem[] {
+  const [first] = derived
+
+  if (first === undefined || has(vocabulary.codes, row)) {
+    return []
+  }
+
+  const codes = derived.map(({ code }) => code).join(', ')
+
+  return [
+    inVocabulary(
+      `section "Codes": the ${noun} derived on ${first.anchor} (${codes}) want the rule row \`${row}\``,
+    ),
+  ]
+}
 
 function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
   const used = usedCodes(screens)
@@ -198,4 +274,6 @@ export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
+  ...ruleRowProblems(contract, 'toasts', contract.screens.toasts, TOAST_RULE_ROW),
+  ...ruleRowProblems(contract, 'questions', contract.screens.questions, CONFIRM_RULE_ROW),
 ]

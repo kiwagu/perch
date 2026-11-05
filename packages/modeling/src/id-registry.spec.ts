@@ -18,6 +18,8 @@ describe('checkIdRegistry', () => {
         device_session: table('dvs'),
         note: table('nte'),
         settings: table('stg'),
+        account: table('acc'),
+        verification: table('vrf'),
         member: table(),
         _replica_update: table(),
       },
@@ -36,6 +38,8 @@ describe('checkIdRegistry', () => {
         device_session: table('dvs'),
         note: table('nte'),
         settings: table('stg'),
+        account: table('acc'),
+        verification: table('vrf'),
         team: table('tem'),
       },
     }
@@ -57,6 +61,8 @@ describe('checkIdRegistry', () => {
       'the id registry declares device_session = dvs but the schema has no table device_session',
       'the id registry declares note = nte but table note has no -- @id nte',
       'the id registry declares settings = stg but the schema has no table settings',
+      'the id registry declares account = acc but the schema has no table account',
+      'the id registry declares verification = vrf but the schema has no table verification',
     ])
   })
 })

@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import type { Collected } from './collect'
+import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -20,7 +23,10 @@ const SCREENS: ScreensFile = {
       bindings: [],
       flag: null,
       entry: ['sample.page'],
-      anchors: { 'sample.page': { kind: 'page' }, 'sample.mode-select': { kind: 'select' } },
+      anchors: {
+        'sample.page': { kind: 'page' },
+        'sample.mode-select': { kind: 'select', derived: ['option'] },
+      },
     },
   ],
   files: ['contract/domain/screens/__root.yaml'],
@@ -31,6 +37,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   literals: [],
   derived: [],
   codes: [],
+  inputs: [],
   problems: [],
   ...part,
 })
@@ -49,6 +56,31 @@ const agreeing = (): Collected[] => [
 
 const printed = (collected: readonly Collected[]): string[] =>
   compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
+
+/** The contract with a field that holds input and one whose own change runs its action. */
+const WITH_FIELDS: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.form.name-input': { kind: 'input', holdsInput: true },
+      'sample.page.kind-select': { kind: 'select', holdsInput: false },
+    },
+  })),
+}
+
+/** The sources that render the two fields, with `inputs` as their holdsInput. */
+const withInputs = (inputs: Collected['inputs']): Collected[] => [
+  ...agreeing(),
+  source('x.tsx', {
+    literals: [
+      { anchor: 'sample.form.name-input', form: 'attribute', line: 3 },
+      { anchor: 'sample.page.kind-select', form: 'prop', line: 4 },
+    ],
+    inputs,
+  }),
+]
 
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
@@ -87,6 +119,60 @@ describe('compareWithContract', () => {
       compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
+  })
+  it("holds a field's holdsInput to the contract", () => {
+    expect(
+      compareWithContract(
+        withInputs([
+          { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+          { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+        ]),
+        WITH_FIELDS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
+      'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
+      'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+    ])
+    expect(
+      compareWithContract(
+        withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
+        WITH_FIELDS,
+        vocabulary,
+      ),
+    ).toEqual([])
+  })
+  it('wants the opt-out on the element of a field that holds no input, once it is rendered', () => {
+    expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary).map(formatProblem)).toEqual(
+      [
+        'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
+      ],
+    )
+    // On a branch the contract may run ahead: the element gains its opt-out in the code's commit.
+    expect(
+      compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead: true }).map(
+        formatProblem,
+      ),
+    ).toEqual([])
+  })
+
+  it('reports holdsInput on an anchor that is not a field', () => {
+    expect(
+      compareWithContract(
+        [
+          source('a.tsx', {
+            literals: [
+              { anchor: 'sample.page', form: 'attribute', line: 3 },
+              { anchor: 'sample.mode-select', form: 'prop', line: 4 },
+            ],
+            inputs: [{ anchor: 'sample.page', holdsInput: false, line: 3 }],
+          }),
+        ],
+        SCREENS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual(['a.tsx:3: "sample.page" is a page, not a field; only a field holds input'])
   })
   it('reports a literal declared twice at the second place, naming the first', () => {
     const collected = [
@@ -139,6 +225,55 @@ describe('compareWithContract', () => {
       'b.tsx:8: "thing" is not a derived suffix of contract/vocabulary.md',
     ])
   })
+  it('takes a derived part only where an anchor lists its suffix: a visibility-button on an input', () => {
+    const eye = (base?: string): Collected =>
+      source('eye.tsx', {
+        derived: [
+          { suffix: 'visibility-button', ...(base === undefined ? {} : { base }), line: 7 },
+        ],
+      })
+
+    expect(printed([...agreeing(), eye()])).toEqual([
+      'eye.tsx:7: "visibility-button": no anchor of contract/domain/screens lists it in its derived',
+    ])
+
+    const screens = structuredClone(WITH_FIELDS)
+
+    Object.assign(screens.screens[0]?.anchors['sample.form.name-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
+    const compared = (collected: readonly Collected[]): string[] =>
+      compareWithContract(collected, screens, vocabulary).map(formatProblem)
+
+    expect(compared([...rendered, eye()])).toEqual([])
+    expect(compared([...rendered, eye('sample.form.name-input')])).toEqual([])
+    expect(compared([...rendered, eye('sample.page')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.page", "visibility-button"): "sample.page" does not list "visibility-button" in its derived',
+    ])
+    expect(compared([...rendered, eye('sample.gone-input')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.gone-input", "visibility-button"): "sample.gone-input" is not in contract/domain/screens',
+    ])
+  })
+  it('holds a literal base, quoted, a template or wrapped, to the anchor that lists its suffix', () => {
+    const screens = structuredClone(SCREENS)
+
+    Object.assign(screens.screens[0]?.anchors ?? {}, {
+      'sample.title-input': { kind: 'input', derived: ['visibility-button'] },
+      'sample.leave-dialog': { kind: 'dialog', derived: ['confirm-button'] },
+    })
+
+    const file = join(import.meta.dirname, '../__fixtures__/sources/derived.tsx')
+    const derived = collectFromSource(readFileSync(file, 'utf8'), 'sources/derived.tsx')
+
+    expect(
+      compareWithContract([derived], screens, vocabulary, { ahead: true }).map(formatProblem),
+    ).toEqual([
+      `sources/derived.tsx:9: ${RUNTIME_SUFFIX}`,
+      'sources/derived.tsx:21: testIdFor("sample.gone-dialog", "confirm-button"): "sample.gone-dialog" is not in contract/domain/screens',
+    ])
+  })
   it('reports a code that is not in the vocabulary', () => {
     const collected = [
       ...agreeing(),
@@ -148,6 +283,26 @@ describe('compareWithContract', () => {
     expect(printed(collected)).toEqual([
       'b.tsx:4: "note:TEXT_REQUIRED" is not a code of contract/vocabulary.md',
     ])
+  })
+  it('takes a toast code the loader derived as a code of the contract', () => {
+    const collected = [
+      ...agreeing(),
+      source('b.tsx', { codes: [{ code: 'thing-created', form: 'key', line: 4 }] }),
+    ]
+
+    expect(printed(collected)).toEqual([
+      'b.tsx:4: "thing-created" is not a code of contract/vocabulary.md',
+    ])
+    expect(
+      compareWithContract(
+        collected,
+        {
+          ...SCREENS,
+          toasts: [{ anchor: 'sample.page', code: 'thing-created', action: 'thing.createThing' }],
+        },
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([])
   })
   it('keeps the problems of the collector, sorted by file and line', () => {
     const collected = [

@@ -45,7 +45,7 @@ describe('the full run of a suite', () => {
   })
 
   it('is not a run given a spec, a filter or any other argument', () => {
-    expect(isFullRun('e2e', [...FULL_RUN.e2e, 'user/flows/key-renewal'])).toBe(false)
+    expect(isFullRun('e2e', [...FULL_RUN.e2e, 'user/flows/sign-out'])).toBe(false)
     expect(isFullRun('e2e', [...FULL_RUN.e2e, '--reporter=list,json'])).toBe(false)
     expect(isFullRun('db', [...FULL_RUN.db, '--filter=@workspace/gateway'])).toBe(false)
   })

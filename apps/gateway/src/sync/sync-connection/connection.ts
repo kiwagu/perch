@@ -1,5 +1,4 @@
 import type { DataError } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
 import {
   CLOSE,
   clientMessage,
@@ -10,25 +9,35 @@ import {
   serverMessage,
 } from '@workspace/replica/protocol'
 
-import type { DeviceTokens } from '../../auth/identity-sessions'
-
 import type { ConnectionState } from './connected-device'
 import type { SocketLike, SyncConnectionDeps } from './deps'
 import { DeviceSeen } from './device-seen'
 import { ConnectionHello } from './hello'
-import { HelloRenewals } from './hello-renewals'
 import type { ConnectionHost } from './host'
 import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
 import { RegionChanges } from './region-changes'
 import { RegionSubscriptions } from './region-subscriptions'
 import { DeviceRequests } from './requests'
 
+/** The reason a socket closed by the registry with `code` is given. */
+function endReason(code: number): string {
+  if (code === CLOSE.signedOut) {
+    return REASON.signedOut
+  }
+
+  if (code === CLOSE.passwordChanged) {
+    return REASON.passwordChanged
+  }
+
+  return code === SUPERSEDED ? REASON.superseded : REASON.revoked
+}
+
 /**
- * One device's WebSocket to the gateway. The device says hello with its keys first, within
- * the hello time; once they are accepted it is welcomed with its identity's private region,
- * the region of each organisation the identity belongs to (one whose database cannot be read is
- * left out until the next hello) and those memberships, and may
- * subscribe, pull, push, probe and compact in those regions only, each handed to the region
+ * One device's WebSocket to the gateway. The device says hello with its session token first,
+ * within the hello time; once its session is read it is welcomed with its identity's private
+ * region, the region of each organisation the identity belongs to (one whose database cannot be
+ * read is left out until the next hello) and those memberships, and may subscribe, pull, push,
+ * probe and compact in those regions only, each handed to the region
  * hub, which answers the device itself and checks its batches against the identity. Messages
  * are handled one at a time, in the order they came. A change of the identity's memberships
  * does not wait for them: the device leaves the regions it may no longer name at once, so a
@@ -38,13 +47,12 @@ import { DeviceRequests } from './requests'
  * hello is under way applies right after the welcome. Text the protocol refuses closes the
  * socket, a hello that names no device among it; so do a region the device may not name and a
  * sign-out (`requests.ts`). A device signed out from another one is closed at once with
- * 4001, whatever it is doing. How a hello's keys are checked, bound to the device's row and handed
- * over, and how a device holds one live socket: `hello.ts`.
+ * 4001, whatever it is doing. How a hello's session is read and checked against its device, and
+ * how a device holds one live socket: `hello.ts`.
  */
 export class SyncConnection {
   readonly #socket: SocketLike
   readonly #onError: (error: DataError) => void
-  readonly #renewals: HelloRenewals
   readonly #subscriptions: RegionSubscriptions
   readonly #seen: DeviceSeen
   readonly #changes: RegionChanges
@@ -53,13 +61,12 @@ export class SyncConnection {
   #state: ConnectionState
   /** Settles once every message so far has been handled. */
   #queue: Promise<void> = Promise.resolve()
-  /** Takes the connection out of the registry; nothing to take until the keys are accepted. */
+  /** Takes the connection out of the registry; nothing to take until the session is read. */
   #unregister: () => void = () => {}
 
   constructor(socket: SocketLike, deps: SyncConnectionDeps) {
     this.#socket = socket
     this.#onError = deps.onError ?? ((error) => deps.log.error({ code: error.code }, error.message))
-    this.#renewals = new HelloRenewals(deps)
     this.#subscriptions = new RegionSubscriptions(deps.hub, {
       id: crypto.randomUUID(),
       send: (message) => this.#send(message),
@@ -73,8 +80,6 @@ export class SyncConnection {
       },
       isClosed: () => this.#isClosed(),
       send: (message) => this.#send(message),
-      sendTokens: (identity, device, held, tokens) =>
-        this.#sendTokens(identity, device, held, tokens),
       close: (code, reason) => this.#close(code, reason),
       fail: (error) => this.#fail(error),
     }
@@ -85,12 +90,7 @@ export class SyncConnection {
       schema: deps.schema,
       helloUnderWay: () => this.#state.kind === 'waiting',
     })
-    this.#requests = new DeviceRequests(deps, {
-      host,
-      subscriptions: this.#subscriptions,
-      seen: this.#seen,
-      pairs: this.#renewals,
-    })
+    this.#requests = new DeviceRequests(deps, { host, subscriptions: this.#subscriptions })
     this.#hello = new ConnectionHello(deps, {
       host,
       listener: this,
@@ -98,12 +98,11 @@ export class SyncConnection {
         this.#unregister = unregister
       },
       seen: this.#seen,
-      pairs: this.#renewals,
       changes: this.#changes,
     })
     this.#state = {
       kind: 'waiting',
-      // A late hello is no sign of bad keys: the device connects again and says it in time.
+      // A late hello is no sign of a bad session: the device connects again and says it in time.
       cancelHello: deps.clock.schedule(deps.helloTimeoutMs ?? 10_000, () =>
         this.#close(CLOSE.timeout, REASON.silent),
       ),
@@ -136,19 +135,20 @@ export class SyncConnection {
   }
 
   /**
-   * The device was signed out from another device: the socket closes with `code` at once,
-   * whatever message is being handled and also while the hello is under way, before its welcome.
-   * Resolves once it closed. Never rejects.
+   * The device was signed out, from another device or over a socket of its own, or a new
+   * sign-in of the device took its session over (`SUPERSEDED`): the socket closes with `code` at
+   * once, whatever message is being handled and also while the hello is under way, before its
+   * welcome. Resolves once it closed. Never rejects.
    */
   end(code: number): Promise<void> {
-    this.#close(code, REASON.revoked)
+    this.#close(code, endReason(code))
 
     return Promise.resolve()
   }
 
   /**
    * A newer hello of the device took over: the socket closes at once, without signing the device
-   * out, and spends none of its keys from then on.
+   * out, and is served no more.
    */
   supersede(): void {
     this.#close(SUPERSEDED, REASON.superseded)
@@ -234,30 +234,6 @@ export class SyncConnection {
   /** Whether the socket took the message: one it dropped is lost. */
   #send(message: ServerMessage): boolean {
     return this.#socket.send(encodeMessage(serverMessage, message)) !== 0
-  }
-
-  /**
-   * Sends a pair the device does not hold yet. One a closed socket cannot take, or one the socket
-   * dropped or threw on, is parked (`deliver`), and an open socket closes so the device comes back.
-   */
-  #sendTokens(
-    identity: IdentityId,
-    device: string,
-    held: string | undefined,
-    tokens: DeviceTokens,
-  ) {
-    const sent = this.#renewals.deliver(
-      { identity, device, held, tokens },
-      (pair) =>
-        !this.#isClosed() &&
-        this.#send({ type: 'tokens', access: pair.access, refresh: pair.refresh }),
-    )
-
-    if (!sent) {
-      this.#close(SERVER_ERROR, REASON.failed)
-    }
-
-    return sent
   }
 
   #close(code: number, reason: string): void {

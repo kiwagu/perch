@@ -38,6 +38,10 @@
       "types": "./src/engines/wasm.ts",
       "import": "./src/engines/wasm.ts"
     },
+    "./engines/wasm-module": {
+      "types": "./src/engines/wasm-module.ts",
+      "import": "./src/engines/wasm-module.ts"
+    },
     "./bun-plugin-surql": {
       "types": "./src/bun-plugin-surql.ts",
       "import": "./src/bun-plugin-surql.ts"
@@ -45,6 +49,10 @@
     "./surql-names": {
       "types": "./src/surql-names.ts",
       "import": "./src/surql-names.ts"
+    },
+    "./better-auth-adapter": {
+      "types": "./src/better-auth-adapter.ts",
+      "import": "./src/better-auth-adapter.ts"
     }
   },
   "scripts": {
@@ -53,6 +61,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@surrealdb/better-auth": "catalog:",
     "@surrealdb/node": "catalog:",
     "@surrealdb/node-native": "catalog:",
     "@surrealdb/wasm": "catalog:",

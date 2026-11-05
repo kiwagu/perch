@@ -1,8 +1,8 @@
 import type { Connection, Gateway } from './stub-state'
 
 /**
- * The gateway took the device's keys: it hands over the renewed pair a test asked for with
- * `renewAtNextHello`, then welcomes the device with its regions and the stub's memberships.
+ * The gateway took the device's token: it welcomes the device with its regions and the stub's
+ * memberships.
  */
 export function welcome(
   gateway: Gateway,
@@ -10,13 +10,6 @@ export function welcome(
   identity: string,
   regions: ReadonlyArray<{ readonly region: string; readonly head: number }>,
 ): void {
-  const renewed = gateway.renewal
-
-  if (renewed) {
-    gateway.renewal = undefined
-    connection.subscriber.send({ type: 'tokens', ...renewed })
-  }
-
   connection.subscriber.send({
     type: 'welcome',
     identity: identity,
@@ -24,30 +17,6 @@ export function welcome(
     memberships: [...gateway.memberships],
     time: gateway.clock.now(),
   })
-}
-
-/**
- * The device asked for new keys over its channel: it is handed the pair a test named with
- * `renewAtNextHello`; without one the stub answers nothing yet, as a gateway still at work;
- * refused while the stub refuses renewals.
- */
-export function renew(gateway: Gateway, connection: Connection): void {
-  if (gateway.refuseRenewals) {
-    connection.subscriber.send({
-      type: 'error',
-      code: 'rate-limited',
-      message: 'too many renewals',
-    })
-
-    return
-  }
-
-  const named = gateway.renewal
-
-  if (named) {
-    gateway.renewal = undefined
-    connection.subscriber.send({ type: 'tokens', ...named })
-  }
 }
 
 /** What a sign-out may do to the device's channel. */

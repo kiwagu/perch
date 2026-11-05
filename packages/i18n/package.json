@@ -14,6 +14,10 @@
     "./check": {
       "types": "./src/check.ts",
       "import": "./src/check.ts"
+    },
+    "./translator": {
+      "types": "./src/translator.ts",
+      "import": "./src/translator.ts"
     }
   },
   "scripts": {

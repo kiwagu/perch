@@ -127,6 +127,21 @@ describe('activitiesProblems', () => {
       `${AT} states.saved.on["other.back-link"]: "other.back-link" is an anchor of "other", not of "sample" or the frame`,
     ])
   })
+  it('refuses a visibility-button as an event: it is presentation only', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    activityStateIn(contract, 'saved').on = {
+      'sample.home-link': { target: 'home' },
+      'sample.title-input.visibility-button': { target: 'home' },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT} states.saved.on["sample.title-input.visibility-button"]: "sample.title-input.visibility-button" is a visibility-button: presentation only, never an event of an activity`,
+    ])
+  })
   it("wants each transition backed by the screen's flow navigating to the target's address, or by a link to it", () => {
     const contract = withOther()
 

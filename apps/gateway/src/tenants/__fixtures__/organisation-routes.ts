@@ -7,15 +7,27 @@ import { expect } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { nodeEngines } from '@workspace/data/engines/node'
-import { TEST_SIGNING_KEY } from '@workspace/data/testing'
+import { type IdentityId, idSchemas } from '@workspace/ids'
 import { manualClock } from '@workspace/replica/testing'
 
-import type { SignedIn } from '../../auth/identity-sessions'
+import {
+  AUTH_SECRET,
+  deviceHeaders,
+  mailsOf,
+  signUpOn,
+} from '../../auth/__fixtures__/auth-instance'
 import { createGatewayRoot, type GatewayRoot } from '../../composition/root'
 import { RequestLimits } from '../../limits/request-limits'
+import { Outbox } from '../../mail/__fixtures__/outbox'
 import { organisationRoutes } from '../organisation.routes'
 
-const PASSWORD = 'pass-word-1'
+const PASSWORD = 'Pass-word-1'
+
+/** An identity signed up on its device: its id and email, and its raw session token. */
+export interface SignedUp {
+  readonly identity: { readonly id: IdentityId; readonly email: string }
+  readonly token: string
+}
 
 /** Closes what a test opened. */
 const cleanups: Array<() => Promise<void>> = []
@@ -42,10 +54,10 @@ export const ADDRESS = '203.0.113.1'
 
 export interface Ask {
   /**
-   * The identity whose access token goes as `Authorization: Bearer <access>`, from the device it
+   * The identity whose session token goes as `Authorization: Bearer <token>`, from the device it
    * signed up on (`X-Perch-Device`).
    */
-  readonly as?: SignedIn
+  readonly as?: SignedUp
   /** The `Authorization` header exactly as sent, for one a device should not send. */
   readonly authorization?: string
   /** The `X-Perch-Device` header instead of the caller's device; `null` leaves it out. */
@@ -63,7 +75,7 @@ export function deviceOf(email: string): string {
 
 export function request(method: string, path: string, ask: Ask = {}): Request {
   const headers = new Headers()
-  const authorization = ask.as ? `Bearer ${ask.as.tokens.access}` : ask.authorization
+  const authorization = ask.as ? `Bearer ${ask.as.token}` : ask.authorization
   const device = ask.device === undefined && ask.as ? deviceOf(ask.as.identity.email) : ask.device
 
   if (authorization !== undefined) {
@@ -101,15 +113,19 @@ export async function answer(
 }
 
 async function openRoot(): Promise<GatewayRoot> {
+  const outbox = new Outbox()
   const root = (
     await createGatewayRoot({
       engines: nodeEngines(),
       url: 'mem://',
       clock: manualClock(),
-      signingKey: TEST_SIGNING_KEY,
+      authSecret: AUTH_SECRET,
+      publicUrl: 'http://localhost',
+      mail: outbox,
     })
   )._unsafeUnwrap()
 
+  mailsOf(root.auth, outbox)
   cleanups.push(() => root.close())
 
   return root
@@ -117,24 +133,25 @@ async function openRoot(): Promise<GatewayRoot> {
 
 /**
  * The routes over a gateway on embedded databases, the directory and one per organisation, with
- * three identities signed up through its sessions: ann, bob and cat; `signUp` signs up another.
+ * three identities signed up and verified through its Better Auth: ann, bob and cat; `signUp`
+ * signs up another.
  */
 export async function harness() {
   const root = await openRoot()
   const clock = manualClock(1_000)
   const routes = organisationRoutes(
     root.sessions,
-    root.deviceSessions,
     root.organisations,
     routeOptions(new RequestLimits({ clock })),
   )
-  const signUp = async (email: string) =>
-    (
-      await root.sessions.signUp(
-        { email, password: PASSWORD },
-        { id: deviceOf(email), label: 'Firefox on Linux' },
-      )
-    )._unsafeUnwrap()
+  const signUp = async (email: string): Promise<SignedUp> => {
+    const { token, user } = await signUpOn(root.auth, email, deviceHeaders(deviceOf(email)), {
+      password: PASSWORD,
+      name: email,
+    })
+
+    return { identity: { id: idSchemas.identity.schema.parse(user.id), email: user.email }, token }
+  }
   const ann = await signUp('ann@example.test')
   const bob = await signUp('bob@example.test')
   const cat = await signUp('cat@example.test')

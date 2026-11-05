@@ -1,23 +1,31 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { DeviceView } from '../../../../../platform/devices.port'
 import { useService } from '../../../../../platform/module'
 import { useNotify } from '../../../../../platform/notices'
+import { useScreenMachine } from '../../../../../platform/screen-machine'
+import { createDevicesMachine } from '../../../application/devices.machine'
 import { DEVICES_SERVICE } from '../../../application/devices.service'
 
-import { type DeviceItem, DevicesView } from './devices.view'
+import { DevicesView } from './devices.view'
 
 export function DevicesContainer() {
   const devices = useService(DEVICES_SERVICE)
   const notify = useNotify()
   const [list, setList] = useState<readonly DeviceView[] | undefined>(undefined)
-  const [pending, setPending] = useState(false)
   const [reads, setReads] = useState(0)
+  // The shell's `notify` changes when it clears the notice, as the account signs out: the read
+  // must not run again for that, and raises through the one taken when it started, which a
+  // reply after the sign-out finds spent.
+  const latestNotify = useRef(notify)
+
+  latestNotify.current = notify
 
   // The devices are read when the page opens, and again after a sign-out that did not come back
   // with them.
   useEffect(() => {
     let live = true
+    const raise = latestNotify.current
 
     void devices.list().match(
       (read) => {
@@ -27,7 +35,7 @@ export function DevicesContainer() {
       },
       () => {
         if (live) {
-          notify({ code: 'devices-read-failed', text: (t) => t('device.notice.read-failed') })
+          raise('devices-read-failed')
         }
       },
     )
@@ -35,51 +43,45 @@ export function DevicesContainer() {
     return () => {
       live = false
     }
-  }, [devices, reads, notify])
-
-  const failed = () => {
-    setPending(false)
-    notify({ code: 'device-sign-out-failed', text: (t) => t('device.notice.sign-out-failed') })
-  }
+  }, [devices, reads])
 
   // Another device's sign-out comes back with the list read again (this device signs out from the
   // profile). A sign-out that failed reads the list again, unless the gateway is out of reach: a
-  // read would fail too, and its notice would replace the one that says the sign-out failed.
-  const revoke = (device: DeviceItem) => {
-    setPending(true)
-    void devices.revoke(device).match(
-      (outcome) => {
-        setPending(false)
-
-        if (outcome.kind === 'listed') {
-          setList(outcome.devices)
-        } else {
-          setReads((count) => count + 1)
-        }
-      },
-      (error) => {
-        failed()
-
-        if (error.code !== 'data:OFFLINE') {
-          setReads((count) => count + 1)
-        }
-      },
-    )
-  }
-
-  // Once the gateway signed every device out, the session has signed this one out too, which
-  // sends the page to sign-in.
-  const signOutEverywhere = () => {
-    setPending(true)
-    void devices.signOutEverywhere().match(() => setPending(false), failed)
-  }
+  // read would fail too, and its notice would replace the one that says the sign-out failed. Once
+  // the gateway signed every device out, the session has signed this one out too.
+  const machine = useMemo(
+    () =>
+      createDevicesMachine({
+        revoke: (device) =>
+          devices
+            .revoke({ id: device })
+            .andTee((outcome) => {
+              if (outcome.kind === 'listed') {
+                setList(outcome.devices)
+              } else {
+                setReads((count) => count + 1)
+              }
+            })
+            .orTee((error) => {
+              if (error.code !== 'data:OFFLINE') {
+                setReads((count) => count + 1)
+              }
+            }),
+        signOutEverywhere: () => devices.signOutEverywhere(),
+      }),
+    [devices],
+  )
+  const { state, send, renders } = useScreenMachine('device', machine)
 
   return (
     <DevicesView
       devices={list}
-      pending={pending}
-      onRevoke={revoke}
-      onSignOutEverywhere={signOutEverywhere}
+      can={(event) => state.can(event)}
+      confirming={renders('device.everywhere.dialog')}
+      onRevoke={(device) => send({ type: 'device.list.revoke-button', device: device.id })}
+      onOpenEverywhere={() => send({ type: 'device.everywhere.open-button' })}
+      onSignOutEverywhere={() => send({ type: 'device.everywhere.dialog.confirm-button' })}
+      onCancelEverywhere={() => send({ type: 'device.everywhere.dialog.cancel-button' })}
     />
   )
 }

@@ -6,7 +6,12 @@
  * while the app's links leave out a value equal to its default: both reach the same state);
  * and matching the link, the router reaches the binding's route with those parameters and
  * that search, unrefused. The route tree the router builds equals the tree of the screen
- * folder (`routeTree`): the same routes under the same parents.
+ * folder (`routeTree`): the same routes under the same parents. On a branch the pre-commit hook
+ * sets `CONTRACT_AHEAD=1`: a business commit may add or change a binding before its route, so
+ * only the bindings the app has a route for are held to their example and the tree, each as the
+ * contract says it now, or as it had it at the branch's merge base with `main`
+ * (`CONTRACT_AHEAD_BASE`) while the route still equals that one (`heldTo` of
+ * `__fixtures__/route-bindings.ts`); `bun run check` and `main` hold every binding as it is now.
  */
 
 import { join } from 'node:path'
@@ -28,13 +33,18 @@ import { z } from '@workspace/zod'
 
 import { modules } from '../modules'
 
+import { AHEAD, bindingsAtBase, bindingsOf, heldBindings } from './__fixtures__/route-bindings'
 import { type AppRouter, matchAt, routerOf, SPLAT } from './__fixtures__/router'
 import { defineModule } from './module'
+import { allModules } from './router'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 
 /** The route the router starts on: it only sends the visitor on (`router.tsx`), no screen binds it. */
 const START_PATH = '/'
+
+/** A path segment no route of the application takes, for a root splat. */
+const UNKNOWN_SEGMENT = 'no-such-page'
 
 /** The parameters the router matches for an example: a splat the link leaves out is empty. */
 function paramsMatched(binding: Binding, params: Readonly<Record<string, string>>) {
@@ -48,7 +58,10 @@ function exampleCase(router: AppRouter, binding: Binding): void {
   const { params, search, link } = exampleOf(binding)
   const [pathname = '', query] = link.split('?')
   const searchStr = query === undefined ? '' : `?${query}`
-  const reached = matchAt(router, pathname, searchStr)
+  // A root splat's example leaves its segment out, which is the start path, and the router's
+  // start route outranks the splat there: the splat is matched at one segment instead.
+  const shadowed = pathname === START_PATH && binding.path !== START_PATH
+  const reached = matchAt(router, shadowed ? `/${UNKNOWN_SEGMENT}` : pathname, searchStr)
 
   expect(pathname, `the path of ${link}`).toBe(
     router.buildLocation({ to: binding.path, params }).href,
@@ -57,7 +70,9 @@ function exampleCase(router: AppRouter, binding: Binding): void {
   expect(trimPathRight(reached.fullPath ?? ''), `the route ${link} matches`).toBe(
     trimPathRight(binding.path),
   )
-  expect(reached.params, `the parameters ${link} matches`).toEqual(paramsMatched(binding, params))
+  expect(reached.params, `the parameters ${link} matches`).toEqual(
+    shadowed ? { [SPLAT]: UNKNOWN_SEGMENT, ...params } : paramsMatched(binding, params),
+  )
   expect(reached.searchError, `the refusal of ${link}`).toBeUndefined()
   expect(reached.search, `the search ${link} reads back`).toEqual(search)
 }
@@ -167,10 +182,15 @@ describe('the example link on the router', () => {
   })
 })
 
+const AT_BASE = bindingsAtBase(ROOT)
 const { screens, problems } = loadScreens(ROOT)
-const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? []).flatMap(
-  (screen) => screen.bindings.map((binding) => [binding.path, binding] as const),
-)
+// The bindings the app's routes are held to: on a branch only the routed ones, each as now or
+// as at the base; `bun run check` and `main` hold every binding as it is now.
+const bindings: readonly (readonly [string, Binding])[] = heldBindings(
+  bindingsOf(screens?.screens ?? []),
+  allModules(modules).flatMap((module) => module.routes),
+  'bindings' in AT_BASE ? AT_BASE.bindings : [],
+).map(({ binding }) => [binding.path, binding] as const)
 const router = routerOf(modules)
 
 describe('the example links of the contract on the router', () => {
@@ -179,9 +199,17 @@ describe('the example links of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.each(bindings)('%s is written and read as its example says', (_path, binding) => {
-    exampleCase(router, binding)
+  // A base that does not load fails here, once; the examples then wait for it.
+  it("the contract at the branch's base loads", () => {
+    expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
   })
+
+  it.skipIf('problem' in AT_BASE).each(bindings)(
+    '%s is written and read as its example says',
+    (_path, binding) => {
+      exampleCase(router, binding)
+    },
+  )
 })
 
 /**
@@ -210,9 +238,10 @@ describe('the route tree', () => {
             ? ROOT_ROUTE
             : trimPathRight(parentRoute.fullPath),
       }))
-    const fromFolder = routeTree(screens?.screens ?? []).flatMap(({ path, parent }) =>
-      parent === null ? [] : [{ path, parent }],
-    )
+    const present = new Set(fromRouter.map(({ path }) => path))
+    const fromFolder = routeTree(screens?.screens ?? [])
+      .flatMap(({ path, parent }) => (parent === null ? [] : [{ path, parent }]))
+      .filter(({ path }) => !AHEAD || present.has(path))
 
     expect(byPath(fromRouter)).toEqual(byPath(fromFolder))
   })

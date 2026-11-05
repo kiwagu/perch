@@ -5,7 +5,7 @@ import {
   RouterProvider,
   SearchParamError,
 } from '@tanstack/react-router'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import type { AuthUser } from '@workspace/data'
@@ -34,7 +34,62 @@ const TestModule = defineModule({
 })
 
 /** A session that only says who is signed in, as long as nobody signs in or out. */
-const fixed = (user: AuthUser | undefined) => ({ current: () => user, subscribe: () => () => {} })
+const fixed = (user: AuthUser | undefined) => ({
+  current: () => user,
+  subscribe: () => () => {},
+  signingInHere: () => false,
+})
+
+/**
+ * A session whose account the test changes, as this tab or another one would: `signIn` tells of
+ * the account, as a sign-in of this tab's own while `here` says so.
+ */
+function switching(start: AuthUser | undefined) {
+  let user = start
+  let here = false
+  const listeners = new Set<(next: AuthUser | undefined) => void>()
+  const tell = (next: AuthUser | undefined) => {
+    user = next
+
+    for (const listener of listeners) {
+      listener(next)
+    }
+  }
+
+  return {
+    session: {
+      current: () => user,
+      subscribe: (listener: (next: AuthUser | undefined) => void) => {
+        listeners.add(listener)
+
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+      signingInHere: () => here,
+    },
+    signIn: (next: AuthUser, own = false) => {
+      here = own
+      tell(next)
+      here = false
+    },
+    signOut: () => tell(undefined),
+  }
+}
+
+/** The router of the test module at `path`, over `session`, loaded. */
+async function loaded(path: string, session: ReturnType<typeof switching>['session']) {
+  const router = createAppRouter({
+    modules: [TestModule],
+    session,
+    layout: () => <Outlet />,
+    history: createMemoryHistory({ initialEntries: [path] }),
+  })
+
+  await router.load()
+
+  return router
+}
 
 async function landing(path: string, user: AuthUser | undefined): Promise<string> {
   const router = createAppRouter({
@@ -120,32 +175,33 @@ describe('createAppRouter', () => {
   })
 
   it('sends an open protected page to sign-in once the user signs out', async () => {
-    let user: AuthUser | undefined = me
-    const listeners = new Set<(next: AuthUser | undefined) => void>()
-    const router = createAppRouter({
-      modules: [TestModule],
-      session: {
-        current: () => user,
-        subscribe: (listener) => {
-          listeners.add(listener)
+    const { session, signOut } = switching(me)
+    const router = await loaded('/me', session)
 
-          return () => listeners.delete(listener)
-        },
-      },
-      layout: () => <Outlet />,
-      history: createMemoryHistory({ initialEntries: ['/me'] }),
-    })
-
-    await router.load()
     expect(router.state.location.pathname).toBe('/me')
 
-    user = undefined
-
-    for (const listener of listeners) {
-      listener(undefined)
-    }
+    signOut()
 
     await vi.waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
+  })
+
+  it('sends an open guest page to the profile once another tab signs the browser in', async () => {
+    const { session, signIn } = switching(undefined)
+    const router = await loaded('/sign-in', session)
+
+    signIn(me)
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/me'))
+  })
+
+  it('leaves a guest page where it is while this tab signs in itself: its flow moves on', async () => {
+    const { session, signIn } = switching(undefined)
+    const router = await loaded('/sign-in', session)
+
+    signIn(me, true)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(router.state.location.pathname).toBe('/sign-in')
   })
 
   it('opens the right start page', async () => {
@@ -187,5 +243,63 @@ describe('createAppRouter', () => {
       await router.navigate({ to: '/z' })
       expect(router.state.location.href).toBe('/z')
     })
+  })
+})
+
+/** A page that fails to render while `failing` says so. */
+const crashing = { failing: true }
+
+const Fragile = () => {
+  if (crashing.failing) {
+    throw new Error('the page broke')
+  }
+
+  return <p>the page renders</p>
+}
+
+const FragileModule = defineModule({
+  id: 'fragile',
+  declarations: { Fragile },
+  routes: [{ path: '/fragile', page: 'Fragile' }],
+})
+
+describe('a page that fails to render', () => {
+  it('gets the crash in its place, the layout around it, and renders again on reset', async () => {
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const router = createAppRouter({
+      modules: [FragileModule],
+      session: fixed(undefined),
+      layout: () => (
+        <main>
+          <p>the frame</p>
+          <Outlet />
+        </main>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/fragile'] }),
+      crash: ({ error, reset }) => (
+        <button type="button" onClick={reset}>
+          {`crashed: ${error instanceof Error ? error.message : String(error)}`}
+        </button>
+      ),
+    })
+
+    crashing.failing = true
+    render(
+      <ServicesProvider services={{ container: new Container(), runner: new FakeShapeRunner() }}>
+        <RouterProvider router={router} />
+      </ServicesProvider>,
+    )
+
+    const crash = await screen.findByText('crashed: the page broke')
+
+    expect(screen.getByText('the frame')).toBeTruthy()
+    expect(screen.queryByText('the page renders')).toBeNull()
+
+    crashing.failing = false
+    fireEvent.click(crash)
+
+    expect(await screen.findByText('the page renders')).toBeTruthy()
+    expect(screen.queryByText('crashed: the page broke')).toBeNull()
+    quiet.mockRestore()
   })
 })

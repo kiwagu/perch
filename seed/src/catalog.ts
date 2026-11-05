@@ -6,7 +6,7 @@
 
 import { err, ok, type Result } from 'neverthrow'
 
-import { isTenantKey } from '@workspace/kernel'
+import { isTenantKey, keepsPasswordRules } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 /** Seed data is addressed to this domain only, so the sweep can find all of it. */
@@ -62,12 +62,16 @@ export interface SeedAccount {
   readonly locale: AccountPreset['locale']
 }
 
+/**
+ * The account a preset seeds: its address on the seed domain, and a password of its ref that keeps
+ * the rules of a new password, `Seed-<ref>-password-1`, the same in every mode.
+ */
 export function accountFor(preset: AccountPreset, mode: SeedMode): SeedAccount {
   const mailbox = mode.kind === 'demo' ? preset.ref : `${preset.ref}.${mode.run}`
 
   return {
     email: `${mailbox}@${SEED_EMAIL_DOMAIN}`,
-    password: `${preset.ref}-seed-password`,
+    password: `Seed-${preset.ref}-password-1`,
     name: preset.name,
     bio: preset.bio,
     locale: preset.locale,
@@ -88,8 +92,9 @@ export function organisationFor(preset: OrganisationPreset, mode: SeedMode): See
 }
 
 /**
- * Checks a catalog offline: its shape, that every ref is used once, that organisations name
- * accounts, and that their keys are tenant keys, both their own and as a run of `mode` gives them.
+ * Checks a catalog offline: its shape, that every ref is used once, that each account's password
+ * keeps the rules of a new password, that organisations name accounts, and that their keys are
+ * tenant keys, both their own and as a run of `mode` gives them.
  */
 export function validateCatalog(
   candidate: unknown,
@@ -113,6 +118,9 @@ export function validateCatalog(
       .filter((ref, index, all) => all.indexOf(ref) !== index)
       .map((ref) => `duplicate organisation ref ${ref}`),
   ]
+  const passwords = accounts
+    .filter((preset) => !keepsPasswordRules(accountFor(preset, mode).password))
+    .map((preset) => `account ${preset.ref}: its password breaks the rules of a new password`)
   const problems = organisations.flatMap((preset) => [
     ...(known.has(preset.admin)
       ? []
@@ -124,7 +132,7 @@ export function validateCatalog(
       .filter((key) => !isTenantKey(key))
       .map((key) => `organisation ${preset.ref}: key ${key} is not a tenant key`),
   ])
-  const refused = [...duplicates, ...problems]
+  const refused = [...duplicates, ...passwords, ...problems]
 
   return refused.length > 0 ? err(refused) : ok(parsed.data)
 }

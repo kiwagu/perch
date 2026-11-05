@@ -3,6 +3,31 @@
 	auto_https off
 }
 
+# The browser security headers, on every response of the site, so a page and a worker both get
+# them with their own script: the e2e fixtures hold every document and script to these values and
+# fail a test on any policy violation a page or a worker reports.
+(security-headers) {
+	header {
+		# The app loads only what this origin serves: its scripts (no inline one), its styles and
+		# fonts, its web app manifest (which makes it installable), the engine's module worker,
+		# fetches and the WebSocket to /backend. The two WASM engines compile their modules, which
+		# 'wasm-unsafe-eval' allows without allowing eval.
+		# No other site may frame the app, no <base> may move its links, forms post only here.
+		Content-Security-Policy "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; font-src 'self'; img-src 'self'; manifest-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
+		# The same ban on framing for browsers that predate frame-ancestors.
+		X-Frame-Options "DENY"
+		# A full referrer stays on this origin; another origin learns nothing of the page.
+		Referrer-Policy "same-origin"
+		# The app uses none of these, so nothing it loads may ask for them.
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+		# Every file is served with its own type; the browser never guesses another.
+		X-Content-Type-Options "nosniff"
+		# No Strict-Transport-Security here: it binds the whole host, so sent from
+		# https://localhost it would force https on every local port of the machine. A deployed
+		# front sends it for its own domain.
+	}
+}
+
 # One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
 # this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT), and
 # PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there).
@@ -11,6 +36,7 @@ https://localhost:{$FRONT_PORT} {
 	tls /certs/localhost.pem /certs/localhost-key.pem
 	root * /srv/web
 	encode zstd gzip
+	import security-headers
 
 	@shell path / /index.html
 

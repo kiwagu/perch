@@ -14,28 +14,13 @@ const minute = 60 * second
 export const CREDENTIAL_CHECKS = { limit: 20, windowMs: 10 * second } as const
 
 /**
- * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until the
- * database answers, cleared by a successful sign-in: online guessing against one account is held
- * to about 960 tries a day, refused before the database is asked, parallel guesses included. An
- * email is counted in lower case, as the routes take it and the directory matches an account's,
- * so an address in any case shares one limit.
+ * Failed sign-ins per email, 10 per 15 minutes, a sign-in under way counted as one until it is
+ * answered, cleared by a successful sign-in: online guessing against one account is held to about
+ * 960 tries a day, refused before the password is checked, parallel guesses included. An email is
+ * counted in lower case, as the directory matches an account's, so an address in any case shares
+ * one limit.
  */
 export const FAILED_SIGN_INS = { limit: 10, windowMs: 15 * minute } as const
-
-/**
- * Renewals per device, 10 per 15 minutes: a device renews once per expired 15-minute access token,
- * at its next hello; a hello whose socket closes before the new pair arrives costs one more (the
- * spent key presented again), so 10 covers five flaps of a bad network in one window.
- */
-export const DEVICE_RENEWALS = { limit: 10, windowMs: 15 * minute } as const
-
-/**
- * Renewals per client address, 120 per minute: everyone behind one NAT renews when they open
- * their laptops after the access tokens expired overnight, and 120 a minute lets about 500
- * devices through in five minutes, a device the address refused retrying with its reconnect
- * backoff at no cost to its own limit; one guessing address is held to 2 lookups a second.
- */
-export const ADDRESS_RENEWALS = { limit: 120, windowMs: minute } as const
 
 /**
  * Invitations per inviting identity, 30 per 10 minutes, every attempt counted, an unknown email's
@@ -59,19 +44,57 @@ export const IDENTITY_ORGANISATIONS = { limit: 10, windowMs: 60 * minute } as co
  */
 export const ADDRESS_ORGANISATIONS = { limit: 30, windowMs: 60 * minute } as const
 
+/**
+ * Mails per client address, 200 per 15 minutes: sign-ups, resends of the verification mail, reset
+ * mails, the confirmations of a new email and the deletion mails together, every attempt counted
+ * whatever the email:
+ * one client can make at most 200 such mails go out per quarter hour (the credential limit alone
+ * would allow 1,800 sign-ups). The e2e suite signs every account up from the front's one address,
+ * about 100 per run, on a gateway restarted for the run.
+ */
+export const ADDRESS_MAILS = { limit: 200, windowMs: 15 * minute } as const
+
+/**
+ * Resends of the verification mail per email, 3 per 15 minutes, whatever the email (an unknown or
+ * verified one too, so the limit tells nothing about accounts): a mailbox gets at most 12 resends
+ * an hour from everyone together.
+ */
+export const EMAIL_VERIFICATION_MAILS = { limit: 3, windowMs: 15 * minute } as const
+
+/**
+ * Reset mails per email, 3 per 15 minutes, whatever the email (an unknown one too, so the limit
+ * tells nothing about accounts): a mailbox gets at most 12 reset mails an hour from everyone
+ * together.
+ */
+export const EMAIL_RESET_MAILS = { limit: 3, windowMs: 15 * minute } as const
+
+/** Changes of the email per identity, 3 per 15 minutes, each one mail to the new email. */
+export const IDENTITY_EMAIL_CHANGES = { limit: 3, windowMs: 15 * minute } as const
+
+/** Requests to delete the account per identity, 3 per 15 minutes, each one mail to its email. */
+export const IDENTITY_DELETION_REQUESTS = { limit: 3, windowMs: 15 * minute } as const
+
+/**
+ * Attempts at one kind of link per client address, 20 per 10 minutes, refused or not: the reset of
+ * a password, the confirmation of a new email and the deletion of an account each count on their
+ * own. A link's token is too
+ * long to guess, so the limit only keeps one client from hammering the directory.
+ */
+export const ADDRESS_LINK_ATTEMPTS = { limit: 20, windowMs: 10 * minute } as const
+
 export interface RequestLimitsOptions {
   readonly clock: Clock
 }
 
 /**
- * What the database answered a sign-in: wrong credentials (`failed`), signed in (`succeeded`), or
- * nothing it could judge (`unjudged`, the database could not be reached).
+ * What a sign-in was answered: wrong credentials (`failed`), signed in (`succeeded`), or anything
+ * that judged no password (`unjudged`: a request refused for another reason, or a failure).
  */
 export type SignInOutcome = 'failed' | 'succeeded' | 'unjudged'
 
 /**
- * A sign-in of an email let through, to settle once the database answered it (a second settle
- * changes nothing); or its refusal.
+ * A sign-in of an email let through, to settle once it was answered (a second settle changes
+ * nothing); or its refusal.
  */
 export type SignInAttempt =
   | { readonly allowed: true; settle(outcome: SignInOutcome): void }
@@ -80,15 +103,23 @@ export type SignInAttempt =
 /**
  * The gateway's request limits, fixed windows in this process's memory (several gateway processes
  * each keep their own): the credential checks of each client address, the failed sign-ins of
- * each email, the refresh-key renewals of each device and each client address, the invitations of
- * each inviting identity and each client address, and the organisations each identity and each
- * client address create.
+ * each email, the mails of each client address, the resends and the reset mails of each email,
+ * the email changes and the deletion requests of each identity, the attempts of each client
+ * address at a reset link, a confirmation link and a deletion link, the invitations of each
+ * inviting identity and each client address, and the organisations each identity and each client
+ * address create.
  */
 export class RequestLimits {
   private readonly credentialChecks: FixedWindow
   private readonly failedSignIns: FixedWindow
-  private readonly deviceRenewals: FixedWindow
-  private readonly addressRenewals: FixedWindow
+  private readonly addressMails: FixedWindow
+  private readonly emailVerificationMails: FixedWindow
+  private readonly emailResetMails: FixedWindow
+  private readonly identityEmailChanges: FixedWindow
+  private readonly identityDeletionRequests: FixedWindow
+  private readonly resetAttempts: FixedWindow
+  private readonly confirmationAttempts: FixedWindow
+  private readonly deletionAttempts: FixedWindow
   private readonly identityInvites: FixedWindow
   private readonly addressInvites: FixedWindow
   private readonly identityOrganisations: FixedWindow
@@ -97,8 +128,23 @@ export class RequestLimits {
   constructor(options: RequestLimitsOptions) {
     this.credentialChecks = new FixedWindow({ ...CREDENTIAL_CHECKS, clock: options.clock })
     this.failedSignIns = new FixedWindow({ ...FAILED_SIGN_INS, clock: options.clock })
-    this.deviceRenewals = new FixedWindow({ ...DEVICE_RENEWALS, clock: options.clock })
-    this.addressRenewals = new FixedWindow({ ...ADDRESS_RENEWALS, clock: options.clock })
+    this.addressMails = new FixedWindow({ ...ADDRESS_MAILS, clock: options.clock })
+    this.emailVerificationMails = new FixedWindow({
+      ...EMAIL_VERIFICATION_MAILS,
+      clock: options.clock,
+    })
+    this.emailResetMails = new FixedWindow({ ...EMAIL_RESET_MAILS, clock: options.clock })
+    this.identityEmailChanges = new FixedWindow({
+      ...IDENTITY_EMAIL_CHANGES,
+      clock: options.clock,
+    })
+    this.identityDeletionRequests = new FixedWindow({
+      ...IDENTITY_DELETION_REQUESTS,
+      clock: options.clock,
+    })
+    this.resetAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
+    this.confirmationAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
+    this.deletionAttempts = new FixedWindow({ ...ADDRESS_LINK_ATTEMPTS, clock: options.clock })
     this.identityInvites = new FixedWindow({ ...IDENTITY_INVITES, clock: options.clock })
     this.addressInvites = new FixedWindow({ ...ADDRESS_INVITES, clock: options.clock })
     this.identityOrganisations = new FixedWindow({
@@ -117,8 +163,8 @@ export class RequestLimits {
    * Lets a sign-in of `email` through while its failed sign-ins and those under way are below the
    * limit, holding a place for it until it is settled: a failure keeps the place, a success
    * forgets the email's window (its failures and the places of those under way), and an answer
-   * the database could not judge gives the place back. The email comes in lower case, as the
-   * routes take it and the directory matches it, so a sign-in in any case counts against one
+   * that judged no password gives the place back. The email comes in lower case, as the auth
+   * mount takes it and the directory matches it, so a sign-in in any case counts against one
    * account.
    */
   signInAttempt(email: string): SignInAttempt {
@@ -150,25 +196,58 @@ export class RequestLimits {
   }
 
   /**
-   * Takes one renewal of `device` from the client at `address`, before its refresh key is
-   * exchanged; the address is charged only when the device's limit allows it, and a renewal the
-   * address's limit refuses gives the device's attempt back, so the devices that wait behind one
-   * busy address keep their own limit for when it lets them through.
+   * Takes one verification mail of the client at `address` before anything is asked: a sign-up
+   * (no `email`) or a resend to `email` (in lower case), which also takes one of that email's
+   * resends. The address's place is reserved first and given back when the email refuses, so a
+   * request the address refuses moves no email's counter, and one the email refuses costs the
+   * address nothing.
    */
-  renewal(address: string, device: string): Allowance {
-    const ofDevice = this.deviceRenewals.reserve(device)
+  verificationMail(address: string, email?: string): Allowance {
+    return email === undefined
+      ? this.mail(address)
+      : this.mail(address, () => this.emailVerificationMails.take(email))
+  }
 
-    if (!ofDevice.allowed) {
-      return ofDevice
-    }
+  /**
+   * Takes one reset mail of `email` (in lower case) from the client at `address`, before anything
+   * is asked: one of the address's mails and one of the email's reset mails, the address's place
+   * given back when the email refuses.
+   */
+  resetMail(address: string, email: string): Allowance {
+    return this.mail(address, () => this.emailResetMails.take(email))
+  }
 
-    const ofAddress = this.addressRenewals.take(addressKey(address))
+  /**
+   * Takes one change of `identity`'s email from the client at `address`, before anything is
+   * asked: one of the address's mails and one of the identity's changes, the address's place
+   * given back when the identity refuses.
+   */
+  emailChangeMail(address: string, identity: IdentityId): Allowance {
+    return this.mail(address, () => this.identityEmailChanges.take(identity))
+  }
 
-    if (!ofAddress.allowed) {
-      ofDevice.giveBack()
-    }
+  /**
+   * Takes one request to delete `identity`'s account from the client at `address`, before anything
+   * is asked: one of the address's mails and one of the identity's requests, the address's place
+   * given back when the identity refuses.
+   */
+  deletionMail(address: string, identity: IdentityId): Allowance {
+    return this.mail(address, () => this.identityDeletionRequests.take(identity))
+  }
 
-    return ofAddress
+  /** Takes one attempt of the client at `address` at a reset link, before anything is read. */
+  passwordReset(address: string): Allowance {
+    return this.resetAttempts.take(addressKey(address))
+  }
+
+  /** Takes one attempt of the client at `address` at a confirmation link, before anything is read. */
+  emailConfirmation(address: string): Allowance {
+    return this.confirmationAttempts.take(addressKey(address))
+  }
+
+  /** Takes one attempt of the client at `address` at a deletion link, before anything is read. */
+  accountDeletion(address: string): Allowance {
+    return this.deletionAttempts.take(addressKey(address))
   }
 
   /**
@@ -189,5 +268,27 @@ export class RequestLimits {
     const ofIdentity = this.identityOrganisations.take(identity)
 
     return ofIdentity.allowed ? this.addressOrganisations.take(addressKey(address)) : ofIdentity
+  }
+
+  /**
+   * Takes one of the mails of the client at `address`, then what `also` takes (an email's or an
+   * identity's own limit): the address's place is reserved first and given back when `also`
+   * refuses, so a mail the address refuses moves no other counter, and one the other limit refuses
+   * costs the address nothing.
+   */
+  private mail(address: string, also?: () => Allowance): Allowance {
+    const ofAddress = this.addressMails.reserve(addressKey(address))
+
+    if (!ofAddress.allowed || also === undefined) {
+      return ofAddress.allowed ? { allowed: true } : ofAddress
+    }
+
+    const ofOther = also()
+
+    if (!ofOther.allowed) {
+      ofAddress.giveBack()
+    }
+
+    return ofOther
   }
 }

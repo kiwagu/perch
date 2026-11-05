@@ -79,6 +79,44 @@ describe('a machine that lags its flow', () => {
     expect(app).toEqual(aheadOf(app, projected(FLOW)))
   })
 
+  it('may lack a clear of a field the flow added, and clears no field the flow does not', () => {
+    const emptied = (anchor: string) => ({ type: 'clear', params: { anchor } }) as const
+    const flow = projected({
+      ...BEHIND,
+      states: {
+        ...BEHIND.states,
+        saving: {
+          invoke: {
+            src: 'sample.save',
+            onDone: {
+              target: 'editing',
+              actions: [emptied('sample.password-input'), show(['saved'])],
+            },
+            onError: { target: 'editing' },
+          },
+        },
+      },
+    })
+    const lagging = projected(BEHIND)
+    const elsewhere = projected(
+      behindWith((states) => {
+        states['saving'] = {
+          invoke: {
+            src: 'sample.save',
+            onDone: {
+              target: 'editing',
+              actions: [emptied('sample.email-input'), show(['saved'])],
+            },
+            onError: { target: 'editing' },
+          },
+        }
+      }),
+    )
+
+    expect(lagging).toEqual(aheadOf(lagging, flow))
+    expect(elsewhere).not.toEqual(aheadOf(elsewhere, flow))
+  })
+
   it('may lack a state or a region named like a property every object has', () => {
     const flow = projected({
       ...FLOW,
@@ -97,6 +135,26 @@ describe('a machine that lags its flow', () => {
     const app = projected(BEHIND)
 
     expect(app).toEqual(aheadOf(app, flow))
+  })
+
+  it('may lack an anchor a state of the flow renders, and renders none the flow does not list', () => {
+    const renders = (anchors: readonly string[]) => ({
+      initial: 'editing',
+      states: { editing: { meta: { renders: anchors } } },
+    })
+    const flow = projected(renders(['sample.name-input', 'sample.rule-list']))
+
+    for (const lagging of [[], ['sample.rule-list']]) {
+      const app = projected(renders(lagging))
+
+      expect(app).toEqual(aheadOf(app, flow))
+    }
+
+    for (const beyond of [['sample.email-input'], ['sample.email-input', 'sample.rule-list']]) {
+      const app = projected(renders(beyond))
+
+      expect(app).not.toEqual(aheadOf(app, flow))
+    }
   })
 
   it('is the whole flow when the machine lacks nothing', () => {

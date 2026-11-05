@@ -1,4 +1,5 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -8,6 +9,10 @@ import { defineConfig, type Plugin } from 'vite'
 import wasm from 'vite-plugin-wasm'
 
 import { surqlPlugin } from '@workspace/data/vite-plugin-surql'
+
+import { pwa } from './build/pwa'
+import { sizeBudgets } from './build/size-budgets'
+import { stripWasmSourceMaps } from './build/wasm-source-maps'
 
 const MANIFEST_INPUTS = ['contract', 'tests/e2e/scenarios'].map((path) =>
   fileURLToPath(new URL(`../../${path}`, import.meta.url)),
@@ -53,8 +58,79 @@ function uiManifestOnWatch(): Plugin {
   }
 }
 
+const BUILD = 'virtual:perch-build'
+const REPOSITORY = fileURLToPath(new URL('../..', import.meta.url))
+
+/** What git answers in the repository, or undefined when it fails (outside git). */
+function git(...args: readonly string[]): string | undefined {
+  const run = spawnSync('git', args, { cwd: REPOSITORY, encoding: 'utf8' })
+
+  return run.status === 0 ? run.stdout.trim() : undefined
+}
+
+/** A path of the repository's git directory, as git resolves it (a worktree has its own). */
+function gitPath(path: string): string | undefined {
+  const found = git('rev-parse', '--git-path', path)
+
+  return found === undefined ? undefined : resolve(REPOSITORY, found)
+}
+
+/** The product the UI manifest names too: the root package's version, the commit checked out. */
+function product(): { readonly version: string; readonly commit: string | null } {
+  const { version } = JSON.parse(readFileSync(join(REPOSITORY, 'package.json'), 'utf8')) as {
+    readonly version: string
+  }
+  const commit = git('rev-parse', 'HEAD') ?? ''
+
+  return { version, commit: /^[0-9a-f]{40}$/.test(commit) ? commit : null }
+}
+
+// The build this bundle is, `import build from 'virtual:perch-build'`: the root package's version
+// and the commit checked out, the same product the UI manifest names, so a tab compares the
+// manifest the server serves with its own. The watcher makes it again whenever the commit or the
+// version moves, as the manifest it writes after each build follows them too.
+function buildIdentity(): Plugin {
+  const id = `\0${BUILD}`
+
+  return {
+    name: 'perch:build-identity',
+    resolveId: (source) => (source === BUILD ? id : undefined),
+    load(source) {
+      if (source !== id) {
+        return undefined
+      }
+
+      const branch = git('symbolic-ref', '-q', 'HEAD')
+      const watched = [
+        gitPath('HEAD'),
+        gitPath('packed-refs'),
+        branch === undefined ? undefined : gitPath(branch),
+        join(REPOSITORY, 'package.json'),
+      ]
+
+      for (const file of watched) {
+        if (file !== undefined) {
+          this.addWatchFile(file)
+        }
+      }
+
+      return `export default ${JSON.stringify(product())}`
+    },
+  }
+}
+
 export default defineConfig(({ mode }) => ({
-  plugins: [surqlPlugin(), wasm(), react(), tailwindcss(), uiManifestOnWatch()],
+  plugins: [
+    surqlPlugin(),
+    wasm(),
+    react(),
+    tailwindcss(),
+    uiManifestOnWatch(),
+    buildIdentity(),
+    stripWasmSourceMaps(),
+    pwa(),
+    sizeBudgets(),
+  ],
   // The page helper `window.__perch.ui` (src/platform/ui-contract.ts): in development builds,
   // and in a production build made with PERCH_UI_HOOKS=1 (the e2e launcher's).
   define: {
@@ -78,5 +154,6 @@ export default defineConfig(({ mode }) => ({
     sourcemap: mode === 'development',
     minify: mode !== 'development',
   },
-  worker: { format: 'es' },
+  // A worker's bundle runs its own plugins: its WASM loses the source-map section too.
+  worker: { format: 'es', plugins: () => [stripWasmSourceMaps()] },
 }))

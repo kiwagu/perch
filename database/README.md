@@ -7,11 +7,13 @@ what every database has, `schema/directory` the directory database (accounts, or
 and memberships) and `schema/tenant` the database of one organisation (`t_<key>`). A
 database's schema is the common files and then its own, each set in file name order. Comment
 annotations above each table (`-- @region`, `-- @replicate none`, `-- @id`, `-- @crdt`,
-`-- @owner`, `-- @can`) tell the modeling stage how the table replicates, which id prefix its
-keys use and who may write it. The same schema is applied to the local replica and to a
-server, and the replica schema generated from it is the one description of replicated tables
-that every runtime reads. Notes carry their write rules there: a member creates notes and
+`-- @owner`, `-- @can`, `-- @readonly`) tell the modeling stage how the table replicates, which
+id prefix its keys use and who may write it. The same schema is applied to the local replica
+and to a server, and the replica schema generated from it is the one description of replicated
+tables that every runtime reads. Notes carry their write rules there: a member creates notes and
 edits or deletes only those it wrote (`-- @owner author`), an admin edits or deletes any note.
+A field marked `-- @readonly` is set by a device only when it creates the record; after that
+only the gateway's own writes change it (the profile's email through the confirmation flow).
 
 ## Key exports
 
@@ -22,27 +24,24 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   as (bound at its first accepted batch), the pull cursor; a number is unique per region in the
   log and the outbox; on a device `_replica_head` also holds the region's generation, which a
   reset of its local copy moves), closed to every record user and never replicated.
-- `schema/directory/`: `identity` (accounts and the `identity` record access with its refresh
-  keys; an email is kept and matched in lower case, so an address in any case is one account),
-  `profile` (its owner reads it; only the gateway writes it, through replication; a bio
-  holds at most 2000 characters), `tenant` (an organisation: its key of 2 to 32 lowercase
-  letters, digits and underscores, its name, namespace, database and status; closed to every
-  record user) and `membership` (an identity's role in an organisation, `member` or `admin`; an
-  identity reads only its own rows, and only the gateway writes them) and `device_session`
-  (one row per device of an identity, with its label, its current refresh grant and when its
-  current session started, `started_at`, to the second like a token's `iat`, so a token of the
-  previous session issued in that very second passes for one of the new session until it
-  expires, at most 15 minutes; unique per identity and device, closed to every record user,
-  served by the gateway). `identity` also
-  holds `sessions_revoked_at`, and its access method an `AUTHENTICATE` clause that refuses every
-  token issued before it ("signed out everywhere"). A refresh exchange carries no token, so the
-  clause does not block it: only revoking the identity's grants
-  (`ACCESS identity ON DATABASE REVOKE WHERE subject.record = <identity>`, which the gateway's
-  namespace user may run) does. The access method signs its tokens with the key whoever applies
-  the schema gives as `$jwt_key`: a server applies it with the gateway's fixed key, so a schema
-  re-apply leaves every issued token valid; without a fixed key (a device's replica, a test) each
-  apply gives it a key of its own and earlier tokens stop working. Refresh grants survive a
-  redefinition, so a new key costs each device one renewal, not its session.
+- `schema/directory/`: the four account tables, Better Auth's models, written only by the
+  gateway as its namespace user and never replicated: `identity` (an account: its email, kept
+  and matched in lower case, so an address in any case is one account, the account's own name
+  and `locale`, the language it signed up in, which its mails speak until its settings name one,
+  `en` when nothing named one; an identity reads only its own row), `account` (how an identity
+  signs in: the credential row holds the argon2id hash of the password), `device_session` (one
+  row per sign-in of a device of an identity, with the device's own id, its label and the session
+  token it holds; a sign-out ends the row, which stays listed for 30 days) and `verification`
+  (one-time tokens with an expiry), the last three closed to every record user; their reference
+  columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
+  schema defines no access method, so no record user signs in to a server. Then `profile` (its
+  owner reads it; only the gateway writes it, through replication; a bio holds at most 2000
+  characters), `settings` (an account's settings, today its language and its theme, one row per identity in
+  its private region; its owner reads it, only the gateway writes it, through replication),
+  `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
+  name, namespace, database and status; closed to every record user) and `membership` (an
+  identity's role in an organisation, `member` or `admin`; an identity reads only its own rows,
+  and only the gateway writes them).
 - `schema/tenant/`: `member` (a member of the organisation keyed by the identity id, with its
   role; server-only) and `note` (the organisation's notes in the `tenant` region, each naming
   its author member, a text of at most 500 characters; only the gateway reads or writes it on
@@ -51,11 +50,13 @@ edits or deletes only those it wrote (`-- @owner author`), an admin edits or del
   documents hold it and the field kinds the replica needs. Generated by `bun run model`
   into `src/replica.schema.gen.ts`, so every runtime that replicates reads the same one.
 - `tests/suites/*.toml`: SurrealKit suites, run on one ephemeral database that holds every
-  schema folder: the permissions of `identity`, `profile`, `membership` (with `tenant`) and `device_session`, the
-  structure of the tenant tables (`tenant-structure`), and the generated suites of the shapes.
-  `setup.surql`, which SurrealKit runs in each test database before it applies the schema, gives
-  that database a random `$jwt_key` for the identity access method (test databases only: a
-  server's key is never stored as a parameter, which `INFO FOR DB` would print in clear);
+  schema folder: the permissions of `identity` (with `account`), `profile`, `settings`,
+  `membership` (with `tenant`) and `device_session`, the structure of the tenant tables
+  (`tenant-structure`), and the generated suites of the shapes.
+  `setup.surql`, which SurrealKit runs in each test database before it applies the schema,
+  defines a record access method `identity` for that database only: the suites' record actors
+  sign up and in through it, which creates the identity row and its credential row as the
+  gateway does; the product schema has none;
   `tests/anonymous`: the unauthenticated-client check over raw HTTP.
 
 ## Commands

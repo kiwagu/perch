@@ -105,7 +105,7 @@ export class EngineRegions {
 
         // A stopped engine syncs nothing more; the next one opens over the app's document.
         if (!this.#stopped) {
-          const sync = this.#syncOf(region)
+          const sync = this.#syncOf(region, true)
 
           this.#map.set(id, { region, sync })
           // On the current connection, as its welcome named the region or not.
@@ -142,10 +142,11 @@ export class EngineRegions {
   }
 
   /**
-   * The sync of `region`. A copy another tab reset is opened again rather than reported; what a
-   * sync reports while its region is replaced, or once it was, is not: its document is gone.
+   * The sync of `region`, `replacing` the region's former one or not. A copy another tab reset is
+   * opened again rather than reported; what a sync reports while its region is replaced, or once
+   * it was, is not: its document is gone.
    */
-  #syncOf(region: RegionDoc): RegionSync {
+  #syncOf(region: RegionDoc, replacing = false): RegionSync {
     const options = this.#options
     const id = region.ref.id
     const sync: RegionSync = new RegionSync({
@@ -166,6 +167,7 @@ export class EngineRegions {
         }
       },
       onReset: (refusal) => this.replace(id, 'reset', refusal),
+      replacing,
       ...(options.batchRows === undefined ? {} : { batchRows: options.batchRows }),
       ...(options.localCompactionRows === undefined
         ? {}

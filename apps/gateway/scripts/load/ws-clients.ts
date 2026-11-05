@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * Entry of the gateway load test (see `load-run.ts`). It needs a SurrealDB stand: through the
+ * Entry of the gateway load test (see `load-run/`). It needs a SurrealDB stand: through the
  * root's `bun run load` the stand's `SURREAL_URL` comes from `mcproc exec`. The gateway
  * imports `.surql` files, so their loader is registered before anything else loads: the
  * repository's bunfig preload applies only to commands started from its root.

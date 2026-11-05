@@ -8,6 +8,13 @@ import { vocabularyProblems } from './vocabulary'
 const printed = (contract = sampleContract()): string[] =>
   vocabularyProblems(contract).map(formatProblem)
 
+const composite = {
+  description: 'The rules a new password keeps.',
+  list: 'password-rule-list',
+  itemState: 'current',
+  items: { length: '10 to 35 characters.' },
+}
+
 describe('vocabularyProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -70,6 +77,16 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.gone-select.option": no such anchor in the screens',
     ])
   })
+  it('refuses choice values for a visibility-button, whose values are its suffix own', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    contract.vocabulary.choiceValues['sample.title-input.visibility-button'] = { show: 'shows it' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: choice values of "sample.title-input.visibility-button": a visibility-button carries show or hide, the values of its suffix, and takes no rows',
+    ])
+  })
   it('reports a code no anchor or platform action uses', () => {
     const contract = sampleContract()
 
@@ -77,6 +94,38 @@ describe('vocabularyProblems', () => {
 
     expect(printed(contract)).toEqual([
       'contract/vocabulary.md:1: code "spare" is documented but unused',
+    ])
+  })
+  it('asks no row of a derived toast code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const toast = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(toast, { codes: [...(toast.codes ?? []), 'thing-created'] })
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the toasts derived on sample.save-button (thing-created) want the rule row `<object>-<verb>ed`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'sample.save-button',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('calls the rule row unused when no toast is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'app-shell.toast',
+      meaning: 'the success of an action of the model',
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>ed" is documented but unused',
     ])
   })
   it('wants the platform status states to equal the app states', () => {
@@ -99,6 +148,30 @@ describe('vocabularyProblems', () => {
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not a reserved anchor of the vocabulary',
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not an anchor of the app-shell screen',
       'contract/domain/platform.yaml:1: reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
+    ])
+  })
+  it('wants a row for every composite of the platform, and a composite for every row', () => {
+    const declared = sampleContract()
+
+    declared.screens.platform.composites = { 'password-rules': composite }
+    expect(vocabularyProblems(declared).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"]: "password-rules" is not a composite of the vocabulary',
+    ])
+
+    const documented = sampleContract()
+
+    documented.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(documented).map(formatProblem)).toEqual([
+      'contract/vocabulary.md:1: composite "password-rules" is documented but undeclared',
+    ])
+  })
+  it('wants the item state of a composite among the row states', () => {
+    const contract = sampleContract()
+
+    contract.screens.platform.composites = { 'password-rules': { ...composite, itemState: 'met' } }
+    contract.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(contract).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"].itemState[0]: "met" is not a row state of the vocabulary',
     ])
   })
   it('takes a choice-values anchor derived only through a suffix its base lists in derived', () => {
@@ -125,6 +198,41 @@ describe('vocabularyProblems', () => {
 
     expect(printed(contract)).toEqual([
       'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+    ])
+  })
+})
+
+describe('the questions before destructive actions', () => {
+  const RULE = {
+    where: 'app-shell.confirmation',
+    meaning: 'the question before a destructive action',
+  }
+
+  it('asks no row of a derived question code, but the rule row once one is derived', () => {
+    const contract = sampleContract()
+    const dialog = anchorIn(contract, 'sample.save-button')
+
+    Object.assign(dialog, { codes: [...(dialog.codes ?? []), 'thing-delete'] })
+    contract.screens.questions = [
+      { anchor: 'sample.save-button', code: 'thing-delete', action: 'thing.deleteThing' },
+    ]
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Codes": the questions derived on sample.save-button (thing-delete) want the rule row `<object>-<verb>`',
+    ])
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([])
+  })
+
+  it('calls the rule row unused when no question is derived', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.codes['<object>-<verb>'] = RULE
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: code "<object>-<verb>" is documented but unused',
     ])
   })
 })

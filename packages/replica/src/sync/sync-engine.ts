@@ -61,10 +61,17 @@ export interface SyncEngine {
    */
   settled(timeoutMs: number): Promise<void>
   /**
+   * Resolves once `region` has caught up with the gateway on the current connection: the welcome
+   * named it, it still syncs, its subscription was answered and every update since was imported in
+   * full. A reconnect or a reload starts it over. Rejects after `timeoutMs` on the clock; never
+   * resolves for a region that stopped, one the welcome left out, or one the engine does not hold.
+   */
+  caughtUp(region: string, timeoutMs: number): Promise<void>
+  /**
    * Waits up to 5 seconds for the channel, drains for up to 10 seconds, then asks the gateway to
    * sign this device out; resolves `signed-out` only when the gateway ended the channel with the
-   * sign-out close, which means the grant is revoked. Any other close after the sign-out was
-   * asked for (a gateway that could not revoke the grant closes as failed), or no close within
+   * sign-out close, which means the session ended. Any other close after the sign-out was
+   * asked for (a gateway that could not end the session closes as failed), or no close within
    * 10 seconds, resolves `offline`, the transport stopped so that no reconnect follows.
    * Resolves `offline`, without asking the gateway, when the channel stayed down (at once while
    * the platform says there is no network, `network.online`), fell, the outbox did not drain in
@@ -76,12 +83,6 @@ export interface SyncEngine {
    * sign the device out. The engine syncs no more; a new engine over a new channel does.
    */
   channelStopped(): boolean
-  /**
-   * Asks the gateway for new keys over the open channel; they come as `tokens`, or the gateway's
-   * limits refuse the renewal with a `rate-limited` error. False, and nothing sent, while the
-   * channel is not up and welcomed: the hello that welcomes it renews keys that no longer work.
-   */
-  renew(): boolean
 }
 
 class Engine implements SyncEngine {
@@ -176,12 +177,12 @@ class Engine implements SyncEngine {
     return this.#settling.settled(timeoutMs)
   }
 
-  channelStopped(): boolean {
-    return this.#signOutFlow.channelStopped()
+  caughtUp(region: string, timeoutMs: number): Promise<void> {
+    return this.#settling.caughtUp(region, timeoutMs)
   }
 
-  renew(): boolean {
-    return this.#options.transport.send({ type: 'renew' })
+  channelStopped(): boolean {
+    return this.#signOutFlow.channelStopped()
   }
 
   signOut(network: { readonly online: boolean }): Promise<'signed-out' | 'offline'> {
@@ -198,8 +199,8 @@ class Engine implements SyncEngine {
           sync.welcome(named.has(id))
         }
       })
-      // The transport hands renewed keys and memberships to the app.
-      .with({ type: P.union('tokens', 'memberships') }, () => {})
+      // The transport hands the memberships to the app.
+      .with({ type: 'memberships' }, () => {})
       .with({ type: 'heads' }, ({ regions }) => {
         this.#passes.answered()
 
@@ -209,8 +210,6 @@ class Engine implements SyncEngine {
 
         this.#settling.changed()
       })
-      // A renewal the gateway's limits refused answers no region: the transport tells the session.
-      .with({ type: 'error', code: 'rate-limited' }, () => {})
       .with({ type: 'error' }, (error) => {
         this.#options.onError(
           dataError(
@@ -244,9 +243,9 @@ class Engine implements SyncEngine {
   /**
    * The channel ended for good. A refused protocol stops syncing and is reported: this
    * application is older than the gateway, and only a reload brings one that speaks its
-   * protocol; nothing on the device changes. A device signed out from another one stops syncing
-   * without a report: the transport tells the app, whose keys no longer work. Refused keys and a
-   * sign-out are the app's to act on.
+   * protocol; nothing on the device changes. A device signed out from another one, or by a
+   * change of the account's password, stops syncing without a report: the transport tells the
+   * app, whose token no longer works. A refused token and a sign-out are the app's to act on.
    */
   #ended(reason: EndReason): void {
     match(reason)
@@ -259,7 +258,7 @@ class Engine implements SyncEngine {
           ),
         )
       })
-      .with('revoked', () => this.#stopPasses())
+      .with(P.union('revoked', 'password-changed'), () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
   }

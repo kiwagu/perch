@@ -70,9 +70,10 @@ export class EnginePasses {
       }
 
       if (kind === 'full') {
+        // A region whose import failed subscribes again as it retries, which serves both.
         for (const { sync } of this.#regions.values()) {
-          sync.resubscribe()
           sync.retryPull()
+          sync.resubscribe()
         }
 
         // What other tabs wrote reaches this document even while the channel is down.

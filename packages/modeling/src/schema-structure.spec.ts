@@ -36,6 +36,7 @@ describe('parseStructure', () => {
       region: 'private',
       idPrefix: 'prf',
       crdt: { bio: 'text' },
+      readonlyFields: ['created_at', 'email', 'identity'],
     })
     expect(model.tables['identity']).toMatchObject({ replicate: 'none', idPrefix: 'idn' })
     expect(model.tables['_replica_update']).toMatchObject({ replicate: 'none' })
@@ -83,12 +84,21 @@ describe('parseStructure', () => {
           { name: 'a', kind: { kind: 'NORMAL' } },
           { name: 'b', kind: { kind: 'NORMAL' } },
           { name: 'c', kind: { kind: 'NORMAL' } },
+          { name: 'd', kind: { kind: 'NORMAL' } },
         ],
       },
       tables: {
         a: { fields: [] },
-        b: { fields: [{ name: 'n', kind: 'int' }] },
+        b: {
+          fields: [
+            { name: 'n', kind: 'int' },
+            { name: 'o', kind: 'string' },
+            { name: 'p', kind: 'object' },
+            { name: 'p.q', kind: 'string' },
+          ],
+        },
         c: { fields: [] },
+        d: { fields: [{ name: 'm', kind: 'string' }] },
       },
     }
     const text = [
@@ -98,14 +108,26 @@ describe('parseStructure', () => {
       'DEFINE TABLE b;',
       '-- @crdt text',
       'DEFINE FIELD n ON b TYPE int;',
+      '-- @readonly yes',
+      'DEFINE FIELD o ON b TYPE string;',
+      'DEFINE FIELD p ON b TYPE object;',
+      '-- @readonly',
+      'DEFINE FIELD p.q ON b TYPE string;',
       '-- @region private',
       'DEFINE TABLE c;',
+      '-- @replicate none',
+      'DEFINE TABLE d;',
+      '-- @readonly',
+      'DEFINE FIELD m ON d TYPE string;',
     ].join('\n')
 
     expect(parseStructure(info, text).problems).toEqual([
       'table a: declare exactly one of -- @region <private|public|tenant> or -- @replicate none',
       'table b: field n is int, a @crdt text field must be a string',
+      'table b: field o: -- @readonly takes no value, got "yes"',
+      'table b: field p.q: -- @readonly marks a top-level field only',
       'table c: a replicated table needs -- @id <prefix>',
+      'table d: field m: -- @readonly needs a replicated table (-- @region)',
     ])
   })
 
@@ -146,12 +168,14 @@ describe('loadSchemaModel', () => {
       '_replica_projected',
       '_replica_snapshot',
       '_replica_update',
+      'account',
       'device_session',
       'identity',
       'membership',
       'profile',
       'settings',
       'tenant',
+      'verification',
     ])
     expect(model.tables['profile']?.region).toBe('private')
     expect(model.tables['tenant']).toMatchObject({ replicate: 'none', idPrefix: 'tnt' })
@@ -165,6 +189,7 @@ describe('loadSchemaModel', () => {
       region: 'tenant',
       idPrefix: 'nte',
       crdt: { text: 'text' },
+      readonlyFields: ['author', 'created_at'],
     })
     expect(model.tables['member']).toMatchObject({ replicate: 'none' })
     expect(model.tables['identity']).toBeUndefined()

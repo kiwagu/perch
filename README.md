@@ -1,168 +1,161 @@
 # Perch
 
-A foundation for local-first applications on SurrealDB and Loro: each device keeps its own
-database, and a gateway keeps it in sync with the central SurrealDB.
+*The perch your apps sit on.*
 
-## Prerequisites
+Perch is my playground for architectural decisions. It is a working foundation for local-first
+web applications on SurrealDB and Loro, in which every device keeps its own database and a
+gateway keeps it in step with the central one. It is also a testbed for a way of building
+software: **contract first** and **AI-native**, with AI agents working to one set of rules, the
+architecture decided in the contract and the code following it.
 
-- Bun 1.4.3 (`packageManager` in `package.json`), then `bun install` at the root.
-- Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB and Caddy in
-  containers.
-- mcproc 0.11.0 or later (`npm i -g mcproc`): it starts and stops the stands from
-  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. The
-  mcproc profiles are the working path: `bun run dev` alone starts the web app's build watcher
-  and the gateway without the gateway's environment, its database or the front.
-- mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
-  self-signed certificate is made, and the browser asks to accept it once.
-- `bunx playwright install` for the browsers the e2e specs run in.
-- The SurrealDB CLI (`surreal`) for the git hooks that validate staged `.surql` files.
-- Screenshot baselines of the e2e specs are git-ignored and rebuilt per machine: the first run
-  writes them. A machine that kept baselines from an older layout rebuilds them with
-  `bun run test:e2e -- --update-snapshots=changed`.
+The name comes from Loro, Spanish for parrot (Spanish is the application's second language): a
+perch is the base a parrot sits on, with a view of everything around it.
 
-## Local stands
+## Principles
 
-A stand is SurrealDB in memory, the gateway and a Caddy front (`infra/dev/`) that serves a
-web app build (`apps/web/dist-dev` on the dev stand, `apps/web/dist` on the e2e stand) and,
-under `/backend/`, the gateway on one https origin; the
-browser talks to nothing else. The processes are declared in `.mcproc/mcproc.yaml` and driven
-by mcproc (pm2 underneath).
+Architectural ideas are tested here against a real system rather than a diagram, under three
+principles:
 
-| Stand | Profile | Open | SurrealDB | Gateway | Web app |
-|---|---|---|---|---|---|
-| development | `dev` | https://localhost:5443 | 127.0.0.1:8000 | 127.0.0.1:5181 | build watcher |
-| tests | `e2e` | https://localhost:5493 | 127.0.0.1:8010 | 127.0.0.1:5191 | production build |
+- **A better idea replaces the old one.** There are no compatibility shims, fallbacks or
+  migrations kept for data that does not exist yet: before production, the schema and the code
+  are reset rather than layered.
+- **A decision that holds becomes a check:** a lint rule, a contract check or a step of the
+  pre-commit hook, not a wiki page or a comment, so that breaking it fails the build.
+- **One context per branch.** A branch holds the work of one area and lands on `main` as a
+  single squash commit, so the history of `main` reads as a list of decisions.
 
-These are the main checkout's addresses, slot 0 of the manifest's `vars`; a worktree made with
-`mcproc worktree add` runs the same stands on a slot of its own, every port shifted by 100 per
-slot, under its own project slug (`perch-w1`), so several checkouts run side by side (see
-*Worktrees* below).
+## Architectural decisions
 
-- `mcproc start dev`, then open https://localhost:5443; `mcproc stop dev` stops the stand. The
-  gateway waits for its database and defines its namespace user there before it starts. The
-  `web` app is a build watcher (`vite build --watch` in development mode, with source maps), not
-  a dev server, so there is no hot module replacement: after a code change it rewrites
-  `apps/web/dist-dev` in 1-3 s, then reload the page. Until its first build finishes the front
-  answers 404. The watcher, the gateway and the front are restarted on a change of their
-  config or sources, so a running stand follows the tree, a landing included; the e2e stand's
-  build is `apps/web/dist`, apart from the dev stand's.
-- Both fronts serve the UI manifest, built from `contract/` and the scenario files by the web
-  build, at `/ui-manifest/manifest.json` (https://localhost:5443/ui-manifest/manifest.json on
-  the dev stand, with `manifest.schema.json` and `model.schema.json` beside it;
-  `Cache-Control: no-store`). The mcproc var `ui_manifest` passes `PERCH_UI_MANIFEST` to
-  both: `'0'` (in `.mcproc/mcproc.local.yaml`, then `mcproc restart caddy-dev`) answers 404
-  there. Development and e2e builds also install `window.__perch.ui.anchors()`, which lists
-  the anchors a page renders now.
-- `bun run test`: every package's unit and functional tests, four packages at a time (each
-  vitest takes the cores it finds; all of them at once starved one another past vitest's 5 s
-  timeout in the pre-commit hook, at no gain in time). Part of the pre-commit hook.
-  `bun run check` runs its tasks four at a time for the same reason.
-- `bun run test:db`: the schema permission suites, the seed and the gateway smoke test against
-  the e2e stand (start it first with `mcproc start e2e`). The suites, the seed and the e2e
-  launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
-  `GATEWAY_URL` and `E2E_BASE_URL` of the e2e stand, `SURREAL_DEV_URL` and `GATEWAY_DEV_URL` of
-  the dev stand) and the stands' signing key `GATEWAY_JWT_KEY`; none of them has an address of
-  its own.
-- `bun run load -- --devices 20 --members 10 --hold 15`: the gateway load test. It starts a
-  gateway of its own on port 5197 in front of the e2e stand's SurrealDB and prints one table row
-  per step (see *Load test* in `apps/gateway/README.md`). Its accounts and organisations stay on
-  the in-memory e2e stand, so afterwards run `mcproc restart surrealdb-e2e`, then
-  `mcproc restart gateway-e2e`; `bun run seed:sweep` reaches the dev stand only.
-- `bun run seed`: the demo accounts, seeded through the dev stand's gateway.
-- `CI=1 bun run test:e2e`: builds (the web app's production build included), starts the `e2e`
-  profile, waits for each of its apps and runs the Playwright specs through the front;
-  `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
-  front serves, so it leaves the dev stand's build alone.
-  The run holds a 4G memory lease for its build and browsers: when the host is short of
-  memory it waits its turn (`mcproc leases` shows the queue).
-- A SurrealDB stand keeps nothing when it stops. After restarting one on its own, restart its
-  gateway too (`mcproc restart gateway-e2e`), so the gateway's user is defined again.
+| Question | Decision |
+|---|---|
+| Where does a device's source of truth live? | In Loro CRDT documents, one per access region; the local SurrealDB is their materialized view. |
+| Where is SQL written? | Only in `.surql` files next to the component that owns them. TypeScript imports the compiled, typed shape and never carries SurrealQL text. |
+| Who may write a record? | The schema states it in annotations (`-- @owner author`, `-- @can`), and the permission suites are generated from them. |
+| What is a tenant? | An organisation, with a database of its own. |
+| Where is a screen designed? | In a YAML file, before any JSX is written. |
+| What drives a screen's transient state? | Its flow, an XState v5 machine, never a component's own flags. |
+| What is a route? | A state address: the same path and search reach the same state after a reload. |
+| How does a test locate an element? | By an anchor from a closed grammar (`user.sign-in.email-input`) and by codes, never by wording or CSS. |
+| What if the contract cannot express a requirement? | The gap is reported in four lines and left unbuilt; it is never emulated. |
+| How large may a source file grow? | 300 lines is a warning, 400 the red zone, 500 a split now. |
 
-### Worktrees
+## Contract first
 
-A branch gets a checkout of its own, with stands of its own, next to the repository:
+The application is described in `contract/` before it is written, and the code and the tests
+are checked back against that description. The page is not a source of truth; it is a rendering
+of the contract.
 
-- `mcproc worktree add feat/x` (from the main checkout; `--from main` starts a new branch there)
-  makes `../perch.worktrees/feat/x`, claims the next free slot, copies the local certificates,
-  `lefthook-local.yml` and the screenshot baselines, runs `bun install` and writes
-  `.mcproc/mcproc.local.yaml` there with the slot and the project slug (`perch-w1`). In that
-  folder `mcproc start dev` brings the stand up on slot 1's ports (8100, 5281,
-  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; there `bun run
-  seed` addresses that dev stand, `bun run test:db` and `CI=1 bun run test:e2e` that checkout's
-  e2e stand.
-- A start asks the host for memory first: every app declares what it takes and the manifest
-  keeps a reserve, so a stand that does not fit waits its turn (`mcproc ls` shows it as
-  `queued`, `mcproc leases` shows the queue) and comes up by itself once memory frees.
-- `mcproc worktree ls` lists the checkouts with their slots; `mcproc worktree remove feat/x`
-  stops that checkout's apps, deletes the worktree and frees the slot (the branch stays).
+```text
+  domain/model.schema.json      what exists: the entities, their fields and actions,
+            │                   who may run them (JSON Schema 2020-12 with an x-perch keyword)
+            ▼
+  domain/screens/<path>.yaml    how a screen unfolds the model: its routes, the anchors
+            │                   bound to fields and actions, its flow as an XState machine
+            ▼
+  domain/activities/<id>.yaml   tasks that span screens: machines whose states are visits
+            │
+            ▼
+  tests/e2e/scenarios/*.md      the behaviour as a person would check it by hand,
+            │                   written from the contract alone
+            │
+  ══════════╪═══════════  review: the developer reads `bun run contract:diff main` and approves
+            ▼
+  code and tests                the JSX held to the contract by contract:check:sources,
+                                the e2e tests by contract:check:consumers
+```
 
-## Organisations on the stand
+The formats are the standard ones: a flow is an XState v5 machine configuration and a route is
+a TanStack Router route. `contract:check` runs every flow and activity in XState, and tests hold
+the application's machines to their flows and its router to the routes. Each scenario is paired
+step by step with a Playwright spec, and the stands serve the UI manifest built from the
+contract at `/ui-manifest/manifest.json` by default. The full guide is
+[contract/README.md](contract/README.md).
 
-`bun run seed --reset` (dev stand) seeds the organisation `acme` with `ann` as its administrator
-and `beto` as a member, besides the demo accounts. Sign in as either one and open `/org` in the
-app: the organisation's name, your role and its shared notes; a note written by one member
-reaches the other's open page. The e2e scenarios of `tests/e2e/scenarios/organisation/flows/`
-cover the sharing, an outsider, a change of membership and who may edit which note across two
-accounts, and the gateway smoke test (`bun run test:db`) drives the organisation routes and the
-tenant region on the e2e stand.
+## AI-native
 
-## Workspaces
+The codebase is organised to be read by agents, and the responsibilities are divided between
+the developer and the agents:
 
-Each workspace has a README with its role, key exports and commands.
+| Area | The developer | The agents |
+|---|---|---|
+| Architecture | decides it, in the contract | propose patterns, with their trade-offs |
+| Contract | reviews and approves each commit of it | draft it in a modeling thread, separately from the code |
+| Code | relies on the contract: the code makes no architectural decisions of its own | implement it from the approved contract, in parallel |
+| Contract gaps | decides whether the contract is extended now or the feature waits | report them in four lines and never work around them |
 
-- `apps/web`: the browser application; each signed-in identity's local replica in its own
-  IndexedDB database, synced through the gateway by one leading tab per browser.
-- `apps/gateway`: the Bun server in front of the central SurrealDB: sign-up and sign-in over
-  HTTP, sync over a WebSocket.
-- `packages/replica`: Loro region documents, the projector into the local database, the
-  sync protocol, the server's region log, batch validation and hub, and the device's sync engine.
-- `packages/data`: the SurrealDB driver: local databases, shapes and commands, accounts.
-- `packages/modeling`: the build-time stage that compiles `.surql` files into typed models.
-- `database`: the shared schema, its permission suites and the generated replica schema.
-- `seed`: demo accounts seeded through the gateway like any device, and their sweep.
-- `tests/e2e`: Playwright specs on a phone and a desktop against the `e2e` stand.
-- `packages/ui-contract`: the anchor grammar of every `data-testid` and the UI contract tooling:
-  the loaders, the three checks, the manifest, coverage and the hand-over diff.
-- `packages/{cqrs,di,e2e-spec,eslint-config,i18n,ids,kernel,logger,ui,zod}`: the buses, the
-  container, the e2e spec tooling, lint rules, translations, entity ids, the domain kernel, the
-  logger, the UI kit and the single Zod instance.
+One rule set in `.cursor/rules/` serves every agent, and the pre-commit hook enforces what the
+rules state. [docs/agents/README.md](docs/agents/README.md) describes the mechanisms behind this
+division.
 
-## Gates
+## Architecture
 
-- `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
-  coverage checks, and the three UI contract checks (`contract:check`,
-  `contract:check:sources`, `contract:check:consumers`); the gate for a change.
-  `bun run check --force` runs every task afresh instead of replaying turbo's cache.
-- `bun run test:db` with the `e2e` stand up: the schema permission suites, the seed and the
-  gateway smoke test.
-- `CI=1 bun run test:e2e`: the Playwright specs, one worker.
+```text
+┌───────────────────────────────────────────┐
+│ each device: React · TanStack · XState    │
+│ Loro documents, one per access region     │
+│   └─▶ projected into a local SurrealDB    │
+│       (WASM in a Web Worker, IndexedDB)   │
+└─────────────────────┬─────────────────────┘
+                      │  one WebSocket, from the leading tab
+┌─────────────────────┴─────────────────────┐
+│ gateway (Bun): accounts · sync · tenants  │
+│ replays every batch on a fork first       │
+└─────────────────────┬─────────────────────┘
+                      │
+┌─────────────────────┴─────────────────────┐
+│ central SurrealDB: a directory database   │
+│ and one database per organisation         │
+└───────────────────────────────────────────┘
+```
 
-## Commands
+- **A replica per identity.** Each signed-in identity has a SurrealDB engine in a Web Worker on
+  its own IndexedDB database, and one more for each organisation it belongs to; replicated data
+  lives in Loro documents projected into them.
+- **Verified sync.** The leading tab of a browser keeps every region in step over a single
+  WebSocket. The server checks each pushed batch on a fork of the region's document before it
+  accepts it, and binds each Loro peer to the identity that pushed it.
+- **Accounts and devices.** Accounts run on Better Auth and verify their email before the first
+  sign-in; each device holds a session token of its own and can be signed out from another one.
 
-- `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
-- `bun run model`: regenerate the models, page model, permission suites and replica schema.
-- `bun run contract:check`, `bun run contract:check:sources` and
-  `bun run contract:check:consumers` (all three in `check` and in the pre-commit hook): the
-  contract files and the scenarios against each other, then the anchors and codes of the web
-  app and the UI kit against them, then the anchors, codes, states and values the e2e tests
-  name. The contract comes first: `contract/README.md` says how a change runs from the model
-  to the screen file, the scenario, the code and the tests.
-- `bun run contract:schemas`: writes the JSON Schemas of the contract files from their Zod
-  sources (`-- --check` fails on drift).
-- `bun run contract:manifest`: builds the UI manifest from `contract/` and the scenario files
-  into `ui-manifest/`.
-- `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
-  ref; a change to the contract hands over the output of `bun run contract:diff main`.
-- `bun run contract:coverage`: the fields and actions of the model bound by anchors, the
-  controls carrying an anchor per feature module, and the anchors and scenarios per screen;
-  `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
-  the ones declared off with `ui-contract-ignore: <reason>`.
-- `bun run contract:routes`: the routes of the screen files, one example deep link each,
-  where each is reached from and the route tree (`-- --json` for all of it as JSON).
-- `bun run seed` and `bun run seed:sweep`: seed the dev stand through its gateway, or remove
-  the seed data (with the stands' signing key from `mcproc exec`, so a sweep keeps it).
-- `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now), largest first, with their baseline.
-- `bun run refactor:ci`: the size ratchet over `refactor-baseline.json`, a machine-local, gitignored file that the first run on a checkout writes from the sizes committed where HEAD left `main`, never from the working tree (also in `check` and in the pre-commit hook): a file at or above 400 lines the baseline does not know, or a baselined file that grew, fails, so a branch's growth fails from its checkout's first run.
-- `bun run refactor:baseline`: rewrites `refactor-baseline.json` from the whole tree after a split; it only shrinks, so a grown or new entry needs `--allow-growth` and an owner decision.
-- `bun run --filter @workspace/replica measure` and `measure:validation`: the replica's write
-  path and what checking a pushed batch costs the server, on this machine.
+**Stack:** Bun · TypeScript 7 · React 19 · TanStack Router · XState 5 · Zod 4 · SurrealDB 3 ·
+Loro · Better Auth · Tailwind 4 and shadcn · Vite · Vitest · Playwright · Turborepo · Caddy ·
+mcproc.
+
+## Current state
+
+The following works end to end, on a phone, where every scenario runs, and on a desktop, where
+the `@smoke` ones run: sign-up with email verification and sign-in with device sessions; a
+profile kept in step across devices and while offline; settings with the theme and the language,
+English or Spanish; the devices page; organisations with members, invitations and shared notes
+under roles; and an app shell that shows the state of the sync, offers a reload when a new
+version is out, answers unknown addresses and crashes, and installs as an app that opens
+offline. Every scenario is paired with its Playwright test, production builds are held to size
+budgets for phones, and a load test drives simulated devices against the gateway.
+
+As a playground, any part of it may be replaced by a better design; that is intended.
+
+## Getting started
+
+```sh
+bun install
+mcproc start dev     # SurrealDB, a mailbox, the gateway, the web app's watcher and the front
+bun run seed         # demo accounts and an organisation
+bun run check        # the gate for a change
+```
+
+Then open https://localhost:5443. To keep the gateway and the web app's watcher in a terminal of
+your own instead, start only the dedicated services (SurrealDB, the mailbox and the front) with
+`mcproc start services` and run `bun run dev`. The prerequisites, the two ways and a walk through
+the application are in [docs/development/getting-started.md](docs/development/getting-started.md).
+
+## Documentation
+
+| Topic | Where |
+|---|---|
+| Prerequisites and the first run | [docs/development/getting-started.md](docs/development/getting-started.md) |
+| Gates and commands | [docs/development/commands.md](docs/development/commands.md) |
+| Local stands and worktrees | [.mcproc/README.md](.mcproc/README.md) |
+| The front and the mailbox | [infra/dev/README.md](infra/dev/README.md) |
+| The UI contract | [contract/README.md](contract/README.md) |
+| Working with agents | [docs/agents/README.md](docs/agents/README.md) |
+| The workspaces and everything in `docs/` | [docs/README.md](docs/README.md) |

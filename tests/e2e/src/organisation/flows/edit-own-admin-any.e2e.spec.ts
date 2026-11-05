@@ -1,12 +1,7 @@
 // scenario: organisation/flows/edit-own-admin-any
-import type { Page } from '@playwright/test'
-
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test } from '../../support/fixtures'
-import { createOrganisation, inviteMember } from '../../support/organisation'
-
-const noteItem = (device: Page, text: string) =>
-  device.getByTestId('organisation.notes.item').filter({ hasText: text })
+import { createOrganisation, inviteMember, noteItem } from '../../support/organisation'
 
 test.describe('Edit only your own notes; an administrator edits any', {
   tag: '@full',
@@ -26,7 +21,7 @@ test.describe('Edit only your own notes; an administrator edits any', {
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B and wait for [/me]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
         const b = await anotherAccount.signUp()
 
         await expect(b.getByTestId('user.profile.heading')).toHaveText(userB.name)
@@ -37,7 +32,7 @@ test.describe('Edit only your own notes; an administrator edits any', {
     const loadsOfB = pageLoads(deviceB)
 
     const loadsOfA =
-      await test.step('2. On device A, sign up as user A, open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input] and click [organisation.create.submit-button]', async () => {
         await signUp(page)
         // Full page loads of device A from here: every change must reach it without one.
         const loads = pageLoads(page)
@@ -167,10 +162,11 @@ test.describe('Edit only your own notes; an administrator edits any', {
       ).toHaveText([data.noteByA, data.noteByBEditedByA], { timeout: 5_000 })
     })
 
-    await test.step('9. On device B, click [organisation.notes.delete-button] on the note by B', async () => {
+    await test.step('9. On device B, click [organisation.notes.delete-button] on the note by B and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await noteItem(deviceB, data.noteByBEditedByA)
         .getByTestId('organisation.notes.delete-button')
         .click()
+      await deviceB.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: Within 5 seconds of step 9 device A shows only the note by A
       await expect(
         page.getByTestId('organisation.notes.list').getByTestId('organisation.notes.text-cell'),
@@ -179,8 +175,9 @@ test.describe('Edit only your own notes; an administrator edits any', {
       })
     })
 
-    await test.step('10. On device A, click [organisation.notes.delete-button] on the note by A', async () => {
+    await test.step('10. On device A, click [organisation.notes.delete-button] on the note by A and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await noteItem(page, data.noteByA).getByTestId('organisation.notes.delete-button').click()
+      await page.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: After step 10 both devices show [organisation.notes.empty-message]
       await expect(page.getByTestId('organisation.notes.empty-message')).toHaveAttribute(
         'data-code',

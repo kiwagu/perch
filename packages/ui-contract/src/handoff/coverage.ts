@@ -5,14 +5,15 @@
  * Then the code's: per feature module of the web app and for the UI kit, the controls and
  * how many carry an anchor (`countControls`), with the unmarked controls and the ones a
  * coverage-ignore marker declares off listed by file and line; and per screen, its declared
- * anchors and the scenarios that reach it.
+ * anchors and the scenarios that reach it. Beside them, a note that fails nothing: the
+ * composites the platform declares that no screen opts into.
  */
 
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { baseOf } from '../anchors'
-import { type Contract, declaredAnchors, loadContract, textsOf } from '../check'
+import { type Contract, codesOf, declaredAnchors, loadContract, textsOf } from '../check'
 import { formatProblem, type Problem, sortProblems } from '../files'
 import { type Reference, referencesIn, type Scenario } from '../scenarios'
 import { sourcePaths } from '../sources'
@@ -35,6 +36,8 @@ export interface CoverageMeasure {
   unmarked: FileControl[]
   ignored: Array<FileControl & { reason: string }>
   screens: Array<{ id: string; anchors: number; scenarios: number }>
+  /** The composites the platform declares and no anchor of a screen opts into, by name. */
+  unusedComposites: string[]
   /** The coverage-ignore markers that cannot be applied. */
   problems: Problem[]
 }
@@ -89,10 +92,17 @@ function screensReached(contract: Contract): (scenario: Scenario) => Set<string>
     )
 }
 
+/** The composites the platform declares and no anchor opts into, in the order declared. */
+function unusedCompositesOf(contract: Contract): string[] {
+  const used = new Set(declaredAnchors(contract.screens).map(({ def }) => def.composite))
+
+  return Object.keys(contract.screens.platform.composites ?? {}).filter((name) => !used.has(name))
+}
+
 /** The totals the note opens with. */
 export const totalsOf = ({ screens, vocabulary }: Contract) => ({
   anchors: declaredAnchors(screens).length,
-  codes: Object.keys(vocabulary.codes).length,
+  codes: codesOf(vocabulary, screens).size,
   screens: screens.screens.length,
 })
 
@@ -114,6 +124,7 @@ export function measureCoverage(root: string): CoverageMeasure {
     unmarked: [],
     ignored: [],
     screens: [],
+    unusedComposites: unusedCompositesOf(contract),
     problems: [],
   }
 

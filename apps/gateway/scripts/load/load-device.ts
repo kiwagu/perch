@@ -30,32 +30,25 @@ export interface DeviceHandlers {
 
 export class LoadDevice {
   readonly #socket: WebSocket
-  /** The device's key pair; a pair the server renews replaces it. */
-  tokens: { readonly access: string; readonly refresh: string }
 
-  private constructor(
-    socket: WebSocket,
-    tokens: { readonly access: string; readonly refresh: string },
-  ) {
+  private constructor(socket: WebSocket) {
     this.#socket = socket
-    this.tokens = tokens
   }
 
   /**
-   * Opens the socket, says hello as `device` and resolves with the welcome, all within
-   * `timeoutMs`; a
-   * renewed pair sent before the welcome is kept as `device.tokens`. When it rejects the socket
-   * is closed. After the welcome, a binary message, a message the protocol refuses and a socket
-   * error each reach `handlers.onError` once.
+   * Opens the socket, says hello as `device` with its session `token` and resolves with the
+   * welcome, all within `timeoutMs`. When it rejects the socket is closed. After the welcome, a
+   * binary message, a message the protocol refuses and a socket error each reach
+   * `handlers.onError` once.
    */
   static async open(
     url: string,
-    tokens: { readonly access: string; readonly refresh: string },
+    token: string,
     handlers: DeviceHandlers,
     { timeoutMs, device: deviceId }: { readonly timeoutMs: number; readonly device: string },
   ): Promise<{ device: LoadDevice; welcome: Received<'welcome'> }> {
     const socket = new WebSocket(url)
-    const device = new LoadDevice(socket, tokens)
+    const device = new LoadDevice(socket)
     let welcomed = false
     let deadline: ReturnType<typeof setTimeout> | undefined
 
@@ -90,16 +83,10 @@ export class LoadDevice {
           decodeMessage(serverMessage, data).match(
             (message) => {
               if (welcomed) {
-                if (message.type === 'tokens') {
-                  device.tokens = { access: message.access, refresh: message.refresh }
-                }
-
                 LoadDevice.#dispatch(message, at, handlers)
               } else if (message.type === 'welcome') {
                 welcomed = true
                 resolve(message)
-              } else if (message.type === 'tokens') {
-                device.tokens = { access: message.access, refresh: message.refresh }
               } else {
                 reject(new Error(`expected welcome, received ${message.type}`))
               }
@@ -108,7 +95,7 @@ export class LoadDevice {
           )
         })
         socket.addEventListener('open', () =>
-          device.send({ type: 'hello', protocol: PROTOCOL_VERSION, ...tokens, device: deviceId }),
+          device.send({ type: 'hello', protocol: PROTOCOL_VERSION, token, device: deviceId }),
         )
       })
 
@@ -140,7 +127,7 @@ export class LoadDevice {
         handlers.onError(`error ${message.code} (${message.message})`)
         break
       default:
-        // memberships, tokens, heads and the rest do not matter to the load.
+        // memberships, heads and the rest do not matter to the load.
         break
     }
   }

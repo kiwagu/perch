@@ -14,6 +14,17 @@ export interface FlowLookups {
   readonly controls: readonly Control[]
   /** The id of the screen, which the name of a derived region leaves out. */
   readonly screen: string
+  /** The frame's toast anchor, which says the success of a model action; none, nothing is derived. */
+  readonly toast: string | undefined
+  /** The platform actions whose success toasts, each with its code (`platform.yaml` `toasts`). */
+  readonly platformToasts: Readonly<Record<string, string>>
+}
+
+/** A toast the loader derived: the frame's toast anchor, its code, the model action it says succeeded. */
+export interface DerivedToast {
+  readonly anchor: string
+  readonly code: string
+  readonly action: string
 }
 
 /** Why a part of the flow could not be expanded, at its path in the screen file. */
@@ -23,5 +34,10 @@ export interface ExpansionIssue {
 }
 
 export interface Expansion extends FlowLookups {
+  /** The guards the flow's `meta.guards` writes by failure code, each with its codes. */
+  readonly codeGuards: ReadonlyMap<string, readonly string[]>
   readonly issues: ExpansionIssue[]
+  readonly toasts: DerivedToast[]
+  /** The codes the flow's own `show`s put on the toast anchor. */
+  readonly writtenToasts: string[]
 }

@@ -3,11 +3,12 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, MODEL_FILE, PLATFORM_FILE, scenarioFile, VOCABULARY_FILE } from '../files'
 import { repository, useRepositories } from '../repository.fixture'
 import { IGNORE_WITHOUT_REASON } from '../sources'
 
-import { measureCoverage } from './coverage'
+import { measureCoverage, totalsOf } from './coverage'
 
 useRepositories()
 
@@ -114,5 +115,48 @@ describe('measureCoverage', () => {
   })
   it('counts the anchors of each screen and the scenarios that reach it', () => {
     expect(measureCoverage(sample()).screens).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
+  })
+  it('lists the composites the platform declares that no screen opts into', () => {
+    const platform = readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8')
+    const composite = (name: string) =>
+      `  ${name}:\n    description: The rules a new password keeps.\n    list: ${name}-list\n    itemState: met\n    items:\n      length: At least eight characters.\n`
+    const screen = readFileSync(join(FIXTURES, SCREEN), 'utf8')
+    const secret =
+      'sample.title-input:\n    kind: input\n    secret: true\n    composite: password-rules\n'
+
+    expect(measureCoverage(sample()).unusedComposites).toEqual([])
+    expect(
+      measureCoverage(
+        sample({
+          [PLATFORM_FILE]: `${platform}composites:\n${composite('password-rules')}${composite('pin-rules')}`,
+        }),
+      ).unusedComposites,
+    ).toEqual(['password-rules', 'pin-rules'])
+    expect(
+      measureCoverage(
+        sample({
+          [PLATFORM_FILE]: `${platform}composites:\n${composite('password-rules')}${composite('pin-rules')}`,
+          [SCREEN]: screen.replace('sample.title-input:\n    kind: input\n', secret),
+        }),
+      ).unusedComposites,
+    ).toEqual(['pin-rules'])
+  })
+})
+
+describe('totalsOf', () => {
+  it('counts each derived toast code among the codes, and the rule row as none', () => {
+    const contract = sampleContract()
+    const listed = Object.keys(contract.vocabulary.codes).length
+
+    contract.vocabulary.codes['<object>-<verb>ed'] = {
+      where: 'sample.save-button',
+      meaning: 'the success of an action of the model',
+    }
+    contract.screens.toasts = [
+      { anchor: 'sample.save-button', code: 'thing-created', action: 'thing.createThing' },
+      { anchor: 'sample.save-button', code: 'thing-deleted', action: 'thing.deleteThing' },
+    ]
+
+    expect(totalsOf(contract).codes).toBe(listed + 2)
   })
 })

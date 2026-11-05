@@ -8,6 +8,9 @@
 # per slot and its containers and pm2 names carry the slug (perch-w1-...). The stands of two
 # checkouts then run side by side, and `mcproc ls` in each shows only its own.
 version: 1
+# the mcproc release this manifest was last checked against, which `mcproc describe` shows as
+# "written by" beside the running one; an mcproc older than 0.13.0 refuses the field
+mcproc: 0.17.0
 project: perch
 vars:
   slot: 0                                   # the main checkout; a worktree gets its own
@@ -17,10 +20,16 @@ vars:
   gateway_e2e: '{{ 5191 + slot * 100 }}'    # the e2e gateway
   front: '{{ 5443 + slot * 100 }}'          # Caddy of the dev stand
   front_e2e: '{{ 5493 + slot * 100 }}'      # Caddy of the e2e stand
+  maildev_smtp: '{{ 1025 + slot * 100 }}'      # MailDev of the dev stand: the gateway's SMTP
+  maildev_web: '{{ 1080 + slot * 100 }}'       # MailDev of the dev stand: its web UI and REST API
+  maildev_smtp_e2e: '{{ 1035 + slot * 100 }}'  # MailDev of the e2e stand: the gateway's SMTP
+  maildev_web_e2e: '{{ 1090 + slot * 100 }}'   # MailDev of the e2e stand: the REST API the suites read
+  # the From of the stands' mails; a deployment sets its own GATEWAY_MAIL_FROM
+  stand_mail_from: 'Perch <no-reply@example.test>'
   # both fronts serve the UI manifest at /ui-manifest/; '0' answers 404 there instead
   ui_manifest: '1'
-  # the stands' identity access key; a deployment sets its own GATEWAY_JWT_KEY
-  stand_jwt_key: 'stand-only-signing-key-not-for-any-deployment-0123456789abcdefghijklmnop'
+  # the stands' Better Auth secret; a deployment sets its own GATEWAY_AUTH_SECRET
+  stand_auth_secret: 'stand-only-auth-secret-not-for-any-deployment-0123456789abcdef'
 # A start asks for memory first: an app's estimate is its `memory` or what a running sibling
 # checkout's copy measures, plus the margin; what does not fit waits its turn in the host's queue.
 resources:
@@ -41,9 +50,16 @@ exec:
     E2E_BASE_URL: 'https://localhost:{{ front_e2e }}'
     SURREAL_DEV_URL: 'http://127.0.0.1:{{ surreal_dev }}'
     GATEWAY_DEV_URL: 'http://127.0.0.1:{{ gateway }}'
-    # the key the stands' gateways sign with: the smoke, the load test and the seed's sweep
-    # open a stand's directory with it, as its gateway does
-    GATEWAY_JWT_KEY: '{{ stand_jwt_key }}'
+    # what the e2e stand's gateway runs with: the smoke and the load test run a gateway of their
+    # own on that stand with the same secret and front origin
+    GATEWAY_AUTH_SECRET: '{{ stand_auth_secret }}'
+    GATEWAY_PUBLIC_URL: 'https://localhost:{{ front_e2e }}'
+    # the e2e stand's mail server, which the smoke's and the load test's own gateways send to, and
+    # the mailboxes the suites, the smoke, the load test and the seed read the links from
+    GATEWAY_SMTP_URL: 'smtp://127.0.0.1:{{ maildev_smtp_e2e }}'
+    GATEWAY_MAIL_FROM: '{{ stand_mail_from }}'
+    MAILBOX_URL: 'http://127.0.0.1:{{ maildev_web_e2e }}'
+    MAILBOX_DEV_URL: 'http://127.0.0.1:{{ maildev_web }}'
 apps:
   surrealdb-dev:
     description: >-
@@ -73,6 +89,38 @@ apps:
     url: http://127.0.0.1:{{ surreal_e2e }}/health
     memory: 512M
     containers: ['{{ project }}-surrealdb-e2e']
+  maildev-dev:
+    description: >-
+      MailDev 2.2.1, the dev stand's mailbox: the gateway sends to its SMTP on
+      127.0.0.1:{{ maildev_smtp }}, and its web UI at http://127.0.0.1:{{ maildev_web }} shows every
+      mail (open a verification link from there). Mails are gone when it stops.
+    kind: server
+    run: >-
+      docker rm -f {{ project }}-maildev-dev >/dev/null 2>&1;
+      MAILDEV_SMTP_PORT={{ maildev_smtp }} MAILDEV_WEB_PORT={{ maildev_web }}
+      exec docker compose -p {{ project }} -f infra/dev/compose.yaml
+      run --rm --name {{ project }}-maildev-dev maildev
+    # MailDev listens from its container, so the app declares only its url
+    url: http://127.0.0.1:{{ maildev_web }}/healthz
+    memory: 192M
+    containers: ['{{ project }}-maildev-dev']
+    watch: [infra/dev/compose.yaml]
+    watch_delay: 1000
+  maildev-e2e:
+    description: >-
+      MailDev 2.2.1, the e2e stand's mailbox: the gateway-e2e sends to its SMTP on
+      127.0.0.1:{{ maildev_smtp_e2e }}; the e2e tests, the smoke, the load test and the seed's suite
+      read the links through its REST API at http://127.0.0.1:{{ maildev_web_e2e }}. Every start
+      begins with no mail.
+    kind: server
+    run: >-
+      docker rm -f {{ project }}-maildev-e2e >/dev/null 2>&1;
+      MAILDEV_SMTP_PORT={{ maildev_smtp_e2e }} MAILDEV_WEB_PORT={{ maildev_web_e2e }}
+      exec docker compose -p {{ project }} -f infra/dev/compose.yaml
+      run --rm --name {{ project }}-maildev-e2e maildev
+    url: http://127.0.0.1:{{ maildev_web_e2e }}/healthz
+    memory: 192M
+    containers: ['{{ project }}-maildev-e2e']
   web:
     description: >-
       The web application's build watcher: `vite build --watch` in development mode
@@ -101,13 +149,12 @@ apps:
       sync over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
       account on the stand first; restarted on a change of its sources.
     kind: server
+    # the stand's values become the gateway's settings in scripts/stand-gateway/, which defines
+    # the gateway's user on the stand first; root `bun run dev` starts the gateway the same way
     run: >-
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc SURREAL_USER=root SURREAL_PASS=root
-      bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc GATEWAY_PORT={{ gateway }}
-      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
-      GATEWAY_JWT_KEY={{ stand_jwt_key }}
-      exec bun apps/gateway/src/index.ts
+      exec bun scripts/stand-gateway/cli.ts --surreal={{ surreal_dev }} --gateway={{ gateway }}
+      --front={{ front }} --smtp={{ maildev_smtp }} --mail-from='{{ stand_mail_from }}'
+      --auth-secret={{ stand_auth_secret }} -- bun apps/gateway/src/index.ts
     port: '{{ gateway }}'
     url: http://127.0.0.1:{{ gateway }}/health
     memory: 256M
@@ -120,6 +167,8 @@ apps:
       - database/src
       - packages/data/src
       - packages/di/src
+      - packages/email/src
+      - packages/i18n/src
       - packages/ids/src
       - packages/kernel/src
       - packages/logger/src
@@ -130,6 +179,7 @@ apps:
     pm2: &gateway-pm2 { exp_backoff_restart_delay: 200 }
     depends_on:
       - { app: surrealdb-dev, condition: ready, timeout: 120 }
+      - { app: maildev-dev, condition: ready, timeout: 60 }
   gateway-e2e:
     description: >-
       The gateway on 127.0.0.1:{{ gateway_e2e }} for the e2e runs, the only client of the
@@ -137,12 +187,9 @@ apps:
       of its sources.
     kind: server
     run: >-
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc SURREAL_USER=root SURREAL_PASS=root
-      bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc GATEWAY_PORT={{ gateway_e2e }}
-      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
-      GATEWAY_JWT_KEY={{ stand_jwt_key }}
-      exec bun apps/gateway/src/index.ts
+      exec bun scripts/stand-gateway/cli.ts --surreal={{ surreal_e2e }} --gateway={{ gateway_e2e }}
+      --front={{ front_e2e }} --smtp={{ maildev_smtp_e2e }} --mail-from='{{ stand_mail_from }}'
+      --auth-secret={{ stand_auth_secret }} -- bun apps/gateway/src/index.ts
     port: '{{ gateway_e2e }}'
     url: http://127.0.0.1:{{ gateway_e2e }}/health
     memory: 256M
@@ -153,12 +200,14 @@ apps:
     pm2: *gateway-pm2
     depends_on:
       - { app: surrealdb-e2e, condition: ready, timeout: 120 }
+      - { app: maildev-e2e, condition: ready, timeout: 60 }
   caddy-dev:
     description: >-
       Caddy on https://localhost:{{ front }}: the web app's development build from
       apps/web/dist-dev, kept fresh by the web watcher (a 404 until its first build finishes),
-      and, under /backend/, the gateway; certificates from infra/dev/make-certs.sh. Restarted
-      on a change of the Caddyfile or the compose file.
+      and, under /backend/, the gateway on 127.0.0.1:{{ gateway }}, whether pm2 runs them (`web`,
+      `gateway`) or root `bun run dev` does; certificates from infra/dev/make-certs.sh.
+      Restarted on a change of the Caddyfile or the compose file.
     kind: server
     # docker would create a missing apps/web/dist-dev as root, which the watcher could not write.
     # The compose project is this checkout's slug and the container is named, so two stands
@@ -177,8 +226,6 @@ apps:
     containers: ['{{ project }}-caddy-dev']
     watch: [infra/dev/Caddyfile, infra/dev/compose.yaml]
     watch_delay: 1000
-    # start order only: Caddy serves whatever apps/web/dist-dev holds
-    depends_on: [web, gateway]
   caddy-e2e:
     description: >-
       Caddy on https://localhost:{{ front_e2e }}: the web app's build from apps/web/dist (the
@@ -198,6 +245,10 @@ apps:
     memory: 128M
     containers: ['{{ project }}-caddy-e2e']
     depends_on: [gateway-e2e]
+# dev: the whole dev stand under pm2. services: its dedicated services alone, for the Bun dev
+# scripts that root `bun run dev` runs in the foreground (the gateway and the web watcher); none
+# of them depends on those scripts, since a start brings an app's dependencies up first.
 profiles:
-  dev: [surrealdb-dev, gateway, web, caddy-dev]
-  e2e: [surrealdb-e2e, gateway-e2e, caddy-e2e]
+  dev: [surrealdb-dev, maildev-dev, gateway, web, caddy-dev]
+  services: [surrealdb-dev, maildev-dev, caddy-dev]
+  e2e: [surrealdb-e2e, maildev-e2e, gateway-e2e, caddy-e2e]

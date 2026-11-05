@@ -1,34 +1,58 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
-description: "Where a visitor signs in with an existing account or creates one: the only screen a guest sees, and where a signed-out device returns."
+description: "Where a visitor signs in with an existing account, or creates one and is asked to open the link of the mail that verifies its email: the only screen a guest sees, and where a signed-out device returns."
 flag: null
-bindings: [ { path: /sign-in, guard: guest, roles: [ guest ], history: push } ]
+bindings:
+  - path: /sign-in
+    guard: guest
+    roles: [ guest ]
+    history: push
+    search:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          description: The email a page that moved here carried over.
+          examples: [ ann@example.test ]
+      additionalProperties: false
 entry: [ user.sign-in.form, user.sign-in.email-input, user.sign-in.submit-button, user.sign-in.toggle-button ]
 anchors:
   user.sign-in.form:
     kind: form
-    description: The form of the page, in the mode sign-in or sign-up; its heading names the mode.
+    description: The form, in the mode sign-in or sign-up; its heading names the mode.
   user.sign-in.notice-message:
     kind: message
-    description: Why the last session on this device ended, when the person should know; shown once, while the page stays open.
-    codes: [ resend-after-sign-in, signed-out-elsewhere, delete-pending ]
+    description: Why the last session on this device ended; shown once, while the page stays open.
+    codes: [ resend-after-sign-in, signed-out-elsewhere, password-changed-elsewhere, password-reset-elsewhere, delete-pending ]
+  user.sign-in.mail-message:
+    kind: message
+    description: Asks to open the link of the verification mail, once a sign-up or a resend went through.
+    codes: [ check-your-mail ]
   user.sign-in.error:
     kind: error
-    description: Why the last attempt failed; the next attempt or a switch of mode clears it.
+    fields:
+      passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
     kind: input
-    description: The email of the account (type email).
+    description: "The email of the account (type email); it starts with the email a page carried over, when there is one."
     binding:
+      - search: email
       - action: platform.sign-in
         params:
           email: user.sign-in.email-input
       - action: platform.sign-up
+        params:
+          email: user.sign-in.email-input
+      - action: platform.resend-verification
         params:
           email: user.sign-in.email-input
   user.sign-in.password-input:
     kind: input
-    description: The password of the account (type password).
+    secret: true
+    composite: password-rules
+    description: The password of the account.
     binding:
       - action: platform.sign-in
         params:
@@ -36,51 +60,128 @@ anchors:
       - action: platform.sign-up
         params:
           password: user.sign-in.password-input
+    derived: [ visibility-button ]
+  user.sign-in.password-confirmation-input:
+    kind: input
+    secret: true
+    description: The password typed again; never sent.
+    derived: [ visibility-button ]
   user.sign-in.name-input:
     kind: input
-    description: The name of the new account; shown only in the mode sign-up.
+    description: The name of the new account.
     binding:
       action: platform.sign-up
       params:
         name: user.sign-in.name-input
   user.sign-in.submit-button:
     kind: button
-    description: Signs in, or in the mode sign-up creates the account; disabled while the attempt runs.
+    description: Signs in, or in the mode sign-up creates the account.
     binding:
       - action: platform.sign-in
-        params:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
       - action: platform.sign-up
         params:
-          email: user.sign-in.email-input
-          password: user.sign-in.password-input
-          name: user.sign-in.name-input
           locale: app-shell.locale-select
   user.sign-in.toggle-button:
     kind: button
-    description: Switches between signing in and creating an account; its value is the mode it switches to.
+    description: Switches between signing in and creating an account.
     dataValue: true
+  user.sign-in.forgot-link:
+    kind: link
+    description: Leads to asking for a mail that sets a new password.
+  user.sign-in.resend-button:
+    kind: button
+    description: Sends the verification mail again.
+    binding: { action: platform.resend-verification }
 states:
-  ready: "The form in the mode sign-in: the email, the password, the submit button and the switch to sign-up; the notice of the last session above them when there is one."
+  ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
 flow:
   initial: sign-in
+  meta:
+    guards:
+      emailNotVerified: { codes: [ email-not-verified ] }
+      passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
+      passwordsDiffer: the password typed again is not the same as the password
+      confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
+      confirmationFollows: the password typed again is how the password begins, all of it or a part, or is empty
   states:
     sign-in:
       description: The form in the mode sign-in.
+      meta: { renders: [ user.sign-in.forgot-link ] }
       on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
         user.sign-in.toggle-button:
-          target: sign-up
-          description: The name input appears; the error is cleared.
+          - target: password-weak
+            guard: passwordBreaksRules
+            actions:
+              - clear: user.sign-in.error
+          - target: passwords-differ
+            guard: confirmationStrays
+            description: The password confirmation kept from before no longer agrees with the password.
+            actions:
+              - clear: user.sign-in.error
+          - target: sign-up
+            actions:
+              - clear: user.sign-in.error
         user.sign-in.submit-button: signing-in
     sign-up:
-      description: The form in the mode sign-up, with the name input.
+      description: The form in the mode sign-up while the password keeps every rule.
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       on:
         user.sign-in.toggle-button:
           target: sign-in
-          description: The name input goes; the error is cleared.
-        user.sign-in.submit-button: signing-up
+          actions:
+            - clear: user.sign-in.error
+        user.sign-in.password-confirmation-input:
+          target: passwords-differ
+          guard: confirmationStrays
+        user.sign-in.password-input:
+          - target: password-weak
+            guard: passwordBreaksRules
+          - target: passwords-differ
+            guard: confirmationStrays
+        user.sign-in.submit-button:
+          - target: passwords-differ
+            guard: passwordsDiffer
+            description: Only a part of the password was typed again, so nothing is sent.
+          - target: signing-up
+    password-weak:
+      description: "The form in the mode sign-up while the password breaks a rule: the list marks the rules it keeps, and the password typed again is not judged yet."
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
+      on:
+        user.sign-in.password-input:
+          - guard: passwordBreaksRules
+            description: The list marks the rules the password keeps now.
+          - target: passwords-differ
+            guard: confirmationStrays
+          - target: sign-up
+        user.sign-in.toggle-button:
+          target: sign-in
+          actions:
+            - clear: user.sign-in.error
+    passwords-differ:
+      description: The form in the mode sign-up while the password typed again differs.
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
+      entry:
+        - show: { user.sign-in.error: [ passwords-differ ] }
+      exit:
+        - clear: user.sign-in.error
+      on:
+        user.sign-in.password-confirmation-input:
+          target: sign-up
+          guard: confirmationFollows
+        user.sign-in.password-input:
+          - target: password-weak
+            guard: passwordBreaksRules
+          - target: sign-up
+            guard: confirmationFollows
+        user.sign-in.toggle-button: sign-in
     signing-in:
+      meta: { renders: [ user.sign-in.forgot-link ] }
+      entry:
+        - clear: user.sign-in.error
       invoke:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
@@ -90,26 +191,96 @@ flow:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me
         onError:
-          target: sign-in
-          actions:
-            - show: user.sign-in.error
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
     signing-up:
+      meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
         src: platform.sign-up
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, name: user.sign-in.name-input }
         onDone:
-          target: done
-          description: The account is created with its profile.
+          target: check-mail
+          description: "The account is created, or the email has one already: either way the device is not signed in, and the form goes back to the mode sign-in with the email kept."
           actions:
-            - show: { app-shell.notice-message: [ welcome ] }
-            - navigate: /me
+            - show: { user.sign-in.mail-message: [ check-your-mail ] }
+    check-mail:
+      description: The form in the mode sign-in with the email kept.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
+        user.sign-in.resend-button: resending
+        user.sign-in.submit-button:
+          target: signing-in
+          actions:
+            - clear: user.sign-in.mail-message
+        user.sign-in.toggle-button:
+          - target: password-weak
+            guard: passwordBreaksRules
+            actions:
+              - clear: user.sign-in.mail-message
+          - target: passwords-differ
+            guard: confirmationStrays
+            description: The password confirmation kept from before no longer agrees with the password.
+            actions:
+              - clear: user.sign-in.mail-message
+          - target: sign-up
+            actions:
+              - clear: user.sign-in.mail-message
+    unverified:
+      description: The form in the mode sign-in with the error.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      on:
+        user.sign-in.forgot-link:
+          target: forgot-password
+          actions:
+            - navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }
+        user.sign-in.resend-button: resending
+        user.sign-in.submit-button: signing-in
+        user.sign-in.toggle-button:
+          - target: password-weak
+            guard: passwordBreaksRules
+            actions:
+              - clear: user.sign-in.error
+          - target: passwords-differ
+            guard: confirmationStrays
+            description: The password confirmation kept from before no longer agrees with the password.
+            actions:
+              - clear: user.sign-in.error
+          - target: sign-up
+            actions:
+              - clear: user.sign-in.error
+    resending:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      entry:
+        - clear: user.sign-in.error
+      invoke:
+        src: platform.resend-verification
+        input: { email: user.sign-in.email-input }
+        onDone:
+          target: check-mail
+          actions:
+            - show: { user.sign-in.mail-message: [ check-your-mail ] }
         onError:
-          target: sign-up
+          target: unverified
           actions:
+            - clear: user.sign-in.mail-message
             - show: user.sign-in.error
     done:
       description: The app has moved to /me.
       type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
+    forgot-password:
+      description: The app has moved to /forgot-password, carrying the email typed.
+      type: final
+      meta: { renders: [ user.sign-in.forgot-link ] }
 wireframe: |-
   - heading "Sign in" [level=1]
   - textbox "Email"

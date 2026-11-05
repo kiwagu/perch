@@ -15,13 +15,14 @@ export interface MembershipsListener {
    */
   revoke(region: string): Promise<void>
   /**
-   * The device was signed out from another device: its socket closes with `code` at once,
-   * whatever it is doing. Resolves once it closed.
+   * The device was signed out, from another device or over one of its sockets, or signed in
+   * again into a new session: its socket closes with `code` at once, whatever it is doing.
+   * Resolves once it closed.
    */
   end(code: number): Promise<void>
   /**
    * Another connection of the device took over: the socket closes at once, without signing the
-   * device out, and spends no key any more; the device connects again after such a close.
+   * device out; the device connects again after such a close.
    */
   supersede(): void
 }
@@ -40,36 +41,39 @@ interface Entry {
 
 /**
  * The open sync connections of each identity and device, so a change of an identity's
- * memberships reaches every device it has connected, and a device signed out from another one
- * is closed wherever it is connected. Each close moves a revocation epoch, of the device or of the
- * whole identity: a hello reads the epoch once its keys are accepted and registers with it, so a
- * close that lands while the hello reads the device's row refuses the registration. A device holds
- * one live connection: the one a newer hello registers closes the older ones (`supersede`).
+ * memberships reaches every device it has connected, and a device signed out from another one,
+ * or signed in again, is closed wherever it is connected. Each close moves the registry's
+ * revocation epoch and records it against the device, or the whole identity, it names. A hello
+ * reads the epoch before it reads its session, when it knows neither the identity nor whether
+ * the device is signed in, and registers with it: a close of the device or of its identity that
+ * lands from then on, while the session is read, refuses the registration, and one before it is
+ * seen by the read (the routes, and a sign-in, end the session before they close the sockets). A
+ * device holds one live connection: the one a newer hello registers closes the older ones
+ * (`supersede`).
  */
 export class ConnectionRegistry {
   readonly #onFailure: (error: DataError) => void
   readonly #byIdentity = new Map<IdentityId, Set<Entry>>()
-  /** How many times every device of an identity was closed. */
-  readonly #identityEpochs = new Map<IdentityId, number>()
-  /** How many times each device of an identity was closed, by identity and device. */
-  readonly #deviceEpochs = new Map<string, number>()
+  /** How many closes the registry made. */
+  #epoch = 0
+  /** The epoch of the last close of every device of an identity. */
+  readonly #identityClosedAt = new Map<IdentityId, number>()
+  /** The epoch of the last close of each device of an identity, by identity and device. */
+  readonly #deviceClosedAt = new Map<string, number>()
 
   constructor(options: ConnectionRegistryOptions) {
     this.#onFailure = options.onFailure
   }
 
-  /** The revocation epoch of `device` of `identity`: it moves with each close that names it. */
-  epoch(identity: IdentityId, device: string): number {
-    return (
-      (this.#identityEpochs.get(identity) ?? 0) +
-      (this.#deviceEpochs.get(deviceKey(identity, device)) ?? 0)
-    )
+  /** The revocation epoch: it moves with each close, whatever it names. */
+  epoch(): number {
+    return this.#epoch
   }
 
   /**
    * Registers a connection of `device` of `identity`, whose hello read `epoch`; the answer
-   * removes it again, once. A device closed since that epoch was read is not registered:
-   * `undefined`.
+   * removes it again, once. A device closed since that epoch was read, alone or with every device
+   * of its identity, is not registered: `undefined`.
    */
   add(
     identity: IdentityId,
@@ -77,7 +81,10 @@ export class ConnectionRegistry {
     connection: MembershipsListener,
     epoch: number,
   ): (() => void) | undefined {
-    if (epoch !== this.epoch(identity, device)) {
+    if (
+      (this.#identityClosedAt.get(identity) ?? 0) > epoch ||
+      (this.#deviceClosedAt.get(deviceKey(identity, device)) ?? 0) > epoch
+    ) {
       return undefined
     }
 
@@ -99,7 +106,7 @@ export class ConnectionRegistry {
   /**
    * Closes every live connection of `device` of `identity` but `keep`, which a newer hello of the
    * device registered: a device holds one live socket, so an older one (a socket the device gave
-   * up that the gateway still holds) spends none of its keys. It signs nothing out: no epoch moves.
+   * up that the gateway still holds) is served no more. It signs nothing out: no epoch moves.
    */
   supersede(identity: IdentityId, device: string, keep: MembershipsListener): void {
     for (const entry of this.#entriesOf(identity)) {
@@ -129,17 +136,17 @@ export class ConnectionRegistry {
 
   /**
    * Closes with `code` every live connection of `device` of `identity`, or of every device of
-   * the identity when `device` is undefined, and moves the epoch of what it names; resolves once
-   * each closed. A connection that fails to close is reported and the others are closed all the
-   * same. Never rejects.
+   * the identity when `device` is undefined, and moves the epoch, recorded against what it names;
+   * resolves once each closed. A connection that fails to close is reported and the others are
+   * closed all the same. Never rejects.
    */
   async close(identity: IdentityId, device: string | undefined, code: number): Promise<void> {
-    if (device === undefined) {
-      this.#identityEpochs.set(identity, (this.#identityEpochs.get(identity) ?? 0) + 1)
-    } else {
-      const key = deviceKey(identity, device)
+    this.#epoch += 1
 
-      this.#deviceEpochs.set(key, (this.#deviceEpochs.get(key) ?? 0) + 1)
+    if (device === undefined) {
+      this.#identityClosedAt.set(identity, this.#epoch)
+    } else {
+      this.#deviceClosedAt.set(deviceKey(identity, device), this.#epoch)
     }
 
     await Promise.all(
@@ -164,7 +171,7 @@ export class ConnectionRegistry {
   }
 }
 
-/** The key of a device of an identity in the map of epochs. */
+/** The key of a device of an identity in the map of its closes. */
 function deviceKey(identity: IdentityId, device: string): string {
   return `${identity}\u0000${device}`
 }

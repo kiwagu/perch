@@ -3,6 +3,7 @@ export { entityDefinitionSchema, entityFieldSchema } from './entity.schema'
 export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'
 export {
+  ACCOUNT,
   actionParamsSchema,
   anchorBindingSchema,
   anchorDefSchema,
@@ -10,12 +11,20 @@ export {
   authoredScreenFileSchema,
   bindingRefSchema,
   bindingSchema,
+  codeGuardSchema,
   controlRegionSchema,
+  derivedFromSchema,
   draftPatternSchema,
   effectSchema,
   flowSchema,
+  type PlatformComposite,
+  type PlatformMail,
+  type PlatformNotice,
   paramValueSchema,
+  platformCompositeSchema,
   platformFileSchema,
+  platformMailSchema,
+  platformNoticeSchema,
   platformSchema,
   screenFileSchema,
   screenSchema,

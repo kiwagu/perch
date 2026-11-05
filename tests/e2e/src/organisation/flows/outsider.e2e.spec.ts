@@ -16,7 +16,7 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
       nameOfC: generate.organisationName(),
     }
 
-    await test.step('1. On device A, sign up as user A, open [/org], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]', async () => {
+    await test.step('1. On device A, sign up as user A, open the link of its [mail:sign-up], open [/org], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]', async () => {
       await signUp(page)
       await page.getByTestId('app-shell.nav.organisation-link').click()
       await createOrganisation(page, data)
@@ -28,7 +28,7 @@ test.describe('Keep an organisation invisible to accounts outside it', { tag: '@
     })
 
     const deviceC =
-      await test.step('2. On device C, sign up as user C and open [/org]', async () => {
+      await test.step('2. On device C, sign up as user C, open the link of its [mail:sign-up] and open [/org]', async () => {
         const c = await anotherAccount.signUp()
 
         await c.getByTestId('app-shell.nav.organisation-link').click()

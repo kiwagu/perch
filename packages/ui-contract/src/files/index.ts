@@ -4,6 +4,20 @@ export {
   type ActivityTransition,
   loadActivities,
 } from './activities'
+export {
+  CONFIRM_RULE_ROW,
+  type DerivedQuestion,
+  type DescriptionContext,
+  derivedDescriptionOf,
+  describedOf,
+  failuresOf,
+  isBare,
+  type Request,
+  requestsOf,
+  TOAST_RULE_ROW,
+  TYPE_PASSWORD,
+} from './derive'
+export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'
 export {
   type DeepTarget,
@@ -29,7 +43,9 @@ export {
   activityFile,
   CONTRACT_DIR,
   COVERAGE_FILE,
+  DOMAIN_DIR,
   ENTITY_SCHEMA_FILE,
+  isBusinessFile,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
   PLATFORM_FILE,
@@ -53,6 +69,7 @@ export { parseYaml } from './read-yaml'
 export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {
+  ACCOUNT,
   type AnchorBinding,
   type AnchorDef,
   type Binding,
@@ -68,6 +85,9 @@ export {
   loadScreensWith,
   type ParamValue,
   type Platform,
+  type PlatformComposite,
+  type PlatformMail,
+  type PlatformNotice,
   type Screen,
   type ScreensFile,
 } from './screens'

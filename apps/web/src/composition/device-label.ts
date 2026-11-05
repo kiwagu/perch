@@ -1,8 +1,8 @@
 /**
  * A label a person can read for this browser, such as "Chrome on Linux" or "Safari on iPhone",
- * sent at sign-up and sign-in so that the list of an account's devices tells them apart. It
- * reads the client hints when the browser gives them, the user agent string otherwise; what
- * neither names reads "Browser on device". The gateway takes at most 60 characters.
+ * sent at sign-in and at an email's first verification so that the list of an account's devices
+ * tells them apart. It reads the client hints when the browser gives them, the user agent string
+ * otherwise; what neither names reads "Browser on device". The gateway takes at most 60 characters.
  */
 
 /** The part of `navigator` the label is read from. */

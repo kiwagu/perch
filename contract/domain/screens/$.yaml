@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: not-found
+title: Page not found
+description: "What an address no other route takes opens: it says no page is there and offers one way back, to sign in for a guest, to the profile for a signed-in account."
+flag: null
+bindings: [ { path: /$, roles: [ guest, identity, member, admin ], history: push } ]
+entry: [ not-found.page.heading ]
+anchors:
+  not-found.page.heading:
+    kind: heading
+  not-found.page.sign-in-link:
+    kind: link
+    binding: { route: /sign-in }
+    roles: [ guest ]
+  not-found.page.profile-link:
+    kind: link
+    binding: { route: /me }
+    roles: [ identity, member, admin ]
+wireframe: |-
+  - heading "Page not found" [level=1]
+  - link "Go to your profile"

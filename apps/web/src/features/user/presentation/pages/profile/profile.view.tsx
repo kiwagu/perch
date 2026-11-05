@@ -1,10 +1,11 @@
-import { type SubmitEvent, useId } from 'react'
+import { useId } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
+import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
@@ -31,9 +32,13 @@ export interface ProfileViewProps {
   /** Whether the flow's state handles a button's event: the button is enabled while it does. */
   readonly can: (control: ProfileControl) => boolean
   readonly onType: (field: keyof ProfileFields, value: string) => void
-  readonly onSave: () => void
+  /** Saves the form: resolves whether it saved, and the fields then hold no unsaved input. */
+  readonly onSave: () => Promise<boolean>
   readonly onSignOut: () => void
-  /** The flow asks before signing out: this device holds changes it could not send. */
+  /**
+   * Whether the flow's state renders the dialog that asks before signing out: this device holds
+   * changes it could not send.
+   */
   readonly confirmSignOut?: boolean
   readonly onConfirmSignOut: () => void
   readonly onCancelSignOut: () => void
@@ -72,13 +77,9 @@ function ProfileForm(props: ProfileViewProps) {
       {error.text}
     </FieldError>
   ) : null
-  const submit = (event: SubmitEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    props.onSave()
-  }
 
   return (
-    <form onSubmit={submit} data-testid="user.profile.form">
+    <Form onSubmit={() => props.onSave()} data-testid="user.profile.form">
       <FieldGroup>
         <Field data-invalid={concerns === 'name' ? true : undefined}>
           <FieldLabel htmlFor={nameId}>{t('user.profile.name')}</FieldLabel>
@@ -115,7 +116,7 @@ function ProfileForm(props: ProfileViewProps) {
           </Button>
         </Field>
       </FieldGroup>
-    </form>
+    </Form>
   )
 }
 

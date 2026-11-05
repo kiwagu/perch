@@ -7,7 +7,7 @@
   "scripts": {
     "prepare": "lefthook install",
     "build": "bun run scripts/build-capped.ts",
-    "dev": "bun run scripts/turbo-with-exclude.ts dev",
+    "dev": "bun run scripts/dev/cli.ts",
     "typecheck": "turbo run typecheck typecheck:root",
     "lint": "turbo run lint lint:root lint:surql",
     "test": "turbo run test test:root --concurrency=4",
@@ -29,6 +29,7 @@
     "contract:routes": "ui-contract routes",
     "contract:flow": "ui-contract flow",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
+    "perf:measure": "mcproc exec --memory 3G --note perf -- bun tests/e2e/scripts/perf-measure.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
@@ -67,7 +68,20 @@
       "@biomejs/biome": "2.5.15",
       "@fontsource-variable/inter": "5.3.0",
       "@playwright/test": "1.64.1",
+      "@react-email/body": "0.3.0",
+      "@react-email/button": "0.2.1",
+      "@react-email/container": "0.0.16",
+      "@react-email/head": "0.0.13",
+      "@react-email/heading": "0.0.16",
+      "@react-email/hr": "0.0.12",
+      "@react-email/html": "0.0.12",
+      "@react-email/link": "0.0.13",
+      "@react-email/preview": "0.0.14",
+      "@react-email/render": "2.2.0",
+      "@react-email/section": "0.0.17",
+      "@react-email/text": "0.1.6",
       "@stylistic/eslint-plugin": "5.10.0",
+      "@surrealdb/better-auth": "0.1.0",
       "@surrealdb/node": "3.1.0",
       "@surrealdb/node-native": "3.3.4",
       "@surrealdb/surql-fmt": "0.1.0-beta.3",
@@ -87,6 +101,7 @@
       "@xstate/react": "6.1.0",
       "ajv": "8.20.0",
       "ajv-formats": "3.0.1",
+      "better-auth": "1.6.33",
       "class-variance-authority": "0.7.1",
       "cn": "0.5.0",
       "entity-id": "1.2.0",
@@ -99,7 +114,9 @@
       "loro-crdt": "1.16.4",
       "lucide-react": "1.58.0",
       "neverthrow": "8.2.0",
+      "nodemailer": "10.1.5",
       "oxc-parser": "0.154.0",
+      "parse5": "8.0.1",
       "pino": "10.4.0",
       "react": "19.3.1",
       "react-dom": "19.3.1",
@@ -114,9 +131,11 @@
       "typescript": "7.0.2",
       "typescript-eslint": "8.71.2",
       "vite": "8.3.4",
+      "vite-plugin-pwa": "2.0.0",
       "vite-plugin-wasm": "3.6.0",
       "vite-tsconfig-paths": "6.1.1",
       "vitest": "5.0.5",
+      "workbox-window": "7.4.1",
       "xstate": "5.33.2",
       "yaml": "2.9.1",
       "zod": "4.6.7"
@@ -126,5 +145,8 @@
         "typescript": "6.0.3"
       }
     }
+  },
+  "patchedDependencies": {
+    "@surrealdb/better-auth@0.1.0": "patches/@surrealdb%2Fbetter-auth@0.1.0.patch"
   }
 }

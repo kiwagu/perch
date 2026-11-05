@@ -30,7 +30,7 @@ const tree: ProfileResult = [
 function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = {
     onType: vi.fn(),
-    onSave: vi.fn(),
+    onSave: vi.fn(() => Promise.resolve(true)),
     onSignOut: vi.fn(),
     onConfirmSignOut: vi.fn(),
     onCancelSignOut: vi.fn(),

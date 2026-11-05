@@ -12,9 +12,9 @@ block below from the code and the contract; the text around it is written by han
 
 <!-- coverage:start -->
 
-The contract declares 5 screens, 67 anchors and 30 codes.
+The contract declares 12 screens, 157 anchors and 67 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4/8; controls marked 33/33, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 63/64, ignored 2.
 
 ## Model
 
@@ -38,9 +38,11 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4
 | --- | --- | --- |
 | id | field | unbound |
 | identity | field | unbound |
-| locale | field | `app-shell.locale-select` |
+| locale | field | `app-shell.locale-select`, `user.settings.locale-select` |
+| theme | field | `app-shell.theme-select`, `user.settings.theme-select` |
 | createSettings | action | unbound |
-| updateLocale | action | `app-shell.locale-select` |
+| updateLocale | action | `app-shell.locale-select`, `user.settings.locale-select` |
+| updateTheme | action | `user.settings.theme-select` |
 
 ### note
 
@@ -58,22 +60,25 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 4
 
 | Activity | Scenarios | Transitions | Walked |
 | --- | ---: | ---: | ---: |
-| session | 4 | 8 | 4 |
+| session | 4 | 8 | 5 |
 
 ## Controls
 
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
-| app-shell | 3 | 3 | 0 | 100% |
+| app-shell | 10 | 10 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
+| not-found | 2 | 2 | 0 | 100% |
 | organisation | 14 | 14 | 0 | 100% |
-| user | 11 | 11 | 0 | 100% |
-| ui kit | 2 | 2 | 2 | 100% |
-| all | 33 | 33 | 2 | 100% |
+| user | 31 | 31 | 0 | 100% |
+| ui kit | 4 | 3 | 2 | 75% |
+| all | 64 | 63 | 2 | 98% |
 
 ### Unmarked
 
-None.
+```text
+packages/ui/src/components/ui/toast.tsx:81: button
+```
 
 ### Ignored
 
@@ -86,11 +91,18 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| app-shell | 9 | 15 |
-| device | 10 | 2 |
-| user.profile | 10 | 16 |
-| organisation | 30 | 4 |
-| user.sign-in | 8 | 10 |
+| not-found | 3 | 1 |
+| app-shell | 21 | 63 |
+| user.confirm-email | 5 | 4 |
+| user.delete-account | 4 | 5 |
+| device | 10 | 1 |
+| user.forgot-password | 6 | 11 |
+| user.profile | 10 | 50 |
+| organisation | 30 | 12 |
+| user.reset-password | 15 | 9 |
+| user.settings | 27 | 21 |
+| user.sign-in | 19 | 40 |
+| user.verify-email | 7 | 6 |
 
 <!-- coverage:end -->
 

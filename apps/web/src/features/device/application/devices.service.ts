@@ -17,7 +17,7 @@ export type RevokeOutcome =
 /**
  * The signed-in identity's devices: listing them, signing another one out and signing out
  * everywhere, through the gateway's device routes. This device is signed out from the profile,
- * through its session, which sends what it can and forgets its keys and data.
+ * through its session, which sends what it can and forgets its token and data.
  */
 export class DevicesService {
   constructor(

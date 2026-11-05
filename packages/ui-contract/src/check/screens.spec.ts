@@ -87,6 +87,57 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "sample.gone-input" is not an anchor of the screen',
     ])
   })
+  it('says only a field holds input', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.page').holdsInput = true
+    anchorIn(contract, 'sample.title-input').holdsInput = false
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].holdsInput: only a field holds input',
+    ])
+  })
+  it('takes a visibility-button on a secret input and refuses it on any other kind', () => {
+    const contract = sampleContract()
+
+    Object.assign(anchorIn(contract, 'sample.title-input'), {
+      secret: true,
+      derived: ['visibility-button'],
+    })
+
+    expect(printed(contract)).toEqual([])
+
+    anchorIn(contract, 'sample.save-button').derived = ['visibility-button']
+    anchorIn(contract, 'sample.mode-select').derived = ['option', 'visibility-button']
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].derived[0]: only an input renders a visibility-button',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].derived[1]: only an input renders a visibility-button',
+    ])
+  })
+  it('refuses an eye on an input that holds no secret: it shows what a secret field hides', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.title-input"].derived[0]: only a secret input renders a visibility-button: declare it secret: true',
+    ])
+  })
+  it('takes secret on a field and refuses it on any other kind', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').secret = true
+    anchorIn(contract, 'sample.mode-select').secret = true
+
+    expect(printed(contract)).toEqual([])
+
+    anchorIn(contract, 'sample.save-button').secret = true
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].secret: only a field holds a secret',
+    ])
+  })
   it('wants every anchor to start with its screen id and end with its kind', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')

@@ -6,11 +6,12 @@
  * and a problem located in a screen's file, the platform file or another file at a line.
  */
 
-import { baseOf } from '../anchors'
+import { baseOf, testIdFor, VISIBILITY_BUTTON, VISIBILITY_VALUES } from '../anchors'
 import {
   type Activity,
   type AnchorDef,
   type BindingRef,
+  CONFIRM_RULE_ROW,
   jsonPath,
   type Lines,
   type Model,
@@ -18,6 +19,7 @@ import {
   type Problem,
   type Screen,
   type ScreensFile,
+  TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
 import type { Scenario } from '../scenarios'
@@ -30,7 +32,7 @@ export interface Contract {
   readonly activities: Activity[]
   /** The line of each key and item of each activity's file, by the activity's id. */
   readonly activityLines: ReadonlyMap<string, Lines>
-  /** The scenarios of `tests/e2e/scenarios`, sorted by the path of their files. */
+  /** The scenarios of `tests/e2e/scenarios`, sorted by their ids. */
   readonly scenarios: Scenario[]
   /** The line of each field of each scenario's file, by the scenario's id. */
   readonly scenarioLines: ReadonlyMap<string, Lines>
@@ -53,6 +55,9 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
       at: ['screens', index, 'anchors', anchor],
     })),
   )
+
+/** The two answers of a question the frame asks: going on, and staying. */
+export const ANSWERS = ['confirm-button', 'cancel-button'] as const
 
 /** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
 export function bindingRefsOf(
@@ -166,6 +171,41 @@ export function knownAnchors(contract: Contract): (anchor: string) => boolean {
   }
 }
 
+/**
+ * The visibility-buttons the contract declares: `<anchor>.visibility-button` for each anchor
+ * that lists the suffix in `derived`. Presentation only: never an event of a flow or an activity,
+ * and never a value an action takes.
+ */
+export const visibilityButtonsOf = (screens: ScreensFile): Set<string> =>
+  new Set(
+    declaredAnchors(screens)
+      .filter(({ def }) => (def.derived ?? []).includes(VISIBILITY_BUTTON))
+      .map(({ anchor }) => testIdFor(anchor, VISIBILITY_BUTTON)),
+  )
+
+/** The problem of a visibility-button named as more than presentation: `never` says as what. */
+export const presentationOnly = (
+  anchor: string,
+  never:
+    | 'an event of a flow'
+    | 'an event of an activity'
+    | 'a value an action takes'
+    | 'a value a search carries',
+): string => `"${anchor}" is a ${VISIBILITY_BUTTON}: presentation only, never ${never}`
+
+/**
+ * The codes of the contract: the vocabulary's rows, the rule rows aside (they are no codes), and
+ * each toast and question code the loader derived, which the rule rows stand for.
+ */
+export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<string> =>
+  new Set([
+    ...Object.keys(vocabulary.codes).filter(
+      (code) => code !== TOAST_RULE_ROW && code !== CONFIRM_RULE_ROW,
+    ),
+    ...screens.toasts.map(({ code }) => code),
+    ...screens.questions.map(({ code }) => code),
+  ])
+
 /** Every state of the vocabulary: app, container and row states. */
 export const statesOf = (vocabulary: Vocabulary): Set<string> =>
   new Set([
@@ -192,6 +232,17 @@ export const isValueOf = (rows: Readonly<Record<string, string>>, value: string)
 /** Whether `value` is a row of some anchor's choice values, or matches a pattern row. */
 export const isChoiceValue = (vocabulary: Vocabulary, value: string): boolean =>
   Object.values(vocabulary.choiceValues).some((rows) => isValueOf(rows, value))
+
+/**
+ * Whether `value` is a `data-value` of the contract: a choice value, or, once an input renders a
+ * visibility-button, one of the values its suffix defines (`show`, `hide`).
+ */
+export function contractValues(contract: Contract): (value: string) => boolean {
+  const visibility = visibilityButtonsOf(contract.screens).size > 0
+
+  return (value) =>
+    isChoiceValue(contract.vocabulary, value) || (visibility && has(VISIBILITY_VALUES, value))
+}
 
 /** The paths of every binding of every screen. */
 export const bindingPaths = (screens: ScreensFile): Set<string> =>

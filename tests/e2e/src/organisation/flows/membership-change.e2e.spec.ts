@@ -17,7 +17,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
     const userB = anotherAccount.account
 
     const deviceB =
-      await test.step('1. On device B, sign up as user B and open [/org]', async () => {
+      await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and open [/org]', async () => {
         const b = await anotherAccount.signUp()
 
         await b.getByTestId('app-shell.nav.organisation-link').click()
@@ -34,7 +34,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
     const loadsOfB = pageLoads(deviceB)
 
     const userA =
-      await test.step('2. On device A, sign up as user A, create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]', async () => {
+      await test.step('2. On device A, sign up as user A, open the link of its [mail:sign-up], create the organisation with [organisation.create.submit-button] and add the note by A with [organisation.notes.add-button]', async () => {
         const account = await signUp(page)
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
@@ -104,12 +104,13 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         return name
       })
 
-    await test.step("4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item]", async () => {
+    await test.step("4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       await page
         .getByTestId('organisation.members.item')
         .filter({ hasText: userB.email })
         .getByTestId('organisation.members.remove-button')
         .click()
+      await page.getByTestId('app-shell.confirmation.confirm-button').click()
     })
 
     // Expected:

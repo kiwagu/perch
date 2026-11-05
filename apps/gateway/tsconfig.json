@@ -1,5 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "types": ["bun", "@workspace/data/surql"] },
+  "compilerOptions": { "types": ["bun", "@workspace/data/surql"], "jsx": "react-jsx" },
   "include": ["src", "scripts", "vitest.config.ts"]
 }

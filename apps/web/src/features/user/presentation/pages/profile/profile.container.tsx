@@ -1,9 +1,7 @@
-import { useNavigate } from '@tanstack/react-router'
-import { useMachine } from '@xstate/react'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 
 import { useService, useShape } from '../../../../../platform/module'
-import { useNotify } from '../../../../../platform/notices'
+import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
 import {
   createProfileMachine,
@@ -43,9 +41,7 @@ export function ProfileContainer() {
       }),
     [profiles, session],
   )
-  const [state, send, actor] = useMachine(machine)
-  const notify = useNotify()
-  const navigate = useNavigate()
+  const { state, send, submit, renders } = useScreenMachine('user.profile', machine)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -58,21 +54,6 @@ export function ProfileContainer() {
       send({ type: 'model.profile.bio' })
     }
   }, [row?.bio, send])
-
-  // The effects of the flow outside the form: the shell's notice, then the move.
-  useEffect(() => {
-    const shown = actor.on('show', ({ codes }) => {
-      if (codes.includes('profile-saved')) {
-        notify({ code: 'profile-saved', text: (t) => t('user.profile.saved') })
-      }
-    })
-    const moved = actor.on('navigate', ({ to }) => void navigate({ to }))
-
-    return () => {
-      shown.unsubscribe()
-      moved.unsubscribe()
-    }
-  }, [actor, notify, navigate])
 
   const type = (field: keyof ProfileFields, value: string) => {
     const next = { ...values.current.drafts, [field]: value }
@@ -93,9 +74,9 @@ export function ProfileContainer() {
       error={state.context.error}
       can={(control: ProfileControl) => state.can({ type: control })}
       onType={type}
-      onSave={() => send({ type: 'user.profile.save-button' })}
+      onSave={() => submit({ type: 'user.profile.save-button' })}
       onSignOut={() => send({ type: 'user.profile.sign-out-button' })}
-      confirmSignOut={state.matches({ editing: { session: 'confirming' } })}
+      confirmSignOut={renders('user.profile.sign-out-dialog')}
       onConfirmSignOut={() => send({ type: 'user.profile.sign-out-dialog.confirm-button' })}
       onCancelSignOut={() => send({ type: 'user.profile.sign-out-dialog.cancel-button' })}
     />

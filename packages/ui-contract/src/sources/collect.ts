@@ -1,12 +1,15 @@
 /**
  * Collects the anchors and codes one source file declares, as the contract check reads
  * them: `data-testid`, `testId` and `*TestId` attributes, `testId:` keys and
- * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`; the
+ * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`, each with
+ * its base when that is a literal; the
  * `data-code` attributes, `code:` keys and `<NAME>_CODES` maps. A name or a `testIdFor()`
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
  * problem, since no check can follow it. A key or a map value is a contract code only in
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
- * while a `data-code` literal outside the grammar is a problem.
+ * while a `data-code` literal outside the grammar is a problem. And `holdsInput={false}`
+ * beside a field's anchor, for the opt-out the contract derives: a literal on the element
+ * that carries the anchor as a literal, or a prop passed through.
  */
 
 import { type Expression, parseSync, Visitor } from 'oxc-parser'
@@ -29,11 +32,20 @@ export const RUNTIME_ANCHOR =
 export const RUNTIME_SUFFIX =
   'the suffix of testIdFor() is built at runtime; pass a literal suffix of the vocabulary'
 
+export const HOLDS_INPUT_ANCHOR =
+  "holdsInput goes on the element that carries the field's anchor as a literal"
+
+export const HOLDS_INPUT_VALUE =
+  'holdsInput is {false} or left out; the contract decides it (a prop passed through is fine)'
+
 export interface Collected {
   file: string
   literals: Array<{ anchor: string; form: 'attribute' | 'prop' | 'key' | 'constant'; line: number }>
-  derived: Array<{ suffix: string; line: number }>
+  /** The suffix of each `testIdFor()`, with its base when the call writes it as a literal. */
+  derived: Array<{ suffix: string; base?: string; line: number }>
   codes: Array<{ code: string; form: 'attribute' | 'key' | 'map'; line: number }>
+  /** `holdsInput` written as a literal on the element of a field's anchor. */
+  inputs: Array<{ anchor: string; holdsInput: boolean; line: number }>
   problems: Problem[]
 }
 
@@ -41,7 +53,7 @@ type LiteralForm = Collected['literals'][number]['form']
 type CodeForm = Collected['codes'][number]['form']
 
 /** A file without any of these words declares no anchor and no code, and is not parsed. */
-const WORDS = /data-testid|testId|TestId|_TEST_ID|data-code|code:|_CODES/
+const WORDS = /data-testid|testId|TestId|_TEST_ID|data-code|code:|_CODES|holdsInput/
 
 const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
 const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
@@ -54,7 +66,14 @@ export const isAnchorAttribute = (name: string): boolean =>
   name === 'data-testid' || name === 'testId' || name.endsWith('TestId')
 
 export function collectFromSource(text: string, file: string): Collected {
-  const collected: Collected = { file, literals: [], derived: [], codes: [], problems: [] }
+  const collected: Collected = {
+    file,
+    literals: [],
+    derived: [],
+    codes: [],
+    inputs: [],
+    problems: [],
+  }
 
   if (!WORDS.test(text)) {
     return collected
@@ -113,6 +132,46 @@ export function collectFromSource(text: string, file: string): Collected {
         anchor(attributeValue(node.value), form, node.start)
       }
     },
+    JSXOpeningElement(node) {
+      const attributes = node.attributes.flatMap((attribute) =>
+        attribute.type === 'JSXAttribute' && attribute.name.type === 'JSXIdentifier'
+          ? [{ name: attribute.name.name, value: attribute.value, start: attribute.start }]
+          : [],
+      )
+      const holds = attributes.find(({ name }) => name === 'holdsInput')
+
+      if (holds === undefined) {
+        return
+      }
+
+      const expression =
+        holds.value?.type === 'JSXExpressionContainer' ? holds.value.expression : undefined
+
+      if (expression?.type === 'Identifier' || expression?.type === 'MemberExpression') {
+        return
+      }
+
+      if (expression?.type !== 'Literal' || typeof expression.value !== 'boolean') {
+        collected.problems.push({ file, line: line(holds.start), message: HOLDS_INPUT_VALUE })
+
+        return
+      }
+
+      const carrier = attributes.find(({ name }) => isAnchorAttribute(name))
+      const value = carrier === undefined ? undefined : attributeValue(carrier.value)
+
+      if (value?.kind !== 'literal') {
+        collected.problems.push({ file, line: line(holds.start), message: HOLDS_INPUT_ANCHOR })
+
+        return
+      }
+
+      collected.inputs.push({
+        anchor: value.text,
+        holdsInput: expression.value,
+        line: line(holds.start),
+      })
+    },
     ObjectExpression(node) {
       for (const property of node.properties) {
         if (property.type !== 'Property' || property.kind !== 'init') {
@@ -150,12 +209,17 @@ export function collectFromSource(text: string, file: string): Collected {
         return
       }
 
+      const base = staticText(node.arguments[0])
       const suffix = staticText(node.arguments[1])
 
       if (suffix === undefined) {
         collected.problems.push({ file, line: line(node.start), message: RUNTIME_SUFFIX })
       } else {
-        collected.derived.push({ suffix, line: line(node.start) })
+        collected.derived.push({
+          suffix,
+          ...(base === undefined ? {} : { base }),
+          line: line(node.start),
+        })
       }
     },
   }).visit(program)

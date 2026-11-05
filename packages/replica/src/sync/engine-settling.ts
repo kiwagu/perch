@@ -12,24 +12,6 @@ export interface SyncedRegion {
   readonly sync: RegionSync
 }
 
-/** A promise that the next `fire` resolves, renewed each time. */
-function changeSignal() {
-  let resolve: () => void = () => {}
-  let next = new Promise<void>((settle) => {
-    resolve = settle
-  })
-
-  return {
-    next: () => next,
-    fire() {
-      resolve()
-      next = new Promise<void>((settle) => {
-        resolve = settle
-      })
-    },
-  }
-}
-
 export interface EngineSettlingOptions {
   readonly regions: ReadonlyMap<string, SyncedRegion>
   /** Times how long `settled` waits. */
@@ -43,8 +25,8 @@ export interface EngineSettlingOptions {
 /**
  * Tells when an engine has settled: the channel is up, every region has its first answer on this
  * connection, the outboxes are empty and every local update is durable, nothing waits for an answer
- * and no message is being handled. Whatever such a check reads calls `changed`, so a waiting
- * `settled` checks again.
+ * and no message is being handled; and when one region has caught up with the gateway. Whatever
+ * such a check reads calls `changed`, so a waiting `settled` or `caughtUp` checks again.
  */
 export class EngineSettling {
   readonly #regions: ReadonlyMap<string, SyncedRegion>
@@ -52,7 +34,8 @@ export class EngineSettling {
   readonly #drain: OutboxDrainPort
   readonly #onError: (error: DataError) => void
   readonly #ready: () => boolean
-  readonly #change = changeSignal()
+  /** Each wait under way: checks again on a change, and leaves the set once it ends. */
+  readonly #watchers = new Set<() => void>()
   /** Server messages handed to a region and not yet handled. */
   #handling = 0
   /** Regions whose last flush failed, reported once until a flush succeeds again. */
@@ -66,9 +49,16 @@ export class EngineSettling {
     this.#ready = options.ready
   }
 
-  /** Something a settled check reads changed: a waiting `settled` checks again. */
+  /** Something a check reads changed: a waiting `settled` or `caughtUp` checks again. */
   changed(): void {
-    this.#change.fire()
+    for (const watch of [...this.#watchers]) {
+      watch()
+    }
+  }
+
+  /** How many waits are under way: each ends resolved or rejected, and stops watching then. */
+  watching(): number {
+    return this.#watchers.size
   }
 
   /** Counts a server message handed to a region until it is handled. */
@@ -76,37 +66,78 @@ export class EngineSettling {
     this.#handling += 1
     void handled.finally(() => {
       this.#handling -= 1
-      this.#change.fire()
+      this.changed()
     })
   }
 
   /** Resolves once the engine has settled; rejects after `timeoutMs` on the clock. */
   settled(timeoutMs: number): Promise<void> {
-    return new Promise((resolve, reject) => {
-      let waiting = true
-      const cancel = this.#clock.schedule(timeoutMs, () => {
-        waiting = false
-        reject(new Error(`the sync did not settle within ${timeoutMs} ms`))
-      })
-      const watch = async (): Promise<void> => {
-        while (waiting) {
-          const change = this.#change.next()
+    return this.#until(() => this.#isSettled(), timeoutMs, 'the sync did not settle')
+  }
 
-          if (await this.#isSettled()) {
-            if (waiting) {
-              waiting = false
-              cancel()
-              resolve()
+  /**
+   * Resolves once region `id` has caught up with the gateway on the current connection, whichever
+   * sync holds it by then (`RegionSync.caughtUp`); rejects after `timeoutMs` on the clock, which is
+   * all it does for a region that stopped, one the welcome left out, or one the engine does not hold.
+   */
+  caughtUp(id: string, timeoutMs: number): Promise<void> {
+    return this.#until(
+      () => Promise.resolve(this.#regions.get(id)?.sync.caughtUp() === true),
+      timeoutMs,
+      `${id} did not catch up with the gateway`,
+    )
+  }
+
+  /**
+   * Resolves once `check` holds, checking again on every change, also one that came while it
+   * checked; rejects after `timeoutMs` on the clock. Either way it stops watching.
+   */
+  #until(check: () => Promise<boolean>, timeoutMs: number, failure: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      let checking = false
+      let changedMeanwhile = false
+      const watch = (): void => {
+        if (checking) {
+          changedMeanwhile = true
+
+          return
+        }
+
+        checking = true
+        changedMeanwhile = false
+        void check().then(
+          (holds) => {
+            checking = false
+
+            // A wait that timed out meanwhile has ended.
+            if (!this.#watchers.has(watch)) {
+              return
             }
 
-            return
-          }
-
-          await change
-        }
+            if (holds) {
+              end()
+              resolve()
+            } else if (changedMeanwhile) {
+              watch()
+            }
+          },
+          (error: unknown) => {
+            end()
+            reject(error)
+          },
+        )
+      }
+      const cancel = this.#clock.schedule(timeoutMs, () => {
+        end()
+        reject(new Error(`${failure} within ${timeoutMs} ms`))
+      })
+      const end = (): void => {
+        this.#watchers.delete(watch)
+        cancel()
       }
 
-      void watch()
+      this.#watchers.add(watch)
+      watch()
     })
   }
 

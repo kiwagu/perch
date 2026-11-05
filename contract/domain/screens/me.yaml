@@ -23,15 +23,15 @@ anchors:
     binding: { model: profile.email }
   user.profile.name-input:
     kind: input
-    description: The name, as stored or as typed; the flow's region name says which.
+    description: The name, as stored or as typed.
     binding: { model: profile.name }
   user.profile.bio-textarea:
     kind: textarea
-    description: The bio, at most 2000 characters, as stored or as typed; the flow's region bio says which.
+    description: The bio, as stored or as typed.
     binding: { model: profile.bio }
   user.profile.error:
     kind: error
-    description: Why the last save failed, under the field its code concerns, which is marked invalid; failed concerns the form and shows above Save.
+    description: Why the last save failed; failed shows above Save.
   user.profile.save-button:
     kind: button
     description: Saves the name, then the bio, each only when it changed.
@@ -48,7 +48,7 @@ anchors:
     binding: { action: platform.sign-out }
   user.profile.sign-out-dialog:
     kind: dialog
-    description: Asks whether to sign out and lose the changes not sent; its confirm-button signs out with forgetUnsent, its cancel-button closes it.
+    description: Asks whether to sign out and lose the changes not sent.
     binding:
       action: platform.sign-out
       params:
@@ -101,9 +101,9 @@ flow:
                     guard: bioChanged
                   - description: With nothing changed, Save still says profile-saved.
                     actions:
-                      - show: { app-shell.notice-message: [ profile-saved ] }
+                      - show: { app-shell.toast: [ profile-saved ] }
             saving-name:
-              description: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed, as the binding lists them; the error is cleared.
+              description: One Save runs profile.updateName when the name changed, then profile.updateBio when the bio changed; the error is cleared.
               invoke:
                 src: profile.updateName
                 input: { name: user.profile.name-input }
@@ -111,8 +111,6 @@ flow:
                   - target: saving-bio
                     guard: bioChanged
                   - target: idle
-                    actions:
-                      - show: { app-shell.notice-message: [ profile-saved ] }
                 onError:
                   target: idle
                   description: The first refused write stops the save; user.profile.error shows its code until a save succeeds.
@@ -122,10 +120,7 @@ flow:
               invoke:
                 src: profile.updateBio
                 input: { bio: user.profile.bio-textarea }
-                onDone:
-                  target: idle
-                  actions:
-                    - show: { app-shell.notice-message: [ profile-saved ] }
+                onDone: idle
                 onError:
                   target: idle
                   actions:
@@ -154,12 +149,10 @@ flow:
                   actions:
                     - navigate: /sign-in
             confirming:
-              description: user.profile.sign-out-dialog asks whether to sign out and lose the changes not sent.
+              meta: { renders: [ user.profile.sign-out-dialog ] }
               on:
                 user.profile.sign-out-dialog.confirm-button: signing-out-anyway
-                user.profile.sign-out-dialog.cancel-button:
-                  target: idle
-                  description: The dialog closes.
+                user.profile.sign-out-dialog.cancel-button: idle
             signing-out-anyway:
               invoke:
                 src: platform.sign-out
