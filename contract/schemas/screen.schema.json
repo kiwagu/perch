@@ -703,6 +703,11 @@
               "description": "A code of the vocabulary (data-code)."
             }
           },
+          "ranked": {
+            "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.",
+            "type": "boolean",
+            "const": true
+          },
           "fields": {
             "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.",
             "type": "object",

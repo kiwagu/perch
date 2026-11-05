@@ -164,6 +164,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       questions: { added: [], removed: [] },
+      ranks: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
       notices: { added: [], removed: [] },
@@ -726,6 +727,63 @@ describe('diffContracts and the questions before destructive actions', () => {
       added: ['thing-delete'],
       removed: [],
     })
+  })
+})
+
+describe('diffContracts and the ranked messages', () => {
+  /** The fixture contract with `sample.status-message`, its codes ranked in `order` when given. */
+  const ranking = (order?: readonly string[]): Contract => {
+    const contract = fixtureContract()
+    const [screen] = contract.screens.screens
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    screen.anchors['sample.status-message'] =
+      order === undefined
+        ? { kind: 'message', codes: ['saved', 'failed'] }
+        : { kind: 'message', codes: [...order], ranked: true }
+
+    return contract
+  }
+
+  it('lists a message that starts or stops ranking its codes, with its order', () => {
+    expect(diffContracts(ranking(), ranking(['saved', 'failed'])).ranks).toEqual({
+      added: ['sample.status-message ranks saved > failed'],
+      removed: [],
+    })
+    expect(diffContracts(ranking(['saved', 'failed']), ranking()).ranks).toEqual({
+      added: [],
+      removed: ['sample.status-message ranks saved > failed'],
+    })
+  })
+  it('lists a new order of a ranked message, which its codes alone do not show', () => {
+    const changes = diffContracts(ranking(['saved', 'failed']), ranking(['failed', 'saved']))
+
+    expect(changes.ranks).toEqual({
+      added: ['sample.status-message ranks failed > saved'],
+      removed: ['sample.status-message ranks saved > failed'],
+    })
+    expect(changes.anchorCodes).toEqual({ added: [], removed: [] })
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 ranked message added, 1 ranked message removed',
+      'ranked messages added: sample.status-message ranks failed > saved',
+      'ranked messages removed: sample.status-message ranks saved > failed',
+    ])
+  })
+  it('shows nothing for a new order of codes that are not ranked', () => {
+    const before = ranking()
+    const after = ranking()
+    const anchor = after.screens.screens[0]?.anchors['sample.status-message']
+
+    if (anchor === undefined) {
+      throw new Error('the fixture has no sample.status-message')
+    }
+
+    anchor.codes = ['failed', 'saved']
+
+    expect(formatChanges(diffContracts(before, after))).toBe('contract changes: none')
   })
 })
 

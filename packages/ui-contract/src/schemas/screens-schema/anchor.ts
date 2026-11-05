@@ -146,6 +146,12 @@ export const anchorDefSchema = z
         'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
       ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()
