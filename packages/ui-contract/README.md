@@ -90,10 +90,11 @@ for Bun.
     expands a shorter form: the screen files (a screen's own, its route parameters', its
     anchors', its container `states`, its flow's own, sentence guards, states, regions and
     transitions with the outcomes of invokes and of a region's button), the platform file (its
-    actions and their parameters, its `events`, its composites' own), the activities (their own,
-    their data, sentence guards, visits and transitions) and the model (its own, each entity's,
-    action's and field's, a field's subschemas included), each read as YAML, the model's JSON
-    too, so each has its line. Each is a `WrittenDescription`: its `file`, `line`, JSON path
+    actions and their parameters, its `events`, its composites' own and their items), the
+    activities (their own, their data, sentence guards, visits and transitions) and the model
+    (its own, each entity's, action's and field's, the subschemas of the document, an entity or
+    a field included), each read as YAML, the model's JSON too, so each has its line. Each is a
+    `WrittenDescription`: its `file`, `line`, JSON path
     `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The place names it
     alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`,
     `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`,

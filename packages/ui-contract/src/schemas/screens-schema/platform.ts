@@ -95,7 +95,7 @@ export const platformCompositeSchema = z
       'The data-state each item takes once what it says holds: a row state of the vocabulary (`met`).',
     ),
     items: z
-      .record(kebabNameSchema, z.string().min(1))
+      .record(kebabNameSchema, z.string().min(1).describe(DESCRIPTION_PURPOSES.compositeItem))
       .refine((items) => Object.keys(items).length > 0, { message: 'a composite has items' })
       .meta({ minProperties: 1 })
       .describe(

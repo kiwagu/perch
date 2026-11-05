@@ -193,9 +193,10 @@ Each domain file says in prose what its parts are for, in its `description`s: a 
 and each anchor's; a flow's own and each state's, region's and transition's, an outcome of an
 invoke among them; a route parameter's; a platform action's, each of its parameters' and a
 composite's; the model's own and each entity's, field's and action's; an activity's own and each
-piece of its data's, each visit's and each transition's. Three maps hold descriptions without
+piece of its data's, each visit's and each transition's. Four maps hold descriptions without
 the key: a screen's `states` (what is visible in each container state), the platform's `events`
-(what each means) and the sentence guards of a `meta.guards` (a guard by failure code is
+(what each means), a composite's `items` (each the description of the item anchor a screen
+derives from it) and the sentence guards of a `meta.guards` (a guard by failure code is
 structure). A platform action's `result` is no description: it is the action's behaviour, which
 the hand-over diff lists among the action's lines.
 

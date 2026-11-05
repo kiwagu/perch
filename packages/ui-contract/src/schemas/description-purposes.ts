@@ -27,6 +27,7 @@ export const DESCRIPTION_PURPOSES = {
   actionParameter: `What the value is and its limits; its type is written beside it. ${AT_MOST}`,
   event: `What the event means: when the platform raises it. What follows is said by the flows that handle it. ${AT_MOST}`,
   composite: `What the composite is for: the list it derives on a screen carries it, and each item has a description of its own. ${AT_MOST}`,
+  compositeItem: `What the item of the composite's list says: every screen that opts in derives an item anchor with it as its description, and the composite's \`itemState\` marks it. ${AT_MOST}`,
   model: `What the model holds, and what it leaves to the platform. Each entity, field and action has a description of its own. ${AT_MOST}`,
   entity: `What the entity is. Its fields and actions have descriptions of their own, and \`x-perch\` says where it lives and who may change it. ${AT_MOST}`,
   field: `What the field holds. Its type, its constraints and \`x-perch\` say the rest, and the failure codes they give are derived. ${AT_MOST}`,

@@ -5845,7 +5845,8 @@
                 },
                 "additionalProperties": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "What the item of the composite's list says: every screen that opts in derives an item anchor with it as its description, and the composite's `itemState` marks it. At most 200 characters."
                 },
                 "minProperties": 1,
                 "description": "The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state."

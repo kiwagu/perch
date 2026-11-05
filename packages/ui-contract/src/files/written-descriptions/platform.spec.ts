@@ -70,6 +70,12 @@ describe('platformDescriptions', () => {
         place: 'platform composite password-rules',
         text: 'The rules a new password keeps.',
       },
+      {
+        at: ['composites', 'password-rules', 'items', 'length'],
+        kind: 'compositeItem',
+        place: 'platform composite password-rules item length',
+        text: '10 to 35 characters.',
+      },
     ])
   })
 })
