@@ -25,5 +25,4 @@ Where: [/devices] in a first tab of device A, reloaded while that tab's database
 ### Expected result
 - After step 3 the first tab's [app-shell.status] reaches [state:opening-data] on [/devices], and its [device.list] holds one [device.list.session-item], in [state:current]
 - Within 5 seconds of step 4 the first tab is on [/sign-in] and shows [user.sign-in.form], its database engines still held back
-- Within 5 seconds of step 5 the first tab is on [/me]
-- After step 6 the first tab's [user.profile.heading] shows the other name
+- After step 6 the first tab is on [/me] and its [user.profile.heading] shows the other name: it follows the account signed in next once it can open that account's data
