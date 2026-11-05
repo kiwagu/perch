@@ -7,10 +7,19 @@ import { fileURLToPath } from 'node:url'
 
 const CONTRACT_TRUNK = fileURLToPath(new URL('./contract-trunk.ts', import.meta.url))
 
-/** The environment of every process here, without what a git hook would pass on. */
-const ENV = Object.fromEntries(
-  Object.entries(process.env).filter(([name]) => !name.startsWith('GIT_')),
-)
+/**
+ * The environment of every process here: without what a git hook would pass on, the marker the
+ * merge hook sets, or the machine's own git configuration and hooks.
+ */
+const ENV = {
+  ...Object.fromEntries(
+    Object.entries(process.env).filter(
+      ([name]) => !name.startsWith('GIT_') && name !== 'CONTRACT_AHEAD_MERGE',
+    ),
+  ),
+  GIT_CONFIG_GLOBAL: '/dev/null',
+  GIT_CONFIG_NOSYSTEM: '1',
+}
 
 /** The checkouts the tests made, removed after each test. */
 const made: string[] = []
@@ -115,6 +124,45 @@ describe('contract-trunk', () => {
     expect(result.stderr).not.toContain('contract/domain/screens.ts')
   })
 
+  it('holds contract/trunk to the business layer when a tag shares its name', () => {
+    const root = checkout('contract/trunk')
+
+    git(root, 'tag', 'contract/trunk')
+    stage(root, 'apps/web/src/main.tsx')
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('\n  apps/web/src/main.tsx\n')
+  })
+
+  it('names a submodule outside the business layer that the configuration hides from a diff', () => {
+    const root = checkout('contract/trunk')
+
+    git(root, 'config', 'diff.ignoreSubmodules', 'all')
+    git(
+      root,
+      'update-index',
+      '--add',
+      '--cacheinfo',
+      `160000,${git(root, 'rev-parse', 'HEAD')},vendor/lib`,
+    )
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('\n  vendor/lib\n')
+  })
+
+  it('refuses a commit when git cannot tell the branch it is on', () => {
+    const root = checkout('contract/trunk')
+
+    const result = run(root, { GIT_DIR: join(root, 'missing') })
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('contract trunk: git cannot tell the branch this commit is on')
+  })
+
   it('lets a commit on any other branch through, whatever it stages', () => {
     const root = checkout('contract/trunk-notes')
 
@@ -141,7 +189,7 @@ describe('contract-trunk', () => {
   it('lets a merge into contract/trunk through while it waits for its commit', () => {
     const root = landedOnMain()
 
-    git(root, 'merge', '-q', '--no-commit', '--no-ff', 'main')
+    author(root, 'merge', '-q', '--no-commit', '--no-ff', 'main')
 
     const result = run(root)
 
