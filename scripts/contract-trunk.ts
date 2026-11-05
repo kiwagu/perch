@@ -18,6 +18,8 @@ import { existsSync } from 'node:fs'
 
 import { DOMAIN_DIR, isBusinessFile, SCENARIOS_DIR, VOCABULARY_FILE } from '@workspace/ui-contract'
 
+import { headRef } from './gates/tree.ts'
+
 const TRUNK = 'contract/trunk'
 
 const TRUNK_REF = `refs/heads/${TRUNK}`
@@ -33,20 +35,6 @@ function git(args: readonly string[]): { readonly status: number | null; readonl
   })
 
   return { status: run.status, out: run.stdout }
-}
-
-/**
- * The full ref of the branch HEAD is on, `''` on a detached HEAD, which `symbolic-ref` answers
- * with status 1, or undefined when git cannot tell.
- */
-function headRef(): string | undefined {
-  const { status, out } = git(['symbolic-ref', '--quiet', 'HEAD'])
-
-  if (status === 0) {
-    return out.trim()
-  }
-
-  return status === 1 ? '' : undefined
 }
 
 /**

@@ -9,6 +9,7 @@ import {
   roleSchema,
   stateSchema,
 } from '../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionParamsSchema } from './params'
 
@@ -125,7 +126,7 @@ export const derivedFromSchema = z
 export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
-    description: z.string().optional().describe('What the element is, for a reader.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.anchor),
     binding: anchorBindingSchema.optional(),
     roles: z
       .array(roleSchema)

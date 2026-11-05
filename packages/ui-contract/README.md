@@ -85,6 +85,26 @@ for Bun.
     the five schema files; `isBusinessFile(path)` says whether a file is one of the business
     layer's (a domain file, the vocabulary or a scenario): the only files a commit on the
     contract trunk may stage.
+  - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain
+    files write, as they write them, never one the engine derives or the loader fills in as it
+    expands a shorter form: the screen files (a screen's own, its route parameters', its
+    anchors', its container `states`, its flow's own, sentence guards, states, regions and
+    transitions with the outcomes of invokes and of a region's button), the platform file (its
+    actions and their parameters, its `events`, its composites' own and their items), the
+    activities (their own, their data, sentence guards, visits and transitions) and the model
+    (its own, each entity's, action's and field's, the subschemas of the document, an entity or
+    a field included), each read as YAML, the model's JSON too, so each has its line. Each is a
+    `WrittenDescription`: its `file`, `line`, JSON path
+    `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The place names it
+    alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`,
+    `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`,
+    `user.profile flow editing.save`, `user.delete-account flow deleting onError #2` (the
+    second of its guarded alternatives), `user.profile guard nameChanged`, `user.sign-in
+    binding /sign-in search email`, `platform action sign-up param email`, `platform event
+    started`, `platform composite password-rules`, `model`, `model entity profile`, `model
+    action profile.updateName`, `model field profile.name`, `activity session state profile
+    on user.profile.sign-out-button`. The `Contract` carries them as `descriptions`, read by
+    `loadContract`, so the contract at a git ref has those its files write there.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
     fixed Markdown sections in any order) into a `Scenario` with `lines`, the line of each
@@ -129,7 +149,13 @@ for Bun.
     `schemaDrift(root)` turn them into the committed `contract/schemas/screen.schema.json`,
     `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
-    authored).
+    authored). `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each
+    description field in one text: what it is for, what it leaves to others and its budget,
+    `DESCRIPTION_BUDGET` (200 characters, for every one); each text is that field's
+    `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint,
+    the model's own description taking its text in the shape `loadModel` reads the document
+    with, and the budget problem quotes it. `descriptionLength(text)` counts a description as
+    the budget does, in characters.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
@@ -204,7 +230,10 @@ for Bun.
     `[value:x]` pairs with the anchor named last before it, a route being no anchor, and must
     be one that anchor carries, `<anchor> never carries code <x>`; after a mail or a notice,
     what follows speaks of it and pairs with no anchor until the text names one again; with no
-    anchor to pair with, it need only be one of the contract). A problem of an activity
+    anchor to pair with, it need only be one of the contract), and `descriptionsProblems`
+    (every description of `contract.descriptions` keeps `DESCRIPTION_BUDGET` characters; one
+    past it is a problem at its line, `<path>: the description of <place> is <n> characters,
+    past its budget of 200; its purpose: "<the purpose of its field>"`). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
   - `anchorCarries(contract)`: whether an anchor carries a code, a state or a value
     (`Carried`): one it declares or one an anchor under it, `<anchor>.<rest>`, declares (the
@@ -342,11 +371,17 @@ for Bun.
     `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
     <type>`, `result: <text>`, `code <code>`, `role <role>`, `mail to <to> language
     <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
-    <screen>]`, descriptions aside;
+    <screen>]`, descriptions aside; and last `descriptions`, by `descriptionChanges(before,
+    after, renamed)` (`handoff/description-changes.ts`): sorted by place, each description of
+    `contract.descriptions` (`readDescriptions`, the reader the budget reads with) that one side
+    adds, removes or changes, a `DescriptionChange` `{ place, before?, after? }` with its length
+    in characters on each side it has, a renamed anchor's under its new name;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`,
     the lines of a flow as `flow lines added in <screen>` and those of a platform action as
-    `platform action lines added in <action>`.
+    `platform action lines added in <action>`, and last `descriptions changed: <place> <before>
+    -> <after>, ...`, `new` where it has no length before and `gone` where it has none after
+    (`app-shell.theme-select 191 -> 340`).
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -371,7 +406,10 @@ for Bun.
     nothing (`compositeNotes(measure)`, internal to the coverage command, which also prints
     them after `--write`), `listControls(measure)` the two
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
-    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
+    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`; `coverageDrift(note,
+    block)` (`handoff/coverage-drift.ts`) finds nothing when the note already holds the block
+    as `replaceCoverageBlock` writes it, else one problem at the line of its start marker
+    naming `bun run contract:coverage --write`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
     `listDescriptions(contract)` (an internal helper of the coverage command,
     `handoff/descriptions.ts`, behind `coverage --descriptions`, not exported from the root)
@@ -439,18 +477,19 @@ for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
-  schema writer, the references, the contract check, the sources check, the consumers check,
-  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note, the
-  routes view, and the walk and comparison of machines.
+- `bun run test`: the anchor grammar, the loaders, the reader of the written descriptions, the
+  scenario parser and formatter, the schema writer, the references, the contract check, the
+  sources check, the consumers check, the coverage-ignore markers, the manifest, the hand-over
+  diff, the coverage note, the routes view, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
-  other and the schema drift; prints `file:line: message` per problem and exits 1, or a
-  one-line summary; part of `bun run check` and the pre-commit hook).
+  other, every written description against its budget and the schema drift; prints
+  `file:line: message` per problem and exits 1, or a one-line summary; part of `bun run check`
+  and the pre-commit hook).
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or
@@ -477,13 +516,14 @@ for Bun.
   parts, the codes, the states and the error fields the anchors both hold gain or lose
   (derived ones included), the fields that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each, the lines changed in each screen's flow, and the platform
-  actions with the lines changed in each, its mail among them, included; prints
+  transitions changed in each, the lines changed in each screen's flow, the platform
+  actions with the lines changed in each, its mail among them, and each written description
+  added, removed or changed with its length before and after, included; prints
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of
   `bun run contract:diff main` in its description.
-- From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
-  [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
+- From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
+  [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios
   walk, then the controls marked and ignored per feature
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
@@ -492,7 +532,12 @@ for Bun.
   with their reasons as `file:line: <element>`, `--descriptions` the written descriptions the
   engine would say itself as `<anchor>: <description>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
-  writing nothing). Not part of `bun run check`: the note is a report.
+  writing nothing). The measure fails nothing: the note is a report. `--check` compares the
+  block of `contract/COVERAGE.md` with what `--write` would write: when they differ it prints a
+  problem at the line of the block's start marker, naming `bun run contract:coverage --write`,
+  and exits 1; when they are equal it says so in one line. `bun run contract:coverage:check`
+  runs it, in `bun run check` and in the pre-commit hook on `main` only, as `e2e:coverage` runs
+  there.
 - From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
   flow of a screen, named by its id or its file, as every reader takes it, expanded from
   the shorter forms its file may write it in, the regions it leaves out derived and the
