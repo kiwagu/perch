@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.verify-email
 title: Verify the email
-description: "What the link of a verification mail opens: the first time, it verifies the account's email with the link's token and signs this device in to the account; a link opened again says the email is verified; a link that does not verify says why and sends a new one to an email typed."
+description: "What the link of a verification mail opens: it verifies the account's email and signs this device in to the account."
 flag: null
 bindings:
   - path: /verify-email
