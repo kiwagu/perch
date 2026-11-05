@@ -133,6 +133,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
     context: { error: undefined, message: undefined, sentTo: undefined },
     states: {
       verifying: {
+        meta: { renders: ['user.verify-email.status'] },
         invoke: {
           src: 'platform.verify-email',
           input: () => ({ token: deps.token }),
@@ -175,11 +176,25 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
           },
         },
       },
-      verified: { type: 'final' },
+      verified: { type: 'final', meta: { renders: ['user.verify-email.sign-in-link'] } },
       'resend-offered': {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         on: { 'user.verify-email.resend-button': { target: 'resending' } },
       },
       resending: {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         invoke: {
           src: 'platform.resend-verification',
           input: emailInput,
@@ -201,6 +216,13 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
         },
       },
       sent: {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         on: { 'user.verify-email.resend-button': { target: 'resending' } },
       },
       done: { type: 'final' },

@@ -28,7 +28,8 @@ over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
-`contract/domain/screens/sign-in.yaml`: the mode is its state, an attempt invokes
+`contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
+state, sign-up where it renders the fields of a new account, an attempt invokes
 `platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it holds the
 password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
 and compares the password typed again as either password is typed and on the switch into
@@ -77,6 +78,17 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   to the profile (this account: the session keeps the new email of the account signed in on this
   browser), to the sign-in page (nobody), or nowhere (another account); a refused link ends on its
   error;
+  `/delete-account` (no guard; search `token`) renders `DeleteAccountPage`, what an account
+  deletion mail's link opens (`application/delete-account.machine.ts`, the flow of
+  `contract/domain/screens/delete-account.yaml`): the page says what goes with the account (its
+  data, its sessions, the organisations it is the only member of) without naming it, and its
+  button, which the frame's confirmation `delete-account` asks before, runs `platform.delete-account`
+  with the address's token. It ends on `account-deleted`, beside the link to sign in for a guest
+  alone, or on a link that does not work (`link-invalid`, `link-expired`) with no button; any
+  other refusal (`last-admin`, `rate-limited`, `failed`) says why and offers the button again,
+  the same link working again within its hour. The deletion signs every device of the account out,
+  this one too when it is signed in to it, and the page keeps its message, which its machine holds
+  whatever the session does; the link to sign in follows who is signed in here;
   `/verify-email` (guard `guest`,
   search `token`) renders `VerifyEmailPage`, the page a verification mail's link opens: it runs
   its screen's flow as its machine through `useScreenMachine`, over the token of its address (none
@@ -100,12 +112,20 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   values the page holds, `useFieldClears`; a refusal shows under the field its code concerns) and
   the account's email (the new email and the current password, `platform.change-email`, which
   mails the new email a link that makes the change; the message `check-your-mail` names it, the
-  same words whether that email has an account or not), its screen's flow run as its machine
-  (`application/settings/settings-machine/`: the theme, language, password and email regions of
-  one parallel state, `machine.ts` assembling `password-region.ts` and `email-region.ts`, held to
-  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
-  `useScreenMachine`, which asks the leave guard before the language changes; its view is
-  `settings.view.tsx` with `password-form.view.tsx` and `email-form.view.tsx`.
+  same words whether that email has an account or not) and the account's deletion (the current
+  password, `platform.request-account-deletion`, which mails the account's own email the link of
+  the page that deletes it; the message `check-your-mail` says the account stays as it is until
+  that page's button is pressed, the flow's `clear` empties the password once the mail went out,
+  and so it does on `last-admin` above the form, a right password that nothing more can use here
+  (the guard `deletionBlocked`); any other refusal (`invalid-credentials` under the field,
+  `rate-limited`, `failed` above the form) keeps it as typed; another press sends a fresh link),
+  its screen's flow run as
+  its machine (`application/settings/settings-machine/`: the theme, language, password, email and
+  deletion regions of one parallel state, `machine.ts` assembling `password-region.ts`,
+  `email-region.ts` and `deletion-region.ts`, held to `contract/domain/screens/settings.yaml` by
+  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
+  language changes; its view is `settings.view.tsx` with `password-form.view.tsx`,
+  `email-form.view.tsx` and `deletion-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
@@ -123,9 +143,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
-  `user.reset-password`, `user.confirm-email`, `user.profile` and `user.settings` in
-  `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`, `forgot-password.yaml`,
-  `reset-password.yaml`, `confirm-email.yaml`, `me.yaml` and `settings.yaml`.
+  `user.reset-password`, `user.confirm-email`, `user.delete-account`, `user.profile` and
+  `user.settings` in `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`,
+  `forgot-password.yaml`, `reset-password.yaml`, `confirm-email.yaml`, `delete-account.yaml`,
+  `me.yaml` and `settings.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the

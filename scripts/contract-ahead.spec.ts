@@ -7,9 +7,9 @@ import { fileURLToPath } from 'node:url'
 
 const CONTRACT_AHEAD = fileURLToPath(new URL('./contract-ahead.ts', import.meta.url))
 
-/** What the hook's command sees: the ahead mode and the base, `null` where unset. */
+/** What the hook's command sees: the ahead mode, the base and the branch's HEAD, `null` where unset. */
 const PRINT_MODE =
-  'console.log(JSON.stringify([process.env.CONTRACT_AHEAD ?? null, process.env.CONTRACT_AHEAD_BASE ?? null]))'
+  'console.log(JSON.stringify([process.env.CONTRACT_AHEAD ?? null, process.env.CONTRACT_AHEAD_BASE ?? null, process.env.CONTRACT_AHEAD_HEAD ?? null]))'
 
 const NO_MERGE_BASE =
   'unit tests: no merge base of HEAD and the local branch main (main is missing, or this branch shares no history with it), so the machines cannot be compared with their flows at the branch base. Fetch main (git fetch origin main:main) or merge it into this branch, then commit again.'
@@ -89,7 +89,13 @@ function run(
     cwd: root,
     encoding: 'utf8',
     stdio: 'pipe',
-    env: { ...ENV, CONTRACT_AHEAD: '1', CONTRACT_AHEAD_BASE: 'stale', ...env },
+    env: {
+      ...ENV,
+      CONTRACT_AHEAD: '1',
+      CONTRACT_AHEAD_BASE: 'stale',
+      CONTRACT_AHEAD_HEAD: 'stale',
+      ...env,
+    },
   })
 }
 
@@ -122,7 +128,7 @@ describe('contract-ahead', () => {
     const result = run(checkout('main'))
 
     expect(result.status).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual([null, null])
+    expect(JSON.parse(result.stdout)).toEqual([null, null, null])
   })
 
   it('runs the command on a detached HEAD in the strict mode, as on main', () => {
@@ -135,42 +141,45 @@ describe('contract-ahead', () => {
     const result = run(root)
 
     expect(result.status).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual([null, null])
+    expect(JSON.parse(result.stdout)).toEqual([null, null, null])
   })
 
-  it('runs the command on a branch in the ahead mode, at its merge base with main', () => {
+  it('runs the command on a branch in the ahead mode, at its merge base with main and its HEAD', () => {
     const root = checkout('main')
     const base = git(root, 'rev-parse', 'HEAD')
 
     git(root, 'switch', '-q', '-c', 'feature')
     commit(root, 'feature')
 
+    const head = git(root, 'rev-parse', 'HEAD')
     const result = run(root)
 
     expect(result.status).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual(['1', base])
+    expect(JSON.parse(result.stdout)).toEqual(['1', base, head])
   })
 
   it('runs a merge of main waiting for its commit at the base the merge will have', () => {
     const root = checkout('main')
     const landed = landedSince(root)
+    const head = git(root, 'rev-parse', 'HEAD')
 
     git(root, 'merge', '-q', '--no-commit', 'main')
 
     const result = run(root)
 
     expect(result.status).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual(['1', landed])
+    expect(JSON.parse(result.stdout)).toEqual(['1', landed, head])
   })
 
   it('runs an automatic merge of main at the base the merge will have, in its hook', () => {
     const root = checkout('main')
     const landed = landedSince(root)
+    const head = git(root, 'rev-parse', 'HEAD')
     const { hooks, mode } = mergeHook()
 
     author(root, '-c', `core.hooksPath=${hooks}`, 'merge', '-q', '-m', 'merge main', 'main')
 
-    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed])
+    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed, head])
   })
 
   it('runs an automatic pull of main at the base the merge will have, in its hook', () => {
@@ -183,6 +192,7 @@ describe('contract-ahead', () => {
     commit(root, 'feature')
     commit(origin, 'landed', 'landed.md')
 
+    const head = git(root, 'rev-parse', 'HEAD')
     const landed = git(origin, 'rev-parse', 'HEAD')
     const { hooks, mode } = mergeHook()
 
@@ -199,7 +209,7 @@ describe('contract-ahead', () => {
       'main',
     )
 
-    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed])
+    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed, head])
   })
 
   it('runs an ordinary commit at its merge base, whatever merge its environment names', () => {
@@ -208,10 +218,11 @@ describe('contract-ahead', () => {
 
     landedSince(root)
 
+    const head = git(root, 'rev-parse', 'HEAD')
     const result = run(root, PRINT_MODE, { GIT_REFLOG_ACTION: 'merge main' })
 
     expect(result.status).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual(['1', base])
+    expect(JSON.parse(result.stdout)).toEqual(['1', base, head])
   })
 
   it('stops an automatic merge whose heads it cannot tell, and runs nothing', () => {

@@ -9,13 +9,13 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { savedIdentity } from '../storage'
+import { savedIdentity, savedToken } from '../storage'
 
 import type { SessionHost } from './host'
 import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
 import type { SessionSignIn } from './sign-in'
-import type { ElsewhereNotice, SessionSignOut } from './sign-out'
+import type { ElsewhereNotice, ForcedSignOut, SessionSignOut } from './sign-out'
 import { sessionTransportContext } from './transport-context'
 
 export interface SessionElsewhereOptions {
@@ -50,6 +50,38 @@ export class SessionElsewhere {
       )
   }
 
+  /**
+   * The gateway deleted the account `identity` and ended its sessions: this device signs out of it
+   * as when its channel hears the 4001 (the sign-in page says `signed-out-elsewhere`), which it
+   * may never hear (no Web Locks, or its WebSocket blocked). Only the session open for `identity`
+   * is signed out, judged in the turn the sign-out takes: another account's stays, nobody's
+   * changes nothing, and so does a session the 4001 already ended. Resolves once it ran.
+   */
+  accountDeleted(identity: IdentityId): Promise<void> {
+    return this.#outElsewhere(identity)
+  }
+
+  /**
+   * Names the session open now, for a reset of a password asked with its `token`: the sign-out it
+   * gives runs as when the channel hears the 4002 (the sign-in page says
+   * `password-changed-elsewhere`), which this device may never hear (no Web Locks, or its
+   * WebSocket blocked), and only while that session is still the one open and the browser still
+   * keeps that token: a sign-in made since, in this tab or another one that saved its new token
+   * for the same account, stays. Undefined with nobody signed in.
+   */
+  resetHere(token: string): (() => Promise<void>) | undefined {
+    const asking = this.#host.open()
+
+    if (asking === undefined) {
+      return undefined
+    }
+
+    const still = () =>
+      this.#host.open() === asking && savedToken(this.#host.options.storage) === token
+
+    return () => this.#outElsewhere(asking.space.identity.id, still, 'password-changed-elsewhere')
+  }
+
   /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
   protocolRefused(): boolean {
     return this.#protocolRefused
@@ -62,7 +94,8 @@ export class SessionElsewhere {
           void this.#organisations.apply(memberships)
         }
       },
-      refused: () => void this.#forced(() => this.#signingOut.refused(identity)),
+      refused: () =>
+        void this.#forced(() => this.#signingOut.refused(identity).map(this.#followIfSignedIn)),
       revoked: () => void this.#outElsewhere(identity),
       passwordChanged: () =>
         void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
@@ -121,8 +154,20 @@ export class SessionElsewhere {
     notice: ElsewhereNotice = 'signed-out-elsewhere',
   ): Promise<void> {
     return this.#forced(() =>
-      still() ? this.#signingOut.refused(identity, notice) : okAsync(undefined),
+      still()
+        ? this.#signingOut.refused(identity, notice).map(this.#followIfSignedIn)
+        : okAsync(undefined),
     )
+  }
+
+  /**
+   * A forced sign-out another tab's sign-in overtook left this tab with no space: it follows what
+   * that tab saved, as on any sign-in made there (`follow`), in a turn of its own.
+   */
+  readonly #followIfSignedIn = (ended: ForcedSignOut): void => {
+    if (ended === 'signed-in-since') {
+      this.follow()
+    }
   }
 
   /**

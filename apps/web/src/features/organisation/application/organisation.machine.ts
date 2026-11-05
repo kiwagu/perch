@@ -285,6 +285,9 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 },
               },
               editing: {
+                meta: {
+                  renders: ['organisation.notes.edit-textarea', 'organisation.notes.save-button'],
+                },
                 on: {
                   'organisation.notes.save-button': { target: 'saving' },
                   'organisation.notes.edit-button': { target: 'editing', actions: 'open' },
@@ -292,6 +295,9 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
                 },
               },
               saving: {
+                meta: {
+                  renders: ['organisation.notes.edit-textarea', 'organisation.notes.save-button'],
+                },
                 invoke: {
                   src: 'note.updateNote',
                   input: taken('organisation.notes.save-button'),

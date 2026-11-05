@@ -1,12 +1,6 @@
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 
-import {
-  type AuthUser,
-  type DataError,
-  dataError,
-  type SignInInput,
-  type SignUpInput,
-} from '@workspace/data'
+import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
@@ -17,18 +11,10 @@ import type {
   SignOutOptions,
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
-import type { AccountSession } from '../gateway-auth'
 import type { IdentitySpace } from '../identity-space'
-import {
-  deviceIdFrom,
-  IDENTITY_KEY,
-  MEMBERSHIPS_KEY,
-  savedIdentity,
-  savedToken,
-  saveIdentityEmail,
-  savePasswordReset,
-} from '../storage'
+import { IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
 
+import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
@@ -65,6 +51,7 @@ export class SessionService implements SessionPort {
   readonly #options: SessionOptions
   readonly #state: SessionState
   readonly #organisations: SessionOrganisations
+  readonly #account: SessionAccount
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   readonly #elsewhere: SessionElsewhere
@@ -82,6 +69,13 @@ export class SessionService implements SessionPort {
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
       open: () => this.#state.open(),
+    })
+    this.#account = new SessionAccount({
+      auth: options.auth,
+      storage: options.storage,
+      signedIn: () => this.#state.open() !== undefined,
+      signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
+      resetHere: (token) => this.#elsewhere.resetHere(token),
     })
 
     const barrier = new WriteBarrier({
@@ -183,33 +177,32 @@ export class SessionService implements SessionPort {
     return this.#options.auth.resendVerification(email)
   }
 
-  /** Asks the gateway alone: the reset signs nothing in or out. */
   requestPasswordReset(email: string): ResultAsync<void, DataError> {
-    return this.#options.auth.requestPasswordReset(email)
+    return this.#account.requestPasswordReset(email)
   }
 
-  /**
-   * Asks the gateway alone: it signs nothing in, and a device of the account it signs out, this one
-   * included, hears so on its channel (4002). Once it did, the browser's other tabs hear of it.
-   */
   resetPassword(token: string, password: string): ResultAsync<void, DataError> {
-    return this.#options.auth
-      .resetPassword(token, password)
-      .andTee(() => savePasswordReset(this.#options.storage))
+    return this.#account.resetPassword(token, password)
   }
 
-  /** Asks the gateway with this device's session; the other devices hear their sign-out (4002). */
   changePassword(currentPassword: string, password: string): ResultAsync<void, DataError> {
-    return this.#accountSession().andThen((session) =>
-      this.#options.auth.changePassword({ currentPassword, password }, session),
-    )
+    return this.#account.changePassword(currentPassword, password)
   }
 
-  /** Asks the gateway with this device's session; nothing changes here until the link is opened. */
   changeEmail(email: string, password: string): ResultAsync<void, DataError> {
-    return this.#accountSession().andThen((session) =>
-      this.#options.auth.changeEmail({ email, password }, session),
-    )
+    return this.#account.changeEmail(email, password)
+  }
+
+  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
+    return this.#account.confirmEmail(token)
+  }
+
+  requestAccountDeletion(password: string): ResultAsync<void, DataError> {
+    return this.#account.requestAccountDeletion(password)
+  }
+
+  deleteAccount(token: string): ResultAsync<void, DataError> {
+    return this.#account.deleteAccount(token)
   }
 
   signOut(options: SignOutOptions = {}): ResultAsync<SignOutOutcome, DataError> {
@@ -329,26 +322,6 @@ export class SessionService implements SessionPort {
           this.#state.openFor(opening) ? this.#organisations.adopt(created) : undefined,
         )
       : this.#organisations.adopt(created)
-  }
-
-  /** The session this device is signed in with, for a change of its account; none signed in fails. */
-  #accountSession(): ResultAsync<AccountSession, DataError> {
-    const token = savedToken(this.#options.storage)
-
-    return token === undefined || this.#state.open() === undefined
-      ? errAsync(dataError('data:AUTH_FAILED', 'nobody is signed in on this device'))
-      : okAsync({ token, device: deviceIdFrom(this.#options.storage) })
-  }
-
-  /**
-   * Asks the gateway alone; the email of the account signed in on this browser, when it is the one
-   * that changed, is kept as the new one, so a later sign-in with it is not taken for another
-   * account's.
-   */
-  confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
-    return this.#options.auth
-      .confirmEmail(token)
-      .andTee(({ identity, email }) => saveIdentityEmail(this.#options.storage, identity, email))
   }
 
   /**

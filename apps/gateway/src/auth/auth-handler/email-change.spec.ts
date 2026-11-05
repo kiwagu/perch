@@ -462,7 +462,7 @@ describe('authHandler, a change of the email and what runs beside it', () => {
 
     await vi.waitFor(() => expect(asked(ann.identity)).toBe(3), ARGON2_WAIT)
     release()
-    expect((await resetting)?.status).toBe(204)
+    expect((await resetting)?.status).toBe(200)
 
     const changed = await changing
 

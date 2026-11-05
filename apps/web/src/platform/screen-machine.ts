@@ -10,7 +10,9 @@
  * clearing, so no container subscribes to them by hand. And it brings the platform's events
  * (`platform-events.port.ts`) to the machine while it runs, each carrying what the screen's fields
  * hold as it comes (`fields`, by anchor, as the container gives them), for a move it makes; a
- * state that does not handle one lets it pass.
+ * state that does not handle one lets it pass. It tells the view what the state renders
+ * (`renders(anchor)`, `screen-renders.ts`), and in development and e2e builds reports each state
+ * of `screen` the page settles in (`settled-report.ts`).
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -22,6 +24,7 @@ import type {
   AnyStateMachine,
   EventFromLogic,
   InspectionEvent,
+  StateValue,
 } from 'xstate'
 
 import { useConfirmGuard } from './confirm-guard.port'
@@ -33,6 +36,8 @@ import { useService } from './module'
 import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
 import { PLATFORM_EVENTS } from './platform-events.port'
 import { sendPlatformEvents } from './platform-events-input'
+import { rendersIn } from './screen-renders'
+import { useSettledReport } from './settled-report'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -96,12 +101,18 @@ const endedBy = (type: string): string | undefined =>
 const controlOf = (event: { readonly type: unknown }): string =>
   typeof event.type === 'string' ? event.type : ''
 
+/** What a snapshot of any screen's machine shows: the state the machine is in. */
+interface Showing {
+  readonly value: StateValue
+}
+
 /**
- * Runs `machine` for a screen; `fields` is what the screen's fields hold now, by anchor, for the
- * moves a platform event makes (a field the flow's move names and the container leaves out fails
- * that move).
+ * Runs `machine` for the screen whose id is `screen`; `fields` is what the screen's fields hold
+ * now, by anchor, for the moves a platform event makes (a field the flow's move names and the
+ * container leaves out fails that move).
  */
 export function useScreenMachine<TMachine extends AnyStateMachine>(
+  screen: string,
   machine: TMachine,
   fields?: FieldValues,
 ) {
@@ -194,8 +205,16 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
   }, [])
   const actor = useActorRef(machine, { inspect })
   const state = useSelector(actor, (snapshot) => snapshot)
+  const snapshot: AnyMachineSnapshot = state
+  const shown: Showing = snapshot
 
   useFrameEffects(actor)
+  useSettledReport(screen, shown.value, () => {
+    const now: AnyMachineSnapshot = actor.getSnapshot()
+    const read: Showing = now
+
+    return read.value
+  })
 
   useEffect(() => {
     const emitter: Pick<AnyActorRef, 'on'> = actor
@@ -272,5 +291,5 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
     [ask, start],
   )
 
-  return { state, send, submit, actor }
+  return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value) }
 }

@@ -71,7 +71,16 @@ modeling stage.
   that failed after the pull is tried again `START_RETRY_MS` (5 seconds) later on the same engine. Until then the account shows what it has, its
   profile page's empty state when the profile is missing. `resendVerification(email)` asks
   `POST /backend/auth/send-verification-email` for the mail again (202) and changes nothing in
-  the session. Until the sign-in is whole its token
+  the session. `requestAccountDeletion(password)` asks
+  `POST /backend/auth/request-account-deletion` with this device's session token for the mail
+  whose link deletes the account (202; the account stays as it is), and `deleteAccount(token)`
+  sends that link's token to `POST /backend/auth/delete-account` with no session (200): both read
+  a 409 `last-admin` as `data:LAST_ADMIN`; the request reads a wrong password as
+  `data:INVALID_CREDENTIALS`, the deletion a link the gateway refuses as `data:LINK_EXPIRED` or
+  `data:LINK_INVALID`. The gateway ends the deleted account's sessions and its 200 names the
+  account (a 200 that does not is `data:AUTH_FAILED`): a session open here for that account signs
+  out at once as on the channel's 4001, which a browser without Web Locks never hears, and
+  another account signed in here stays. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
   still open and no other tab saved another account, saves the memberships, the token and the
@@ -196,7 +205,10 @@ modeling stage.
   which names the asking session before the request goes), without waiting for a 4001 it may
   never hear (no Web Locks, or no WebSocket); whichever of the two comes second finds nothing
   left to do, and an answer that comes once the asking session has ended (another account, or
-  the same one, signed in since) signs nobody out. A write that waited for the lock goes on only into the
+  the same one, signed in since) signs nobody out. A forced sign-out that finds, once no tab
+  writes any more, a token another tab saved since it began (a sign-in made there meanwhile, of
+  the same account or another) forgets nothing and deletes nothing: this tab leaves its space and
+  follows that sign-in. A write that waited for the lock goes on only into the
   space it was admitted for, still open, and while no sign-out runs. A
   protocol the gateway refuses (4400) stops the sync and keeps everything; the session publishes
   it and keeps it until the page loads again (`protocolRefused()`), so that the frame offers to
@@ -207,7 +219,13 @@ modeling stage.
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
-  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below). The container's runner and write
+  time that names no account, so the browser's other tabs hear of it (`PLATFORM_EVENTS`, below).
+  The reset presents this device's session when one is open, and the gateway's 200 says whether
+  that session was among those it ended (`{ signedOut }`; a 200 that does not is
+  `data:AUTH_FAILED`): when it was, the session signs out here at once as on the channel's 4002,
+  which a browser without Web Locks never hears, unless the browser keeps another token by then
+  (a sign-in made since, in another tab too); another account signed in here stays. The
+  container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
   and correlation ids). The root makes the app's domain event bus (`EventBus` of
@@ -284,7 +302,8 @@ modeling stage.
   `machines.spec.ts` holds the app's own machines for a screen (`APP_MACHINES`) to their
   flows with the engine's comparison (`@workspace/ui-contract/machines`), one way on a branch
   (`CONTRACT_AHEAD=1`: a machine may lack what its flow just added, or still be its flow at the
-  branch's base); running every flow and
+  branch's base or at the branch's HEAD, the contract it was built from,
+  `__fixtures__/machine-flows.ts`); running every flow and
   activity in XState is the contract check's, not the app's.
   The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
   lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the
@@ -296,15 +315,24 @@ modeling stage.
   `confirmations-contract.spec.ts`; `confirm-guard.port.ts` is how a screen asks the frame's
   confirmation before such a control (`useConfirmGuard().before(control)`; every action goes
   ahead without a provider); `screen-machine.ts` is the one way a screen runs its machine
-  (`useScreenMachine(machine)`: the flow's `navigate` effects pass the guard, their search
+  (`useScreenMachine(screen, machine)`, `screen` the id of the contract's screen whose flow
+  it runs: the flow's `navigate` effects pass the guard, their search
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
   field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
-  (`useScreenMachine(machine, fields)`), for a move it makes, and a state that does not handle
-  one lets it pass; and the flow's effects on the
+  (`useScreenMachine(screen, machine, fields)`), for a move it makes, and a state that does not
+  handle one lets it pass; `renders(anchor)` says whether the state renders an anchor, read from
+  the machine, whose states carry their flow's `meta.renders` (`screen-renders.ts`: `rendersIn`
+  over the engine's `renderedAt` and `isRendered`, which the frame's shell reads too), so a view
+  shows an anchor only some states render where the state renders it, never by a list of states
+  of its own; in development and e2e builds each state of `screen` the page settles in (React
+  committed it, the browser painted it, every animation that ends has ended, and the machine is
+  still in it) goes to `window.__perchSettledState` when an e2e run exposes it
+  (`settled-report.ts`: `useSettledReport`, which the frame calls as `app-shell` from
+  `main.tsx`, and `reportSettled` over the page); and the flow's effects on the
   frame run through `frame-effects.ts`: a `show` on `app-shell.toast` pushes a toast, one on
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in

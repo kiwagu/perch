@@ -50,9 +50,10 @@ function signIn(base: string, email: string, password: string, device: string): 
 /**
  * On a fresh identity verified on a laptop and signed in on a phone, whose socket is open: a
  * request for a reset mail answers 202 with no body for it and for an unknown email, mailing it
- * only; the link of the mail sets a new password (204), which closes the phone's socket with 4002
- * and refuses its token at hello, refuses the old password and signs in with the new one, and
- * mails the notice of a changed password; the same link again answers 401 `link-invalid`.
+ * only; the link of the mail, opened with no session, sets a new password (200, `signedOut`
+ * false), which closes the phone's socket with 4002 and refuses its token at hello, refuses the
+ * old password and signs in with the new one, and mails the notice of a changed password; the
+ * same link again answers 401 `link-invalid`.
  */
 export async function passwordResetSteps(
   base: string,
@@ -100,11 +101,15 @@ export async function passwordResetSteps(
   )
 
   await step(
-    `the reset link sets a new password: 204, the phone closed with ${CLOSE.passwordChanged} and its token refused, the old password refused, the notice mailed`,
+    `the reset link sets a new password: 200 signing out no session of its own, the phone closed with ${CLOSE.passwordChanged} and its token refused, the old password refused, the notice mailed`,
     async () => {
       const answer = await reset(base, token, password, laptop.id)
 
-      check(answer.status === 204, `answered ${reported(answer)}`)
+      check(
+        answer.status === 200 &&
+          z.object({ signedOut: z.literal(false) }).safeParse(answer.body).success,
+        `answered ${reported(answer)}`,
+      )
 
       const { code } = await socket.closed
 

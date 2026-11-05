@@ -301,6 +301,12 @@ for Bun.
     an anchor shows its facts), `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
+    `settledProblems(contract, settled)`: the e2e harness's check of a `SettledState` against
+    the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids`), one line
+    per problem: of the screen's anchors rendered only where listed, with their derived parts,
+    one visible where the state does not render it, and one the state renders that is not on
+    the page or hidden, unless it, or an anchor it is under, has `roles`, `own` or a `dataId`,
+    or it is a part shown on demand (`option`, `item`, `error-message`).
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
@@ -328,10 +334,17 @@ for Bun.
     sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than
     one, as order runs the machine; so a screen file written shorter that loads to the same
-    flow shows no change);
+    flow shows no change); the platform actions by name, added and removed; per platform
+    action either side holds, the lines of the action added and removed (an action one side
+    lacks has none, so an action added or removed whole shows every line, its mail among them),
+    `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
+    <type>`, `result: <text>`, `code <code>`, `role <role>`, `mail to <to> language
+    <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
+    <screen>]`, descriptions aside;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
-    line per list that is not empty, the transitions as `transitions added in <activity>` and
-    the lines of a flow as `flow lines added in <screen>`.
+    line per list that is not empty, the transitions as `transitions added in <activity>`,
+    the lines of a flow as `flow lines added in <screen>` and those of a platform action as
+    `platform action lines added in <action>`.
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -388,6 +401,15 @@ for Bun.
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`).
+  What a state renders, read from a flow or from an app's machine config alike:
+  `renderedAt(config, value)` returns the `RenderedAt` of XState's state value (`listed`, the
+  names any state lists in `meta.renders`; `rendered`, those the states the machine is in
+  list); `isListed(at, anchor)` (rendered only where listed: a state lists it or an anchor it
+  is under) and `isRendered(at, anchor)` (no state lists it, or this state lists it or an
+  anchor it is under). Rendered means visible to the user. `listedBy(state)` is how all of them
+  read one state's list (an array of its own, its strings alone), the comparison of machines
+  included.
   The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
   suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
   the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
@@ -395,16 +417,18 @@ for Bun.
   The page helper's contract: `PAGE_HELPER` (`__perch.ui`), `ANCHOR_ATTRIBUTES` (the
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
-  `Window` for any code that imports them.
+  `Window` for any code that imports them. The report of a settled state to an e2e run:
+  `SETTLED_STATE` (`__perchSettledState`, the binding the run exposes, declared on `Window`),
+  `SettledState` (the screen, the state value as `SettledValue` and the `RenderedPage`).
 - `./machines`: a flow in XState, for the check and for an app's own machines.
   `walk(flow)` builds the flow with `setup({ guards, actions, actors }).createMachine` (a stub
   per guard, per effect and per `invoke.src`), reaches every state, a parallel state's regions
   each on its own with the others at their initial, and gives the `visited` states and each
   case with its `expected` and `actual` outcome (handled, state, effects); `casesOfFlow(flow)`
   the cases the flow says. An app holds a machine of its own to its flow with
-  `projected(config)` (initial state, states, final states, regions, events with their
-  targets and guards, invoke sources, the contract's effects; the app's own actions left
-  out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  `projected(config)` (initial state, states, final states, what each state renders
+  (`meta.renders`, as a set), regions, events with their targets and guards, invoke sources,
+  the contract's effects; the app's own actions left out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
   counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
   say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is
@@ -451,7 +475,8 @@ for Bun.
   parts, the codes, the states and the error fields the anchors both hold gain or lose
   (derived ones included), the fields that start or
   stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each, and the lines changed in each screen's flow included; prints
+  transitions changed in each, the lines changed in each screen's flow, and the platform
+  actions with the lines changed in each, its mail among them, included; prints
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of
   `bun run contract:diff main` in its description.

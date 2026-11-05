@@ -55,7 +55,24 @@ async function harness() {
     return rows
   }
 
-  return { ...opened, ...services, identity, sessions, live, sessionOf, resetLink, pending }
+  const askDeletion = async () => {
+    const token = (await services.accountDeletions.ask(identity))._unsafeUnwrap()
+    const read = (await services.accountDeletions.read(token))._unsafeUnwrap()
+
+    return read.kind === 'deletion' ? read.claims : expect.unreachable('a deletion')
+  }
+
+  return {
+    ...opened,
+    ...services,
+    identity,
+    sessions,
+    live,
+    sessionOf,
+    resetLink,
+    pending,
+    askDeletion,
+  }
 }
 
 describe('AccountPasswords', () => {
@@ -101,6 +118,16 @@ describe('AccountPasswords', () => {
     expect(await pending()).toEqual([])
     expect((await passwords.matches(identity, NEW_PASSWORD))._unsafeUnwrap()).toBe(true)
     expect((await passwords.reset(identity, token, hash))._unsafeUnwrap()).toBe('link-invalid')
+  })
+
+  it('ends the pending deletion of the account when it resets the password', async () => {
+    const { passwords, accountDeletions, identity, resetLink, askDeletion } = await harness()
+    const token = await resetLink()
+    const deletion = await askDeletion()
+    const hash = (await passwords.hash(NEW_PASSWORD))._unsafeUnwrap()
+
+    expect((await passwords.reset(identity, token, hash))._unsafeUnwrap()).toBe('reset')
+    expect((await accountDeletions.claim(deletion))._unsafeUnwrap()).toBe(false)
   })
 
   it('answers link-expired for a link past its hour on the clock, changing nothing', async () => {
@@ -151,6 +178,18 @@ describe('AccountPasswords', () => {
     expect((await resets.read(token))._unsafeUnwrap()).toBeUndefined()
     expect(await pending()).toEqual([])
     expect((await passwords.matches(identity, NEW_PASSWORD))._unsafeUnwrap()).toBe(true)
+  })
+
+  it('ends the pending deletion of the account when it changes the password', async () => {
+    const { passwords, accountDeletions, identity, sessions, sessionOf, askDeletion } =
+      await harness()
+    const laptop = await sessionOf(sessions.laptop)
+    const deletion = await askDeletion()
+
+    expect(
+      (await passwords.change(identity, laptop, PASSWORD, NEW_PASSWORD))._unsafeUnwrap().kind,
+    ).toBe('changed')
+    expect((await accountDeletions.claim(deletion))._unsafeUnwrap()).toBe(false)
   })
 
   it('changes nothing for a session that is no longer live', async () => {
