@@ -7,6 +7,7 @@
 import { z } from '@workspace/zod'
 
 import { anchorSchema, baseAnchorSchema, screenNameSchema } from '../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { anchorDefSchema, authoredAnchorDefSchema } from './anchor'
 import { bindingSchema } from './binding'
@@ -18,10 +19,7 @@ const screenSchemaOf = <F extends z.ZodType, A extends z.ZodType>(flow: F, ancho
     .strictObject({
       id: screenNameSchema,
       title: z.string().min(1).describe('The title of the screen, for a reader.'),
-      description: z
-        .string()
-        .min(1)
-        .describe('What the screen is for: the task it serves and when it is shown.'),
+      description: z.string().min(1).describe(DESCRIPTION_PURPOSES.screen),
       frame: z
         .boolean()
         .optional()
@@ -39,9 +37,9 @@ const screenSchemaOf = <F extends z.ZodType, A extends z.ZodType>(flow: F, ancho
         .describe('The anchors that are present once the screen is open.'),
       anchors: z.record(baseAnchorSchema, anchor).describe('The declared anchors by name.'),
       states: z
-        .record(z.string(), z.string())
+        .record(z.string(), z.string().describe(DESCRIPTION_PURPOSES.containerState))
         .optional()
-        .describe('The states of the screen with their meaning.'),
+        .describe('The container states of the screen, each with what is visible in it.'),
       flow: flow.optional(),
       wireframe: z.string().optional().describe('A text sketch of the layout.'),
     })

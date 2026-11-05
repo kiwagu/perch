@@ -186,6 +186,28 @@ rewrites its block.
 The scenarios are part of the contract's input too, but they live in the e2e tree beside
 their tests, in `tests/e2e/scenarios/` (see "Scenarios").
 
+### Descriptions
+
+Each domain file says in prose what its parts are for, in its `description`s: a screen's own
+and each anchor's; a flow's own and each state's, region's and transition's, an outcome of an
+invoke among them; a route parameter's; a platform action's, each of its parameters' and a
+composite's; the model's own and each entity's, field's and action's; an activity's own and each
+piece of its data's, each visit's and each transition's. Three maps hold descriptions without
+the key: a screen's `states` (what is visible in each container state), the platform's `events`
+(what each means) and the sentence guards of a `meta.guards` (a guard by failure code is
+structure). A platform action's `result` is no description: it is the action's behaviour, which
+the hand-over diff lists among the action's lines.
+
+A description says what its element is for, as a tester or a user tells it apart, and leaves
+out what the structure, another element, the platform, the model, the vocabulary or the flow
+already says, and what the engine says itself (see "What a screen leaves out"). The purpose of
+each field is the text its schema describes it with, which an editor shows as the field's hint:
+what the field is for, what it leaves to others and its budget, in one text. Every written
+description keeps at most 200 characters, whatever it describes, a screen's own included, and
+`contract:check` names one past it by its place and its length, with the purpose of its field.
+Written means as the file writes it: a description the engine derives, or that the loader fills
+in as it expands a shorter form, is no file's and keeps no budget.
+
 ### The layout of a screen file
 
 The loader accepts any valid YAML. Files written by hand follow one layout, so they read
@@ -243,7 +265,8 @@ anchors:
 
 A screen's `title` is what a reader calls it, and its `description` says what the screen is
 for: the task it serves and when it is shown, in one or two sentences, so an agent chooses
-the screen before it reads the anchors.
+the screen before it reads the anchors; never a list of its parts, which are its anchors, each
+with a description of its own.
 
 A screen's `bindings` are its routes in the router's format: `path` (static segments,
 `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a
@@ -1142,7 +1165,9 @@ gap is fixed in the contract files first, never worked around in a test.
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
-  names exists, and every device acts as a role of the vocabulary.
+  names exists, and every device acts as a role of the vocabulary; and every description the
+  domain files write keeps 200 characters, one past it named with the purpose of its field (see
+  "Descriptions").
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a

@@ -15,7 +15,7 @@
     "description": {
       "type": "string",
       "minLength": 1,
-      "description": "What the screen is for: the task it serves and when it is shown."
+      "description": "What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters."
     },
     "frame": {
       "description": "The frame around every screen: it has no route of its own.",
@@ -136,7 +136,7 @@
                       "type": "string"
                     },
                     "description": {
-                      "description": "What the parameter means.",
+                      "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                       "type": "string"
                     },
                     "x-perch": {
@@ -297,7 +297,7 @@
                       "type": "string"
                     },
                     "description": {
-                      "description": "What the parameter means.",
+                      "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                       "type": "string"
                     },
                     "x-perch": {
@@ -429,7 +429,7 @@
             "description": "The kind of the anchor; matches the end of its last segment."
           },
           "description": {
-            "description": "What the element is, for a reader.",
+            "description": "What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
             "type": "string"
           },
           "binding": {
@@ -809,13 +809,14 @@
       "description": "The declared anchors by name."
     },
     "states": {
-      "description": "The states of the screen with their meaning.",
+      "description": "The container states of the screen, each with what is visible in it.",
       "type": "object",
       "propertyNames": {
         "type": "string"
       },
       "additionalProperties": {
-        "type": "string"
+        "type": "string",
+        "description": "What is visible on the screen in this container state; the vocabulary says what the state means, and each anchor what it is for in a description of its own. At most 200 characters."
       }
     },
     "flow": {
@@ -827,7 +828,7 @@
           "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
         },
         "description": {
-          "description": "What the flow is, for a reader.",
+          "description": "What the flow does as a whole that no single state says: how its areas or its modes go together. Its states, events, guards and effects say the rest. At most 200 characters.",
           "type": "string"
         },
         "initial": {
@@ -851,7 +852,7 @@
                 "anyOf": [
                   {
                     "type": "string",
-                    "description": "What the guard holds, in a sentence."
+                    "description": "What the guard holds, in one sentence the app implements; a guard that tells the failures of an action apart takes their codes, `{ codes }`, instead. At most 200 characters."
                   },
                   {
                     "type": "object",
@@ -893,7 +894,7 @@
                 "type": "object",
                 "properties": {
                   "description": {
-                    "description": "What the state is, for a reader.",
+                    "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                     "type": "string"
                   },
                   "type": {
@@ -1111,7 +1112,7 @@
                 "type": "object",
                 "properties": {
                   "description": {
-                    "description": "What the state is, for a reader.",
+                    "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                     "type": "string"
                   },
                   "type": {
@@ -1236,7 +1237,7 @@
                               "description": "A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it."
                             },
                             "description": {
-                              "description": "What the area is, for a reader.",
+                              "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                               "type": "string"
                             },
                             "input": {
@@ -1273,7 +1274,7 @@
                               "description": "The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`."
                             },
                             "description": {
-                              "description": "What the area is, for a reader.",
+                              "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                               "type": "string"
                             },
                             "onDone": {
@@ -1324,7 +1325,7 @@
                           "type": "object",
                           "properties": {
                             "description": {
-                              "description": "What the area is, for a reader.",
+                              "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                               "type": "string"
                             },
                             "initial": {
@@ -1343,7 +1344,7 @@
                                 "type": "object",
                                 "properties": {
                                   "description": {
-                                    "description": "What the state is, for a reader.",
+                                    "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                                     "type": "string"
                                   },
                                   "meta": {
@@ -1883,7 +1884,7 @@
               "description": "The effects, in order."
             },
             "description": {
-              "description": "What happens, for a reader.",
+              "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
               "type": "string"
             }
           },

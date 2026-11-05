@@ -21,6 +21,7 @@ import {
   type ScreensFile,
   TOAST_RULE_ROW,
   type Vocabulary,
+  type WrittenDescription,
 } from '../files'
 import type { Scenario } from '../scenarios'
 
@@ -36,6 +37,11 @@ export interface Contract {
   readonly scenarios: Scenario[]
   /** The line of each field of each scenario's file, by the scenario's id. */
   readonly scenarioLines: ReadonlyMap<string, Lines>
+  /**
+   * Every description the files of `contract/domain` write, by its place, as they write it
+   * (`readDescriptions`): never one the engine derives or the loader fills in.
+   */
+  readonly descriptions: readonly WrittenDescription[]
 }
 
 export interface DeclaredAnchor {

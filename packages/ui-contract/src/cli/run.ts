@@ -2,8 +2,9 @@
  * The contract tooling, run from the repository root.
  *
  *   ui-contract check [--sources [--ahead]] [--consumers [--tests=<dir>]]
- *     checks the contract files under `contract/` (the activities included) and the scenario
- *     files under `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
+ *     checks the contract files under `contract/` (the activities included, and every
+ *     description they write against its budget) and the scenario files under
+ *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
  *     of the web app and the UI kit against them (with `--ahead`, an anchor declared but not
  *     rendered yet is allowed: the contract runs ahead of the app on a branch); with `--consumers`, then the anchors, codes,
  *     states and values the e2e tests under `tests/e2e/src` (or `<dir>`) name as literals.

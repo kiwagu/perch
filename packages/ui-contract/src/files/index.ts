@@ -97,3 +97,4 @@ export {
   VOCABULARY_SECTIONS,
   type Vocabulary,
 } from './vocabulary'
+export { readDescriptions, type WrittenDescription } from './written-descriptions'

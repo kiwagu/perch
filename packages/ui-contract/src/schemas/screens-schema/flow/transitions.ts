@@ -5,6 +5,8 @@
 
 import { z } from '@workspace/zod'
 
+import { DESCRIPTION_PURPOSES } from '../../description-purposes'
+
 import { flowTargetSchema, guardNameSchema } from './names'
 
 /** One transition whose `actions` are `effect`s. */
@@ -16,7 +18,7 @@ export const transitionSchemaOf = <E extends z.ZodType>(effect: E) =>
         .describe('The state the machine moves to; absent: it stays where it is.'),
       guard: guardNameSchema.exactOptional(),
       actions: z.array(effect).min(1).describe('The effects, in order.').exactOptional(),
-      description: z.string().exactOptional().describe('What happens, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.transition),
     })
     .describe('One transition.')
 

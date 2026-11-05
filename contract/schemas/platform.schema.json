@@ -19,7 +19,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "What the action does."
+            "description": "What the platform action does. What holds once it succeeds is its `result`, and its parameters, codes, roles and mail say the rest. At most 200 characters."
           },
           "params": {
             "type": "object",
@@ -36,7 +36,7 @@
                 },
                 "description": {
                   "type": "string",
-                  "description": "What the value is and its limits."
+                  "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
                 }
               },
               "required": [
@@ -180,7 +180,8 @@
         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
       },
       "additionalProperties": {
-        "type": "string"
+        "type": "string",
+        "description": "What the event means: when the platform raises it. What follows is said by the flows that handle it. At most 200 characters."
       }
     },
     "leaving": {
@@ -219,7 +220,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the composite is, for a reader: the list it derives carries it."
+            "description": "What the composite is for: the list it derives on a screen carries it, and each item has a description of its own. At most 200 characters."
           },
           "list": {
             "type": "string",
