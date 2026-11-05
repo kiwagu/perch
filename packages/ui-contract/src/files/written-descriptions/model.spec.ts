@@ -82,4 +82,66 @@ describe('modelDescriptions', () => {
       },
     ])
   })
+  it('reads the subschemas of a field by where JSON Schema puts them, a subfield named like a keyword included', () => {
+    const field = {
+      type: 'object',
+      properties: {
+        description: { type: 'string', description: 'A subfield named description.' },
+        default: { type: 'string', description: 'A subfield named default.' },
+        'x-note': { type: 'string', description: 'A subfield named like an extension.' },
+      },
+      anyOf: [{ description: 'The first shape.' }, { description: 'The second shape.' }],
+      $defs: { enum: { description: 'A definition named enum.' } },
+      additionalProperties: { description: 'Any other subfield.' },
+      default: { description: 'data, not a schema' },
+      examples: [{ description: 'data, not a schema' }],
+    }
+    const model = { $defs: { note: { type: 'object', properties: { meta: field } } } }
+    const at = (...keys: PropertyKey[]) => ['$defs', 'note', 'properties', 'meta', ...keys]
+
+    expect(modelDescriptions(model)).toEqual([
+      {
+        at: at('properties', 'description', 'description'),
+        kind: 'field',
+        place: 'model field note.meta properties description',
+        text: 'A subfield named description.',
+      },
+      {
+        at: at('properties', 'default', 'description'),
+        kind: 'field',
+        place: 'model field note.meta properties default',
+        text: 'A subfield named default.',
+      },
+      {
+        at: at('properties', 'x-note', 'description'),
+        kind: 'field',
+        place: 'model field note.meta properties x-note',
+        text: 'A subfield named like an extension.',
+      },
+      {
+        at: at('anyOf', 0, 'description'),
+        kind: 'field',
+        place: 'model field note.meta anyOf 0',
+        text: 'The first shape.',
+      },
+      {
+        at: at('anyOf', 1, 'description'),
+        kind: 'field',
+        place: 'model field note.meta anyOf 1',
+        text: 'The second shape.',
+      },
+      {
+        at: at('$defs', 'enum', 'description'),
+        kind: 'field',
+        place: 'model field note.meta $defs enum',
+        text: 'A definition named enum.',
+      },
+      {
+        at: at('additionalProperties', 'description'),
+        kind: 'field',
+        place: 'model field note.meta additionalProperties',
+        text: 'Any other subfield.',
+      },
+    ])
+  })
 })
