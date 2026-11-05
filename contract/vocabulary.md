@@ -265,7 +265,7 @@ screen name of its own.
 
 | Role | Meaning |
 |---|---|
-| `guest` | nobody is signed in on the device |
+| `guest` | nobody is signed in on the device; for the frame also a device whose saved account is not open: while the app starts, when its data fails to open, and while it signs out from there |
 | `identity` | an account is signed in, with or without organisations |
 | `member` | the signed-in account is a member of the current organisation |
 | `admin` | the signed-in account administers the current organisation |
