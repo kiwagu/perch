@@ -21,6 +21,7 @@ export const DESCRIPTION_PURPOSES = {
   region: `What area of the screen the region is. Its states and their transitions say how it behaves. ${AT_MOST}`,
   transition: `What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. ${AT_MOST}`,
   guard: `What the guard holds, in one sentence the app implements; a guard that tells the failures of an action apart takes their codes, \`{ codes }\`, instead. ${AT_MOST}`,
+  activityGuard: `What the guard holds, in one sentence the app implements. ${AT_MOST}`,
   parameter: `What the route parameter means. Its type, bounds, default and examples say the rest. ${AT_MOST}`,
   action: `What the platform action does. What holds once it succeeds is its \`result\`, and its parameters, codes, roles and mail say the rest. ${AT_MOST}`,
   actionParameter: `What the value is and its limits; its type is written beside it. ${AT_MOST}`,

@@ -22,7 +22,7 @@ export function activityDescriptions(value: unknown): Found[] {
     ...meaningsAt(
       recordOf(meta)['guards'],
       ['meta', 'guards'],
-      'guard',
+      'activityGuard',
       (name) => `${head} guard ${name}`,
     ),
     ...entriesOf(states).flatMap(([name, state]) => {

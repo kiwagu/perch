@@ -86,7 +86,7 @@ export const activitySchema = z
     meta: z
       .strictObject({
         guards: z
-          .record(guardNameSchema, z.string().describe(DESCRIPTION_PURPOSES.guard))
+          .record(guardNameSchema, z.string().describe(DESCRIPTION_PURPOSES.activityGuard))
           .exactOptional()
           .describe('The guards by name, each with what it holds.'),
       })

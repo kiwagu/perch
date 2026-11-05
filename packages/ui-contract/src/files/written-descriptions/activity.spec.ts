@@ -62,7 +62,7 @@ describe('activityDescriptions', () => {
       },
       {
         at: ['meta', 'guards', 'titleGiven'],
-        kind: 'guard',
+        kind: 'activityGuard',
         place: 'activity thing guard titleGiven',
         text: 'the title input holds a title',
       },

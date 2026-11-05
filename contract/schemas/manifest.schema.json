@@ -6046,7 +6046,7 @@
                 },
                 "additionalProperties": {
                   "type": "string",
-                  "description": "What the guard holds, in one sentence the app implements; a guard that tells the failures of an action apart takes their codes, `{ codes }`, instead. At most 200 characters."
+                  "description": "What the guard holds, in one sentence the app implements. At most 200 characters."
                 }
               }
             },

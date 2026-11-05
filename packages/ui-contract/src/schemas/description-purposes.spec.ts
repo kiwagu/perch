@@ -72,7 +72,7 @@ const FILES: ReadonlyArray<{
     file: 'an activity file',
     schema: activitySchema,
     fields: ['activity', 'activityData', 'visit', 'activityTransition'],
-    meanings: ['guard'],
+    meanings: ['activityGuard'],
   },
   {
     file: 'an entity of the model',
