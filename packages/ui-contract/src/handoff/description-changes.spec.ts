@@ -102,4 +102,15 @@ describe('descriptionChanges', () => {
       ),
     ).toThrow('two written descriptions of the anchor sample.page')
   })
+  it('pairs the subschemas of the model whose names would read alike unquoted', () => {
+    const modelWith = (second: string): Contract =>
+      contractWith(
+        written('model properties "a not"', 'First.', 'model'),
+        written('model properties a not', second, 'model'),
+      )
+
+    expect(descriptionChanges(modelWith('Second.'), modelWith('The second.'), [])).toEqual([
+      { place: 'model properties a not', before: 7, after: 11 },
+    ])
+  })
 })

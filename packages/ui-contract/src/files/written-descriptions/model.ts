@@ -83,6 +83,17 @@ const schemaAt = (
 ]
 
 /**
+ * A key on the way to a subschema as its place writes it: as it is, or quoted as a JSON string
+ * when it is empty or holds a space or a quote, so the keys of two places never read alike
+ * (`properties "a not"` beside `properties a not`).
+ */
+const segment = (key: PropertyKey): string => {
+  const text = String(key)
+
+  return /^[^\s"]+$/.test(text) ? text : JSON.stringify(text)
+}
+
+/**
  * The descriptions of the subschemas of `schema` at `at`, save those under a keyword in
  * `handled`, which the caller reads as what they are (the entities of the document's `$defs`,
  * the fields of an entity's `properties`).
@@ -97,7 +108,7 @@ const besideAt = (
   subschemasOf(schema)
     .filter(([keys]) => !handled.has(String(keys[0])))
     .flatMap(([keys, subschema]) =>
-      schemaAt(subschema, [...at, ...keys], kind, `${place} ${keys.map(String).join(' ')}`),
+      schemaAt(subschema, [...at, ...keys], kind, `${place} ${keys.map(segment).join(' ')}`),
     )
 
 /** The descriptions of the entity `name` at `$defs.<name>`. */

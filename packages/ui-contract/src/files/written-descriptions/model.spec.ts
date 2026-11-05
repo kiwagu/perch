@@ -186,4 +186,17 @@ describe('modelDescriptions', () => {
       },
     ])
   })
+  it('quotes a name of a subschema that holds a space or a quote, so no two places read alike', () => {
+    const model = {
+      properties: {
+        'a not': { description: 'First.' },
+        a: { not: { description: 'Second.' } },
+      },
+    }
+
+    expect(modelDescriptions(model).map(({ place }) => place)).toEqual([
+      'model properties "a not"',
+      'model properties a not',
+    ])
+  })
 })
