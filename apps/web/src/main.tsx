@@ -24,6 +24,7 @@ import {
   type ShellLive,
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
+import { useSignedOutUnrouted } from './features/app-shell/presentation/shell/signed-out-unrouted'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
@@ -234,6 +235,8 @@ function App(props: { readonly reload: () => void }) {
   // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
     STATUS[state.value as keyof typeof STATUS]
+
+  useSignedOutUnrouted(started?.services.session, actor, unrouted !== undefined)
 
   if (started === undefined || unrouted !== undefined) {
     return (
