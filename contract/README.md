@@ -351,7 +351,8 @@ An anchor's `binding` says what the element does or shows:
 
 A list of bindings means the anchor runs them in that order, or one of them by the mode of
 the screen; its `flow` says which. The other fields of an anchor: `codes` (the `data-code`
-values the element carries), `fields` (an error's codes, each with the field of its screen it
+values the element carries), `ranked` (`true` on a message whose `codes` are in rank order,
+see "Notices"), `fields` (an error's codes, each with the field of its screen it
 concerns: the error shows under that field and marks it invalid; a code left out concerns the
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
@@ -1022,6 +1023,13 @@ that raised it (a notice an action raises just before its flow navigates shows o
 navigates to). Find it by its anchor and its code together, right after the action that
 raises it.
 
+A message whose codes more than one source may raise before it shows (an effect of the app
+and a `show` of a flow on its way there) says which one it shows in its structure:
+`ranked: true`, with its `codes` in rank order. Of the codes raised before it shows, it shows
+the first, and the others go with it. `contract:check` takes `ranked` on a message of two
+codes or more, each listed once, and `contract:diff` lists each ranked message with its order
+(see "Handing over a change").
+
 ## Scenarios
 
 A scenario is an instruction a person could follow by hand, one Markdown file each, in the
@@ -1134,6 +1142,7 @@ gap is fixed in the contract files first, never worked around in a test.
   vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
   every route of the screen declares, which only a field that holds no secret starts with;
   `secret` is on a field alone, and a `visibility-button` on a secret input alone;
+  `ranked` is on a message of two codes or more alone, each code listed once;
   a `composite` is on a secret input alone, names a composite of the platform, is opted into
   once per screen and derives no anchor the file writes or another composite derives, and no
   file writes `derivedFrom`; the platform's composites and the rows of the vocabulary's
@@ -1260,7 +1269,8 @@ meaning of the suffix as its `description` and, for a `visibility-button`, its v
 under `platform.composites`), the screens (each binding with its `example` link, each anchor
 with its description, written or derived), the platform section and the activities verbatim,
 the scenarios parsed, the route parameters, the model, and `ids`, every declared anchor with
-its kind, its screen and its attributes (a secret input's `composite`, and `derivedFrom` on
+its kind, its screen and its attributes (a ranked message's `ranked`, a secret input's
+`composite`, and `derivedFrom` on
 the anchors a composite derives: `{ composite }` on its list, `{ composite, item }` on an
 item), one entry per line, so a search for an anchor in the manifest shows its facts.
 
@@ -1337,7 +1347,8 @@ This is the delivery of a finished change; the review before the code is describ
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the platform actions added or removed
+error fields the anchors both sides hold gain or lose, the messages among them that rank their
+codes, with their order, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
 hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
 lines of each platform action added, removed or changed, and each written description added,
@@ -1371,6 +1382,9 @@ screen and kind. The derived parts of an anchor are listed by name,
 error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
+ranked message is listed with its order, `<anchor> ranks <code> > <code>`: a new order shows
+as its old line removed and its new one added, which its codes, compared as a set, do not
+show. A
 notice is listed by its action and its name, `<action>.<name>`. A composite is listed by its
 name. A screen's flow is listed as `flow lines added in <screen id>` and `flow lines
 removed in <screen id>`, one line per fact the flow says: its initial state and each

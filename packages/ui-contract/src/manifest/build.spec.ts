@@ -133,6 +133,31 @@ describe('buildManifest', () => {
     expect(anchors?.['sample.save-button']).not.toHaveProperty('description')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
+  it('carries a ranked message with its codes in their order, the first shown of those raised', () => {
+    const ranked = fixtureContract()
+    const screen = ranked.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no sample screen')
+    }
+
+    screen.anchors['sample.status-message'] = {
+      kind: 'message',
+      codes: ['failed', 'saved'],
+      ranked: true,
+    }
+
+    const built = buildManifest({ ...ranked, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.status-message']).toEqual({
+      kind: 'message',
+      screen: 'sample',
+      codes: ['failed', 'saved'],
+      ranked: true,
+    })
+    expect(built.ids['sample.page']).not.toHaveProperty('ranked')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
   it("names in an error's description the actions its flow invokes against it", () => {
     const withError = fixtureContract()
     const screen = withError.screens.screens.find(({ id }) => id === 'sample')

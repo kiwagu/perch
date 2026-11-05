@@ -169,7 +169,8 @@ for Bun.
     `visibility-button`, whose values its suffix defines, the platform's composites and the
     rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
     never named like a derived one, entry and names, `secret` on a field alone, a
-    `visibility-button` derived by a secret `input` alone), `bindingsProblems` (model fields,
+    `visibility-button` derived by a secret `input` alone, `ranked` on a message of two codes
+    or more alone, each listed once), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
     input), a constant or a search parameter every route of the screen declares, routes,
     the search parameter a field starts with, one every route of the screen declares, never on
@@ -321,7 +322,8 @@ for Bun.
     through, each code with its meaning from the vocabulary), the
     platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes, `holdsInput` of a field among them, a secret
+    with its kind, its screen and its attributes, `holdsInput` of a field among them, a ranked
+    message's `ranked`, a secret
     input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
     and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
@@ -348,7 +350,8 @@ for Bun.
     both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
     them), the codes as `<anchor> <code>`, the states as `<anchor> <state>` and an error's
     fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
-    as `<anchor> holds input`;
+    as `<anchor> holds input` and the messages that rank their codes as
+    `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
     the actions of `platform.leaving` added and removed, the entries of
     `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
     actions as `<action>.<name>`;

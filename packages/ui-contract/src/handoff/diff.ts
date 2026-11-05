@@ -40,6 +40,11 @@ export interface ContractChanges {
   inputs: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
+  /**
+   * As `<anchor> ranks <code> > <code>`, the messages that rank their codes, each with its order:
+   * a new order shows as the old line removed and the new one added.
+   */
+  ranks: Change
   /** As the action's name, the actions that leave what the user typed behind. */
   leaving: Change
   /** As `<leave>: <how it asks>`, and `question: <dialog>`: how each leave that would lose unsaved input asks first. */
@@ -272,6 +277,9 @@ export function diffContracts(
     ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],
+    ),
+    ranks: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.ranked === true ? [`ranks ${(def.codes ?? []).join(' > ')}`] : [],
     ),
     leaving: changeOf(
       before?.screens.platform.leaving ?? [],

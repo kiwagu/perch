@@ -187,6 +187,19 @@ export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
 ```
 
+A message whose codes more than one source may raise before it shows (an effect of the app
+and a flow's `show` on its way there) is declared `ranked: true`, its `codes` in rank order:
+the app shows the first of those raised and drops the others, and a spec of the app holds its
+own order to the anchor's `codes` (`contract:diff` lists the order as
+`<anchor> ranks <code> > <code>`).
+
+```yaml
+<screen>.<object>-message:
+  kind: message
+  ranked: true
+  codes: [ <the code that says the most>, <the next>, <the last> ]
+```
+
 ## 8. A container with `data-state`
 
 A container whose data arrives after the page says its state, computed from the same value
