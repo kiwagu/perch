@@ -405,7 +405,10 @@ for Bun.
     nothing (`compositeNotes(measure)`, internal to the coverage command, which also prints
     them after `--write`), `listControls(measure)` the two
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
-    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
+    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`; `coverageDrift(note,
+    block)` (`handoff/coverage-drift.ts`) finds nothing when the note already holds the block
+    as `replaceCoverageBlock` writes it, else one problem at the line of its start marker
+    naming `bun run contract:coverage --write`. The counting method is
     described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
     `listDescriptions(contract)` (an internal helper of the coverage command,
     `handoff/descriptions.ts`, behind `coverage --descriptions`, not exported from the root)
@@ -518,8 +521,8 @@ for Bun.
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of
   `bun run contract:diff main` in its description.
-- From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
-  [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
+- From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
+  [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios
   walk, then the controls marked and ignored per feature
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
@@ -528,7 +531,12 @@ for Bun.
   with their reasons as `file:line: <element>`, `--descriptions` the written descriptions the
   engine would say itself as `<anchor>: <description>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
-  writing nothing). Not part of `bun run check`: the note is a report.
+  writing nothing). The measure fails nothing: the note is a report. `--check` compares the
+  block of `contract/COVERAGE.md` with what `--write` would write: when they differ it prints a
+  problem at the line of the block's start marker, naming `bun run contract:coverage --write`,
+  and exits 1; when they are equal it says so in one line. `bun run contract:coverage:check`
+  runs it, in `bun run check` and in the pre-commit hook on `main` only, as `e2e:coverage` runs
+  there.
 - From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
   flow of a screen, named by its id or its file, as every reader takes it, expanded from
   the shorter forms its file may write it in, the regions it leaves out derived and the

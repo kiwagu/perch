@@ -3,8 +3,9 @@
 ## Gates
 
 - `bun run check`: type checks, lint, unit tests and the model, i18n, refactor, README and e2e
-  coverage checks, and the three UI contract checks (`contract:check`,
-  `contract:check:sources`, `contract:check:consumers`); the gate for a change.
+  coverage checks, the three UI contract checks (`contract:check`,
+  `contract:check:sources`, `contract:check:consumers`) and the check of the coverage block
+  (`contract:coverage:check`); the gate for a change.
   `bun run check --force` runs every task afresh instead of replaying turbo's cache. It runs its
   tasks four at a time, for the reason `bun run test` does below.
 - `bun run test:db` with the `e2e` stand up (`mcproc start e2e`): the schema permission suites,
@@ -72,19 +73,22 @@ screen file, the scenario, the code and the tests.
 
 - `bun run contract:check`, `bun run contract:check:sources` and
   `bun run contract:check:consumers` (all three in `check` and in the pre-commit hook): the
-  contract files and the scenarios against each other, then the anchors and codes of the web
-  app and the UI kit against them, then the anchors, codes, states and values the e2e tests
-  name.
+  contract files and the scenarios against each other, every description they write within
+  200 characters among them, then the anchors and codes of the web app and the UI kit against
+  them, then the anchors, codes, states and values the e2e tests name.
 - `bun run contract:schemas`: writes the JSON Schemas of the contract files from their Zod
   sources (`-- --check` fails on drift).
 - `bun run contract:manifest`: builds the UI manifest from `contract/` and the scenario files
   into `ui-manifest/`.
 - `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
-  ref; a change to the contract hands over the output of `bun run contract:diff main`.
+  ref, each written description changed with its length before and after among it; a change to
+  the contract hands over the output of `bun run contract:diff main`.
 - `bun run contract:coverage`: the fields and actions of the model bound by anchors, the
   controls carrying an anchor per feature module, and the anchors and scenarios per screen;
   `--write` updates `contract/COVERAGE.md`, `--unmarked` lists the controls left unmarked and
-  the ones declared off with `ui-contract-ignore: <reason>`.
+  the ones declared off with `ui-contract-ignore: <reason>`. `bun run contract:coverage:check`
+  (in `check` and in the pre-commit hook on `main`) fails when the block of
+  `contract/COVERAGE.md` is not what `--write` writes.
 - `bun run contract:routes`: the routes of the screen files, one example deep link each,
   where each is reached from and the route tree (`-- --json` for all of it as JSON).
 - `bun run contract:flow <screen>`: a screen's flow as the full XState configuration its

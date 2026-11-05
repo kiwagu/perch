@@ -198,7 +198,8 @@ code and the tests follow; the checks hold them to the contract.
    bun run contract:coverage --write
    ```
 
-   Then `bun run check` before the commit.
+   Then `bun run check` before the commit; it fails a coverage block left behind
+   (`contract:coverage:check`), and so does the hook on `main`.
 9. **Hand over** the finished change: the output of `bun run contract:diff main` with the
    reason for each rename or removal (`references/templates.md`, "Hand-off"). This is the
    delivery; the review of step 5 came before the code.

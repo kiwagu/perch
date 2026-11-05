@@ -181,7 +181,8 @@ Generated into `schemas/`, never edited by hand: `screen.schema.json` (one scree
 manifest). `bun run contract:schemas` writes them
 from the Zod sources of `@workspace/ui-contract`, and the contract check fails when they
 drift. `COVERAGE.md` is a note, not a contract file: `bun run contract:coverage --write`
-rewrites its block.
+rewrites its block, and `bun run contract:coverage:check` fails when the block is not what it
+would write (see "Coverage").
 
 The scenarios are part of the contract's input too, but they live in the e2e tree beside
 their tests, in `tests/e2e/scenarios/` (see "Scenarios").
@@ -1229,7 +1230,9 @@ gap is fixed in the contract files first, never worked around in a test.
 
 Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
 `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
-leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
+leaves it out, so a scenario may wait for its test. `bun run contract:coverage:check` runs
+where it runs and holds the block of `COVERAGE.md` to what `contract:coverage --write` writes
+(see "Coverage"). The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
 
 On `contract/trunk` the pre-commit hook first holds each commit to the business layer
@@ -1284,7 +1287,12 @@ a message shows when it carries a code, and an error when there is one.
 ## Coverage
 
 `bun run contract:coverage` prints how far the contract reaches, and `--write` puts the same
-block into `COVERAGE.md`. It is a report, not a gate.
+block into `COVERAGE.md`. It is a report, not a gate: no measure fails a commit. The block stays
+current, though: `bun run contract:coverage:check` (`ui-contract coverage --check`) fails when
+the block in `COVERAGE.md` is not what `--write` would write, naming that command, and says so
+in one line when it is. It runs in `bun run check` and in the pre-commit hook on a commit on
+`main`; on a branch, the contract trunk included, the hook leaves it out, so a block left behind
+fails `bun run check` before a landing, and the squash on `main`.
 
 1. **The model**, the measure of completeness: per entity of `model.schema.json`, each field
    and each action with the anchors whose `binding` names it, or `unbound`. A field may be

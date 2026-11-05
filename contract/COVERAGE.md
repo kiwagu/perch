@@ -8,7 +8,9 @@ model no screen shows yet. The second is the code's: how many of the
 controls a user can act on carry an anchor, per feature module of the web app and for the UI
 kit, which are left unmarked and which are declared off the coverage by a marker, and how
 many anchors and scenarios each screen has. `bun run contract:coverage --write` rewrites the
-block below from the code and the contract; the text around it is written by hand.
+block below from the code and the contract; the text around it is written by hand. The block
+stays what that command writes: `bun run contract:coverage:check` fails when it is not, in `bun
+run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 

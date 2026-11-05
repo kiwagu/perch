@@ -23,11 +23,12 @@
  *     the codes and error fields of the anchors both hold, derived ones included, and the
  *     activities with the transitions changed in each: the hand-over block of a change, or the
  *     changes as JSON.
- *   ui-contract coverage [--write] [--json] [--unmarked] [--descriptions]
+ *   ui-contract coverage [--write | --check] [--json] [--unmarked] [--descriptions]
  *     prints the coverage block (the fields and actions of the model bound by anchors, the
  *     transitions of each activity its scenarios walk, the controls marked per module,
  *     anchors and scenarios per screen), writes it between the
- *     markers of `contract/COVERAGE.md`, prints the measure as JSON, lists the unmarked
+ *     markers of `contract/COVERAGE.md`, fails when the block there is not what it would
+ *     write (`--check`), prints the measure as JSON, lists the unmarked
  *     and the ignored controls as `file:line: <element>`, or lists the written descriptions
  *     the engine would say itself as `<anchor>: <description>`. A coverage-ignore marker it cannot
  *     apply, or that ignores no control, is printed as a problem, and nothing is written.
@@ -73,7 +74,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1
