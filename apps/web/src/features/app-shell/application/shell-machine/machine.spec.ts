@@ -108,6 +108,7 @@ function frame(reloadedFor: string[] = []) {
         | 'opening-data'
         | 'ready'
         | 'failed'
+        | 'start-failed'
         | 'crashed'
         | 'updating'
         | 'reloading'
@@ -156,6 +157,21 @@ describe('shell machine', () => {
 
     expect(blocked.actor.getSnapshot().status).toBe('done')
     expect(blocked.canChoose()).toBe(false)
+  })
+
+  it('says the app could not start when the code of its start did not load, with no sign-out', () => {
+    const stopped = frame()
+
+    stopped.actor.send({ type: 'platform.start-failed' })
+
+    expect(stopped.is('start-failed')).toBe(true)
+    expect(stopped.actor.getSnapshot().can({ type: 'app-shell.sign-out-here-button' })).toBe(false)
+    expect(stopped.canChooseTheme()).toBe(true)
+
+    stopped.choose('es')
+
+    expect(stopped.is('start-failed')).toBe(true)
+    expect(stopped.spoken).toEqual(['es'])
   })
 
   it("renders a guest's screen once started, and a signed-in account's frame while its data opens", () => {

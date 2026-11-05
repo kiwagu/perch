@@ -91,6 +91,17 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.toast')).toBeNull()
   })
 
+  it('says the app could not start, holds the page back and offers no sign-out', () => {
+    renderShell({ status: 'start-failed', renders: rendering(), onSignOutHere: () => {} })
+
+    const status = screen.getByTestId('app-shell.status')
+
+    expect(status.getAttribute('data-state')).toBe('start-failed')
+    expect(status.textContent).toBe(en['app.shell.start-failed'])
+    expect(screen.queryByText('page')).toBeNull()
+    expect(screen.queryByTestId('app-shell.sign-out-here-button')).toBeNull()
+  })
+
   it('says the browser keeps no site data when it blocks storage, and holds the page back', () => {
     renderShell({ status: 'storage-blocked' })
 

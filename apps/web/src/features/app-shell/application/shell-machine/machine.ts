@@ -123,6 +123,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'platform.started': [{ target: 'ready', guard: 'signedOut' }, { target: 'opening-data' }],
           'platform.open-failed': { target: 'failed' },
+          'platform.start-failed': { target: 'start-failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
@@ -231,6 +232,12 @@ export function createShellMachine(deps: ShellMachineDeps) {
           src: 'platform.sign-out',
           onDone: { target: 'signed-out', actions: TO_SIGN_IN },
           onError: { target: 'signed-out', actions: TO_SIGN_IN },
+        },
+      },
+      'start-failed': {
+        on: {
+          'app-shell.locale-select': { target: 'start-failed', actions: 'speakChoice' },
+          'app-shell.theme-select': THEME_CHOSEN,
         },
       },
       'storage-blocked': { type: 'final' },
