@@ -518,7 +518,8 @@ for Bun.
   `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived
   parts, the codes, the states and the error fields the anchors both hold gain or lose
   (derived ones included), the fields that start or
-  stop holding input, the leaving actions, how each leave asks, the activities and the
+  stop holding input, the messages that rank their codes with their order, the leaving
+  actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform
   actions with the lines changed in each, its mail among them, and each written description
   added, removed or changed with its length before and after, included; prints

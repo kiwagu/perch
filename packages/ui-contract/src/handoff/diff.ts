@@ -4,7 +4,8 @@
  * it renames, the derived parts (a password input's visibility-button among them), the
  * composites the platform declares, the codes, the states and the error fields it adds or
  * removes on the anchors both hold (written or derived, so a constraint added to the model
- * shows as the code it gives), the fields that start or stop holding input, the actions that
+ * shows as the code it gives), the fields that start or stop holding input, the messages that
+ * rank their codes, with their order, the actions that
  * leave what the user typed behind and how each leave that would lose it asks, the notices the
  * platform actions declare, the transitions it adds or removes in each activity both contracts
  * hold, the lines of the flow it adds or removes in each screen both hold (a flow added or
