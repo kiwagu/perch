@@ -1,6 +1,7 @@
 import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
@@ -242,7 +243,8 @@ export class SessionService implements SessionPort {
   /**
    * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
    * Online, a token a sign-out left to sign out is sent meanwhile. Until the space is open (or did
-   * not open), the saved identity is the current one and reads and writes wait for its space.
+   * not open), the saved identity is the current one and reads and writes wait for its space;
+   * another tab that signs it out meanwhile ends that at once, and the restore with nobody.
    */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
     const saved = savedIdentity(this.#options.storage)
@@ -250,22 +252,18 @@ export class SessionService implements SessionPort {
       this.#signingIn.restore(generation),
     )
 
-    if (saved) {
-      // The saved identity is current while its space opens, so the page renders for it at once.
-      this.#state.startOpening(saved, restoring)
-    }
-
-    return restoring
+    // The saved identity is current while its space opens, so the page renders for it at once.
+    return saved ? this.#state.startOpening(saved, restoring) : restoring
   }
 
   /**
-   * The saved identity's space did not open: signs it out on this device without it. Its token
-   * is left to sign out (sent at once online) and its databases deleted, its own and every
-   * organisation one counted for it, with whatever they held that was not sent. Changes nothing
-   * while a space is open or nobody is saved.
+   * The saved identity's space did not open: signs `identity` out on this device without it, while
+   * it is still the saved one. Its token is left to sign out (sent at once online) and its
+   * databases deleted, its own and every organisation one counted for it, with whatever they held
+   * that was not sent. Changes nothing while a space is open or another identity is saved.
    */
-  signOutUnopened(): ResultAsync<void, DataError> {
-    return this.#transitions.serially(() => this.#signingOut.unopened())
+  signOutUnopened(identity: IdentityId): ResultAsync<void, DataError> {
+    return this.#transitions.serially(() => this.#signingOut.unopened(identity))
   }
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */

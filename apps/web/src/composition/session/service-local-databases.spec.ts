@@ -179,7 +179,7 @@ describe('a saved identity whose database does not open', () => {
     const tab = await world({ storage, online: false, refusedIdentities: [ann.id] })
 
     expect((await tab.session.restore())._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
-    expect((await tab.session.signOutUnopened()).isOk()).toBe(true)
+    expect((await tab.session.signOutUnopened(ann.id)).isOk()).toBe(true)
 
     expect(storage.get('perch.session.identity')).toBeUndefined()
     expect(pendingRevokes(storage).map(({ token }) => token)).toEqual(['token-ann'])
@@ -193,7 +193,7 @@ describe('a saved identity whose database does not open', () => {
     const tab = await world({ storage, online: false })
 
     expect((await tab.session.restore()).isOk()).toBe(true)
-    expect((await tab.session.signOutUnopened()).isOk()).toBe(true)
+    expect((await tab.session.signOutUnopened(ann.id)).isOk()).toBe(true)
 
     expect(tab.session.current()?.id).toBe(ann.id)
     expect(storage.get('perch.session.identity')).toBeDefined()

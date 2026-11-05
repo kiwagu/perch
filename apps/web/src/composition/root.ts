@@ -102,7 +102,7 @@ export interface AppRootOptions {
 /**
  * Why the application did not start: the browser keeps no site data (`storage-blocked`), or the
  * session could not be restored (`open-failed`), with the error each time. When the saved
- * identity's space did not open, `signOutHere` signs it out on this device without it
+ * identity's space did not open, `signOutHere` signs that identity out on this device without it
  * (`SessionService.signOutUnopened`), so a database that will never open is no dead end.
  */
 export type BootFailure =
@@ -156,9 +156,16 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     })
   }
 
-  // The routes that act for the signed-in device present the token saved on this browser.
+  // The routes that act for the signed-in device present the token saved on this browser, only
+  // while it is the session of the account this tab shows: never one another tab saved since.
   const bearer: BearerDeps = {
-    token: () => savedToken(options.storage),
+    token: () => {
+      const here = session.current()
+
+      return here !== undefined && savedIdentity(options.storage)?.id === here.id
+        ? savedToken(options.storage)
+        : undefined
+    },
     device: () => deviceIdFrom(options.storage),
   }
   const organisationsApi = options.organisationsApi(bearer)
@@ -259,8 +266,11 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       // No frame reads the state of the sync of a start that failed.
       sync.stop()
 
-      return savedIdentity(options.storage)
-        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
+      // The sign-out offered is of the identity whose space did not open, and of no other.
+      const unopened = savedIdentity(options.storage)
+
+      return unopened
+        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(unopened.id) }
         : { kind: 'open-failed', error }
     })
     .map(() => step('ready'))

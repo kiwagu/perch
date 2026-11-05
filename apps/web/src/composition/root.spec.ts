@@ -168,6 +168,49 @@ describe('createAppRoot', () => {
     expect(failures).toEqual([])
   })
 
+  it('presents the saved token on the organisation and device routes only while it is the session of the account this tab shows', async () => {
+    const storage = memoryStorage()
+    let deps: BearerDeps | undefined
+    let devicesDeps: BearerDeps | undefined
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [], {
+      organisationsApi: (given) => {
+        deps ??= given
+
+        return organisationsApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+      devicesApi: (given) => {
+        devicesDeps = given
+
+        return devicesApi('/backend', {
+          ...given,
+          fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+        })
+      },
+    })
+
+    services = result._unsafeUnwrap()
+
+    expect(deps?.token()).toBe(ann.token)
+    expect(devicesDeps?.token()).toBe(ann.token)
+
+    // Another tab signed Ann out and Bob in; this tab, still Ann's, has not followed yet.
+    saveDevice(storage, {
+      identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+      token: 'token-bob',
+      memberships: [],
+    })
+
+    expect(services.session.current()?.id).toBe(ann.identity.id)
+    expect(deps?.token()).toBeUndefined()
+    expect(devicesDeps?.token()).toBeUndefined()
+  })
+
   it('stops at the step that failed', async () => {
     const storage = memoryStorage()
     const steps: BootStep[] = []

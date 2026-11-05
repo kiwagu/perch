@@ -115,12 +115,16 @@ export class SessionElsewhere {
 
   /**
    * Another tab changed the saved identity: this tab follows, closing a space that is no longer
-   * it and, with none open, opening the space of the identity another tab signed in.
+   * it and, with none open, opening the space of the identity another tab signed in. An identity
+   * this tab shows without its space leaves at once, not behind the start's open, so nothing
+   * more is asked or shown in its name meanwhile.
    */
   follow(): void {
     if (this.#host.isClosed()) {
       return
     }
+
+    this.#host.leaveUnopened()
 
     void this.#host
       .serially((generation) => {
