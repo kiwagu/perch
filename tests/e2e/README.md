@@ -45,7 +45,7 @@ Each test carries the tag of its scenario's `tags`, written by hand in its `test
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) but the tests named below, `organisation/base/`,
 `not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
-`open-before-data` and `start-failed` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
+`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
