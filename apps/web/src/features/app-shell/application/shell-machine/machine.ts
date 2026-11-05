@@ -122,7 +122,6 @@ export function createShellMachine(deps: ShellMachineDeps) {
       opening: {
         on: {
           'platform.started': [{ target: 'ready', guard: 'signedOut' }, { target: 'opening-data' }],
-          'platform.open-failed': { target: 'failed' },
           'platform.start-failed': { target: 'start-failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },

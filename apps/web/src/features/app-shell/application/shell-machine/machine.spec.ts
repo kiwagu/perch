@@ -97,6 +97,12 @@ function frame(reloadedFor: string[] = []) {
       actor.send({ type: 'platform.started' })
       actor.send({ type: 'platform.opened' })
     },
+    /** The saved account's data does not open: its frame shows while it opens, then it fails. */
+    failOpen: () => {
+      values = { ...values, account: values.account ?? 'idn_ann' }
+      actor.send({ type: 'platform.started' })
+      actor.send({ type: 'platform.open-failed' })
+    },
     choose: (locale: Locale) => actor.send({ type: 'app-shell.locale-select', locale }),
     chooseTheme: (theme: Theme) => actor.send({ type: 'app-shell.theme-select', theme }),
     canChooseTheme: () =>
@@ -138,7 +144,7 @@ const sameAs = (event: unknown, expected: object): boolean =>
   JSON.stringify(event) === JSON.stringify(expected)
 
 describe('shell machine', () => {
-  it('opens the frame, or says the start failed or the browser keeps none', () => {
+  it('opens the frame, or says the data failed or the browser keeps none', () => {
     const opened = frame()
 
     opened.actor.send({ type: 'platform.started' })
@@ -147,7 +153,7 @@ describe('shell machine', () => {
 
     const failed = frame()
 
-    failed.actor.send({ type: 'platform.open-failed' })
+    failed.failOpen()
 
     expect(failed.is('failed')).toBe(true)
 
@@ -172,6 +178,16 @@ describe('shell machine', () => {
 
     expect(stopped.is('start-failed')).toBe(true)
     expect(stopped.spoken).toEqual(['es'])
+  })
+
+  it('hears that the data did not open only while it opens, never at the start', () => {
+    const shell = frame()
+
+    expect(shell.actor.getSnapshot().can({ type: 'platform.open-failed' })).toBe(false)
+
+    shell.failOpen()
+
+    expect(shell.is('failed')).toBe(true)
   })
 
   it("renders a guest's screen once started, and a signed-in account's frame while its data opens", () => {
@@ -228,7 +244,7 @@ describe('shell machine', () => {
     const shell = frame()
 
     shell.choose('es')
-    shell.actor.send({ type: 'platform.open-failed' })
+    shell.failOpen()
     shell.choose('en')
 
     expect(shell.spoken).toEqual(['es', 'en'])
@@ -336,7 +352,7 @@ describe('shell machine', () => {
 
     const failed = frame()
 
-    failed.actor.send({ type: 'platform.open-failed' })
+    failed.failOpen()
     failed.chooseTheme('dark')
 
     expect(failed.setTheme).toHaveBeenCalledWith('dark')
@@ -443,7 +459,7 @@ describe('shell machine', () => {
   it('signs the saved account out here when its data failed, then moves to sign-in', async () => {
     const shell = frame()
 
-    shell.actor.send({ type: 'platform.open-failed' })
+    shell.failOpen()
     shell.actor.send({ type: 'app-shell.sign-out-here-button' })
 
     expect(shell.actor.getSnapshot().can({ type: 'app-shell.sign-out-here-button' })).toBe(false)
@@ -613,7 +629,7 @@ describe('shell machine', () => {
 
     const failed = frame()
 
-    failed.actor.send({ type: 'platform.open-failed' })
+    failed.failOpen()
 
     expect(failed.actor.getSnapshot().can({ type: 'platform.protocol-refused' })).toBe(false)
     expect(failed.canUpdate()).toBe(false)
@@ -645,7 +661,7 @@ describe('shell machine', () => {
 
     const failed = frame()
 
-    failed.actor.send({ type: 'platform.open-failed' })
+    failed.failOpen()
 
     expect(failed.actor.getSnapshot().can({ type: 'platform.offline' })).toBe(false)
   })
