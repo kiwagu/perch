@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.sign-in
 title: Sign in or create an account
-description: "Where a visitor signs in with an existing account, or creates one and is asked to open the link of the mail that verifies its email: the only screen a guest sees, and where a signed-out device returns."
+description: Where a visitor signs in with an existing account or creates one, and where a signed-out device returns.
 flag: null
 bindings:
   - path: /sign-in
