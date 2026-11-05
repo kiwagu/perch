@@ -143,6 +143,9 @@ flow:
       on:
         platform.opened: ready
         platform.open-failed: failed
+        platform.signed-out:
+          target: ready
+          description: Signed out while its data opened, in another tab or from another device; nothing is left to open, so the tab goes on as a guest's and its screen moves to the sign-in page.
     ready:
       description: The frame with the open screen.
       meta: { renders: [ app-shell.nav ] }
@@ -319,6 +322,9 @@ flow:
       meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
+        platform.signed-out:
+          target: ready
+          description: The saved account was signed out, in another tab or from another device; the tab goes on as a guest's, its screen on the sign-in page, and offers no sign-out of an account it no longer holds.
         app-shell.locale-select:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
