@@ -10,7 +10,7 @@ anchors:
   app-shell.status:
     kind: status
     description: "The readiness line of the app: its state says where the start is; in ready it is a visually hidden text, in opening-data a visible line beside the open screen, otherwise the visible message."
-    states: [ opening, opening-data, ready, failed, storage-blocked ]
+    states: [ opening, opening-data, ready, failed, start-failed, storage-blocked ]
   app-shell.notice-message:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
@@ -109,7 +109,8 @@ states:
   opening: app-shell.status says the app is starting, with the theme select and the language select; no screen is rendered.
   opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, toast, crash message or message of the sync, update or install shows yet.
   ready: The open screen in the frame, with the navigation and the sync state for a signed-in account, the theme and language selects for a guest, the update and install messages when they apply.
-  failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved, and the theme select and the language select; no screen is rendered.
+  failed: app-shell.status says this device could not open the saved account's data, with app-shell.sign-out-here-button, the theme select and the language select; no screen is rendered.
+  start-failed: app-shell.status says the app could not start on this device, with the theme select and the language select; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data, with the theme select and the language select; no screen and no sign-in form.
 flow:
   initial: opening
@@ -131,6 +132,7 @@ flow:
           - target: opening-data
             description: An account is signed in, so its frame and the open screen render at once while its data opens.
         platform.open-failed: failed
+        platform.start-failed: start-failed
         platform.storage-blocked: storage-blocked
         app-shell.locale-select:
           target: opening
@@ -337,6 +339,13 @@ flow:
           description: A failed sign-out also loads the sign-in page again; no code is shown.
           actions:
             - navigate: /sign-in
+    start-failed:
+      description: The app's code did not load or run, so the start stopped before it knew who is signed in; no screen is rendered.
+      on:
+        app-shell.locale-select:
+          target: start-failed
+          description: The app speaks the chosen language; the start opened no settings to store it.
+        app-shell.theme-select: {}
     storage-blocked:
       description: The browser keeps no site data, so the app stops with a message.
       type: final
