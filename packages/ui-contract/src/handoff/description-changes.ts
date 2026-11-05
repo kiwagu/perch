@@ -7,7 +7,7 @@
  */
 
 import type { Contract } from '../check'
-import { descriptionLength } from '../schemas'
+import { type DescriptionKind, descriptionLength } from '../schemas'
 
 import { byName } from './change'
 
@@ -20,17 +20,40 @@ export interface DescriptionChange {
   readonly after?: number
 }
 
-/** Each written description by its place; an anchor renamed under its new name. */
-const textsOf = (
+/** A written description as the diff pairs it: its kind and place, the same at any ref. */
+interface Paired {
+  readonly kind: DescriptionKind
+  readonly place: string
+  readonly text: string
+}
+
+/**
+ * Each written description by its kind and place, an anchor renamed under its new name: two
+ * kinds may share a place (a screen named `model` and the model's own description), one kind
+ * never; a side holding two at one place is refused, as keeping either would hide the other.
+ */
+function textsOf(
   contract: Contract | undefined,
   renamedTo: ReadonlyMap<string, string>,
-): Map<string, string> =>
-  new Map(
-    (contract?.descriptions ?? []).map(({ kind, place, text }) => [
-      kind === 'anchor' ? (renamedTo.get(place) ?? place) : place,
-      text,
-    ]),
-  )
+): Map<string, Paired> {
+  const texts = new Map<string, Paired>()
+
+  for (const { kind, place, text } of contract?.descriptions ?? []) {
+    const named = kind === 'anchor' ? (renamedTo.get(place) ?? place) : place
+    const key = JSON.stringify([kind, named])
+
+    if (texts.has(key)) {
+      throw new Error(`two written descriptions of the ${kind} ${named}`)
+    }
+
+    texts.set(key, { kind, place: named, text })
+  }
+
+  return texts
+}
+
+/** The pairs by their place, then by their kind. */
+const byPlace = (a: Paired, b: Paired): number => byName(a.place, b.place) || byName(a.kind, b.kind)
 
 /**
  * The descriptions `after` adds, removes or changes against `before`, sorted by place; the
@@ -43,19 +66,20 @@ export function descriptionChanges(
 ): DescriptionChange[] {
   const was = textsOf(before, new Map(renamed.map(({ from, to }) => [from, to])))
   const is = textsOf(after, new Map())
+  const keys = [...new Set([...was.keys(), ...is.keys()])]
+  const pairs = keys.flatMap((key) => {
+    const old = was.get(key)
+    const now = is.get(key)
+    const either = now ?? old
 
-  return [...new Set([...was.keys(), ...is.keys()])].sort(byName).flatMap((place) => {
-    const old = was.get(place)
-    const now = is.get(place)
-
-    return old === now
-      ? []
-      : [
-          {
-            place,
-            ...(old === undefined ? {} : { before: descriptionLength(old) }),
-            ...(now === undefined ? {} : { after: descriptionLength(now) }),
-          },
-        ]
+    return either === undefined || old?.text === now?.text ? [] : [{ old, now, either }]
   })
+
+  return pairs
+    .sort((a, b) => byPlace(a.either, b.either))
+    .map(({ old, now, either }) => ({
+      place: either.place,
+      ...(old === undefined ? {} : { before: descriptionLength(old.text) }),
+      ...(now === undefined ? {} : { after: descriptionLength(now.text) }),
+    }))
 }

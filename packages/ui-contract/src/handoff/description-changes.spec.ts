@@ -78,4 +78,28 @@ describe('descriptionChanges', () => {
       descriptionChanges(undefined, contractWith(written('sample.page', 'The root.')), []),
     ).toEqual([{ place: 'sample.page', after: 9 }])
   })
+  it('keeps descriptions of different kinds at the same place apart', () => {
+    expect(
+      descriptionChanges(
+        contractWith(
+          written('model', 'The model screen.', 'screen'),
+          written('model', 'The data.', 'model'),
+        ),
+        contractWith(
+          written('model', 'The model page.', 'screen'),
+          written('model', 'The data.', 'model'),
+        ),
+        [],
+      ),
+    ).toEqual([{ place: 'model', before: 17, after: 15 }])
+  })
+  it('refuses two written descriptions of one kind at one place rather than keep one of them', () => {
+    expect(() =>
+      descriptionChanges(
+        undefined,
+        contractWith(written('sample.page', 'One.'), written('sample.page', 'Two.')),
+        [],
+      ),
+    ).toThrow('two written descriptions of the anchor sample.page')
+  })
 })
