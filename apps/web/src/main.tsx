@@ -54,11 +54,11 @@ interface Started {
 
 /**
  * How the start ended: started, with the open of the saved account's data still going on;
- * stopped because the browser keeps no site data; or failed, its code not loaded.
+ * stopped because the browser keeps no site data; or failed to start, its code not loaded or run.
  */
 type Boot =
   | ({ readonly status: 'started'; readonly opened: ResultAsync<void, BootFailure> } & Started)
-  | { readonly status: 'storage-blocked' | 'failed' }
+  | { readonly status: 'storage-blocked' | 'start-failed' }
 
 function Layout() {
   return (
@@ -101,13 +101,11 @@ function bootOnce(): Promise<Boot> {
             crash: CrashSignal,
           }),
         }),
-        (failure) => ({
-          status: failure.kind === 'storage-blocked' ? 'storage-blocked' : 'failed',
-        }),
+        () => ({ status: 'storage-blocked' }),
       ),
     )
-    // A start that throws (its code did not load) failed too: it does not open any more.
-    .catch((): Boot => ({ status: 'failed' }))
+    // A start that throws, its code not loaded or run, failed to start: it opens nothing more.
+    .catch((): Boot => ({ status: 'start-failed' }))
 
   return booting
 }
@@ -118,6 +116,7 @@ const STATUS = {
   failed: 'failed',
   'signing-out': 'failed',
   'signed-out': 'failed',
+  'start-failed': 'start-failed',
   'storage-blocked': 'storage-blocked',
 } as const
 
@@ -179,7 +178,8 @@ function App(props: { readonly reload: () => void }) {
 
       if (boot.status !== 'started') {
         send({
-          type: boot.status === 'failed' ? 'platform.open-failed' : 'platform.storage-blocked',
+          type:
+            boot.status === 'start-failed' ? 'platform.start-failed' : 'platform.storage-blocked',
         })
 
         return
@@ -231,7 +231,7 @@ function App(props: { readonly reload: () => void }) {
     }
   }, [started, made])
 
-  // The frame's states with no screen: the start goes on, stopped, or the data did not open.
+  // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
     STATUS[state.value as keyof typeof STATUS]
 
