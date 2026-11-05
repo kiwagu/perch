@@ -1,8 +1,14 @@
+import { ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
-import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
-import { savedIdentity } from '../storage'
+import {
+  browserDatabases,
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+} from '../__fixtures__/session'
+import { memoryStorage, savedIdentity } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -62,6 +68,50 @@ describe("a change of the signed-in account's password or email", () => {
       (await world.session.changePassword('Secret-ann1', 'Secret-new1'))._unsafeUnwrapErr().code,
     ).toBe('data:AUTH_FAILED')
     expect(auth.requests).toEqual([])
+  })
+
+  it("asks the gateway with the session this device saved while the start opens the account's space", async () => {
+    const auth = fakeGatewayAuth()
+    const storage = memoryStorage()
+    const before = await openTestWorld({ auth, storage, online: false })
+
+    expect((await signUpVerified(before.session, auth, annSignUp)).isOk()).toBe(true)
+    await before.close()
+    expect(before.failures).toEqual([])
+    auth.requests.splice(0)
+
+    // The page loads again, and the account's database opens only once the test lets it.
+    let open: () => void = () => {}
+    const held = new Promise<void>((resolve) => {
+      open = resolve
+    })
+    const shared = browserDatabases()
+    const tab = await openTestWorld({
+      auth,
+      storage,
+      online: false,
+      databases: {
+        open: (identity) => ResultAsync.fromSafePromise(held).andThen(() => shared.open(identity)),
+      },
+    })
+
+    worlds.push(tab)
+
+    const restoring = tab.session.restore()
+
+    expect(tab.session.space()).toBeUndefined()
+    expect((await tab.session.changePassword(annSignUp.password, 'Secret-new1')).isOk()).toBe(true)
+    expect(auth.requests).toEqual([
+      {
+        kind: 'change-password',
+        token: storage.get('perch.session.token'),
+        device: storage.get('perch.device.id'),
+      },
+    ])
+
+    open()
+
+    expect((await restoring).isOk()).toBe(true)
   })
 })
 

@@ -73,7 +73,9 @@ export class SessionService implements SessionPort {
     this.#account = new SessionAccount({
       auth: options.auth,
       storage: options.storage,
-      signedIn: () => this.#state.open() !== undefined,
+      // The account is signed in here while the start opens its space too: its own calls need only
+      // the session this device saved, never its data.
+      signedIn: () => this.#state.current() !== undefined,
       signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
       resetHere: (token) => this.#elsewhere.resetHere(token),
     })
