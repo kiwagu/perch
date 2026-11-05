@@ -71,7 +71,7 @@ flow:
       description: The error says the link does not work; a new one is asked for from the settings.
       type: final
     done:
-      description: "The message says the account is gone, beside user.delete-account.sign-in-link for a guest; the device signed in to the account is signed out by the deletion and keeps the message; another account signed in on this device stays, with no link."
+      description: The message says the account is gone, and stays when the deletion signs this device out.
       type: final
       meta: { renders: [ user.delete-account.sign-in-link ] }
 wireframe: |-

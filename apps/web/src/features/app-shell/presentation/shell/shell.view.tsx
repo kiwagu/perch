@@ -21,12 +21,23 @@ export interface ShellLinkProps {
   readonly children: ReactNode
 }
 
+/** The anchors only some states of the frame's flow render that the frame shows or leaves out. */
+export type ShellListed =
+  | 'app-shell.nav'
+  | 'app-shell.reload-button'
+  | 'app-shell.sign-out-here-button'
+
 export interface ShellViewProps {
   /**
    * Where the start is: starting, opening a signed-in account's data around its screen, ready,
    * failed, or stopped because the browser keeps no site data.
    */
   readonly status: 'opening' | 'opening-data' | 'ready' | 'failed' | 'storage-blocked'
+  /**
+   * Whether the frame's flow, in its state, renders an anchor: the navigation of a signed-in
+   * account, the reload around a crash, the sign-out here when the account's data did not open.
+   */
+  readonly renders: (anchor: ShellListed) => boolean
   readonly signedIn: boolean
   readonly activePath: string
   /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
@@ -38,7 +49,7 @@ export interface ShellViewProps {
   readonly canChooseTheme: boolean
   readonly onThemeChange: (theme: Theme) => void
   readonly link?: ComponentType<ShellLinkProps>
-  /** Signs the saved account out on this device when its data could not be opened; offered while `failed`. */
+  /** Signs the saved account out on this device when its data could not be opened; none without one. */
   readonly onSignOutHere?: (() => void) | undefined
   /** That sign-out runs: the button waits for it. */
   readonly signingOutHere?: boolean | undefined
@@ -187,7 +198,7 @@ export function ShellView(props: ShellViewProps) {
         </>
       }
       navigation={
-        props.signedIn
+        props.signedIn && props.renders('app-shell.nav')
           ? items.map((item) => (
               <Link
                 key={item.to}
@@ -287,7 +298,7 @@ export function ShellView(props: ShellViewProps) {
           </Toast>
         ))}
       </Toaster>
-      {props.status === 'failed' && props.onSignOutHere ? (
+      {props.renders('app-shell.sign-out-here-button') && props.onSignOutHere ? (
         <Button
           type="button"
           variant="outline"
@@ -299,21 +310,25 @@ export function ShellView(props: ShellViewProps) {
           {t('app.shell.sign-out-here')}
         </Button>
       ) : null}
-      {props.status === 'ready' && props.crash ? (
+      {props.crash || props.renders('app-shell.reload-button') ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm" data-testid="app-shell.crash-message" data-code={props.crash}>
-            {t('app.shell.crash.screen-crashed')}
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="self-start"
-            disabled={!props.canReload}
-            onClick={props.onReload}
-            data-testid="app-shell.reload-button"
-          >
-            {t('app.shell.reload')}
-          </Button>
+          {props.crash ? (
+            <p className="text-sm" data-testid="app-shell.crash-message" data-code={props.crash}>
+              {t('app.shell.crash.screen-crashed')}
+            </p>
+          ) : null}
+          {props.renders('app-shell.reload-button') ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="self-start"
+              disabled={!props.canReload}
+              onClick={props.onReload}
+              data-testid="app-shell.reload-button"
+            >
+              {t('app.shell.reload')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {/* The screen renders once ready, and around a signed-in account's data while it opens. */}

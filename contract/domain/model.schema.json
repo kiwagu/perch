@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Perch data model",
-  "description": "The entities the screens read and write. The platform's own tables (accounts, organisations, memberships, device sessions) are not modeled here: the screens reach them through the platform actions of platform.yaml.",
+  "description": "The entities the screens read and write; the platform's own tables (accounts, organisations, memberships, device sessions) are reached through the actions of platform.yaml.",
   "$defs": {
     "profile": {
       "type": "object",
@@ -12,7 +12,7 @@
         "id": "prf",
         "actions": {
           "createProfile": {
-            "description": "Creates the profile of a new account on the first device that enters it: the device that verifies its email by the link of the sign-up mail, or, when a password reset verified the email, the device of its first sign-in.",
+            "description": "Creates the profile of a new account on the first device that enters it.",
             "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" }
           },
           "updateName": {
@@ -68,7 +68,7 @@
     },
     "settings": {
       "type": "object",
-      "description": "The settings of an account: what the app is like for it, today its language and its theme. One row per account, created with its profile on the first device that enters the account, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
+      "description": "The settings of an account: what the app is like for it. Each of its devices reads and changes them offline, and nobody but the account ever reads them.",
       "x-perch": {
         "table": "settings",
         "region": "private",

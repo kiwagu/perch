@@ -80,9 +80,11 @@ for Bun.
     problem of its file); both return beside their files `lines`, by id the line of each
     place of the file by its JSON path (`states.profile.on["user.profile.sign-out-button"]`,
     `steps[2]`), which the `Contract` carries as `activityLines` and `scenarioLines`. The
-    paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`, `MODEL_FILE`,
-    `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and the five
-    schema files.
+    paths: `CONTRACT_DIR`, `DOMAIN_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`,
+    `MODEL_FILE`, `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and
+    the five schema files; `isBusinessFile(path)` says whether a file is one of the business
+    layer's (a domain file, the vocabulary or a scenario): the only files a commit on the
+    contract trunk may stage.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
     fixed Markdown sections in any order) into a `Scenario` with `lines`, the line of each
@@ -407,7 +409,9 @@ for Bun.
   names any state lists in `meta.renders`; `rendered`, those the states the machine is in
   list); `isListed(at, anchor)` (rendered only where listed: a state lists it or an anchor it
   is under) and `isRendered(at, anchor)` (no state lists it, or this state lists it or an
-  anchor it is under). Rendered means visible to the user.
+  anchor it is under). Rendered means visible to the user. `listedBy(state)` is how all of them
+  read one state's list (an array of its own, its strings alone), the comparison of machines
+  included.
   The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
   suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
   the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
@@ -424,9 +428,9 @@ for Bun.
   each on its own with the others at their initial, and gives the `visited` states and each
   case with its `expected` and `actual` outcome (handled, state, effects); `casesOfFlow(flow)`
   the cases the flow says. An app holds a machine of its own to its flow with
-  `projected(config)` (initial state, states, final states, regions, events with their
-  targets and guards, invoke sources, the contract's effects; the app's own actions left
-  out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  `projected(config)` (initial state, states, final states, what each state renders
+  (`meta.renders`, as a set), regions, events with their targets and guards, invoke sources,
+  the contract's effects; the app's own actions left out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
   counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
   say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is

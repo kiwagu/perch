@@ -5,13 +5,27 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
-import { DeleteAccountView, type DeleteAccountViewProps } from './delete-account.view'
+import {
+  type DeleteAccountListed,
+  DeleteAccountView,
+  type DeleteAccountViewProps,
+} from './delete-account.view'
 
+/** What a state renders of the anchors only some render: `anchor` alone, or none. */
+const only = (anchor?: DeleteAccountListed) => (asked: DeleteAccountListed) => asked === anchor
+
+/** The page asking for the press, unless `props` names another state. */
 function renderView(props: Partial<DeleteAccountViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const handlers = { onDelete: vi.fn() }
 
   renderWithProviders(
-    <DeleteAccountView guest linkDead={false} canDelete {...handlers} {...props} />,
+    <DeleteAccountView
+      guest
+      renders={only('user.delete-account.delete-button')}
+      canDelete
+      {...handlers}
+      {...props}
+    />,
     { locale, es },
   )
 
@@ -50,7 +64,7 @@ describe('DeleteAccountView', () => {
   })
 
   it('says the account is gone beside the link to sign in, with the button gone', () => {
-    renderView({ message: 'account-deleted' })
+    renderView({ message: 'account-deleted', renders: only('user.delete-account.sign-in-link') })
 
     const message = screen.getByTestId('user.delete-account.message')
 
@@ -63,7 +77,11 @@ describe('DeleteAccountView', () => {
   })
 
   it('leaves the link to sign in to a guest: another account signed in here keeps the message alone', () => {
-    renderView({ message: 'account-deleted', guest: false })
+    renderView({
+      message: 'account-deleted',
+      guest: false,
+      renders: only('user.delete-account.sign-in-link'),
+    })
 
     expect(screen.getByTestId('user.delete-account.message')).toBeTruthy()
     expect(screen.queryByTestId('user.delete-account.sign-in-link')).toBeNull()
@@ -75,7 +93,7 @@ describe('DeleteAccountView', () => {
   ])(
     'takes the button away for a link that does not work, asking for a new one: %s',
     (failure, code) => {
-      renderView({ error: failure, linkDead: true })
+      renderView({ error: failure, renders: only() })
 
       const error = screen.getByTestId('user.delete-account.error')
 

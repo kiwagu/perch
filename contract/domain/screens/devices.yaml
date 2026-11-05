@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: device
 title: My devices
-description: "The devices of the account: every device signed in and those signed out within 30 days, this one marked, when each was last seen; any other active device is signed out from here, or all of them at once."
+description: The devices of the account, where another device, or all of them at once, is signed out.
 flag: null
 bindings: [ { path: /devices, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ device.page.status, device.list, device.everywhere.open-button ]

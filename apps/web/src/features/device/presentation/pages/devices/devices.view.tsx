@@ -22,7 +22,7 @@ export interface DevicesViewProps {
   readonly devices: readonly DeviceItem[] | undefined
   /** Whether the page's flow takes the event now: a control is enabled exactly while it does. */
   readonly can: (event: DevicesEvent) => boolean
-  /** The dialog asks whether to sign every device out. */
+  /** Whether the flow's state renders the dialog that asks whether to sign every device out. */
   readonly confirming: boolean
   readonly onRevoke: (device: DeviceItem) => void
   readonly onOpenEverywhere: () => void

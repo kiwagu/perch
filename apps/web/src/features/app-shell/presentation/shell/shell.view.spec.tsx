@@ -7,7 +7,16 @@ import { I18nProvider, type Locale } from '@workspace/i18n'
 import en from '../../../../platform/i18n/app.en.json'
 import es from '../../../../platform/i18n/app.es.json'
 
-import { ShellView, type ShellViewProps } from './shell.view'
+import { type ShellListed, ShellView, type ShellViewProps } from './shell.view'
+
+/** What a state of the frame's flow renders of the anchors only some render: `anchors` alone. */
+const rendering =
+  (...anchors: readonly ShellListed[]) =>
+  (anchor: ShellListed) =>
+    anchors.includes(anchor)
+
+/** The frame ready, as most of its states: the navigation of a signed-in account. */
+const READY = rendering('app-shell.nav')
 
 function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale } = {}) {
   const { locale = 'en', ...rest } = props
@@ -16,6 +25,7 @@ function renderShell(props: Partial<ShellViewProps> & { readonly locale?: Locale
     <I18nProvider locale={locale} catalogs={{ en, es }}>
       <ShellView
         status="ready"
+        renders={READY}
         signedIn={false}
         activePath="/sign-in"
         canChooseLocale={true}
@@ -94,7 +104,11 @@ describe('ShellView', () => {
   it('offers to sign out on this device when it could not open its data', () => {
     const signOutHere = vi.fn()
 
-    renderShell({ status: 'failed', onSignOutHere: signOutHere })
+    renderShell({
+      status: 'failed',
+      renders: rendering('app-shell.sign-out-here-button'),
+      onSignOutHere: signOutHere,
+    })
 
     const status = screen.getByTestId('app-shell.status')
 
@@ -109,8 +123,10 @@ describe('ShellView', () => {
   })
 
   it('holds the button while the sign-out runs, and offers none without a way out', () => {
+    const failed = rendering('app-shell.sign-out-here-button')
     const { unmount } = renderShell({
       status: 'failed',
+      renders: failed,
       onSignOutHere: () => {},
       signingOutHere: true,
     })
@@ -118,7 +134,7 @@ describe('ShellView', () => {
     expect(screen.getByTestId('app-shell.sign-out-here-button').hasAttribute('disabled')).toBe(true)
     unmount()
 
-    renderShell({ status: 'failed' })
+    renderShell({ status: 'failed', renders: failed })
 
     expect(screen.queryByTestId('app-shell.sign-out-here-button')).toBeNull()
   })
@@ -240,6 +256,7 @@ describe('ShellView', () => {
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ShellView
           status="ready"
+          renders={READY}
           signedIn={false}
           activePath="/sign-in"
           canChooseLocale
@@ -310,6 +327,7 @@ describe('ShellView', () => {
       <I18nProvider locale="en" catalogs={{ en, es }}>
         <ShellView
           status="ready"
+          renders={READY}
           signedIn={false}
           activePath="/sign-in"
           canChooseLocale={true}
@@ -330,7 +348,13 @@ describe('ShellView', () => {
 
   it('says a screen failed to render, in its place, with a reload while the flow takes one', () => {
     const onReload = vi.fn()
-    const { rerender } = renderShell({ crash: 'screen-crashed', canReload: true, onReload })
+    const crashed = rendering('app-shell.nav', 'app-shell.reload-button')
+    const { rerender } = renderShell({
+      crash: 'screen-crashed',
+      renders: crashed,
+      canReload: true,
+      onReload,
+    })
     const message = screen.getByTestId('app-shell.crash-message')
 
     expect(message.getAttribute('data-code')).toBe('screen-crashed')
@@ -354,6 +378,7 @@ describe('ShellView', () => {
           theme="system"
           canChooseTheme={true}
           onThemeChange={() => {}}
+          renders={crashed}
           crash="screen-crashed"
           canReload={false}
           onReload={onReload}

@@ -190,10 +190,22 @@ pages until the test lets them go, so a page cannot open an account's data meanw
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
+`src/support/browsers.ts`: what every browser a test opens is held to, from before its first
+page: `watchBrowser` (the front's security policy and the settled states), `expectWatched`
+(fails the test with what it reported) and `ownBrowser` (a browser context of the test's own,
+opened on first use and checked as it closes); the fixtures watch the test's own `page` the
+same way, and the step check reads `browsers`.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
-their workers report); the fixtures watch every browser a test opens.
+their workers report).
+`src/support/settled.ts`: `watchSettled`, which exposes `window.__perchSettledState` in every
+page of a browser context: the app's e2e build reports to it each state a screen's machine, or
+the frame's, settles in, with the page as `window.__perch.ui.anchors()` reads it then, and each
+report is held to the manifest the stand serves (`settledProblems` of `@workspace/ui-contract`).
+Of the anchors a screen renders only where its flow lists them, one the state does not render
+is not visible, and one it renders is on the page and visible; a test fails at its end with
+every problem a state it passed through showed, though no line of the test asks for it.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
 page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
 and `expectInvited` (the toast `invited` and the account in the members list).
@@ -256,7 +268,10 @@ seen there and holds it to its declaration). A failure prints no address, link o
   once, so the browser sees a network that stays the same, and forwards the loopback ports of
   `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
   address does not lead to the host's loopback either). IPv4 only: inside,
-  `localhost` resolves to ::1 first, where the front does not listen. Without pasta the launcher
+  `localhost` resolves to ::1 first, where the front does not listen. IPv6 is also switched off
+  inside before Playwright starts: the kernel gives the namespace's interface an IPv6 link-local
+  address whose duplicate address check ends a second or two later, an address change that
+  aborted the requests of the run's first test. Without pasta the launcher
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
