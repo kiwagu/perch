@@ -85,8 +85,14 @@ export interface BrowserStart extends AppStart {
   readonly warm: () => void
 }
 
-/** Boots the app; `theme` is the theme this device shows now, as the page's start made it. */
-export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailure> {
+/**
+ * Boots the app; `theme` is the theme this device shows now, as the page's start made it. The
+ * start itself fails only when the browser keeps no site data; the open of the saved account's
+ * data says later whether it failed.
+ */
+export function bootBrowser(
+  theme: () => Theme,
+): Result<BrowserStart, Extract<BootFailure, { readonly kind: 'storage-blocked' }>> {
   const store = siteStorage(window)
 
   // Without site storage nothing is kept: neither who is signed in nor the device's own id.

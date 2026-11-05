@@ -10,12 +10,13 @@ import {
   formatProblem,
   MODEL_FILE,
   PLATFORM_FILE,
+  readDescriptions,
   SCREEN_SCHEMA_FILE,
   scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
 
-import { checkContract } from './run'
+import { checkContract, loadContract } from './run'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 const SCENARIO = 'sample/base/thing'
@@ -124,6 +125,23 @@ describe('checkContract', () => {
 
     expect(printed()).toEqual([
       'contract/domain/model.schema.json:1: $defs.thing["x-perch"].can.memebr: "memebr" is not a role of the vocabulary',
+    ])
+  })
+  it('loads the descriptions as the domain files write them', () => {
+    const { contract } = loadContract(root)
+
+    expect(contract?.descriptions).toEqual(readDescriptions(root).descriptions)
+    expect(contract?.descriptions.map(({ place }) => place)).toContain('sample.page')
+  })
+  it('holds every written description to its budget, at its line in its file', () => {
+    edit('contract/domain/screens/sample/$key.yaml', (text) =>
+      text.replace('The root of the screen.', `The root${' of the screen'.repeat(14)}.`),
+    )
+    edit(MODEL_FILE, (text) => text.replace('Adds a thing.', `Adds${' a thing'.repeat(25)}.`))
+
+    expect(printed().map((problem) => problem.replace(/; its purpose: .*$/, ''))).toEqual([
+      'contract/domain/model.schema.json:16: $defs.thing["x-perch"].actions.createThing.description: the description of model action thing.createThing is 205 characters, past its budget of 200',
+      'contract/domain/screens/sample/$key.yaml:11: anchors["sample.page"].description: the description of sample.page is 205 characters, past its budget of 200',
     ])
   })
 })

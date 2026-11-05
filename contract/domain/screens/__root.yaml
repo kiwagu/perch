@@ -131,7 +131,6 @@ flow:
             description: Nobody is signed in, so there is no data to open and the screen renders at once, the sign-in form loading no database engine.
           - target: opening-data
             description: An account is signed in, so its frame and the open screen render at once while its data opens.
-        platform.open-failed: failed
         platform.start-failed: start-failed
         platform.storage-blocked: storage-blocked
         app-shell.locale-select:
