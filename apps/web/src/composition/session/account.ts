@@ -17,7 +17,10 @@ import {
 export interface SessionAccountDeps {
   readonly auth: GatewayAuth
   readonly storage: KeyValueStorage
-  /** Whether an account is signed in on this device now: its space open, or opening at the start. */
+  /**
+   * Whether the session this browser keeps is the one of the account signed in here: its space
+   * open, or opening at the start. A session another tab saved for another account since is not.
+   */
   readonly signedIn: () => boolean
   /**
    * Signs this device out of the account `identity` if it is the one signed in here, as the
