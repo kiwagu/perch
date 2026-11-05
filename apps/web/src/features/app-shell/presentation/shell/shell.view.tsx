@@ -30,9 +30,16 @@ export type ShellListed =
 export interface ShellViewProps {
   /**
    * Where the start is: starting, opening a signed-in account's data around its screen, ready,
-   * failed, or stopped because the browser keeps no site data.
+   * failed to open that data, failed to start (the app's code did not load or run), or stopped
+   * because the browser keeps no site data.
    */
-  readonly status: 'opening' | 'opening-data' | 'ready' | 'failed' | 'storage-blocked'
+  readonly status:
+    | 'opening'
+    | 'opening-data'
+    | 'ready'
+    | 'failed'
+    | 'start-failed'
+    | 'storage-blocked'
   /**
    * Whether the frame's flow, in its state, renders an anchor: the navigation of a signed-in
    * account, the reload around a crash, the sign-out here when the account's data did not open.
@@ -141,6 +148,7 @@ export function ShellView(props: ShellViewProps) {
         .with('opening-data', () => t('app.shell.opening-db'))
         .with('storage-blocked', () => t('app.shell.storage-blocked'))
         .with('failed', () => t('app.shell.failed'))
+        .with('start-failed', () => t('app.shell.start-failed'))
         .exhaustive()}
     </p>
   )
@@ -271,8 +279,8 @@ export function ShellView(props: ShellViewProps) {
           </div>
         </Alert>
       ) : null}
-      {/* The notice and the toasts show once a signed-in account's data is open; a notice raised
-          before waits for it, and a toast raised before goes unseen. */}
+      {/* The notice shows once a signed-in account's data is open, and a notice raised before
+          waits for it; a toast answers what the user just did, so it shows at once. */}
       <div data-slot="notice" className="min-h-15 sm:min-h-10">
         {props.status === 'ready' && props.notice ? (
           <p
@@ -286,7 +294,7 @@ export function ShellView(props: ShellViewProps) {
         ) : null}
       </div>
       <Toaster>
-        {(props.status === 'ready' ? (props.toasts ?? []) : []).map((toast) => (
+        {(props.toasts ?? []).map((toast) => (
           <Toast
             key={toast.id}
             data-testid="app-shell.toast"

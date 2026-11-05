@@ -79,16 +79,27 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
   })
 
-  it("shows no notice and no toast while a signed-in account's data opens", () => {
+  it("shows no notice while a signed-in account's data opens, but its toasts at once", () => {
     renderShell({
       status: 'opening-data',
       signedIn: true,
       notice: { code: 'devices-read-failed', text: 'The devices could not be read.' },
-      toasts: [{ id: 1, code: 'device-signed-out', tone: 'success', text: 'Signed out.' }],
+      toasts: [{ id: 1, code: 'password-changed', tone: 'success', text: 'Password changed.' }],
     })
 
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
-    expect(screen.queryByTestId('app-shell.toast')).toBeNull()
+    expect(screen.getByTestId('app-shell.toast').getAttribute('data-code')).toBe('password-changed')
+  })
+
+  it('says the app could not start, holds the page back and offers no sign-out', () => {
+    renderShell({ status: 'start-failed', renders: rendering(), onSignOutHere: () => {} })
+
+    const status = screen.getByTestId('app-shell.status')
+
+    expect(status.getAttribute('data-state')).toBe('start-failed')
+    expect(status.textContent).toBe(en['app.shell.start-failed'])
+    expect(screen.queryByText('page')).toBeNull()
+    expect(screen.queryByTestId('app-shell.sign-out-here-button')).toBeNull()
   })
 
   it('says the browser keeps no site data when it blocks storage, and holds the page back', () => {
