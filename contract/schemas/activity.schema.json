@@ -15,7 +15,7 @@
     "description": {
       "type": "string",
       "minLength": 1,
-      "description": "What the activity is for: the task it serves across its screens."
+      "description": "What the activity is for: the task it serves across its screens. Its states are the visits, and the screens do the work. At most 200 characters."
     },
     "roles": {
       "minItems": 1,
@@ -41,7 +41,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What it is, for a reader."
+            "description": "What the activity carries from screen to screen; `model` names the field of the model it is. At most 200 characters."
           },
           "model": {
             "type": "string",
@@ -74,7 +74,8 @@
             "description": "A guard: a camelCase name of the flow `meta.guards`."
           },
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "What the guard holds, in one sentence the app implements. At most 200 characters."
           }
         }
       },
@@ -91,7 +92,7 @@
         "type": "object",
         "properties": {
           "description": {
-            "description": "What the visit is, for a reader.",
+            "description": "What the visit is for in the task. Its `meta` names the screen and the address, and the screen has a description of its own. At most 200 characters.",
             "type": "string"
           },
           "type": {
@@ -154,7 +155,7 @@
                       "description": "A guard: a camelCase name of the flow `meta.guards`."
                     },
                     "description": {
-                      "description": "What happens, for a reader.",
+                      "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                       "type": "string"
                     }
                   },
@@ -181,7 +182,7 @@
                         "description": "A guard: a camelCase name of the flow `meta.guards`."
                       },
                       "description": {
-                        "description": "What happens, for a reader.",
+                        "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                         "type": "string"
                       }
                     },

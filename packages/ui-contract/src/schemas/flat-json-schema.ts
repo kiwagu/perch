@@ -10,6 +10,8 @@ import { z } from '@workspace/zod'
 
 import { anchorSchema } from '../names.schema'
 
+import { DESCRIPTION_PURPOSES } from './description-purposes'
+
 const primitiveSchema = z
   .union([z.string(), z.number(), z.boolean()])
   .describe('A string, number or boolean value.')
@@ -57,7 +59,7 @@ const parameterSchema = z
       .string()
       .optional()
       .describe('A regular expression (ECMA-262) every value of a string matches.'),
-    description: z.string().optional().describe('What the parameter means.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.parameter),
     'x-perch': parameterControlSchema.optional(),
   })
   .describe('One flat parameter.')

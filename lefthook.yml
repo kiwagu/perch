@@ -50,14 +50,17 @@ pre-commit:
       run: . scripts/ensure-path.sh && bun run readme:check
 
     # On a branch the contract may run ahead of the app (a business commit before its
-    # implementation): the sources must use only what it declares, and a scenario may wait
-    # for its test. A commit on main, the landing, takes the full check: every declared
-    # anchor rendered, every scenario paired with its test, step for step.
+    # implementation): the sources must use only what it declares, a scenario may wait
+    # for its test, and the coverage block may wait for the commit that rewrites it. A
+    # commit on main, the landing, takes the full check: every declared anchor rendered,
+    # every scenario paired with its test, step for step, and the block of
+    # contract/COVERAGE.md what `bun run contract:coverage --write` writes.
     - name: contract
       run: >-
         . scripts/ensure-path.sh && bun run contract:check &&
         if [ "$(git branch --show-current)" = main ];
-        then bun run contract:check:sources && bun run e2e:coverage;
+        then bun run contract:check:sources && bun run e2e:coverage &&
+        bun run contract:coverage:check;
         else bun run contract:check:sources:ahead; fi &&
         bun run contract:check:consumers
 

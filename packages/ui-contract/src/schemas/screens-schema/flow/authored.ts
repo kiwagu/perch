@@ -22,6 +22,7 @@
 import { z } from '@workspace/zod'
 
 import { anchorSchema, codeSchema } from '../../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { routePathSchema } from '../binding'
 
 import { flowSchemaOf, toastOptOutSchema } from './build'
@@ -85,7 +86,7 @@ export const controlRegionSchema = z
     by: anchorSchema.describe(
       'The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`.',
     ),
-    description: z.string().exactOptional().describe('What the area is, for a reader.'),
+    description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
@@ -109,7 +110,7 @@ export const draftPatternSchema = z
       .describe(
         'A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it.',
       ),
-    description: z.string().exactOptional().describe('What the area is, for a reader.'),
+    description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     input: anchorSchema.describe('The control typed into.'),
     stored: modelEventNameSchema.describe('The data event of the stored value it follows.'),
     guard: guardNameSchema.describe(

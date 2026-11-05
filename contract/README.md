@@ -181,10 +181,37 @@ Generated into `schemas/`, never edited by hand: `screen.schema.json` (one scree
 manifest). `bun run contract:schemas` writes them
 from the Zod sources of `@workspace/ui-contract`, and the contract check fails when they
 drift. `COVERAGE.md` is a note, not a contract file: `bun run contract:coverage --write`
-rewrites its block.
+rewrites its block, and `bun run contract:coverage:check` fails when the block is not what it
+would write (see "Coverage").
 
 The scenarios are part of the contract's input too, but they live in the e2e tree beside
 their tests, in `tests/e2e/scenarios/` (see "Scenarios").
+
+### Descriptions
+
+Each domain file says in prose what its parts are for, in its `description`s: a screen's own
+and each anchor's; a flow's own and each state's, region's and transition's, an outcome of an
+invoke among them; a route parameter's; a platform action's, each of its parameters' and a
+composite's; the model's own and each entity's, field's and action's; an activity's own and each
+piece of its data's, each visit's and each transition's. Four maps hold descriptions without
+the key: a screen's `states` (what is visible in each container state), the platform's `events`
+(what each means), a composite's `items` (each the description of the item anchor a screen
+derives from it) and the sentence guards of a `meta.guards` (a guard by failure code is
+structure). A platform action's `result` is no description: it is the action's behaviour, which
+the hand-over diff lists among the action's lines.
+
+A description says what its element is for, as a tester or a user tells it apart, and leaves
+out what the structure, another element, the platform, the model, the vocabulary or the flow
+already says, and what the engine says itself (see "What a screen leaves out"). The purpose of
+each field is the text its schema describes it with, which an editor shows as the field's hint:
+what the field is for, what it leaves to others and its budget, in one text. Every written
+description keeps at most 200 characters, whatever it describes, a screen's own included, and
+`contract:check` names one past it by its place and its length, with the purpose of its field.
+Written means as the file writes it: a description the engine derives, or that the loader fills
+in as it expands a shorter form, is no file's and keeps no budget. `contract:diff` lists each
+written description added, removed or changed by its place, with its length before and after
+(`app-shell.theme-select 191 -> 340`, `new -> 120`, `340 -> gone`), a shrink included, so a
+description that grows shows on review (see "Handing over a change").
 
 ### The layout of a screen file
 
@@ -243,7 +270,8 @@ anchors:
 
 A screen's `title` is what a reader calls it, and its `description` says what the screen is
 for: the task it serves and when it is shown, in one or two sentences, so an agent chooses
-the screen before it reads the anchors.
+the screen before it reads the anchors; never a list of its parts, which are its anchors, each
+with a description of its own.
 
 A screen's `bindings` are its routes in the router's format: `path` (static segments,
 `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a
@@ -744,7 +772,8 @@ contract:diff <ref>` lists the codes and the error fields the anchors gain or lo
 derived, so a constraint added to the model shows on review as the codes it adds, and the lines
 of each screen's flow, its states' addresses, what they render and what each guard by failure
 code takes among them, and every line of a flow added to or removed from a screen,
-descriptions aside, so a screen written shorter that loads to the same flow shows no change.
+descriptions aside, so a screen written shorter that loads to the same flow shows no change
+but the descriptions it stops writing, each listed as `<n> -> gone`.
 
 ## Activities
 
@@ -1142,7 +1171,9 @@ gap is fixed in the contract files first, never worked around in a test.
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
-  names exists, and every device acts as a role of the vocabulary.
+  names exists, and every device acts as a role of the vocabulary; and every description the
+  domain files write keeps 200 characters, one past it named with the purpose of its field (see
+  "Descriptions").
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against
   the contract. It reads the four literal forms and wants each literal written once, the
   literals equal to the anchors of the screen files (an anchor no source renders is a
@@ -1200,7 +1231,9 @@ gap is fixed in the contract files first, never worked around in a test.
 
 Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
 `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook
-leaves it out, so a scenario may wait for its test. The web app's tests hold the module routes and the real router to the bindings, and
+leaves it out, so a scenario may wait for its test. `bun run contract:coverage:check` runs
+where it runs and holds the block of `COVERAGE.md` to what `contract:coverage --write` writes
+(see "Coverage"). The web app's tests hold the module routes and the real router to the bindings, and
 XState and the app's machines to the flows.
 
 On `contract/trunk` the pre-commit hook first holds each commit to the business layer
@@ -1255,7 +1288,12 @@ a message shows when it carries a code, and an error when there is one.
 ## Coverage
 
 `bun run contract:coverage` prints how far the contract reaches, and `--write` puts the same
-block into `COVERAGE.md`. It is a report, not a gate.
+block into `COVERAGE.md`. It is a report, not a gate: no measure fails a commit. The block stays
+current, though: `bun run contract:coverage:check` (`ui-contract coverage --check`) fails when
+the block in `COVERAGE.md` is not what `--write` would write, naming that command, and says so
+in one line when it is. It runs in `bun run check` and in the pre-commit hook on a commit on
+`main`; on a branch, the contract trunk included, the hook leaves it out, so a block left behind
+fails `bun run check` before a landing, and the squash on `main`.
 
 1. **The model**, the measure of completeness: per entity of `model.schema.json`, each field
    and each action with the anchors whose `binding` names it, or `unbound`. A field may be
@@ -1301,8 +1339,9 @@ description (the screens, anchors, codes, entities, fields and activities added,
 renamed, the composites added or removed, the derived parts, the codes, the states and the
 error fields the anchors both sides hold gain or lose, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
-hold, the lines of the flow added or removed in each screen both sides hold with a flow, and
-the lines of each platform action added, removed or changed), and below
+hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
+lines of each platform action added, removed or changed, and each written description added,
+removed or changed with its length before and after), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
 
@@ -1342,9 +1381,9 @@ region by its path, `viewing.create-form.open`), each `entry` and `exit` effect,
 transition on an event with its target, guard and effects, each invoke with its input as
 JSON and its outcomes, each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
-sequence of more than one carries its position, `#<n>`. Descriptions are left out, as they
-change nothing that runs, so a screen file written shorter that loads to the same flow shows
-no change. A platform action is listed by its name, and its lines as `platform action lines
+sequence of more than one carries its position, `#<n>`. Descriptions are left out of a flow's
+lines, as they change nothing that runs, so a screen file written shorter that loads to the same
+flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
@@ -1352,8 +1391,17 @@ shows (`code rate-limited`), each role that may run it, its mail (`mail to email
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. The tests are in
-this repository, so the same change updates them, and the consumers check fails until it does.
+removed whole shows every line, as nothing else in the summary says its mail. Last, `descriptions
+changed:` lists, sorted by place, each description a domain file writes (see "Descriptions")
+that the change adds, removes or changes, with its length in characters before and after:
+`app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added,
+`340 -> gone` for one removed, and the same length on both sides for a text changed at its
+length. Its place names it alike at any ref (`app-shell.theme-select`, `user.profile` for the
+screen's own, `user.profile state loading` for a container state, `app-shell flow ready on
+platform.theme-set` for a transition, `platform event started`, `model field profile.name`), a
+renamed anchor's under its new name, so a description that grows clause by clause shows on
+review even where nothing that runs changed. The tests are in this repository, so the same
+change updates them, and the consumers check fails until it does.
 
 ## Asking for a missing anchor
 
