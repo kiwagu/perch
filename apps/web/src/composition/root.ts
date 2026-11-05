@@ -260,19 +260,20 @@ export function createAppRoot(options: AppRootOptions): AppStart {
 
   step('restore-session')
 
+  // The identity whose space the start opens: a sign-out offered when it does not open is of it.
+  const restoring = savedIdentity(options.storage)
+  // The sync's state is heard on after a start whose space did not open: once another tab signs
+  // that identity out, this tab goes on as a guest's, who may sign in again.
   const opened = session
     .restore()
-    .mapErr((error): BootFailure => {
-      // No frame reads the state of the sync of a start that failed.
-      sync.stop()
-
-      // The sign-out offered is of the identity whose space did not open, and of no other.
-      const unopened = savedIdentity(options.storage)
-
-      return unopened
-        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(unopened.id) }
-        : { kind: 'open-failed', error }
-    })
+    .mapErr(
+      (error): BootFailure =>
+        // Offered only while that identity is still the saved one: another tab may have signed it
+        // out, and another account in, before this tab heard of it (it follows once it does).
+        restoring !== undefined && savedIdentity(options.storage)?.id === restoring.id
+          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(restoring.id) }
+          : { kind: 'open-failed', error },
+    )
     .map(() => step('ready'))
 
   return {

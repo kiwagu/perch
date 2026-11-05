@@ -24,7 +24,8 @@ modeling stage.
   blocks site data stops at a message that says so, instead of forgetting who signed in, the
   device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
-  (`SessionService.signOutUnopened()`): its session token is left to sign out and its databases deleted,
+  (`SessionService.signOutUnopened(identity)`), of that identity alone and only while it is still
+  the saved one: its session token is left to sign out and its databases deleted,
   so a database that will never open is no dead end. Signing up asks the gateway to create the
   account and mail its verification link (`SessionService.signUp`, the gateway's own
   `POST /backend/auth/sign-up/email` with the name, the email, the password and the language the
@@ -215,7 +216,11 @@ modeling stage.
   load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
-  sign-in is its own); a sign-in that finds another account saved is refused with
+  sign-in is its own); an identity the tab shows without its space (the start opening it, or
+  done without opening it) leaves at once when another tab signs it out, not behind the open,
+  which then attaches nothing, and the frame goes on as a guest's. The organisation and device
+  routes present the saved token only while it is the session of the identity the tab shows,
+  never one another tab saved since. A sign-in that finds another account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
