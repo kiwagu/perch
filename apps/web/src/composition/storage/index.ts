@@ -32,8 +32,10 @@ export {
   saveDevice,
   savedIdentity,
   savedToken,
+  savedTokenOf,
   saveIdentityEmail,
   TOKEN_KEY,
+  tokenRecord,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
 export { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'

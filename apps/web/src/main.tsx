@@ -3,7 +3,7 @@ import '@workspace/ui/styles/global.css'
 import { Outlet, RouterProvider } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
 import type { ResultAsync } from 'neverthrow'
-import { StrictMode, useEffect, useMemo, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
@@ -24,6 +24,7 @@ import {
   type ShellLive,
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
+import { useSignedOutUnrouted } from './features/app-shell/presentation/shell/signed-out-unrouted'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
@@ -150,6 +151,8 @@ function App(props: { readonly reload: () => void }) {
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+  // The account the frame shows, as the start and then the shell's container last saw it.
+  const shownAccount = useCallback(() => made.live.account, [made])
 
   // Development and e2e builds report each state of the frame the page settles in.
   useSettledReport('app-shell', state.value, () => actor.getSnapshot().value)
@@ -234,6 +237,8 @@ function App(props: { readonly reload: () => void }) {
   // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
     STATUS[state.value as keyof typeof STATUS]
+
+  useSignedOutUnrouted(started?.services.session, actor, unrouted !== undefined, shownAccount)
 
   if (started === undefined || unrouted !== undefined) {
     return (

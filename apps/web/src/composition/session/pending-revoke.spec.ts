@@ -2,6 +2,7 @@ import { errAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
+import { identityIdFactory } from '@workspace/ids'
 
 import { fakeFetch, noContent, respond } from '../__fixtures__/gateway-fetch'
 import { gatewayAuth } from '../gateway-auth'
@@ -14,9 +15,13 @@ import {
   pendingRevokes,
   savedToken,
   TOKEN_KEY,
+  tokenRecord,
 } from '../storage'
 
 import { PendingRevoke } from './pending-revoke'
+
+/** Whose the device's token is: no call here reads it for its identity. */
+const owner = identityIdFactory.create()
 
 /** A token a sign-out left to sign out, with the device it signed out. */
 const left = { token: 'token-1', device: 'device-1' }
@@ -97,7 +102,7 @@ describe('PendingRevoke', () => {
   it("forgets the device's token, leaving a token that still works to sign out, sent at once online", async () => {
     const { pending, memory, sent, waiting } = harness([noContent()], { waiting: [] })
 
-    memory.set(TOKEN_KEY, 'token-3')
+    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
     pending.forgetKeys('live')
 
     expect(savedToken(memory)).toBeUndefined()
@@ -111,7 +116,7 @@ describe('PendingRevoke', () => {
   it('keeps a token that still works to sign out later while the browser is offline', () => {
     const { pending, memory, sent, waiting } = harness([], { waiting: [], online: false })
 
-    memory.set(TOKEN_KEY, 'token-3')
+    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
     pending.forgetKeys('live')
 
     expect(savedToken(memory)).toBeUndefined()
@@ -122,7 +127,7 @@ describe('PendingRevoke', () => {
   it('forgets a dead token without leaving it to sign out', () => {
     const { pending, memory, sent, waiting } = harness([], { waiting: [] })
 
-    memory.set(TOKEN_KEY, 'token-3')
+    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
     pending.forgetKeys('dead')
 
     expect(savedToken(memory)).toBeUndefined()
@@ -266,7 +271,7 @@ describe('PendingRevoke', () => {
     const kept = Array.from({ length: 8 }, (_, n) => ({ token: `token-w${n}`, device: 'device-1' }))
     const { pending, memory, failures, waiting } = harness([], { waiting: kept })
 
-    memory.set(TOKEN_KEY, 'token-now')
+    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-now'))
     memory.set('perch.device.id', 'device-now')
     pending.keep()
 
@@ -489,7 +494,7 @@ describe('PendingRevoke over the browser storage, its quota full', () => {
       [noContent()],
       { online: true },
       {
-        [TOKEN_KEY]: 'token-8',
+        [TOKEN_KEY]: tokenRecord(owner, 'token-8'),
       },
     )
 
