@@ -177,8 +177,8 @@ export interface SessionPort {
   flush(): ResultAsync<void, DataError>
   /**
    * The word the sign-in page says, from two slots: the browser's, which a session left as it
-   * ended, and this tab's own (`leaveNotice`). A word on what became of the device's data
-   * (`resend-after-sign-in`, `delete-pending`) wins, then this tab's own, then the browser's.
+   * ended, and this tab's own (`leaveNotice`): of the two, the first by their rank
+   * (`SESSION_NOTICES`).
    */
   notice(): SessionNotice | undefined
   /** Takes both words away: the sign-in page said them. */
