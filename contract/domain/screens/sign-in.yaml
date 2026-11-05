@@ -25,7 +25,8 @@ anchors:
   user.sign-in.notice-message:
     kind: message
     description: Why the last session on this device ended; shown once, while the page stays open.
-    codes: [ resend-after-sign-in, signed-out-elsewhere, password-changed-elsewhere, password-reset-elsewhere, delete-pending ]
+    ranked: true
+    codes: [ resend-after-sign-in, delete-pending, password-reset-elsewhere, signed-out-elsewhere, password-changed-elsewhere ]
   user.sign-in.mail-message:
     kind: message
     description: Asks to open the link of the verification mail, once a sign-up or a resend went through.
