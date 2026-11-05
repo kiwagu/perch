@@ -143,6 +143,9 @@ flow:
       on:
         platform.opened: ready
         platform.open-failed: failed
+        platform.signed-out:
+          target: ready
+          description: Signed out while its data opened, in another tab or from another device; nothing is left to open, so the tab goes on as a guest's and its screen moves to the sign-in page.
     ready:
       description: The frame with the open screen.
       meta: { renders: [ app-shell.nav ] }
