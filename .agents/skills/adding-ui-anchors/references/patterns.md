@@ -72,7 +72,7 @@ When a part is not a derived piece of its composite but an element of the screen
 own name, the composite takes it as a named prop ending in `TestId`. `AppShell`
 (`packages/ui/src/components/platform/app-shell.tsx`) puts `navigationTestId` on its `<nav>`;
 the shell view passes the frame's anchor
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/frame.view.tsx`):
 
 ```tsx
 <AppShell
@@ -84,7 +84,8 @@ the shell view passes the frame's anchor
 ```
 
 The links of that navigation are static items, each with its literal under a `testId` key,
-which the view renders with `data-testid={item.testId}`:
+which `NavigationLinks` (`shell-view/navigation-links.view.tsx`) renders with
+`data-testid={item.testId}`:
 
 ```tsx
 { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
@@ -165,7 +166,7 @@ A button that switches a mode is one anchor whose value says the mode, never two
 ## 7. A notice with `data-code`
 
 The shell's notice carries the code of what it says
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/notice-line.view.tsx`):
 
 ```tsx
 <p
@@ -189,9 +190,9 @@ export const notice = (page: Page, code: string) =>
 
 A message whose codes more than one source may raise before it shows (an effect of the app
 and a flow's `show` on its way there) is declared `ranked: true`, its `codes` in rank order:
-the app shows the first of those raised and drops the others, and a spec of the app holds its
-own order to the anchor's `codes` (`contract:diff` lists the order as
-`<anchor> ranks <code> > <code>`).
+the app shows the first of those raised and drops the others, a `clear` of it in any flow drops
+every code raised before it, and a spec of the app holds its own order to the anchor's `codes`
+(`contract:diff` lists the order as `<anchor> ranks <code> > <code>`).
 
 ```yaml
 <screen>.<object>-message:
@@ -217,7 +218,7 @@ const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? '
 ```
 
 The app's own readiness works the same way: `app-shell.status` carries
-`data-state={props.status}` in `shell.view.tsx`.
+`data-state={props.status}` in `shell-view/status-line.view.tsx`.
 
 ## 9. One element drawn by two render paths
 

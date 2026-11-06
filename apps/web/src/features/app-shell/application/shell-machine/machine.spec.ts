@@ -285,6 +285,35 @@ describe('shell machine', () => {
     expect(shell.is('ready')).toBe(true)
   })
 
+  it("goes on as a guest's frame when the account signs out while its data opens, its notice going with it", () => {
+    const opening = frame()
+
+    opening.signIn()
+    opening.actor.send({ type: 'platform.started' })
+    opening.signOut()
+
+    expect(opening.is('ready')).toBe(true)
+    expect(opening.emitted).toEqual([CLEARED, SYNC_CLEARED])
+
+    // The open that ends after the tab left changes nothing.
+    opening.actor.send({ type: 'platform.opened' })
+    opening.actor.send({ type: 'platform.open-failed' })
+
+    expect(opening.is('ready')).toBe(true)
+  })
+
+  it("goes on as a guest's frame when the saved account signs out after its data failed, offering no sign-out", () => {
+    const failed = frame()
+
+    failed.failOpen()
+    failed.signOut()
+
+    expect(failed.is('ready')).toBe(true)
+    expect(failed.emitted).toEqual([CLEARED, SYNC_CLEARED])
+    expect(failed.actor.getSnapshot().can({ type: 'app-shell.sign-out-here-button' })).toBe(false)
+    expect(failed.signOutHere).not.toHaveBeenCalled()
+  })
+
   it('says on the notice that a change was refused, and refused again', () => {
     const shell = frame()
     const REJECTED = {

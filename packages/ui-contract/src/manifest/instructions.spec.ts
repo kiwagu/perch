@@ -143,9 +143,9 @@ describe('instructionsOf', () => {
       'each marked `derivedFrom` with the composite and, for an item, its name',
     )
   })
-  it('says a ranked message shows the first of the codes raised before it shows', () => {
+  it('says a ranked message shows the first of the codes raised before it shows, unless cleared', () => {
     expect(instructions.screenMap).toContain(
-      '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it)',
+      '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a `clear` of it, in any flow, takes away every code raised before it)',
     )
   })
   it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {

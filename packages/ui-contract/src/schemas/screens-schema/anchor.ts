@@ -150,7 +150,7 @@ export const anchorDefSchema = z
       .literal(true)
       .optional()
       .describe(
-        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.',
+        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.',
       ),
     fields: z
       .record(codeSchema, baseAnchorSchema)

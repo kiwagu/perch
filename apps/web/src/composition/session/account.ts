@@ -8,7 +8,7 @@ import type { AccountSession, GatewayAuth } from '../gateway-auth'
 import {
   deviceIdFrom,
   type KeyValueStorage,
-  savedToken,
+  savedTokenOf,
   saveIdentityEmail,
   savePasswordReset,
 } from '../storage'
@@ -18,10 +18,10 @@ export interface SessionAccountDeps {
   readonly auth: GatewayAuth
   readonly storage: KeyValueStorage
   /**
-   * Whether the session this browser keeps is the one of the account signed in here: its space
-   * open, or opening at the start. A session another tab saved for another account since is not.
+   * The account signed in here: its space open, or opening at the start. Its calls present the
+   * session this browser keeps for it, never one another tab saved for another account since.
    */
-  readonly signedIn: () => boolean
+  readonly signedInAs: () => IdentityId | undefined
   /**
    * Signs this device out of the account `identity` if it is the one signed in here, as the
    * channel's 4001 does; resolves once done, and never rejects.
@@ -132,10 +132,9 @@ export class SessionAccount {
 
   /** The session this device is signed in with, its account's space open or opening; none without. */
   #openSession(): AccountSession | undefined {
-    const token = savedToken(this.#deps.storage)
+    const here = this.#deps.signedInAs()
+    const token = here === undefined ? undefined : savedTokenOf(this.#deps.storage, here)
 
-    return token === undefined || !this.#deps.signedIn()
-      ? undefined
-      : { token, device: deviceIdFrom(this.#deps.storage) }
+    return token === undefined ? undefined : { token, device: deviceIdFrom(this.#deps.storage) }
   }
 }

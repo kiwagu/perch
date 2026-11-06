@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
-import { savedIdentity } from '../storage'
+import { savedIdentity, savedToken } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -33,7 +33,7 @@ async function signedIn() {
 describe("asking to delete the signed-in account's", () => {
   it('asks the gateway with the session this device holds, and stays signed in', async () => {
     const { session, auth, storage } = await signedIn()
-    const token = storage.get('perch.session.token')
+    const token = savedToken(storage)
     const device = storage.get('perch.device.id')
 
     expect((await session.requestAccountDeletion(annSignUp.password)).isOk()).toBe(true)
@@ -126,7 +126,7 @@ describe("the deletion of an account by its mailed link's", () => {
     expect((await session.deleteAccount(auth.deletionLinkFor(bob.email))).isOk()).toBe(true)
     expect(session.current()?.id).toBe(me.id)
     expect(savedIdentity(storage)?.id).toBe(me.id)
-    expect(storage.get('perch.session.token')).toBeDefined()
+    expect(savedToken(storage)).toBeDefined()
     expect(session.notice()).toBeUndefined()
   })
 

@@ -14,7 +14,11 @@ import { MEMBERSHIPS_KEY, saveMemberships, TENANT_KEY } from './memberships'
 /** Who is signed in on this browser; the tabs follow it. */
 export const IDENTITY_KEY = 'perch.session.identity'
 
-/** The session token the gateway issued the device at its sign-in; it lives until a sign-out. */
+/**
+ * The session token the gateway issued the device at its sign-in, kept with the identity it was
+ * issued to (`{ identity, token }`), so a token and its owner are read in one step; it lives until
+ * a sign-out.
+ */
 export const TOKEN_KEY = 'perch.session.token'
 
 /** The refresh key an older build kept beside its access token; nothing reads or writes it now. */
@@ -22,9 +26,16 @@ const OLD_REFRESH_KEY = 'perch.session.refresh'
 
 const savedIdentitySchema = z.object({ id: idSchemas.identity.schema, email: z.string() })
 
+const savedTokenSchema = z.object({ identity: idSchemas.identity.schema, token: z.string() })
+
 /** A device whose sign-in is whole: who it is, its session token and the memberships it read. */
 export interface KeptDevice extends SignedInDevice {
   readonly memberships: readonly Membership[]
+}
+
+/** What `TOKEN_KEY` keeps: the session `token` with the `identity` it was issued to. */
+export function tokenRecord(identity: AuthUser['id'], token: string): string {
+  return JSON.stringify({ identity, token })
 }
 
 /**
@@ -33,7 +44,7 @@ export interface KeptDevice extends SignedInDevice {
  */
 export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
   saveMemberships(storage, device.identity.id, device.memberships)
-  storage.set(TOKEN_KEY, device.token)
+  storage.set(TOKEN_KEY, tokenRecord(device.identity.id, device.token))
   storage.set(
     IDENTITY_KEY,
     JSON.stringify({ id: device.identity.id, email: device.identity.email }),
@@ -56,24 +67,42 @@ export function saveIdentityEmail(
 
 /** The identity signed in on this browser; a kept value that does not describe one is none. */
 export function savedIdentity(storage: KeyValueStorage): AuthUser | undefined {
-  const text = storage.get(IDENTITY_KEY)
+  return read(storage, IDENTITY_KEY, savedIdentitySchema)
+}
+
+/** The session token the device presents to the gateway, if it keeps one, whoever it is of. */
+export function savedToken(storage: KeyValueStorage): string | undefined {
+  return read(storage, TOKEN_KEY, savedTokenSchema)?.token
+}
+
+/**
+ * The session token the device keeps for `identity`; none while it keeps none, or another
+ * identity's. The calls made for an identity read its token here, with its owner in one step.
+ */
+export function savedTokenOf(
+  storage: KeyValueStorage,
+  identity: AuthUser['id'],
+): string | undefined {
+  const saved = read(storage, TOKEN_KEY, savedTokenSchema)
+
+  return saved?.identity === identity ? saved.token : undefined
+}
+
+/** The record kept at `key`; a kept value that does not describe one is none. */
+function read<T>(storage: KeyValueStorage, key: string, schema: z.ZodType<T>): T | undefined {
+  const text = storage.get(key)
 
   if (text === undefined) {
     return undefined
   }
 
   try {
-    const parsed = savedIdentitySchema.safeParse(JSON.parse(text))
+    const parsed = schema.safeParse(JSON.parse(text))
 
     return parsed.success ? parsed.data : undefined
   } catch {
     return undefined
   }
-}
-
-/** The session token the device presents to the gateway, if it keeps one. */
-export function savedToken(storage: KeyValueStorage): string | undefined {
-  return storage.get(TOKEN_KEY)
 }
 
 /**
