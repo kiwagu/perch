@@ -28,9 +28,24 @@
 	}
 }
 
+# Whom the front names to the gateway as the client: the gateway counts its request limits by
+# the rightmost X-Forwarded-For entry. `peer`, the default, is the address the request came
+# from, which reverse_proxy writes there itself. The e2e stand runs with `claimed`: every browser
+# of its suite reaches the front from 127.0.0.1, so each Playwright worker claims an address of its
+# own in X-Perch-Client-Address, and spends its own limits as a client of its own would; a request
+# without the header leaves the entry empty, and the gateway takes the connection's address.
+(client-address-peer) {
+}
+
+(client-address-claimed) {
+	header_up X-Forwarded-For {header.X-Perch-Client-Address}
+	header_up -X-Perch-Client-Address
+}
+
 # One site per stand: the mcproc apps caddy-dev and caddy-e2e run this file with the ports of
-# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT), and
-# PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there).
+# this checkout's stand in the container's environment (FRONT_PORT, GATEWAY_PORT),
+# PERCH_UI_MANIFEST (1, the default, serves /ui-manifest/; 0 answers 404 there) and
+# PERCH_CLIENT_ADDRESS (peer, the default, or claimed: the snippets above).
 https://localhost:{$FRONT_PORT} {
 	bind 127.0.0.1
 	tls /certs/localhost.pem /certs/localhost-key.pem
@@ -48,7 +63,9 @@ https://localhost:{$FRONT_PORT} {
 		file_server
 	}
 	handle_path /backend/* {
-		reverse_proxy 127.0.0.1:{$GATEWAY_PORT}
+		reverse_proxy 127.0.0.1:{$GATEWAY_PORT} {
+			import client-address-{$PERCH_CLIENT_ADDRESS:peer}
+		}
 	}
 	# The web app's build, a single-page app: any path that is not a file gets index.html.
 	# The route keeps the written order, so the headers see the path after try_files and a
