@@ -232,9 +232,13 @@ flow:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me
         onError:
-          target: sign-in
-          actions:
-            - show: user.sign-in.error
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
