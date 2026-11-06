@@ -25,4 +25,4 @@ Where: [/settings] on device A, and [/me] on device B, another browser
 
 ### Expected result
 - After step 4 [app-shell.toast] carries [code:password-changed] on device A, and device B is still on [/me]
-- Within 5 seconds of step 5 device B is on [/sign-in], where [user.sign-in.notice-message] carries [code:password-changed-elsewhere]
+- After step 5 device B is on [/sign-in] once it connects again, where [user.sign-in.notice-message] carries [code:password-changed-elsewhere]

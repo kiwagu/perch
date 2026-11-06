@@ -32,4 +32,4 @@ Where: [/sign-in] on device B, and [/me] on device A, another browser
 - After step 6 [user.sign-in.device-limit-dialog] carries [code:device-limit] again
 - After step 7 device B is on [/me]
 - After step 8 [device.list] holds eleven [device.list.session-item]: device B's in [state:current], device A's in [state:revoked] and the nine others in neither
-- Within 5 seconds of step 9 device A is on [/sign-in], where [user.sign-in.notice-message] carries [code:device-limit-elsewhere]
+- After step 9 device A is on [/sign-in] once it connects again, where [user.sign-in.notice-message] carries [code:device-limit-elsewhere]

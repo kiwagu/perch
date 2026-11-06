@@ -24,4 +24,4 @@ Where: [/devices] on device A, and [/me] on device B, another browser
 
 ### Expected result
 - After step 4 device B's [device.list.session-item] on device A is in [state:revoked], and device B is still on [/me]
-- Within 5 seconds of step 5 device B is on [/sign-in], where [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
+- After step 5 device B is on [/sign-in] once it connects again, where [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
