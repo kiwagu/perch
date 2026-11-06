@@ -31,7 +31,7 @@ function headersOf(ctx: GenericEndpointContext | null): Headers | undefined {
 }
 
 /** Better Auth's path of a sign-in by email and password, whose session the gateway admits. */
-const SIGN_IN_PATH = '/sign-in/email'
+const BETTER_AUTH_SIGN_IN_PATH = '/sign-in/email'
 
 /**
  * Better Auth's `databaseHooks.session`: a session is created at a sign-in and at the first
@@ -84,7 +84,9 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
             ...session,
             device: device.data,
             label: parsedLabel.success ? parsedLabel.data : '',
-            pending: ctx?.path === SIGN_IN_PATH && headers?.get(ADMISSION_HEADER) === 'pending',
+            pending:
+              ctx?.path === BETTER_AUTH_SIGN_IN_PATH &&
+              headers?.get(ADMISSION_HEADER) === 'pending',
           },
         }
       },
