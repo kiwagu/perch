@@ -207,6 +207,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
+| `device-limit` | `user.sign-in.device-limit-dialog` | the dialog asks whether to sign in all the same and sign out the account's device seen least recently, since the account is signed in on as many devices as it may be at once |
 | `unsaved-input` | `app-shell.leave-dialog` | the dialog asks whether to leave and lose what was typed but not saved |
 | `screen-crashed` | `app-shell.crash-message` | the open screen failed to render; another screen, a language chosen or a reload may bring it back |
 | `new-version` | `app-shell.update-message` | the server serves a newer version of the app than the one this tab runs, and loading the page again brings it |
