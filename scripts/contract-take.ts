@@ -16,7 +16,11 @@
  * (its first parents since `main`), a run's first not after its last and each before the next,
  * and every file the take stages must be one they change: what the take needs beyond them goes to
  * the trunk under the card, taken as one more commit. A conflict resolved in a file they change
- * passes. A commit that stages nothing (an amend of the message alone) is judged by its message.
+ * passes. A commit that stages nothing, apart from an amend, is judged by its message. An amend, told
+ * by the arguments of the git command that runs the hook (read from /proc; where there is none, it
+ * is judged by what it adds), is judged as the whole commit it leaves, against HEAD's parent, and
+ * the amend of a merge passes as the merge it stays. A message git's cleanup modes would record two
+ * ways (a comment line above its subject or its trailer) fails.
  * Commits on `main`, the trunk, the engine's branch and an experiment, on a detached HEAD, and a
  * merge pass at once; a commit whose branch, files or message git cannot tell fails.
  *
@@ -24,7 +28,7 @@
  */
 
 import { headRef } from './gates/tree.ts'
-import { merging, stagedFiles } from './staged-commit.ts'
+import { amending, git, merging, stagedFiles } from './staged-commit.ts'
 import { readMessage, takeRefusal } from './takes/index.ts'
 
 /** Branches whose commits are no area's: `main`, the trunk and the contract engine's branch. */
@@ -36,6 +40,32 @@ const OWN_LAYERS = new Set([
 
 /** An experiment's business commits go to the trunk when it is split. */
 const EXPERIMENTS = 'refs/heads/experiment/'
+
+/**
+ * What an amend's commit is judged against: HEAD's parent, the empty tree for a first commit, or
+ * `merge` for a merge, which stays one; undefined when git cannot tell.
+ */
+function amendBase(): string | undefined {
+  const parents = git(['rev-list', '--parents', '-n', '1', 'HEAD'])
+
+  if (parents.status !== 0) {
+    return undefined
+  }
+
+  const [, first, second] = parents.out.trim().split(' ')
+
+  if (second !== undefined) {
+    return 'merge'
+  }
+
+  if (first !== undefined) {
+    return first
+  }
+
+  const empty = git(['hash-object', '-t', 'tree', '--stdin'], '')
+
+  return empty.status === 0 ? empty.out.trim() : undefined
+}
 
 function main(): number {
   const [file] = process.argv.slice(2)
@@ -51,7 +81,13 @@ function main(): number {
     return 0
   }
 
-  const files = stagedFiles()
+  const base = amending() ? amendBase() : 'HEAD'
+
+  if (base === 'merge') {
+    return 0
+  }
+
+  const files = base === undefined ? undefined : stagedFiles(base)
   const message = file === undefined ? undefined : readMessage(file)
 
   if (files === undefined || message === undefined) {

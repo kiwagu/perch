@@ -121,6 +121,34 @@ function run(
   })
 }
 
+/**
+ * Commits in `root` with `args` through the script installed as the commit-msg hook, as git runs
+ * it, so that it reads the command (an amend) the commit is made by.
+ */
+function commitThroughHook(root: string, ...args: string[]): SpawnSyncReturns<string> {
+  writeFileSync(
+    join(root, '.git', 'hooks', 'commit-msg'),
+    `#!/bin/sh\nexec "${process.execPath}" "${CONTRACT_TAKE}" "$1"\n`,
+    { mode: 0o755 },
+  )
+
+  return spawnSync(
+    'git',
+    [
+      '-c',
+      'commit.gpgsign=false',
+      '-c',
+      'user.name=t',
+      '-c',
+      'user.email=t@example.test',
+      'commit',
+      '-q',
+      ...args,
+    ],
+    { cwd: root, encoding: 'utf8', stdio: 'pipe', env: ENV },
+  )
+}
+
 /** A take's message: `subject`, then each of `trailers` in a paragraph of its own. */
 function message(subject: string, ...trailers: string[]): string {
   return [subject, ...trailers.map((trailer) => `\n${trailer}`)].join('\n').concat('\n')
@@ -432,7 +460,7 @@ describe('contract-take on an area branch', () => {
     }
   })
 
-  it('judges a commit that stages nothing by its message alone, as an amend of the message', () => {
+  it('judges a commit that stages nothing, made apart from an amend, by its message alone', () => {
     const { root, screen } = trunk()
 
     passes(
@@ -442,6 +470,92 @@ describe('contract-take on an area branch', () => {
       ),
     )
     refuses(run(root, message('feat(contract): model the page')), 'names its source in no trailer')
+  })
+
+  it('judges an amend by the whole commit it leaves, not by what it adds', () => {
+    const { root, screen } = trunk()
+    const taken = `Taken-from: contract/trunk ${screen} ABC-1`
+
+    pick(root, screen)
+    commit(root, 'feat(contract): model the page')
+
+    const renamed = commitThroughHook(root, '--amend', '-m', 'feat(web): show the page')
+
+    expect(renamed.status).not.toBe(0)
+    expect(renamed.stderr).toContain(`\n  ${SCREEN}\n`)
+
+    const forgotten = commitThroughHook(
+      root,
+      '--amend',
+      '-m',
+      'feat(contract): model the page',
+      '-m',
+      taken,
+    )
+
+    expect(forgotten.stderr).toBe('')
+    expect(forgotten.status).toBe(0)
+    expect(git(root, 'log', '-1', '--format=%(trailers:key=Taken-from,valueonly)')).toBe(
+      `contract/trunk ${screen} ABC-1`,
+    )
+  })
+
+  it('refuses an amend that adds a take to a commit of other files', () => {
+    const { root, screen } = trunk()
+
+    stage(root, 'apps/web/src/main.tsx', 'shown')
+    commit(root, 'feat(web): show the page')
+    pick(root, screen)
+
+    const amended = commitThroughHook(
+      root,
+      '--am',
+      '-m',
+      'feat(contract): model the page',
+      '-m',
+      `Taken-from: contract/trunk ${screen} ABC-1`,
+    )
+
+    expect(amended.status).not.toBe(0)
+    expect(amended.stderr).toContain('outside the business layer')
+    expect(amended.stderr).toContain('\n  apps/web/src/main.tsx\n')
+  })
+
+  it('lets an amend of a merge through, as the merge it stays', () => {
+    const { root } = trunk()
+
+    author(root, 'merge', '-q', '--no-ff', '-m', 'chore: merge the trunk', 'contract/trunk')
+
+    const amended = commitThroughHook(root, '--amend', '-m', 'chore: merge the trunk again')
+
+    expect(amended.stderr).toBe('')
+    expect(amended.status).toBe(0)
+  })
+
+  it("refuses a message that git's cleanup modes read two ways", () => {
+    const { root } = trunk()
+
+    stage(root, SCREEN, 'old names dropped')
+
+    refuses(
+      run(root, '# a note\n\nrefactor(contract): drop the old names\n\nWritten-on-branch: ABC-1\n'),
+      'reads one way when git strips its comment lines and another when it keeps them',
+    )
+  })
+
+  it('refuses a take when the clone knows no main, saying how to get it', () => {
+    const { root, screen } = trunk()
+
+    pick(root, screen)
+    git(root, 'branch', '-q', '-D', 'main')
+
+    refuses(
+      run(
+        root,
+        message('feat(contract): model the page', `Taken-from: contract/trunk ${screen} ABC-1`),
+      ),
+      'git fetch origin main',
+    )
   })
 
   it('reads the trunk from origin when the clone has no branch of its own', () => {

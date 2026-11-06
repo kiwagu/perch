@@ -84,7 +84,21 @@ export function takeRefusal(
   message: Message,
   files: readonly string[],
 ): string | undefined {
-  if (claimsScope(message.subject) || message.trailers.some(({ key }) => isSource(key))) {
+  const claims = claimsScope(message.subject) || message.trailers.some(({ key }) => isSource(key))
+  const business = files.filter((file) => isBusinessFile(file))
+
+  if (!claims && business.length === 0) {
+    return undefined
+  }
+
+  if (!message.alike) {
+    return [
+      `contract take: on ${branch}, this commit's message reads one way when git strips its comment lines and another when it keeps them, as its cleanup mode decides (a message given with -m keeps them): write the subject first, and no line starting with the comment character above the trailer.`,
+      FORM,
+    ].join('\n')
+  }
+
+  if (claims) {
     const problems = contractProblems(message, files)
 
     return problems.length === 0
@@ -96,12 +110,7 @@ export function takeRefusal(
         ].join('\n')
   }
 
-  const business = files.filter((file) => isBusinessFile(file))
   const outside = files.filter((file) => !isBusinessFile(file))
-
-  if (business.length === 0) {
-    return undefined
-  }
 
   return [
     `contract take: on ${branch}, the UI contract's business layer (${LAYER}) comes from ${TRUNK} as a take, and this commit changes it:`,

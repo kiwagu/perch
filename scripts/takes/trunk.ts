@@ -81,13 +81,11 @@ function ownLine(): ReadonlySet<string> | string {
     return `git knows no ${TRUNK} in this clone: git fetch origin ${TRUNK}, then commit again.`
   }
 
-  const own = lines([
-    'rev-list',
-    '--first-parent',
-    '--no-merges',
-    ...trunks,
-    ...(mains.length > 0 ? ['--not', ...mains] : []),
-  ])
+  if (mains.length === 0) {
+    return `git knows no main in this clone, which tells ${TRUNK}'s own commits from those it took from main: git fetch origin main, then commit again.`
+  }
+
+  const own = lines(['rev-list', '--first-parent', '--no-merges', ...trunks, '--not', ...mains])
 
   return own === undefined ? `git cannot read ${TRUNK}.` : new Set(own)
 }
