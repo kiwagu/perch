@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { renderHook } from '@testing-library/react'
+import { StrictMode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
@@ -126,6 +127,64 @@ describe('useSignedOut', () => {
 
     expect(actor.send).not.toHaveBeenCalled()
     unmount()
+  })
+
+  it('tells the frame once of an account gone before listening began, when the effect runs again', () => {
+    const { session, tell } = tellingSession(undefined)
+    const actor = { send: vi.fn() }
+    const { unmount } = renderHook(() => useSignedOut(session, actor, true, () => ann.id), {
+      wrapper: StrictMode,
+    })
+
+    expect(actor.send).toHaveBeenCalledExactlyOnceWith({ type: 'platform.signed-out' })
+
+    tell(bob)
+    tell(undefined)
+    expect(actor.send).toHaveBeenCalledTimes(2)
+    unmount()
+  })
+
+  it('tells the frame once as the listening passes from the start to the shell container', () => {
+    const { session, tell } = tellingSession(ann)
+    const live: { account: string | undefined } = { account: ann.id }
+    const shown = () => live.account
+    const actor = { send: vi.fn() }
+    // The start listens while no screen renders: the saved account's data did not open.
+    const start = renderHook(({ listening }) => useSignedOut(session, actor, listening, shown), {
+      initialProps: { listening: true },
+    })
+
+    // Ann signs out: the frame goes on as a guest's, and its screen renders nobody.
+    tell(undefined)
+    live.account = undefined
+    start.rerender({ listening: false })
+    const container = renderHook(() => useSignedOut(session, actor, true, shown))
+
+    tell(bob)
+    expect(actor.send).toHaveBeenCalledExactlyOnceWith({ type: 'platform.signed-out' })
+
+    tell(undefined)
+    expect(actor.send).toHaveBeenCalledTimes(2)
+    container.unmount()
+    start.unmount()
+  })
+
+  it('tells the frame once as the listening passes from the shell container to the start', () => {
+    const { session, tell } = tellingSession(ann)
+    const live: { account: string | undefined } = { account: ann.id }
+    const shown = () => live.account
+    const actor = { send: vi.fn() }
+    const container = renderHook(() => useSignedOut(session, actor, true, shown))
+
+    // The data did not open: the screen goes, the start listens to the account it showed.
+    container.unmount()
+    const start = renderHook(() => useSignedOut(session, actor, true, shown))
+
+    expect(actor.send).not.toHaveBeenCalled()
+
+    tell(undefined)
+    expect(actor.send).toHaveBeenCalledExactlyOnceWith({ type: 'platform.signed-out' })
+    start.unmount()
   })
 
   it('hears nothing before the session exists', () => {
