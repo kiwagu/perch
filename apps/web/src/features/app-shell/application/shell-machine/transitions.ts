@@ -11,6 +11,10 @@ export const SIGNED_OUT = {
     { type: 'clear', params: { anchor: 'app-shell.sync-message' } },
   ],
 } as const
+/** A sign-in on this device ends the words the sign-in page had not said yet. */
+export const SIGNED_IN = {
+  actions: { type: 'clear', params: { anchor: 'user.sign-in.notice-message' } },
+} as const
 /** The gateway refused a change this device then undid, or refused the undo too. */
 export const REJECTED = {
   type: 'show',
