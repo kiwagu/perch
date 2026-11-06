@@ -33,7 +33,10 @@ modules' routes.
   the transitions several states share, `transitions.ts`), made by the start (`src/main.tsx`) through
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `setting-writes.ts`
   tells a setting another tab or device stored from this tab's own write coming back.
-- `presentation/shell/shell.container.tsx` and `shell.view.tsx`: the frame, the navigation
+- `presentation/shell/shell.container.tsx` and `shell-view/`: the frame (`frame.view.tsx` lays it
+  out in the kit's `AppShell`, a child view for each of its parts: the status line, the header's
+  actions, the navigation links, the update and install alerts, the notice's line, the toasts,
+  "Sign out on this device" and the message of a screen that failed to render), the navigation
   for a signed-in account only (for a guest the kit's `AppShell` renders no `<nav>`, neither the
   bottom bar nor the side rail, and the page takes their room), the notice, whose line is held as tall as the longest notice (three lines on a phone, two
   wider up, a guard in `texts-contract.spec.ts`) so the page does not move, and the toasts
@@ -130,4 +133,4 @@ modules' routes.
 - `bun run test` in `apps/web` runs its specs (`shell-machine/machine.spec.ts`, `shell.events.spec.ts`,
   `setting-writes.spec.ts`, `shell-frame.spec.ts`, `stored-settings.spec.ts`,
   `shell.container.spec.tsx`,
-  `shell.view.spec.tsx`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).
+  the specs of `shell-view/`, `leave-guard.container.spec.tsx`, `confirm-guard.container.spec.tsx`).
