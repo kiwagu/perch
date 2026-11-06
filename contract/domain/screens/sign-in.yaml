@@ -227,7 +227,7 @@ flow:
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, signOutOldest: { value: true } }
         onDone:
           target: done
-          description: This device is signed in, and the account's device seen least recently is signed out, unless a place freed since the dialog opened.
+          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
           actions:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me
