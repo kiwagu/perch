@@ -203,7 +203,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `no-such-identity` | `organisation.invite.error` | no account has this email |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
 | `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
-| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error` | the account is the only administrator of an organisation that has other members, so it cannot be deleted; the organisation page shows them, and the deletion goes through once they are removed |
+| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error` | the account is the only administrator of an organisation that has other members, so it cannot be deleted or made a member; the organisation page shows them, and it goes through once another member is made an administrator or they are removed |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
 | `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |

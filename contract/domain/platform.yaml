@@ -169,7 +169,7 @@ actions:
       password:
         type: string
         description: The password the account has now, which confirms the request.
-    result: "the mail below is on its way to the account's email, its link replacing the link of an earlier request, and the account stays as it is until the button of the page that link opens is pressed; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; an account that is the only administrator of an organisation with other members answers last-admin and sends nothing, until those members are removed; one account asks three deletions within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails"
+    result: "the mail below is on its way to the account's email, its link replacing the link of an earlier request, and the account stays as it is until the button of the page that link opens is pressed; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password; an account that is the only administrator of an organisation with other members answers last-admin and sends nothing, until another member of it is made an administrator or those members are removed; one account asks three deletions within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the network address's budget of mails"
     codes:
       - invalid-credentials
       - last-admin
