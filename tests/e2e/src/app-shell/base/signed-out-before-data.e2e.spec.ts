@@ -7,9 +7,9 @@ test.describe('Sign out in another tab while the data opens', { tag: '@full' }, 
   test('A tab whose account another tab signs out while its data opens goes to the sign-in page at once, then follows the account signed in next', async ({
     page,
   }) => {
-    // Two sign-ups, each opening its account's data, and a sign-out: with other runs on the
-    // host's CPU it can take more than 30 seconds, every step slower and none stuck. To be
-    // measured again once full e2e runs stop sharing the host's CPU.
+    // Two sign-ups, each opening its account's data, and a sign-out can use up the default
+    // 30-second budget when other runs load the host's CPU; no tab was found waiting on the
+    // other. Measure again once full e2e runs go one at a time on the host.
     test.slow()
 
     const other = {
