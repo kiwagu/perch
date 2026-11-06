@@ -2,6 +2,7 @@ import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useSelector } from '@xstate/react'
 import {
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -31,6 +32,7 @@ import { shellEvents } from '../../application/shell.events'
 import { pageTitle } from './page-title'
 import { useShellFrame } from './shell-frame'
 import { type ShellLinkProps, ShellView } from './shell-view'
+import { useSignedOut } from './signed-out'
 import { deliverStored } from './stored-settings'
 
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
@@ -100,7 +102,6 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const { actor, live } = frame
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
-  const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   // The path of the route matched, as it is declared (`/$` for an unknown address).
   const route = useRouterState({
@@ -164,16 +165,11 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     deliverStored(frame, 'theme', storedTheme)
   }, [frameState, user?.id, storedTheme, frame])
 
-  // The account going away, by its own sign-out or from another device: the frame's platform event.
-  useEffect(() => {
-    const before = signedInAs.current
+  // The account going away, by its own sign-out or from another device, another account in its
+  // place included: the frame's platform event, heard from the session while a screen renders.
+  const shown = useCallback(() => live.account, [live])
 
-    signedInAs.current = user?.id
-
-    if (before !== undefined && user?.id === undefined) {
-      actor.send({ type: 'platform.signed-out' })
-    }
-  }, [user?.id, actor])
+  useSignedOut(session, actor, true, shown)
 
   // The frame's flow says its notice and clears it, as every screen's flow does.
   useFrameEffects(actor)

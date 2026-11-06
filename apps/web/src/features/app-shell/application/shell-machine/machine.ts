@@ -201,17 +201,17 @@ export function createShellMachine(deps: ShellMachineDeps) {
       },
       reloading: {
         meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN },
+        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
         invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
       },
       updating: {
         meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN },
+        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
         invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
       },
       installing: {
         meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN },
+        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
         invoke: {
           src: 'platform.install.prompt',
           onDone: { target: 'ready', actions: INSTALL_GONE },
@@ -220,7 +220,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
       },
       postponing: {
         meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN },
+        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
         invoke: {
           src: 'platform.install.postpone',
           onDone: { target: 'ready', actions: INSTALL_GONE },
