@@ -13,6 +13,14 @@ export const DEVICE_HEADER = 'X-Perch-Device'
 
 export const DEVICE_LABEL_HEADER = 'X-Perch-Device-Label'
 
+/**
+ * Set to `pending` by the gateway's sign-in route on the request it hands Better Auth, whatever
+ * the client sent: the session that sign-in writes waits for its admission against the account's
+ * limit of devices. Read on Better Auth's sign-in path only, so no other way in writes a session
+ * that waits.
+ */
+export const ADMISSION_HEADER = 'X-Perch-Admission'
+
 const label = z.string().max(60)
 
 type SessionRow = Session & Record<string, unknown>
@@ -22,11 +30,17 @@ function headersOf(ctx: GenericEndpointContext | null): Headers | undefined {
   return ctx?.headers ?? ctx?.request?.headers
 }
 
+/** Better Auth's path of a sign-in by email and password, whose session the gateway admits. */
+const SIGN_IN_PATH = '/sign-in/email'
+
 /**
  * Better Auth's `databaseHooks.session`: a session is created at a sign-in and at the first
  * verification of an email. Before the row exists, the device the request names
  * (`X-Perch-Device`, 1 to 64 characters) and its label (`X-Perch-Device-Label`, at most 60) go
- * into it; a request without a valid device is refused 400 `bad-request`, as the routes refuse it. After the row exists, the identity's sessions on
+ * into it; a request without a valid device is refused 400 `bad-request`, as the routes refuse it.
+ * A sign-in's row is written `pending` when the gateway's sign-in route asks for it
+ * (`ADMISSION_HEADER`): the gateway admits it against the account's limit of devices before it
+ * hands it out (`AuthSessions.admit`). After the row exists, the identity's sessions on
  * the same device but the newest one end (the newest: created last, of the greater id among those
  * created at the same instant): a device holds one live session. Every sign-in's hook keeps the
  * newest, its own row included when a newer one exists already, so the device converges on its
@@ -67,6 +81,7 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
             ...session,
             device: device.data,
             label: parsedLabel.success ? parsedLabel.data : '',
+            pending: ctx?.path === SIGN_IN_PATH && headers?.get(ADMISSION_HEADER) === 'pending',
           },
         }
       },

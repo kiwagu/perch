@@ -1,9 +1,10 @@
-import type { ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import type { DeviceSessionId, IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
+import { KeyedTurns } from '../../keyed-turns'
 import type { AuthInstance } from '../auth-instance'
 import { DEVICE_LIMIT } from '../auth-instance'
 import { writing } from '../device-session-rows'
@@ -56,6 +57,8 @@ export class AuthSessions {
   readonly #directory: LocalDb
   readonly #clock: Clock
   readonly #secret: string
+  /** The admissions of each account, one at a time in this process. */
+  readonly #admissions = new KeyedTurns<IdentityId>()
 
   constructor(options: AuthSessionsOptions) {
     this.#auth = options.auth
@@ -114,26 +117,37 @@ export class AuthSessions {
   }
 
   /**
-   * Admits the sign-in whose new session holds `token` against the limit of devices one account
-   * keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction: within the limit it stays
-   * as it is; past it, a sign-in not confirmed (`signOutOldest` false) has its session deleted and
-   * is asked, a confirmed one signs out the account's other device seen least recently, whose
-   * session keeps `device-limit` as why it ended. Two sign-ins admitted at once each count the
-   * other's session, so each signs out one device at most, and a device signed in already takes
-   * no new place.
+   * Admits the sign-in of `identity` whose new session holds `token` against the limit of devices
+   * one account keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction, the account's
+   * admissions one at a time: within the limit the session is admitted and waits no more
+   * (`pending`); past it, a sign-in not confirmed (`signOutOldest` false) has its session deleted
+   * and is asked, a confirmed one signs out the account's other device seen least recently, whose
+   * session keeps `device-limit` as why it ended. Only admitted sessions count, the new one beside
+   * them, so a sign-in still waiting for its admission takes no place from another, a device
+   * signed in already takes no new place, and of two sign-ins for the last place one is admitted
+   * and the other asked. A session whose admission failed keeps waiting: nothing counts, lists or
+   * hands it out.
    */
-  admit(token: string, signOutOldest: boolean): ResultAsync<SignInAdmission, DataError> {
-    return writing(
-      this.#directory.db
-        .query<unknown[]>(sessionsAdmitStatement, {
-          session_token: token,
-          limit: DEVICE_LIMIT,
-          sign_out_oldest: signOutOldest,
-          now: this.#now(),
-        })
-        .retry(),
-      'a sign-in could not be admitted',
-    ).andThen((results) => toSignInAdmission(results.at(-2)))
+  admit(
+    identity: IdentityId,
+    token: string,
+    signOutOldest: boolean,
+  ): ResultAsync<SignInAdmission, DataError> {
+    return new ResultAsync(
+      this.#admissions.run(identity, () =>
+        writing(
+          this.#directory.db
+            .query<unknown[]>(sessionsAdmitStatement, {
+              session_token: token,
+              limit: DEVICE_LIMIT,
+              sign_out_oldest: signOutOldest,
+              now: this.#now(),
+            })
+            .retry(),
+          'a sign-in could not be admitted',
+        ).andThen((results) => toSignInAdmission(results.at(-2))),
+      ),
+    )
   }
 
   /**

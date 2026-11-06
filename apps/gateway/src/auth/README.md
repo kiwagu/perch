@@ -278,18 +278,23 @@ present at its commit, a session written before it is ended by it and one writte
 by the sign-in itself: no session outlives the password it was opened with. A sign-in that
 stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (10, beside
 `SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
-`surql/device-sessions-admit.surql`): the account's devices with a live session are counted, the
-new session's device included and a device with several sessions once. Within the limit nothing
+`surql/device-sessions-admit.surql`), one admission of an account at a time in the gateway's
+process: the account's devices with a live admitted session are counted, the new session's
+device included and a device with several sessions once. A sign-in's session is written
+`pending` (the session hooks mark it by Better Auth's path `/sign-in/email`) and waits until its
+admission, counted by no other admission and listed among no devices, so a sign-in still under
+way takes no place from another. Within the limit the session is admitted and nothing else
 changes. Past it, a sign-in whose body does not carry `signOutOldest: true` has its new session
 deleted, never handed to the device nor listed among its devices, and answers 409 `device-limit`,
 which the web asks the person about; once confirmed, the sign-in signs out the account's other
 device seen least recently (`last_seen_at`, then the device's id), whose session ends with
 `device-limit` as its reason and whose sockets close with 4003 (`CLOSE.deviceLimit`). The limit is
 judged when the sign-in is admitted, not when it was asked: a place freed meanwhile signs no
-device out, two sign-ins admitted at once count each other's session and sign out one device
-each at most, and a new sign-in of a device signed in already takes no place. A 409 counts as a
-right password for the email's failed sign-ins, and an admission that fails ends the new session
-and answers 500 `internal`. `signOutOldest` is the gateway's: Better Auth gets the rest of the
+device out, of two sign-ins for the last place one is admitted and the other asked, and a new
+sign-in of a device signed in already takes no place. A 409 counts as a right password for the
+email's failed sign-ins, and an admission that fails ends the new session and answers 500
+`internal`; should the ending fail too, the session keeps waiting, never handed out, counted or
+listed. `signOutOldest` is the gateway's: Better Auth gets the rest of the
 body. Better Auth's
 clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
 expired, not unknown: an account keeps one reset link and one pending change of its email at

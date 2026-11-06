@@ -1,9 +1,14 @@
+import { errAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
-import type { IdentityId } from '@workspace/ids'
+import { dataError } from '@workspace/data'
+import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 
+import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
+import type { AuthSessions } from '../auth-sessions'
 import { DeviceSessions } from '../device-sessions'
+import { ADMISSION_HEADER } from '../session-hooks'
 
 import {
   ANN,
@@ -44,6 +49,48 @@ async function endedOf(mounted: Mounted, identity: IdentityId) {
 /** The sockets the limit of devices closed. */
 const limitCloses = (mounted: Mounted) =>
   mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)
+
+/**
+ * Admissions a test holds: once `arm`ed with a number, that many next admissions wait, each with
+ * its sign-in's session written, until `release` lets them all go at once; `reached` settles once
+ * they all wait. Every other one runs at once.
+ */
+function heldAdmissions() {
+  let left = 0
+  let release = () => {}
+  let reach = () => {}
+  let held: Promise<void> = Promise.resolve()
+  let reached: Promise<void> = Promise.resolve()
+
+  return {
+    get reached() {
+      return reached
+    },
+    arm: (count: number) => {
+      left = count
+      held = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      reached = new Promise<void>((resolve) => {
+        reach = resolve
+      })
+    },
+    release: () => release(),
+    admission: (admit: () => ReturnType<AuthSessions['admit']>) => {
+      if (left === 0) {
+        return admit()
+      }
+
+      left -= 1
+
+      if (left === 0) {
+        reach()
+      }
+
+      return ResultAsync.fromSafePromise(held).andThen(admit)
+    },
+  }
+}
 
 /**
  * Marks every device of `ann` seen a minute after the other, in the order given, all after every
@@ -146,6 +193,103 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
       expect(answer?.status).toBe(200)
       expect(limitCloses(mounted)).toEqual([])
       expect(await endedOf(mounted, ann.identity)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'counts no sign-in still being admitted: a device signed in already signs in again meanwhile, and the new device is then asked',
+    async () => {
+      const held = heldAdmissions()
+      const mounted = await mountedOnRealAuth({ admission: held.admission })
+      const ann = await signedInOn(mounted, ANN, TEN)
+
+      held.arm(1)
+
+      const eleventh = mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM)
+
+      await held.reached
+      // The eleventh device's session is written and waits for its admission: no device lists it.
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+
+      const again = await mounted.route(signInRequest(ANN, PASSWORD, 'a'), FROM)
+
+      expect(again?.status).toBe(200)
+
+      held.release()
+
+      expect((await eleventh)?.status).toBe(409)
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect(await endedOf(mounted, ann.identity)).toEqual([])
+      expect(limitCloses(mounted)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'admits one of two devices whose sign-ins come to the last place at once, and asks the other',
+    async () => {
+      const held = heldAdmissions()
+      const mounted = await mountedOnRealAuth({ admission: held.admission })
+      const ann = await signedInOn(mounted, ANN, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
+
+      held.arm(2)
+
+      // Both sessions are written before either sign-in is admitted.
+      const answers = Promise.all(
+        ['j', 'k'].map((device) => mounted.route(signInRequest(ANN, PASSWORD, device), FROM)),
+      )
+
+      await held.reached
+      held.release()
+
+      expect((await answers).map((answer) => answer?.status).sort()).toEqual([200, 409])
+      expect(await devicesOf(mounted, ann.identity)).toHaveLength(10)
+      expect(limitCloses(mounted)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'counts and lists no session whose admission and its ending both failed, which was never handed out',
+    async () => {
+      let failing = false
+      const mounted = await mountedOnRealAuth({
+        admission: (admit) =>
+          failing ? errAsync(dataError('data:QUERY_FAILED', 'the directory is away')) : admit(),
+        signOutFails: true,
+      })
+      const ann = await signedInOn(mounted, ANN, ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'])
+
+      failing = true
+
+      const lost = await mounted.route(signInRequest(ANN, PASSWORD, 'x'), FROM)
+
+      expect(lost?.status).toBe(500)
+
+      failing = false
+
+      const tenth = await mounted.route(signInRequest(ANN, PASSWORD, 'j'), FROM)
+
+      expect(tenth?.status).toBe(200)
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect(limitCloses(mounted)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'lets no other way in write a session that waits: a verification naming the admission header is listed and counted',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const headers = deviceHeaders('a')
+
+      headers.set(ADMISSION_HEADER, 'pending')
+
+      const signedUp = await signUpOn(mounted.auth, ANN, headers, { password: PASSWORD })
+      const identity = idSchemas.identity.schema.parse(signedUp.user.id)
+
+      expect((await devicesOf(mounted, identity)).map(({ device }) => device)).toEqual(['a'])
     },
     ARGON2_RUNS_MS,
   )

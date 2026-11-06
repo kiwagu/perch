@@ -124,6 +124,8 @@ export function authOptions(options: AuthInstanceOptions) {
       additionalFields: {
         device: { type: 'string', required: true, input: false },
         label: { type: 'string', required: true, input: false },
+        // A sign-in's session until the gateway admits it against the limit of devices.
+        pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,
       // Better Auth's refresh stays off, so it never writes `expires_at` after sign-in: its write is

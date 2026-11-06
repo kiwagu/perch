@@ -6,6 +6,7 @@ import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
+import { ADMISSION_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
@@ -89,8 +90,10 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * written. A sign-in that stands is then admitted against the account's limit of devices
  * (`AuthSessions.admit`, `signOutOldest` its confirmation): one that would bring the account past
  * it unconfirmed has its session deleted and answers 409 `device-limit`, nothing signed in; a
- * confirmed one signs out the device seen least recently, whose sockets close with 4003. An
- * admission that failed ends the new session by its token and answers 500 `internal`. Any other
+ * confirmed one signs out the device seen least recently, whose sockets close with 4003. Until
+ * then the session waits (`pending`), counted by no other admission and listed nowhere: an
+ * admission that failed answers 500 `internal` and ends the new session by its token, and should
+ * that ending fail too, the session keeps waiting, never handed out. Any other
  * answer reaches the client as its status and code alone (`refusalOf`); an
  * accepted one, without its cookies, and with `start` (`{ name, locale }`, what the account signed
  * in to signed up with) while that account has not started: its profile or its settings have not reached the
@@ -132,12 +135,13 @@ async function handedOver(
   }
 
   const { token, user } = accepted.data
-  const admission = await deps.sessions.admit(token, signOutOldest)
+  const admission = await deps.sessions.admit(user.id, token, signOutOldest)
 
   if (admission.isErr()) {
     const internal = () => Response.json({ code: 'internal' }, { status: 500 })
 
-    // The session was never handed to its device: it is ended, and the answer is 500 either way.
+    // The session was never handed to its device: it is ended, and the answer is 500 either way;
+    // an ending that failed leaves it waiting for an admission, which nothing counts or lists.
     return (await deps.sessions.signOut(token)).match(internal, internal)
   }
 
@@ -210,9 +214,19 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
 
   return settling(attempt, async () => {
     const before = await deps.passwords.credentialOf(email)
+    // The session Better Auth writes waits for its admission, whatever the client sent.
+    const headers = new Headers(request.headers)
+
+    headers.set(ADMISSION_HEADER, 'pending')
 
     return before.isErr()
       ? Response.json({ code: 'internal' }, { status: 500 })
-      : handedOver(deps, withJsonBody(request, forwarded), email, before.value, signOutOldest)
+      : handedOver(
+          deps,
+          withJsonBody(request, forwarded, headers),
+          email,
+          before.value,
+          signOutOldest,
+        )
   })
 }

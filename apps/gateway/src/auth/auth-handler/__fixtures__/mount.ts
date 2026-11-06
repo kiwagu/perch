@@ -211,6 +211,15 @@ export interface RealMountOptions extends OpenAuthOptions {
    * or holds their queries with it.
    */
   readonly organisationsDirectory?: (local: LocalDb) => LocalDb
+  /**
+   * Stands between the mount and each admission of a sign-in against the limit of devices, given
+   * the admission the sessions make: a test holds it, or answers a failure instead.
+   */
+  readonly admission?: (
+    admit: () => ReturnType<AuthSessions['admit']>,
+  ) => ReturnType<AuthSessions['admit']>
+  /** Every ending of a session by its token fails, as on a directory that takes no writes. */
+  readonly signOutFails?: boolean
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -298,13 +307,20 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           ? errAsync(dataError('data:QUERY_FAILED', READBACK_FAILURE))
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
-      signOut: (token) => sessions.signOut(token),
+      signOut: (token) =>
+        options.signOutFails === true
+          ? errAsync(dataError('data:QUERY_FAILED', 'the session could not be ended'))
+          : sessions.signOut(token),
       revokeAll: (identity) => {
         steps.push('sessions ended')
 
         return sessions.revokeAll(identity)
       },
-      admit: (token, signOutOldest) => sessions.admit(token, signOutOldest),
+      admit: (identity, token, signOutOldest) => {
+        const admit = () => sessions.admit(identity, token, signOutOldest)
+
+        return options.admission === undefined ? admit() : options.admission(admit)
+      },
     },
     ...accounts,
     deletions: accounts.accountDeletions,
