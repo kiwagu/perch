@@ -11,8 +11,8 @@ interface Own {
 const standing = (word: SessionNotice): number => SESSION_NOTICES.indexOf(word)
 
 /**
- * The word this tab's sign-in page says, from two slots. The browser's (`perch.session.notice.*`)
- * holds what a session left as it ended, for whichever tab opens the sign-in page next. This tab's
+ * The word this tab's sign-in page says, from two slots. The browser's
+ * (`perch.session.notice.<sign-in>.<code>`) holds what a session left as it ended, for whichever tab opens the sign-in page next. This tab's
  * own holds what a screen of this tab showed there on its way (a fact of this tab's move, never
  * the browser's), in memory for the page's lifetime, so another tab's sign-in page cannot take it,
  * and a later write of the browser's slot cannot replace it. A word waits from the session that
