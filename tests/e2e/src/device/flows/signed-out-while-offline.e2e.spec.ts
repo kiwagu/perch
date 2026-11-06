@@ -16,7 +16,8 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
     page,
     freshDevice,
   }) => {
-    // A sign-in waits for the sync channel.
+    // A sign-in waits for the sync channel, and device B stays offline until its reconnect delay
+    // reaches 30 seconds.
     test.slow()
 
     const data = { ...generate.account(), name: generate.name() }
@@ -48,6 +49,9 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
     await test.step("3. Take device B's browser offline", async () => {
       await network.goOffline()
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
+      // Offline long enough for its reconnect delay to reach the longest, 30 seconds: coming back
+      // online in step 5 must not wait it out.
+      await network.untilLongestReconnectDelay()
     })
 
     await test.step("4. On device A, reload [/devices], click [device.list.revoke-button] on device B's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
