@@ -22,15 +22,25 @@ export function signInMark(storage: KeyValueStorage): string {
  * `raised` (the `signInMark` as the session ended; now by default). A word raised before the last
  * sign-in on this browser is not written: that sign-in ended it. Every word of every sign-in has
  * a key of its own, so no write replaces another: one that races a sign-in names the sign-in
- * before, which the page no longer reads (`savedNotice`).
+ * before, which the page no longer reads (`savedNotice`), and its key goes as the writer sees the
+ * sign-in, or at the next sign-in when it landed as that one was kept (`markSignIn`).
  */
 export function saveNotice(
   storage: KeyValueStorage,
   notice: SessionNotice,
   raised: string = signInMark(storage),
 ): void {
-  if (raised === signInMark(storage)) {
-    storage.set(wordKey(raised, notice), notice)
+  if (raised !== signInMark(storage)) {
+    return
+  }
+
+  const key = wordKey(raised, notice)
+
+  storage.set(key, notice)
+
+  // A sign-in another tab made between the check and the write ended the word: its key goes too.
+  if (raised !== signInMark(storage)) {
+    storage.remove(key)
   }
 }
 
@@ -52,8 +62,8 @@ export function forgetNotice(storage: KeyValueStorage): void {
 /**
  * An account signed in on this browser, as its session is kept: every word raised before goes,
  * and one raised before but written later is not said. The words of the sign-in that ends go,
- * those a write racing the sign-in before it left, and any a count it does not know left under
- * the next one, then the mark moves.
+ * those a write left as the sign-in before it was kept, and any under the next one, then the mark
+ * moves. A count Perch did not write starts again at 1: words left under it are never read.
  */
 export function markSignIn(storage: KeyValueStorage): void {
   const mark = signInMark(storage)

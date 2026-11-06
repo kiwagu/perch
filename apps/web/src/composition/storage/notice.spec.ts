@@ -96,7 +96,7 @@ describe('the words for the sign-in page', () => {
     expect(savedNotice(storage)).toBe('resend-after-sign-in')
   })
 
-  it("keeps a newer sign-in's word when the same word of the sign-in before lands last, and clears that one at the next sign-in", () => {
+  it("keeps a newer sign-in's word when the same word of the sign-in before lands last, and leaves no key of that one", () => {
     const storage = memoryStorage()
     const ended = signInMark(storage)
     // Between this tab's check of the mark and its write, another tab signs in, and the session it
@@ -109,8 +109,34 @@ describe('the words for the sign-in page', () => {
     saveNotice(late, 'delete-pending', ended)
 
     expect(savedNotice(storage)).toBe('delete-pending')
+    expect(storage.get(`perch.session.notice.${ended}.delete-pending`)).toBeUndefined()
 
     forgetNotice(storage)
+
+    expect(savedNotice(storage)).toBeUndefined()
+  })
+
+  it('leaves no key of a word written after two sign-ins passed it', () => {
+    const storage = memoryStorage()
+    const ended = signInMark(storage)
+    const late = racedBy(storage, () => {
+      markSignIn(storage)
+      markSignIn(storage)
+    })
+
+    saveNotice(late, 'delete-pending', ended)
+
+    expect(savedNotice(storage)).toBeUndefined()
+    expect(storage.get(`perch.session.notice.${ended}.delete-pending`)).toBeUndefined()
+  })
+
+  it('says no word written as a sign-in is kept, and clears its key at the next sign-in', () => {
+    const storage = memoryStorage()
+    const ended = signInMark(storage)
+    // Another tab writes once this tab's sign-in cleared the words, before it moves the mark.
+    const signingIn = racedBy(storage, () => saveNotice(storage, 'delete-pending', ended))
+
+    markSignIn(signingIn)
 
     expect(savedNotice(storage)).toBeUndefined()
 
