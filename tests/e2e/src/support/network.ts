@@ -7,7 +7,7 @@
  * that no longer takes the page's sync protocol.
  */
 
-import type { Page, WebSocketRoute } from '@playwright/test'
+import { expect, type Page, type WebSocketRoute } from '@playwright/test'
 
 /** The sync socket's address on the front: `wss://<front>/backend/sync`. */
 const SYNC_SOCKET = /\/backend\/sync$/
@@ -25,11 +25,20 @@ const PROTOCOL_REFUSED = { code: 4400, reason: 'protocol' } as const
 const sendable = (code: number | undefined): code is number =>
   code === 1000 || (code !== undefined && code >= 3000 && code <= 4999)
 
+/**
+ * How long a page may take to connect again once `goOnline` brought its browser back: the app
+ * tries at once when the browser says it is online instead of waiting out its reconnect delay
+ * (up to 30 seconds), so this bounds a hello and what its answer leads to on a busy host.
+ */
+export const BACK_ONLINE_MS = 10_000
+
 export class SyncNetwork {
   readonly #page: Page
   #online = true
   #refusing = false
   #dropping = false
+  /** The sockets the page opened since the last `goOffline`, each refused while it is offline. */
+  #refused = 0
   /** The page side of the socket the page holds now. */
   #socket: WebSocketRoute | undefined
 
@@ -49,9 +58,20 @@ export class SyncNetwork {
   /** Takes the page's browser offline and drops the sync socket the page holds. */
   async goOffline(): Promise<void> {
     this.#online = false
+    this.#refused = 0
     await this.#page.context().setOffline(true)
     await this.#socket?.close(DROPPED)
     this.#socket = undefined
+  }
+
+  /**
+   * Waits, offline, until the app's reconnect delay has grown to its longest: it waits 1, 2, 4,
+   * 8 and 16 seconds before its first five attempts, each refused here, and 30 seconds after the
+   * fifth. Brought back online then, a page that only waited out its delay would connect again up
+   * to 30 seconds later.
+   */
+  async untilLongestReconnectDelay(): Promise<void> {
+    await expect.poll(() => this.#refused, { timeout: 45_000 }).toBeGreaterThanOrEqual(5)
   }
 
   /** Brings the page's browser back online; the app's next attempt connects again. */
@@ -92,6 +112,10 @@ export class SyncNetwork {
 
   async #connect(socket: WebSocketRoute): Promise<void> {
     if (!this.#online || this.#dropping) {
+      if (!this.#online) {
+        this.#refused += 1
+      }
+
       await socket.close(DROPPED)
 
       return

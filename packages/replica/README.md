@@ -211,7 +211,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
-  the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
+  the first delay, and leaves one not welcomed yet to the hello it says; with a `network`
+  (`DeviceNetwork`: `online()` and `onOnlineChange`, the platform's word on the device's
+  network), heard from `start` until a stop or an ending, the network coming back starts the
+  delays over and connects a reconnect waiting for its delay at once, leaving a socket open or
+  opening to its welcome or its close; the memberships of the
   welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
   (`signed-out`), signed out from another device (`revoked`, 4001), by a change of the

@@ -15,12 +15,7 @@ import {
   syncSays,
   test,
 } from '../../support/fixtures'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds.
- */
-const RECONNECT_MS = 35_000
+import { BACK_ONLINE_MS } from '../../support/network'
 
 test.describe('Sign in past the number of devices an account may be signed in on', {
   tag: '@full',
@@ -29,9 +24,8 @@ test.describe('Sign in past the number of devices an account may be signed in on
     page,
     freshDevices,
   }) => {
-    // Eleven devices sign in, each waiting for its sync channel, and device C may wait out a
-    // reconnect delay of up to 30 seconds: 16 s alone on the dev host, the default budget is not
-    // enough when other runs load it.
+    // Eleven devices sign in, each waiting for its sync channel: the default budget is not enough
+    // when other runs load the dev host.
     test.slow()
 
     const data = { ...generate.account(), name: generate.name() }
@@ -101,7 +95,7 @@ test.describe('Sign in past the number of devices an account may be signed in on
       await deviceC.network.goOnline()
       // Expected: After step 10 device C is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:device-limit-elsewhere]
-      await expectPathname(deviceC.page, '/sign-in', RECONNECT_MS)
+      await expectPathname(deviceC.page, '/sign-in', BACK_ONLINE_MS)
       await expect(signInNotice(deviceC.page, 'device-limit-elsewhere')).toBeVisible()
     })
 

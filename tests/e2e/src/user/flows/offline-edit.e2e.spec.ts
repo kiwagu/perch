@@ -1,22 +1,13 @@
 // scenario: user/flows/offline-edit
 import { generate } from '../../support/data'
 import { appReady, expect, test, toast } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds, and the catch-up follows.
- */
-const RECONNECT_MS = 35_000
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 
 test.describe('Edit offline and catch up when back online', { tag: '@full' }, () => {
   test('A bio written offline on one device and a name changed meanwhile on another reach both devices', async ({
     page,
     secondDevice,
   }) => {
-    // Coming back online may wait out a reconnect delay of up to 30 seconds.
-    test.slow()
-
     const data = {
       bio: generate.bio(),
       newName: generate.newName(),
@@ -75,7 +66,7 @@ test.describe('Edit offline and catch up when back online', { tag: '@full' }, ()
     // Expected:
     // - After step 6 the sync channel of device B comes up again
     await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
-      timeout: RECONNECT_MS,
+      timeout: BACK_ONLINE_MS,
     })
     // - Then both devices show the new name from device A and the bio from device B
     for (const device of [page, deviceB]) {
