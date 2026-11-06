@@ -177,7 +177,9 @@ context of its own that opens nothing and signs nothing in by itself), `appReady
 `app-shell.status` in `ready`, `APP_READY`), `signIn`
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
-the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
+the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
+the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
+500 ms), `signUp` (`startSignUp`, then
 opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
 `/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
 from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for

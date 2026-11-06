@@ -132,6 +132,8 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
 /**
  * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
+ * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
 export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
@@ -142,7 +144,12 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
   await page.getByTestId('user.sign-in.password-confirmation-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
-  await expect(checkYourMail(page)).toBeVisible()
+  await expect
+    .poll(() => checkYourMail(page).isVisible(), {
+      message: 'the sign-in page asks to check the mail',
+      intervals: [50],
+    })
+    .toBe(true)
 }
 
 /**
