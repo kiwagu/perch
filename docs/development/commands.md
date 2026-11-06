@@ -59,9 +59,9 @@ filter records none); a commit on `main` is refused without both receipts for ex
   sets it: a machine that runs nothing beside it may give vitest every core), at low CPU priority
   (`nice -n 10`, as `typecheck`, `lint` and `check` run), so an e2e run on the same host gets the
   CPU first. Measured on a 20-thread host beside an e2e run: uncapped, the unit tests took up to
-  18 threads and the e2e's slowest test went from 15 s to 22 s; capped and niced, it stayed at
-  15 s, for about 8 s more of `check` (up to 5 s more when nothing else runs). Part of the
-  pre-commit hook.
+  18 threads and the e2e's slowest test went from 15 s to 22 s; capped and niced, it took 15 to
+  16 s, and `check` took 78 to 88 s against 80 s uncapped (63 to 71 s when nothing else runs,
+  either way). Part of the pre-commit hook.
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now),
