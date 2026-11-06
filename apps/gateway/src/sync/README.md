@@ -70,7 +70,12 @@ A device whose session a change of the account's password ended (a reset link, w
 session of the account, or a change on another device, which ends every other one) is closed the
 same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
 tell its person why; a hello whose registration such a close refuses, while it is under way, is
-closed with 4001 as for any other close.
+closed with 4001 as for any other close. A device whose session a sign-in on another device ended
+at the account's limit of devices is closed the same way with 4003 (`CLOSE.deviceLimit`,
+`signed out by a sign-in past the limit of devices`). A device offline when one of these ended its
+session hears the same close at its next hello: a hello whose token reads no live session is
+closed with the code its row's `ended_reason` names (4001, 4002, 4003) when the row is the
+hello's device's, and with 4401 otherwise; a row that cannot be read closes it with 1011.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
 of an email opened on it, closes the identity's sockets on that device the same way, with 1000
 (`another connection of this device took over`): its session ended the earlier one, and the

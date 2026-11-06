@@ -40,6 +40,17 @@ DEFINE FIELD OVERWRITE last_seen_at ON device_session TYPE datetime
 -- after those instants, so only this mark tells the write the session must stay ended. NONE
 -- while the session is live, and once it merely expired.
 DEFINE FIELD OVERWRITE ended_at ON device_session TYPE option<datetime>;
+-- Why another device or the account's own change signed this one out, set with `ended_at` by an
+-- ending that found the session live and never changed afterwards: `revoked` (signed out from
+-- another device, or every device at once), `password-changed` (the account's password changed,
+-- on another device or through a reset link), `device-limit` (a sign-in on another device went
+-- past the account's limit of devices, this one seen least recently). The device hears it at its
+-- next hello, also after it was offline when its session ended. NONE while the session is live,
+-- for an ending of the device's own (its sign-out, a new sign-in of the device) and for one that
+-- merely expired.
+DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
+  ASSERT $value = NONE
+  OR $value IN ['revoked', 'password-changed', 'device-limit'];
 
 DEFINE INDEX OVERWRITE device_session_token ON device_session FIELDS token
   UNIQUE;

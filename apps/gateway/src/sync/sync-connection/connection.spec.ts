@@ -35,9 +35,11 @@ import {
   openAuth,
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
+import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
 import { authHandler } from '../../auth/auth-handler'
 import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
+import { DeviceSessions } from '../../auth/device-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
@@ -306,6 +308,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   const unsubscribed: string[] = []
   const socket = new FakeSocket()
   const read = (token: string) => sessions.read(token)
+  const devices = new DeviceSessions({ directory: gateway.local, clock: gateway.clock })
   const connection = new SyncConnection(socket, {
     sessions: {
       read: (token) => {
@@ -321,6 +324,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
 
         return okAsync(undefined)
       },
+      byToken: (token) => devices.byToken(token),
     },
     hub: {
       subscribe: hub.subscribe.bind(hub),
@@ -557,6 +561,50 @@ describe('SyncConnection', () => {
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
     expect(seen).toEqual([])
+  })
+
+  it.each([
+    { reason: 'revoked', code: CLOSE.revoked, text: 'signed out from another device' },
+    {
+      reason: 'password-changed',
+      code: CLOSE.passwordChanged,
+      text: 'signed out because the password changed',
+    },
+    {
+      reason: 'device-limit',
+      code: CLOSE.deviceLimit,
+      text: 'signed out by a sign-in past the limit of devices',
+    },
+  ])(
+    'closes with $code the hello of a device whose session ended as $reason while it was offline',
+    async ({ reason, code, text }) => {
+      const { socket, connection, ann, connections, seen, local, clock } = await connect()
+
+      await local.db.query(endWithStatement, {
+        session_token: ann.token,
+        ended_at: new Date(clock.now()),
+        reason,
+      })
+      await hello(connection, ann.token)
+
+      expect(socket.closes).toEqual([[code, text]])
+      expect(socket.sent).toEqual([])
+      expect(connections.forIdentity(ann.identity.id)).toEqual([])
+      expect(seen).toEqual([])
+    },
+  )
+
+  it("closes 4401 a hello under another device than its ended session's, whatever ended it", async () => {
+    const { socket, connection, ann, local, clock } = await connect()
+
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await hello(connection, ann.token, 'device-phone')
+
+    expect(socket.closes).toEqual([[CLOSE.unauthorized, 'the session was not accepted']])
   })
 
   it('closes as a failed server a hello whose session could not be read, and welcomes it once it can', async () => {

@@ -57,7 +57,14 @@ another device is refused.
 A session ends and is never deleted: its row's `expires_at` and `ended_at` become the moment it
 ended, on the gateway's clock, and the row stays, so a device signed out from another one stays
 listed with that moment. `ended_at` is set once and never moved or cleared, and empty only while
-the session is live or has expired with nothing having ended it. Every ending is the gateway's
+the session is live or has expired with nothing having ended it. An ending that finds the session
+live and comes from elsewhere also sets `ended_reason`, in the same update and as fixed: `revoked`
+(signed out from another device, or every device at once), `password-changed` (the account's
+password changed, on another device or through a reset link) or `device-limit` (a sign-in past
+the account's limit of devices); the device's own sign-out, a new sign-in of the same device and
+an expiry leave it empty. A hello whose token reads no live session is closed with the code of
+that reason, so a device offline when its session ended still learns why while the row is kept
+(`sync/README.md`). Every ending is the gateway's
 own update of `device_session` (`AuthSessions`: one session by its token, one session of an
 identity by its id, or every session of an identity; the session hooks: all but the newest
 session of a device at a sign-in), which leaves a session that ended already with its end and
