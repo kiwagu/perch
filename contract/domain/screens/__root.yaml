@@ -167,6 +167,9 @@ flow:
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -242,6 +245,9 @@ flow:
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
