@@ -1026,9 +1026,10 @@ raises it.
 A message whose codes more than one source may raise before it shows (an effect of the app
 and a `show` of a flow on its way there) says which one it shows in its structure:
 `ranked: true`, with its `codes` in rank order. Of the codes raised before it shows, it shows
-the first, and the others go with it. `contract:check` takes `ranked` on a message of two
-codes or more, each listed once, and `contract:diff` lists each ranked message with its order
-(see "Handing over a change").
+the first, and the others go with it. A code raised waits until the message shows or a flow
+clears it: a `clear` of the message, in any flow, takes away every code raised before it.
+`contract:check` takes `ranked` on a message of two codes or more, each listed once, and
+`contract:diff` lists each ranked message with its order (see "Handing over a change").
 
 ## Scenarios
 
