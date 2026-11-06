@@ -258,7 +258,7 @@ class Engine implements SyncEngine {
           ),
         )
       })
-      .with(P.union('revoked', 'password-changed'), () => this.#stopPasses())
+      .with(P.union('revoked', 'password-changed', 'device-limit'), () => this.#stopPasses())
       .with(P.union('unauthorized', 'signed-out'), () => {})
       .exhaustive()
   }

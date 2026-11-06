@@ -29,6 +29,10 @@ function endReason(code: number): string {
     return REASON.passwordChanged
   }
 
+  if (code === CLOSE.deviceLimit) {
+    return REASON.deviceLimit
+  }
+
   return code === SUPERSEDED ? REASON.superseded : REASON.revoked
 }
 

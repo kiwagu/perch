@@ -327,6 +327,49 @@ describe('SignInContainer', () => {
     expect(messageText()).not.toContain(carol)
   })
 
+  it('asks before signing in past the limit of devices, then signs in all the same once confirmed', async () => {
+    let user: AuthUser | undefined
+    const confirmations: Array<boolean | undefined> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input) => {
+        confirmations.push(input.signOutOldest)
+
+        if (input.signOutOldest !== true) {
+          return errAsync({
+            code: 'data:DEVICE_LIMIT',
+            message: 'the account is on as many devices as it may be',
+          })
+        }
+
+        user = ann
+
+        return okAsync(ann)
+      },
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'Pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const dialog = await screen.findByTestId('user.sign-in.device-limit-dialog')
+
+    expect(dialog.getAttribute('data-code')).toBe('device-limit')
+    expect(router.state.location.pathname).toBe('/sign-in')
+
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(router.state.location.pathname).toBe('/me')
+    expect(confirmations).toEqual([undefined, true])
+  })
+
   it('offers the resend when a sign-in is refused because the email is not verified yet', async () => {
     const session: SessionPort = {
       ...fakeSession().session,

@@ -1,11 +1,12 @@
-import { errAsync, okAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import { type AuthUser, dataError } from '@workspace/data'
+import { identityIdFactory } from '@workspace/ids'
 
 import type { Passwords } from '../../domain/password-confirmation.rule'
-import type { SignInError, SignInForm } from '../sign-in.service'
+import type { SignInError, SignInForm, SignInOutcome } from '../sign-in.service'
 
 import { createSignInMachine, type SignInEvent } from '.'
 
@@ -29,7 +30,7 @@ function form() {
   const actor = createActor(
     createSignInMachine({
       signIn: () =>
-        errAsync<AuthUser, SignInError>(
+        errAsync<SignInOutcome, SignInError>(
           dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'),
         ),
       signUp: (signed) => {
@@ -382,6 +383,105 @@ describe('the rules of a new password at sign-up', () => {
       context: { error: undefined },
     })
   })
+})
+
+/** Ann, as a sign-in that goes through answers. */
+const annUser: AuthUser = { id: identityIdFactory.create(), email: ann.email }
+
+/** A sign-in that finds the account on as many devices as it may be, signing nothing in. */
+const atTheLimit = () => okAsync<SignInOutcome, SignInError>({ kind: 'device-limit' })
+
+/** A sign-in that signs Ann in. */
+const signedIn = () => okAsync<SignInOutcome, SignInError>({ kind: 'signed-in', user: annUser })
+
+/**
+ * The sign-in form over a service whose sign-ins answer `answers` in turn, recording whether each
+ * one confirmed signing out the device seen least recently; nothing else is asked here.
+ */
+function limited(answers: ReadonlyArray<() => ResultAsync<SignInOutcome, SignInError>>) {
+  const confirmed: boolean[] = []
+  const actor = createActor(
+    createSignInMachine({
+      signIn: (_form, signOutOldest) => {
+        const answer = answers[confirmed.length] ?? expect.unreachable('no sign-in beyond these')
+
+        confirmed.push(signOutOldest)
+
+        return answer()
+      },
+      signUp: () => okAsync(undefined),
+      resend: () => okAsync(undefined),
+    }),
+  ).start()
+  const emitted: unknown[] = []
+
+  actor.on('*', (event) => emitted.push(event))
+
+  return { actor, confirmed, emitted }
+}
+
+/** The dialog's confirmation, with Ann's form as typed. */
+const confirmedAnyway: SignInEvent = {
+  type: 'user.sign-in.device-limit-dialog.confirm-button',
+  form: ann,
+}
+
+/** What the form asks its host to show once a sign-in finds the account at its limit. */
+const ASKED = { type: 'show', anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] }
+
+describe('a sign-in past the limit of devices', () => {
+  it('asks in its dialog, then signs in all the same once confirmed, signing out the device seen least recently', async () => {
+    const { actor, confirmed, emitted } = limited([atTheLimit, signedIn])
+
+    actor.send(submitted(''))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+
+    expect(confirmed).toEqual([false])
+    expect(emitted).toEqual([ASKED])
+
+    actor.send(confirmedAnyway)
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(confirmed).toEqual([false, true])
+    expect(emitted).toEqual([
+      ASKED,
+      { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
+      { type: 'navigate', to: '/me' },
+    ])
+  })
+
+  it('goes back to the form on cancel, asking nothing more', async () => {
+    const { actor, confirmed } = limited([atTheLimit])
+
+    actor.send(submitted(''))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+    actor.send({ type: 'user.sign-in.device-limit-dialog.cancel-button' })
+
+    expect(actor.getSnapshot().value).toBe('sign-in')
+    expect(confirmed).toEqual([false])
+  })
+
+  it.each([
+    ['data:EMAIL_NOT_VERIFIED', 'unverified'],
+    ['data:INVALID_CREDENTIALS', 'sign-in'],
+  ] as const)(
+    'shows %s, refusing the confirmed sign-in, as a refused sign-in does',
+    async (code, state) => {
+      const { actor } = limited([
+        atTheLimit,
+        () => errAsync<SignInOutcome, SignInError>(dataError(code, 'the sign-in was refused')),
+      ])
+
+      actor.send(submitted(''))
+      await waitFor(actor, (snapshot) => snapshot.matches('device-limit'))
+      actor.send(confirmedAnyway)
+
+      const refused = await waitFor(actor, (snapshot) => snapshot.context.error !== undefined)
+
+      expect(refused.value).toBe(state)
+      expect(refused.context.error).toBe(code)
+    },
+  )
 })
 
 describe('the forgot-link', () => {

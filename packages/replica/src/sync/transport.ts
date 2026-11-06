@@ -16,10 +16,18 @@ export type ChannelState = 'up' | 'down'
 /**
  * Why a channel ended for good: the gateway refused the token, signed the device out at its own
  * request, refused the protocol this device speaks (an application older than the gateway),
- * signed the device out from another device (`revoked`), or ended its session because the
- * account's password changed, through a reset link or on another device (`password-changed`).
+ * signed the device out from another device (`revoked`), ended its session because the
+ * account's password changed, through a reset link or on another device (`password-changed`), or
+ * because a sign-in on another device went past the account's limit of devices
+ * (`device-limit`).
  */
-export type EndReason = 'unauthorized' | 'signed-out' | 'protocol' | 'revoked' | 'password-changed'
+export type EndReason =
+  | 'unauthorized'
+  | 'signed-out'
+  | 'protocol'
+  | 'revoked'
+  | 'password-changed'
+  | 'device-limit'
 
 export interface DeviceCredentials {
   readonly token: string
@@ -95,6 +103,7 @@ const ENDINGS: ReadonlyMap<number, EndReason> = new Map([
   [CLOSE.signedOut, 'signed-out'],
   [CLOSE.revoked, 'revoked'],
   [CLOSE.passwordChanged, 'password-changed'],
+  [CLOSE.deviceLimit, 'device-limit'],
 ])
 
 /** Why a close with `code` ends the channel for good; `undefined` for a close a reconnect follows. */

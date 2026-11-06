@@ -8,8 +8,10 @@ export const PROTOCOL_VERSION = 8
 /**
  * Close codes of the gateway: a message the protocol refuses, a session token it refuses, a
  * region of somebody else, a hello that did not come in time, a sign-out, a device signed out
- * from another device (one device, or every device of the identity), and a device signed out
- * because the account's password changed (by a reset link, or on another device).
+ * from another device (one device, or every device of the identity), a device signed out
+ * because the account's password changed (by a reset link, or on another device), and a device
+ * signed out because a sign-in on another one went past the account's limit of devices, this one
+ * seen least recently.
  */
 export const CLOSE = {
   protocol: 4400,
@@ -19,6 +21,7 @@ export const CLOSE = {
   signedOut: 4000,
   revoked: 4001,
   passwordChanged: 4002,
+  deviceLimit: 4003,
 } as const
 
 /** The id a device names itself with: the browser's own stable id, minted on first use. */

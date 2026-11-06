@@ -25,7 +25,10 @@ import { SpaceEnding } from './space'
 export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
 /** Why the gateway signed the device out, as the sign-in page says it. */
-export type ElsewhereNotice = 'signed-out-elsewhere' | 'password-changed-elsewhere'
+export type ElsewhereNotice =
+  | 'signed-out-elsewhere'
+  | 'password-changed-elsewhere'
+  | 'device-limit-elsewhere'
 
 /** How a forced sign-out ended: done, or left to a sign-in another tab made while it waited. */
 export type ForcedSignOut = 'signed-out' | 'signed-in-since'
