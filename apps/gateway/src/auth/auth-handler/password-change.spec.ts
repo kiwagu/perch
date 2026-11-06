@@ -7,6 +7,7 @@ import { linkToken } from '../../mail/__fixtures__/outbox'
 import cancelAllowStatement from '../__fixtures__/email-change-cancel-allow.surql'
 import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.surql'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
+import { DeviceSessions } from '../device-sessions'
 
 import {
   ANN,
@@ -58,6 +59,18 @@ describe('authHandler, the change of a password', () => {
       [ann.identity, 'phone', CLOSE.passwordChanged],
       [ann.identity, 'tablet', CLOSE.passwordChanged],
     ])
+
+    // Each device signed out keeps why, for its next hello; the device that changed it, nothing.
+    const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
+    const reasonOf = async (device: string) =>
+      (
+        (await devices.byToken(ann.tokens.get(device) ?? ''))._unsafeUnwrap() ??
+        expect.unreachable('a row')
+      ).endedReason
+
+    expect(await reasonOf('laptop')).toBeUndefined()
+    expect(await reasonOf('phone')).toBe('password-changed')
+    expect(await reasonOf('tablet')).toBe('password-changed')
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'phone'), FROM))?.status).toBe(200)
   })

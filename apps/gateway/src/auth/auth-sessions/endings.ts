@@ -30,6 +30,41 @@ const signOutAnswer = z.array(z.boolean())
 /** What an ending of several sessions answers: the device of each session marked, and whether it was live. */
 const endedSessions = z.array(z.object({ device: z.string(), live: z.boolean() }))
 
+/**
+ * What a sign-in's admission against the limit of devices did: let it in as it is (`admitted`),
+ * deleted its session, not confirmed past the limit (`asked`), or let it in and signed out the
+ * other device seen least recently (`signed-out`).
+ */
+export type SignInAdmission =
+  | { readonly kind: 'admitted' }
+  | { readonly kind: 'asked' }
+  | { readonly kind: 'signed-out'; readonly device: string }
+
+/** What the admission of a sign-in answers. */
+const admissionAnswer = z.object({
+  outcome: z.enum(['admitted', 'asked', 'signed-out']),
+  device: z.string().optional(),
+})
+
+/** The admission of a sign-in as the directory answered it. */
+export function toSignInAdmission(value: unknown): Result<SignInAdmission, DataError> {
+  const answer = admissionAnswer.safeParse(value)
+
+  if (!answer.success) {
+    return err(dataError('data:QUERY_FAILED', 'the admission of a sign-in has an unknown shape'))
+  }
+
+  const { outcome, device } = answer.data
+
+  if (outcome !== 'signed-out') {
+    return ok({ kind: outcome })
+  }
+
+  return device === undefined
+    ? err(dataError('data:QUERY_FAILED', 'the admission of a sign-in signed out no device'))
+    : ok({ kind: 'signed-out', device })
+}
+
 /** The devices whose session an ending of several sessions ended while it was live, each once. */
 export function toEndedDevices(value: unknown): Result<readonly string[], DataError> {
   const answer = endedSessions.safeParse(value)

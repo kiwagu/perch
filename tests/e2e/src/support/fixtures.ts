@@ -43,6 +43,16 @@ export interface FreshDevice {
   open(): Promise<Page>
 }
 
+/**
+ * Devices for an account the test makes itself, as many as it opens: each a browser of its own
+ * (a context of its own, so its own storage, Web Locks and BroadcastChannel) that signs nothing in
+ * by itself.
+ */
+export interface FreshDevices {
+  /** Opens one more device and gives its page, on no address yet. */
+  open(): Promise<Page>
+}
+
 interface Fixtures {
   /**
    * A user who has just signed up through the sign-in page, opened the link of the verification
@@ -52,6 +62,7 @@ interface Fixtures {
   readonly secondDevice: SecondDevice
   readonly anotherAccount: AnotherAccount
   readonly freshDevice: FreshDevice
+  readonly freshDevices: FreshDevices
 }
 
 /** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
@@ -65,6 +76,13 @@ export async function appReady(page: Page): Promise<void> {
 /** The shell's notice, located by its anchor and its contract code together. */
 export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
+
+/** Waits until the shell's word on the sync carries `code` (by default `synced`). */
+export async function syncSays(page: Page, code = 'synced', timeout = 15_000): Promise<void> {
+  await expect(page.getByTestId('app-shell.sync-message')).toHaveAttribute('data-code', code, {
+    timeout,
+  })
+}
 
 /** One toast of the frame, located by its anchor and its contract code together. */
 export const toast = (page: Page, code: string) =>
@@ -245,6 +263,23 @@ const extended = base.extend<Fixtures>({
 
     await use({ open: device.open })
     await device.close()
+  },
+  freshDevices: async ({ browser, contextOptions, baseURL }, use) => {
+    const devices: { close(): Promise<void> }[] = []
+
+    await use({
+      open: () => {
+        const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
+
+        devices.push(device)
+
+        return device.open()
+      },
+    })
+
+    for (const device of devices) {
+      await device.close()
+    }
   },
 })
 

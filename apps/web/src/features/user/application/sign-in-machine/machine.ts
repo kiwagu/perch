@@ -21,6 +21,28 @@ function formInput({ event }: { readonly event: SignInEvent }): { readonly form:
   return { form: event.form }
 }
 
+/** What a sign-in invokes with: the form, and whether it signs out the device seen least recently. */
+interface SignInAttempt {
+  readonly form: SignInForm
+  readonly signOutOldest: boolean
+}
+
+/**
+ * The sign-in the submit button asks for, or the one the dialog past the limit of devices
+ * confirms, which signs out the account's device seen least recently.
+ */
+function signInInput({ event }: { readonly event: SignInEvent }): SignInAttempt {
+  assertEvent(event, [
+    'user.sign-in.submit-button',
+    'user.sign-in.device-limit-dialog.confirm-button',
+  ])
+
+  return {
+    form: event.form,
+    signOutOldest: event.type === 'user.sign-in.device-limit-dialog.confirm-button',
+  }
+}
+
 /** The email the resend button sent, which the resend takes. */
 function emailInput({ event }: { readonly event: SignInEvent }): { readonly email: string } {
   assertEvent(event, 'user.sign-in.resend-button')
@@ -52,6 +74,31 @@ const showMail = {
   params: { anchor: MAIL_MESSAGE, codes: [CHECK_YOUR_MAIL] },
 } as const
 
+/** The welcome a sign-in that went through says, and the move to the profile. */
+const welcomed = [
+  { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
+  { type: 'navigate', params: { to: '/me' } },
+] as const
+
+/** The dialog asking whether to sign in past the limit of devices. */
+const askPastTheLimit = {
+  type: 'show',
+  params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
+} as const
+
+/** A refused sign-in: one of an email not verified yet offers the resend, any other goes back. */
+const refusedSignIn = [
+  {
+    target: 'unverified',
+    guard: 'emailNotVerified',
+    actions: [showError('email-not-verified')],
+  },
+  {
+    target: 'sign-in',
+    actions: [showError('invalid-credentials', 'rate-limited', 'other-account', 'failed')],
+  },
+] as const
+
 /**
  * The switch into the mode sign-up, judging the passwords as typed with `clear` on the way: to
  * `password-weak` while the password breaks a rule, else to `passwords-differ` while the password
@@ -68,7 +115,10 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * The sign-in form as the screen's flow says (`contract/domain/screens/sign-in.yaml`): the mode is
  * the state, an attempt is an invoke of its platform action, a failure goes back to the mode with
  * its code; a sign-up, or a resend of the verification mail, leaves the form in the mode sign-in
- * asking to check the mail, and a sign-in of an account not verified yet offers the resend. At
+ * asking to check the mail, and a sign-in of an account not verified yet offers the resend. A
+ * sign-in that finds the account signed in on as many devices as it may be signs nothing in and
+ * asks in its dialog; confirmed, it signs in all the same, signing out the account's device seen
+ * least recently, and the cancel goes back to the form. At
  * sign-up the password is held to the rules of a new password and the password typed again is
  * compared, as either is typed and on the switch into sign-up, and the submit is held while the
  * password breaks a rule or the two differ. In the mode sign-in the forgot-link moves to the page
@@ -85,9 +135,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     },
     guards: signInGuards,
     actors: {
-      'platform.sign-in': fromPromise(
-        ({ input }: { readonly input: { readonly form: SignInForm } }) =>
-          settled(service.signIn(input.form)),
+      'platform.sign-in': fromPromise(({ input }: { readonly input: SignInAttempt }) =>
+        settled(service.signIn(input.form, input.signOutOldest)),
       ),
       // A sign-up and a resend end with the address they mailed: the message names that one, not
       // the field's, which can change after.
@@ -216,27 +265,29 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         entry: [clearError],
         invoke: {
           src: 'platform.sign-in',
-          input: formInput,
-          onDone: {
-            target: 'done',
-            actions: [
-              { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-              { type: 'navigate', params: { to: '/me' } },
-            ],
-          },
-          onError: [
-            {
-              target: 'unverified',
-              guard: 'emailNotVerified',
-              actions: [showError('email-not-verified')],
-            },
-            {
-              target: 'sign-in',
-              actions: [
-                showError('invalid-credentials', 'rate-limited', 'other-account', 'failed'),
-              ],
-            },
+          input: signInInput,
+          onDone: [
+            { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
+            { target: 'done', actions: welcomed },
           ],
+          onError: refusedSignIn,
+        },
+      },
+      // Nothing is signed in unless the dialog is confirmed.
+      'device-limit': {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.device-limit-dialog'] },
+        on: {
+          'user.sign-in.device-limit-dialog.confirm-button': { target: 'signing-in-anyway' },
+          'user.sign-in.device-limit-dialog.cancel-button': { target: 'sign-in' },
+        },
+      },
+      'signing-in-anyway': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
+        invoke: {
+          src: 'platform.sign-in',
+          input: signInInput,
+          onDone: { target: 'done', actions: welcomed },
+          onError: refusedSignIn,
         },
       },
       'signing-up': {

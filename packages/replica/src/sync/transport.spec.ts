@@ -263,6 +263,19 @@ describe('WebSocket transport', () => {
     expect(sockets.length).toBe(1)
   })
 
+  it("stops on 4003 and reports device-limit: a sign-in past the account's limit signed it out", async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4003)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: device-limit', 'down'])
+    expect(ended).toEqual(['device-limit'])
+    expect(sockets.length).toBe(1)
+  })
+
   it('connects again after 4408, a hello the gateway stopped waiting for', async () => {
     const { clock, sockets, transport, socket, events } = harness()
 

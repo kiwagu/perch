@@ -116,19 +116,19 @@ the update; each device's next hello is then refused with 4401.
   identity with a phone's socket open (a reset request answered 202 with no body for it and for
   an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
   new password with 200 and `signedOut` false, as opened with no session, which closes the
-  phone's socket with 4002 and refuses its token at
-  hello, refuses the old password, signs in with the new one and mails the notice of a changed
+  phone's socket with 4002 and closes its token's hello with 4002 too (why its session ended),
+  refuses the old password, signs in with the new one and mails the notice of a changed
   password; the same link again answered 401 `link-invalid`); then on another identity its device
   sessions: a hello
   under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
   400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone
   signed out from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row
-  showing `revokedAt`, its token's hello closed with 4401) and signed in again (the old token
-  refused at hello with 4401 and by `GET /devices` with 401, the new one welcomed), a tablet
+  showing `revokedAt`, its token's hello closed with 4001) and signed in again (the old token's
+  hello closed with 4001 all the same, a call with it answered 401, the new one welcomed), a tablet
   signed in twice (the first session ended by the second), then every device signed out from
   the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
-  refused), a sign-in right after it answered 200 with a working token, the laptop's old token
-  refused at hello (4401), and a device signing itself out with `POST /auth/sign-out` (204 with
+  refused), a sign-in right after it answered 200 with a working token, the laptop's old token's
+  hello closed with 4001, and a device signing itself out with `POST /auth/sign-out` (204 with
   its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
   identity, the organisation path (an organisation `smoke_<time>` created, a second identity
   invited, each device welcomed with its membership and role, the invited device writing a note

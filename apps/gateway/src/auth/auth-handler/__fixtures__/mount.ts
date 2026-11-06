@@ -107,7 +107,8 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
- * account, no session is read back, no token holds a session, and nothing is signed out.
+ * account, no session is read back, no token holds a session, nothing is signed out, and every
+ * sign-in is admitted within the limit of devices.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -120,6 +121,7 @@ export const noSessions: AuthMountDeps['sessions'] = {
   read: async () => ({ kind: 'none' }),
   signOut: notHere,
   revokeAll: notHere,
+  admit: () => okAsync({ kind: 'admitted' }),
 }
 
 /**
@@ -209,6 +211,15 @@ export interface RealMountOptions extends OpenAuthOptions {
    * or holds their queries with it.
    */
   readonly organisationsDirectory?: (local: LocalDb) => LocalDb
+  /**
+   * Stands between the mount and each admission of a sign-in against the limit of devices, given
+   * the admission the sessions make: a test holds it, or answers a failure instead.
+   */
+  readonly admission?: (
+    admit: () => ReturnType<AuthSessions['admit']>,
+  ) => ReturnType<AuthSessions['admit']>
+  /** Every ending of a session by its token fails, as on a directory that takes no writes. */
+  readonly signOutFails?: boolean
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -296,11 +307,19 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           ? errAsync(dataError('data:QUERY_FAILED', READBACK_FAILURE))
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
-      signOut: (token) => sessions.signOut(token),
+      signOut: (token) =>
+        options.signOutFails === true
+          ? errAsync(dataError('data:QUERY_FAILED', 'the session could not be ended'))
+          : sessions.signOut(token),
       revokeAll: (identity) => {
         steps.push('sessions ended')
 
         return sessions.revokeAll(identity)
+      },
+      admit: (identity, token, signOutOldest) => {
+        const admit = () => sessions.admit(identity, token, signOutOldest)
+
+        return options.admission === undefined ? admit() : options.admission(admit)
       },
     },
     ...accounts,
@@ -396,8 +415,16 @@ export function signUpRequest(email: string, password = PASSWORD): Request {
   })
 }
 
-/** A sign-in of `email` with `password` from `device`, as the web sends it from the front's origin. */
-export function signInRequest(email: string, password: string, device: string): Request {
+/**
+ * A sign-in of `email` with `password` from `device`, as the web sends it from the front's origin;
+ * `signOutOldest` confirms a sign-in past the account's limit of devices.
+ */
+export function signInRequest(
+  email: string,
+  password: string,
+  device: string,
+  signOutOldest?: boolean,
+): Request {
   const headers = deviceHeaders(device)
 
   headers.set('content-type', 'application/json')
@@ -405,7 +432,9 @@ export function signInRequest(email: string, password: string, device: string): 
   return new Request('http://gateway.test/auth/sign-in/email', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(
+      signOutOldest === undefined ? { email, password } : { email, password, signOutOldest },
+    ),
   })
 }
 

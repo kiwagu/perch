@@ -25,6 +25,12 @@ import { verificationMailer } from './verification-mail'
  */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
 
+/**
+ * How many devices one account keeps signed in at once: a sign-in that would bring it past them
+ * asks first, then signs out the device seen least recently (`AuthSessions.admit`).
+ */
+export const DEVICE_LIMIT = 10
+
 /** How long a verification link verifies, in seconds: a day. */
 export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60
 
@@ -118,6 +124,8 @@ export function authOptions(options: AuthInstanceOptions) {
       additionalFields: {
         device: { type: 'string', required: true, input: false },
         label: { type: 'string', required: true, input: false },
+        // A sign-in's session until the gateway admits it against the limit of devices.
+        pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,
       // Better Auth's refresh stays off, so it never writes `expires_at` after sign-in: its write is

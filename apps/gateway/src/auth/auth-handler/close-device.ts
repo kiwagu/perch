@@ -10,10 +10,11 @@ import { DEVICE_HEADER } from '../session-hooks'
 const acceptedBody = z.object({ user: z.object({ id: idSchemas.identity.schema }) })
 
 /**
- * Closes, with 1000, the sync sockets of the device a sign-in Better Auth accepted (`response`,
- * 200) was made on, for the identity its answer names. The new session ended the
- * identity's earlier one on that device, and a socket opened with the earlier token would
- * otherwise go on reading and writing with it, however long the new token stays unused. The
+ * Closes, with 1000, the sync sockets of the device a sign-in was made on, once Better Auth
+ * accepted it (`response`, 200) and the gateway admitted it, for the identity its answer names.
+ * The admission ended the identity's earlier session on that device, and a socket opened with
+ * the earlier token would otherwise go on reading and writing with it, however long the new
+ * token stays unused. The
  * close also moves the device's epoch, so a hello with the earlier token whose session read is
  * under way is refused at registration. An answer that is not 200, names no identity, or comes
  * for a request naming no device closes nothing, and nothing of it is logged. Better Auth's

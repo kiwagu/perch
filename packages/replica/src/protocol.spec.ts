@@ -123,6 +123,10 @@ describe('sync protocol', () => {
     expect(CLOSE.passwordChanged).toBe(4002)
   })
 
+  it("closes a device signed out by a sign-in past the account's limit of devices with 4003", () => {
+    expect(CLOSE.deviceLimit).toBe(4003)
+  })
+
   it('refuses text that is not JSON', () => {
     expect(decodeMessage(serverMessage, 'not json').isErr()).toBe(true)
   })
