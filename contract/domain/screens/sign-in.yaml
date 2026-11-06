@@ -24,7 +24,7 @@ anchors:
     description: The form, in the mode sign-in or sign-up; its heading names the mode.
   user.sign-in.notice-message:
     kind: message
-    description: Why the last session on this device ended; shown once, while the page stays open.
+    description: Why the last session on this device ended, also one that ended while the device was offline, said once it connects again; shown once, while the page stays open.
     ranked: true
     codes: [ resend-after-sign-in, delete-pending, password-reset-elsewhere, signed-out-elsewhere, password-changed-elsewhere, device-limit-elsewhere ]
   user.sign-in.mail-message:
