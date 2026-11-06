@@ -10,21 +10,14 @@ import {
   test,
   toast,
 } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds.
- */
-const RECONNECT_MS = 35_000
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 
 test.describe('Change the password while another device is offline', { tag: '@full' }, () => {
   test('A device signed out by a change of the password while it was offline learns why when it connects again', async ({
     page,
     freshDevice,
   }) => {
-    // A sign-in waits for the sync channel, and coming back online may wait out a reconnect delay
-    // of up to 30 seconds.
+    // A sign-in waits for the sync channel.
     test.slow()
 
     const data = {
@@ -75,7 +68,7 @@ test.describe('Change the password while another device is offline', { tag: '@fu
       await network.goOnline()
       // Expected: After step 5 device B is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:password-changed-elsewhere]
-      await expectPathname(deviceB, '/sign-in', RECONNECT_MS)
+      await expectPathname(deviceB, '/sign-in', BACK_ONLINE_MS)
       await expect(signInNotice(deviceB, 'password-changed-elsewhere')).toBeVisible()
     })
   })

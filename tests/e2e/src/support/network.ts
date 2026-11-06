@@ -25,6 +25,13 @@ const PROTOCOL_REFUSED = { code: 4400, reason: 'protocol' } as const
 const sendable = (code: number | undefined): code is number =>
   code === 1000 || (code !== undefined && code >= 3000 && code <= 4999)
 
+/**
+ * How long a page may take to connect again once `goOnline` brought its browser back: the app
+ * tries at once when the browser says it is online instead of waiting out its reconnect delay
+ * (up to 30 seconds), so this bounds a hello and what its answer leads to on a busy host.
+ */
+export const BACK_ONLINE_MS = 10_000
+
 export class SyncNetwork {
   readonly #page: Page
   #online = true

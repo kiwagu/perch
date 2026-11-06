@@ -1,14 +1,8 @@
 // scenario: user/flows/signed-out-with-unsent-changes
 import { generate } from '../../support/data'
 import { appReady, expect, signIn, signInNotice, test, toast } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 import { databases, identityDatabase } from '../../support/storage'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds, and the gateway's refusal of its signed-out session follows.
- */
-const RECONNECT_MS = 35_000
 
 test.describe('Sign a device out from another one while it holds changes not sent yet', {
   tag: '@full',
@@ -18,9 +12,6 @@ test.describe('Sign a device out from another one while it holds changes not sen
     signedIn,
     secondDevice,
   }) => {
-    // Coming back online may wait out a reconnect delay of up to 30 seconds.
-    test.slow()
-
     const data = { unsentName: generate.newName() }
     // Device A's sync socket goes through the test from its next load, so step 3 can drop it.
     const network = await SyncNetwork.attach(page)
@@ -90,7 +81,7 @@ test.describe('Sign a device out from another one while it holds changes not sen
       // Expected: After step 6 device A is on [/sign-in], where [user.sign-in.notice-message]
       //   carries [code:resend-after-sign-in], and its browser keeps the local database of the
       //   account
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: RECONNECT_MS })
+      await expect(page).toHaveURL(/\/sign-in$/, { timeout: BACK_ONLINE_MS })
       await expect(signInNotice(page, 'resend-after-sign-in')).toBeVisible()
       expect(await databases(page), "device A's database of the account").toContain(database)
     })
