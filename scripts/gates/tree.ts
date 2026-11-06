@@ -5,7 +5,7 @@
  * every tracked file is byte-identical.
  */
 
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdtempSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -31,12 +31,22 @@ export function topLevel(): string {
   return git(['rev-parse', '--show-toplevel'])
 }
 
-export function currentBranch(): string | undefined {
-  try {
-    return git(['symbolic-ref', '--short', '-q', 'HEAD'])
-  } catch {
-    return undefined
+/**
+ * The full ref of the branch HEAD is on (`refs/heads/main`), `''` on a detached HEAD, which
+ * `symbolic-ref` answers with status 1, or undefined when git cannot tell. Never the short name:
+ * beside a tag of the same name, `symbolic-ref --short` prints `heads/<branch>`.
+ */
+export function headRef(): string | undefined {
+  const run = spawnSync('git', ['symbolic-ref', '--quiet', 'HEAD'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'inherit'],
+  })
+
+  if (run.status === 0) {
+    return run.stdout.trim()
   }
+
+  return run.status === 1 ? '' : undefined
 }
 
 /** The tree that `git commit` would record right now: the index. */

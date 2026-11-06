@@ -8,7 +8,9 @@ model no screen shows yet. The second is the code's: how many of the
 controls a user can act on carry an anchor, per feature module of the web app and for the UI
 kit, which are left unmarked and which are declared off the coverage by a marker, and how
 many anchors and scenarios each screen has. `bun run contract:coverage --write` rewrites the
-block below from the code and the contract; the text around it is written by hand.
+block below from the code and the contract; the text around it is written by hand. The block
+stays what that command writes: `bun run contract:coverage:check` fails when it is not, in `bun
+run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
@@ -92,16 +94,16 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 1 |
-| app-shell | 21 | 63 |
+| app-shell | 21 | 67 |
 | user.confirm-email | 5 | 4 |
 | user.delete-account | 4 | 5 |
-| device | 10 | 1 |
+| device | 10 | 2 |
 | user.forgot-password | 6 | 11 |
-| user.profile | 10 | 50 |
+| user.profile | 10 | 53 |
 | organisation | 30 | 12 |
 | user.reset-password | 15 | 9 |
-| user.settings | 27 | 21 |
-| user.sign-in | 19 | 40 |
+| user.settings | 27 | 22 |
+| user.sign-in | 19 | 42 |
 | user.verify-email | 7 | 6 |
 
 <!-- coverage:end -->

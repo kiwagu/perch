@@ -23,6 +23,7 @@ import {
   savedIdentity,
   savedMemberships,
   savedToken,
+  tokenRecord,
 } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
@@ -334,7 +335,7 @@ describe('a sign-in whose space does not open', () => {
       get: (key) => {
         if (armed && !thrown && key === 'perch.device.id') {
           thrown = true
-          throw new Error(`the storage broke beside ${memory.get('perch.session.token')}`)
+          throw new Error(`the storage broke beside ${savedToken(memory)}`)
         }
 
         return memory.get(key)
@@ -525,7 +526,7 @@ describe('a sign-in that throws while it holds its token', () => {
     auth.requests.splice(0)
     unreachableSignOuts(auth)
     // Another tab keeps Ann signed in with a token of its own.
-    storage.changeElsewhere('perch.session.token', 'token-of-the-other-tab')
+    storage.changeElsewhere('perch.session.token', tokenRecord(made.id, 'token-of-the-other-tab'))
     storage.changeElsewhere(
       'perch.session.identity',
       JSON.stringify({ id: made.id, email: made.email }),

@@ -309,6 +309,7 @@ actions:
       - admin
 events:
   started: "The start is done: the browser keeps site data and the app knows who is signed in on this device, so the frame and the open screen can render."
+  start-failed: The app's code did not load or run on this device, so it could not start or tell who is signed in.
   opened: The signed-in account's local data is open.
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
@@ -391,4 +392,5 @@ status:
     - opening-data
     - ready
     - failed
+    - start-failed
     - storage-blocked

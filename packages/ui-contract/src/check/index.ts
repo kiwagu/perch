@@ -12,6 +12,7 @@ export {
   modelTargetOf,
   own,
 } from './contract'
+export { descriptionsProblems } from './descriptions'
 export {
   type DeepTarget,
   deepEnteredOf,

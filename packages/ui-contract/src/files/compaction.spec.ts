@@ -229,14 +229,17 @@ describe('a screen compacted by the derivations', () => {
     })
   })
 
-  it('passes the contract check both ways, and the diff between the two is none', () => {
+  it('passes the contract check both ways, and the diff between the two is the descriptions the compacted one leaves to the composite', () => {
     const written = repositoryWith(true)
     const compact = repositoryWith(false)
 
     expect(checkContract(written)).toEqual([])
     expect(checkContract(compact)).toEqual([])
-    expect(formatChanges(diffContracts(contractAt(written), contractAt(compact)))).toBe(
-      'contract changes: none',
-    )
+    expect(
+      formatChanges(diffContracts(contractAt(written), contractAt(compact))).split('\n'),
+    ).toEqual([
+      'contract changes: 3 descriptions changed',
+      'descriptions changed: sample.sign-in.password-rule-list 31 -> gone, sample.sign-in.password-rule-list.digit-item 19 -> gone, sample.sign-in.password-rule-list.length-item 20 -> gone',
+    ])
   })
 })

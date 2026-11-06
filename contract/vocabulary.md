@@ -128,6 +128,7 @@ The `data-state` of `app-shell.status`.
 | `opening-data` | the signed-in account's frame and the open screen are rendered while its local data is being opened |
 | `ready` | the frame and the screen are rendered, and a signed-in account's data is open, so a test may start |
 | `failed` | the saved account's data could not be opened, and the frame offers `app-shell.sign-out-here-button` |
+| `start-failed` | the app's code did not load or run, so it did not start, and the frame offers no sign-out |
 | `storage-blocked` | the browser keeps no site data, so the app stops with a message and shows no sign-in form |
 
 ## Container states
@@ -265,7 +266,7 @@ screen name of its own.
 
 | Role | Meaning |
 |---|---|
-| `guest` | nobody is signed in on the device |
+| `guest` | nobody is signed in on the device; for the frame also a device whose saved account is not open: while the app starts, when its start or its data fails, and while it signs out from there |
 | `identity` | an account is signed in, with or without organisations |
 | `member` | the signed-in account is a member of the current organisation |
 | `admin` | the signed-in account administers the current organisation |

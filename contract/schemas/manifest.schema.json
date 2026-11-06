@@ -388,7 +388,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the screen is for: the task it serves and when it is shown."
+            "description": "What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters."
           },
           "frame": {
             "description": "The frame around every screen: it has no route of its own.",
@@ -509,7 +509,7 @@
                             "type": "string"
                           },
                           "description": {
-                            "description": "What the parameter means.",
+                            "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                             "type": "string"
                           },
                           "x-perch": {
@@ -670,7 +670,7 @@
                             "type": "string"
                           },
                           "description": {
-                            "description": "What the parameter means.",
+                            "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                             "type": "string"
                           },
                           "x-perch": {
@@ -807,7 +807,7 @@
                   "description": "The kind of the anchor; matches the end of its last segment."
                 },
                 "description": {
-                  "description": "What the element is, for a reader.",
+                  "description": "What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
                   "type": "string"
                 },
                 "binding": {
@@ -1081,6 +1081,11 @@
                     "description": "A code of the vocabulary (data-code)."
                   }
                 },
+                "ranked": {
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.",
+                  "type": "boolean",
+                  "const": true
+                },
                 "fields": {
                   "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
                   "type": "object",
@@ -1222,13 +1227,14 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The states of the screen with their meaning.",
+            "description": "The container states of the screen, each with what is visible in it.",
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "type": "string"
+              "type": "string",
+              "description": "What is visible on the screen in this container state; the vocabulary says what the state means, and each anchor what it is for in a description of its own. At most 200 characters."
             }
           },
           "flow": {
@@ -1240,7 +1246,7 @@
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
               "description": {
-                "description": "What the flow is, for a reader.",
+                "description": "What the flow does as a whole that no single state says: how its areas or its modes go together. Its states, events, guards and effects say the rest. At most 200 characters.",
                 "type": "string"
               },
               "initial": {
@@ -1264,7 +1270,7 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "description": "What the guard holds, in a sentence."
+                          "description": "What the guard holds, in one sentence the app implements; a guard that tells the failures of an action apart takes their codes, `{ codes }`, instead. At most 200 characters."
                         },
                         {
                           "type": "object",
@@ -1306,7 +1312,7 @@
                       "type": "object",
                       "properties": {
                         "description": {
-                          "description": "What the state is, for a reader.",
+                          "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                           "type": "string"
                         },
                         "type": {
@@ -1840,7 +1846,7 @@
                                     "description": "The effects, in order."
                                   },
                                   "description": {
-                                    "description": "What happens, for a reader.",
+                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                     "type": "string"
                                   }
                                 },
@@ -2012,7 +2018,7 @@
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2247,7 +2253,7 @@
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2419,7 +2425,7 @@
                                         "description": "The effects, in order."
                                       },
                                       "description": {
-                                        "description": "What happens, for a reader.",
+                                        "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                         "type": "string"
                                       }
                                     },
@@ -2596,7 +2602,7 @@
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2768,7 +2774,7 @@
                                         "description": "The effects, in order."
                                       },
                                       "description": {
-                                        "description": "What happens, for a reader.",
+                                        "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                         "type": "string"
                                       }
                                     },
@@ -2795,7 +2801,7 @@
                       "type": "object",
                       "properties": {
                         "description": {
-                          "description": "What the state is, for a reader.",
+                          "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                           "type": "string"
                         },
                         "type": {
@@ -3329,7 +3335,7 @@
                                     "description": "The effects, in order."
                                   },
                                   "description": {
-                                    "description": "What happens, for a reader.",
+                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                     "type": "string"
                                   }
                                 },
@@ -3501,7 +3507,7 @@
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -3525,7 +3531,7 @@
                             "type": "object",
                             "properties": {
                               "description": {
-                                "description": "What the area is, for a reader.",
+                                "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                                 "type": "string"
                               },
                               "initial": {
@@ -3544,7 +3550,7 @@
                                   "type": "object",
                                   "properties": {
                                     "description": {
-                                      "description": "What the state is, for a reader.",
+                                      "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                                       "type": "string"
                                     },
                                     "meta": {
@@ -4046,7 +4052,7 @@
                                                 "description": "The effects, in order."
                                               },
                                               "description": {
-                                                "description": "What happens, for a reader.",
+                                                "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                 "type": "string"
                                               }
                                             },
@@ -4218,7 +4224,7 @@
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4453,7 +4459,7 @@
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4625,7 +4631,7 @@
                                                     "description": "The effects, in order."
                                                   },
                                                   "description": {
-                                                    "description": "What happens, for a reader.",
+                                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                     "type": "string"
                                                   }
                                                 },
@@ -4802,7 +4808,7 @@
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4974,7 +4980,7 @@
                                                     "description": "The effects, in order."
                                                   },
                                                   "description": {
-                                                    "description": "What happens, for a reader.",
+                                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                     "type": "string"
                                                   }
                                                 },
@@ -5139,7 +5145,7 @@
                   "type": "string"
                 },
                 "description": {
-                  "description": "What the parameter means.",
+                  "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                   "type": "string"
                 },
                 "x-perch": {
@@ -5485,6 +5491,11 @@
               "description": "A code of the vocabulary (data-code)."
             }
           },
+          "ranked": {
+            "description": "The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it.",
+            "type": "boolean",
+            "const": true
+          },
           "fields": {
             "description": "An error's codes, each with the field it concerns.",
             "type": "object",
@@ -5616,7 +5627,7 @@
             "properties": {
               "description": {
                 "type": "string",
-                "description": "What the action does."
+                "description": "What the platform action does. What holds once it succeeds is its `result`, and its parameters, codes, roles and mail say the rest. At most 200 characters."
               },
               "params": {
                 "type": "object",
@@ -5633,7 +5644,7 @@
                     },
                     "description": {
                       "type": "string",
-                      "description": "What the value is and its limits."
+                      "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
                     }
                   },
                   "required": [
@@ -5777,7 +5788,8 @@
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "What the event means: when the platform raises it. What follows is said by the flows that handle it. At most 200 characters."
           }
         },
         "leaving": {
@@ -5816,7 +5828,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "What the composite is, for a reader: the list it derives carries it."
+                "description": "What the composite is for: the list it derives on a screen carries it, and each item has a description of its own. At most 200 characters."
               },
               "list": {
                 "type": "string",
@@ -5843,7 +5855,8 @@
                 },
                 "additionalProperties": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "What the item of the composite's list says: every screen that opts in derives an item anchor with it as its description, and the composite's `itemState` marks it. At most 200 characters."
                 },
                 "minProperties": 1,
                 "description": "The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state."
@@ -5984,7 +5997,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the activity is for: the task it serves across its screens."
+            "description": "What the activity is for: the task it serves across its screens. Its states are the visits, and the screens do the work. At most 200 characters."
           },
           "roles": {
             "minItems": 1,
@@ -6010,7 +6023,7 @@
                 "description": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "What it is, for a reader."
+                  "description": "What the activity carries from screen to screen; `model` names the field of the model it is. At most 200 characters."
                 },
                 "model": {
                   "type": "string",
@@ -6043,7 +6056,8 @@
                   "description": "A guard: a camelCase name of the flow `meta.guards`."
                 },
                 "additionalProperties": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "What the guard holds, in one sentence the app implements. At most 200 characters."
                 }
               }
             },
@@ -6060,7 +6074,7 @@
               "type": "object",
               "properties": {
                 "description": {
-                  "description": "What the visit is, for a reader.",
+                  "description": "What the visit is for in the task. Its `meta` names the screen and the address, and the screen has a description of its own. At most 200 characters.",
                   "type": "string"
                 },
                 "type": {
@@ -6123,7 +6137,7 @@
                             "description": "A guard: a camelCase name of the flow `meta.guards`."
                           },
                           "description": {
-                            "description": "What happens, for a reader.",
+                            "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                             "type": "string"
                           }
                         },
@@ -6150,7 +6164,7 @@
                               "description": "A guard: a camelCase name of the flow `meta.guards`."
                             },
                             "description": {
-                              "description": "What happens, for a reader.",
+                              "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                               "type": "string"
                             }
                           },

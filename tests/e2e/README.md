@@ -44,14 +44,15 @@ Each test carries the tag of its scenario's `tags`, written by hand in its `test
 `mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) but the tests named below, `organisation/base/`,
-`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation` and
-`open-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
+`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
+`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
 `change-email-refused`, `delete-account-refused`, `delete-link-used`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
-a new version, offline, an outdated protocol, the sync status), `app-shell/flows/` (a guest
+a new version, offline, an outdated protocol, the sync status, a sign-out in another tab while
+the data opens or once it did not open), `app-shell/flows/` (a guest
 across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
 its own). `bun run test:e2e --grep @smoke` runs the first set
 on both projects.
@@ -185,7 +186,11 @@ from a mail's link never prints its token), `pageLoads` (counts a page's full lo
 together. Tests locate elements by their anchors and assert codes,
 states and values, never the page's wording.
 `src/support/engines.ts`: `holdEngines`, which holds back the WASM files of a browser context's
-pages until the test lets them go, so a page cannot open an account's data meanwhile.
+pages until the test lets them go, so a page cannot open an account's data meanwhile, and
+`holdTabEngines`, which holds those of one page alone, the ones its database worker fetches
+included, until the test lets them load or refuses them as a dropped network would, so another
+tab of the same browser still opens an account's data (a context's hold would stall that tab's
+sign-in too).
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
 it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app

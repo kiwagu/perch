@@ -9,6 +9,7 @@ import {
   roleSchema,
   stateSchema,
 } from '../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionParamsSchema } from './params'
 
@@ -125,7 +126,7 @@ export const derivedFromSchema = z
 export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
-    description: z.string().optional().describe('What the element is, for a reader.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.anchor),
     binding: anchorBindingSchema.optional(),
     roles: z
       .array(roleSchema)
@@ -145,6 +146,12 @@ export const anchorDefSchema = z
         'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
       ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it. Only a message of two codes or more, each once.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()

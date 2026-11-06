@@ -216,6 +216,7 @@ export function sampleContract(): Contract {
       },
     ],
     scenarioLines: new Map(),
+    descriptions: [],
     model: {
       document: {},
       entities: {

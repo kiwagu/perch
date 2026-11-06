@@ -122,7 +122,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
       opening: {
         on: {
           'platform.started': [{ target: 'ready', guard: 'signedOut' }, { target: 'opening-data' }],
-          'platform.open-failed': { target: 'failed' },
+          'platform.start-failed': { target: 'start-failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
@@ -133,6 +133,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'platform.opened': { target: 'ready' },
           'platform.open-failed': { target: 'failed' },
+          // Nothing is left to open: a guest's frame, the account's notice gone with it.
+          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
         },
       },
       ready: {
@@ -220,6 +222,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
         meta: { renders: ['app-shell.sign-out-here-button'] },
         on: {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
+          // The saved account went elsewhere: a guest's frame, with no sign-out of it offered.
+          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
           'platform.theme-set': { actions: 'followTheme' },
@@ -231,6 +235,12 @@ export function createShellMachine(deps: ShellMachineDeps) {
           src: 'platform.sign-out',
           onDone: { target: 'signed-out', actions: TO_SIGN_IN },
           onError: { target: 'signed-out', actions: TO_SIGN_IN },
+        },
+      },
+      'start-failed': {
+        on: {
+          'app-shell.locale-select': { target: 'start-failed', actions: 'speakChoice' },
+          'app-shell.theme-select': THEME_CHOSEN,
         },
       },
       'storage-blocked': { type: 'final' },
