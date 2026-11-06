@@ -603,6 +603,87 @@ describe('ShellContainer', () => {
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
   })
 
+  it("takes an account's notice away when another account replaces it before a render", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }
+    const changes = new Set<Parameters<SessionPort['subscribe']>[0]>()
+    let who: typeof ann | undefined = ann
+    const switching: SessionPort = {
+      ...session,
+      current: () => who,
+      subscribe: (onChange) => {
+        changes.add(onChange)
+
+        return () => changes.delete(onChange)
+      },
+    }
+    const services = fakeServices(switching)
+    const frame = openedFrame()
+    const sent = vi.spyOn(frame.actor, 'send')
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: switching,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+    await act(() =>
+      services.reject({
+        region: 'tenant:acme',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: 'note/nte_1:update',
+        reloaded: false,
+      }),
+    )
+    await screen.findByTestId('app-shell.notice-message')
+    act(() => services.sync('synced'))
+    await screen.findByTestId('app-shell.sync-message')
+
+    // Ann signs out and Bob signs in before the frame renders again: the session tells both, the
+    // render sees Bob alone, whose sync gives no state yet.
+    act(() => {
+      services.sync(undefined)
+
+      for (const next of [undefined, bob]) {
+        who = next
+
+        for (const onChange of changes) {
+          onChange(next)
+        }
+      }
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+      expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+    })
+    expect(sent.mock.calls.filter(([event]) => event.type === 'platform.signed-out')).toHaveLength(
+      1,
+    )
+  })
+
   /**
    * The shell for a guest, in a frame that loads the page again through `reload`: on /home, or
    * `guarded` on /form with a field, inside the kit's unsaved-input scope and the frame's leave
