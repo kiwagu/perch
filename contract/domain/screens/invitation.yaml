@@ -1,0 +1,162 @@
+# yaml-language-server: $schema=../../schemas/screen.schema.json
+id: organisation.invitation
+title: Join an organisation
+description: "What the link of an invitation mail opens: the organisation and the role, which the account the mail was sent to accepts or declines; a link that does not work says why."
+flag: null
+bindings:
+  - path: /invitation
+    roles: [ guest, identity ]
+    history: push
+    search:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          description: The token the invitation mail carries in its link.
+          examples: [ eyJhbG...dXJl ]
+      additionalProperties: false
+entry: [ organisation.invitation.status, organisation.invitation.heading, organisation.invitation.error ]
+anchors:
+  organisation.invitation.status:
+    kind: status
+    description: Says the link is being checked.
+    states: [ loading ]
+  organisation.invitation.heading:
+    kind: heading
+    description: The name of the organisation the invitation is to.
+  organisation.invitation.role-badge:
+    kind: badge
+    description: The role the account takes when it accepts.
+    dataValue: true
+  organisation.invitation.message:
+    kind: message
+    description: Asks to sign in to the account the mail was sent to, or to create it, before the invitation is accepted.
+    codes: [ sign-in-to-accept ]
+  organisation.invitation.sign-in-link:
+    kind: link
+    binding: { route: /sign-in }
+    roles: [ guest ]
+  organisation.invitation.accept-button:
+    kind: button
+    description: Makes the account a member with the role shown, and opens the organisation.
+    binding:
+      action: platform.invitations.accept
+      params:
+        invitation: { search: token }
+  organisation.invitation.decline-button:
+    kind: button
+    description: Declines the invitation; its link stops working.
+    binding:
+      action: platform.invitations.decline
+      params:
+        invitation: { search: token }
+  organisation.invitation.error:
+    kind: error
+states:
+  loading: "organisation.invitation.status in loading: the link is being checked."
+  ready: "The organisation and the role, with what this device may do with them, or the error."
+flow:
+  initial: checking
+  meta:
+    guards:
+      forThisAccount: the invitation is for the account signed in on this device
+      nobodyHere: nobody is signed in on this device
+      linkUnusable: { codes: [ link-invalid, link-expired ] }
+      invitationGone: { codes: [ invitation-gone ] }
+  states:
+    checking:
+      description: The token of the link is being read.
+      meta: { renders: [ organisation.invitation.status ] }
+      invoke:
+        src: platform.invitations.read
+        input: { token: { search: token } }
+        onDone:
+          - target: asking
+            guard: forThisAccount
+          - target: signing-in
+            guard: nobodyHere
+            actions:
+              - show: { organisation.invitation.message: [ sign-in-to-accept ] }
+          - target: elsewhere
+            description: Another account is signed in on this device; the invited one signs in once it is signed out.
+            actions:
+              - show: { organisation.invitation.error: [ other-account ] }
+        onError:
+          - target: link-dead
+            guard: linkUnusable
+            actions:
+              - show: organisation.invitation.error
+          - target: unread
+            actions:
+              - show: organisation.invitation.error
+    asking:
+      description: The organisation and the role, with the buttons that accept and decline.
+      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      on:
+        organisation.invitation.accept-button: accepting
+        organisation.invitation.decline-button: declining
+    accepting:
+      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      entry:
+        - clear: organisation.invitation.error
+      invoke:
+        src: platform.invitations.accept
+        input: { invitation: { search: token } }
+        onDone:
+          target: joined
+          actions:
+            - navigate: /org
+        onError:
+          - target: link-dead
+            guard: invitationGone
+            actions:
+              - show: organisation.invitation.error
+          - target: asking
+            actions:
+              - show: organisation.invitation.error
+    declining:
+      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      entry:
+        - clear: organisation.invitation.error
+      invoke:
+        src: platform.invitations.decline
+        input: { invitation: { search: token } }
+        onDone:
+          target: declined
+          actions:
+            - navigate: /org
+        onError:
+          - target: link-dead
+            guard: invitationGone
+            actions:
+              - show: organisation.invitation.error
+          - target: asking
+            actions:
+              - show: organisation.invitation.error
+    signing-in:
+      description: The organisation and the role, and the message beside the link to the sign-in page; the account accepts once signed in, here or on the organisation page.
+      type: final
+      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.message, organisation.invitation.sign-in-link ] }
+    elsewhere:
+      description: The organisation and the role, with the error; another account stays signed in on this device, and nothing is offered.
+      type: final
+      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge ] }
+    link-dead:
+      description: The error says the link does not work; a new invitation is asked of the organisation's administrator.
+      type: final
+    unread:
+      description: The error says why the link could not be read; loading the page again tries it again.
+      type: final
+    joined:
+      description: The app has moved to /org, the organisation current.
+      type: final
+    declined:
+      description: The app has moved to /org.
+      type: final
+wireframe: |-
+  - heading /.+/ [level=1]
+  - paragraph: Member
+  - button "Accept"
+  - button "Decline"

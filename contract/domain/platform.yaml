@@ -277,27 +277,120 @@ actions:
   organisations.members:
     description: Reads the members of the current organisation.
     params: {}
-    result: its members with their identity id and email
+    result: its members with their identity id, email and role
     codes:
       - not-admin
       - failed
     roles:
       - admin
   organisations.invite:
-    description: Adds an existing account to the current organisation by its email.
+    description: Invites an email to the current organisation with a role; a mail carries the link that accepts it.
     params:
       email:
         type: string
-        description: The email of an existing account.
-    result: the account becomes a member; its own devices learn it without a reload
+        description: The email the invitation is for; it needs no account yet.
+      role:
+        type: string
+        description: "member or admin: the role the account takes when it accepts."
+    result: "an invitation of the email with the role, pending for seven days, and a mail with its link goes to the email; an email with an account and one without get the same answer, in the same time; inviting an email again replaces its pending invitation, whose link stops working; the email of a member answers already-member; the email is a member only once the account with that email accepts"
     codes:
       - no-such-identity
       - already-member
+      - email-invalid
       - not-admin
       - rate-limited
       - failed
     roles:
       - admin
+  organisations.invitations:
+    description: Reads the pending invitations of the current organisation.
+    params: {}
+    result: its invitations not accepted, declined, revoked or expired yet, the newest first, each with its id, email, role and link
+    codes:
+      - not-admin
+      - failed
+    roles:
+      - admin
+  organisations.copy-invitation:
+    description: Puts the link of a pending invitation on this device's clipboard, to send it another way than the mail.
+    params:
+      invitation:
+        type: string
+        description: The id of the invitation.
+    result: the link is on the clipboard (no server call); it is the link the mail carries, and works for the invited email alone
+    codes:
+      - failed
+    roles:
+      - admin
+  organisations.revoke-invitation:
+    description: Revokes a pending invitation of the current organisation.
+    params:
+      invitation:
+        type: string
+        description: The id of the invitation.
+    result: the invitation is gone and its link stops working; the invitations are read again
+    codes:
+      - not-admin
+      - failed
+    roles:
+      - admin
+  organisations.set-role:
+    description: Changes the role of a member of the current organisation.
+    params:
+      identity:
+        type: string
+        description: The identity id of the member.
+      role:
+        type: string
+        description: member or admin.
+    result: "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it; an administrator may make itself a member while another administrator stays; the only administrator of the organisation answers last-admin and keeps its role"
+    codes:
+      - not-admin
+      - last-admin
+      - failed
+    roles:
+      - admin
+  invitations.read:
+    description: Reads the invitation a link carries, for the page the link opens.
+    params:
+      token:
+        type: string
+        description: The token the link of the invitation mail carries in the address of /invitation.
+    result: "the organisation's name, the role, and whether the invitation is for the account signed in on this device, whose email is then the invitation's; never the email. A link unknown, used, declined, revoked or replaced by a newer one, or whose organisation is gone, answers link-invalid; one older than seven days link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    codes:
+      - link-invalid
+      - link-expired
+      - rate-limited
+      - failed
+  invitations.mine:
+    description: Reads the invitations to the signed-in account's email.
+    params: {}
+    result: the pending invitations to the account's email, of organisations it is not a member of, the newest first, each with its id, the organisation's name and the role
+    codes:
+      - failed
+  invitations.accept:
+    description: Accepts an invitation to the signed-in account's email.
+    params:
+      invitation:
+        type: string
+        description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
+    result: "the account is a member of the invitation's organisation with its role, that organisation becomes current on this device, the account's devices learn it without a reload, and the invitation is spent; an invitation to another email answers other-account; one revoked, replaced, declined, accepted or expired meanwhile invitation-gone; an account that is a member already already-member"
+    codes:
+      - invitation-gone
+      - other-account
+      - already-member
+      - failed
+  invitations.decline:
+    description: Declines an invitation to the signed-in account's email.
+    params:
+      invitation:
+        type: string
+        description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
+    result: the invitation is gone and its link stops working; an invitation to another email answers other-account, and one gone meanwhile invitation-gone
+    codes:
+      - invitation-gone
+      - other-account
+      - failed
   organisations.remove:
     description: Removes a member from the current organisation.
     params:
@@ -339,12 +432,18 @@ toasts:
   organisations.create: organisation-created
   organisations.invite: invited
   organisations.remove: member-removed
+  organisations.revoke-invitation: invitation-revoked
+  organisations.set-role: role-changed
+  organisations.copy-invitation: link-copied
+  invitations.accept: invitation-accepted
+  invitations.decline: invitation-declined
   devices.revoke: device-signed-out
   change-password: password-changed
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere
   - platform.organisations.select
+  - platform.invitations.accept
   - settings.updateLocale
   - platform.reload
 unsavedInput:
