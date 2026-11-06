@@ -295,6 +295,10 @@ flow:
         platform.signed-in:
           actions:
             - clear: user.sign-in.notice-message
+        platform.signed-out:
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
       invoke:
         src: platform.reload
         onDone:
@@ -307,6 +311,10 @@ flow:
         platform.signed-in:
           actions:
             - clear: user.sign-in.notice-message
+        platform.signed-out:
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
       invoke:
         src: platform.reload
         onDone:
@@ -319,6 +327,10 @@ flow:
         platform.signed-in:
           actions:
             - clear: user.sign-in.notice-message
+        platform.signed-out:
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
       invoke:
         src: platform.install.prompt
         onDone:
@@ -338,6 +350,10 @@ flow:
         platform.signed-in:
           actions:
             - clear: user.sign-in.notice-message
+        platform.signed-out:
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
       invoke:
         src: platform.install.postpone
         onDone:
