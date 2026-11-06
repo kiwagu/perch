@@ -147,7 +147,7 @@ const idSchema = z
       .literal(true)
       .optional()
       .describe(
-        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it.',
+        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
       ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
