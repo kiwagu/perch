@@ -24,6 +24,7 @@ import {
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
 import { ShellView } from './features/app-shell/presentation/shell/shell-view'
+import { useSignedIn } from './features/app-shell/presentation/shell/signed-in'
 import { useSignedOutUnrouted } from './features/app-shell/presentation/shell/signed-out-unrouted'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
@@ -239,6 +240,8 @@ function App(props: { readonly reload: () => void }) {
     STATUS[state.value as keyof typeof STATUS]
 
   useSignedOutUnrouted(started?.services.session, actor, unrouted !== undefined, shownAccount)
+  // A sign-in on this device reaches the frame's flow in every state.
+  useSignedIn(started?.services.session, actor, unrouted !== undefined)
 
   if (started === undefined || unrouted !== undefined) {
     return (

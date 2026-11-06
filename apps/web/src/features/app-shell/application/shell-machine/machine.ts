@@ -18,6 +18,7 @@ import {
   PROTOCOL_OUTDATED,
   REJECTED,
   RELOADED,
+  SIGNED_IN,
   SIGNED_OUT,
   SYNC,
   THEME_CHOSEN,
@@ -133,6 +134,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'platform.opened': { target: 'ready' },
           'platform.open-failed': { target: 'failed' },
+          'platform.signed-in': SIGNED_IN,
           // Nothing is left to open: a guest's frame, the account's notice gone with it.
           'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
         },
@@ -147,6 +149,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.theme-set': THEME_SET,
           'model.settings.locale': LOCALE_STORED,
           'model.settings.theme': THEME_STORED,
+          'platform.signed-in': SIGNED_IN,
           'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
@@ -181,6 +184,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'platform.theme-set': THEME_SET,
           'model.settings.locale': LOCALE_STORED,
           'model.settings.theme': THEME_STORED,
+          'platform.signed-in': SIGNED_IN,
           'platform.signed-out': SIGNED_OUT,
           'platform.change-rejected': { actions: REJECTED },
           'platform.changes-reloaded': { actions: RELOADED },
@@ -197,14 +201,17 @@ export function createShellMachine(deps: ShellMachineDeps) {
       },
       reloading: {
         meta: { renders: ['app-shell.nav'] },
+        on: { 'platform.signed-in': SIGNED_IN },
         invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
       },
       updating: {
         meta: { renders: ['app-shell.nav'] },
+        on: { 'platform.signed-in': SIGNED_IN },
         invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
       },
       installing: {
         meta: { renders: ['app-shell.nav'] },
+        on: { 'platform.signed-in': SIGNED_IN },
         invoke: {
           src: 'platform.install.prompt',
           onDone: { target: 'ready', actions: INSTALL_GONE },
@@ -213,6 +220,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
       },
       postponing: {
         meta: { renders: ['app-shell.nav'] },
+        on: { 'platform.signed-in': SIGNED_IN },
         invoke: {
           src: 'platform.install.postpone',
           onDone: { target: 'ready', actions: INSTALL_GONE },
@@ -222,6 +230,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
         meta: { renders: ['app-shell.sign-out-here-button'] },
         on: {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
+          'platform.signed-in': SIGNED_IN,
           // The saved account went elsewhere: a guest's frame, with no sign-out of it offered.
           'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },

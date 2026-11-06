@@ -16,7 +16,7 @@ export {
   saveMemberships,
   saveTenant,
 } from './memberships'
-export { forgetNotice, savedNotice, saveNotice } from './notice'
+export { dropNotice, forgetNotice, noticeMark, savedNotice, saveNotice } from './notice'
 export { PASSWORD_RESET_KEY, savePasswordReset } from './password-reset'
 export {
   addPendingRevoke,

@@ -20,7 +20,7 @@ import type { LockManagerLike } from '@workspace/replica/sync'
 
 import type { IdentitySpace } from '../identity-space'
 import { RetainedTenantDatabases, type TenantDatabaseInventory } from '../retained-tenant-databases'
-import { type KeyValueStorage, savedIdentity, saveNotice } from '../storage'
+import { type KeyValueStorage, noticeMark, savedIdentity, saveNotice } from '../storage'
 
 import {
   addLeftoverIdentity,
@@ -81,6 +81,8 @@ export class SpaceDeletion {
     space: Pick<IdentitySpace, 'identity' | 'close' | 'destroy'>,
   ): ResultAsync<DeleteOutcome, DataError> {
     const identity = space.identity.id
+    // The session ends now: the word on its data is raised now, whenever the grace writes it.
+    const raised = noticeMark(this.#options.storage)
 
     // Listed first: a page that goes during the close still leaves the databases to the next start.
     addLeftoverIdentity(this.#options.storage, identity)
@@ -93,6 +95,7 @@ export class SpaceDeletion {
             () => this.#nothingLeft(identity),
           ),
         ),
+        raised,
       ),
     )
   }
@@ -102,9 +105,14 @@ export class SpaceDeletion {
    * organisation database counted for it, as `destroy` does those of an open one.
    */
   deleteUnopened(identity: IdentityId): ResultAsync<DeleteOutcome, DataError> {
+    const raised = noticeMark(this.#options.storage)
+
     addLeftoverIdentity(this.#options.storage, identity)
 
-    return this.#withinGrace(this.#deleteUnlessInUse(identity, () => this.#deleteClosed(identity)))
+    return this.#withinGrace(
+      this.#deleteUnlessInUse(identity, () => this.#deleteClosed(identity)),
+      raised,
+    )
   }
 
   /**
@@ -198,17 +206,19 @@ export class SpaceDeletion {
 
   /**
    * How `deleting` went within the grace, which runs from now; a failure after it is reported,
-   * nobody waiting for it any more.
+   * nobody waiting for it any more. The word a delete held up past it leaves the sign-in page was
+   * raised at `raised`, as the session ended: a sign-in since dropped it (`saveNotice`).
    */
   #withinGrace(
     deleting: ResultAsync<'deleted' | 'in-use', DataError>,
+    raised: string,
   ): ResultAsync<DeleteOutcome, DataError> {
     const answer = new Promise<Result<DeleteOutcome, DataError>>((resolve) => {
       let answered = false
       const cancel = this.#options.clock.schedule(DELETE_GRACE_MS, () => {
         answered = true
         // The sign-in page says the data goes once the other tabs are closed.
-        saveNotice(this.#options.storage, 'delete-pending')
+        saveNotice(this.#options.storage, 'delete-pending', raised)
         resolve(ok('pending'))
       })
 

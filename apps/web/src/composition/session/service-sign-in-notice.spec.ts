@@ -1,21 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { identityIdFactory } from '@workspace/ids'
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
-import {
-  type KeptDevice,
-  type MemoryStorage,
-  memoryStorage,
-  saveDevice,
-  saveNotice,
-} from '../storage'
-
-const ann: KeptDevice = {
-  identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
-  token: 'token-ann',
-  memberships: [],
-}
+import { memoryStorage, saveNotice } from '../storage'
 
 const worlds: TestWorld[] = []
 
@@ -35,17 +21,6 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   worlds.push(opened)
 
   return opened
-}
-
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of ['perch.session.token', 'perch.session.identity']) {
-    storage.changeElsewhere(key, other.get(key))
-  }
 }
 
 describe("the sign-in page's word, the browser's and this tab's own", () => {
@@ -81,14 +56,26 @@ describe("the sign-in page's word, the browser's and this tab's own", () => {
     expect(tab.session.notice()).toBe('resend-after-sign-in')
   })
 
-  it("drops this tab's word once an account signs in in this tab after it was left by a guest", async () => {
-    const tab = await world()
+  it("drops this tab's word and the browser's on a sign-in in any tab, and says the word of a session that ends after it", async () => {
+    const storage = memoryStorage()
+    const tab = await world({ storage })
+    const other = await world({ storage })
 
-    expect((await tab.session.restore()).isOk()).toBe(true)
-    tab.session.leaveNotice('signed-out-elsewhere')
-    signInElsewhere(tab.storage, ann)
+    tab.session.leaveNotice('password-reset-elsewhere')
+    saveNotice(storage, 'signed-out-elsewhere')
 
-    await vi.waitFor(() => expect(tab.session.current()?.id).toBe(ann.identity.id))
+    // Each tab's frame hears the sign-in and drops what its sign-in page would have said.
+    other.session.dropNotice()
+
+    expect(other.session.notice()).toBeUndefined()
+    expect(tab.session.notice()).toBe('password-reset-elsewhere')
+
+    tab.session.dropNotice()
+
     expect(tab.session.notice()).toBeUndefined()
+
+    saveNotice(storage, 'password-changed-elsewhere')
+
+    expect(tab.session.notice()).toBe('password-changed-elsewhere')
   })
 })

@@ -178,7 +178,7 @@ export interface SessionPort {
   /**
    * The word the sign-in page says, from two slots: the browser's, which a session left as it
    * ended, and this tab's own (`leaveNotice`): of the two, the first by their rank
-   * (`SESSION_NOTICES`).
+   * (`SESSION_NOTICES`). Each slot keeps the first by that rank of the words written to it.
    */
   notice(): SessionNotice | undefined
   /** Takes both words away: the sign-in page said them. */
@@ -186,9 +186,15 @@ export interface SessionPort {
   /**
    * Leaves this tab's next sign-in page `notice`, as a screen's flow shows it there on its way: a
    * fact of this tab's move, kept in this tab's memory for the page's lifetime, never the
-   * browser's; a sign-in of another account in this tab drops it.
+   * browser's; a sign-in on this device drops it (`dropNotice`).
    */
   leaveNotice(notice: SessionNotice): void
+  /**
+   * Drops both words unsaid, as a flow clears the sign-in page's notice: an account signed in on
+   * this device (`platform.signed-in`). A word the ended session raised before this and writes
+   * later (`delete-pending`, once its data is held up) goes too; one raised after it stays.
+   */
+  dropNotice(): void
   /**
    * Whether the gateway refused the sync protocol of the build this page runs since the page
    * loaded: the sync stopped, and stays stopped until the page loads again.

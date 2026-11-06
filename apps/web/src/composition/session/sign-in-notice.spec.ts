@@ -1,17 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
-import { identityIdFactory } from '@workspace/ids'
-
 import { SESSION_NOTICES, type SessionNotice } from '../../platform/session.port'
-import { memoryStorage, savedNotice, saveNotice } from '../storage'
+import { memoryStorage, noticeMark, savedNotice, saveNotice } from '../storage'
 
 import { SignInNotice } from './sign-in-notice'
 
-const ann = identityIdFactory.create()
-const bob = identityIdFactory.create()
-
 const SLOT = [undefined, ...SESSION_NOTICES]
 const PAIRS = SLOT.flatMap((own) => SLOT.map((browsers) => [own, browsers] as const))
+const WORDS = SESSION_NOTICES.flatMap((first) =>
+  SESSION_NOTICES.map((then) => [first, then] as const),
+)
 
 /** Where `word` stands in the rank of `SESSION_NOTICES`; no word stands after every word. */
 const standing = (word: SessionNotice | undefined): number =>
@@ -25,7 +23,7 @@ describe("the word of this tab's sign-in page", () => {
       const notice = new SignInNotice(storage)
 
       if (own !== undefined) {
-        notice.leave(own, undefined)
+        notice.leave(own)
       }
 
       if (browsers !== undefined) {
@@ -33,6 +31,18 @@ describe("the word of this tab's sign-in page", () => {
       }
 
       expect(notice.read()).toBe(standing(own) <= standing(browsers) ? own : browsers)
+    },
+  )
+
+  it.each(WORDS)(
+    'keeps the first by the rank of the words %s and %s this tab leaves',
+    (first, then) => {
+      const notice = new SignInNotice(memoryStorage())
+
+      notice.leave(first)
+      notice.leave(then)
+
+      expect(notice.read()).toBe(standing(first) <= standing(then) ? first : then)
     },
   )
 
@@ -57,7 +67,7 @@ describe("the word of this tab's sign-in page", () => {
     const notice = new SignInNotice(storage)
 
     saveNotice(storage, 'signed-out-elsewhere')
-    notice.leave('password-reset-elsewhere', undefined)
+    notice.leave('password-reset-elsewhere')
 
     expect(notice.read()).toBe('password-reset-elsewhere')
 
@@ -76,14 +86,14 @@ describe("the word of this tab's sign-in page", () => {
     const storage = memoryStorage()
     const notice = new SignInNotice(storage)
 
-    notice.leave('signed-out-elsewhere', ann)
-    saveNotice(storage, 'resend-after-sign-in')
-
-    expect(notice.read()).toBe('resend-after-sign-in')
-
+    notice.leave('signed-out-elsewhere')
     saveNotice(storage, 'delete-pending')
 
     expect(notice.read()).toBe('delete-pending')
+
+    saveNotice(storage, 'resend-after-sign-in')
+
+    expect(notice.read()).toBe('resend-after-sign-in')
 
     notice.take()
 
@@ -95,8 +105,8 @@ describe("the word of this tab's sign-in page", () => {
     const first = new SignInNotice(storage)
     const second = new SignInNotice(storage)
 
-    first.leave('password-reset-elsewhere', undefined)
-    second.leave('signed-out-elsewhere', undefined)
+    first.leave('password-reset-elsewhere')
+    second.leave('signed-out-elsewhere')
 
     // The second tab's page opens first, says its word and takes the words it read.
     expect(second.read()).toBe('signed-out-elsewhere')
@@ -105,23 +115,42 @@ describe("the word of this tab's sign-in page", () => {
     expect(first.read()).toBe('password-reset-elsewhere')
   })
 
-  it('drops its own word once another account signs in in this tab, and keeps it for its own account', () => {
+  it('drops both words unsaid on a sign-in, a word the ended session raised before it and writes later too', () => {
     const storage = memoryStorage()
-    const guest = new SignInNotice(storage)
-    const anns = new SignInNotice(storage)
+    const notice = new SignInNotice(storage)
 
-    guest.leave('password-reset-elsewhere', undefined)
-    guest.signedIn(ann)
+    notice.leave('password-reset-elsewhere')
+    saveNotice(storage, 'signed-out-elsewhere')
 
-    expect(guest.read()).toBeUndefined()
+    const ended = noticeMark(storage)
 
-    anns.leave('signed-out-elsewhere', ann)
-    anns.signedIn(ann)
+    notice.drop()
 
-    expect(anns.read()).toBe('signed-out-elsewhere')
+    expect(notice.read()).toBeUndefined()
 
-    anns.signedIn(bob)
+    saveNotice(storage, 'delete-pending', ended)
 
-    expect(anns.read()).toBeUndefined()
+    expect(notice.read()).toBeUndefined()
+
+    // A session that signed in since ends in turn: its word waits for the page.
+    saveNotice(storage, 'password-changed-elsewhere')
+
+    expect(notice.read()).toBe('password-changed-elsewhere')
+  })
+
+  it('takes the words it said, leaving a word raised before that comes later to the next page', () => {
+    const storage = memoryStorage()
+    const notice = new SignInNotice(storage)
+
+    saveNotice(storage, 'signed-out-elsewhere')
+
+    const ended = noticeMark(storage)
+
+    expect(notice.read()).toBe('signed-out-elsewhere')
+    notice.take()
+
+    saveNotice(storage, 'delete-pending', ended)
+
+    expect(notice.read()).toBe('delete-pending')
   })
 })
