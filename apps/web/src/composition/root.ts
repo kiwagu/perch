@@ -50,7 +50,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedTokenOf } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -102,7 +102,7 @@ export interface AppRootOptions {
 /**
  * Why the application did not start: the browser keeps no site data (`storage-blocked`), or the
  * session could not be restored (`open-failed`), with the error each time. When the saved
- * identity's space did not open, `signOutHere` signs it out on this device without it
+ * identity's space did not open, `signOutHere` signs that identity out on this device without it
  * (`SessionService.signOutUnopened`), so a database that will never open is no dead end.
  */
 export type BootFailure =
@@ -156,9 +156,14 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     })
   }
 
-  // The routes that act for the signed-in device present the token saved on this browser.
+  // The routes that act for the signed-in device present the token saved on this browser, only
+  // while it is the session of the account this tab shows: never one another tab saved since.
   const bearer: BearerDeps = {
-    token: () => savedToken(options.storage),
+    token: () => {
+      const here = session.current()
+
+      return here === undefined ? undefined : savedTokenOf(options.storage, here.id)
+    },
     device: () => deviceIdFrom(options.storage),
   }
   const organisationsApi = options.organisationsApi(bearer)
@@ -253,16 +258,20 @@ export function createAppRoot(options: AppRootOptions): AppStart {
 
   step('restore-session')
 
+  // The identity whose space the start opens: a sign-out offered when it does not open is of it.
+  const restoring = savedIdentity(options.storage)
+  // The sync's state is heard on after a start whose space did not open: once another tab signs
+  // that identity out, this tab goes on as a guest's, who may sign in again.
   const opened = session
     .restore()
-    .mapErr((error): BootFailure => {
-      // No frame reads the state of the sync of a start that failed.
-      sync.stop()
-
-      return savedIdentity(options.storage)
-        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
-        : { kind: 'open-failed', error }
-    })
+    .mapErr(
+      (error): BootFailure =>
+        // Offered only while that identity is still the saved one: another tab may have signed it
+        // out, and another account in, before this tab heard of it (it follows once it does).
+        restoring !== undefined && savedIdentity(options.storage)?.id === restoring.id
+          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(restoring.id) }
+          : { kind: 'open-failed', error },
+    )
     .map(() => step('ready'))
 
   return {

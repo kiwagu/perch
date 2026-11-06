@@ -4,7 +4,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from '../storage'
+import { deviceIdFrom, type KeyValueStorage, savedTokenOf } from '../storage'
 
 import type { TransportContext } from './options'
 
@@ -36,12 +36,10 @@ export function sessionTransportContext(
   storage: KeyValueStorage,
   events: SessionChannelEvents,
 ): TransportContext {
-  const saved = () => savedIdentity(storage)?.id === identity
-
   return {
     identity,
     device: deviceIdFrom(storage),
-    credentials: () => (saved() ? credentialsOf(savedToken(storage)) : undefined),
+    credentials: () => credentialsOf(savedTokenOf(storage, identity)),
     onMemberships: events.memberships,
     onEnded: (reason) =>
       match(reason)

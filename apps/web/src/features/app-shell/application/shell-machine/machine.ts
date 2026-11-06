@@ -133,6 +133,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
         on: {
           'platform.opened': { target: 'ready' },
           'platform.open-failed': { target: 'failed' },
+          // Nothing is left to open: a guest's frame, the account's notice gone with it.
+          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
         },
       },
       ready: {
@@ -220,6 +222,8 @@ export function createShellMachine(deps: ShellMachineDeps) {
         meta: { renders: ['app-shell.sign-out-here-button'] },
         on: {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
+          // The saved account went elsewhere: a guest's frame, with no sign-out of it offered.
+          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
           'platform.theme-set': { actions: 'followTheme' },

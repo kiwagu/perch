@@ -24,7 +24,8 @@ modeling stage.
   blocks site data stops at a message that says so, instead of forgetting who signed in, the
   device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
-  (`SessionService.signOutUnopened()`): its session token is left to sign out and its databases deleted,
+  (`SessionService.signOutUnopened(identity)`), of that identity alone and only while it is still
+  the saved one: its session token is left to sign out and its databases deleted,
   so a database that will never open is no dead end. Signing up asks the gateway to create the
   account and mail its verification link (`SessionService.signUp`, the gateway's own
   `POST /backend/auth/sign-up/email` with the name, the email, the password and the language the
@@ -103,7 +104,10 @@ modeling stage.
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
   "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
   same id in its hello and every organisation call sends it as `X-Perch-Device`. The
-  identity, its session token (`perch.session.token`, kept as it is until a sign-out)
+  identity, its session token (`perch.session.token`, kept until a sign-out together with the
+  identity it was issued to, `{ identity, token }`: the calls made for an identity, its own, the
+  organisation and device routes' and its channel's, read the token through its owner in one
+  step, never another account's that another tab saved since)
   and its memberships (`perch.session.memberships`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
@@ -215,7 +219,10 @@ modeling stage.
   load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
-  sign-in is its own); a sign-in that finds another account saved is refused with
+  sign-in is its own); an identity the tab shows without its space (the start opening it, or
+  done without opening it) leaves at once when another tab signs it out, not behind the open,
+  which then attaches nothing, and the frame goes on as a guest's. A sign-in that finds another
+  account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
@@ -338,9 +345,8 @@ modeling stage.
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
   page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
   browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
-  with the browser's word, `perch.session.notice`, and says the browser's word on the device's
-  data, `resend-after-sign-in` or `delete-pending`, first, then the tab's own, then the
-  browser's other words, and takes both), one code each, while
+  with the browser's word, `perch.session.notice`, says the first of the two by the rank the
+  contract gives the anchor's codes, `SESSION_NOTICES`, and takes both), one code each, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).
