@@ -17,13 +17,13 @@ import { CrashSignal } from './features/app-shell/presentation/crash/crash-signa
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
 import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
-import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
   frameSettingsWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
+import { ShellView } from './features/app-shell/presentation/shell/shell-view'
 import { useSignedOutUnrouted } from './features/app-shell/presentation/shell/signed-out-unrouted'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
