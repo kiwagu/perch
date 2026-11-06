@@ -99,12 +99,13 @@ test.describe('Sign a device out from another one while it holds changes not sen
       await signIn(page, signedIn)
       // Expected: After step 7 device A shows the unsent name, and within 5 seconds device B shows
       //   it too: signing in again sent the change device A kept
-      await expect(page.getByTestId('user.profile.heading')).toHaveText(data.unsentName, {
-        timeout: 10_000,
-      })
-      await expect(deviceB.getByTestId('user.profile.heading')).toHaveText(data.unsentName, {
-        timeout: 5_000,
-      })
+      await Promise.all(
+        [page, deviceB].map((device) =>
+          expect(device.getByTestId('user.profile.heading')).toHaveText(data.unsentName, {
+            timeout: 5_000,
+          }),
+        ),
+      )
     })
   })
 })
