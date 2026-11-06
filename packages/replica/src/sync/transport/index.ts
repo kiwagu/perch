@@ -7,6 +7,7 @@ export type {
   SyncTransport,
 } from './port'
 export {
+  type DeviceNetwork,
   RECONNECT_DELAYS_MS,
   type SocketLike,
   WELCOME_TIMEOUT_MS,

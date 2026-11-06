@@ -17,6 +17,16 @@ import type { ChannelState, DeviceCredentials, EndReason, SyncTransport } from '
 /** The part of a WebSocket the transport uses. */
 export type SocketLike = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>
 
+/**
+ * The device's network as the platform tells it: whether it says the device has one now, and
+ * its changes (a browser's `online` and `offline` events); `onOnlineChange` returns what stops
+ * hearing them.
+ */
+export interface DeviceNetwork {
+  readonly online: () => boolean
+  readonly onOnlineChange: (listener: () => void) => () => void
+}
+
 export interface WebSocketTransportOptions {
   readonly url: string
   readonly credentials: () => DeviceCredentials | undefined
@@ -32,6 +42,12 @@ export interface WebSocketTransportOptions {
   readonly clock: Clock
   /** Opens a socket; `new WebSocket(url)` by default. */
   readonly socket?: (url: string) => SocketLike
+  /**
+   * The device's network, heard while the transport is started: once it is back, a reconnect
+   * waiting for its delay connects at once, and the delays start over. Without it, only the
+   * delays bring the channel back.
+   */
+  readonly network?: DeviceNetwork
 }
 
 /** How long the transport waits before each reconnect in a row; the last delay repeats. */
@@ -48,6 +64,9 @@ const NORMAL_CLOSE = 1000
 
 const NO_TIMER = (): void => {}
 
+/** What stops hearing the device's network while the transport hears none. */
+const NOT_HEARING = (): void => {}
+
 type State =
   /** Not started, or stopped: no socket and no reconnect. */
   | { readonly kind: 'idle' }
@@ -63,8 +82,9 @@ type State =
  * device's id; the channel is up once the gateway welcomes it, and only then does it send.
  * The memberships of the welcome and of every later change go to `onMemberships`, before the
  * listeners of messages hear the message. A socket that closes, or is not welcomed within 10
- * seconds, is opened again after a growing delay, which starts over at
- * the next welcome or when the engine gives a welcomed connection up (`reconnect`). A close that
+ * seconds, is opened again after a growing delay, which starts over at the next welcome, when
+ * the engine gives a welcomed connection up (`reconnect`) or when the device's network comes
+ * back (`network`), which also connects a pending reconnect at once. A close that
  * refuses the token or the protocol, or signs the device out (at its own request or from another
  * device), ends the channel for good. Text the protocol refuses closes the socket as a breach
  * and connects again.
@@ -79,6 +99,8 @@ export class WebSocketTransport implements SyncTransport {
   #attempt = 0
   /** Gives up on the open socket when the welcome does not come in time. */
   #cancelWelcome = NO_TIMER
+  /** Stops hearing the device's network, heard from the start until a stop or an ending. */
+  #stopHearingNetwork = NOT_HEARING
 
   constructor(options: WebSocketTransportOptions) {
     this.#options = options
@@ -87,6 +109,7 @@ export class WebSocketTransport implements SyncTransport {
   start(): void {
     if (this.#state.kind === 'idle') {
       this.#connect()
+      this.#hearNetwork()
     }
   }
 
@@ -98,6 +121,7 @@ export class WebSocketTransport implements SyncTransport {
     }
 
     this.#endWelcomeWait()
+    this.#stopHearing()
     this.#state = { kind: 'idle' }
 
     if (state.kind === 'waiting') {
@@ -297,8 +321,42 @@ export class WebSocketTransport implements SyncTransport {
     this.#cancelWelcome = NO_TIMER
   }
 
+  #hearNetwork(): void {
+    const network = this.#options.network
+
+    if (network) {
+      this.#stopHearingNetwork = network.onOnlineChange(() => {
+        if (network.online()) {
+          this.#networkBack()
+        }
+      })
+    }
+  }
+
+  #stopHearing(): void {
+    this.#stopHearingNetwork()
+    this.#stopHearingNetwork = NOT_HEARING
+  }
+
+  /**
+   * The device's network came back: the delays start over, and a reconnect waiting for its delay
+   * connects at once. A socket open or still opening is left to its welcome or its close, which
+   * then waits the first delay.
+   */
+  #networkBack(): void {
+    const state = this.#state
+
+    this.#attempt = 0
+
+    if (state.kind === 'waiting') {
+      state.cancel()
+      this.#connect()
+    }
+  }
+
   #end(reason: EndReason): void {
     this.#endWelcomeWait()
+    this.#stopHearing()
     this.#state = { kind: 'ended' }
     this.#options.onEnded(reason)
 
