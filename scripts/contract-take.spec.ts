@@ -121,32 +121,43 @@ function run(
   })
 }
 
-/**
- * Commits in `root` with `args` through the script installed as the commit-msg hook, as git runs
- * it, so that it reads the command (an amend) the commit is made by.
- */
-function commitThroughHook(root: string, ...args: string[]): SpawnSyncReturns<string> {
+/** Installs the script as `root`'s commit-msg hook, run as git runs a hook. */
+function installHook(root: string): void {
   writeFileSync(
     join(root, '.git', 'hooks', 'commit-msg'),
     `#!/bin/sh\nexec "${process.execPath}" "${CONTRACT_TAKE}" "$1"\n`,
     { mode: 0o755 },
   )
+}
+
+/**
+ * Runs git in `root` with `args` (its command first) through the script installed as the
+ * commit-msg hook, as git runs it, so that it reads the command the commit is made by; an editor,
+ * where one opens, writes `edited` in place of the message git offers, above git's comments.
+ */
+function gitThroughHook(root: string, edited: string, ...args: string[]): SpawnSyncReturns<string> {
+  const editor = join(root, '.git', 'editor.sh')
+
+  installHook(root)
+  writeFileSync(
+    editor,
+    '#!/bin/sh\n{ cat "$0.text"; sed -n \'/^#/,$p\' "$1"; } > "$1.new" && mv "$1.new" "$1"\n',
+    {
+      mode: 0o755,
+    },
+  )
+  writeFileSync(`${editor}.text`, edited)
 
   return spawnSync(
     'git',
-    [
-      '-c',
-      'commit.gpgsign=false',
-      '-c',
-      'user.name=t',
-      '-c',
-      'user.email=t@example.test',
-      'commit',
-      '-q',
-      ...args,
-    ],
-    { cwd: root, encoding: 'utf8', stdio: 'pipe', env: ENV },
+    ['-c', 'commit.gpgsign=false', '-c', 'user.name=t', '-c', 'user.email=t@example.test', ...args],
+    { cwd: root, encoding: 'utf8', stdio: 'pipe', env: { ...ENV, GIT_EDITOR: editor } },
   )
+}
+
+/** Commits in `root` with `args` through the script installed as the commit-msg hook. */
+function commitThroughHook(root: string, ...args: string[]): SpawnSyncReturns<string> {
+  return gitThroughHook(root, '', 'commit', '-q', ...args)
 }
 
 /** A take's message: `subject`, then each of `trailers` in a paragraph of its own. */
@@ -530,6 +541,147 @@ describe('contract-take on an area branch', () => {
 
     expect(amended.stderr).toBe('')
     expect(amended.status).toBe(0)
+  })
+
+  it('reads an amend from its option, not from the value of another', () => {
+    const { root } = trunk()
+
+    author(root, 'merge', '-q', '--no-ff', '-m', 'chore: merge the trunk', 'contract/trunk')
+    stage(root, SCREEN, 'raw')
+
+    for (const args of [
+      ['-m', '--amend'],
+      ['--mess', '--amend'],
+      ['--message=--amend'],
+      ['-am', '--amend'],
+      ['--amend', '--no-amend', '-m', 'feat(screens): model the page'],
+    ]) {
+      const result = commitThroughHook(root, ...args)
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain(`\n  ${SCREEN}\n`)
+    }
+  })
+
+  it('reads an amend made through an alias of git commit', () => {
+    const { root, screen } = trunk()
+
+    pick(root, screen)
+    commit(root, 'feat(contract): model the page')
+    git(root, 'config', 'alias.ci', 'commit')
+
+    const amended = gitThroughHook(
+      root,
+      '',
+      'ci',
+      '-q',
+      '--amend',
+      '-m',
+      'feat(web): show the page',
+    )
+
+    expect(amended.status).not.toBe(0)
+    expect(amended.stderr).toContain(`\n  ${SCREEN}\n`)
+  })
+
+  it('reads no amend from a git command working in another repository', () => {
+    const { root, screen } = trunk()
+    const other = trunk().root
+    const text = join(root, '.git', 'OTHER_MSG')
+
+    pick(root, screen)
+    commit(root, 'feat(contract): model the page')
+    writeFileSync(text, 'feat(web): show the page\n')
+    writeFileSync(
+      join(other, '.git', 'hooks', 'commit-msg'),
+      `#!/bin/sh\ncd "${root}" && exec "${process.execPath}" "${CONTRACT_TAKE}" "${text}"\n`,
+      { mode: 0o755 },
+    )
+
+    const outer = spawnSync(
+      'git',
+      [
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@example.test',
+        'commit',
+        '-q',
+        '--amend',
+        '-m',
+        'chore: x',
+      ],
+      { cwd: other, encoding: 'utf8', stdio: 'pipe', env: ENV },
+    )
+
+    expect(outer.stderr).toBe('')
+    expect(outer.status).toBe(0)
+  })
+
+  it('reads a message git keeps whole, a scissors line in it, as git reads its trailers', () => {
+    const { root } = trunk()
+    const cut = '------------------------ >8 ------------------------'
+    const written = (...args: string[]): SpawnSyncReturns<string> =>
+      commitThroughHook(
+        root,
+        '-m',
+        'refactor(contract): drop the old names',
+        '-m',
+        'Written-on-branch: ABC-1',
+        ...args,
+      )
+
+    stage(root, SCREEN, 'old names dropped')
+    refuses(
+      written('--cleanup=verbatim', '-m', `x ${cut}\nThis stays.`),
+      'names its source in no trailer',
+    )
+    refuses(
+      written('-m', `# ${cut}\nThis stays.`),
+      'reads one way when git strips its comment lines and another when it keeps them',
+    )
+    refuses(written('--verbose', '-m', `x ${cut}\nThis stays.`), 'names its source in no trailer')
+    refuses(
+      commitThroughHook(
+        root,
+        '--cleanup=verbatim',
+        '-m',
+        '# a note',
+        '-m',
+        'refactor(contract): drop the old names',
+        '-m',
+        'Written-on-branch: ABC-1',
+      ),
+      '"# a note" is not.',
+    )
+
+    const scissors = written('--cleanup=scissors', '-m', `# ${cut}\nThis stays.`)
+
+    expect(scissors.stderr).toBe('')
+    expect(scissors.status).toBe(0)
+    expect(git(root, 'log', '-1', '--format=%(trailers:key=Written-on-branch,valueonly)')).toBe(
+      'ABC-1',
+    )
+  })
+
+  it('lets a take through written in the editor of git commit --verbose, its diff cut off', () => {
+    const { root, screen } = trunk()
+
+    pick(root, screen)
+
+    const result = gitThroughHook(
+      root,
+      `feat(contract): model the page\n\nTaken-from: contract/trunk ${screen} ABC-1\n`,
+      'commit',
+      '-q',
+      '--verbose',
+    )
+
+    expect(result.stderr).toBe('')
+    expect(result.status).toBe(0)
+    expect(git(root, 'log', '-1', '--format=%(trailers:key=Taken-from,valueonly)')).toBe(
+      `contract/trunk ${screen} ABC-1`,
+    )
   })
 
   it("refuses a message that git's cleanup modes read two ways", () => {

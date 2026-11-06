@@ -1262,11 +1262,15 @@ each commit or run of them oldest first, on the trunk's own line, changing every
 a business commit the rules let the branch write itself (the last one of a rename or a removal,
 a feature begun there before the trunk, an amendment allowed there) names its cards in
 `Written-on-branch: <card>` instead. Nothing else there names the `contract` scope, so
-`git log <branch> -E --grep='^[a-z]*\(contract\):'` lists the branch's contract changes and
-`--grep='^Taken-from:'` its takes. A plain cherry-pick or rebase runs no hook and a revert of a
-take fails it; an amend is judged as the whole commit it leaves (told from the git command that
-runs the hook, where the system has `/proc`), and a message git would record two ways by its
-cleanup mode, a comment line above its subject or its trailer, fails. A take is checked against
+`git log main..<branch> -E --grep='^[a-z]*\(contract\):'` lists the branch's contract changes
+(`main..` leaves out the meta rounds `main` brings in) and `--grep='^Taken-from:'` its takes. A
+plain cherry-pick or rebase runs no hook and a revert of a take fails it. The check reads the
+`git commit` that runs the hook from `/proc`, its options parsed as git parses them: an amend is
+judged as the whole commit it leaves, and the message as git records it, cut at its scissors line
+under `--verbose` and its comment lines stripped or kept by the cleanup mode; where git's default
+mode leaves that to whether an editor opened, a message its comment lines change fails. Without
+`/proc` (another system), an amend is judged by what it adds and the message is cut at a
+scissors line it holds. A take is checked against
 `main` and `contract/trunk` as the clone knows them, the remote's when it has no branch of its
 own. The pre-commit hook first refuses a commit
 while a hook `lefthook.yml` names is not installed (`scripts/hooks-installed.ts`): lefthook

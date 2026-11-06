@@ -7,8 +7,8 @@
  * `<first>^..<last>` as `git log` reads it. A business commit the rules let the branch write itself
  * (the last one of a rename or a removal, a feature begun there before the trunk, an amendment the
  * developer allows there) carries `Written-on-branch: <cards>` instead. Nothing else on the branch
- * names the `contract` scope, so `git log <branch> -E --grep='^[a-z]*\(contract\):'` lists every
- * contract change of the branch, and `--grep='^Taken-from:'` its takes.
+ * names the `contract` scope, so `git log main..<branch> -E --grep='^[a-z]*\(contract\):'` lists
+ * every contract change of the branch, and `--grep='^Taken-from:'` its takes.
  *
  * A commit that changes the business layer without that form fails, naming the files, and so does
  * one in that form that stages any other file, names its source in no trailer or in two, or
@@ -16,11 +16,10 @@
  * (its first parents since `main`), a run's first not after its last and each before the next,
  * and every file the take stages must be one they change: what the take needs beyond them goes to
  * the trunk under the card, taken as one more commit. A conflict resolved in a file they change
- * passes. A commit that stages nothing, apart from an amend, is judged by its message. An amend, told
- * by the arguments of the git command that runs the hook (read from /proc; where there is none, it
- * is judged by what it adds), is judged as the whole commit it leaves, against HEAD's parent, and
- * the amend of a merge passes as the merge it stays. A message git's cleanup modes would record two
- * ways (a comment line above its subject or its trailer) fails.
+ * passes. A commit that stages nothing, apart from an amend, is judged by its message. Whether the
+ * commit amends and how git cleans its message up are read from the `git commit` running the hook
+ * (`takes/command.ts`): an amend is judged as the whole commit it leaves, against HEAD's parent,
+ * the amend of a merge passing as the merge it stays, and the message as git records it.
  * Commits on `main`, the trunk, the engine's branch and an experiment, on a detached HEAD, and a
  * merge pass at once; a commit whose branch, files or message git cannot tell fails.
  *
@@ -28,8 +27,8 @@
  */
 
 import { headRef } from './gates/tree.ts'
-import { amending, git, merging, stagedFiles } from './staged-commit.ts'
-import { readMessage, takeRefusal } from './takes/index.ts'
+import { git, merging, stagedFiles } from './staged-commit.ts'
+import { commitCommand, readMessage, takeRefusal } from './takes/index.ts'
 
 /** Branches whose commits are no area's: `main`, the trunk and the contract engine's branch. */
 const OWN_LAYERS = new Set([
@@ -81,14 +80,15 @@ function main(): number {
     return 0
   }
 
-  const base = amending() ? amendBase() : 'HEAD'
+  const command = commitCommand()
+  const base = command.amend ? amendBase() : 'HEAD'
 
   if (base === 'merge') {
     return 0
   }
 
   const files = base === undefined ? undefined : stagedFiles(base)
-  const message = file === undefined ? undefined : readMessage(file)
+  const message = file === undefined ? undefined : readMessage(file, command.cleanup)
 
   if (files === undefined || message === undefined) {
     console.error(

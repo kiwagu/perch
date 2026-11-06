@@ -1,16 +1,16 @@
 /**
- * A commit message as git records it, read for the take check: its subject and its trailers, what
- * `git commit --verbose` shows below its scissors line left out. Git strips comment lines or keeps
- * them by its cleanup mode (it keeps them for a message given with `-m`), so the message is read
- * both ways, and whether the two agree is part of what the check judges.
+ * A commit message as git records it, read for the take check: its subject and its trailers. How
+ * git cleans the message up (`command.ts`) says whether what follows the scissors line is left
+ * out and whether comment lines are stripped; where git's default leaves that to whether an editor
+ * opened, the message is read both ways, and whether the two agree is part of what the check
+ * judges.
  */
 
 import { readFileSync } from 'node:fs'
 
 import { git } from '../staged-commit.ts'
 
-/** The line `git commit --verbose` writes above the diff it shows, which is no part of the message. */
-const SCISSORS = /^\S+ -{24} >8 -{24}$/m
+import type { Cleanup } from './command.ts'
 
 export interface Trailer {
   readonly key: string
@@ -20,22 +20,34 @@ export interface Trailer {
 export interface Message {
   readonly subject: string
   readonly trailers: readonly Trailer[]
-  /** Whether the subject and the trailers are the same whether git strips comment lines or keeps them. */
+  /** Whether the subject and the trailers are the same however git's cleanup mode reads them. */
   readonly alike: boolean
 }
 
-/** The subject and trailers of `text` cleaned up by git, its comment lines stripped or kept. */
-function reading(
-  text: string,
-  stripComments: boolean,
-): Pick<Message, 'subject' | 'trailers'> | undefined {
-  const cleaned = git(['stripspace', ...(stripComments ? ['--strip-comments'] : [])], text)
+type Reading = Pick<Message, 'subject' | 'trailers'>
 
-  if (cleaned.status !== 0) {
-    return undefined
+/** The line git cuts a message at, a comment line of its own: `<comment> -------- >8 --------`. */
+function scissors(comments: readonly string[]): RegExp {
+  const marks = comments.map((comment) => comment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+
+  return new RegExp(`^(?:${marks.join('|')}) -{24} >8 -{24}$`, 'm')
+}
+
+/** The subject and trailers of `text` cleaned up by git in `mode`. */
+function reading(text: string, mode: 'strip' | 'whitespace' | 'verbatim'): Reading | undefined {
+  let cleaned = text
+
+  if (mode !== 'verbatim') {
+    const stripped = git(['stripspace', ...(mode === 'strip' ? ['--strip-comments'] : [])], text)
+
+    if (stripped.status !== 0) {
+      return undefined
+    }
+
+    cleaned = stripped.out
   }
 
-  const parsed = git(['interpret-trailers', '--parse'], cleaned.out)
+  const parsed = git(['interpret-trailers', '--parse'], cleaned)
 
   if (parsed.status !== 0) {
     return undefined
@@ -49,12 +61,13 @@ function reading(
 
       return { key: line.slice(0, colon), value: line.slice(colon + 1).trim() }
     })
+  const subject = cleaned.split('\n').find((line) => line.trim() !== '') ?? ''
 
-  return { subject: cleaned.out.split('\n', 1)[0] ?? '', trailers }
+  return { subject, trailers }
 }
 
-/** The message in `file` as git records it, or undefined when it cannot be read. */
-export function readMessage(file: string): Message | undefined {
+/** The message in `file` as git records it after `cleanup`, or undefined when it cannot be read. */
+export function readMessage(file: string, cleanup: Cleanup): Message | undefined {
   let text: string
 
   try {
@@ -63,17 +76,15 @@ export function readMessage(file: string): Message | undefined {
     return undefined
   }
 
-  const kept = text.slice(0, SCISSORS.exec(text)?.index)
-  const stripped = reading(kept, true)
-  const whole = reading(kept, false)
+  const kept = cleanup.cut ? text.slice(0, scissors(cleanup.comments).exec(text)?.index) : text
+  const modes = cleanup.mode === 'either' ? (['strip', 'whitespace'] as const) : [cleanup.mode]
+  const [first, ...others] = modes.map((mode) => reading(kept, mode))
 
-  if (stripped === undefined || whole === undefined) {
+  if (first === undefined || others.some((other) => other === undefined)) {
     return undefined
   }
 
-  const alike =
-    stripped.subject === whole.subject &&
-    JSON.stringify(stripped.trailers) === JSON.stringify(whole.trailers)
+  const alike = others.every((other) => JSON.stringify(other) === JSON.stringify(first))
 
-  return { ...stripped, alike }
+  return { ...first, alike }
 }
