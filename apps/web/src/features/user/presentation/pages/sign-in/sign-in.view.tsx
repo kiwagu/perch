@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -44,6 +45,7 @@ export type SignInListed =
   | 'user.sign-in.password-confirmation-input'
   | 'user.sign-in.name-input'
   | 'user.sign-in.resend-button'
+  | 'user.sign-in.device-limit-dialog'
 
 /** A password field: the password, or the password typed again. */
 export type PasswordField = keyof Passwords
@@ -83,6 +85,13 @@ export interface SignInViewProps {
   readonly onResend: (email: string) => Promise<boolean>
   /** Moves to asking for a reset mail, carrying the email as typed. */
   readonly onForgot: (email: string) => void
+  /**
+   * Signs in all the same past the account's limit of devices, with the values as typed: the
+   * account's device seen least recently is signed out.
+   */
+  readonly onConfirmDeviceLimit: (values: SignInValues) => void
+  /** Goes back to the form from the dialog past the limit of devices, signing nothing in. */
+  readonly onCancelDeviceLimit: () => void
 }
 
 /** The contract code of a refusal, with its text. */
@@ -320,6 +329,18 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
           </FieldGroup>
         </Form>
+        <ConfirmDialog
+          open={props.renders('user.sign-in.device-limit-dialog')}
+          title={t('user.sign-in.device-limit.title')}
+          description={t('user.sign-in.device-limit.body')}
+          confirmLabel={t('user.sign-in.device-limit.confirm')}
+          cancelLabel={t('user.sign-in.device-limit.cancel')}
+          destructive
+          onConfirm={() => props.onConfirmDeviceLimit(values)}
+          onCancel={() => props.onCancelDeviceLimit()}
+          testId="user.sign-in.device-limit-dialog"
+          code="device-limit"
+        />
       </CardContent>
     </Card>
   )

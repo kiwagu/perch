@@ -28,10 +28,21 @@ function passwordsOf(event: SignInEvent): Passwords {
 
 /**
  * The guards of the screen's flow, by the names of its `meta.guards`: whether a sign-in was refused
- * for an email not verified yet, and those of a new password typed twice at sign-up.
+ * for an email not verified yet, whether it found the account signed in on as many devices as it
+ * may be (its outcome `device-limit`), and those of a new password typed twice at sign-up.
  */
 export const signInGuards = {
   emailNotVerified: ({ event }: GuardArgs) =>
     failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
+  atDeviceLimit: ({ event }: GuardArgs) => {
+    const output = 'output' in event ? event.output : undefined
+
+    return (
+      typeof output === 'object' &&
+      output !== null &&
+      'kind' in output &&
+      output.kind === 'device-limit'
+    )
+  },
   ...newPasswordGuards(passwordsOf),
 }

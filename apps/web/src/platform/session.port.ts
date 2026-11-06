@@ -83,6 +83,11 @@ export interface SessionPort {
    * email that has an account answers the same.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
+  /**
+   * Signs this device in to the account of `input`. A sign-in that finds the account signed in on
+   * as many devices as it may be at once signs nothing in and fails as `data:DEVICE_LIMIT`, unless
+   * `input.signOutOldest` confirms it, which signs out the account's device seen least recently.
+   */
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email
