@@ -51,6 +51,7 @@ export type ShellEvent =
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'model.settings.theme' }
   | { readonly type: 'app-shell.sign-out-here-button' }
+  | { readonly type: 'platform.signed-in' }
   | { readonly type: 'platform.signed-out' }
   | { readonly type: 'platform.change-rejected' }
   | { readonly type: 'platform.changes-reloaded' }

@@ -167,7 +167,10 @@ modeling stage.
   `perch.session.leftover-identities` before its databases are deleted and taken off once they
   are gone (`SpaceDeletion`); a delete another tab still holds up after 5 seconds (it keeps the
   database open) goes on without the sign-out, whose tab then hears of it, and the sign-in page
-  says the data leaves the device once the other tabs are closed. Each start deletes the
+  says the data leaves the device once the other tabs are closed, unless an account signed in on
+  the browser since the session ended: each word left for the sign-in page names the last sign-in
+  before the session ended (`perch.session.notice.<sign-in>.<code>`), and a sign-in ends every word naming
+  an earlier one as it is kept (`perch.session.sign-ins`), a late one included. Each start deletes the
   databases of the identities still listed, but the one signed in, and opening an identity's
   database waits for a delete of it that the page runs. A sign-out the gateway did not confirm (offline, or
   giving unsent changes up, or kept by a frozen tab while offline) leaves the session token, whose
@@ -344,9 +347,12 @@ modeling stage.
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
   page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
-  browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
-  with the browser's word, `perch.session.notice`, says the first of the two by the rank the
-  contract gives the anchor's codes, `SESSION_NOTICES`, and takes both), one code each, while
+  browser's storage; the page reads it with the browser's words, `perch.session.notice.<sign-in>.<code>`,
+  says the first by the rank the contract gives the anchor's codes, `SESSION_NOTICES`, and
+  takes them all; each slot holds the words left since the last sign-in on the browser, which
+  ends the browser's as it is kept), one code each, and a `clear` of it, the frame's on a sign-in
+  heard (`platform.signed-in`), drops this tab's own word left before that sign-in
+  (`SessionPort.dropNotice`), however late it is heard, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).

@@ -46,6 +46,7 @@ export function fakeSession(): { readonly session: SessionPort } {
       notice: () => undefined,
       clearNotice: () => {},
       leaveNotice: () => {},
+      dropNotice: () => {},
       protocolRefused: () => false,
       memberships: () => [],
       subscribeMemberships: () => () => {},
