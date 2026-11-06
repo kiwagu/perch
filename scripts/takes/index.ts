@@ -4,5 +4,5 @@
  */
 
 export { type Cleanup, type CommitCommand, commitCommand } from './command.ts'
-export { type Message, readMessage, type Trailer } from './message.ts'
+export { type Doubt, type Message, readMessage, type Trailer } from './message.ts'
 export { takeRefusal } from './refusal.ts'

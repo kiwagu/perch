@@ -19,7 +19,7 @@ export interface Cleanup {
   /** Whether git cuts the message at its scissors line. */
   readonly cut: boolean
   readonly mode: CleanupMode
-  /** What a comment line may start with. */
+  /** What a comment line starts with: the one configured, or each git may pick under `auto`. */
   readonly comments: readonly string[]
 }
 
@@ -39,7 +39,10 @@ function config(key: string, type?: string): string | undefined {
   return status === 0 ? out.trim() : undefined
 }
 
-/** What a comment line may start with, by `core.commentChar` (or `core.commentString`). */
+/**
+ * What a comment line starts with, by `core.commentChar` (or `core.commentString`): under `auto`,
+ * git picks one per commit, so each it may pick.
+ */
 function comments(): readonly string[] {
   const { status, out } = git(['config', '--get-regexp', '^core\\.comment(char|string)$'])
   const value =

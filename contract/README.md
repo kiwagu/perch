@@ -1268,7 +1268,9 @@ plain cherry-pick or rebase runs no hook and a revert of a take fails it. The ch
 `git commit` that runs the hook from `/proc`, its options parsed as git parses them: an amend is
 judged as the whole commit it leaves, and the message as git records it, cut at its scissors line
 under `--verbose` and its comment lines stripped or kept by the cleanup mode; where git's default
-mode leaves that to whether an editor opened, a message its comment lines change fails. Without
+mode leaves that to whether an editor opened, a message its comment lines change fails, and so
+does one the comment characters git may pick under `core.commentChar=auto` read differently.
+Without
 `/proc` (another system), an amend is judged by what it adds and the message is cut at a
 scissors line it holds. A take is checked against
 `main` and `contract/trunk` as the clone knows them, the remote's when it has no branch of its

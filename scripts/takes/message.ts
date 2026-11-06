@@ -2,8 +2,9 @@
  * A commit message as git records it, read for the take check: its subject and its trailers. How
  * git cleans the message up (`command.ts`) says whether what follows the scissors line is left
  * out and whether comment lines are stripped; where git's default leaves that to whether an editor
- * opened, the message is read both ways, and whether the two agree is part of what the check
- * judges.
+ * opened, the message is read both ways, and where git picks its comment character per commit
+ * (`core.commentChar=auto`), with each it may pick. Whether the readings agree is part of what the
+ * check judges.
  */
 
 import { readFileSync } from 'node:fs'
@@ -17,28 +18,37 @@ export interface Trailer {
   readonly value: string
 }
 
+/** What could make git record a message otherwise than it reads: its comment lines, or its comment character. */
+export type Doubt = 'comment-lines' | 'comment-character'
+
 export interface Message {
   readonly subject: string
   readonly trailers: readonly Trailer[]
-  /** Whether the subject and the trailers are the same however git's cleanup mode reads them. */
-  readonly alike: boolean
+  /** Why the readings of the message disagree, or undefined where they agree. */
+  readonly doubt: Doubt | undefined
 }
 
 type Reading = Pick<Message, 'subject' | 'trailers'>
 
 /** The line git cuts a message at, a comment line of its own: `<comment> -------- >8 --------`. */
-function scissors(comments: readonly string[]): RegExp {
-  const marks = comments.map((comment) => comment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-
-  return new RegExp(`^(?:${marks.join('|')}) -{24} >8 -{24}$`, 'm')
+function scissors(comment: string): RegExp {
+  return new RegExp(`^${comment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} -{24} >8 -{24}$`, 'm')
 }
 
-/** The subject and trailers of `text` cleaned up by git in `mode`. */
-function reading(text: string, mode: 'strip' | 'whitespace' | 'verbatim'): Reading | undefined {
+/** The subject and trailers of `text` cleaned up by git in `mode`, comment lines starting with `comment`. */
+function reading(
+  text: string,
+  mode: 'strip' | 'whitespace' | 'verbatim',
+  comment: string,
+): Reading | undefined {
+  const as = ['-c', `core.commentString=${comment}`]
   let cleaned = text
 
   if (mode !== 'verbatim') {
-    const stripped = git(['stripspace', ...(mode === 'strip' ? ['--strip-comments'] : [])], text)
+    const stripped = git(
+      [...as, 'stripspace', ...(mode === 'strip' ? ['--strip-comments'] : [])],
+      text,
+    )
 
     if (stripped.status !== 0) {
       return undefined
@@ -47,7 +57,7 @@ function reading(text: string, mode: 'strip' | 'whitespace' | 'verbatim'): Readi
     cleaned = stripped.out
   }
 
-  const parsed = git(['interpret-trailers', '--parse'], cleaned)
+  const parsed = git([...as, 'interpret-trailers', '--parse'], cleaned)
 
   if (parsed.status !== 0) {
     return undefined
@@ -76,15 +86,24 @@ export function readMessage(file: string, cleanup: Cleanup): Message | undefined
     return undefined
   }
 
-  const kept = cleanup.cut ? text.slice(0, scissors(cleanup.comments).exec(text)?.index) : text
   const modes = cleanup.mode === 'either' ? (['strip', 'whitespace'] as const) : [cleanup.mode]
-  const [first, ...others] = modes.map((mode) => reading(kept, mode))
+  const rows = cleanup.comments.map((comment) => {
+    const kept = cleanup.cut ? text.slice(0, scissors(comment).exec(text)?.index) : text
 
-  if (first === undefined || others.some((other) => other === undefined)) {
+    return modes.map((mode) => reading(kept, mode, comment))
+  })
+  const readings = rows.flat()
+  const first = readings[0]
+
+  if (first === undefined || readings.some((one) => one === undefined)) {
     return undefined
   }
 
-  const alike = others.every((other) => JSON.stringify(other) === JSON.stringify(first))
+  const same = (one: Reading | undefined): boolean => JSON.stringify(one) === JSON.stringify(first)
+  const lines = rows.every((row) =>
+    row.every((one) => JSON.stringify(one) === JSON.stringify(row[0])),
+  )
+  const doubt = !lines ? 'comment-lines' : readings.every(same) ? undefined : 'comment-character'
 
-  return { ...first, alike }
+  return { ...first, doubt }
 }

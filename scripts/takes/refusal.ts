@@ -91,9 +91,16 @@ export function takeRefusal(
     return undefined
   }
 
-  if (!message.alike) {
+  if (message.doubt === 'comment-lines') {
     return [
       `contract take: on ${branch}, this commit's message reads one way when git strips its comment lines and another when it keeps them, as its cleanup mode decides (a message given with -m keeps them): write the subject first, and no line starting with the comment character above the trailer.`,
+      FORM,
+    ].join('\n')
+  }
+
+  if (message.doubt === 'comment-character') {
+    return [
+      `contract take: on ${branch}, this commit's message reads one way or another by the comment character git picks for it (core.commentChar is auto): commit with one set, git -c core.commentChar='#' commit ..., or leave out the lines that start with one of #;@!$%^&|:.`,
       FORM,
     ].join('\n')
   }

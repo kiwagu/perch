@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'bun:test'
+import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -6,6 +6,12 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const CONTRACT_TAKE = fileURLToPath(new URL('./contract-take.ts', import.meta.url))
+
+/**
+ * Each case runs git, and many the check itself through a real commit, a dozen times or more: under
+ * the pre-commit hook's suites running side by side, one takes seconds.
+ */
+setDefaultTimeout(30_000)
 
 /**
  * The environment of every process here: without what a git hook would pass on, the marker the
@@ -662,6 +668,41 @@ describe('contract-take on an area branch', () => {
     expect(git(root, 'log', '-1', '--format=%(trailers:key=Written-on-branch,valueonly)')).toBe(
       'ABC-1',
     )
+  })
+
+  it('reads a message with each comment character git may pick under core.commentChar=auto', () => {
+    const { root, screen } = trunk()
+    const cut = '------------------------ >8 ------------------------'
+
+    git(root, 'config', 'core.commentChar', 'auto')
+    stage(root, SCREEN, 'old names dropped')
+    refuses(
+      commitThroughHook(
+        root,
+        '--verbose',
+        '--cleanup=whitespace',
+        '-m',
+        'refactor(contract): drop the old names',
+        '-m',
+        'Written-on-branch: ABC-1',
+        '-m',
+        `; ${cut}\nThis paragraph stays.`,
+      ),
+      'by the comment character git picks for it',
+    )
+    author(root, 'reset', '-q', '--hard', 'HEAD')
+    pick(root, screen)
+
+    const taken = commitThroughHook(
+      root,
+      '-m',
+      'feat(contract): model the page',
+      '-m',
+      `Taken-from: contract/trunk ${screen} ABC-1`,
+    )
+
+    expect(taken.stderr).not.toContain('contract take')
+    expect(taken.status).toBe(0)
   })
 
   it('lets a take through written in the editor of git commit --verbose, its diff cut off', () => {
