@@ -8,7 +8,7 @@
  * make closes it as a failed server (1011), and the device comes back with the same token. A
  * device signed out while its session is read is closed with the code its row's reason names
  * (4001, 4002, 4003), else with 4001. The device is
- * marked seen at its hello and then at most every five minutes it talks. A device holds one live
+ * marked seen at its hello, before its welcome, and then at most every five minutes it talks. A device holds one live
  * socket: the hello that registers closes its older ones (1000), without signing it out. An
  * organisation whose database cannot be read is left out of the welcome (`welcome-heads.ts`); the
  * identity's own region failing fails the hello. Once the device is welcomed, the account's email
@@ -213,9 +213,10 @@ export class ConnectionHello {
     }
 
     this.#registered(unregister)
-    this.#seen.mark(caller.identity, hello.device)
     // The device holds one live socket: an older one it gave up is served no more.
     this.#connections.supersede(caller.identity, hello.device, this.#listener)
+    // Seen before it is welcomed: whatever it does next, the account's devices are judged by it.
+    await this.#seen.mark(caller.identity, hello.device)
 
     return { id: caller.identity, email: caller.email }
   }

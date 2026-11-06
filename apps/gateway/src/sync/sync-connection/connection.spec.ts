@@ -130,6 +130,8 @@ interface ConnectOptions {
   ) => Promise<SessionRead>
   /** Ends the session of a device that signs out over its channel; the directory ends it by default. */
   readonly signOut?: SyncConnectionDeps['sessions']['signOut']
+  /** Marks a device seen in place of the directory, which answers at once by default. */
+  readonly seen?: SyncConnectionDeps['devices']['seen']
 }
 
 interface GatewayOptions {
@@ -322,7 +324,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
       seen: (device) => {
         seen.push(device)
 
-        return okAsync(undefined)
+        return options.seen ? options.seen(device) : okAsync(undefined)
       },
       byToken: (token) => devices.byToken(token),
     },
@@ -529,6 +531,54 @@ describe('SyncConnection', () => {
     expect(seen).toEqual([{ identity: ann.identity.id, device: DEVICE }])
     // The hello timer is gone with the hello.
     expect(clock.pending()).toBe(0)
+  })
+
+  it('welcomes a device once the mark of its hello landed, so it is seen before it hears anything', async () => {
+    let reach = () => {}
+    let release = () => {}
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve
+    })
+    const landed = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { socket, connection, ann } = await connect({
+      seen: () => {
+        reach()
+
+        return ResultAsync.fromSafePromise(landed)
+      },
+    })
+    const helloed = hello(connection, ann.token)
+
+    await reached
+
+    // Every other step of the hello has time to run meanwhile: the welcome waits for the mark.
+    const first = await Promise.race([
+      helloed.then(() => 'welcomed'),
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve('still marking'), 200)
+      }),
+    ])
+
+    expect(first).toBe('still marking')
+    expect(socket.sent).toEqual([])
+
+    release()
+    await helloed
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+  })
+
+  it('welcomes a device all the same when the mark of its hello failed, and logs it', async () => {
+    const { socket, connection, ann, logLines } = await connect({
+      seen: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is away')),
+    })
+
+    await hello(connection, ann.token)
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+    expect(logLines.join('\n')).toContain('the device could not be marked seen')
   })
 
   it.each<{ readonly name: string; readonly token: (fixture: Connected) => Promise<string> }>([

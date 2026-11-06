@@ -21,9 +21,10 @@ the device it was opened on. A read the directory could not make closes the sock
 server (1011), and the device comes back with the same token. Nothing is spent at a hello, so a
 device may say it again on any socket. A device holds one live socket: the hello that registers
 closes the device's older sockets with 1000 (`another connection of this device took over`,
-`ConnectionRegistry.supersede`), which signs nothing out. A device is marked seen at its hello and
-then at most every five minutes it talks, which extends its live session (`DeviceSessions.seen`);
-a mark that fails is logged and changes nothing for the device. It is welcomed
+`ConnectionRegistry.supersede`), which signs nothing out. A device is marked seen at its hello,
+before its welcome, so the account's devices are judged by that mark whatever the device does
+next, and then at most every five minutes it talks, without holding it up; a mark extends its live
+session (`DeviceSessions.seen`); a mark that fails is logged and changes nothing for the device. It is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
 belongs to and those memberships, the only regions it may name (an organisation whose database
 cannot be read is left out of the welcome and logged, its membership kept: the device syncs only

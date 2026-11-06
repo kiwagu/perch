@@ -45,7 +45,8 @@ test.describe('Sign in past the number of devices an account may be signed in on
         signInDevicesCToK(freshDevices, data))
 
     await test.step('3. On device A, reload [/me] and wait for [app-shell.sync-message] to carry [code:synced]', async () => {
-      // Device A is seen again: device C is now the device seen least recently.
+      // Device A is seen again at its hello, before its welcome, so once it is synced device C is
+      // the device seen least recently.
       await page.reload()
       await appReady(page)
       await syncSays(page)
