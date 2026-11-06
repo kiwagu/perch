@@ -9,10 +9,11 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
-} from '../protocol'
-import { manualClock } from '../testing'
+} from '../../protocol'
+import { manualClock } from '../../testing'
 
-import { type DeviceCredentials, RECONNECT_DELAYS_MS, WebSocketTransport } from './transport'
+import type { DeviceCredentials } from './port'
+import { RECONNECT_DELAYS_MS, WebSocketTransport } from './web-socket'
 
 /** A socket the test opens, feeds and closes by hand; it keeps what the transport sent. */
 class FakeSocket extends EventTarget {
