@@ -21,10 +21,9 @@ export default defineConfig({
   // Every test signs up a fresh account in a fresh browser context, so specs share no state, and
   // each worker's browsers claim a client address of their own at the front
   // (`src/support/client-address.ts`), so the gateway's per-address limits do not bind the number
-  // of workers either. Two, measured 2026-11-06 on the dev host (16 cores) over the 107 tests:
-  // 237 s; three took 211 s, each test running about 40% longer, with 3.2 GB of memory at the
-  // peak instead of 2.2 GB, and once left a tab of `signed-out-before-data` stuck opening its
-  // data. The reporter prints each spec file's tests together.
+  // of workers either. Two, measured 2026-11-06 on the dev host (20 CPU threads) over the 107
+  // tests: 237 s; three took 211 s, each test running about 40% longer, with 3.2 GB of memory at
+  // the peak instead of 2.2 GB. The reporter prints each spec file's tests together.
   workers: 2,
   reporter: [['./scripts/spec-reporter.ts'], ['html', { open: 'never' }]],
   // Screenshot baselines are not committed (images stay out of the repository): the
