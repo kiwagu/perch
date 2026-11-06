@@ -150,6 +150,44 @@ describe('the sign-in service', () => {
   })
 })
 
+describe('a sign-in past the limit of devices', () => {
+  it('asks before signing in, signing nothing in, and signs in once confirmed', async () => {
+    await annVerified()
+    opened.auth.atDeviceLimit(ann.email)
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+    expect(
+      opened.auth.requests.flatMap((request) =>
+        request.kind === 'sign-in' ? [request.signOutOldest ?? false] : [],
+      ),
+    ).toEqual([false, true])
+  })
+
+  it('signs nothing in once the question is cancelled', async () => {
+    await annVerified()
+    opened.auth.atDeviceLimit(ann.email)
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+    actor.send({ type: 'user.sign-in.device-limit-dialog.cancel-button' })
+
+    expect(actor.getSnapshot().value).toBe('sign-in')
+    expect(session.current()).toBeUndefined()
+  })
+})
+
 describe('the sign-in form', () => {
   it('asks to check the mail after a sign-up, in the mode sign-in, signing nothing in and asking its host nothing', async () => {
     const actor = start()

@@ -11,6 +11,7 @@ import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.su
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
+import { DeviceSessions } from '../device-sessions'
 
 import {
   ANN,
@@ -199,6 +200,16 @@ describe('authHandler, the reset of a password', () => {
     }
 
     expect(mounted.closes).toEqual([[ann.identity, undefined, CLOSE.passwordChanged]])
+
+    // Every device signed out keeps why, for its next hello.
+    const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
+
+    for (const device of ['laptop', 'phone']) {
+      const row = (await devices.byToken(ann.tokens.get(device) ?? ''))._unsafeUnwrap()
+
+      expect(row?.endedReason).toBe('password-changed')
+    }
+
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'laptop'), FROM))?.status).toBe(
       200,

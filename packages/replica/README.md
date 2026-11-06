@@ -77,9 +77,11 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
   `signedOut` 4000 (the device's own sign-out), `revoked` 4001 (the device's session was
   signed out from another device, alone or with every device of its identity, also while its
-  hello is under way) and `passwordChanged` 4002 (the device's session ended because the
+  hello is under way), `passwordChanged` 4002 (the device's session ended because the
   account's password changed: through a reset link, every device; on another device, every
-  device but that one). And the membership contract the gateway
+  device but that one) and `deviceLimit` 4003 (a sign-in on another device went past the
+  account's limit of devices and signed out this one, seen least recently). A device that was
+  offline when its session ended hears the same code at its next hello. And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
@@ -212,11 +214,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
   welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
-  (`signed-out`), signed out from another device (`revoked`, 4001) or by a change of the
-  account's password (`password-changed`, 4002), none followed by a
+  (`signed-out`), signed out from another device (`revoked`, 4001), by a change of the
+  account's password (`password-changed`, 4002) or by a sign-in past the account's limit of
+  devices (`device-limit`, 4003), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
-  report on `revoked` and `password-changed`) behind the `SyncTransport` port;
+  report on `revoked`, `password-changed` and `device-limit`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and

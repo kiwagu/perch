@@ -5,6 +5,16 @@ import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids
 import { z } from '@workspace/zod'
 
 /**
+ * Why a device was signed out from elsewhere, as its session row keeps it for the device's next
+ * hello: from another device (`revoked`), by a change of the account's password
+ * (`password-changed`), or by a sign-in past the account's limit of devices (`device-limit`).
+ */
+export const ENDED_REASONS = ['revoked', 'password-changed', 'device-limit'] as const
+
+/** One of `ENDED_REASONS`. */
+export type EndedReason = (typeof ENDED_REASONS)[number]
+
+/**
  * A session of a device of an identity, as the directory's `device_session` row records it: one
  * row per sign-in, kept once the session ended.
  */
@@ -26,6 +36,11 @@ export interface DeviceSessionRow {
    * moved afterwards. Absent while it is live, and for a session that merely expired.
    */
   readonly endedAt?: Date
+  /**
+   * Why the session was ended from elsewhere, when it was live then (`ENDED_REASONS`); absent for
+   * an ending of the device's own, an expiry, and a session that is live.
+   */
+  readonly endedReason?: EndedReason
 }
 
 /** A row of `device_session` as the driver returns it, once its values are plain. */
@@ -40,6 +55,7 @@ const deviceSessionRow = z
     last_seen_at: z.date(),
     expires_at: z.date(),
     ended_at: z.date().optional(),
+    ended_reason: z.enum(ENDED_REASONS).optional(),
   })
   .transform(
     (row): DeviceSessionRow => ({
@@ -52,6 +68,7 @@ const deviceSessionRow = z
       lastSeenAt: row.last_seen_at,
       expiresAt: row.expires_at,
       ...(row.ended_at === undefined ? {} : { endedAt: row.ended_at }),
+      ...(row.ended_reason === undefined ? {} : { endedReason: row.ended_reason }),
     }),
   )
 

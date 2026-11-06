@@ -30,7 +30,9 @@ and commands beside it), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
-`platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, at sign-up it holds the
+`platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, a sign-in that finds the
+account at its limit of devices (its outcome `device-limit`, the guard `atDeviceLimit`) asks in its
+dialog and, confirmed, invokes `platform.sign-in` again with `signOutOldest`, at sign-up it holds the
 password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
 and compares the password typed again as either password is typed and on the switch into
 sign-up, it keeps the codes of the form's error and mail message, and the address the last
@@ -184,6 +186,11 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   (`user.sign-in.resend-button`), the message naming the address the last sign-up or resend
   mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
+  a sign-in that finds the account signed in on as many devices as it may be at once
+  (`data:DEVICE_LIMIT`, which `SignInService` answers as the outcome `device-limit`) signs nothing
+  in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
+  `user.sign-in.device-limit.*`) whether to sign in all the same, which signs out the device used
+  least recently, its cancel going back to the form;
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to
@@ -198,7 +205,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   were signed out from another device." when this device was signed out from another one
   (`user.sign-in.notice-message` with the code `signed-out-elsewhere`), that a change of the
   account's password signed it out, through a reset link or on another device (the code
-  `password-changed-elsewhere`, when the channel closed with 4002), that a new password was set
+  `password-changed-elsewhere`, when the channel closed with 4002), that a sign-in on another
+  device went past the account's limit of devices and signed out this one, used least recently
+  (the code `device-limit-elsewhere`, when the channel closed with 4003), that a new password was set
   in another tab through a reset link (the code `password-reset-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);

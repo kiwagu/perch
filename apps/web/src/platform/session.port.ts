@@ -23,6 +23,8 @@ export interface SignOutOptions {
  * when another device of the identity signed this one out and nothing waited to be sent.
  * `password-changed-elsewhere` when the account's password changed (through a reset link, or on
  * another device), which signed this device out, and nothing waited to be sent.
+ * `device-limit-elsewhere` when a sign-in on another device went past the account's limit of
+ * devices and signed out this one, the device seen least recently, and nothing waited to be sent.
  */
 export const SESSION_NOTICES = [
   'resend-after-sign-in',
@@ -30,6 +32,7 @@ export const SESSION_NOTICES = [
   'password-reset-elsewhere',
   'signed-out-elsewhere',
   'password-changed-elsewhere',
+  'device-limit-elsewhere',
 ] as const
 
 /** A word left for the sign-in page (`SESSION_NOTICES`). */
@@ -80,6 +83,11 @@ export interface SessionPort {
    * email that has an account answers the same.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
+  /**
+   * Signs this device in to the account of `input`. A sign-in that finds the account signed in on
+   * as many devices as it may be at once signs nothing in and fails as `data:DEVICE_LIMIT`, unless
+   * `input.signOutOldest` confirms it, which signs out the account's device seen least recently.
+   */
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email

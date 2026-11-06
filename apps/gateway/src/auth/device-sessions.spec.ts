@@ -23,7 +23,7 @@ import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import { type AuthInstance, SESSION_LIFETIME_MS } from './auth-instance'
 import { AuthSessions } from './auth-sessions'
 import { deviceRoutes } from './device.routes'
-import { endedAt } from './device-session-rows'
+import { type DeviceSessionRow, endedAt } from './device-session-rows'
 import { DeviceSessions } from './device-sessions'
 
 const closers: Array<() => Promise<void>> = []
@@ -105,6 +105,19 @@ const ENDINGS: ReadonlyArray<readonly [string, (ending: Ending) => Promise<void>
 interface ExpiredEnding extends Ending {
   readonly devices: DeviceSessions
   readonly clock: Clock
+}
+
+/**
+ * Why each of `ENDINGS` signed the device out, as its row keeps it for the device's next hello:
+ * only a sign-out from another device names a reason; the device's own sign-out and a new sign-in
+ * of the same device name none.
+ */
+const REASONS: Readonly<Record<string, DeviceSessionRow['endedReason']>> = {
+  'its sign-out': undefined,
+  'its ending by its row': 'revoked',
+  'the ending of every session of its identity': 'revoked',
+  "Better Auth's own sign-out": undefined,
+  'a new sign-in of its device': undefined,
 }
 
 /**
@@ -373,6 +386,43 @@ describe('DeviceSessions', () => {
       expect((await devices.byToken(token))._unsafeUnwrap()).toEqual(ended)
       // Marked ended at its expiry, which stays where it was.
       expect(ended).toMatchObject({ expiresAt: expiry, endedAt: expiry })
+    },
+  )
+
+  it.each(ENDINGS)('keeps why %s signed the device out, for its next hello', async (name, end) => {
+    const { auth, local, clock, devices } = await harness()
+    const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await clock.advance(MINUTE_MS)
+    await end({ auth, sessions, identity: identityOf(user.id), token })
+
+    const row = (await devices.byToken(token))._unsafeUnwrap() ?? expect.unreachable('a row')
+
+    expect(row.endedAt).toEqual(new Date(clock.now()))
+    expect(row.endedReason).toBe(REASONS[name])
+  })
+
+  it.each(EXPIRED_ENDINGS)(
+    'keeps no reason for a session that had expired when %s marked it ended',
+    async (_, end) => {
+      const { auth, local, clock, devices } = await harness()
+      const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
+      const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+      const identity = identityOf(user.id)
+
+      await clock.advance(Date.now() - 3 * MINUTE_MS - clock.now())
+
+      const expiry = new Date(clock.now() + MINUTE_MS)
+
+      await local.db.query(deviceSessionMoveEndStatement, { session_token: token, ends_at: expiry })
+      await clock.advance(2 * MINUTE_MS)
+      await end({ auth, sessions, devices, clock, identity, token })
+
+      const row = (await devices.byToken(token))._unsafeUnwrap() ?? expect.unreachable('a row')
+
+      expect(row.endedAt).toEqual(expiry)
+      expect(row.endedReason).toBeUndefined()
     },
   )
 

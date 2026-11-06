@@ -20,8 +20,12 @@ export interface SocketLike {
 export interface SyncConnectionDeps {
   /** Reads the session a hello's token holds, and ends it when the device signs out. */
   readonly sessions: Pick<AuthSessions, 'read' | 'signOut'>
-  /** The devices' rows: a device is marked seen at its hello, then at most every five minutes. */
-  readonly devices: Pick<DeviceSessions, 'seen'>
+  /**
+   * The devices' rows: a device is marked seen at its hello, then at most every five minutes; a
+   * hello whose session ended is told why from its row, when another device or the account's own
+   * change ended it.
+   */
+  readonly devices: Pick<DeviceSessions, 'seen' | 'byToken'>
   readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
   /**

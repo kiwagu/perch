@@ -11,7 +11,7 @@ const SCHEMA_DIR = join(import.meta.dirname, '../../../../database/schema/direct
 
 /** Our columns beside Better Auth's, per table: each by name, with whether it may be left empty. */
 const OURS: Record<string, Readonly<Record<string, boolean>>> = {
-  device_session: { last_seen_at: false, ended_at: true },
+  device_session: { last_seen_at: false, ended_at: true, ended_reason: true },
 }
 
 interface Column {

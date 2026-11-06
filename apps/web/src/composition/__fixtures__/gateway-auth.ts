@@ -26,7 +26,13 @@ export type FakeAuthRequest =
       readonly name: string
       readonly locale: string
     }
-  | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
+  | {
+      readonly kind: 'sign-in'
+      readonly email: string
+      readonly device: NamedDevice
+      /** Present on a sign-in that confirmed signing out the device seen least recently. */
+      readonly signOutOldest?: true
+    }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
   | { readonly kind: 'request-reset'; readonly email: string }
@@ -61,6 +67,12 @@ export interface FakeGatewayAuth extends GatewayAuth {
    * refused as `data:LAST_ADMIN` and change nothing.
    */
   blockDeletion(email: string, blocked?: boolean): void
+  /**
+   * Puts the account of `email` at its limit of devices (`at`, by default) or takes it off: a
+   * sign-in of it that does not confirm signing out its device seen least recently is then refused
+   * as `data:DEVICE_LIMIT`, nothing signed in, and one that confirms signs in.
+   */
+  atDeviceLimit(email: string, at?: boolean): void
 }
 
 /** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
@@ -90,6 +102,8 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
   const deletions = new Map<string, string>()
   /** The emails of the accounts that are the only administrator of an organisation with others. */
   const onlyAdmins = new Set<string>()
+  /** The emails of the accounts at their limit of devices. */
+  const atLimit = new Set<string>()
   /** The email of the account each session token was given for. */
   const sessions = new Map<string, string>()
   const requests: FakeAuthRequest[] = []
@@ -137,6 +151,13 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return link
     },
+    atDeviceLimit: (email, at = true) => {
+      if (at) {
+        atLimit.add(email.toLowerCase())
+      } else {
+        atLimit.delete(email.toLowerCase())
+      }
+    },
     blockDeletion: (email, blocked = true) => {
       if (blocked) {
         onlyAdmins.add(email.toLowerCase())
@@ -182,7 +203,12 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return okAsync(undefined)
     },
     signIn: (input, device) => {
-      requests.push({ kind: 'sign-in', email: input.email, device })
+      requests.push({
+        kind: 'sign-in',
+        email: input.email,
+        device,
+        ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+      })
 
       const account = accounts.get(input.email.toLowerCase())
 
@@ -192,6 +218,15 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       if (!account.verified) {
         return errAsync(dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'))
+      }
+
+      if (atLimit.has(input.email.toLowerCase()) && input.signOutOldest !== true) {
+        return errAsync(
+          dataError(
+            'data:DEVICE_LIMIT',
+            'the account is signed in on as many devices as it may be',
+          ),
+        )
       }
 
       const given = token()
