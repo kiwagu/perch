@@ -29,8 +29,8 @@ import { NOTHING_SEEN } from '../../application/setting-writes'
 import { shellEvents } from '../../application/shell.events'
 
 import { pageTitle } from './page-title'
-import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
+import { type ShellLinkProps, ShellView } from './shell-view'
 import { deliverStored } from './stored-settings'
 
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
