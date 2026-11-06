@@ -7,7 +7,8 @@
   `contract:check:sources`, `contract:check:consumers`) and the check of the coverage block
   (`contract:coverage:check`); the gate for a change.
   `bun run check --force` runs every task afresh instead of replaying turbo's cache. It runs its
-  tasks four at a time, for the reason `bun run test` does below.
+  tasks four at a time, at low CPU priority and with vitest's workers capped, for the reasons
+  `bun run test` gives below.
 - `bun run test:db` with the `e2e` stand up (`mcproc start e2e`): the schema permission suites,
   the seed and the gateway smoke test against the e2e stand. The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
@@ -23,8 +24,11 @@
   workers, every test on a phone and the `@smoke` ones on a desktop too, about 5 minutes in all;
   `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
   front serves, so it leaves the dev stand's build alone. It holds a 4G memory lease for its
-  build and browsers: when the host is short of memory it waits its turn (`mcproc leases` shows
-  the queue). [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.
+  build and browsers, and it runs in mcproc's `e2e` group (`--exclusive e2e`, with
+  `perf:measure`): one of them at a time on the host, whichever checkout starts it. A run waits
+  its turn when the host is short of memory or another run holds the group (then it says once
+  whom it waits for), for up to an hour; `mcproc leases` shows the queue and the holder.
+  [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.
 
 `bun run test:db` and `CI=1 bun run test:e2e`, run without arguments, record a receipt for the
 tree they passed on in the gitignored `.gates/` folder (`scripts/gates/`; a run given a spec or a
@@ -49,9 +53,16 @@ filter records none); a commit on `main` is refused without both receipts for ex
 
 ## Commands of the root
 
-- `bun run test`: every package's unit and functional tests, four packages at a time (each
-  vitest takes the cores it finds; all of them at once starved one another past vitest's 5 s
-  timeout in the pre-commit hook, at no gain in time). Part of the pre-commit hook.
+- `bun run test`: every package's unit and functional tests, four packages at a time (all of
+  them at once starved one another past vitest's 5 s timeout in the pre-commit hook, at no gain
+  in time), each vitest on at most four workers (`VITEST_MAX_WORKERS`, 4 unless the environment
+  sets it: a machine that runs nothing beside it may give vitest every core), at low CPU priority
+  (`nice -n 10`, as `typecheck`, `lint` and `check` run), so an e2e run on the same host gets the
+  CPU first. Measured on a 20-thread host, one run each, with `check --force` started from
+  another checkout beside an e2e run: uncapped, the check took up to 18 threads and the e2e's
+  slowest test went from 15 s to 22 s; capped and niced, it took 15 to 16 s, and the check 78 to
+  88 s against 80 s uncapped (63 to 71 s when nothing else runs, either way). Part of the
+  pre-commit hook.
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now),
@@ -102,7 +113,7 @@ Run from the root; each is described in the README named beside it.
 |---|---|---|
 | `bun run seed`, `bun run seed:sweep` | seed the dev stand through its gateway, or remove the seed data (with the dev stand's addresses from `mcproc exec`; neither needs the auth secret) | [seed](../../seed/README.md) |
 | `bun run load -- --devices 20 --members 10 --hold 15` | the gateway load test: a gateway of its own on port 5197 in front of the e2e stand's SurrealDB, one table row per step | [apps/gateway](../../apps/gateway/README.md), *Load test* |
-| `bun run perf:measure` | the start's timings on a slowed-down phone against their budgets, on the production build the e2e stand serves | [tests/e2e](../../tests/e2e/README.md) |
+| `bun run perf:measure` | the start's timings on a slowed-down phone against their budgets, on the production build the e2e stand serves, in turn with the e2e runs (mcproc's `e2e` group) | [tests/e2e](../../tests/e2e/README.md) |
 | `bun run e2e:scaffold <scenario id>`, `bun run e2e:coverage` | the failing test of a new scenario, and the check that every scenario has its test | [tests/e2e](../../tests/e2e/README.md) |
 | `bun run i18n:check` | translation keys against the catalogs | [apps/web](../../apps/web/README.md) |
 | `bun run --filter @workspace/replica measure`, `measure:validation` | the replica's write path, and what checking a pushed batch costs the server, on this machine | [packages/replica](../../packages/replica/README.md) |
