@@ -8,13 +8,16 @@ import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 import { createProfile } from '../__fixtures__/profile'
 import { browserDatabases, openTestWorld, type TestWorld } from '../__fixtures__/session'
 import {
+  forgetDevice,
   IDENTITY_KEY,
   type KeptDevice,
   MEMBERSHIPS_KEY,
   type MemoryStorage,
+  markSignIn,
   memoryStorage,
   saveDevice,
   savedIdentity,
+  savedNotice,
   savedToken,
   TOKEN_KEY,
 } from '../storage'
@@ -209,6 +212,27 @@ describe('a forced sign-out and a sign-in another tab made meanwhile', () => {
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
     // Ann's data is the call of the tab that signed her out.
     expect(destroyed()).toEqual([])
+    expect(session.notice()).toBeUndefined()
+  })
+
+  it('leaves the sign-in page no word once an account signed in and out while it waited', async () => {
+    const locks = new FakeLocks()
+    const world = await annSyncing(locks)
+    const { session, storage, destroyed } = world
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+    const lock = writeLockName(ann.identity.id)
+    const letGo = holdWriteLock(locks)
+
+    world.stub.closeChannels(ann.identity.id, id, CLOSE.revoked)
+    await vi.waitFor(() => expect(locks.waiting(lock, 'exclusive')).toBe(true))
+    // Another tab ends the same session first, then Bob signs in there and out again; this tab
+    // hears of it only once its own sign-out goes on.
+    forgetDevice(storage)
+    markSignIn(storage)
+    letGo()
+
+    await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
+    expect(savedNotice(storage)).toBeUndefined()
     expect(session.notice()).toBeUndefined()
   })
 })

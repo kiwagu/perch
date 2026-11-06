@@ -35,7 +35,7 @@ describe('the platform events of this browser', () => {
     const { heard } = listening(storage)
 
     savePasswordReset(storage)
-    storage.changeElsewhere('perch.session.notice', 'signed-out-elsewhere')
+    storage.changeElsewhere('perch.session.notice.0.signed-out-elsewhere', 'signed-out-elsewhere')
 
     expect(heard).toEqual([])
   })

@@ -139,7 +139,6 @@ export class SessionService implements SessionPort {
         }
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
-      this.subscribe((user) => user && this.#signInNotice.signedIn(user.id)),
     ]
   }
 
@@ -275,7 +274,11 @@ export class SessionService implements SessionPort {
   }
 
   leaveNotice(notice: SessionNotice): void {
-    this.#signInNotice.leave(notice, this.current()?.id)
+    this.#signInNotice.leave(notice)
+  }
+
+  dropNotice(): void {
+    this.#signInNotice.drop()
   }
 
   /** Runs a sign-in this tab started; `signingInHere` says so while it runs. */

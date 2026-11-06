@@ -313,6 +313,7 @@ events:
   opened: The signed-in account's local data is open.
   open-failed: The data of the saved account could not be opened on this device.
   storage-blocked: The browser keeps no site data, so the app stops.
+  signed-in: An account signed in on this device, in this tab or another.
   signed-out: The account was signed out on this device, by its own sign-out or from another device.
   password-reset: Another tab of this browser set a new password through the link of a reset mail; the answer names no account.
   theme-set: Another tab of this browser chose the theme of this device.
