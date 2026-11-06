@@ -6,9 +6,11 @@
 pre-commit:
   piped: true
   jobs:
-    # Every hook this configuration names is installed in the clone: lefthook installs them only
-    # when told (`bun install` runs `lefthook install`), so a hook added here later would be
-    # skipped, silently, by a clone installed before it (scripts/hooks-installed.ts).
+    # Every hook this configuration names is installed in the clone. lefthook installs them on
+    # `lefthook install` (which `bun install` runs), and a hook run installs them again by itself
+    # once this configuration changed since, unless told not to (`--no-auto-install`); a hook whose
+    # file went while the configuration stayed the same stays missing, and every commit would skip
+    # it, silently (scripts/hooks-installed.ts).
     - name: git hooks installed
       run: . scripts/ensure-path.sh && bun run scripts/hooks-installed.ts
 

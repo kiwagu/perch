@@ -1276,7 +1276,9 @@ scissors line it holds. A take is checked against
 `main` and `contract/trunk` as the clone knows them, the remote's when it has no branch of its
 own. The pre-commit hook first refuses a commit
 while a hook `lefthook.yml` names is not installed (`scripts/hooks-installed.ts`): lefthook
-installs a hook added later only on `bunx lefthook install` (or `bun install`).
+installs the hooks on `bunx lefthook install` (or `bun install`), and by itself on the next hook
+run once `lefthook.yml` changed, unless told not to (`--no-auto-install`), but a hook whose file
+went while `lefthook.yml` stayed the same stays missing.
 
 ## The manifest
 

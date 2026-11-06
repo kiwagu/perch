@@ -1,11 +1,13 @@
 /**
  * Refuses a commit while a git hook lefthook's configuration names is not installed in the clone.
- * lefthook installs the hooks its configuration names only when told (`lefthook install`, which
- * `bun install` runs), so a hook added to the configuration later would be skipped, silently, by
- * every commit of a clone installed before it. The configuration is lefthook's own reading of it
- * (`lefthook dump`), a machine-local `lefthook-local.yml` included; a hook is installed when git
- * finds a file it can run where it looks for that hook (`git rev-parse --git-path hooks/<name>`:
- * the hooks folder every worktree of the clone shares, or `core.hooksPath`).
+ * lefthook installs the hooks on `lefthook install` (which `bun install` runs), and a hook run
+ * installs them again by itself once the configuration changed since, unless told not to
+ * (`--no-auto-install`); a hook whose file went while the configuration stayed the same stays
+ * missing, and every commit of the clone would skip it, silently. The configuration is
+ * lefthook's own reading of it (`lefthook dump`), a machine-local `lefthook-local.yml` included;
+ * a hook is installed when git finds a file it can run where it looks for that hook
+ * (`git rev-parse --git-path hooks/<name>`: the hooks folder every worktree of the clone shares,
+ * or `core.hooksPath`).
  *
  * Usage: bun run scripts/hooks-installed.ts, as the first job of the pre-commit hook.
  */
