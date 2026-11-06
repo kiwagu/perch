@@ -6,7 +6,8 @@
  * signed out from another device, 4002 the password changed, 4003 a sign-in past the limit of
  * devices): a device offline then learns why at its next hello. A read the directory could not
  * make closes it as a failed server (1011), and the device comes back with the same token. A
- * device signed out from another one while its session is read is closed with 4001. The device is
+ * device signed out while its session is read is closed with the code its row's reason names
+ * (4001, 4002, 4003), else with 4001. The device is
  * marked seen at its hello and then at most every five minutes it talks. A device holds one live
  * socket: the hello that registers closes its older ones (1000), without signing it out. An
  * organisation whose database cannot be read is left out of the welcome (`welcome-heads.ts`); the
@@ -185,7 +186,7 @@ export class ConnectionHello {
     }
 
     if (read.kind === 'none') {
-      await this.#refuse(hello)
+      await this.#closeEnded(hello, [CLOSE.unauthorized, REASON.refused])
 
       return undefined
     }
@@ -204,7 +205,9 @@ export class ConnectionHello {
     const unregister = this.#connections.add(caller.identity, hello.device, this.#listener, epoch)
 
     if (!unregister) {
-      this.#host.close(CLOSE.revoked, REASON.revoked)
+      // A close of the device or of its identity landed while the session was read: the routes end
+      // the session first, so its row says why when another device or the account's change did.
+      await this.#closeEnded(hello, [CLOSE.revoked, REASON.revoked])
 
       return undefined
     }
@@ -218,11 +221,13 @@ export class ConnectionHello {
   }
 
   /**
-   * Closes a hello whose token reads no live session: with why it ended, when its row says another
-   * device or the account's own change ended it, else with 4401. The row is the hello's device's,
-   * or it says nothing; a row the directory could not read closes the hello as a failed server.
+   * Closes a hello whose session ended or was ended while it was read: with why, when its row says
+   * another device or the account's own change ended it, else with `otherwise` (4401 for a token
+   * that reads no live session, 4001 for a registration a close refused). The row is the hello's
+   * device's, or it says nothing; a row the directory could not read closes the hello as a failed
+   * server.
    */
-  async #refuse(hello: Hello): Promise<void> {
+  async #closeEnded(hello: Hello, otherwise: readonly [code: number, text: string]): Promise<void> {
     const row = await this.#devices.byToken(hello.token)
 
     if (this.#host.isClosed()) {
@@ -237,12 +242,6 @@ export class ConnectionHello {
 
     const reason = row.value?.device === hello.device ? row.value.endedReason : undefined
 
-    if (reason === undefined) {
-      this.#host.close(CLOSE.unauthorized, REASON.refused)
-
-      return
-    }
-
-    this.#host.close(...endedClose(reason))
+    this.#host.close(...(reason === undefined ? otherwise : endedClose(reason)))
   }
 }

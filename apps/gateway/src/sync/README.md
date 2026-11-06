@@ -70,7 +70,8 @@ A device whose session a change of the account's password ended (a reset link, w
 session of the account, or a change on another device, which ends every other one) is closed the
 same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
 tell its person why; a hello whose registration such a close refuses, while it is under way, is
-closed with 4001 as for any other close. A device whose session a sign-in on another device ended
+closed with the code its session's row names when the close ended the session (4002, 4003), and
+with 4001 otherwise, as for any other close. A device whose session a sign-in on another device ended
 at the account's limit of devices is closed the same way with 4003 (`CLOSE.deviceLimit`,
 `signed out by a sign-in past the limit of devices`). A device offline when one of these ended its
 session hears the same close at its next hello: a hello whose token reads no live session is

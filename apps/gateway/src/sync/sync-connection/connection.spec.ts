@@ -882,6 +882,32 @@ describe('SyncConnection', () => {
     expect(seen).toEqual([])
   })
 
+  it('closes a hello refused at its registration with the code its ended session keeps, 4003 for the limit of devices', async () => {
+    const held = heldRead()
+    const { socket, connection, ann, connections, seen, local, clock } = await connect({
+      read: held.read,
+    })
+    const helloed = hello(connection, ann.token)
+
+    await held.reached
+    // As a sign-in past the limit does: the session first, then the sockets.
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await connections.close(ann.identity.id, DEVICE, CLOSE.deviceLimit)
+    held.release()
+    await helloed
+
+    expect(socket.closes).toEqual([
+      [CLOSE.deviceLimit, 'signed out by a sign-in past the limit of devices'],
+    ])
+    expect(socket.sent).toEqual([])
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
+    expect(seen).toEqual([])
+  })
+
   it('closes a welcomed socket of the device with 1000 once a new sign-in of the device is answered', async () => {
     const { socket, ann, connections, sessions, signInAgain } = await connectedAsAnn()
 

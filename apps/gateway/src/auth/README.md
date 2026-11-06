@@ -54,7 +54,9 @@ with the earlier token whose session read was under way is refused 4001 at its r
 Every call with a token must name the device its session was opened on, so a token carried to
 another device is refused.
 
-A session ends and is never deleted: its row's `expires_at` and `ended_at` become the moment it
+A session ends and is never deleted once its device holds it (the one row deleted is the new
+session of a sign-in asked about the account's limit of devices, which no device ever held): its
+row's `expires_at` and `ended_at` become the moment it
 ended, on the gateway's clock, and the row stays, so a device signed out from another one stays
 listed with that moment. `ended_at` is set once and never moved or cleared, and empty only while
 the session is live or has expired with nothing having ended it. An ending that finds the session
