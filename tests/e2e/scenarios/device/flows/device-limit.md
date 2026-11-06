@@ -26,8 +26,8 @@ Where: [/sign-in] on device B, and [/me] on devices A and C to K, each another b
 
 ### Steps
 1. On device A, sign up with the email, the password and the name, open the link of [mail:sign-up] and wait for [/me]
-2. On devices C to K in turn, sign in with the same account and wait for [/me], so the account is signed in on ten devices
-3. On device A, reload [/me] and wait for [app-shell.status] to reach [state:ready]
+2. On devices C to K in turn, sign in with the same account and wait for [app-shell.sync-message] to carry [code:synced] on [/me], so the account is signed in on ten devices
+3. On device A, reload [/me] and wait for [app-shell.sync-message] to carry [code:synced]
 4. Take device C's browser offline
 5. On device B, open [/sign-in], enter the email and the password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]
 6. Click [user.sign-in.device-limit-dialog.cancel-button]
