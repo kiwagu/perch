@@ -273,7 +273,22 @@ sockets close, and the sign-in answers 401 as wrong credentials do; an acceptanc
 session of an account answers 500 `internal`. A sign-in's `start` is always that of the account it
 stands for. Since a reset's or a change's transaction ends every session
 present at its commit, a session written before it is ended by it and one written after is ended
-by the sign-in itself: no session outlives the password it was opened with. Better Auth's
+by the sign-in itself: no session outlives the password it was opened with. A sign-in that
+stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (10, beside
+`SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
+`surql/device-sessions-admit.surql`): the account's devices with a live session are counted, the
+new session's device included and a device with several sessions once. Within the limit nothing
+changes. Past it, a sign-in whose body does not carry `signOutOldest: true` has its new session
+deleted, never handed to the device nor listed among its devices, and answers 409 `device-limit`,
+which the web asks the person about; once confirmed, the sign-in signs out the account's other
+device seen least recently (`last_seen_at`, then the device's id), whose session ends with
+`device-limit` as its reason and whose sockets close with 4003 (`CLOSE.deviceLimit`). The limit is
+judged when the sign-in is admitted, not when it was asked: a place freed meanwhile signs no
+device out, two sign-ins admitted at once count each other's session and sign out one device
+each at most, and a new sign-in of a device signed in already takes no place. A 409 counts as a
+right password for the email's failed sign-ins, and an admission that fails ends the new session
+and answers 500 `internal`. `signOutOldest` is the gateway's: Better Auth gets the rest of the
+body. Better Auth's
 clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
 expired, not unknown: an account keeps one reset link and one pending change of its email at
 most, each replaced by the next.
@@ -483,12 +498,14 @@ error carries one.
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
   `device.routes.ts`).
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
-  a change of the password ended, so the device can tell its person why it was signed out; 4001
-  stays a sign-out from another device.
+  a change of the password ended, so the device can tell its person why it was signed out; 4003
+  (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
+  devices signed out; 4001 stays a sign-out from another device.
 - Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
   and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
-  which the schema check reads too, `SESSION_LIFETIME_MS` and `VERIFICATION_LINK_LIFETIME_S`),
+  which the schema check reads too, `SESSION_LIFETIME_MS`, `DEVICE_LIMIT` and
+  `VERIFICATION_LINK_LIFETIME_S`),
   `AUTH_MODELS` and `generateAuthId` (`auth-models.ts`), `hashPassword` and `verifyPassword`
   (`password-hash.ts`), `AuthLog`, `authLogger` and `authErrorReporter` (`auth-log.ts`),
   `verificationMailer`, `verificationLink` and `VERIFY_EMAIL_PATH` (`verification-mail.ts`),
@@ -507,7 +524,8 @@ error carries one.
   `DeletedAccount`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
-  `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
+  `signOut`, `revoke`, `revokeAll`, `admit` a sign-in against the limit of devices
+  (`SignInAdmission`), and for a verification `signedIn`,
   `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the

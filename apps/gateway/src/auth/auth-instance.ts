@@ -25,6 +25,12 @@ import { verificationMailer } from './verification-mail'
  */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
 
+/**
+ * How many devices one account keeps signed in at once: a sign-in that would bring it past them
+ * asks first, then signs out the device seen least recently (`AuthSessions.admit`).
+ */
+export const DEVICE_LIMIT = 10
+
 /** How long a verification link verifies, in seconds: a day. */
 export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60
 

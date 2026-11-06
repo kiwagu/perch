@@ -5,13 +5,22 @@ import type { DeviceSessionId, IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { AuthInstance } from '../auth-instance'
+import { DEVICE_LIMIT } from '../auth-instance'
 import { writing } from '../device-session-rows'
 import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
+import sessionsAdmitStatement from '../surql/device-sessions-admit.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
 
-import { type SessionRevoke, type SignOutEnding, toSessionRevoke, toSignOutEnding } from './endings'
+import {
+  type SessionRevoke,
+  type SignInAdmission,
+  type SignOutEnding,
+  toSessionRevoke,
+  toSignInAdmission,
+  toSignOutEnding,
+} from './endings'
 import { readSession, type SessionRead } from './read'
 import {
   type MailedVerification,
@@ -102,6 +111,29 @@ export class AuthSessions {
         .retry(),
       `the sessions of ${identity} could not be ended`,
     ).map(() => undefined)
+  }
+
+  /**
+   * Admits the sign-in whose new session holds `token` against the limit of devices one account
+   * keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction: within the limit it stays
+   * as it is; past it, a sign-in not confirmed (`signOutOldest` false) has its session deleted and
+   * is asked, a confirmed one signs out the account's other device seen least recently, whose
+   * session keeps `device-limit` as why it ended. Two sign-ins admitted at once each count the
+   * other's session, so each signs out one device at most, and a device signed in already takes
+   * no new place.
+   */
+  admit(token: string, signOutOldest: boolean): ResultAsync<SignInAdmission, DataError> {
+    return writing(
+      this.#directory.db
+        .query<unknown[]>(sessionsAdmitStatement, {
+          session_token: token,
+          limit: DEVICE_LIMIT,
+          sign_out_oldest: signOutOldest,
+          now: this.#now(),
+        })
+        .retry(),
+      'a sign-in could not be admitted',
+    ).andThen((results) => toSignInAdmission(results.at(-2)))
   }
 
   /**
