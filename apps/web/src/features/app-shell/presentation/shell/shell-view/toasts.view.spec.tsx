@@ -28,8 +28,9 @@ describe('Toasts', () => {
     ])
 
     fireEvent.click(screen.getByRole('button', { name: 'Note saved.' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Note added.' }))
 
-    expect(onDismissToast).toHaveBeenCalledWith(2)
+    expect(onDismissToast.mock.calls).toEqual([[2], [1]])
   })
 
   it('draws each toast in its tone', () => {
