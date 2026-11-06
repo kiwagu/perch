@@ -7,7 +7,8 @@
   `contract:check:sources`, `contract:check:consumers`) and the check of the coverage block
   (`contract:coverage:check`); the gate for a change.
   `bun run check --force` runs every task afresh instead of replaying turbo's cache. It runs its
-  tasks four at a time, for the reason `bun run test` does below.
+  tasks four at a time, at low CPU priority and with vitest's workers capped, for the reasons
+  `bun run test` gives below.
 - `bun run test:db` with the `e2e` stand up (`mcproc start e2e`): the schema permission suites,
   the seed and the gateway smoke test against the e2e stand. The suites, the seed and the e2e
   launcher run through `mcproc exec`, which gives them this checkout's addresses (`SURREAL_URL`,
@@ -49,9 +50,15 @@ filter records none); a commit on `main` is refused without both receipts for ex
 
 ## Commands of the root
 
-- `bun run test`: every package's unit and functional tests, four packages at a time (each
-  vitest takes the cores it finds; all of them at once starved one another past vitest's 5 s
-  timeout in the pre-commit hook, at no gain in time). Part of the pre-commit hook.
+- `bun run test`: every package's unit and functional tests, four packages at a time (all of
+  them at once starved one another past vitest's 5 s timeout in the pre-commit hook, at no gain
+  in time), each vitest on at most four workers (`VITEST_MAX_WORKERS`, 4 unless the environment
+  sets it: a machine that runs nothing beside it may give vitest every core), at low CPU priority
+  (`nice -n 10`, as `typecheck`, `lint` and `check` run), so an e2e run on the same host gets the
+  CPU first. Measured on a 20-thread host beside an e2e run: uncapped, the unit tests took up to
+  18 threads and the e2e's slowest test went from 15 s to 22 s; capped and niced, it stayed at
+  15 s, for about 8 s more of `check` (up to 5 s more when nothing else runs). Part of the
+  pre-commit hook.
 - `bun run build`: production builds, leaving two cores free (`BUILD_RESERVED_CORES`).
 - `bun run model`: regenerate the models, page model, permission suites and replica schema.
 - `bun run refactor:scan`: files past the size tiers (300 warn, 400 red zone, 500 split now),
