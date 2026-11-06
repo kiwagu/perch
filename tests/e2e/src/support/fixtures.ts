@@ -3,6 +3,7 @@ import { test as base, expect, type Page, type TestStepInfo } from '@playwright/
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
+import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
 
@@ -177,6 +178,14 @@ export function pageLoads(page: Page): () => number {
 }
 
 const extended = base.extend<Fixtures>({
+  // Every browser of a test, its own contexts included (Playwright Test gives them the test's
+  // options), claims its worker's client address at the front (`client-address.ts`).
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, use, testInfo) => {
+    await use({
+      ...extraHTTPHeaders,
+      [CLIENT_ADDRESS_HEADER]: clientAddressOf(testInfo.parallelIndex),
+    })
+  },
   // Every browser of a test is watched from before its first page: the front's security policy,
   // and what each page shows in each state of its screen it settled in (`browsers.ts`).
   page: async ({ page, baseURL }, use) => {

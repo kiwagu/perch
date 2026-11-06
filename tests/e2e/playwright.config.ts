@@ -18,12 +18,13 @@ export const BASE_URL = z
 export default defineConfig({
   testDir: './src',
   testMatch: '**/*.e2e.spec.ts',
-  // Every test signs up a fresh account in a fresh browser context, so specs share no state but
-  // the gateway's limits of the one client address the front gives every browser. Its credential
-  // checks (sign-ups, sign-ins, verifications, changes of a password or an email, 20 per 10 s) set
-  // the number of workers, measured 2026-11-02 on the dev host (16 cores) over the 90 tests: two
-  // ran them in 4.0 min with at most 17 checks in any 10 s; three took 2.7 min but reached 22, and
-  // four (2.4 min) had a sign-in refused. The reporter prints each spec file's tests together.
+  // Every test signs up a fresh account in a fresh browser context, so specs share no state, and
+  // each worker's browsers claim a client address of their own at the front
+  // (`src/support/client-address.ts`), so the gateway's per-address limits do not bind the number
+  // of workers either. Two, measured 2026-11-06 on the dev host (16 cores) over the 107 tests:
+  // 237 s; three took 211 s, each test running about 40% longer, with 3.2 GB of memory at the
+  // peak instead of 2.2 GB, and once left a tab of `signed-out-before-data` stuck opening its
+  // data. The reporter prints each spec file's tests together.
   workers: 2,
   reporter: [['./scripts/spec-reporter.ts'], ['html', { open: 'never' }]],
   // Screenshot baselines are not committed (images stay out of the repository): the
