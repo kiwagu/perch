@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { SESSION_NOTICES, type SessionNotice } from '../../platform/session.port'
-import { memoryStorage, noticeMark, savedNotice, saveNotice } from '../storage'
+import { markSignIn, memoryStorage, savedNotice, saveNotice, signInMark } from '../storage'
 
 import { SignInNotice } from './sign-in-notice'
 
@@ -115,16 +115,16 @@ describe("the word of this tab's sign-in page", () => {
     expect(first.read()).toBe('password-reset-elsewhere')
   })
 
-  it('drops both words unsaid on a sign-in, a word the ended session raised before it and writes later too', () => {
+  it('ends both words at a sign-in on the browser, a word the ended session raised before it and writes later too', () => {
     const storage = memoryStorage()
     const notice = new SignInNotice(storage)
 
     notice.leave('password-reset-elsewhere')
     saveNotice(storage, 'signed-out-elsewhere')
 
-    const ended = noticeMark(storage)
+    const ended = signInMark(storage)
 
-    notice.drop()
+    markSignIn(storage)
 
     expect(notice.read()).toBeUndefined()
 
@@ -132,8 +132,43 @@ describe("the word of this tab's sign-in page", () => {
 
     expect(notice.read()).toBeUndefined()
 
-    // A session that signed in since ends in turn: its word waits for the page.
+    // The session signed in since ends in turn: its word waits for the page.
     saveNotice(storage, 'password-changed-elsewhere')
+
+    expect(notice.read()).toBe('password-changed-elsewhere')
+  })
+
+  it("drops this tab's word left before a sign-in it hears late, and no word left after it", () => {
+    const storage = memoryStorage()
+    const late = new SignInNotice(storage)
+    const other = new SignInNotice(storage)
+
+    late.leave('signed-out-elsewhere')
+    markSignIn(storage)
+    // Before this tab hears of the sign-in, the session it made ends, and another tab leaves a word.
+    saveNotice(storage, 'resend-after-sign-in')
+    other.leave('password-reset-elsewhere')
+
+    late.drop()
+    other.drop()
+
+    expect(late.read()).toBe('resend-after-sign-in')
+
+    // This tab's page says the browser's word and takes it: the other tab's own word, left after
+    // the sign-in, waits on.
+    late.take()
+
+    expect(late.read()).toBeUndefined()
+    expect(other.read()).toBe('password-reset-elsewhere')
+  })
+
+  it("keeps the first by the rank of this tab's words left since the last sign-in only", () => {
+    const storage = memoryStorage()
+    const notice = new SignInNotice(storage)
+
+    notice.leave('resend-after-sign-in')
+    markSignIn(storage)
+    notice.leave('password-changed-elsewhere')
 
     expect(notice.read()).toBe('password-changed-elsewhere')
   })
@@ -144,7 +179,7 @@ describe("the word of this tab's sign-in page", () => {
 
     saveNotice(storage, 'signed-out-elsewhere')
 
-    const ended = noticeMark(storage)
+    const ended = signInMark(storage)
 
     expect(notice.read()).toBe('signed-out-elsewhere')
     notice.take()

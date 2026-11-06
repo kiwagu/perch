@@ -2,7 +2,9 @@
  * Signing out: the sign-out the person asks for, through the gateway, and the one the gateway
  * forces on the device (a refused token, a sign-out from another device), without it. Either
  * holds every tab's writes back, then forgets the token and deletes the identity's databases, or
- * keeps them for the next sign-in as the identity when they hold changes not sent yet.
+ * keeps them for the next sign-in as the identity when they hold changes not sent yet. Each names,
+ * as it begins, the last sign-in on the browser (`signInMark`), and every word it leaves the
+ * sign-in page names that one: a sign-in made while it waits ends them, however late they come.
  */
 
 import { okAsync, ResultAsync } from 'neverthrow'
@@ -10,7 +12,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { forgetDevice, savedIdentity, savedToken, saveNotice } from '../storage'
+import { forgetDevice, savedIdentity, savedToken, saveNotice, signInMark } from '../storage'
 
 import type { SessionHost } from './host'
 import type { OpenSpace } from './open-space'
@@ -62,6 +64,7 @@ export class SessionSignOut {
     }
 
     const { space, leadership } = open
+    const raised = signInMark(this.#host.options.storage)
 
     this.#barrier.hold(open.hints)
 
@@ -79,10 +82,11 @@ export class SessionSignOut {
           open,
           () =>
             outcome === 'signed-out'
-              ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
-              : this.#stillSignedIn(open, forgetUnsent),
+              ? this.#signedOut(open, forgetUnsent, raised).map((): SignOutOutcome => 'signed-out')
+              : this.#stillSignedIn(open, forgetUnsent, raised),
           'signed-out',
           outcome === 'signed-out' ? 'dead' : 'live',
+          raised,
         ),
       )
 
@@ -103,9 +107,11 @@ export class SessionSignOut {
       return okAsync(undefined)
     }
 
+    const raised = signInMark(this.#host.options.storage)
+
     this.#pendingRevoke.forgetKeys('live')
 
-    return this.#deletion.deleteUnopened(identity).map(() => undefined)
+    return this.#deletion.deleteUnopened(identity, raised).map(() => undefined)
   }
 
   /**
@@ -122,6 +128,7 @@ export class SessionSignOut {
   refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
+    const raised = signInMark(storage)
 
     if (open?.space.identity.id !== identity) {
       return okAsync('signed-out')
@@ -148,7 +155,7 @@ export class SessionSignOut {
         return 'signed-in-since'
       }
 
-      this.#keepForNextSignIn(open, 'dead')
+      this.#keepForNextSignIn(open, 'dead', raised)
 
       return 'signed-out'
     }
@@ -163,10 +170,10 @@ export class SessionSignOut {
             }
 
             if (notice) {
-              saveNotice(storage, notice)
+              saveNotice(storage, notice, raised)
             }
 
-            return this.#forgetSpace(open, 'dead').map((): ForcedSignOut => 'signed-out')
+            return this.#forgetSpace(open, 'dead', raised).map((): ForcedSignOut => 'signed-out')
           }),
         keep,
       )
@@ -201,13 +208,15 @@ export class SessionSignOut {
    * database goes only with an empty outbox, or when the person gave unsent changes up.
    * Otherwise it stays for the next sign-in as the identity, which sends what it holds.
    */
-  #signedOut(open: OpenSpace, forgetUnsent: boolean): ResultAsync<void, DataError> {
+  #signedOut(open: OpenSpace, forgetUnsent: boolean, raised: string): ResultAsync<void, DataError> {
     if (forgetUnsent) {
-      return this.#forgetSpace(open, 'dead')
+      return this.#forgetSpace(open, 'dead', raised)
     }
 
     return this.#unsentOrUnknown(open).andThen((unsent) =>
-      unsent ? okAsync(this.#keepForNextSignIn(open, 'dead')) : this.#forgetSpace(open, 'dead'),
+      unsent
+        ? okAsync(this.#keepForNextSignIn(open, 'dead', raised))
+        : this.#forgetSpace(open, 'dead', raised),
     )
   }
 
@@ -216,11 +225,15 @@ export class SessionSignOut {
    * could not send. With such changes it asks first; without them the device signs out here,
    * leaving its token to sign out once online.
    */
-  #stillSignedIn(open: OpenSpace, forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
+  #stillSignedIn(
+    open: OpenSpace,
+    forgetUnsent: boolean,
+    raised: string,
+  ): ResultAsync<SignOutOutcome, DataError> {
     return (forgetUnsent ? okAsync(false) : open.space.unsent()).andThen((asks) =>
       asks
         ? okAsync<SignOutOutcome>('needs-confirmation')
-        : this.#forgetSpace(open, 'live').map((): SignOutOutcome => 'signed-out'),
+        : this.#forgetSpace(open, 'live', raised).map((): SignOutOutcome => 'signed-out'),
     )
   }
 
@@ -235,9 +248,10 @@ export class SessionSignOut {
     work: () => ResultAsync<T, DataError>,
     kept: T,
     keys: KeysLeft,
+    raised: string,
   ): ResultAsync<T, DataError> {
     return this.#barrier.exclusively(open.space.identity.id, work, () => {
-      this.#keepForNextSignIn(open, keys)
+      this.#keepForNextSignIn(open, keys, raised)
 
       return kept
     })
@@ -250,7 +264,7 @@ export class SessionSignOut {
    * (`SpaceDeletion`), and the sign-in page says the data goes once the other tabs are closed;
    * this tab hears of the sign-out once the delete answered, so that page reads the word.
    */
-  #forgetSpace(open: OpenSpace, keys: KeysLeft): ResultAsync<void, DataError> {
+  #forgetSpace(open: OpenSpace, keys: KeysLeft, raised: string): ResultAsync<void, DataError> {
     this.#pendingRevoke.forgetKeys(keys)
 
     const current = this.#host.open() === open
@@ -261,7 +275,7 @@ export class SessionSignOut {
     }
 
     const deleted = this.#deletion
-      .destroy(open.space)
+      .destroy(open.space, raised)
       .map(() => undefined)
       .andTee(tell)
       .orTee(tell)
@@ -285,8 +299,8 @@ export class SessionSignOut {
    * with the changes it holds: the sign-in page says that signing in again as the identity
    * sends them.
    */
-  #keepForNextSignIn(open: OpenSpace, keys: KeysLeft): void {
-    saveNotice(this.#host.options.storage, 'resend-after-sign-in')
+  #keepForNextSignIn(open: OpenSpace, keys: KeysLeft, raised: string): void {
+    saveNotice(this.#host.options.storage, 'resend-after-sign-in', raised)
     this.#pendingRevoke.forgetKeys(keys)
 
     if (this.#host.open() === open) {

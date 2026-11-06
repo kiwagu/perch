@@ -20,7 +20,7 @@ import type { LockManagerLike } from '@workspace/replica/sync'
 
 import type { IdentitySpace } from '../identity-space'
 import { RetainedTenantDatabases, type TenantDatabaseInventory } from '../retained-tenant-databases'
-import { type KeyValueStorage, noticeMark, savedIdentity, saveNotice } from '../storage'
+import { type KeyValueStorage, savedIdentity, saveNotice } from '../storage'
 
 import {
   addLeftoverIdentity,
@@ -72,17 +72,17 @@ export class SpaceDeletion {
   /**
    * Closes the space and deletes its databases: `deleted` once they are all gone, `in-use` when
    * the identity was signed in again first, `pending` when the delete is still held up after the
-   * grace, which leaves it going, the identity listed until it ends and the sign-in page a word; a
-   * failure within the grace fails, one after it is reported. The space closes before the lock is
-   * taken, so a tab never holds the database open while it waits for another tab's delete of it;
-   * the grace runs from the close.
+   * grace, which leaves it going, the identity listed until it ends and the sign-in page a word,
+   * which names the sign-in the ended session came after (`raised`, its `signInMark`); a failure
+   * within the grace fails, one after it is reported. The space closes before the lock is taken,
+   * so a tab never holds the database open while it waits for another tab's delete of it; the
+   * grace runs from the close.
    */
   destroy(
     space: Pick<IdentitySpace, 'identity' | 'close' | 'destroy'>,
+    raised: string,
   ): ResultAsync<DeleteOutcome, DataError> {
     const identity = space.identity.id
-    // The session ends now: the word on its data is raised now, whenever the grace writes it.
-    const raised = noticeMark(this.#options.storage)
 
     // Listed first: a page that goes during the close still leaves the databases to the next start.
     addLeftoverIdentity(this.#options.storage, identity)
@@ -104,9 +104,7 @@ export class SpaceDeletion {
    * Deletes the databases of an identity whose space did not open, its own and every
    * organisation database counted for it, as `destroy` does those of an open one.
    */
-  deleteUnopened(identity: IdentityId): ResultAsync<DeleteOutcome, DataError> {
-    const raised = noticeMark(this.#options.storage)
-
+  deleteUnopened(identity: IdentityId, raised: string): ResultAsync<DeleteOutcome, DataError> {
     addLeftoverIdentity(this.#options.storage, identity)
 
     return this.#withinGrace(
@@ -206,8 +204,8 @@ export class SpaceDeletion {
 
   /**
    * How `deleting` went within the grace, which runs from now; a failure after it is reported,
-   * nobody waiting for it any more. The word a delete held up past it leaves the sign-in page was
-   * raised at `raised`, as the session ended: a sign-in since dropped it (`saveNotice`).
+   * nobody waiting for it any more. The word a delete held up past it leaves the sign-in page
+   * names the sign-in `raised`: one made since ended it (`saveNotice`).
    */
   #withinGrace(
     deleting: ResultAsync<'deleted' | 'in-use', DataError>,

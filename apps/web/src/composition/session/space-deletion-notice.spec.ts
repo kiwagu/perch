@@ -5,7 +5,7 @@ import type { DataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
 import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
-import { dropNotice, memoryStorage, savedNotice, saveNotice } from '../storage'
+import { markSignIn, memoryStorage, savedNotice, saveNotice, signInMark } from '../storage'
 
 import { DELETE_GRACE_MS, type DeleteOutcome, SpaceDeletion } from './space-deletion'
 
@@ -55,9 +55,12 @@ describe('the word a delete held up past the grace leaves the sign-in page', () 
   it('says the data goes once the other tabs close, for an open space and for one that did not open', async () => {
     for (const deleting of ['open', 'unopened'] as const) {
       const { storage, deletion, space, graceEnds } = browser()
+      const ended = signInMark(storage)
 
       await graceEnds(
-        deleting === 'open' ? deletion.destroy(space()) : deletion.deleteUnopened(ann.id),
+        deleting === 'open'
+          ? deletion.destroy(space(), ended)
+          : deletion.deleteUnopened(ann.id, ended),
       )
 
       expect(savedNotice(storage)).toBe('delete-pending')
@@ -67,11 +70,14 @@ describe('the word a delete held up past the grace leaves the sign-in page', () 
   it('leaves no word once an account signed in on the browser after the session ended', async () => {
     for (const deleting of ['open', 'unopened'] as const) {
       const { storage, deletion, space, graceEnds } = browser()
+      const ended = signInMark(storage)
       const answer =
-        deleting === 'open' ? deletion.destroy(space()) : deletion.deleteUnopened(ann.id)
+        deleting === 'open'
+          ? deletion.destroy(space(), ended)
+          : deletion.deleteUnopened(ann.id, ended)
 
-      // An account signs in in another tab while the delete waits: the frames drop the words.
-      dropNotice(storage)
+      // An account signs in in another tab while the delete waits.
+      markSignIn(storage)
       await graceEnds(answer)
 
       expect(savedNotice(storage)).toBeUndefined()
@@ -80,9 +86,9 @@ describe('the word a delete held up past the grace leaves the sign-in page', () 
 
   it('keeps the word of a session that signed in and ended since, not the word of the one before', async () => {
     const { storage, deletion, space, graceEnds } = browser()
-    const answer = deletion.destroy(space())
+    const answer = deletion.destroy(space(), signInMark(storage))
 
-    dropNotice(storage)
+    markSignIn(storage)
     // That session ends too, from another device, before the grace passes.
     saveNotice(storage, 'password-changed-elsewhere')
     await graceEnds(answer)
@@ -90,18 +96,15 @@ describe('the word a delete held up past the grace leaves the sign-in page', () 
     expect(savedNotice(storage)).toBe('password-changed-elsewhere')
   })
 
-  it('counts the session as ended from the delete on, while its space still closes', async () => {
+  it('leaves no word for a session that ended before a sign-in made while it waited to delete', async () => {
     const { storage, deletion, space, graceEnds } = browser()
-    let close = () => {}
-    const closed = new Promise<void>((resolve) => {
-      close = resolve
-    })
-    const answer = deletion.destroy(space(closed))
+    // The session ends; its sign-out waits for the other tabs' writes, and an account signs in
+    // and out meanwhile, before the delete begins.
+    const ended = signInMark(storage)
 
-    // The keys are gone as the delete begins: another tab may sign an account in at once.
-    dropNotice(storage)
-    close()
-    await graceEnds(answer)
+    markSignIn(storage)
+
+    await graceEnds(deletion.destroy(space(), ended))
 
     expect(savedNotice(storage)).toBeUndefined()
   })

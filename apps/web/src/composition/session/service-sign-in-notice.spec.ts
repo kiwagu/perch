@@ -1,7 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
+import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
+import {
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+  type TestWorldOptions,
+} from '../__fixtures__/session'
 import { memoryStorage, saveNotice } from '../storage'
+
+const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
 
 const worlds: TestWorld[] = []
 
@@ -56,26 +64,25 @@ describe("the sign-in page's word, the browser's and this tab's own", () => {
     expect(tab.session.notice()).toBe('resend-after-sign-in')
   })
 
-  it("drops this tab's word and the browser's on a sign-in in any tab, and says the word of a session that ends after it", async () => {
+  it('ends every waiting word as an account signs in here, and a tab that hears it late keeps the words left since', async () => {
     const storage = memoryStorage()
-    const tab = await world({ storage })
-    const other = await world({ storage })
+    const auth = fakeGatewayAuth()
+    const signing = await world({ storage, auth })
+    const late = await world({ storage })
 
-    tab.session.leaveNotice('password-reset-elsewhere')
+    late.session.leaveNotice('password-reset-elsewhere')
     saveNotice(storage, 'signed-out-elsewhere')
 
-    // Each tab's frame hears the sign-in and drops what its sign-in page would have said.
-    other.session.dropNotice()
+    // Ann opens the link of her sign-up's mail in the first tab: an account signs in here.
+    expect((await signUpVerified(signing.session, auth, annSignUp)).isOk()).toBe(true)
 
-    expect(other.session.notice()).toBeUndefined()
-    expect(tab.session.notice()).toBe('password-reset-elsewhere')
+    expect(signing.session.notice()).toBeUndefined()
+    expect(late.session.notice()).toBeUndefined()
 
-    tab.session.dropNotice()
-
-    expect(tab.session.notice()).toBeUndefined()
-
+    // The second tab's frame hears of it only once that session ended and left its word.
     saveNotice(storage, 'password-changed-elsewhere')
+    late.session.dropNotice()
 
-    expect(tab.session.notice()).toBe('password-changed-elsewhere')
+    expect(late.session.notice()).toBe('password-changed-elsewhere')
   })
 })
