@@ -24,8 +24,11 @@
   workers, every test on a phone and the `@smoke` ones on a desktop too, about 5 minutes in all;
   `mcproc stop e2e` stops the profile. The run writes `apps/web/dist`, which only the e2e
   front serves, so it leaves the dev stand's build alone. It holds a 4G memory lease for its
-  build and browsers: when the host is short of memory it waits its turn (`mcproc leases` shows
-  the queue). [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.
+  build and browsers, and it runs in mcproc's `e2e` group (`--exclusive e2e`, with
+  `perf:measure`): one of them at a time on the host, whichever checkout starts it. A run waits
+  its turn when the host is short of memory or another run holds the group, says once whom it
+  waits for and gives up after an hour; `mcproc leases` shows the queue and the holder.
+  [tests/e2e/README.md](../../tests/e2e/README.md) has the rest.
 
 `bun run test:db` and `CI=1 bun run test:e2e`, run without arguments, record a receipt for the
 tree they passed on in the gitignored `.gates/` folder (`scripts/gates/`; a run given a spec or a
@@ -109,7 +112,7 @@ Run from the root; each is described in the README named beside it.
 |---|---|---|
 | `bun run seed`, `bun run seed:sweep` | seed the dev stand through its gateway, or remove the seed data (with the dev stand's addresses from `mcproc exec`; neither needs the auth secret) | [seed](../../seed/README.md) |
 | `bun run load -- --devices 20 --members 10 --hold 15` | the gateway load test: a gateway of its own on port 5197 in front of the e2e stand's SurrealDB, one table row per step | [apps/gateway](../../apps/gateway/README.md), *Load test* |
-| `bun run perf:measure` | the start's timings on a slowed-down phone against their budgets, on the production build the e2e stand serves | [tests/e2e](../../tests/e2e/README.md) |
+| `bun run perf:measure` | the start's timings on a slowed-down phone against their budgets, on the production build the e2e stand serves, in turn with the e2e runs (mcproc's `e2e` group) | [tests/e2e](../../tests/e2e/README.md) |
 | `bun run e2e:scaffold <scenario id>`, `bun run e2e:coverage` | the failing test of a new scenario, and the check that every scenario has its test | [tests/e2e](../../tests/e2e/README.md) |
 | `bun run i18n:check` | translation keys against the catalogs | [apps/web](../../apps/web/README.md) |
 | `bun run --filter @workspace/replica measure`, `measure:validation` | the replica's write path, and what checking a pushed batch costs the server, on this machine | [packages/replica](../../packages/replica/README.md) |
