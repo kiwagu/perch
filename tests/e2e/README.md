@@ -173,8 +173,10 @@ check and its fixtures, every browser of a test claiming its worker's client add
 its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
 a test asks) and `freshDevice` (device B of an account the test makes itself: a browser
-context of its own that opens nothing and signs nothing in by itself), `appReady` (waits for
-`app-shell.status` in `ready`, `APP_READY`), `signIn`
+context of its own that opens nothing and signs nothing in by itself), `freshDevices` (as many
+devices of such an account as the test opens, each a browser context of its own), `appReady`
+(waits for `app-shell.status` in `ready`, `APP_READY`), `syncSays` (waits until
+`app-shell.sync-message` carries a code, `synced` by default), `signIn`
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
@@ -236,6 +238,13 @@ form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends 
 mail, held to its declaration), `deleteAccount` (presses the button of `/delete-account` and
 confirms the frame's question, checked for its code `delete-account`) and `accountDeleted` (the
 page's message once the account is gone).
+`src/support/device-limit.ts`: an account at its limit of ten devices and a sign-in past it:
+`signInDevicesCToK` (signs the account in on nine more devices in turn, each synced on `/me`,
+the first, device C, with its sync socket routed through the test), `submitSignIn` (submits the
+sign-in form without waiting for its answer), `deviceLimitDialog` (the dialog asking whether to
+sign in past the limit, by its anchor and its code) and `expectDeviceCSignedOut` (the list of
+devices once the sign-in past the limit went through: device C's alone `revoked`, by the order
+the devices signed in).
 `src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
 names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
