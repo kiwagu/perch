@@ -27,7 +27,12 @@ export interface GatewayAuth {
    * `data:AUTH_FAILED` naming its status, never the email or the password.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
-  /** Signs `device` in; an account whose email is not verified yet fails as `data:EMAIL_NOT_VERIFIED`. */
+  /**
+   * Signs `device` in; an account whose email is not verified yet fails as
+   * `data:EMAIL_NOT_VERIFIED`, and one signed in on as many devices as it may be as
+   * `data:DEVICE_LIMIT`, nothing signed in, unless `input.signOutOldest` confirms signing out its
+   * device seen least recently.
+   */
   signIn(input: SignInInput, device: NamedDevice): ResultAsync<SignedInDevice, DataError>
   /**
    * Exchanges a verification link's `token`, naming `device`: the first exchange verifies the
@@ -211,7 +216,15 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       }).andThen(signedUpOf),
     signIn: (input, device) =>
       ResultAsync.fromPromise(
-        client.signIn.email({ email: input.email, password: input.password }, callOptions(device)),
+        client.signIn.email(
+          {
+            email: input.email,
+            password: input.password,
+            // The confirmation goes only with a sign-in that confirms.
+            ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+          },
+          callOptions(device),
+        ),
         unreachable,
       ).andThen(signedIn),
     verifyEmail: (token, device) =>

@@ -23,6 +23,8 @@ export interface SignOutOptions {
  * when another device of the identity signed this one out and nothing waited to be sent.
  * `password-changed-elsewhere` when the account's password changed (through a reset link, or on
  * another device), which signed this device out, and nothing waited to be sent.
+ * `device-limit-elsewhere` when a sign-in on another device went past the account's limit of
+ * devices and signed out this one, the device seen least recently, and nothing waited to be sent.
  */
 export const SESSION_NOTICES = [
   'resend-after-sign-in',
@@ -30,6 +32,7 @@ export const SESSION_NOTICES = [
   'password-reset-elsewhere',
   'signed-out-elsewhere',
   'password-changed-elsewhere',
+  'device-limit-elsewhere',
 ] as const
 
 /** A word left for the sign-in page (`SESSION_NOTICES`). */
@@ -80,6 +83,11 @@ export interface SessionPort {
    * email that has an account answers the same.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
+  /**
+   * Signs this device in to the account of `input`. A sign-in that finds the account signed in on
+   * as many devices as it may be at once signs nothing in and fails as `data:DEVICE_LIMIT`, unless
+   * `input.signOutOldest` confirms it, which signs out the account's device seen least recently.
+   */
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email
@@ -178,7 +186,7 @@ export interface SessionPort {
   /**
    * The word the sign-in page says, from two slots: the browser's, which a session left as it
    * ended, and this tab's own (`leaveNotice`): of the two, the first by their rank
-   * (`SESSION_NOTICES`).
+   * (`SESSION_NOTICES`). Each slot holds the words left since the last sign-in on this browser.
    */
   notice(): SessionNotice | undefined
   /** Takes both words away: the sign-in page said them. */
@@ -186,9 +194,15 @@ export interface SessionPort {
   /**
    * Leaves this tab's next sign-in page `notice`, as a screen's flow shows it there on its way: a
    * fact of this tab's move, kept in this tab's memory for the page's lifetime, never the
-   * browser's; a sign-in of another account in this tab drops it.
+   * browser's; a sign-in on this browser ends it.
    */
   leaveNotice(notice: SessionNotice): void
+  /**
+   * A sign-in on this device was heard (`platform.signed-in`), as a flow clears the sign-in page's
+   * notice, maybe late: this tab's own word left before it goes. The browser's words went as that
+   * sign-in was kept, an ended session's word written later included; a word left since stays.
+   */
+  dropNotice(): void
   /**
    * Whether the gateway refused the sync protocol of the build this page runs since the page
    * loaded: the sync stopped, and stays stopped until the page loads again.

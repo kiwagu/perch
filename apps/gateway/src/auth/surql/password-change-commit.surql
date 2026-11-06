@@ -3,7 +3,8 @@
 -- $verified_hash: the session must still be live, else `unauthorized`, and the credential row
 -- must still hold $verified_hash, else `wrong-password`, and nothing changes. Once both hold,
 -- $hash becomes the password, every reset link of the identity is deleted, every other session
--- not ended already ends at $ended_at (an expired one at its expiry), and the pending change of
+-- not ended already ends at $ended_at (an expired one at its expiry; a live one keeps
+-- `password-changed` as its reason, for its device's next hello), and the pending change of
 -- email and the pending deletion of the account are deleted. Answers `{ outcome, ended }`:
 -- `changed` with, for each session it marked, its device and whether it was live until now. A
 -- failure of any write leaves all of them undone.
@@ -49,6 +50,7 @@ IF $outcome = 'changed' {
 LET $ended = IF $outcome = 'changed' {
   (
     UPDATE device_session SET
+      ended_reason = IF expires_at > $ended_at { 'password-changed' } ELSE { ended_reason },
       ended_at = ended_at ?? time::min([expires_at, $ended_at]),
       expires_at = time::min([expires_at, $ended_at])
     WHERE

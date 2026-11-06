@@ -143,6 +143,9 @@ flow:
       on:
         platform.opened: ready
         platform.open-failed: failed
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           target: ready
           description: Signed out while its data opened, in another tab or from another device; nothing is left to open, so the tab goes on as a guest's and its screen moves to the sign-in page.
@@ -167,6 +170,9 @@ flow:
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -242,6 +248,9 @@ flow:
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -282,6 +291,10 @@ flow:
     reloading:
       description: The page loads again from the server.
       meta: { renders: [ app-shell.nav ] }
+      on:
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
       invoke:
         src: platform.reload
         onDone:
@@ -290,6 +303,10 @@ flow:
     updating:
       description: The page loads again on the version the server serves.
       meta: { renders: [ app-shell.nav ] }
+      on:
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
       invoke:
         src: platform.reload
         onDone:
@@ -298,6 +315,10 @@ flow:
     installing:
       description: The browser's own window asks the user to install the app.
       meta: { renders: [ app-shell.nav ] }
+      on:
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
       invoke:
         src: platform.install.prompt
         onDone:
@@ -313,6 +334,10 @@ flow:
     postponing:
       description: The reminder is put off for three days on this device.
       meta: { renders: [ app-shell.nav ] }
+      on:
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
       invoke:
         src: platform.install.postpone
         onDone:
@@ -325,6 +350,9 @@ flow:
       meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           target: ready
           description: The saved account was signed out, in another tab or from another device; the tab goes on as a guest's, its screen on the sign-in page, and offers no sign-out of an account it no longer holds.

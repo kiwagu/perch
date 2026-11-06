@@ -1,10 +1,12 @@
 import { idSchemas } from '@workspace/ids'
+import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
+import { ADMISSION_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
@@ -17,9 +19,14 @@ export const SIGN_IN_PATH = '/auth/sign-in/email'
  * What a sign-in's body must name before anything is read for its email: its email, and a password
  * that is not empty, as strings. An empty password answers alike for any email here: Better Auth
  * would hash it to keep the time of an unknown email's answer, which fails, while it checks a known
- * one's and finds it wrong. Better Auth gets all of the body.
+ * one's and finds it wrong. `signOutOldest`, true once the person confirmed a sign-in past the
+ * account's limit of devices, is the gateway's: Better Auth gets the rest of the body.
  */
-const signInBody = z.object({ email: z.string(), password: z.string().min(1) })
+const signInBody = z.looseObject({
+  email: z.string(),
+  password: z.string().min(1),
+  signOutOldest: z.boolean().optional(),
+})
 
 /** As much of an accepted sign-in's answer as holding it to its account needs. */
 const acceptedSession = z.object({
@@ -39,10 +46,11 @@ type AllowedAttempt = Extract<SignInAttempt, { readonly allowed: true }>
 
 /**
  * What Better Auth's answer to a sign-in means for its email's limit: 200 signed in and 403 (the
- * password was right, the email is not verified yet) both judged the password right.
+ * password was right, the email is not verified yet) both judged the password right, and so did
+ * 409, a sign-in asked about the account's limit of devices once Better Auth accepted it.
  */
 function outcomeOf(status: number): SignInOutcome {
-  if (status === 200 || status === 403) {
+  if (status === 200 || status === 403 || status === 409) {
     return 'succeeded'
   }
 
@@ -77,9 +85,17 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * ended at once by its token and the sign-in answers as wrong credentials do (401), or 500
  * `internal` when the answer names no session, or the second read or that ending failed. A reset
  * or a change ends every session present when its transaction commits, so a session written
- * before it is ended by it, and one written after is ended here. Either way the
- * device's sockets close (`closeDevice`): the device's earlier session ended when the new one was
- * written. Any other answer reaches the client as its status and code alone (`refusalOf`); an
+ * before it is ended by it, and one written after is ended here. Either way the device's earlier
+ * session is left as it was. A sign-in that stands is then admitted against the account's limit of devices
+ * (`AuthSessions.admit`, `signOutOldest` its confirmation): one that would bring the account past
+ * it unconfirmed has its session deleted and answers 409 `device-limit`, nothing signed in, the
+ * device's earlier session left as it was; a confirmed one signs out the device seen least
+ * recently, whose sockets close with 4003. An admitted session ends the device's earlier one, so
+ * the device's sockets close then (`closeDevice`). Until its admission the session waits
+ * (`pending`), counted by no other admission and listed nowhere: an
+ * admission that failed answers 500 `internal` and ends the new session by its token, and should
+ * that ending fail too, the session keeps waiting, never handed out. Any other
+ * answer reaches the client as its status and code alone (`refusalOf`); an
  * accepted one, without its cookies, and with `start` (`{ name, locale }`, what the account signed
  * in to signed up with) while that account has not started: its profile or its settings have not reached the
  * directory, so the device that signs in creates them, as the device that verifies the email by
@@ -90,6 +106,7 @@ async function handedOver(
   request: Request,
   email: string,
   before: SignInCredential | undefined,
+  signOutOldest: boolean,
 ): Promise<Response> {
   const response = await deps.auth.handler(request)
 
@@ -108,14 +125,34 @@ async function handedOver(
   const ended =
     stands || (accepted.success && (await deps.sessions.signOut(accepted.data.token)).isOk())
 
-  await closeDevice(request, response, deps.connections)
-
   if (after.isErr() || !ended) {
     return Response.json({ code: 'internal' }, { status: 500 })
   }
 
-  if (!stands) {
+  if (!stands || !accepted.success) {
     return notSignedIn()
+  }
+
+  const { token, user } = accepted.data
+  const admission = await deps.sessions.admit(user.id, token, signOutOldest)
+
+  if (admission.isErr()) {
+    const internal = () => Response.json({ code: 'internal' }, { status: 500 })
+
+    // The session was never handed to its device: it is ended, and the answer is 500 either way;
+    // an ending that failed leaves it waiting for an admission, which nothing counts or lists.
+    return (await deps.sessions.signOut(token)).match(internal, internal)
+  }
+
+  if (admission.value.kind === 'asked') {
+    return Response.json({ code: 'device-limit' }, { status: 409 })
+  }
+
+  // The admission ended the device's earlier session: the sockets it opened with it close.
+  await closeDevice(request, response, deps.connections)
+
+  if (admission.value.kind === 'signed-out') {
+    await deps.connections.close(user.id, admission.value.device, CLOSE.deviceLimit)
   }
 
   // The account the sign-in stands for is the one the second read found.
@@ -158,7 +195,8 @@ async function withStart(response: Response, start: AccountStart): Promise<Respo
  * before Better Auth checks the password (`AccountPasswords.credentialOf`, the same read for an
  * email that has no account), and again once it wrote the session (`handedOver`), so no session
  * outlives the password it was opened with, nor survives the move of its email to another account.
- * A first read that fails answers 500 `internal`, nothing checked.
+ * A first read that fails answers 500 `internal`, nothing checked. A sign-in that stands is then
+ * admitted against the account's limit of devices (`handedOver`).
  */
 export async function signIn(deps: AuthMountDeps, request: Request): Promise<Response> {
   const body = await readBody(request)
@@ -168,7 +206,8 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
     return Response.json({ code: 'bad-request' }, { status: 400 })
   }
 
-  const email = named.data.email.toLowerCase()
+  const { signOutOldest = false, ...forwarded } = named.data
+  const email = forwarded.email.toLowerCase()
   const attempt = deps.limits.signInAttempt(email)
 
   if (!attempt.allowed) {
@@ -177,9 +216,19 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
 
   return settling(attempt, async () => {
     const before = await deps.passwords.credentialOf(email)
+    // The session Better Auth writes waits for its admission, whatever the client sent.
+    const headers = new Headers(request.headers)
+
+    headers.set(ADMISSION_HEADER, 'pending')
 
     return before.isErr()
       ? Response.json({ code: 'internal' }, { status: 500 })
-      : handedOver(deps, withJsonBody(request, body), email, before.value)
+      : handedOver(
+          deps,
+          withJsonBody(request, forwarded, headers),
+          email,
+          before.value,
+          signOutOldest,
+        )
   })
 }

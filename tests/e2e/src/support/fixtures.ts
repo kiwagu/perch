@@ -3,6 +3,7 @@ import { test as base, expect, type Page, type TestStepInfo } from '@playwright/
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
+import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
 
@@ -42,6 +43,16 @@ export interface FreshDevice {
   open(): Promise<Page>
 }
 
+/**
+ * Devices for an account the test makes itself, as many as it opens: each a browser of its own
+ * (a context of its own, so its own storage, Web Locks and BroadcastChannel) that signs nothing in
+ * by itself.
+ */
+export interface FreshDevices {
+  /** Opens one more device and gives its page, on no address yet. */
+  open(): Promise<Page>
+}
+
 interface Fixtures {
   /**
    * A user who has just signed up through the sign-in page, opened the link of the verification
@@ -51,6 +62,7 @@ interface Fixtures {
   readonly secondDevice: SecondDevice
   readonly anotherAccount: AnotherAccount
   readonly freshDevice: FreshDevice
+  readonly freshDevices: FreshDevices
 }
 
 /** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
@@ -64,6 +76,13 @@ export async function appReady(page: Page): Promise<void> {
 /** The shell's notice, located by its anchor and its contract code together. */
 export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
+
+/** Waits until the shell's word on the sync carries `code` (by default `synced`). */
+export async function syncSays(page: Page, code = 'synced', timeout = 15_000): Promise<void> {
+  await expect(page.getByTestId('app-shell.sync-message')).toHaveAttribute('data-code', code, {
+    timeout,
+  })
+}
 
 /** One toast of the frame, located by its anchor and its contract code together. */
 export const toast = (page: Page, code: string) =>
@@ -131,6 +150,8 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
 /**
  * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
+ * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
 export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
@@ -141,7 +162,12 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
   await page.getByTestId('user.sign-in.password-confirmation-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
-  await expect(checkYourMail(page)).toBeVisible()
+  await expect
+    .poll(() => checkYourMail(page).isVisible(), {
+      message: 'the sign-in page asks to check the mail',
+      intervals: [50],
+    })
+    .toBe(true)
 }
 
 /**
@@ -177,6 +203,14 @@ export function pageLoads(page: Page): () => number {
 }
 
 const extended = base.extend<Fixtures>({
+  // Every browser of a test, its own contexts included (Playwright Test gives them the test's
+  // options), claims its worker's client address at the front (`client-address.ts`).
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, use, testInfo) => {
+    await use({
+      ...extraHTTPHeaders,
+      [CLIENT_ADDRESS_HEADER]: clientAddressOf(testInfo.parallelIndex),
+    })
+  },
   // Every browser of a test is watched from before its first page: the front's security policy,
   // and what each page shows in each state of its screen it settled in (`browsers.ts`).
   page: async ({ page, baseURL }, use) => {
@@ -229,6 +263,23 @@ const extended = base.extend<Fixtures>({
 
     await use({ open: device.open })
     await device.close()
+  },
+  freshDevices: async ({ browser, contextOptions, baseURL }, use) => {
+    const devices: { close(): Promise<void> }[] = []
+
+    await use({
+      open: () => {
+        const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
+
+        devices.push(device)
+
+        return device.open()
+      },
+    })
+
+    for (const device of devices) {
+      await device.close()
+    }
   },
 })
 

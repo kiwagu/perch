@@ -190,9 +190,9 @@ export const notice = (page: Page, code: string) =>
 
 A message whose codes more than one source may raise before it shows (an effect of the app
 and a flow's `show` on its way there) is declared `ranked: true`, its `codes` in rank order:
-the app shows the first of those raised and drops the others, and a spec of the app holds its
-own order to the anchor's `codes` (`contract:diff` lists the order as
-`<anchor> ranks <code> > <code>`).
+the app shows the first of those raised and drops the others, a `clear` of it in any flow drops
+every code raised before it, and a spec of the app holds its own order to the anchor's `codes`
+(`contract:diff` lists the order as `<anchor> ranks <code> > <code>`).
 
 ```yaml
 <screen>.<object>-message:

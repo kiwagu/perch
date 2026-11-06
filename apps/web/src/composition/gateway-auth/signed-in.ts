@@ -63,6 +63,14 @@ const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly mes
     [401, { code: 'data:INVALID_CREDENTIALS', message: 'wrong email or password' }],
     // The password was right, the email is not verified yet.
     [403, { code: 'data:EMAIL_NOT_VERIFIED', message: 'the email is not verified yet' }],
+    // The account is signed in on as many devices as it may be: nothing is signed in.
+    [
+      409,
+      {
+        code: 'data:DEVICE_LIMIT',
+        message: 'the account is signed in on as many devices as it may be',
+      },
+    ],
     [429, { code: 'data:RATE_LIMITED', message: 'too many attempts' }],
   ])
 
