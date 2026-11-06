@@ -8,9 +8,10 @@ pre-commit:
   jobs:
     # Every hook this configuration names is installed in the clone. lefthook installs them on
     # `lefthook install` (which `bun install` runs), and a hook run installs them again by itself
-    # once this configuration changed since, unless told not to (`--no-auto-install`); a hook whose
-    # file went while the configuration stayed the same stays missing, and every commit would skip
-    # it, silently (scripts/hooks-installed.ts).
+    # when it notices this configuration changed since (an edit in the same second as the last
+    # install can pass unnoticed), unless told not to (`--no-auto-install`); a hook whose file went
+    # while the configuration stayed the same stays missing, and every commit would skip it,
+    # silently (scripts/hooks-installed.ts).
     - name: git hooks installed
       run: . scripts/ensure-path.sh && bun run scripts/hooks-installed.ts
 

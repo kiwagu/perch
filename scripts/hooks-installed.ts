@@ -1,9 +1,10 @@
 /**
  * Refuses a commit while a git hook lefthook's configuration names is not installed in the clone.
  * lefthook installs the hooks on `lefthook install` (which `bun install` runs), and a hook run
- * installs them again by itself once the configuration changed since, unless told not to
- * (`--no-auto-install`); a hook whose file went while the configuration stayed the same stays
- * missing, and every commit of the clone would skip it, silently. The configuration is
+ * installs them again by itself when it notices the configuration changed since (an edit in the
+ * same second as the last install can pass unnoticed), unless told not to (`--no-auto-install`);
+ * a hook whose file went while the configuration stayed the same stays missing, and every commit
+ * of the clone would skip it, silently. The configuration is
  * lefthook's own reading of it (`lefthook dump`), a machine-local `lefthook-local.yml` included;
  * a hook is installed when git finds a file it can run where it looks for that hook
  * (`git rev-parse --git-path hooks/<name>`: the hooks folder every worktree of the clone shares,
