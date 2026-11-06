@@ -12,6 +12,7 @@ import { deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
+import type { DeviceNetwork } from '@workspace/replica/sync'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
 import type { Theme } from '../platform/theme'
@@ -110,6 +111,20 @@ export function bootBrowser(
   // Undefined in a page that is not a secure context: such a page does not sync, and says so.
   const locks: LockManager | undefined = navigator.locks
   const visibility = documentVisibility(document)
+  // The browser's network: the sync status reads it in every tab, and the leading tab's channel
+  // hears it come back to connect again at once.
+  const network: DeviceNetwork = {
+    online: () => navigator.onLine,
+    onOnlineChange: (listener) => {
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
+  }
 
   showSync({ leader: false, channel: 'down' })
 
@@ -141,16 +156,8 @@ export function bootBrowser(
       gatewayAuth: gatewayAuth(`${origin}/backend`),
       deviceLabel: deviceLabel(navigator),
       theme,
-      online: () => navigator.onLine,
-      onOnlineChange: (listener) => {
-        window.addEventListener('online', listener)
-        window.addEventListener('offline', listener)
-
-        return () => {
-          window.removeEventListener('online', listener)
-          window.removeEventListener('offline', listener)
-        }
-      },
+      online: network.online,
+      onOnlineChange: network.onOnlineChange,
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
       transport: (context) =>
@@ -161,6 +168,7 @@ export function bootBrowser(
           onMemberships: context.onMemberships,
           onEnded: context.onEnded,
           clock: systemClock,
+          network,
         }),
       locks,
       hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),

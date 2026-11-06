@@ -258,7 +258,9 @@ modeling stage.
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  `WebSocketTransport`): once the browser is back online it connects at once instead of waiting
+  out its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
   of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
   `perch.theme` tells `platform.theme-set`); the storage's own
