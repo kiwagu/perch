@@ -61,7 +61,9 @@ The profiles:
   file. `caddy-e2e` serves `apps/web/dist`, which only the e2e launcher writes, so the two stands
   never overwrite each other's build: the `e2e` profile has no web app of its own; `bun run
   test:e2e` writes the production build, then starts the profile with `--reload` (apps already
-  online restart, so a run never meets a stale stand) and waits for it.
+  online restart, so a run never meets a stale stand) and waits for it. `caddy-e2e` also names to
+  the gateway the client address each browser claims (`PERCH_CLIENT_ADDRESS=claimed`,
+  `infra/dev/`), so each Playwright worker spends request limits of its own.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
 no persistence. Apps in containers (SurrealDB, MailDev, Caddy) declare only a url: their ports
