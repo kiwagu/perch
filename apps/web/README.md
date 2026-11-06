@@ -35,7 +35,10 @@ modeling stage.
   client over `POST /backend/auth/sign-in/email` on the page's own origin, the device in
   `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
   answer's body, never the signed one of its `set-auth-token` header; a 401 is
-  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 429 `data:RATE_LIMITED`, and the
+  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
+  account is signed in on as many devices as it may be: nothing is signed in, and the sign-in page
+  asks before it signs in all the same with `signOutOldest`, which signs out the account's device
+  seen least recently), a 429 `data:RATE_LIMITED`, and the
   sign-in page says to wait; an unreachable gateway is `data:OFFLINE`, keeping nothing of what the
   request carried).
   A verification link's token signs the device in the same way the first time it is exchanged
@@ -255,7 +258,9 @@ modeling stage.
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  `WebSocketTransport`): once the browser is back online it connects at once instead of waiting
+  out its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
   of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
   `perch.theme` tells `platform.theme-set`); the storage's own

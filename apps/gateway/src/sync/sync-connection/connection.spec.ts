@@ -35,9 +35,11 @@ import {
   openAuth,
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
+import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
 import { authHandler } from '../../auth/auth-handler'
 import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
+import { DeviceSessions } from '../../auth/device-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
@@ -128,6 +130,8 @@ interface ConnectOptions {
   ) => Promise<SessionRead>
   /** Ends the session of a device that signs out over its channel; the directory ends it by default. */
   readonly signOut?: SyncConnectionDeps['sessions']['signOut']
+  /** Marks a device seen in place of the directory, which answers at once by default. */
+  readonly seen?: SyncConnectionDeps['devices']['seen']
 }
 
 interface GatewayOptions {
@@ -306,6 +310,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   const unsubscribed: string[] = []
   const socket = new FakeSocket()
   const read = (token: string) => sessions.read(token)
+  const devices = new DeviceSessions({ directory: gateway.local, clock: gateway.clock })
   const connection = new SyncConnection(socket, {
     sessions: {
       read: (token) => {
@@ -319,8 +324,9 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
       seen: (device) => {
         seen.push(device)
 
-        return okAsync(undefined)
+        return options.seen ? options.seen(device) : okAsync(undefined)
       },
+      byToken: (token) => devices.byToken(token),
     },
     hub: {
       subscribe: hub.subscribe.bind(hub),
@@ -527,6 +533,54 @@ describe('SyncConnection', () => {
     expect(clock.pending()).toBe(0)
   })
 
+  it('welcomes a device once the mark of its hello landed, so it is seen before it hears anything', async () => {
+    let reach = () => {}
+    let release = () => {}
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve
+    })
+    const landed = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { socket, connection, ann } = await connect({
+      seen: () => {
+        reach()
+
+        return ResultAsync.fromSafePromise(landed)
+      },
+    })
+    const helloed = hello(connection, ann.token)
+
+    await reached
+
+    // Every other step of the hello has time to run meanwhile: the welcome waits for the mark.
+    const first = await Promise.race([
+      helloed.then(() => 'welcomed'),
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve('still marking'), 200)
+      }),
+    ])
+
+    expect(first).toBe('still marking')
+    expect(socket.sent).toEqual([])
+
+    release()
+    await helloed
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+  })
+
+  it('welcomes a device all the same when the mark of its hello failed, and logs it', async () => {
+    const { socket, connection, ann, logLines } = await connect({
+      seen: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is away')),
+    })
+
+    await hello(connection, ann.token)
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+    expect(logLines.join('\n')).toContain('the device could not be marked seen')
+  })
+
   it.each<{ readonly name: string; readonly token: (fixture: Connected) => Promise<string> }>([
     { name: 'a token nobody holds', token: async () => 'garbage' },
     {
@@ -557,6 +611,50 @@ describe('SyncConnection', () => {
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
     expect(seen).toEqual([])
+  })
+
+  it.each([
+    { reason: 'revoked', code: CLOSE.revoked, text: 'signed out from another device' },
+    {
+      reason: 'password-changed',
+      code: CLOSE.passwordChanged,
+      text: 'signed out because the password changed',
+    },
+    {
+      reason: 'device-limit',
+      code: CLOSE.deviceLimit,
+      text: 'signed out by a sign-in past the limit of devices',
+    },
+  ])(
+    'closes with $code the hello of a device whose session ended as $reason while it was offline',
+    async ({ reason, code, text }) => {
+      const { socket, connection, ann, connections, seen, local, clock } = await connect()
+
+      await local.db.query(endWithStatement, {
+        session_token: ann.token,
+        ended_at: new Date(clock.now()),
+        reason,
+      })
+      await hello(connection, ann.token)
+
+      expect(socket.closes).toEqual([[code, text]])
+      expect(socket.sent).toEqual([])
+      expect(connections.forIdentity(ann.identity.id)).toEqual([])
+      expect(seen).toEqual([])
+    },
+  )
+
+  it("closes 4401 a hello under another device than its ended session's, whatever ended it", async () => {
+    const { socket, connection, ann, local, clock } = await connect()
+
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await hello(connection, ann.token, 'device-phone')
+
+    expect(socket.closes).toEqual([[CLOSE.unauthorized, 'the session was not accepted']])
   })
 
   it('closes as a failed server a hello whose session could not be read, and welcomes it once it can', async () => {
@@ -829,6 +927,32 @@ describe('SyncConnection', () => {
     await helloed
 
     expect(socket.closes).toEqual([[CLOSE.revoked, 'signed out from another device']])
+    expect(socket.sent).toEqual([])
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
+    expect(seen).toEqual([])
+  })
+
+  it('closes a hello refused at its registration with the code its ended session keeps, 4003 for the limit of devices', async () => {
+    const held = heldRead()
+    const { socket, connection, ann, connections, seen, local, clock } = await connect({
+      read: held.read,
+    })
+    const helloed = hello(connection, ann.token)
+
+    await held.reached
+    // As a sign-in past the limit does: the session first, then the sockets.
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await connections.close(ann.identity.id, DEVICE, CLOSE.deviceLimit)
+    held.release()
+    await helloed
+
+    expect(socket.closes).toEqual([
+      [CLOSE.deviceLimit, 'signed out by a sign-in past the limit of devices'],
+    ])
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
     expect(seen).toEqual([])

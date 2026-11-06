@@ -1,17 +1,27 @@
-import type { ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import type { DeviceSessionId, IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
+import { KeyedTurns } from '../../keyed-turns'
 import type { AuthInstance } from '../auth-instance'
+import { DEVICE_LIMIT } from '../auth-instance'
 import { writing } from '../device-session-rows'
 import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
+import sessionsAdmitStatement from '../surql/device-sessions-admit.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
 
-import { type SessionRevoke, type SignOutEnding, toSessionRevoke, toSignOutEnding } from './endings'
+import {
+  type SessionRevoke,
+  type SignInAdmission,
+  type SignOutEnding,
+  toSessionRevoke,
+  toSignInAdmission,
+  toSignOutEnding,
+} from './endings'
 import { readSession, type SessionRead } from './read'
 import {
   type MailedVerification,
@@ -47,6 +57,8 @@ export class AuthSessions {
   readonly #directory: LocalDb
   readonly #clock: Clock
   readonly #secret: string
+  /** The admissions of each account, one at a time in this process. */
+  readonly #admissions = new KeyedTurns<IdentityId>()
 
   constructor(options: AuthSessionsOptions) {
     this.#auth = options.auth
@@ -102,6 +114,41 @@ export class AuthSessions {
         .retry(),
       `the sessions of ${identity} could not be ended`,
     ).map(() => undefined)
+  }
+
+  /**
+   * Admits the sign-in of `identity` whose new session holds `token` against the limit of devices
+   * one account keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction, the account's
+   * admissions one at a time: within the limit the session is admitted and waits no more
+   * (`pending`), the device's earlier sessions ending as at any new sign-in of the device; past
+   * it, a sign-in not confirmed (`signOutOldest` false) has its session deleted
+   * and is asked, a confirmed one signs out the account's other device seen least recently, whose
+   * session keeps `device-limit` as why it ended. Only admitted sessions count, the new one beside
+   * them, so a sign-in still waiting for its admission takes no place from another, a device
+   * signed in already takes no new place, and of two sign-ins for the last place one is admitted
+   * and the other asked. A session whose admission failed keeps waiting: nothing counts, lists or
+   * hands it out.
+   */
+  admit(
+    identity: IdentityId,
+    token: string,
+    signOutOldest: boolean,
+  ): ResultAsync<SignInAdmission, DataError> {
+    return new ResultAsync(
+      this.#admissions.run(identity, () =>
+        writing(
+          this.#directory.db
+            .query<unknown[]>(sessionsAdmitStatement, {
+              session_token: token,
+              limit: DEVICE_LIMIT,
+              sign_out_oldest: signOutOldest,
+              now: this.#now(),
+            })
+            .retry(),
+          'a sign-in could not be admitted',
+        ).andThen((results) => toSignInAdmission(results.at(-2))),
+      ),
+    )
   }
 
   /**

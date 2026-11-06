@@ -74,6 +74,13 @@ export function SignInContainer() {
       onForgot={(email) =>
         send({ type: 'user.sign-in.forgot-link', fields: { 'user.sign-in.email-input': email } })
       }
+      onConfirmDeviceLimit={({ email, password, name }) =>
+        send({
+          type: 'user.sign-in.device-limit-dialog.confirm-button',
+          form: { email, password, name, locale },
+        })
+      }
+      onCancelDeviceLimit={() => send({ type: 'user.sign-in.device-limit-dialog.cancel-button' })}
     />
   )
 }

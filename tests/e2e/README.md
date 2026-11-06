@@ -173,8 +173,10 @@ check and its fixtures, every browser of a test claiming its worker's client add
 its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
 a test asks) and `freshDevice` (device B of an account the test makes itself: a browser
-context of its own that opens nothing and signs nothing in by itself), `appReady` (waits for
-`app-shell.status` in `ready`, `APP_READY`), `signIn`
+context of its own that opens nothing and signs nothing in by itself), `freshDevices` (as many
+devices of such an account as the test opens, each a browser context of its own), `appReady`
+(waits for `app-shell.status` in `ready`, `APP_READY`), `syncSays` (waits until
+`app-shell.sync-message` carries a code, `synced` by default), `signIn`
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
@@ -195,7 +197,9 @@ included, until the test lets them load or refuses them as a dropped network wou
 tab of the same browser still opens an account's data (a context's hold would stall that tab's
 sign-in too).
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
-it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
+it can go offline and back (Playwright's offline mode leaves an open WebSocket up), and can wait
+offline until the app's reconnect delay has grown to its longest (`untilLongestReconnectDelay`);
+`BACK_ONLINE_MS`, how long a page back online may take to connect again.
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/browsers.ts`: what every browser a test opens is held to, from before its first
@@ -236,6 +240,13 @@ form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends 
 mail, held to its declaration), `deleteAccount` (presses the button of `/delete-account` and
 confirms the frame's question, checked for its code `delete-account`) and `accountDeleted` (the
 page's message once the account is gone).
+`src/support/device-limit.ts`: an account at its limit of ten devices and a sign-in past it:
+`signInDevicesCToK` (signs the account in on nine more devices in turn, each synced on `/me`,
+the first, device C, with its sync socket routed through the test), `submitSignIn` (submits the
+sign-in form without waiting for its answer), `deviceLimitDialog` (the dialog asking whether to
+sign in past the limit, by its anchor and its code) and `expectDeviceCSignedOut` (the list of
+devices once the sign-in past the limit went through: device C's alone `revoked`, by the order
+the devices signed in).
 `src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
 names, bios, organisation keys and names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
@@ -263,7 +274,9 @@ seen there and holds it to its declaration). A failure prints no address, link o
 ## Commands
 
 - `bun run test:e2e` (repository root): runs the launcher through `mcproc exec`, under a 4G
-  memory lease (the run waits its turn when the host is short of memory) and with
+  memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
+  group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
+  checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
   `E2E_BASE_URL` and `MAILBOX_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
@@ -287,7 +300,8 @@ seen there and holds it to its declaration). A failure prints no address, link o
   stops before the build and names the package; it never runs the browser on the host's network.
   `perf:measure` stays on the host's network, as pasta's forwarding would weigh on its timings.
 - `bun run perf:measure [--runs=5] [--slow-4g]` (repository root): the start's timings against
-  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease). It builds
+  their budgets (`scripts/perf-measure.ts`, through `mcproc exec` under a 3G lease and in the
+  `e2e` group, so no e2e run shares the CPU with its timings). It builds
   and brings the stand up as the launcher does (`scripts/stand.ts`), then times in Chromium, as
   a Pixel 7 with the CPU slowed four times and the service worker blocked, a guest's first
   visit (first paint 500 ms, ready 1 s) and a signed-in reload with the cache kept and cleared

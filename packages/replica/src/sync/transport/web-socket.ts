@@ -1,4 +1,4 @@
-import type { Clock } from '../clock'
+import type { Clock } from '../../clock'
 import {
   CLOSE,
   type ClientMessage,
@@ -9,43 +9,23 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
-} from '../protocol'
+} from '../../protocol'
 
-export type ChannelState = 'up' | 'down'
-
-/**
- * Why a channel ended for good: the gateway refused the token, signed the device out at its own
- * request, refused the protocol this device speaks (an application older than the gateway),
- * signed the device out from another device (`revoked`), or ended its session because the
- * account's password changed, through a reset link or on another device (`password-changed`).
- */
-export type EndReason = 'unauthorized' | 'signed-out' | 'protocol' | 'revoked' | 'password-changed'
-
-export interface DeviceCredentials {
-  readonly token: string
-}
-
-/** The channel between a device and the gateway that the sync engine talks through. */
-export interface SyncTransport {
-  start(): void
-  stop(): void
-  /**
-   * Gives up on the current connection, which stopped answering or must present the token again,
-   * and connects again after the first delay of the backoff. Nothing happens unless the gateway
-   * has welcomed the connection: one still opening or waiting for its welcome says hello with the
-   * token anyway, and is given up as any other is: by its close, or by the welcome wait once open.
-   */
-  reconnect(): void
-  /** Sends when the channel is up and the gateway has welcomed the device; false otherwise. */
-  send(message: ClientMessage): boolean
-  onMessage(listener: (message: ServerMessage) => void): () => void
-  onChannel(listener: (state: ChannelState) => void): () => void
-  /** Hears that the channel ended for good; it is told before the channel goes down. */
-  onEnded(listener: (reason: EndReason) => void): () => void
-}
+import { endingOf } from './endings'
+import type { ChannelState, DeviceCredentials, EndReason, SyncTransport } from './port'
 
 /** The part of a WebSocket the transport uses. */
 export type SocketLike = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>
+
+/**
+ * The device's network as the platform tells it: whether it says the device has one now, and
+ * its changes (a browser's `online` and `offline` events); `onOnlineChange` returns what stops
+ * hearing them.
+ */
+export interface DeviceNetwork {
+  readonly online: () => boolean
+  readonly onOnlineChange: (listener: () => void) => () => void
+}
 
 export interface WebSocketTransportOptions {
   readonly url: string
@@ -62,17 +42,16 @@ export interface WebSocketTransportOptions {
   readonly clock: Clock
   /** Opens a socket; `new WebSocket(url)` by default. */
   readonly socket?: (url: string) => SocketLike
+  /**
+   * The device's network, heard while the transport is started: once it is back, a reconnect
+   * waiting for its delay connects at once, and the delays start over. Without it, only the
+   * delays bring the channel back.
+   */
+  readonly network?: DeviceNetwork
 }
 
 /** How long the transport waits before each reconnect in a row; the last delay repeats. */
 export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
-
-/**
- * What one region's sync uses of the transport: it sends, and has a connection that stopped
- * answering made again. `RegionSync` hands its parts a channel that refuses both once the region
- * no longer syncs on this connection.
- */
-export type RegionChannel = Pick<SyncTransport, 'send' | 'reconnect'>
 
 /** How long an open socket waits for the gateway's welcome before it is given up. */
 export const WELCOME_TIMEOUT_MS = 10_000
@@ -85,22 +64,8 @@ const NORMAL_CLOSE = 1000
 
 const NO_TIMER = (): void => {}
 
-/**
- * Close codes after which the gateway will not take the device back, and what they mean. Any
- * other close, a hello the gateway stopped waiting for (4408) included, is followed by a reconnect.
- */
-const ENDINGS: ReadonlyMap<number, EndReason> = new Map([
-  [CLOSE.unauthorized, 'unauthorized'],
-  [CLOSE.protocol, 'protocol'],
-  [CLOSE.signedOut, 'signed-out'],
-  [CLOSE.revoked, 'revoked'],
-  [CLOSE.passwordChanged, 'password-changed'],
-])
-
-/** Why a close with `code` ends the channel for good; `undefined` for a close a reconnect follows. */
-export function endingOf(code: number): EndReason | undefined {
-  return ENDINGS.get(code)
-}
+/** What stops hearing the device's network while the transport hears none. */
+const NOT_HEARING = (): void => {}
 
 type State =
   /** Not started, or stopped: no socket and no reconnect. */
@@ -117,8 +82,9 @@ type State =
  * device's id; the channel is up once the gateway welcomes it, and only then does it send.
  * The memberships of the welcome and of every later change go to `onMemberships`, before the
  * listeners of messages hear the message. A socket that closes, or is not welcomed within 10
- * seconds, is opened again after a growing delay, which starts over at
- * the next welcome or when the engine gives a welcomed connection up (`reconnect`). A close that
+ * seconds, is opened again after a growing delay, which starts over at the next welcome, when
+ * the engine gives a welcomed connection up (`reconnect`) or when the device's network comes
+ * back (`network`), which also connects a pending reconnect at once. A close that
  * refuses the token or the protocol, or signs the device out (at its own request or from another
  * device), ends the channel for good. Text the protocol refuses closes the socket as a breach
  * and connects again.
@@ -133,6 +99,8 @@ export class WebSocketTransport implements SyncTransport {
   #attempt = 0
   /** Gives up on the open socket when the welcome does not come in time. */
   #cancelWelcome = NO_TIMER
+  /** Stops hearing the device's network, heard from the start until a stop or an ending. */
+  #stopHearingNetwork = NOT_HEARING
 
   constructor(options: WebSocketTransportOptions) {
     this.#options = options
@@ -141,6 +109,7 @@ export class WebSocketTransport implements SyncTransport {
   start(): void {
     if (this.#state.kind === 'idle') {
       this.#connect()
+      this.#hearNetwork()
     }
   }
 
@@ -152,6 +121,7 @@ export class WebSocketTransport implements SyncTransport {
     }
 
     this.#endWelcomeWait()
+    this.#stopHearing()
     this.#state = { kind: 'idle' }
 
     if (state.kind === 'waiting') {
@@ -351,8 +321,42 @@ export class WebSocketTransport implements SyncTransport {
     this.#cancelWelcome = NO_TIMER
   }
 
+  #hearNetwork(): void {
+    const network = this.#options.network
+
+    if (network) {
+      this.#stopHearingNetwork = network.onOnlineChange(() => {
+        if (network.online()) {
+          this.#networkBack()
+        }
+      })
+    }
+  }
+
+  #stopHearing(): void {
+    this.#stopHearingNetwork()
+    this.#stopHearingNetwork = NOT_HEARING
+  }
+
+  /**
+   * The device's network came back: the delays start over, and a reconnect waiting for its delay
+   * connects at once. A socket open or still opening is left to its welcome or its close, which
+   * then waits the first delay.
+   */
+  #networkBack(): void {
+    const state = this.#state
+
+    this.#attempt = 0
+
+    if (state.kind === 'waiting') {
+      state.cancel()
+      this.#connect()
+    }
+  }
+
   #end(reason: EndReason): void {
     this.#endWelcomeWait()
+    this.#stopHearing()
     this.#state = { kind: 'ended' }
     this.#options.onEnded(reason)
 

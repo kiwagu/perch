@@ -36,7 +36,10 @@ actions:
       password:
         type: string
         description: The password of the account.
-    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent
+      signOutOldest:
+        type: boolean
+        description: "Optional: sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many."
+    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices
     codes:
       - invalid-credentials
       - email-not-verified

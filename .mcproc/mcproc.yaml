@@ -9,8 +9,9 @@
 # checkouts then run side by side, and `mcproc ls` in each shows only its own.
 version: 1
 # the mcproc release this manifest was last checked against, which `mcproc describe` shows as
-# "written by" beside the running one; an mcproc older than 0.13.0 refuses the field
-mcproc: 0.17.0
+# "written by" beside the running one; an mcproc older than 0.13.0 refuses the field. The root
+# scripts need 0.19.0 or later: the e2e runs take turns through `mcproc exec --exclusive`.
+mcproc: 0.19.0
 project: perch
 vars:
   slot: 0                                   # the main checkout; a worktree gets its own

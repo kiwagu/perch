@@ -9,10 +9,11 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
-} from '../protocol'
-import { manualClock } from '../testing'
+} from '../../protocol'
+import { manualClock } from '../../testing'
 
-import { type DeviceCredentials, RECONNECT_DELAYS_MS, WebSocketTransport } from './transport'
+import type { DeviceCredentials } from './port'
+import { type DeviceNetwork, RECONNECT_DELAYS_MS, WebSocketTransport } from './web-socket'
 
 /** A socket the test opens, feeds and closes by hand; it keeps what the transport sent. */
 class FakeSocket extends EventTarget {
@@ -63,7 +64,10 @@ const acme: Membership = { tenant: { id: 'tnt_a', key: 'acme', name: 'Acme' }, r
 const probe: ClientMessage = { type: 'probe', regions: ['identity:idn_a'] }
 
 /** A transport over fake sockets with a manual clock; `events` lists channel changes and endings in order. */
-function harness(credentials: () => DeviceCredentials | undefined = () => keys) {
+function harness(
+  credentials: () => DeviceCredentials | undefined = () => keys,
+  network?: DeviceNetwork,
+) {
   const clock = manualClock()
   const sockets: FakeSocket[] = []
   const events: string[] = []
@@ -83,6 +87,7 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
 
       return socket
     },
+    ...(network ? { network } : {}),
   })
 
   transport.onChannel((state) => events.push(state))
@@ -117,6 +122,34 @@ function harness(credentials: () => DeviceCredentials | undefined = () => keys) 
     socket,
     connect,
   }
+}
+
+/** The device's network, which the test takes away and brings back; it counts who hears it. */
+function fakeNetwork() {
+  const listeners = new Set<() => void>()
+  let online = true
+
+  const network: DeviceNetwork = {
+    online: () => online,
+    onOnlineChange: (listener) => {
+      listeners.add(listener)
+
+      return () => {
+        listeners.delete(listener)
+      }
+    },
+  }
+
+  /** The browser says its network went (`false`) or came back (`true`), as its events do. */
+  const change = (now: boolean): void => {
+    online = now
+
+    for (const listener of [...listeners]) {
+      listener()
+    }
+  }
+
+  return { network, change, listening: () => listeners.size }
 }
 
 describe('WebSocket transport', () => {
@@ -198,6 +231,122 @@ describe('WebSocket transport', () => {
     expect(events).toEqual(['up', 'down'])
   })
 
+  it('connects at once when the network comes back while a reconnect waits, and starts its delays over', async () => {
+    const { network, change } = fakeNetwork()
+    const { clock, sockets, transport, socket, events } = harness(() => keys, network)
+
+    transport.start()
+    socket().open()
+    socket().receive(welcome)
+    change(false)
+
+    // Every attempt fails while the network is gone, until the delay has grown to 30 seconds.
+    for (const delay of [1_000, 2_000, 4_000, 8_000, 16_000]) {
+      socket().drop(1006)
+      await clock.advance(delay)
+    }
+
+    socket().drop(1006)
+    await clock.advance(10_000)
+
+    expect(sockets).toHaveLength(6)
+
+    change(true)
+
+    expect(sockets).toHaveLength(7)
+
+    // The delays start over: an attempt that fails now waits one second, not thirty.
+    socket().drop(1006)
+    await clock.advance(999)
+
+    expect(sockets).toHaveLength(7)
+
+    await clock.advance(1)
+
+    expect(sockets).toHaveLength(8)
+
+    // The wait the network cut short opens nothing later.
+    socket().open()
+    socket().receive(welcome)
+    await clock.advance(60_000)
+
+    expect(sockets).toHaveLength(8)
+    expect(events).toEqual(['up', 'down', 'up'])
+  })
+
+  it('opens no second socket when the network comes back while one opens or is up, and starts its delays over', async () => {
+    const { network, change } = fakeNetwork()
+    const { clock, sockets, transport, socket } = harness(() => keys, network)
+
+    // Three closes in a row grew the next delay to 8 seconds.
+    transport.start()
+
+    for (const delay of [1_000, 2_000, 4_000]) {
+      socket().drop(1006)
+      await clock.advance(delay)
+    }
+
+    change(false)
+    change(true)
+
+    // The socket still opening is left to its own open and hello.
+    expect(sockets).toHaveLength(4)
+    expect(socket().closedWith).toBeUndefined()
+
+    // It fails, and the next attempt waits one second, not eight.
+    socket().drop(1006)
+    await clock.advance(999)
+
+    expect(sockets).toHaveLength(4)
+
+    await clock.advance(1)
+
+    expect(sockets).toHaveLength(5)
+
+    socket().open()
+    socket().receive(welcome)
+    change(false)
+    change(true)
+    await clock.advance(60_000)
+
+    expect(sockets).toHaveLength(5)
+    expect(socket().closedWith).toBeUndefined()
+  })
+
+  it('hears the network only while it runs: a stop or an ending stops hearing it', async () => {
+    const stopped = fakeNetwork()
+    const first = harness(() => keys, stopped.network)
+
+    expect(stopped.listening()).toBe(0)
+
+    first.transport.start()
+    first.transport.start()
+
+    expect(stopped.listening()).toBe(1)
+
+    first.transport.stop()
+
+    expect(stopped.listening()).toBe(0)
+
+    first.transport.start()
+
+    expect(stopped.listening()).toBe(1)
+
+    const ended = fakeNetwork()
+    const second = harness(() => keys, ended.network)
+
+    second.connect().drop(4001)
+
+    expect(ended.listening()).toBe(0)
+
+    ended.change(false)
+    ended.change(true)
+    await second.clock.advance(60_000)
+
+    expect(second.sockets).toHaveLength(1)
+    expect(second.events).toEqual(['up', 'ended: revoked', 'down'])
+  })
+
   it("hands the welcome's memberships and a later memberships message to onMemberships", () => {
     const { transport, socket, memberships, received } = harness()
     const update: ServerMessage = { type: 'memberships', memberships: [] }
@@ -260,6 +409,19 @@ describe('WebSocket transport', () => {
 
     expect(events).toEqual(['up', 'ended: password-changed', 'down'])
     expect(ended).toEqual(['password-changed'])
+    expect(sockets.length).toBe(1)
+  })
+
+  it("stops on 4003 and reports device-limit: a sign-in past the account's limit signed it out", async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4003)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: device-limit', 'down'])
+    expect(ended).toEqual(['device-limit'])
     expect(sockets.length).toBe(1)
   })
 
