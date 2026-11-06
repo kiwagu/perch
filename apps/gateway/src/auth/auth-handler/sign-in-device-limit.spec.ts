@@ -5,6 +5,7 @@ import { dataError } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 
+import { SUPERSEDED } from '../../sync/sync-connection'
 import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
 import type { AuthSessions } from '../auth-sessions'
 import { DeviceSessions } from '../device-sessions'
@@ -221,6 +222,39 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
       expect((await eleventh)?.status).toBe(409)
       expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
       expect(await endedOf(mounted, ann.identity)).toEqual([])
+      expect(limitCloses(mounted)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    "keeps a device signed in already in its place while its new sign-in waits: a new device is asked meanwhile, and the device's sign-in admitted",
+    async () => {
+      const held = heldAdmissions()
+      const mounted = await mountedOnRealAuth({ admission: held.admission })
+      const ann = await signedInOn(mounted, ANN, TEN)
+
+      held.arm(1)
+
+      const again = mounted.route(signInRequest(ANN, PASSWORD, 'a'), FROM)
+
+      await held.reached
+      // Device a's new session is written and waits for its admission: until then its earlier
+      // session stays live, and so does the socket it opened.
+      expect(await endedOf(mounted, ann.identity)).toEqual([])
+      expect(ann.sockets.get('a')?.ended).toEqual([])
+
+      const eleventh = await mounted.route(signInRequest(ANN, PASSWORD, 'k'), FROM)
+
+      expect(eleventh?.status).toBe(409)
+
+      held.release()
+
+      expect((await again)?.status).toBe(200)
+      expect((await devicesOf(mounted, ann.identity)).map(({ device }) => device)).toEqual([...TEN])
+      expect(await endedOf(mounted, ann.identity)).toEqual([])
+      // The admission ended the device's earlier session: the socket it opened closed.
+      expect(ann.sockets.get('a')?.ended).toEqual([SUPERSEDED])
       expect(limitCloses(mounted)).toEqual([])
     },
     ARGON2_RUNS_MS,

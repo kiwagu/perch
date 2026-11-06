@@ -120,7 +120,8 @@ export class AuthSessions {
    * Admits the sign-in of `identity` whose new session holds `token` against the limit of devices
    * one account keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction, the account's
    * admissions one at a time: within the limit the session is admitted and waits no more
-   * (`pending`); past it, a sign-in not confirmed (`signOutOldest` false) has its session deleted
+   * (`pending`), the device's earlier sessions ending as at any new sign-in of the device; past
+   * it, a sign-in not confirmed (`signOutOldest` false) has its session deleted
    * and is asked, a confirmed one signs out the account's other device seen least recently, whose
    * session keeps `device-limit` as why it ended. Only admitted sessions count, the new one beside
    * them, so a sign-in still waiting for its admission takes no place from another, a device

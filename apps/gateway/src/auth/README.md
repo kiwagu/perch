@@ -40,16 +40,22 @@ any other label is stored empty), which the session hooks (`session-hooks.ts`) w
 new row. A request without a valid device is refused 400 `bad-request` when its session is about
 to be created, so a sign-in with wrong credentials answers 401 before its device is looked at; a
 sign-up creates no session, and the mount names a verification's device before it asks Better
-Auth (below). Once the row exists, every session of the
-identity on that device but the newest ends (the newest: created last, of the greater id among
-those created at the same instant), the new row itself when a newer one exists already: a device
-holds one live session, and its sign-ins converge on the newest whatever order their rows are
-inserted and their hooks run in. Sessions of the identity on other devices, and of other
+Auth (below). Once a row admitted as it is written exists (a verification's), and when a
+sign-in's row is admitted against the account's limit of devices (below), in the admission's
+transaction, every admitted session of the identity on that device but the newest ends (the
+newest: created last, of the greater id among those created at the same instant), the new row
+itself when a newer one exists already: a device holds one live session, and its sessions
+converge on the newest whatever order their rows are inserted and their statements run in. A
+sign-in's row that waits for its admission is neither kept nor ended, so the device's earlier
+session stays live until the sign-in is admitted, and as it was when the sign-in is asked about
+the limit or does not stand. Sessions of the identity on other devices, and of other
 identities on a device of the same id, stay live.
-Once Better Auth accepted a sign-in, or signed a device in at the first verification of an
-email, and before its answer is returned, the mount closes the identity's sync sockets on that
-device with 1000 (a sign-up signs nothing in and closes nothing): a socket opened with the
-session just ended goes no further, the device connects again with the new token, and a hello
+Once the gateway admitted a sign-in Better Auth accepted (below), or Better Auth signed a device
+in at the first verification of an email, and before its answer is returned, the mount closes
+the identity's sync sockets on that device with 1000 (a sign-up signs nothing in and closes
+nothing, and neither does a sign-in asked about the limit of devices or one that does not
+stand): a socket opened with the session just ended goes no further, the device connects again
+with the new token, and a hello
 with the earlier token whose session read was under way is refused 4001 at its registration.
 Every call with a token must name the device its session was opened on, so a token carried to
 another device is refused.
@@ -68,9 +74,10 @@ an expiry leave it empty. A hello whose token reads no live session is closed wi
 that reason, so a device offline when its session ended still learns why while the row is kept
 (`sync/README.md`). Every ending is the gateway's
 own update of `device_session` (`AuthSessions`: one session by its token, one session of an
-identity by its id, or every session of an identity; the session hooks: all but the newest
-session of a device at a sign-in), which leaves a session that ended already with its end and
-marks one that expired ended at its expiry, so a late extension, prepared while it was live,
+identity by its id, or every session of an identity; all but the newest session of a device, by
+the session hooks at a verification and by the admission of a sign-in), which leaves a session
+that ended already with its end and marks one that expired ended at its expiry, so a late
+extension, prepared while it was live,
 cannot bring it back once anything has ended it. Better Auth ends a session by deleting its row,
 at its own sign-out and when it reads an expired one; the session hooks turn such a delete of one
 row into the ending by its token and refuse the delete. The hooks run these endings on the
@@ -271,8 +278,9 @@ Better Auth signed in (its answer's `user.id`), with a password, the same one
 (`signInStands`). Otherwise (a reset or a change gave the account a new password, or
 confirmations moved the email between accounts, however often and back again, while Better Auth
 looked it up or checked the password) the session is ended at once by its token, the device's
-sockets close, and the sign-in answers 401 as wrong credentials do; an acceptance that names no
-session of an account answers 500 `internal`. A sign-in's `start` is always that of the account it
+earlier session left as it was, and the sign-in answers 401 as wrong credentials do; an
+acceptance that names no session of an account answers 500 `internal`. A sign-in's `start` is
+always that of the account it
 stands for. Since a reset's or a change's transaction ends every session
 present at its commit, a session written before it is ended by it and one written after is ended
 by the sign-in itself: no session outlives the password it was opened with. A sign-in that
@@ -281,10 +289,12 @@ stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (
 `surql/device-sessions-admit.surql`), one admission of an account at a time in the gateway's
 process: the account's devices with a live admitted session are counted, the new session's
 device included and a device with several sessions once. A sign-in's session is written
-`pending` (the session hooks mark it by Better Auth's path `/sign-in/email`) and waits until its
-admission, counted by no other admission and listed among no devices, so a sign-in still under
-way takes no place from another. Within the limit the session is admitted and nothing else
-changes. Past it, a sign-in whose body does not carry `signOutOldest: true` has its new session
+`pending` (the sign-in route asks for it with `X-Perch-Admission: pending`, whatever the client
+sent, and the session hooks honour it on Better Auth's path `/sign-in/email` only) and waits
+until its admission, counted by no other admission and listed among no devices, so a sign-in
+still under way takes no place from another. Within the limit the session is admitted, which
+ends the device's earlier session and closes the sockets it opened with 1000, as a confirmed
+one past it does. Past it, a sign-in whose body does not carry `signOutOldest: true` has its new session
 deleted, never handed to the device nor listed among its devices, and answers 409 `device-limit`,
 which the web asks the person about; once confirmed, the sign-in signs out the account's other
 device seen least recently (`last_seen_at`, then the device's id), whose session ends with
@@ -542,7 +552,8 @@ error carries one.
   organisations' invites use it, each deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
-  ending of all but a device's newest session at a sign-in, the language an account's settings
+  ending of all but a device's newest session at a verification, a sign-in's admission against
+  the limit of devices (which ends the same), the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, an
   identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,

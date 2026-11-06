@@ -8,7 +8,9 @@
 -- nothing: its session, never handed to its device, is deleted (`asked`). A confirmed one signs out
 -- the other device seen least recently (by `last_seen_at`, then by its id): its live sessions end
 -- at $now and keep `device-limit` as their reason (`signed-out`, with that `device`). An admitted
--- session waits no more.
+-- session waits no more, and its device keeps it as its newest: the device's other admitted
+-- sessions end with no reason, as at any new sign-in of the device. Until then they stay live, so
+-- a device signed in already keeps its place while its new sign-in waits.
 BEGIN TRANSACTION;
   LET $own = (
     SELECT
@@ -51,6 +53,27 @@ BEGIN TRANSACTION;
     UPDATE device_session SET
       pending = false
     WHERE token = $session_token
+    RETURN NONE;
+    -- The device keeps its newest admitted session, as `device-sessions-keep-newest.surql` keeps
+    -- it for a session admitted as it is written: its other admitted ones end now, unended.
+    UPDATE device_session SET
+      ended_at = ended_at ?? time::min([expires_at, $now]),
+      expires_at = time::min([expires_at, $now])
+    WHERE
+      identity = $own.identity
+      AND device = $own.device
+      AND ended_at = NONE
+      AND pending = false
+      AND id != (
+        SELECT VALUE id
+        FROM device_session
+        WHERE
+          identity = $own.identity
+          AND device = $own.device
+          AND pending = false
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1
+      )[0]
     RETURN NONE;
   };
   LET $oldest = IF $outcome = 'signed-out' {

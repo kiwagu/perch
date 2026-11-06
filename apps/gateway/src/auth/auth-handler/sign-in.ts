@@ -85,13 +85,14 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * ended at once by its token and the sign-in answers as wrong credentials do (401), or 500
  * `internal` when the answer names no session, or the second read or that ending failed. A reset
  * or a change ends every session present when its transaction commits, so a session written
- * before it is ended by it, and one written after is ended here. Either way the
- * device's sockets close (`closeDevice`): the device's earlier session ended when the new one was
- * written. A sign-in that stands is then admitted against the account's limit of devices
+ * before it is ended by it, and one written after is ended here. Either way the device's earlier
+ * session is left as it was. A sign-in that stands is then admitted against the account's limit of devices
  * (`AuthSessions.admit`, `signOutOldest` its confirmation): one that would bring the account past
- * it unconfirmed has its session deleted and answers 409 `device-limit`, nothing signed in; a
- * confirmed one signs out the device seen least recently, whose sockets close with 4003. Until
- * then the session waits (`pending`), counted by no other admission and listed nowhere: an
+ * it unconfirmed has its session deleted and answers 409 `device-limit`, nothing signed in, the
+ * device's earlier session left as it was; a confirmed one signs out the device seen least
+ * recently, whose sockets close with 4003. An admitted session ends the device's earlier one, so
+ * the device's sockets close then (`closeDevice`). Until its admission the session waits
+ * (`pending`), counted by no other admission and listed nowhere: an
  * admission that failed answers 500 `internal` and ends the new session by its token, and should
  * that ending fail too, the session keeps waiting, never handed out. Any other
  * answer reaches the client as its status and code alone (`refusalOf`); an
@@ -124,8 +125,6 @@ async function handedOver(
   const ended =
     stands || (accepted.success && (await deps.sessions.signOut(accepted.data.token)).isOk())
 
-  await closeDevice(request, response, deps.connections)
-
   if (after.isErr() || !ended) {
     return Response.json({ code: 'internal' }, { status: 500 })
   }
@@ -148,6 +147,9 @@ async function handedOver(
   if (admission.value.kind === 'asked') {
     return Response.json({ code: 'device-limit' }, { status: 409 })
   }
+
+  // The admission ended the device's earlier session: the sockets it opened with it close.
+  await closeDevice(request, response, deps.connections)
 
   if (admission.value.kind === 'signed-out') {
     await deps.connections.close(user.id, admission.value.device, CLOSE.deviceLimit)

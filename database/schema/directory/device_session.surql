@@ -54,8 +54,9 @@ DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
 -- Whether the session waits for its admission against the account's limit of devices: true from
 -- the moment a sign-in by email and password writes it until the gateway admits it, and the
 -- session is handed to its device only then; a sign-in asked about the limit deletes it. While it
--- waits, no admission of another sign-in counts it and no list of devices shows it, and one whose
--- admission failed stays so, never handed out. Every other session is admitted as it is written.
+-- waits, no admission of another sign-in counts it, no list of devices shows it and the device's
+-- earlier session stays live; one whose admission failed stays so, never handed out. Every other
+-- session is admitted as it is written.
 DEFINE FIELD OVERWRITE pending ON device_session TYPE bool DEFAULT false;
 
 DEFINE INDEX OVERWRITE device_session_token ON device_session FIELDS token

@@ -40,12 +40,15 @@ const SIGN_IN_PATH = '/sign-in/email'
  * into it; a request without a valid device is refused 400 `bad-request`, as the routes refuse it.
  * A sign-in's row is written `pending` when the gateway's sign-in route asks for it
  * (`ADMISSION_HEADER`): the gateway admits it against the account's limit of devices before it
- * hands it out (`AuthSessions.admit`). After the row exists, the identity's sessions on
- * the same device but the newest one end (the newest: created last, of the greater id among those
- * created at the same instant): a device holds one live session. Every sign-in's hook keeps the
- * newest, its own row included when a newer one exists already, so the device converges on its
- * newest session whatever order the rows are inserted and the hooks run in: a sign-in whose row
- * is inserted late ends itself, and two that end the others at once never end each other.
+ * hands it out (`AuthSessions.admit`). After a row admitted as it is written exists (a
+ * verification's), the identity's admitted sessions on the same device but the newest one end
+ * (the newest: created last, of the greater id among those created at the same instant), and the
+ * admission of a sign-in does the same in its transaction: a device holds one live session. Each
+ * keeps the newest, its own row included when a newer one exists already, so the device converges
+ * on its newest session whatever order the rows are inserted and the statements run in: a session
+ * whose row is inserted late ends itself, and two that end the others at once never end each
+ * other. A row that waits for its admission is neither kept nor ended, so the device's earlier
+ * session stays live until the sign-in is admitted, and as it was when the sign-in is not.
  *
  * A session row is ended, never deleted, so a device signed out from another one stays listed
  * with the moment it ended. Better Auth deletes the row at sign-out and when it reads a session
@@ -88,7 +91,9 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
       after: async (session: SessionRow) => {
         const device = session['device']
 
-        if (typeof device !== 'string') {
+        // A sign-in's row that waits for its admission ends nothing yet: its admission keeps the
+        // device's newest session, so a sign-in asked about the limit leaves the device as it was.
+        if (typeof device !== 'string' || session['pending'] === true) {
           return
         }
 
