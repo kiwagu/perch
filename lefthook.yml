@@ -6,6 +6,12 @@
 pre-commit:
   piped: true
   jobs:
+    # Every hook this configuration names is installed in the clone: lefthook installs them only
+    # when told (`bun install` runs `lefthook install`), so a hook added here later would be
+    # skipped, silently, by a clone installed before it (scripts/hooks-installed.ts).
+    - name: git hooks installed
+      run: . scripts/ensure-path.sh && bun run scripts/hooks-installed.ts
+
     # A commit on contract/trunk holds the UI contract's business layer alone: the domain files,
     # the vocabulary and the scenarios. One that stages any other file fails here, before the
     # longer checks; a merge, any other branch and a detached HEAD pass (scripts/contract-trunk.ts).
@@ -93,3 +99,15 @@ pre-merge-commit:
   jobs:
     - name: the pre-commit checks
       run: . scripts/ensure-path.sh && CONTRACT_AHEAD_MERGE=1 lefthook run pre-commit
+
+# The message of a commit on an area branch that changes the UI contract's business layer: a
+# take from contract/trunk, `<type>(contract): <the card's goal>` with the trailer
+# `Taken-from: contract/trunk <first>^..<last> <card>`, the commits it carries on the trunk's own
+# line and holding the files it stages, or a business commit the rules let the branch write
+# itself, with `Written-on-branch: <card>`; nothing else there names the contract scope. main,
+# the trunk, the engine's branch, an experiment, a detached HEAD and a merge pass
+# (scripts/contract-take.ts).
+commit-msg:
+  jobs:
+    - name: an area branch takes the contract from the trunk
+      run: . scripts/ensure-path.sh && bun run scripts/contract-take.ts {1}
