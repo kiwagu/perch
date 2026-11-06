@@ -572,6 +572,14 @@ describe('SignInView', () => {
     )
   })
 
+  it("says a sign-in on another device went past the account's limit and signed this one out", () => {
+    renderView({ notice: 'device-limit-elsewhere' })
+
+    expect(noticeWith('device-limit-elsewhere').textContent).toBe(
+      'You were signed out: your account was signed in on more devices than it may be at once, and this one was used least recently.',
+    )
+  })
+
   it('says a new password was set in another tab, naming no account', () => {
     renderView({ notice: 'password-reset-elsewhere' })
 

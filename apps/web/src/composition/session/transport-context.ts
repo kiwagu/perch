@@ -17,6 +17,8 @@ export interface SessionChannelEvents {
   readonly revoked: () => void
   /** The device was signed out because the account's password changed (4002). */
   readonly passwordChanged: () => void
+  /** The device was signed out because a sign-in went past the account's limit of devices (4003). */
+  readonly deviceLimit: () => void
   /** The gateway no longer takes the protocol of this build (4400): the channel ended for good. */
   readonly protocolRefused: () => void
 }
@@ -46,6 +48,7 @@ export function sessionTransportContext(
         .with('unauthorized', events.refused)
         .with('revoked', events.revoked)
         .with('password-changed', events.passwordChanged)
+        .with('device-limit', events.deviceLimit)
         // The sync engine stops and reports it; the app is told so that the page loads again.
         .with('protocol', events.protocolRefused)
         // A sign-out this device asked for is heard by `signOut`, through the sync engine.

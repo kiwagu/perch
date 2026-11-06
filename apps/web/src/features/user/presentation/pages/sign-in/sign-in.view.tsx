@@ -59,7 +59,9 @@ export interface SignInViewProps {
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
    * another device signed it out, `password-changed-elsewhere` once a change of the account's
-   * password did, `password-reset-elsewhere` once another tab set a new password through a reset
+   * password did, `device-limit-elsewhere` once a sign-in on another device went past the
+   * account's limit of devices and signed out this one, seen least recently,
+   * `password-reset-elsewhere` once another tab set a new password through a reset
    * link, `delete-pending` while another tab still holds the data of the account signed out.
    */
   readonly notice?: SessionNotice | undefined
@@ -124,6 +126,8 @@ function noticeText(
       return t('user.sign-in.notice.signed-out-elsewhere')
     case 'password-changed-elsewhere':
       return t('user.sign-in.notice.password-changed-elsewhere')
+    case 'device-limit-elsewhere':
+      return t('user.sign-in.notice.device-limit-elsewhere')
     case 'password-reset-elsewhere':
       return t('user.sign-in.notice.password-reset-elsewhere')
     case 'delete-pending':
