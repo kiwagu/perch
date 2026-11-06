@@ -658,10 +658,14 @@ describe('ShellContainer', () => {
       }),
     )
     await screen.findByTestId('app-shell.notice-message')
+    act(() => services.sync('synced'))
+    await screen.findByTestId('app-shell.sync-message')
 
     // Ann signs out and Bob signs in before the frame renders again: the session tells both, the
-    // render sees Bob alone.
+    // render sees Bob alone, whose sync gives no state yet.
     act(() => {
+      services.sync(undefined)
+
       for (const next of [undefined, bob]) {
         who = next
 
@@ -671,7 +675,10 @@ describe('ShellContainer', () => {
       }
     })
 
-    await waitFor(() => expect(screen.queryByTestId('app-shell.notice-message')).toBeNull())
+    await waitFor(() => {
+      expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+      expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+    })
     expect(sent.mock.calls.filter(([event]) => event.type === 'platform.signed-out')).toHaveLength(
       1,
     )
