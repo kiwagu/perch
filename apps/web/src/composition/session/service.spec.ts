@@ -914,7 +914,6 @@ describe('SessionService', () => {
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
     expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBeUndefined()
     expect(session.notice()).toBeUndefined()
     expect(gateway.signOuts()).toBe(0)
     // A refused token is dead: nothing waits to be signed out.
@@ -934,7 +933,7 @@ describe('SessionService', () => {
     expect(session.space()).toBeUndefined()
     expect(storage.get('perch.session.identity')).toBeUndefined()
     expect(storage.get('perch.session.token')).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBe('resend-after-sign-in')
+    expect(storage.get('perch.session.notice.0.resend-after-sign-in')).toBe('resend-after-sign-in')
     expect(session.notice()).toBe('resend-after-sign-in')
     await settle()
     expect(destroyed()).toEqual([])
@@ -943,7 +942,7 @@ describe('SessionService', () => {
     session.clearNotice()
 
     expect(session.notice()).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBeUndefined()
+    expect(storage.get('perch.session.notice.0.resend-after-sign-in')).toBeUndefined()
   })
 
   it('keeps the database when the gateway refuses the token and the outbox cannot be read', async () => {

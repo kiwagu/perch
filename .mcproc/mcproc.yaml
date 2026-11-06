@@ -216,7 +216,7 @@ apps:
       docker rm -f {{ project }}-caddy-dev >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist-dev &&
       FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }} PERCH_UI_MANIFEST={{ ui_manifest }}
-      WEB_DIST=dist-dev
+      WEB_DIST=dist-dev PERCH_CLIENT_ADDRESS=peer
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-dev caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
@@ -230,13 +230,16 @@ apps:
     description: >-
       Caddy on https://localhost:{{ front_e2e }}: the web app's build from apps/web/dist (the
       e2e launcher makes the production build first) and, under /backend/, the gateway-e2e;
-      certificates from infra/dev/make-certs.sh.
+      certificates from infra/dev/make-certs.sh. It names to the gateway the client address each
+      browser claims (PERCH_CLIENT_ADDRESS=claimed), so each Playwright worker spends request
+      limits of its own.
     kind: server
     # docker would create a missing apps/web/dist as root, which a build could not write
     run: >-
       docker rm -f {{ project }}-caddy-e2e >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
       FRONT_PORT={{ front_e2e }} GATEWAY_PORT={{ gateway_e2e }} PERCH_UI_MANIFEST={{ ui_manifest }}
+      PERCH_CLIENT_ADDRESS=claimed
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-e2e caddy
     # Caddy listens from its container, outside the app's processes, so the app declares

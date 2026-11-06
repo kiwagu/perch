@@ -20,7 +20,9 @@ notices of a change the gateway refused and this device undid, so the change doe
 vanish, and, when the gateway refused the undo too, that the later changes not sent yet went
 with it (the bus's `sync.change-rejected` and `sync.changes-reloaded` reach the frame's flow as
 its platform events through `application/shell.events.ts`); a notice goes when the account it
-was raised for signs out, here or from another device. It offers to load the page again when
+was raised for signs out, here or from another device, and a sign-in on this device, in this tab
+or another (`platform.signed-in`, which `presentation/shell/signed-in.ts` hears from the session
+in every state, from `src/main.tsx`), ends the words the sign-in page had not said yet. It offers to load the page again when
 the server serves a newer build than the tab runs, or no longer takes this build's sync
 protocol, and shows a signed-in account the state of this device's sync. The folder has no
 module manifest: the composition root mounts the shell around the router built from the

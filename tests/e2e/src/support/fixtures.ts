@@ -3,6 +3,7 @@ import { test as base, expect, type Page, type TestStepInfo } from '@playwright/
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
+import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
 
@@ -131,6 +132,8 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
 /**
  * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
+ * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
 export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
   await page.goto('/sign-in')
@@ -141,7 +144,12 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
   await page.getByTestId('user.sign-in.password-confirmation-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
-  await expect(checkYourMail(page)).toBeVisible()
+  await expect
+    .poll(() => checkYourMail(page).isVisible(), {
+      message: 'the sign-in page asks to check the mail',
+      intervals: [50],
+    })
+    .toBe(true)
 }
 
 /**
@@ -177,6 +185,14 @@ export function pageLoads(page: Page): () => number {
 }
 
 const extended = base.extend<Fixtures>({
+  // Every browser of a test, its own contexts included (Playwright Test gives them the test's
+  // options), claims its worker's client address at the front (`client-address.ts`).
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, use, testInfo) => {
+    await use({
+      ...extraHTTPHeaders,
+      [CLIENT_ADDRESS_HEADER]: clientAddressOf(testInfo.parallelIndex),
+    })
+  },
   // Every browser of a test is watched from before its first page: the front's security policy,
   // and what each page shows in each state of its screen it settled in (`browsers.ts`).
   page: async ({ page, baseURL }, use) => {

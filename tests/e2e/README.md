@@ -57,21 +57,21 @@ across the tabs of one browser) and `organisation/flows/` (two accounts, each in
 its own). `bun run test:e2e --grep @smoke` runs the first set
 on both projects.
 
-The suite runs from the front's one client address, so its tests, on every worker, share the
-gateway's per-address limits, which a launcher run starts afresh by restarting the gateway. The
-credential checks (sign-ups, sign-ins, verifications, changes of a password or an email and
-requests to delete an account, 20 per ten seconds) set the number of workers: with two, a run
-made at most 17 in any ten seconds when it was measured, before the deletion of an account added
-its three requests; three workers reached 22 and four had a sign-in refused. The others
-the run spends as a whole, in one window of each, and stays under them in whatever order the
-workers take the tests: the mails of sign-ups, resends, reset requests, email changes and
-deletion requests (about 140 of 200 per quarter hour), the attempts at a reset link (10 of 20
-per ten minutes), at a confirmation link (7 of 20) and at a deletion link (7 of 20), the
-organisations created (19 of 30 an hour) and the invitations (9 of 60 per ten minutes). The
-limits a test runs into on purpose (`resend-limit`, `forgot-password-limit`) are an email's,
-and every test uses fresh emails. A test uses as few emails, sign-ins and links as its scenario
-needs; a new one that signs up, mails, opens a link or creates an organisation counts against
-these.
+Every browser of the suite reaches the front from 127.0.0.1, and the gateway counts its
+per-address limits by the client address the front names, so each worker's browsers claim an
+address of their own (`src/support/client-address.ts`), which the `caddy-e2e` front names to the
+gateway (`infra/dev/`). A worker's tests share its address's limits, which a launcher run starts
+afresh by restarting the gateway, as one client running them one after another would; no two
+workers share an address, so the limits do not bind their number. Per worker, with two, a run
+spent when it was measured: at most 12 credential checks (sign-ups, sign-ins, verifications,
+changes of a password or an email and requests to delete an account) in any ten seconds, of 20;
+under 80 of 200 mails per quarter hour (sign-ups, resends, reset requests, email changes and
+deletion requests: about 150 in the whole run); at most 7 of 20 attempts at a reset link per ten
+minutes, 4 of 20 at a confirmation link and 4 of 20 at a deletion link; 11 of 30 organisations
+created an hour and at most 6 of 60 invitations per ten minutes. The limits a test runs into on
+purpose (`resend-limit`, `forgot-password-limit`) are an email's, and every test uses fresh
+emails. A test uses as few emails, sign-ins and links as its scenario needs; a new one that signs
+up, mails, opens a link or creates an organisation counts against these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
   (`no-store`) is valid against the schema served beside it and names contract version 1; on
@@ -159,7 +159,7 @@ the organisation and its note on device B).
 
 None; tests only. `src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts` are the tests, and
 `scenarios/` beside them holds their scenarios, one file each at the same path.
-`scripts/spec-reporter.ts`: the run's log, as two workers run the tests side by side: each spec
+`scripts/spec-reporter.ts`: the run's log, as the workers run the tests side by side: each spec
 file's tests printed together once the last of them ended, one line each (outcome, project,
 title, tags, time) with, under a failed run, its errors with their stack and cause and where its
 trace is, and under any run the output it wrote, each attempt of a retried test under a header
@@ -167,7 +167,8 @@ of its own; then the tally, with the failed and the flaky tests again. A run sto
 prints every file it had not printed yet, a test that never started marked `not run`. The HTML
 report (`playwright-report/`) has the rest; `--list` prints Playwright's own listing.
 `src/support/fixtures.ts`: the `test` with the step
-check and its fixtures,
+check and its fixtures, every browser of a test claiming its worker's client address at the front
+(`extraHTTPHeaders`, `client-address.ts`),
 `signedIn` (device A, signed up through its mail on `/me`), `secondDevice` (device B, a browser context of
 its own that opens and signs in with the same account when a test asks), `anotherAccount`
 (another user: a fresh account and a browser context of its own that opens and signs up when
@@ -176,7 +177,9 @@ context of its own that opens nothing and signs nothing in by itself), `appReady
 `app-shell.status` in `ready`, `APP_READY`), `signIn`
 (fails at once when the sign-in page shows its error, naming its code), `signOut` (clicks the
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
-the sign-up form and waits until the page asks to check the mail), `signUp` (`startSignUp`, then
+the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
+the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
+500 ms), `signUp` (`startSignUp`, then
 opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
 `/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
 from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for
@@ -200,6 +203,10 @@ page: `watchBrowser` (the front's security policy and the settled states), `expe
 (fails the test with what it reported) and `ownBrowser` (a browser context of the test's own,
 opened on first use and checked as it closes); the fixtures watch the test's own `page` the
 same way, and the step check reads `browsers`.
+`src/support/client-address.ts`: the client address the browsers of a worker claim at the e2e
+front (`CLIENT_ADDRESS_HEADER`, `clientAddressOf`), one per worker slot, from 198.18.0.0/15, a
+range set aside for benchmarks: the front names it to the gateway as the request's address, so
+each worker spends per-address limits of its own.
 `src/support/security.ts`: `SECURITY_HEADERS`, the headers the front sends with every
 response as the stands' Caddyfile writes them, and `watchSecurity`, which watches one browser
 context for a test (its documents' and scripts' headers, the CSP violations its pages and
@@ -263,7 +270,7 @@ seen there and holds it to its declaration). A failure prints no address, link o
   gateway and the front run the current code and configuration) and waits for it, then runs
   Playwright in a network namespace of its own (below); extra arguments go to Playwright (`--grep @smoke`, `user/flows/`,
   `--update-snapshots=missing`). It runs two workers, `CI=1` or not (`workers` in
-  `playwright.config.ts`, measured against the credential limit above), and its log is
+  `playwright.config.ts`, measured on the dev host), and its log is
   `scripts/spec-reporter.ts`'s; `--reporter=list` gives Playwright's own.
 - The browser's own network (`scripts/isolated-network.ts`): Chromium on Linux aborts every
   request in flight (`net::ERR_NETWORK_CHANGED`) when a network interface it can see comes, goes

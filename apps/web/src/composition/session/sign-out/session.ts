@@ -1,8 +1,11 @@
 /**
  * Signing out: the sign-out the person asks for, through the gateway, and the one the gateway
  * forces on the device (a refused token, a sign-out from another device), without it. Either
- * holds every tab's writes back, then forgets the token and deletes the identity's databases, or
- * keeps them for the next sign-in as the identity when they hold changes not sent yet.
+ * holds every tab's writes back, then has the space end (`SpaceEnding`): its token forgotten and
+ * the identity's databases deleted, or kept for the next sign-in as the identity when they hold
+ * changes not sent yet. Each names, as it begins, the last sign-in on the browser (`signInMark`),
+ * and every word it leaves the sign-in page names that one: a sign-in made while it waits ends
+ * them, however late they come.
  */
 
 import { okAsync, ResultAsync } from 'neverthrow'
@@ -10,13 +13,14 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { forgetDevice, savedIdentity, savedToken, saveNotice } from '../storage'
+import { forgetDevice, savedIdentity, savedToken, signInMark } from '../../storage'
+import type { SessionHost } from '../host'
+import type { OpenSpace } from '../open-space'
+import type { KeysLeft, PendingRevoke } from '../pending-revoke'
+import type { SpaceDeletion } from '../space-deletion'
+import type { WriteBarrier } from '../write-barrier'
 
-import type { SessionHost } from './host'
-import type { OpenSpace } from './open-space'
-import type { KeysLeft, PendingRevoke } from './pending-revoke'
-import type { SpaceDeletion } from './space-deletion'
-import type { WriteBarrier } from './write-barrier'
+import { SpaceEnding } from './space'
 
 export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
@@ -38,12 +42,14 @@ export class SessionSignOut {
   readonly #barrier: WriteBarrier
   readonly #pendingRevoke: PendingRevoke
   readonly #deletion: SpaceDeletion
+  readonly #ending: SpaceEnding
 
   constructor(options: SessionSignOutOptions) {
     this.#host = options.host
     this.#barrier = options.barrier
     this.#pendingRevoke = options.pendingRevoke
     this.#deletion = options.deletion
+    this.#ending = new SpaceEnding(options)
   }
 
   /**
@@ -62,6 +68,7 @@ export class SessionSignOut {
     }
 
     const { space, leadership } = open
+    const raised = signInMark(this.#host.options.storage)
 
     this.#barrier.hold(open.hints)
 
@@ -79,10 +86,11 @@ export class SessionSignOut {
           open,
           () =>
             outcome === 'signed-out'
-              ? this.#signedOut(open, forgetUnsent).map((): SignOutOutcome => 'signed-out')
-              : this.#stillSignedIn(open, forgetUnsent),
+              ? this.#signedOut(open, forgetUnsent, raised).map((): SignOutOutcome => 'signed-out')
+              : this.#stillSignedIn(open, forgetUnsent, raised),
           'signed-out',
           outcome === 'signed-out' ? 'dead' : 'live',
+          raised,
         ),
       )
 
@@ -103,9 +111,11 @@ export class SessionSignOut {
       return okAsync(undefined)
     }
 
+    const raised = signInMark(this.#host.options.storage)
+
     this.#pendingRevoke.forgetKeys('live')
 
-    return this.#deletion.deleteUnopened(identity).map(() => undefined)
+    return this.#deletion.deleteUnopened(identity, raised).map(() => undefined)
   }
 
   /**
@@ -122,6 +132,7 @@ export class SessionSignOut {
   refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
+    const raised = signInMark(storage)
 
     if (open?.space.identity.id !== identity) {
       return okAsync('signed-out')
@@ -148,7 +159,7 @@ export class SessionSignOut {
         return 'signed-in-since'
       }
 
-      this.#keepForNextSignIn(open, 'dead')
+      this.#ending.keep(open, 'dead', raised)
 
       return 'signed-out'
     }
@@ -157,17 +168,16 @@ export class SessionSignOut {
       .exclusively(
         identity,
         () =>
-          this.#unsentOrUnknown(open).andThen((unsent): ResultAsync<ForcedSignOut, DataError> => {
-            if (unsent || signedInSince()) {
-              return okAsync(unsent ? keep() : 'signed-in-since')
-            }
-
-            if (notice) {
-              saveNotice(storage, notice)
-            }
-
-            return this.#forgetSpace(open, 'dead').map((): ForcedSignOut => 'signed-out')
-          }),
+          this.#ending
+            .unsentOrUnknown(open)
+            .andThen(
+              (unsent): ResultAsync<ForcedSignOut, DataError> =>
+                unsent || signedInSince()
+                  ? okAsync(unsent ? keep() : 'signed-in-since')
+                  : this.#ending
+                      .forget(open, 'dead', raised, notice)
+                      .map((): ForcedSignOut => 'signed-out'),
+            ),
         keep,
       )
       .andTee(release)
@@ -201,14 +211,18 @@ export class SessionSignOut {
    * database goes only with an empty outbox, or when the person gave unsent changes up.
    * Otherwise it stays for the next sign-in as the identity, which sends what it holds.
    */
-  #signedOut(open: OpenSpace, forgetUnsent: boolean): ResultAsync<void, DataError> {
+  #signedOut(open: OpenSpace, forgetUnsent: boolean, raised: string): ResultAsync<void, DataError> {
     if (forgetUnsent) {
-      return this.#forgetSpace(open, 'dead')
+      return this.#ending.forget(open, 'dead', raised)
     }
 
-    return this.#unsentOrUnknown(open).andThen((unsent) =>
-      unsent ? okAsync(this.#keepForNextSignIn(open, 'dead')) : this.#forgetSpace(open, 'dead'),
-    )
+    return this.#ending
+      .unsentOrUnknown(open)
+      .andThen((unsent) =>
+        unsent
+          ? okAsync(this.#ending.keep(open, 'dead', raised))
+          : this.#ending.forget(open, 'dead', raised),
+      )
   }
 
   /**
@@ -216,11 +230,15 @@ export class SessionSignOut {
    * could not send. With such changes it asks first; without them the device signs out here,
    * leaving its token to sign out once online.
    */
-  #stillSignedIn(open: OpenSpace, forgetUnsent: boolean): ResultAsync<SignOutOutcome, DataError> {
+  #stillSignedIn(
+    open: OpenSpace,
+    forgetUnsent: boolean,
+    raised: string,
+  ): ResultAsync<SignOutOutcome, DataError> {
     return (forgetUnsent ? okAsync(false) : open.space.unsent()).andThen((asks) =>
       asks
         ? okAsync<SignOutOutcome>('needs-confirmation')
-        : this.#forgetSpace(open, 'live').map((): SignOutOutcome => 'signed-out'),
+        : this.#ending.forget(open, 'live', raised).map((): SignOutOutcome => 'signed-out'),
     )
   }
 
@@ -235,62 +253,12 @@ export class SessionSignOut {
     work: () => ResultAsync<T, DataError>,
     kept: T,
     keys: KeysLeft,
+    raised: string,
   ): ResultAsync<T, DataError> {
     return this.#barrier.exclusively(open.space.identity.id, work, () => {
-      this.#keepForNextSignIn(open, keys)
+      this.#ending.keep(open, keys, raised)
 
       return kept
     })
-  }
-
-  /**
-   * Forgets the device's identity and token, leaving a live token to sign out, then deletes the
-   * identity's databases. The other tabs hear the identity go and close their own spaces, which
-   * lets the stores be deleted. A delete another tab still holds up after a few seconds goes on
-   * (`SpaceDeletion`), and the sign-in page says the data goes once the other tabs are closed;
-   * this tab hears of the sign-out once the delete answered, so that page reads the word.
-   */
-  #forgetSpace(open: OpenSpace, keys: KeysLeft): ResultAsync<void, DataError> {
-    this.#pendingRevoke.forgetKeys(keys)
-
-    const current = this.#host.open() === open
-    const tell = () => current && this.#host.emit(undefined)
-
-    if (current) {
-      this.#host.drop(open)
-    }
-
-    const deleted = this.#deletion
-      .destroy(open.space)
-      .map(() => undefined)
-      .andTee(tell)
-      .orTee(tell)
-
-    this.#host.retire(Promise.resolve(deleted).then(() => undefined))
-
-    return deleted
-  }
-
-  /** Whether the space holds changes not sent yet; an outbox that cannot be read is reported and counts. */
-  #unsentOrUnknown(open: OpenSpace): ResultAsync<boolean, DataError> {
-    return open.space.unsent().orElse((error) => {
-      this.#host.options.onError(error)
-
-      return okAsync(true)
-    })
-  }
-
-  /**
-   * Forgets the token, leaving a live one to sign out, and closes the space, keeping its database
-   * with the changes it holds: the sign-in page says that signing in again as the identity
-   * sends them.
-   */
-  #keepForNextSignIn(open: OpenSpace, keys: KeysLeft): void {
-    saveNotice(this.#host.options.storage, 'resend-after-sign-in')
-    this.#pendingRevoke.forgetKeys(keys)
-
-    if (this.#host.open() === open) {
-      this.#host.leaveAndTell()
-    }
   }
 }

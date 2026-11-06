@@ -49,8 +49,9 @@ export const ADDRESS_ORGANISATIONS = { limit: 30, windowMs: 60 * minute } as con
  * mails, the confirmations of a new email and the deletion mails together, every attempt counted
  * whatever the email:
  * one client can make at most 200 such mails go out per quarter hour (the credential limit alone
- * would allow 1,800 sign-ups). The e2e suite signs every account up from the front's one address,
- * about 100 per run, on a gateway restarted for the run.
+ * would allow 1,800 sign-ups). The e2e suite makes about 150 go out per run, on a gateway
+ * restarted for the run, from one address per Playwright worker: the e2e stand's front passes on
+ * the address each worker claims.
  */
 export const ADDRESS_MAILS = { limit: 200, windowMs: 15 * minute } as const
 
