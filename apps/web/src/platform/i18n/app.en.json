@@ -78,6 +78,7 @@
   "app.title.user.delete-account": "Delete the account",
   "app.title.user.profile": "Profile",
   "app.title.organisation": "Organisation",
+  "app.title.organisation.invitation": "Join an organisation",
   "app.title.device": "My devices",
   "app.title.not-found": "Page not found",
   "app.shell.nav.settings": "Settings",

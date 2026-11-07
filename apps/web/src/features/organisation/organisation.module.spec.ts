@@ -99,10 +99,16 @@ describe('OrganisationModule', () => {
     expect(world.tenantsOpened()).toEqual(['acme'])
   })
 
-  it('routes signed-in users to the organisation page', () => {
-    expect(OrganisationModule.routes).toEqual([
+  it('routes signed-in users to the organisation page, and anyone to the invitation page', () => {
+    expect(
+      OrganisationModule.routes.map(({ path, page, guard }) => ({ path, page, guard })),
+    ).toEqual([
       { path: '/org', page: 'OrganisationPage', guard: 'authenticated' },
+      { path: '/invitation', page: 'InvitationPage', guard: undefined },
     ])
-    expect(Object.keys(OrganisationModule.declarations)).toEqual(['OrganisationPage'])
+    expect(Object.keys(OrganisationModule.declarations)).toEqual([
+      'OrganisationPage',
+      'InvitationPage',
+    ])
   })
 })

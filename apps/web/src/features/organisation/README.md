@@ -7,13 +7,14 @@ organisation, the current organisation's members for an administrator, invitatio
 removals, and the shared notes of the current organisation as the first table of the tenant
 region. `domain/` holds the organisation entity (the name bound) and one file per rule
 (`tenant-key.rule.ts`, `organisation-name.rule.ts`); `application/` the organisation and
-notes services and the page's machine (`organisation-machine/`). Reads and writes go to the current organisation's database. The write rules declared
+notes services and the machines of the two pages (`organisation-machine/`, `invitation.machine.ts`). Reads and writes go to the current organisation's database. The write rules declared
 on the replica schema are applied on the device before a command runs
 (`OrganisationService.ability()`), the same rule the gateway applies on its fork.
 
 ## Surface
 
-- Route: `/org` (guard `authenticated`) renders `OrganisationPage`.
+- Routes: `/org` (guard `authenticated`) renders `OrganisationPage`; `/invitation?token` (open to
+  anyone) renders `InvitationPage`, the page the link of an invitation mail opens.
 - Shape `organisation.shape.surql`: the notes of the current organisation (`note`, tenant
   region), oldest first.
 - Commands `organisation.commands.surql`: `createNote`, `updateNote`, `deleteNote`, all in
@@ -36,7 +37,8 @@ on the replica schema are applied on the device before a command runs
   its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
-- Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
+- Anchors: screens `organisation` in `contract/domain/screens/org.yaml` and
+  `organisation.invitation` in `contract/domain/screens/invitation.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/organisation-machine/`,
   held to `contract/domain/screens/org.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`: the create form, the notes' items, the invitation, the members
@@ -70,6 +72,22 @@ on the replica schema are applied on the device before a command runs
   what failed shows in place of that list. The page follows the memberships as they change,
   without a reload. A refused change the gateway limits (`rate-limited`) is worded as "too many
   attempts".
+
+## The invitation page
+
+`InvitationPage` runs its screen's flow as its machine (`application/invitation.machine.ts`, held
+to `contract/domain/screens/invitation.yaml` by `platform/machines.spec.ts`) over the token of its
+address, through `useScreenMachine`; another token starts afresh, and an address without one is a
+link that does not work, which the gateway is not asked about. It reads the link
+(`OrganisationService.readInvitation`) and shows the organisation's name and the role, never the
+email the invitation went to. The account the invitation is for (the gateway's `forYou`) accepts
+(it becomes a member, its organisation current, and the app moves to `/org`) or declines (the app
+moves to `/org`); nobody signed in here is asked to sign in first, with the link to the sign-in
+page, and another account signed in is told the invitation is not its own, with no button either
+way. A link that does not work (`link-invalid`, `link-expired`, or an invitation gone meanwhile)
+says so with no button; any other refusal of a press says why and leaves the buttons for another.
+The error shows one of the contract's codes: a refusal the flow does not list for the transition
+is `failed`. The accept button leaves the page (`platform/leaving.ts`).
 
 ## Commands
 

@@ -28,6 +28,7 @@ import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell-machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
+import { createInvitationMachine } from '../features/organisation/application/invitation.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation-machine'
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
 import { createDeleteAccountMachine } from '../features/user/application/delete-account.machine'
@@ -96,6 +97,14 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       accept: () => okAsync(undefined),
       decline: () => okAsync(undefined),
       account: () => undefined,
+      current: () => undefined,
+    }),
+  'organisation.invitation': () =>
+    createInvitationMachine({
+      token: 't',
+      read: () => errAsync({ code: 'not-in-this-spec', message: 'not in this spec' }),
+      accept: () => okAsync(undefined),
+      decline: () => okAsync(undefined),
       current: () => undefined,
     }),
   'user.sign-in': () => createSignInMachine(new SignInService(fakeSession().session)),
