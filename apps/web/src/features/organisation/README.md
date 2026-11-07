@@ -17,9 +17,12 @@ on the replica schema are applied on the device before a command runs
 - Shape `organisation.shape.surql`: the notes of the current organisation (`note`, tenant
   region), oldest first.
 - Commands `organisation.commands.surql`: `createNote`, `updateNote`, `deleteNote`, all in
-  the tenant region. Creating an organisation, inviting an account by email and removing a
-  member go through the gateway's `/organisations` routes via the `ORGANISATIONS` port, not
-  through the replica.
+  the tenant region. Creating an organisation, inviting an email with a role, listing and
+  revoking the pending invitations, changing a member's role and removing a member go through
+  the gateway's `/organisations` routes via the `ORGANISATIONS` port, not through the replica;
+  reading the invitation a link carries, listing the invitations to the account, accepting and
+  declining one go through the `INVITATIONS` port (`OrganisationService.accept` selects the
+  organisation once its membership is adopted).
 - Components: `OrganisationCreate` (the form that creates an organisation),
   `OrganisationNotes` (the notes card with its new note form), `OrganisationMembers` (the
   members card with the invite form) and `OrganisationErrorLine` (a refused change as its

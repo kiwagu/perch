@@ -156,7 +156,15 @@ modeling stage.
   which the organisation page words as "too many attempts"; any other status
   named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
   it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once, added to the newest list any tab kept. `devicesApi` is the `DEVICES` port over
+  creates its membership on the device at once, added to the newest list any tab kept; the
+  invitations of an organisation (an invite with a role, the pending ones, a revocation) and a
+  member's role change (`PATCH` of the member) adopt nothing: every device of the member learns
+  the role over the sync channel. `invitationsApi` is the `INVITATIONS` port over
+  `POST /invitations/read` (the link's token in the body, with the session token only when the
+  device holds one: `jsonAsWhoever`), `GET /invitations`, `POST /invitations/accept` and
+  `POST /invitations/decline` (`createInvitations`: an accepted invitation is the membership on
+  this device at once, as a created organisation is, and the answer comes once it is adopted, so
+  the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. One tab per browser leads the

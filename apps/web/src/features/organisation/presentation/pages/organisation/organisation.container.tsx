@@ -76,7 +76,7 @@ export function OrganisationContainer() {
 
         return organisation === undefined
           ? errAsync(NOT_NOW)
-          : organisations.invite(organisation, email)
+          : organisations.invite(organisation, email, 'member')
       },
       remove: (identity) => {
         const organisation = at()

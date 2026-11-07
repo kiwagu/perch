@@ -31,6 +31,7 @@ import { UserModule } from '../../features/user/user.module'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppServices, createAppRoot } from '../root'
 import { memoryStorage } from '../storage'
@@ -193,6 +194,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
+    invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),

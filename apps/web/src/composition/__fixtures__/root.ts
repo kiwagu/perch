@@ -8,6 +8,7 @@ import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { devicesApi } from '../devices-api'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppRootOptions, type BootStep, createAppRoot } from '../root'
 import type { MemoryStorage } from '../storage'
@@ -59,6 +60,11 @@ export async function bootRoot(
       }),
     devicesApi: (deps) =>
       devicesApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
+    invitationsApi: (deps) =>
+      invitationsApi('/backend', {
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),

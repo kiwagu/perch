@@ -2,7 +2,8 @@ import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, SHAPE_RUNNER, WRITE_PATH } from '@workspace/data'
-import { type IdentityId, identityIdFactory } from '@workspace/ids'
+import { type IdentityId, identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
 
 import { ProfileService } from '../features/user/application/profile.service'
 import { SETTINGS_SERVICE } from '../features/user/application/settings/settings.service'
@@ -12,6 +13,7 @@ import {
 } from '../features/user/presentation/pages/profile/profile.model.gen'
 import { COMMANDS } from '../platform/commands.port'
 import { DEVICES } from '../platform/devices.port'
+import { INVITATIONS } from '../platform/invitations.port'
 import { ORGANISATIONS } from '../platform/organisations.port'
 import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SESSION } from '../platform/session.port'
@@ -22,6 +24,7 @@ import { bootRoot } from './__fixtures__/root'
 import { signUpVerified } from './__fixtures__/session'
 import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
+import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
 import type { AppRootOptions, AppServices, BootStep } from './root'
 import {
@@ -79,6 +82,38 @@ describe('createAppRoot', () => {
     expect(services.container.get(DEVICES)).toBe(services.devices)
     expect(services.session.current()).toBeUndefined()
     expect(failures).toEqual([])
+  })
+
+  it('binds INVITATIONS over the signed-in device: an invitation it accepts is its membership at once', async () => {
+    const storage = memoryStorage()
+    const acme: Membership = {
+      tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+      role: 'member',
+    }
+    const gateway = fakeFetch(respond(200, { membership: acme }))
+
+    saveDevice(storage, ann)
+
+    const { result } = await boot(storage, [], [], {
+      invitationsApi: (given) => invitationsApi('/backend', { ...given, fetcher: gateway.fetcher }),
+    })
+
+    services = result._unsafeUnwrap()
+
+    const invitations = services.container.get(INVITATIONS)
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+
+    expect((await invitations.accept('inv_one'))._unsafeUnwrap()).toEqual(acme)
+    expect(gateway.sent).toEqual([
+      {
+        url: '/backend/invitations/accept',
+        method: 'POST',
+        authorization: 'Bearer token-ann',
+        device: id,
+        body: { invitation: 'inv_one' },
+      },
+    ])
+    expect(services.session.memberships()).toEqual([acme])
   })
 
   it("tells the screens a password reset another tab of the browser made, through the browser's storage", async () => {

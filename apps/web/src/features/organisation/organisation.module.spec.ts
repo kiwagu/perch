@@ -13,6 +13,7 @@ import {
   type TestWorld,
 } from '../../composition/__fixtures__/session'
 import { COMMANDS } from '../../platform/commands.port'
+import { INVITATIONS, type InvitationsPort } from '../../platform/invitations.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
 
@@ -32,7 +33,17 @@ const unreachable: OrganisationsPort = {
   create: offline,
   members: offline,
   invite: offline,
+  invitations: offline,
+  revokeInvitation: offline,
+  setRole: offline,
   remove: offline,
+}
+
+const noInvitations: InvitationsPort = {
+  read: offline,
+  mine: offline,
+  accept: offline,
+  decline: offline,
 }
 
 let world: TestWorld
@@ -48,6 +59,7 @@ beforeEach(async () => {
     .singleton(COMMANDS, () => world.commands)
     .singleton(SESSION, () => world.session)
     .singleton(ORGANISATIONS, () => unreachable)
+    .singleton(INVITATIONS, () => noInvitations)
 
   container = root.child()
 

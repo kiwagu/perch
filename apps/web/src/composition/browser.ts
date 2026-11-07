@@ -23,6 +23,7 @@ import { devicesApi } from './devices-api'
 import { warmEngines } from './engine-warm'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
 import { type AppStart, type BootFailure, createAppRoot } from './root'
 import { servedBuild } from './served-build'
@@ -160,6 +161,7 @@ export function bootBrowser(
       onOnlineChange: network.onOnlineChange,
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
+      invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
       transport: (context) =>
         new WebSocketTransport({
           url: `${origin.replace(/^http/, 'ws')}/backend/sync`,

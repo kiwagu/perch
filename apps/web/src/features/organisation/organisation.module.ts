@@ -2,6 +2,7 @@ import { SHAPE_RUNNER } from '@workspace/data'
 import { replicaSchema } from '@workspace/database/replica-schema'
 
 import { COMMANDS } from '../../platform/commands.port'
+import { INVITATIONS } from '../../platform/invitations.port'
 import { defineModule } from '../../platform/module'
 import { ORGANISATIONS } from '../../platform/organisations.port'
 import { SESSION } from '../../platform/session.port'
@@ -37,6 +38,7 @@ export const OrganisationModule = defineModule({
         new OrganisationService(
           container.get(SESSION),
           container.get(ORGANISATIONS),
+          container.get(INVITATIONS),
           replicaSchema,
         ),
     },

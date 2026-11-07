@@ -34,6 +34,7 @@ import {
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
 import { type AppEvent, EVENTS } from '../platform/events.port'
+import { INVITATIONS, type InvitationsPort } from '../platform/invitations.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
 import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
@@ -46,6 +47,7 @@ import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
 import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
+import { createInvitations } from './invitations'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
@@ -76,8 +78,9 @@ export interface AppRootOptions {
   readonly onOnlineChange: (listener: () => void) => () => void
   /** The gateway's organisation routes, called with the device's session token and id. */
   readonly organisationsApi: (deps: BearerDeps) => OrganisationsApi
-  /** The gateway's device routes, called the same way. */
+  /** The gateway's device and invitation routes, called the same way. */
   readonly devicesApi: (deps: BearerDeps) => DevicesPort
+  readonly invitationsApi: (deps: BearerDeps) => InvitationsPort
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -250,6 +253,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(SETTINGS_SERVICE, () => settings)
     .singleton(ACCOUNT_START_SERVICE, () => starts.service)
     .singleton(ORGANISATIONS, () => organisations)
+    .singleton(INVITATIONS, () => createInvitations(options.invitationsApi(bearer), session))
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)

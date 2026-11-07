@@ -39,7 +39,7 @@ export function ensureMember(
   email: string,
 ): ResultAsync<void, SeedError> {
   return device.organisations
-    .invite(key, email)
+    .invite(key, email, 'member')
     .map(() => undefined)
     .orElse((error) =>
       error.code === 'data:WRITE_REJECTED' && error.message === 'already-member'
