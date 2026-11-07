@@ -88,6 +88,7 @@ export {
   type PlatformComposite,
   type PlatformMail,
   type PlatformNotice,
+  RECIPIENT,
   type Screen,
   type ScreensFile,
 } from './screens'
