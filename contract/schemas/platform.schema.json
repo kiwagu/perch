@@ -82,7 +82,7 @@
               "language": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the account's settings once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
               },
               "link": {
                 "type": "object",

@@ -120,7 +120,9 @@ for Bun.
     `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
-    reserved word no parameter of an action that sends a mail or a notice takes, and
+    reserved word no parameter of an action that sends a mail or a notice takes, the language
+    also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's,
+    a reserved word no parameter of an action that sends a mail takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
     type `PlatformMail`) and `platformNoticeSchema` (a notice of the action's `notices`, a mail
     that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, `to:

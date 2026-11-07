@@ -68,6 +68,13 @@ describe('noticesProblems', () => {
       `${AT}[0].language: "tongue" is neither a parameter of "password.change" nor account`,
     ])
   })
+  it('refuses the recipient as the language of a notice: only a mail speaks it', () => {
+    expect(
+      printed(sending([{ name: 'password-changed', to: 'account', language: 'recipient' }])),
+    ).toEqual([
+      `${AT}[0].language: "recipient" is the language of a mail alone; a notice speaks a parameter's or the account's`,
+    ])
+  })
   it('wants the names unique within the action', () => {
     expect(
       printed(
