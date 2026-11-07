@@ -19,8 +19,8 @@ keeps one connection per organisation database in use, shared by every holder an
 nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
 unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
-organisations by key, lets an admin invite an existing identity by email, change a member's role
-and remove a member other than itself, lists the members with their emails to an admin (leaving out the rows of
+organisations by key, lets an admin change a member's role and remove a member other than itself
+(an account joins by accepting an invitation, `invitations`), lists the members with their emails to an admin (leaving out the rows of
 identities that are gone), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change, answering once they
@@ -31,13 +31,13 @@ read again to be told, so a removal that fails after the directory (500) has rev
 all the same; asking again completes it. Until the revoke reaches the removed identity's
 connection, a batch its device pushes there may still be accepted: that window between the
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
-creations, the invites of it, its role changes, its removals, its departure) run one after the other, each once
-the one before it and its notification have settled, so the directory and the organisation's
-database end as the last change left them and its devices hear the lists in that order. An
-invite, a role change, a removal and a departure also run, inside the identity's turn, in the
-turn of each organisation they change, and decide there from the rows as they are then: an
-invite, a role change or a removal is refused when its organisation went (`no-such-tenant`) or
-its admin is one no more, and a departure counts who else belongs. This holds within one gateway process; gateways in
+creations, its acceptances of invitations, its role changes, its removals, its departure) run one
+after the other, each once the one before it and its notification have settled, so the directory
+and the organisation's database end as the last change left them and its devices hear the lists
+in that order. An acceptance, a role change, a removal and a departure also run, inside the
+identity's turn, in the turn of each organisation they change, and decide there from the rows as
+they are then: a role change or a removal is refused when its organisation went
+(`no-such-tenant`) or its admin is one no more, and a departure counts who else belongs. This holds within one gateway process; gateways in
 several processes would need a durable revision of the memberships.
 An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
 the directory's memberships and their roles: `blocked` is true while it is the only admin of a
@@ -50,7 +50,7 @@ key to subscribe to; a retire that fails stops the departure with nothing remove
 database, its memberships and its directory row go in one transaction, then the cached
 connection.
 `Organisations.leaveAll` runs that departure in the identity's turn and the turns of its
-organisations, so an invite of it and a creation by it wait, and so does any change of another
+organisations, so an acceptance by it and a creation by it wait, and so does any change of another
 identity there; `leave` reads the rows again in those turns and is refused `last-admin`, changing
 nothing, while the identity is the only admin of a ready organisation with others in it. That
 check is the one that decides. The caller's steps run in the same turns (`DepartureSteps`):
@@ -64,7 +64,7 @@ connections in `before`, and the other members read the members when they ask.
 `OrganisationAdmission.admit(tenant, identity, role)` is the one operation that adds a member
 with a role: the directory's membership with that role, then the member row; an identity already in
 is refused `already-member` once its member row is written again with the role the directory
-holds. The direct invite calls it with `member`.
+holds. No route calls it any more: an account joins an organisation by accepting an invitation.
 `Organisations.setRole` changes a member's role for an admin, in the identity's turn and the
 organisation's, through the same check of the admin as the other changes (`OrganisationRoleChange`).
 It decides from the directory's rows as they are in the turn: an identity that is no member is
@@ -94,13 +94,12 @@ a change one of its admins asked, once the admin is found still one), and
 `MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a
 `KeyedTurns` (`src/keyed-turns.ts`), an identity's always taken first and several
 organisations' in the order of their ids, so no two changes wait for each other. The identity
-an invite names is found by its email, in any case, through the auth module's one lookup
-(`identityByEmail`, `src/auth/identity-by-email.ts`); an email no identity has is refused
-`no-such-identity` here. The invite looks the email up again in the identity's turn and is
-refused `no-such-identity` when it no longer names that identity, and a creation reads its
-creator again in its turn (`OrganisationLookup.existing`) and is refused `no-such-identity` when
-it is gone: one that waited for a departure whose `after` removed the identity writes no
-membership of an identity that is gone and provisions nothing.
+a mail goes to is found by its email, in any case, through the auth module's one lookup
+(`identityByEmail`, `src/auth/identity-by-email.ts`), for the language of the mail alone. A
+creation reads its creator again in its turn (`OrganisationLookup.existing`) and is refused
+`no-such-identity` when it is gone: one that waited for a departure whose `after` removed the
+identity writes no membership of an identity that is gone and provisions nothing, and an
+acceptance does the same with its account.
 
 `PendingInvitations` (`invitations/`) keeps the invitations to organisations: one row of the
 directory's `invitation` table per organisation and email (the email in lower case), with the
@@ -163,24 +162,53 @@ The organisation routes (`organisation-routes/`) are Bearer calls (`src/auth/REA
 `GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
 the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
-(403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
-invite an identity; and `DELETE /organisations/:key/members/:identity` lets an admin remove a
-member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
+(403 `not-admin` to a member); `PATCH /organisations/:key/members/:identity` with `{ role }` lets
+an admin change a member's role (204; 409 `last-admin`, 404 `no-such-member`);
+`DELETE /organisations/:key/members/:identity` lets an admin remove a member (204);
+`POST /organisations/:key/invitations` with `{ email, role }` lets an admin invite an email, with
+an account or without one (201 with the invitation's id, email, role and link; 409
+`already-member` for a member's email), `GET /organisations/:key/invitations` lists the pending
+ones, newest first, and `DELETE /organisations/:key/invitations/:invitation` revokes one (204,
+also for one already gone or of another organisation, which it leaves alone). The direct add of
+an account, `POST /organisations/:key/members`, is gone: that path answers 405 with
+`Allow: GET`. An accepted invite answers no sooner than `INVITE_FLOOR_MS` (300 ms) after its
+handler began, whether the email has an account or not, so neither the answer nor its time tells
+which emails have one while the invite's own work stays under the floor (a refusal needs none);
+the mail is started and never awaited, so it delays nothing. `email-invalid` is the gateway's own
+judgement of the email (`accountEmail`), made after the attempt was counted.
+
+The invitation routes (`invitation-routes/`) carry a token in a body, never in a path, which the
+server logs. `POST /invitations/read` with `{ token }` shows anyone what a link offers (the
+organisation's name, the role, and `forYou` when the bearer, if it sends one, is the invited
+account; 404 `link-invalid`, 410 `link-expired`); it is limited per client address before its body
+is read (see `src/limits/README.md`), and a token that holds no live session answers 401.
+`GET /invitations` lists the signed-in account's invitations, newest first;
+`POST /invitations/accept` with `{ invitation }` (an id or a link's token) makes the account a
+member (200 with the membership; 403 `other-account`, 409 `already-member`, 410
+`invitation-gone`), and `POST /invitations/decline` spends the invitation (204; refused as an
+accept is but for `already-member`).
+
+A body or an identity that does not follow its schema answers 400 (`bad-request`);
 a refusal answers its code, with 400 for `invalid-key`, `invalid-name` and `email-invalid`, 403
 for `not-a-member`, `not-admin` and `other-account`, 404 for `no-such-tenant`, `no-such-identity`,
 `no-such-member` and `link-invalid`, 409 for `key-taken`, `already-member`, `self` and
-`last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation whose caller's identity went before
-its turn (its account deleted after its session was read), which answers 401 `unauthorized` as a
-token that holds no session does; an invitation or a creation over its limit answers 429
-(`rate-limited`, see `src/limits/README.md`); a failure of the gateway answers 500 (`internal`).
+`last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation or an
+acceptance whose account was deleted after its session was read, which answers 401 `unauthorized`
+as a token that holds no session does; an invite, an organisation creation or a read of a link
+over its limit answers 429 (`rate-limited`, see `src/limits/README.md`); a failure of the gateway
+answers 500 (`internal`). `refusalStatus` (`organisation-refusal.ts`) is the one table of those
+statuses, and `organisation-http.ts` the answers both route folders share.
 
 ## Surface
 
 - Routes: `GET /organisations`, `POST /organisations`, `GET /organisations/:key/members`,
-  `POST /organisations/:key/members`, `DELETE /organisations/:key/members/:identity`
+  `PATCH` and `DELETE /organisations/:key/members/:identity`, `GET` and
+  `POST /organisations/:key/invitations`, `DELETE /organisations/:key/invitations/:invitation`
   (`organisation-routes/`, through its `index.ts`: the targets of a path, the handlers of the
-  memberships and members, and the routes that answer them; `organisation-http.ts` holds the
-  answers they share).
+  memberships and members and those of the invitations, and the routes that answer them);
+  `POST /invitations/read`, `GET /invitations`, `POST /invitations/accept` and
+  `POST /invitations/decline` (`invitation-routes/`, through its `index.ts`);
+  `organisation-http.ts` holds the answers both share.
 - Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
   commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
@@ -202,7 +230,7 @@ token that holds no session does; an invitation or a creation over its limit ans
 
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
   `account-departure.spec.ts`, `organisation-routes/routes.spec.ts`,
-  `organisation-routes/limits.spec.ts`,
+  `organisation-routes/limits.spec.ts`, `invitation-routes/routes.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
   `organisations/invitations.spec.ts`, `invitations/token.spec.ts`, `invitations/pending.spec.ts`,
   `invitations/mails.spec.ts`), each organisation on an embedded in-memory database of its own.

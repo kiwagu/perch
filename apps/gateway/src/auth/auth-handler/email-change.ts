@@ -4,10 +4,10 @@ import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 
-import { until } from './floor'
 import type { AuthMountDeps } from './mount'
 import { confirmPassword } from './password-confirmation'
 import { badRequest, internal, refused } from './requests'

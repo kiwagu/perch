@@ -29,20 +29,19 @@ const MAX_NAME = 80
  * organisation and every membership; each organisation's own database holds its members, the
  * word its data is checked against. A command that fails with a `DataError` after some of its
  * rows were written leaves those rows in place, and asking again completes it: a creation by its
- * creator, an invite, a role change, a removal. Each change of memberships but a departure
- * resolves once the listeners heard the identity's new memberships.
+ * creator, a role change, a removal. Each change of memberships but a departure resolves once the
+ * listeners heard the identity's new memberships.
  *
- * The changes of one identity's memberships (its creations, the invites of it, its role changes,
- * its removals and its departure) run one after the other, each once the one before it, its
- * notification included, has settled: the directory and the organisation's database end as the
- * last one left them, and the listeners hear the lists in that order. An invite, a role change, a
- * removal and a departure run in the turn of each organisation they change too
+ * The changes of one identity's memberships (its creations, its acceptances of invitations, its
+ * role changes, its removals and its departure) run one after the other, each once the one before
+ * it, its notification included, has settled: the directory and the organisation's database end
+ * as the last one left them, and the listeners hear the lists in that order. An acceptance, a
+ * role change, a removal and a departure run in the turn of each organisation they change too
  * (`MembershipTurns`; `AdminTurn` for those an admin asks), and decide there from the rows as they
- * are then: an invite, a role change
- * or a removal is refused when its organisation is gone or its admin no longer one, a departure
- * or a demotion when it would leave the others without an admin. This orders them within one
- * gateway process only; gateways running in several processes would need a durable revision of
- * the memberships.
+ * are then: a role change or a removal is refused when its organisation is gone or its admin no
+ * longer one, a departure or a demotion when it would leave the others without an admin. This
+ * orders them within one gateway process only; gateways running in several processes would need
+ * a durable revision of the memberships.
  *
  * The invitations to join an organisation are `invitations` (`OrganisationInvitations`): they
  * share the turns, the lookup, the listeners and the admission of this class, so an accepted
@@ -53,7 +52,6 @@ export class Organisations {
   readonly #members: TenantMembers
   readonly #listeners: MembershipListeners
   readonly #creation: OrganisationCreation
-  readonly #admission: OrganisationAdmission
   readonly #roleChange: OrganisationRoleChange
   readonly #removal: OrganisationRemoval
   readonly #departure: AccountDeparture
@@ -74,7 +72,6 @@ export class Organisations {
     this.#members = members
     this.#listeners = listeners
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
-    this.#admission = admission
     this.invitations = new OrganisationInvitations({
       ...options.invitations,
       lookup,
@@ -124,45 +121,6 @@ export class Organisations {
           this.#listeners.tell(identity).map((): Membership => ({ tenant, role: 'admin' })),
         ),
     )
-  }
-
-  /**
-   * An admin of the organisation adds the identity that signs in with `email` as a member
-   * (`OrganisationAdmission`), and the invited identity's listeners hear it. In the identity's
-   * turn the email is looked up again: an identity whose account went while the invite waited for
-   * its departure (`leaveAll`), or whose email names another identity now, is refused
-   * `no-such-identity`, so no membership is written for an identity that is gone.
-   */
-  invite(input: {
-    actor: IdentityId
-    key: string
-    email: string
-  }): ResultAsync<Member, OrganisationError> {
-    const { actor, key, email } = input
-
-    return this.#lookup
-      .tenantOf(key)
-      .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
-      .andThen((tenant) =>
-        this.#lookup.identityByEmail(email).map((identity) => ({ tenant, identity })),
-      )
-      .andThen(({ tenant, identity }) =>
-        this.#turns.ofIdentity(identity.id, () =>
-          this.#lookup
-            .identityByEmail(email)
-            .andThen((current) =>
-              current.id === identity.id ? okAsync(tenant) : errAsync(refused('no-such-identity')),
-            )
-            .andThen(() =>
-              this.#adminTurn.run(actor, tenant, (current) =>
-                this.#admission
-                  .admit(current, identity.id, 'member')
-                  .andThen(() => this.#listeners.tell(identity.id))
-                  .map((): Member => ({ identity, role: 'member' })),
-              ),
-            ),
-        ),
-      )
   }
 
   /**

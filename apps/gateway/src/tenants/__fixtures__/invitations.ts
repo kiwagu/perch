@@ -6,10 +6,13 @@
  */
 
 import type { LocalDb } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
 import { type InvitationMailer, invitationLink, PendingInvitations } from '../invitations'
+import type { Organisations } from '../organisations'
 
 /** What the store of a spec signs its tokens with. */
 const INVITATION_SECRET = 'invitation-spec-secret-0123456789-0123456789'
@@ -41,4 +44,32 @@ export function specInvitations(directory: LocalDb, clock: Clock = manualClock()
     link: specLink,
     mailed,
   }
+}
+
+/** What `admitted` is asked for: who invites, into which organisation, which account joins, as what. */
+export interface Admission {
+  readonly actor: IdentityId
+  readonly key: string
+  /** The account that joins: its identity and its email in the directory. */
+  readonly invitee: { readonly id: IdentityId; readonly email: string }
+  /** The role the invitation offers; `member` unless named. */
+  readonly role?: TenantRole
+}
+
+/**
+ * `invitee` becomes a member of the organisation the way an account does: `actor` invites its
+ * email, and it accepts the invitation by the id the invite answered. For a spec that needs a
+ * member to start from.
+ */
+export async function admitted(
+  organisations: Organisations,
+  { actor, key, invitee, role = 'member' }: Admission,
+): Promise<Membership> {
+  const invitation = (
+    await organisations.invitations.invite({ actor, key, email: invitee.email, role })
+  )._unsafeUnwrap()
+
+  return (
+    await organisations.invitations.accept({ identity: invitee.id, invitation: invitation.id })
+  )._unsafeUnwrap()
 }

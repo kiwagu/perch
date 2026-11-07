@@ -11,7 +11,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
+import { type IdentityId, idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -45,7 +45,7 @@ import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
-import { specInvitations } from '../../tenants/__fixtures__/invitations'
+import { admitted, specInvitations } from '../../tenants/__fixtures__/invitations'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
 import memberRemoveStatement from '../../tenants/surql/member-remove.surql'
@@ -472,6 +472,19 @@ async function connectedAsAnn(options: ConnectOptions = {}, gatewayOptions: Gate
   return { ...fixture, doc: RegionDoc.inMemory('private', fixture.region) }
 }
 
+/** Bob joins Acme the way an account does: Ann invites him and he accepts the invitation. */
+function joinAcme(
+  gateway: Awaited<ReturnType<typeof openGateway>>,
+  anns: { readonly identity: { readonly id: IdentityId } },
+  bobs: { readonly identity: { readonly id: IdentityId } },
+) {
+  return admitted(gateway.organisations, {
+    actor: anns.identity.id,
+    key: 'acme',
+    invitee: { id: bobs.identity.id, email: bob.email },
+  })
+}
+
 /**
  * A gateway where Ann and Bob have signed up and Ann has created the organisation Acme;
  * Bob belongs to it when `bobInvited`.
@@ -485,9 +498,7 @@ async function withAcme(bobInvited: boolean, options: GatewayOptions = {}) {
   )._unsafeUnwrap()
 
   if (bobInvited) {
-    ;(
-      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
-    )._unsafeUnwrap()
+    await joinAcme(gateway, anns, bobs)
   }
 
   return { gateway, anns, bobs, acme }
@@ -1387,14 +1398,12 @@ describe('SyncConnection', () => {
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
   })
 
-  it('sends memberships with the new organisation when the identity is invited while connected', async () => {
+  it('sends memberships with the new organisation when the identity joins it while connected', async () => {
     const { gateway, anns, bobs, acme } = await withAcme(false)
     const { socket, connection } = open(gateway)
 
     await hello(connection, bobs.token)
-    ;(
-      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
-    )._unsafeUnwrap()
+    await joinAcme(gateway, anns, bobs)
     // The region is not subscribed on the device's behalf: the device subscribes, and now may.
     await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
 

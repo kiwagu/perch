@@ -508,7 +508,7 @@ error carries one.
   confirmation (`email-change.ts`), the request to delete an account and the deletion
   (`account-deletion.ts`), the confirmation of a signed-in caller's password
   (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
-  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`floor.ts`), the close of a
+  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the close of a
   device's sockets, and the requests and refusals as Better Auth and the client get them),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,

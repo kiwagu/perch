@@ -23,12 +23,11 @@ import {
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
 import { createAuthInstance } from '../../auth/auth-instance'
-import identityByEmailStatement from '../../auth/surql/identity-by-email.surql'
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { Outbox } from '../../mail/__fixtures__/outbox'
 import directoryRows from '../__fixtures__/directory-rows.surql'
 import identityForget from '../__fixtures__/identity-forget.surql'
-import { specInvitations } from '../__fixtures__/invitations'
+import { admitted, specInvitations } from '../__fixtures__/invitations'
 import memberClear from '../__fixtures__/member-clear.surql'
 import memberForget from '../__fixtures__/member-forget.surql'
 import memberRows from '../__fixtures__/member-rows.surql'
@@ -39,9 +38,9 @@ import tenantRows from '../__fixtures__/tenant-rows.surql'
 import tenantSweep from '../__fixtures__/tenant-sweep.surql'
 import { OrganisationLookup } from '../organisation-lookup'
 import type { OrganisationRefusalCode } from '../organisation-refusal'
+import invitationAcceptStatement from '../surql/invitation-accept.surql'
 import memberAddStatement from '../surql/member-add.surql'
 import memberRemoveStatement from '../surql/member-remove.surql'
-import membershipAddStatement from '../surql/membership-add.surql'
 import membershipRemoveStatement from '../surql/membership-remove.surql'
 import membershipSetRoleStatement from '../surql/membership-set-role.surql'
 import membershipsOfStatement from '../surql/memberships-of.surql'
@@ -241,9 +240,19 @@ async function harness() {
   const founded = async (key = 'acme', name = 'Acme') =>
     (await organisations.create({ identity: ann.id, key, name }))._unsafeUnwrap()
 
-  /** Ann invites the identity that signs in with `email` into acme, for a test to start from. */
-  const invited = async (email: string) =>
-    (await organisations.invite({ actor: ann.id, key: 'acme', email }))._unsafeUnwrap()
+  /**
+   * Ann invites the account that signs in with `email` into acme and it accepts, for a test to
+   * start from.
+   */
+  const invited = async (email: string) => {
+    const invitee = [ann, bob, cat].find((account) => account.email === email)
+
+    if (invitee === undefined) {
+      throw new Error('no account of the harness has this email')
+    }
+
+    return admitted(organisations, { actor: ann.id, key: 'acme', invitee })
+  }
 
   /** The organisations' databases refuse `statement` from now on; `undefined` lets every one through. */
   const refuseInTenants = (statement: string | undefined) => {
@@ -483,121 +492,6 @@ describe('Organisations', () => {
     expect(heard).toEqual([])
   })
 
-  it("invites an existing identity as member and tells the invited identity's listeners, not the inviter's", async () => {
-    const { organisations, ann, bob, heard, membersIn, founded } = await harness()
-    const acme = await founded()
-
-    heard.splice(0)
-
-    expect(
-      await organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' }),
-    ).toEqual(ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }))
-    const joined: Membership = { tenant: acme.tenant, role: 'member' }
-
-    expect(heard).toEqual([[bob.id, [joined]]])
-    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
-    expect(await membersIn('acme')).toEqual([
-      { identity: ann.id, role: 'admin' },
-      { identity: bob.id, role: 'member' },
-    ])
-  })
-
-  it('finds the identity to invite by its email in any case', async () => {
-    const { organisations, ann, bob, founded } = await harness()
-
-    await founded()
-
-    expect(
-      await organisations.invite({ actor: ann.id, key: 'acme', email: 'Bob@EXAMPLE.test' }),
-    ).toEqual(ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }))
-  })
-
-  it('refuses an invite from a member who is not admin', async () => {
-    const { organisations, bob, founded, invited } = await harness()
-
-    await founded()
-    await invited('bob@example.test')
-
-    expect(
-      (
-        await organisations.invite({ actor: bob.id, key: 'acme', email: 'cat@example.test' })
-      )._unsafeUnwrapErr(),
-    ).toEqual(refused('not-admin'))
-  })
-
-  it('refuses an invite from an outsider', async () => {
-    const { organisations, cat, founded } = await harness()
-
-    await founded()
-
-    expect(
-      (
-        await organisations.invite({ actor: cat.id, key: 'acme', email: 'cat@example.test' })
-      )._unsafeUnwrapErr(),
-    ).toEqual(refused('not-a-member'))
-  })
-
-  it('refuses an invite of an unknown email', async () => {
-    const { organisations, ann, founded } = await harness()
-
-    await founded()
-
-    expect(
-      (
-        await organisations.invite({ actor: ann.id, key: 'acme', email: 'dan@example.test' })
-      )._unsafeUnwrapErr(),
-    ).toEqual(refused('no-such-identity'))
-  })
-
-  it('refuses an invite of an identity already in', async () => {
-    const { organisations, ann, heard, founded, invited } = await harness()
-
-    await founded()
-    await invited('bob@example.test')
-    heard.splice(0)
-
-    expect(
-      (
-        await organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
-      )._unsafeUnwrapErr(),
-    ).toEqual(refused('already-member'))
-    expect(heard).toEqual([])
-  })
-
-  it('restores the member rows of identities already in when they are invited again, with the roles the directory holds', async () => {
-    const { organisations, ann, bob, heard, membersIn, forgetMember, founded, invited } =
-      await harness()
-
-    await founded()
-    await invited('bob@example.test')
-    // An invite that failed after the directory membership leaves no member row behind.
-    await forgetMember('acme', bob.id)
-    await forgetMember('acme', ann.id)
-    heard.splice(0)
-
-    for (const email of ['bob@example.test', 'ann@example.test']) {
-      expect(
-        (await organisations.invite({ actor: ann.id, key: 'acme', email }))._unsafeUnwrapErr(),
-      ).toEqual(refused('already-member'))
-    }
-
-    expect(await membersIn('acme')).toEqual([
-      { identity: ann.id, role: 'admin' },
-      { identity: bob.id, role: 'member' },
-    ])
-    expect(heard).toEqual([])
-  })
-
-  it('refuses an invite to an unknown key', async () => {
-    const { organisations, ann } = await harness()
-
-    expect(
-      (
-        await organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
-      )._unsafeUnwrapErr(),
-    ).toEqual(refused('no-such-tenant'))
-  })
-
   it("removes a member: the membership and the member row go, the removed identity's listener hears an empty list", async () => {
     const { organisations, ann, bob, directory, heard, membersIn, founded, invited } =
       await harness()
@@ -686,7 +580,7 @@ describe('Organisations', () => {
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
   })
 
-  it('a removal paused before its tenant step and a concurrent invite of the same identity end in a consistent state', async () => {
+  it('a removal paused before its tenant step and a concurrent acceptance by the same identity end in a consistent state', async () => {
     const {
       organisations,
       ann,
@@ -695,13 +589,19 @@ describe('Organisations', () => {
       steps,
       membersIn,
       founded,
-      invited,
       holdInTenants,
       onDirectoryQuery,
     } = await harness()
     const acme = await founded()
+    const invitation = (
+      await organisations.invitations.invite({
+        actor: ann.id,
+        key: 'acme',
+        email: 'bob@example.test',
+        role: 'member',
+      })
+    )._unsafeUnwrap()
 
-    await invited('bob@example.test')
     heard.splice(0)
 
     const held = holdInTenants(memberRemoveStatement)
@@ -713,23 +613,23 @@ describe('Organisations', () => {
 
     onDirectoryQuery((text) => directorySteps.push(text))
 
-    const invite = organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
+    const accepting = organisations.invitations.accept({
+      identity: bob.id,
+      invitation: invitation.id,
+    })
 
-    // The invite finds bob, then waits for the removal: it writes no membership meanwhile.
-    await vi.waitFor(() => expect(directorySteps).toContain(identityByEmailStatement))
+    // The acceptance waits for the removal's turn of bob: it writes no membership meanwhile.
     await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(directorySteps).not.toContain(membershipAddStatement)
+    expect(directorySteps).not.toContain(invitationAcceptStatement)
 
     held.release()
 
     expect(await removal).toEqual(ok(undefined))
-    expect(await invite).toEqual(
-      ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }),
-    )
+    expect((await accepting)._unsafeUnwrap()).toEqual({ tenant: acme.tenant, role: 'member' })
 
     const joined: Membership = { tenant: acme.tenant, role: 'member' }
 
-    // Removed, then invited again: the directory and the organisation's database agree.
+    // Removed, then accepted: the directory and the organisation's database agree.
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
     expect(await membersIn('acme')).toEqual([
       { identity: ann.id, role: 'admin' },
@@ -742,7 +642,7 @@ describe('Organisations', () => {
     expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
   })
 
-  it('an invite of an identity waits for its departure under way, which revokes nothing and tells nobody', async () => {
+  it('an acceptance by an identity waits for its departure under way, which revokes nothing and tells nobody', async () => {
     const {
       organisations,
       ann,
@@ -755,9 +655,22 @@ describe('Organisations', () => {
       holdInTenants,
       onDirectoryQuery,
     } = await harness()
-    const acme = await founded()
+
+    await founded()
+
+    const zeta = await founded('zeta', 'Zeta')
 
     await invited('bob@example.test')
+
+    const invitation = (
+      await organisations.invitations.invite({
+        actor: ann.id,
+        key: 'zeta',
+        email: 'bob@example.test',
+        role: 'member',
+      })
+    )._unsafeUnwrap()
+
     heard.splice(0)
 
     const held = holdInTenants(memberRemoveStatement)
@@ -769,28 +682,29 @@ describe('Organisations', () => {
 
     onDirectoryQuery((text) => directorySteps.push(text))
 
-    const invite = organisations.invite({ actor: ann.id, key: 'acme', email: 'bob@example.test' })
+    const accepting = organisations.invitations.accept({
+      identity: bob.id,
+      invitation: invitation.id,
+    })
 
-    // The invite finds bob, then waits for the departure: it writes no membership meanwhile.
-    await vi.waitFor(() => expect(directorySteps).toContain(identityByEmailStatement))
+    // The acceptance waits for the departure's turn of bob: it writes no membership meanwhile.
     await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(directorySteps).not.toContain(membershipAddStatement)
+    expect(directorySteps).not.toContain(invitationAcceptStatement)
 
     held.release()
 
     expect(await departure).toEqual(ok(undefined))
-    expect(await invite).toEqual(
-      ok({ identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' }),
-    )
+    expect((await accepting)._unsafeUnwrap()).toEqual({ tenant: zeta.tenant, role: 'member' })
 
-    const joined: Membership = { tenant: acme.tenant, role: 'member' }
+    const joined: Membership = { tenant: zeta.tenant, role: 'member' }
 
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([joined]))
-    expect(await membersIn('acme')).toEqual([
+    expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    expect(await membersIn('zeta')).toEqual([
       { identity: ann.id, role: 'admin' },
       { identity: bob.id, role: 'member' },
     ])
-    // Only the invite told bob's listeners; the departure took no region from any connection.
+    // Only the acceptance told bob's listeners; the departure took no region from any connection.
     expect(heard).toEqual([[bob.id, [joined]]])
     expect(steps).toEqual(['member-remove'])
   })

@@ -5,6 +5,7 @@ import { bearerCaller, bearerRefused } from '../../auth/bearer-caller'
 import { badRequest, errorAnswer, type Handler } from '../organisation-http'
 import type { Organisations } from '../organisations'
 
+import { invitationHandlers } from './invitation-handlers'
 import { membershipHandlers } from './membership-handlers'
 import type { OrganisationRoutesOptions } from './options'
 import { type Target, targetOf } from './targets'
@@ -21,17 +22,28 @@ import { type Target, targetOf } from './targets'
  *   and nothing is created.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
- * - `POST /organisations/:key/members` `{ email }`: 200 `{ member }`, for an admin; 30 attempts
- *   per 10 minutes per inviting identity and 60 per client address, whatever the answer.
+ * - `PATCH /organisations/:key/members/:identity` `{ role }`: 204, for an admin; `last-admin`
+ *   (409) for the only admin's demotion, `no-such-member` (404) for one who is no member.
  * - `DELETE /organisations/:key/members/:identity`: 204, for an admin.
+ * - `POST /organisations/:key/invitations` `{ email, role }`: 201 `{ invitation: { id, email,
+ *   role, link } }`, for an admin, an email with an account and one without answered alike and
+ *   neither sooner than `INVITE_FLOOR_MS` after the request began; `email-invalid` (400) for an
+ *   email the gateway does not take, `already-member` (409) for a member's. An attempt takes one
+ *   of the client address's mails, one of the inviting identity's 30 invites per 10 minutes and
+ *   one of the address's 60, counted once the body follows its schema, whatever the answer.
+ * - `GET /organisations/:key/invitations`: 200 `{ invitations }`, newest first, for an admin.
+ * - `DELETE /organisations/:key/invitations/:invitation`: 204, for an admin, also for an
+ *   invitation that is gone or belongs to another organisation (which it leaves alone).
  *
- * A method a path does not take answers 405 with the ones it does in `Allow`; a request whose
+ * A method a path does not take answers 405 with the ones it does in `Allow` (the direct add of a
+ * member, `POST /organisations/:key/members`, is gone: only `GET` is left there); a request whose
  * token holds no live session, or one of another device, 401 `unauthorized`; a request that
- * names no device, or a body or an identity that does not follow its schema, 400 `bad-request`;
- * a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited` with `Retry-After`,
- * before the service is asked and counted only once the body follows its schema; a failure of the
- * gateway, 500 `internal`, the failure itself handed to `onFailure`. A request for another path
- * is not answered here (`undefined`), so the server can try its other routes.
+ * names no device, or a body or an identity or an invitation id that does not follow its schema,
+ * 400 `bad-request`; a refusal, its code with 400, 403, 404 or 409; a limit, 429 `rate-limited`
+ * with `Retry-After`, before the service is asked and counted only once the body follows its
+ * schema; a failure of the gateway, 500 `internal`, the failure itself handed to `onFailure`. A
+ * request for another path is not answered here (`undefined`), so the server can try its other
+ * routes.
  */
 export function organisationRoutes(
   sessions: Pick<AuthSessions, 'read'>,
@@ -40,6 +52,7 @@ export function organisationRoutes(
 ): (request: Request, from: string) => Promise<Response | undefined> {
   const errorResponse = errorAnswer(options.onFailure)
   const memberships = membershipHandlers(organisations, options)
+  const invitations = invitationHandlers(organisations, options)
 
   /** The methods the target takes, each with its handler, in the order `Allow` lists them. */
   function handlersOf(target: Target): ReadonlyMap<string, Handler> {
@@ -52,17 +65,26 @@ export function organisationRoutes(
             ['POST', memberships.create],
           ]),
       )
+      .with({ kind: 'members' }, ({ key }) => new Map([['GET', memberships.members(key)]]))
       .with(
-        { kind: 'members' },
-        ({ key }) =>
+        { kind: 'member' },
+        ({ key, identity }) =>
           new Map([
-            ['GET', memberships.members(key)],
-            ['POST', memberships.invite(key)],
+            ['PATCH', memberships.setRole(key, identity)],
+            ['DELETE', memberships.remove(key, identity)],
           ]),
       )
       .with(
-        { kind: 'member' },
-        ({ key, identity }) => new Map([['DELETE', memberships.remove(key, identity)]]),
+        { kind: 'invitations' },
+        ({ key }) =>
+          new Map([
+            ['GET', invitations.pending(key)],
+            ['POST', invitations.invite(key)],
+          ]),
+      )
+      .with(
+        { kind: 'invitation' },
+        ({ key, invitation }) => new Map([['DELETE', invitations.revoke(key, invitation)]]),
       )
       .exhaustive()
   }

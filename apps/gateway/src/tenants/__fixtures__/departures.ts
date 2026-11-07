@@ -30,7 +30,7 @@ import { Organisations } from '../organisations'
 import { TenantDatabases } from '../tenant-databases'
 
 import directoryRows from './directory-rows.surql'
-import { specInvitations } from './invitations'
+import { admitted, specInvitations } from './invitations'
 import memberRows from './member-rows.surql'
 import membershipRows from './membership-rows.surql'
 import namespaceInfo from './namespace-info.surql'
@@ -139,6 +139,12 @@ export async function departureHarness() {
   const ann = await identity('ann@example.test')
   const bob = await identity('bob@example.test')
   const cat = await identity('cat@example.test')
+  /** The accounts the harness wrote, with the emails they sign in with. */
+  const accounts = [
+    { id: ann, email: 'ann@example.test' },
+    { id: bob, email: 'bob@example.test' },
+    { id: cat, email: 'cat@example.test' },
+  ]
 
   /** Runs `work` on the organisation's database, holding it meanwhile. */
   const inTenant = async <T>(key: string, work: (local: LocalDb) => Promise<T>): Promise<T> => {
@@ -171,9 +177,16 @@ export async function departureHarness() {
     founded: async (creator: IdentityId, key: string) =>
       (await organisations.create({ identity: creator, key, name: key }))._unsafeUnwrap(),
 
-    /** `actor` invites the identity that signs in with `email` into `key`. */
-    invited: async (actor: IdentityId, key: string, email: string) =>
-      (await organisations.invite({ actor, key, email }))._unsafeUnwrap(),
+    /** `actor` invites the identity that signs in with `email` into `key`, and it accepts. */
+    invited: async (actor: IdentityId, key: string, email: string) => {
+      const invitee = accounts.find((account) => account.email === email)
+
+      if (invitee === undefined) {
+        throw new Error('no account of the departure harness has this email')
+      }
+
+      return admitted(organisations, { actor, key, invitee })
+    },
 
     /** The members the organisation's own database holds, admins first. */
     membersIn: (key: string) =>

@@ -5,8 +5,6 @@ import type { IdentityId } from '@workspace/ids'
 import { type Membership, type TenantRole, tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { identityByEmail } from '../auth/identity-by-email'
-
 import { type OrganisationError, refused } from './organisation-refusal'
 import {
   type IdentityRow,
@@ -90,16 +88,6 @@ export class OrganisationLookup {
   adminOf(actor: IdentityId, tenant: Tenant): ResultAsync<Tenant, OrganisationError> {
     return this.memberOf(actor, tenant).andThen((role) =>
       role === 'admin' ? okAsync(tenant) : errAsync(refused('not-admin')),
-    )
-  }
-
-  /**
-   * The identity that signs in with `email`, in any case, through the auth module's lookup; none
-   * is refused.
-   */
-  identityByEmail(email: string): ResultAsync<Member['identity'], OrganisationError> {
-    return identityByEmail(this.#directory, email).andThen((identity) =>
-      identity ? ok(identity) : err(refused('no-such-identity')),
     )
   }
 
