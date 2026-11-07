@@ -1,11 +1,19 @@
 import {
+  CLEAR_EMAIL,
+  CLEAR_ROLE,
+  COPY_REFUSED,
+  DECLINE_REFUSED,
   forget,
+  INVITATION_DECLINED,
+  INVITATION_REVOKED,
   INVITE_REFUSED,
   INVITED,
+  LINK_COPIED,
   MEMBER_REMOVED,
   NOTE_CREATED,
   NOTE_REFUSED,
   REMOVE_REFUSED,
+  REVOKE_REFUSED,
 } from './effects'
 import { taken } from './events'
 
@@ -16,7 +24,7 @@ import { taken } from './events'
  * the members are read again.
  */
 
-/** Invites an email: the invitation is mailed. */
+/** Invites an email: the invitation is mailed and the form's fields empty. */
 export const INVITE_REGION = {
   initial: 'idle',
   states: {
@@ -25,7 +33,10 @@ export const INVITE_REGION = {
       invoke: {
         src: 'platform.organisations.invite',
         input: taken('organisation.invite.submit-button'),
-        onDone: { target: 'idle', actions: [forget('members'), 'reread', INVITED] },
+        onDone: {
+          target: 'idle',
+          actions: [CLEAR_EMAIL, CLEAR_ROLE, forget('members'), 'rereadInvitations', INVITED],
+        },
         onError: { target: 'idle', actions: [INVITE_REFUSED] },
       },
     },
@@ -43,7 +54,7 @@ export const MEMBERS_REGION = {
         input: taken('organisation.members.remove-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('members'), 'reread', MEMBER_REMOVED],
+          actions: [forget('members'), 'rereadMembers', MEMBER_REMOVED],
         },
         onError: { target: 'idle', actions: [REMOVE_REFUSED] },
       },
@@ -62,6 +73,60 @@ export const NOTES_ADD_REGION = {
         input: taken('organisation.notes.add-button'),
         onDone: { target: 'idle', actions: [forget('notes'), NOTE_CREATED] },
         onError: { target: 'idle', actions: [NOTE_REFUSED] },
+      },
+    },
+  },
+} as const
+
+/** Puts the link of a pending invitation on the clipboard. */
+export const SENT_COPY_REGION = {
+  initial: 'idle',
+  states: {
+    idle: { on: { 'organisation.sent.copy-button': { target: 'running' } } },
+    running: {
+      invoke: {
+        src: 'platform.organisations.copy-invitation',
+        input: taken('organisation.sent.copy-button'),
+        onDone: { target: 'idle', actions: [forget('members'), LINK_COPIED] },
+        onError: { target: 'idle', actions: [COPY_REFUSED] },
+      },
+    },
+  },
+} as const
+
+/** Revokes a pending invitation: the invitations are read again. */
+export const SENT_REVOKE_REGION = {
+  initial: 'idle',
+  states: {
+    idle: { on: { 'organisation.sent.revoke-button': { target: 'running' } } },
+    running: {
+      invoke: {
+        src: 'platform.organisations.revoke-invitation',
+        input: taken('organisation.sent.revoke-button'),
+        onDone: {
+          target: 'idle',
+          actions: [forget('members'), 'rereadInvitations', INVITATION_REVOKED],
+        },
+        onError: { target: 'idle', actions: [REVOKE_REFUSED] },
+      },
+    },
+  },
+} as const
+
+/** Declines an invitation for the account: the invitations for it are read again. */
+export const RECEIVED_DECLINE_REGION = {
+  initial: 'idle',
+  states: {
+    idle: { on: { 'organisation.received.decline-button': { target: 'running' } } },
+    running: {
+      invoke: {
+        src: 'platform.invitations.decline',
+        input: taken('organisation.received.decline-button'),
+        onDone: {
+          target: 'idle',
+          actions: [forget('received'), 'rereadReceived', INVITATION_DECLINED],
+        },
+        onError: { target: 'idle', actions: [DECLINE_REFUSED] },
       },
     },
   },

@@ -1,4 +1,4 @@
-import { okAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
@@ -81,6 +81,10 @@ export async function bootRoot(
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     servedBuild: { watch: () => () => {} },
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a test root has no clipboard' }),
+    },
     logger: { info: () => {}, warn: () => {} },
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),

@@ -5,9 +5,8 @@
  * ports only. Nothing is opened while nobody is signed in.
  */
 
-import { okAsync, type ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
-import { EventBus } from '@workspace/cqrs'
 import {
   type DataError,
   type LocalDb,
@@ -31,9 +30,10 @@ import {
   SETTINGS_SERVICE,
   SettingsService,
 } from '../features/user/application/settings/settings.service'
+import { CLIPBOARD, type ClipboardPort } from '../platform/clipboard.port'
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
-import { type AppEvent, EVENTS } from '../platform/events.port'
+import { EVENTS } from '../platform/events.port'
 import { INVITATIONS, type InvitationsPort } from '../platform/invitations.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
 import { PLATFORM_EVENTS } from '../platform/platform-events.port'
@@ -43,6 +43,7 @@ import { SYNC_STATUS } from '../platform/sync-status.port'
 import type { Theme } from '../platform/theme'
 
 import { accountStarts } from './account-starts'
+import { appEvents } from './app-events'
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
 import type { BearerDeps } from './gateway-bearer'
@@ -81,6 +82,8 @@ export interface AppRootOptions {
   /** The gateway's device and invitation routes, called the same way. */
   readonly devicesApi: (deps: BearerDeps) => DevicesPort
   readonly invitationsApi: (deps: BearerDeps) => InvitationsPort
+  /** The clipboard of the device, which an invitation's link is copied to. */
+  readonly clipboard: ClipboardPort
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -149,15 +152,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   }
   // The facts of the app, after they happened: the commands' outcomes, the changes the gateway
   // refused. Only the root publishes; the features hear them through `EVENTS`.
-  const events = new EventBus<AppEvent>()
-
-  if (options.logEvents === true) {
-    events.onAny((event) => {
-      options.logger.info({ event: event.name })
-
-      return okAsync(undefined)
-    })
-  }
+  const events = appEvents(options)
 
   // The routes that act for the signed-in device present the token saved on this browser, only
   // while it is the session of the account this tab shows: never one another tab saved since.
@@ -254,6 +249,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(ACCOUNT_START_SERVICE, () => starts.service)
     .singleton(ORGANISATIONS, () => organisations)
     .singleton(INVITATIONS, () => createInvitations(options.invitationsApi(bearer), session))
+    .singleton(CLIPBOARD, () => options.clipboard)
     .singleton(DEVICES, () => devices)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)

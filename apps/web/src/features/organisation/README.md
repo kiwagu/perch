@@ -25,16 +25,21 @@ on the replica schema are applied on the device before a command runs
   organisation once its membership is adopted).
 - Components: `OrganisationCreate` (the form that creates an organisation),
   `OrganisationNotes` (the notes card with its new note form), `OrganisationMembers` (the
-  members card with the invite form) and `OrganisationErrorLine` (a refused change as its
-  contract code and its copy), in `presentation/components/`; the page's `useMembers` hook
-  (the members as last read, for an administrator) sits beside its view.
+  members card: each member's role select and remove button), `OrganisationInvite` (the form
+  that invites an email with a role, under the members), `OrganisationSent` (the invitations
+  not accepted yet, with the link to copy and the revoke button), `OrganisationReceived` (the
+  invitations for the account, with accept and decline) and `OrganisationErrorLine` (a
+  refused change as its contract code and its copy), in `presentation/components/`; the page's
+  `useListed` hook (a list as last read: the members, the invitations sent, the invitations
+  for the account) and `useInviteDraft` (the invitation form's fields, which the flow empties)
+  sit beside its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
 - Behaviour: the page runs its screen's flow as its machine (`application/organisation-machine/`,
   held to `contract/domain/screens/org.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`: the create form, the notes' items, the invitation, the members
-  and the new note are its regions, a write is an invoke of its action, a control is enabled
+  and their roles, the invitations sent and received, and the new note are its regions, a write is an invoke of its action, a control is enabled
   while the machine's state handles its event, and the machine keeps the codes of the page's
   errors with the organisation they were refused in. Without memberships the page offers to
   create an organisation (a key checked by the kernel's `isTenantKey`, a name of at most 80
@@ -49,9 +54,19 @@ on the replica schema are applied on the device before a command runs
   the kit's `Form`, whose saved submit leaves its fields with nothing unsaved. Notes are at most 500 characters. A member edits and deletes only its own
   notes and an administrator any, so "Edit" and "Delete" appear only where allowed, the
   member's own notes are marked "Yours", and a change the rules forbid is explained
-  (`note:FORBIDDEN`). An administrator also sees the members, invites an existing account by
-  email and removes a member. The page follows the memberships as they change, without a
-  reload. A refused change the gateway limits (`rate-limited`) is worded as "too many attempts".
+  (`note:FORBIDDEN`). An administrator also sees the members, each with a role select that
+  applies at once (the administrator's own included while another administrator stays; the
+  row shows the role being set while the change runs, the listed role after a refusal), invites
+  an email by a mailed link with a role (the account may not exist yet), copies the link of or
+  revokes an invitation not accepted yet (the clipboard is the `CLIPBOARD` port), and removes
+  a member. The members and the invitations sent are read when they start to show (the page
+  opening, the account made an administrator) and after each change made here, not after the
+  account's own demotion, whose role comes over the sync channel. Every account sees the
+  invitations to its email above the create form, read when the page opens and after each
+  accept or decline, and accepts one (its organisation becomes current) or declines it;
+  what failed shows in place of that list. The page follows the memberships as they change,
+  without a reload. A refused change the gateway limits (`rate-limited`) is worded as "too many
+  attempts".
 
 ## Commands
 

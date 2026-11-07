@@ -214,6 +214,11 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     visibility: { current: () => 'visible', onChange: () => () => {} },
     // A seed client shows no frame to offer a newer build in.
     servedBuild: { watch: () => () => {} },
+    // Nor does it copy an invitation's link: it accepts the invitation itself.
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a seed client has no clipboard' }),
+    },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},

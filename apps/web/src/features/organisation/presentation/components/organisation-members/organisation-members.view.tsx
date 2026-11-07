@@ -1,45 +1,37 @@
-import { useId, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { useT } from '@workspace/i18n'
 import type { IdentityId } from '@workspace/ids'
+import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
-import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
-import { Form } from '@workspace/ui/components/ui/form'
-import { Input } from '@workspace/ui/components/ui/input'
 
-import type { OrganisationEvent } from '../../../application/organisation-machine'
-import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
+import type { OrganisationEvent, TenantRole } from '../../../application/organisation-machine'
+import { roleOptions } from '../role-words'
 
 export interface MemberItem {
   readonly id: IdentityId
   readonly email: string
+  /** The role the row's select shows: the one being set while its change runs, else the listed one. */
+  readonly role: TenantRole
   /** An administrator removes any member but itself. */
   readonly removable: boolean
 }
 
+/**
+ * The members card: each member by its email with a role select that applies at once, and a
+ * remove button on every row but the administrator's own; the invitation form goes under the
+ * list, as `children`.
+ */
 export function OrganisationMembers(props: {
   readonly members: readonly MemberItem[] | undefined
-  readonly error: string | undefined
   /** Whether the page's flow takes the event now. */
   readonly can: (event: OrganisationEvent) => boolean
-  readonly onInvite: (email: string) => Promise<boolean>
+  readonly onSetRole: (id: IdentityId, role: TenantRole) => void
   readonly onRemove: (id: IdentityId) => void
+  readonly children?: ReactNode
 }) {
   const t = useT()
-  const emailId = useId()
-  const [email, setEmail] = useState('')
-  const invite = () => {
-    const invited = props.onInvite(email)
-
-    void invited.then((done) => {
-      if (done) {
-        setEmail('')
-      }
-    })
-
-    return invited
-  }
 
   return (
     <Card>
@@ -54,53 +46,49 @@ export function OrganisationMembers(props: {
             {props.members.map((member) => (
               <li
                 key={member.id}
-                className="flex items-center justify-between gap-2"
+                className="flex flex-wrap items-center justify-between gap-2"
                 data-testid="organisation.members.item"
                 data-id={member.id}
               >
                 <span className="min-w-0 break-all">{member.email}</span>
-                {member.removable ? (
-                  <Button
-                    type="button"
-                    variant="outline"
+                <span className="flex items-center gap-2">
+                  <OptionSelect
+                    label={t('organisation.members.role')}
+                    value={member.role}
+                    options={roleOptions(t)}
+                    onChange={(role) => props.onSetRole(member.id, role)}
                     disabled={
                       !props.can({
-                        type: 'organisation.members.remove-button',
+                        type: 'organisation.members.role-select',
                         identity: member.id,
+                        role: member.role,
                       })
                     }
-                    onClick={() => props.onRemove(member.id)}
-                    data-testid="organisation.members.remove-button"
-                  >
-                    {t('organisation.members.remove')}
-                  </Button>
-                ) : null}
+                    testId="organisation.members.role-select"
+                    holdsInput={false}
+                  />
+                  {member.removable ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={
+                        !props.can({
+                          type: 'organisation.members.remove-button',
+                          identity: member.id,
+                        })
+                      }
+                      onClick={() => props.onRemove(member.id)}
+                      data-testid="organisation.members.remove-button"
+                    >
+                      {t('organisation.members.remove')}
+                    </Button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ul>
         ) : null}
-        <Form onSubmit={invite} data-testid="organisation.invite.form">
-          <Field data-invalid={props.error ? true : undefined}>
-            <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
-            <Input
-              id={emailId}
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="off"
-              aria-invalid={props.error ? true : undefined}
-              data-testid="organisation.invite.email-input"
-            />
-            <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
-            <Button
-              type="submit"
-              disabled={!props.can({ type: 'organisation.invite.submit-button', email })}
-              data-testid="organisation.invite.submit-button"
-            >
-              {t('organisation.invite.submit')}
-            </Button>
-          </Field>
-        </Form>
+        {props.children}
       </CardContent>
     </Card>
   )

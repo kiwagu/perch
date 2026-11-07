@@ -3,13 +3,15 @@ import { describe, expect, it, vi } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
-import { identityIdFactory, noteIdFactory } from '@workspace/ids'
+import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
 
 import { createOrganisationMachine, type OrganisationMachineDeps } from '.'
 
 const hello = noteIdFactory.create()
 const agenda = noteIdFactory.create()
 const bea = identityIdFactory.create()
+const ann = identityIdFactory.create()
+const toBea = invitationIdFactory.create()
 
 const refused = (code: string): ResultAsync<never, BusError> => errAsync({ code })
 
@@ -41,7 +43,13 @@ function page(writes: Partial<OrganisationMachineDeps> = {}) {
     editNote: vi.fn(() => okAsync(undefined)),
     deleteNote: vi.fn(() => okAsync(undefined)),
     invite: vi.fn(() => okAsync(undefined)),
+    setRole: vi.fn(() => okAsync(undefined)),
     remove: vi.fn(() => okAsync(undefined)),
+    revoke: vi.fn(() => okAsync(undefined)),
+    copy: vi.fn(() => okAsync(undefined)),
+    accept: vi.fn(() => okAsync(undefined)),
+    decline: vi.fn(() => okAsync(undefined)),
+    account: () => ann,
     current: () => current,
     ...writes,
   }
@@ -168,22 +176,36 @@ describe('organisation machine', () => {
     expect(emitted).toEqual([toast('note-created')])
   })
 
-  it('toasts an invitation and a removal, reading the members again after each', async () => {
+  it('invites with a role: the invitation toasts, both fields empty and the invitations are read again', async () => {
     const { actor, deps, snapshot, emitted, region } = page()
 
-    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'admin',
+    })
     await region('invite', 'idle')
 
-    expect(deps.invite).toHaveBeenCalledWith('bea@example.test')
-    expect(emitted).toEqual([toast('invited')])
-    expect(snapshot().context.membersChanged).toBe(1)
+    expect(deps.invite).toHaveBeenCalledWith('bea@example.test', 'admin')
+    expect(emitted).toEqual([
+      { type: 'clear', anchor: 'organisation.invite.email-input' },
+      { type: 'clear', anchor: 'organisation.invite.role-select' },
+      toast('invited'),
+    ])
+    expect(snapshot().context.invitationsChanged).toBe(1)
+    expect(snapshot().context.membersChanged).toBe(0)
+  })
+
+  it('toasts a removal, reading the members again', async () => {
+    const { actor, deps, snapshot, emitted, region } = page()
 
     actor.send({ type: 'organisation.members.remove-button', identity: bea })
     await region('members', 'idle')
 
     expect(deps.remove).toHaveBeenCalledWith(bea)
-    expect(emitted.slice(1)).toEqual([toast('member-removed')])
-    expect(snapshot().context.membersChanged).toBe(2)
+    expect(emitted).toEqual([toast('member-removed')])
+    expect(snapshot().context.membersChanged).toBe(1)
+    expect(snapshot().context.invitationsChanged).toBe(0)
   })
 
   it('shows a refused invitation or removal under the invitation', async () => {
@@ -192,7 +214,11 @@ describe('organisation machine', () => {
       remove: () => refused('not-admin'),
     })
 
-    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'member',
+    })
     await region('invite', 'idle')
 
     expect(snapshot().context.errors.codes).toEqual({ members: 'already-member' })
@@ -202,7 +228,162 @@ describe('organisation machine', () => {
 
     expect(snapshot().context.errors.codes).toEqual({ members: 'not-admin' })
     expect(snapshot().context.membersChanged).toBe(0)
+    expect(snapshot().context.invitationsChanged).toBe(0)
     expect(emitted).toEqual([])
+  })
+
+  it('changes one role at a time, showing the role being set, then toasts and reads the members again', async () => {
+    const change = later()
+    const { actor, deps, snapshot, emitted, region } = page({ setRole: vi.fn(() => change.result) })
+
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+
+    expect(snapshot().context.changingRole).toEqual({ identity: bea, role: 'admin' })
+    expect(
+      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+    ).toBe(false)
+
+    change.done()
+    await region('member-roles', 'idle')
+
+    expect(deps.setRole).toHaveBeenCalledWith({ identity: bea, role: 'admin' })
+    expect(emitted).toEqual([toast('role-changed')])
+    expect(snapshot().context.membersChanged).toBe(1)
+    expect(snapshot().context.changingRole).toBeUndefined()
+    expect(
+      snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
+    ).toBe(true)
+  })
+
+  it('does not read the members again after the account demoted itself', async () => {
+    const { actor, snapshot, emitted, region } = page()
+
+    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    await region('member-roles', 'idle')
+
+    expect(emitted).toEqual([toast('role-changed')])
+    expect(snapshot().context.membersChanged).toBe(0)
+    expect(snapshot().context.changingRole).toBeUndefined()
+  })
+
+  it('shows a refused role change under the invitation and lets the select show the role kept', async () => {
+    const { actor, snapshot, emitted, region } = page({ setRole: () => refused('last-admin') })
+
+    actor.send({ type: 'organisation.members.role-select', identity: ann, role: 'member' })
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.errors.codes).toEqual({ members: 'last-admin' })
+    expect(snapshot().context.changingRole).toBeUndefined()
+    expect(snapshot().context.membersChanged).toBe(0)
+    expect(emitted).toEqual([])
+  })
+
+  it('puts the link of an invitation on the clipboard and toasts, or shows a refused clipboard as it is', async () => {
+    let refuse = false
+    const { actor, deps, snapshot, emitted, region } = page({
+      copy: vi.fn(() => (refuse ? refused('clipboard:REFUSED') : okAsync(undefined))),
+    })
+
+    actor.send({ type: 'organisation.sent.copy-button', invitation: toBea })
+    await region('sent-copy', 'idle')
+
+    expect(deps.copy).toHaveBeenCalledWith(toBea)
+    expect(emitted).toEqual([toast('link-copied')])
+    expect(snapshot().context.invitationsChanged).toBe(0)
+
+    refuse = true
+    actor.send({ type: 'organisation.sent.copy-button', invitation: toBea })
+    await region('sent-copy', 'idle')
+
+    expect(snapshot().context.errors.codes).toEqual({ members: 'clipboard:REFUSED' })
+    expect(emitted).toHaveLength(1)
+  })
+
+  it('revokes an invitation, toasts and reads the invitations again; a refusal shows under the invitation', async () => {
+    let refuse = false
+    const { actor, deps, snapshot, emitted, region } = page({
+      revoke: vi.fn(() => (refuse ? refused('not-admin') : okAsync(undefined))),
+    })
+
+    actor.send({ type: 'organisation.sent.revoke-button', invitation: toBea })
+    await region('sent-revoke', 'idle')
+
+    expect(deps.revoke).toHaveBeenCalledWith(toBea)
+    expect(emitted).toEqual([toast('invitation-revoked')])
+    expect(snapshot().context.invitationsChanged).toBe(1)
+
+    refuse = true
+    actor.send({ type: 'organisation.sent.revoke-button', invitation: toBea })
+    await region('sent-revoke', 'idle')
+
+    expect(snapshot().context.errors.codes).toEqual({ members: 'not-admin' })
+    expect(snapshot().context.invitationsChanged).toBe(1)
+    expect(emitted).toHaveLength(1)
+  })
+
+  it('accepts an invitation: it toasts, reads the invitations again and starts every area afresh', async () => {
+    const { actor, deps, snapshot, emitted, viewing } = page({
+      addNote: () => refused('failed'),
+    })
+
+    actor.send({ type: 'organisation.create.toggle-button' })
+    actor.send({ type: 'organisation.notes.edit-button', id: hello })
+    actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })
+    await waitFor(actor, (state) => state.context.errors.codes.notes !== undefined)
+
+    actor.send({ type: 'organisation.received.accept-button', invitation: toBea })
+    await viewing()
+    await waitFor(actor, (state) => state.matches({ viewing: { received: 'idle' } }))
+
+    expect(deps.accept).toHaveBeenCalledWith(toBea)
+    expect(emitted).toEqual([toast('invitation-accepted')])
+    expect(snapshot().context.receivedChanged).toBe(1)
+    expect(snapshot().context.errors).toEqual({ of: undefined, codes: {} })
+    expect(snapshot().context.editing).toBeUndefined()
+    expect(snapshot().matches({ viewing: { 'create-form': 'closed' } })).toBe(true)
+  })
+
+  it('shows a refused acceptance on the invitations for the account, and takes the next one', async () => {
+    let refuse = true
+    const { actor, snapshot, emitted, region } = page({
+      accept: () => (refuse ? refused('invitation-gone') : okAsync(undefined)),
+    })
+
+    actor.send({ type: 'organisation.received.accept-button', invitation: toBea })
+    await region('received', 'idle')
+
+    expect(snapshot().context.errors.codes).toEqual({ received: 'invitation-gone' })
+    expect(snapshot().context.receivedChanged).toBe(0)
+    expect(emitted).toEqual([])
+
+    refuse = false
+    actor.send({ type: 'organisation.received.accept-button', invitation: toBea })
+    await waitFor(actor, (state) => state.context.receivedChanged === 1)
+
+    expect(snapshot().context.errors).toEqual({ of: undefined, codes: {} })
+  })
+
+  it('declines an invitation, toasts and reads the invitations for the account again; a refusal shows there', async () => {
+    let refuse = false
+    const { actor, deps, snapshot, emitted, region } = page({
+      decline: vi.fn(() => (refuse ? refused('other-account') : okAsync(undefined))),
+    })
+
+    actor.send({ type: 'organisation.received.decline-button', invitation: toBea })
+    await region('received-decline', 'idle')
+
+    expect(deps.decline).toHaveBeenCalledWith(toBea)
+    expect(emitted).toEqual([toast('invitation-declined')])
+    expect(snapshot().context.receivedChanged).toBe(1)
+    expect(snapshot().matches({ viewing: { received: 'idle' } })).toBe(true)
+
+    refuse = true
+    actor.send({ type: 'organisation.received.decline-button', invitation: toBea })
+    await region('received-decline', 'idle')
+
+    expect(snapshot().context.errors.codes).toEqual({ received: 'other-account' })
+    expect(snapshot().context.receivedChanged).toBe(1)
+    expect(emitted).toHaveLength(1)
   })
 
   it('keeps the errors of the organisation they were refused in', async () => {
@@ -217,7 +398,11 @@ describe('organisation machine', () => {
     expect(snapshot().context.errors.of).toBe('acme')
 
     becomes('globex')
-    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'member',
+    })
     await region('invite', 'idle')
 
     expect(snapshot().context.errors).toEqual({
@@ -233,7 +418,11 @@ describe('organisation machine', () => {
       remove: () => refused('not-admin'),
     })
 
-    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'member',
+    })
     becomes('globex')
     actor.send({ type: 'organisation.members.remove-button', identity: bea })
     await region('members', 'idle')
@@ -253,7 +442,11 @@ describe('organisation machine', () => {
       addNote: () => refused('failed'),
     })
 
-    actor.send({ type: 'organisation.invite.submit-button', email: 'bea@example.test' })
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'member',
+    })
     becomes('globex')
     actor.send({ type: 'organisation.notes.add-button', text: 'Plans' })
     await region('notes-add', 'idle')

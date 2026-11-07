@@ -249,7 +249,7 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`EventBus` of
+  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
@@ -259,7 +259,10 @@ modeling stage.
   (`/ui-manifest/manifest.json`, never cached) when the frame starts watching, each time the tab
   comes back to the foreground and every ten minutes while it is there, against the build this
   tab runs (`virtual:perch-build`, below); a manifest the server does not serve, or a failed
-  read, says nothing. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
+  read, says nothing. It provides `CLIPBOARD` too (`browser-clipboard.ts`): the browser's
+  `navigator.clipboard.writeText`, which an administrator's copy of an invitation's link goes
+  through; a page that is not a secure context has no clipboard, and a write then fails naming
+  it, as the browser's own refusal does. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
   signed-in account, the same in every tab: the leading tab shares its channel, whether its
   space holds unsent changes and a sync stopped for good as the record `perch.sync.leader` in
   the browser's storage, written on each change of its channel and every two seconds while it

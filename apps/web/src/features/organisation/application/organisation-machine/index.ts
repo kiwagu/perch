@@ -4,5 +4,6 @@ export type {
   OrganisationErrors,
   OrganisationEvent,
   OrganisationMachineDeps,
+  TenantRole,
 } from './events'
 export { createOrganisationMachine } from './machine'
