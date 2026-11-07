@@ -33,6 +33,17 @@ function commitOf(rev: string): string | undefined {
   return status === 0 ? out.trim() : undefined
 }
 
+/**
+ * The id `refs/heads/<branch>` holds, read from that ref exactly, never from a revision of it
+ * (`feat/me~0`), or undefined when git has no such branch.
+ */
+function branchTip(branch: string): string | undefined {
+  const { status, out } = git(['show-ref', '--verify', '--hash', `refs/heads/${branch}`])
+  const id = out.trim()
+
+  return status === 0 && id !== '' ? id : undefined
+}
+
 /** The id of the tree `rev` records, or undefined when git knows none. */
 function treeOf(rev: string): string | undefined {
   const { status, out } = git(['rev-parse', '--verify', '--quiet', `${rev}^{tree}`])
@@ -113,7 +124,9 @@ function bindingOf({ branch, tip }: Landed, amend: boolean): Binding | string {
     return `main has no commit ${amend ? 'under the one this commit replaces' : 'yet'} to land on: a landing changes main.`
   }
 
-  if (commitOf(`refs/heads/${branch}`) === undefined) {
+  const head = branchTip(branch)
+
+  if (head === undefined) {
     return `this commit's trailer names ${branch}, and git knows no branch ${branch} in this clone.`
   }
 
@@ -138,7 +151,7 @@ function bindingOf({ branch, tip }: Landed, amend: boolean): Binding | string {
   }
 
   const id = line.slice(0, line.indexOf(' '))
-  const onBranch = under(id, `refs/heads/${branch}`)
+  const onBranch = under(id, head)
 
   if (onBranch === undefined) {
     return `git cannot tell whether ${tip} is on ${branch}.`

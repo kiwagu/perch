@@ -655,6 +655,22 @@ describe('contract-take on main', () => {
     refuses(landing(root, squashedFrom(other)), `${other} is not on feat/me`)
   })
 
+  it('refuses a landing that names its branch by a revision of it, and passes one by its name', () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const tip = staged(fixture)
+
+    for (const branch of ['feat/me~0', 'feat/me^0', 'feat/me@{0}']) {
+      refuses(
+        landing(root, squashedFrom(tip, branch)),
+        `contract take: this commit's trailer names ${branch}, and git knows no branch ${branch} in this clone.\n`,
+        SQUASH_FORM,
+      )
+    }
+
+    passes(landing(root, squashedFrom(tip)))
+  })
+
   it('refuses a landing naming a tip git cannot tell from another commit', () => {
     const fixture = trunk()
     const { root } = fixture
