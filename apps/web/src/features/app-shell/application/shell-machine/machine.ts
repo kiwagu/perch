@@ -1,4 +1,14 @@
-import { assertEvent, assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
+import {
+  and,
+  assertEvent,
+  assign,
+  emit,
+  enqueueActions,
+  fromPromise,
+  not,
+  setup,
+  stateIn,
+} from 'xstate'
 
 import type { Locale } from '@workspace/i18n'
 
@@ -7,23 +17,15 @@ import type { ClearParams, NavigateParams, ShowParams } from '../../../../platfo
 import type { Theme } from '../../../../platform/theme'
 
 import type { ShellContext, ShellEmitted, ShellEvent, ShellMachineDeps } from './events'
+import { FRAME_STATES } from './frame-states'
 import {
   CRASH_GONE,
   CRASHED,
-  INSTALL_AVAILABLE,
-  INSTALL_BY_STEPS,
+  FRAME_MESSAGES,
   INSTALL_GONE,
-  LOCALE_STORED,
-  NEW_VERSION,
-  PROTOCOL_OUTDATED,
-  REJECTED,
-  RELOADED,
   SIGNED_IN,
   SIGNED_OUT,
-  SYNC,
   THEME_CHOSEN,
-  THEME_SET,
-  THEME_STORED,
   TO_SIGN_IN,
 } from './transitions'
 
@@ -60,10 +62,17 @@ export function createShellMachine(deps: ShellMachineDeps) {
       storedElsewhere: () => storedElsewhere() !== undefined,
       themeStoredElsewhere: () => themeStoredElsewhere() !== undefined,
       protocolTaken: ({ context }) => context.pending?.code !== 'protocol-outdated',
-      quietReload: ({ context }) =>
-        context.pending !== undefined &&
-        !deps.values().unsaved &&
-        !deps.selfReloads.done(context.pending.update),
+      // The frame shows the open screen as usual: its `screen` region is in `ready`.
+      screenReady: stateIn(FRAME_STATES.ready),
+      // An update waits, and no install window is open: a reload nobody asked for would lose
+      // the browser's answer.
+      quietReload: and([
+        ({ context }) =>
+          context.pending !== undefined &&
+          !deps.values().unsaved &&
+          !deps.selfReloads.done(context.pending.update),
+        not(stateIn(FRAME_STATES.installing)),
+      ]),
     },
     actions: {
       show: emit((_, params: ShowParams) => ({ type: 'show' as const, ...params })),
@@ -122,7 +131,10 @@ export function createShellMachine(deps: ShellMachineDeps) {
     states: {
       opening: {
         on: {
-          'platform.started': [{ target: 'ready', guard: 'signedOut' }, { target: 'opening-data' }],
+          'platform.started': [
+            { target: 'running', guard: 'signedOut' },
+            { target: 'opening-data' },
+          ],
           'platform.start-failed': { target: 'start-failed' },
           'platform.storage-blocked': { target: 'storage-blocked' },
           'app-shell.locale-select': { target: 'opening', actions: 'speakChoice' },
@@ -132,98 +144,88 @@ export function createShellMachine(deps: ShellMachineDeps) {
       'opening-data': {
         meta: { renders: ['app-shell.nav'] },
         on: {
-          'platform.opened': { target: 'ready' },
+          'platform.opened': { target: 'running' },
           'platform.open-failed': { target: 'failed' },
           'platform.signed-in': SIGNED_IN,
           // Nothing is left to open: a guest's frame, the account's notice gone with it.
-          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
+          'platform.signed-out': { target: 'running', ...SIGNED_OUT },
         },
       },
-      ready: {
+      // The frame around the open screen: its messages follow the platform whatever the screen
+      // and the reminder to install are doing, so each is written once, here.
+      running: {
+        type: 'parallel',
         meta: { renders: ['app-shell.nav'] },
-        on: {
-          'app-shell.locale-select': [
-            { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
-          ],
-          'app-shell.theme-select': THEME_CHOSEN,
-          'platform.theme-set': THEME_SET,
-          'model.settings.locale': LOCALE_STORED,
-          'model.settings.theme': THEME_STORED,
-          'platform.signed-in': SIGNED_IN,
-          'platform.signed-out': SIGNED_OUT,
-          'platform.change-rejected': { actions: REJECTED },
-          'platform.changes-reloaded': { actions: RELOADED },
-          'platform.crashed': { target: 'crashed' },
-          'platform.new-version': NEW_VERSION,
-          'platform.protocol-refused': PROTOCOL_OUTDATED,
-          'app-shell.update-button': { target: 'updating' },
-          'platform.tab-hidden': {
-            target: 'updating',
-            guard: 'quietReload',
-            actions: 'markSelfReload',
+        on: FRAME_MESSAGES,
+        states: {
+          screen: {
+            initial: 'ready',
+            states: {
+              ready: {
+                on: {
+                  'app-shell.locale-select': [
+                    { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
+                  ],
+                  'platform.crashed': { target: 'crashed' },
+                  'app-shell.update-button': { target: 'updating' },
+                  'platform.tab-hidden': {
+                    target: 'updating',
+                    guard: 'quietReload',
+                    actions: 'markSelfReload',
+                  },
+                },
+              },
+              crashed: {
+                meta: { renders: ['app-shell.reload-button'] },
+                entry: CRASHED,
+                exit: CRASH_GONE,
+                on: {
+                  'app-shell.reload-button': { target: 'reloading' },
+                  'platform.navigated': { target: 'ready' },
+                  'app-shell.locale-select': [
+                    { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
+                  ],
+                  'app-shell.update-button': { target: 'reloading' },
+                  'platform.tab-hidden': {
+                    target: 'reloading',
+                    guard: 'quietReload',
+                    actions: 'markSelfReload',
+                  },
+                },
+              },
+              reloading: {
+                invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
+              },
+              updating: {
+                invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
+              },
+            },
           },
-          ...SYNC,
-          'platform.install-offered': INSTALL_AVAILABLE,
-          'platform.install-by-steps': INSTALL_BY_STEPS,
-          'platform.installed': { actions: INSTALL_GONE },
-          'app-shell.install-button': { target: 'installing' },
-          'app-shell.install-later-button': { target: 'postponing' },
-        },
-      },
-      crashed: {
-        meta: { renders: ['app-shell.nav', 'app-shell.reload-button'] },
-        entry: CRASHED,
-        exit: CRASH_GONE,
-        on: {
-          'app-shell.reload-button': { target: 'reloading' },
-          'platform.navigated': { target: 'ready' },
-          'app-shell.locale-select': [
-            { target: 'ready', guard: 'signedOut', actions: 'speakChoice' },
-          ],
-          'app-shell.theme-select': THEME_CHOSEN,
-          'platform.theme-set': THEME_SET,
-          'model.settings.locale': LOCALE_STORED,
-          'model.settings.theme': THEME_STORED,
-          'platform.signed-in': SIGNED_IN,
-          'platform.signed-out': SIGNED_OUT,
-          'platform.change-rejected': { actions: REJECTED },
-          'platform.changes-reloaded': { actions: RELOADED },
-          'platform.new-version': NEW_VERSION,
-          'platform.protocol-refused': PROTOCOL_OUTDATED,
-          'app-shell.update-button': { target: 'reloading' },
-          'platform.tab-hidden': {
-            target: 'reloading',
-            guard: 'quietReload',
-            actions: 'markSelfReload',
+          install: {
+            initial: 'offering',
+            states: {
+              // The reminder's buttons are taken only while the screen shows as usual.
+              offering: {
+                on: {
+                  'app-shell.install-button': { target: 'installing', guard: 'screenReady' },
+                  'app-shell.install-later-button': { target: 'postponing', guard: 'screenReady' },
+                },
+              },
+              installing: {
+                invoke: {
+                  src: 'platform.install.prompt',
+                  onDone: { target: 'offering', actions: INSTALL_GONE },
+                  onError: { target: 'offering', actions: INSTALL_GONE },
+                },
+              },
+              postponing: {
+                invoke: {
+                  src: 'platform.install.postpone',
+                  onDone: { target: 'offering', actions: INSTALL_GONE },
+                },
+              },
+            },
           },
-          ...SYNC,
-        },
-      },
-      reloading: {
-        meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
-        invoke: { src: 'platform.reload', onDone: { target: 'crashed' } },
-      },
-      updating: {
-        meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
-        invoke: { src: 'platform.reload', onDone: { target: 'ready' } },
-      },
-      installing: {
-        meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
-        invoke: {
-          src: 'platform.install.prompt',
-          onDone: { target: 'ready', actions: INSTALL_GONE },
-          onError: { target: 'ready', actions: INSTALL_GONE },
-        },
-      },
-      postponing: {
-        meta: { renders: ['app-shell.nav'] },
-        on: { 'platform.signed-in': SIGNED_IN, 'platform.signed-out': SIGNED_OUT },
-        invoke: {
-          src: 'platform.install.postpone',
-          onDone: { target: 'ready', actions: INSTALL_GONE },
         },
       },
       failed: {
@@ -232,7 +234,7 @@ export function createShellMachine(deps: ShellMachineDeps) {
           'app-shell.sign-out-here-button': { target: 'signing-out' },
           'platform.signed-in': SIGNED_IN,
           // The saved account went elsewhere: a guest's frame, with no sign-out of it offered.
-          'platform.signed-out': { target: 'ready', ...SIGNED_OUT },
+          'platform.signed-out': { target: 'running', ...SIGNED_OUT },
           'app-shell.locale-select': { target: 'failed', actions: 'speakChoice' },
           'app-shell.theme-select': THEME_CHOSEN,
           'platform.theme-set': { actions: 'followTheme' },

@@ -237,7 +237,9 @@ function App(props: { readonly reload: () => void }) {
 
   // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
-    STATUS[state.value as keyof typeof STATUS]
+    typeof state.value === 'string' && Object.hasOwn(STATUS, state.value)
+      ? STATUS[state.value as keyof typeof STATUS]
+      : undefined
 
   // A sign-out of the account the frame shows reaches its flow from the session while no screen
   // renders; the shell's container hears it once one does.

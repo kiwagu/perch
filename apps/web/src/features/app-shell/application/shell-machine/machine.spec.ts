@@ -7,7 +7,7 @@ import type { Locale } from '@workspace/i18n'
 import type { Theme } from '../../../../platform/theme'
 import { type FrameWrites, NOTHING_SEEN } from '../setting-writes'
 
-import { createShellMachine, type ShellValues } from '.'
+import { createShellMachine, FRAME_STATES, type ShellValues } from '.'
 
 /**
  * A frame over its machine: what the guards read and what the machine emitted; `reloadedFor`
@@ -109,17 +109,15 @@ function frame(reloadedFor: string[] = []) {
       actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'dark' }),
     canChoose: () => actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' }),
     canUpdate: () => actor.getSnapshot().can({ type: 'app-shell.update-button' }),
-    is: (
-      state:
-        | 'opening-data'
-        | 'ready'
-        | 'failed'
-        | 'start-failed'
-        | 'crashed'
-        | 'updating'
-        | 'reloading'
-        | 'installing',
-    ) => actor.getSnapshot().matches(state),
+    /** Whether the frame is in a state of the root, or of one region of `running`. */
+    is: (state: 'opening-data' | 'failed' | 'start-failed' | keyof typeof FRAME_STATES) =>
+      actor
+        .getSnapshot()
+        .matches(
+          state === 'opening-data' || state === 'failed' || state === 'start-failed'
+            ? state
+            : FRAME_STATES[state],
+        ),
   }
 }
 
@@ -555,7 +553,7 @@ describe('shell machine', () => {
     expect(shell.reload).toHaveBeenCalledOnce()
 
     // Only while the page has not loaded again; the message stays.
-    await waitFor(shell.actor, (state) => state.matches('ready'))
+    await waitFor(shell.actor, (state) => state.matches(FRAME_STATES.ready))
 
     expect(shell.emitted.at(-1)).toEqual(NEW_VERSION)
   })
@@ -712,14 +710,14 @@ describe('shell machine', () => {
     shell.actor.send({ type: 'app-shell.install-button' })
 
     expect(shell.is('installing')).toBe(true)
-    await waitFor(shell.actor, (state) => state.matches('ready'))
+    await waitFor(shell.actor, (state) => state.matches(FRAME_STATES.offering))
 
     expect(shell.install.prompt).toHaveBeenCalledOnce()
     expect(shell.emitted.at(-1)).toEqual(installGone)
 
     shell.actor.send({ type: 'platform.install-by-steps' })
     shell.actor.send({ type: 'app-shell.install-later-button' })
-    await waitFor(shell.actor, (state) => state.matches('ready'))
+    await waitFor(shell.actor, (state) => state.matches(FRAME_STATES.offering))
 
     expect(shell.install.postpone).toHaveBeenCalledOnce()
     expect(shell.emitted.at(-1)).toEqual(installGone)
@@ -736,19 +734,28 @@ describe('shell machine', () => {
     shell.open()
     shell.actor.send({ type: 'platform.install-offered' })
     shell.actor.send({ type: 'app-shell.install-button' })
-    await waitFor(shell.actor, (state) => state.matches('ready'))
+    await waitFor(shell.actor, (state) => state.matches(FRAME_STATES.offering))
 
     expect(shell.emitted.at(-1)).toEqual({ type: 'clear', anchor: 'app-shell.install-message' })
   })
 
-  it('takes no install around a crash, while the data opens or once it failed to', () => {
+  it("takes the reminder's message around a crash, not its buttons", () => {
     const crashed = frame()
 
     crashed.open()
     crashed.actor.send({ type: 'platform.crashed' })
 
     expect(crashed.actor.getSnapshot().can({ type: 'app-shell.install-button' })).toBe(false)
-    expect(crashed.actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
-    expect(frame().actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
+    expect(crashed.actor.getSnapshot().can({ type: 'app-shell.install-later-button' })).toBe(false)
+    expect(crashed.actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(true)
+
+    // While the signed-in data opens, it takes none of them.
+    const opening = frame()
+
+    opening.signIn()
+    opening.actor.send({ type: 'platform.started' })
+
+    expect(opening.is('opening-data')).toBe(true)
+    expect(opening.actor.getSnapshot().can({ type: 'platform.install-offered' })).toBe(false)
   })
 })

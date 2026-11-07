@@ -22,6 +22,7 @@ import { ServicesProvider } from '../../../../platform/services'
 import type { SessionPort } from '../../../../platform/session.port'
 import { ThemeContext } from '../../../../platform/theme'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
+import { FRAME_STATES } from '../../application/shell-machine'
 import { CrashSignal } from '../crash/crash-signal'
 import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
@@ -389,7 +390,7 @@ describe('ShellContainer', () => {
     expect(spoken).toEqual(['es'])
   })
 
-  it('applies a language and a theme stored elsewhere while the install prompt is pending, once the frame is back', async () => {
+  it('applies a language and a theme stored elsewhere while the install prompt is pending, at once', async () => {
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const { session: guest } = fakeSession()
     const session: SessionPort = { ...guest, current: () => ann }
@@ -452,17 +453,80 @@ describe('ShellContainer', () => {
       services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'dark' }])
     })
 
-    expect(frame.actor.getSnapshot().matches('installing')).toBe(true)
-    expect(theme.current()).toBe('light')
-    expect(spoken).toEqual(['en'])
+    // The frame hears them in the install window, before the prompt is answered.
+    await waitFor(() => expect(theme.current()).toBe('dark'))
+    expect(frame.actor.getSnapshot().matches(FRAME_STATES.installing)).toBe(true)
+    expect(spoken).toEqual(['en', 'es'])
 
     await act(async () => {
       endPrompt()
     })
 
-    await waitFor(() => expect(theme.current()).toBe('dark'))
+    await waitFor(() => expect(frame.actor.getSnapshot().matches(FRAME_STATES.offering)).toBe(true))
+    expect(theme.current()).toBe('dark')
     expect(spoken).toEqual(['en', 'es'])
-    expect(frame.actor.getSnapshot().matches('ready')).toBe(true)
+  })
+
+  it('shows the state of the sync while the install prompt is pending', async () => {
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    let endPrompt = () => {}
+    const frame = openedFrame({
+      install: {
+        prompt: () =>
+          new Promise<void>((resolve) => {
+            endPrompt = resolve
+          }),
+        postpone: () => {},
+      },
+    })
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    act(() => services.sync('synced'))
+    await screen.findByTestId('app-shell.sync-message')
+
+    // The browser's install window is up; the sync goes offline while it stays open.
+    act(() => {
+      frame.actor.send({ type: 'app-shell.install-button' })
+    })
+    act(() => services.sync('offline'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe(
+        'offline',
+      ),
+    )
+    expect(frame.actor.getSnapshot().matches(FRAME_STATES.installing)).toBe(true)
+
+    await act(async () => {
+      endPrompt()
+    })
   })
 
   it("lets a guest choose the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
