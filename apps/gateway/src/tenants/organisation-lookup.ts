@@ -1,8 +1,9 @@
 import { err, errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow'
 
-import { type DataError, type LocalDb, recordId } from '@workspace/data'
+import { type DataError, dataError, type LocalDb, recordId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
+import { z } from '@workspace/zod'
 
 import { identityByEmail } from '../auth/identity-by-email'
 
@@ -21,9 +22,16 @@ import {
   toTenant,
 } from './organisation-rows'
 import identitiesByIdStatement from './surql/identities-by-id.surql'
+import membershipAdminsStatement from './surql/membership-admins.surql'
 import membershipRoleStatement from './surql/membership-role.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import tenantByKeyStatement from './surql/tenant-by-key.surql'
+
+/**
+ * What `membership-admins.surql` answers: an array holding the one count of the admins an
+ * organisation has, and nothing else.
+ */
+const adminCount = z.tuple([z.number().int().nonnegative()])
 
 /**
  * What the directory says of organisations, their memberships and the identities in them: the
@@ -112,6 +120,27 @@ export class OrganisationLookup {
       }),
       `could not read the role of ${identity} in ${tenant.key}`,
     ).map(([role]) => role)
+  }
+
+  /** How many admins the directory counts in the organisation. */
+  adminsOf(tenant: Tenant): ResultAsync<number, DataError> {
+    return reading(
+      this.#directory.db.query(membershipAdminsStatement, {
+        tenant: recordId('tenant', tenant.id),
+      }),
+      `could not count the admins of ${tenant.key}`,
+    ).andThen((answer) => {
+      const parsed = adminCount.safeParse(answer)
+
+      return parsed.success
+        ? ok(parsed.data[0])
+        : err(
+            dataError(
+              'data:QUERY_FAILED',
+              `the count of the admins of ${tenant.key} has an unknown shape`,
+            ),
+          )
+    })
   }
 
   /**

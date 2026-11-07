@@ -10,6 +10,8 @@ export type OrganisationRefusalCode =
   | 'no-such-identity'
   | 'already-member'
   | 'self'
+  | 'last-admin'
+  | 'no-such-member'
 
 /** An organisation command refused for what was asked, not for a failure of the gateway. */
 export interface OrganisationRefusal {

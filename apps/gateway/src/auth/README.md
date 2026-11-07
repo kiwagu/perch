@@ -418,8 +418,8 @@ turn the token is judged again on the clock as it is then. The rest runs in the 
 account's memberships (`Organisations.leaveAll`, `src/tenants`), whose check, made from the rows
 as they are there, is the one that decides: an account that is the only admin of an organisation
 with other members answers 409 `last-admin` with nothing changed, its link still pending and its
-sessions alive, so the same link deletes it once those members are removed, an invitation that
-overtook the press included. Only once the departure is allowed, and before it writes anything,
+sessions alive, so the same link deletes it once another member is made an admin or those
+members are removed, an invitation that overtook the press included. Only once the departure is allowed, and before it writes anything,
 does the deletion take effect (the departure's `before` step): the token is judged once more on
 the gateway's clock, as the departure may have waited for an organisation's turn past the link's
 hour (401 `link-expired`, nothing changed), and the pending deletion is spent

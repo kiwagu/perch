@@ -1,0 +1,96 @@
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+
+import { type LocalDb, recordId } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
+import type { TenantRole } from '@workspace/replica/protocol'
+
+import type { OrganisationLookup } from '../organisation-lookup'
+import { type OrganisationError, refused } from '../organisation-refusal'
+import { type Tenant, writing } from '../organisation-rows'
+import membershipSetRoleStatement from '../surql/membership-set-role.surql'
+import type { TenantMembers } from '../tenant-members'
+
+export interface OrganisationRoleChangeOptions {
+  /** The directory database, opened as the gateway's namespace user. */
+  readonly directory: LocalDb
+  readonly lookup: OrganisationLookup
+  readonly members: TenantMembers
+}
+
+/**
+ * The change of a member's role in an organisation. The directory holds the authority (who is an
+ * admin, how many admins there are), so it is written last: a failure before its write leaves the
+ * authority as it was, and asking again redoes the whole change, a self-demotion included, as its
+ * actor is still an admin to the directory. Each write is the same again when repeated.
+ */
+export class OrganisationRoleChange {
+  readonly #directory: LocalDb
+  readonly #lookup: OrganisationLookup
+  readonly #members: TenantMembers
+
+  constructor(options: OrganisationRoleChangeOptions) {
+    this.#directory = options.directory
+    this.#lookup = options.lookup
+    this.#members = options.members
+  }
+
+  /**
+   * `identity` holds `role` in the organisation from now on: its member row first, then its
+   * membership in the directory. Decided from the directory's rows as they are now, nothing
+   * written otherwise: refused `no-such-member` for an identity that is no member, and
+   * `last-admin` for the demotion of the only admin. The role it already holds is written again,
+   * which completes a change that was interrupted.
+   */
+  set(
+    tenant: Tenant,
+    identity: IdentityId,
+    role: TenantRole,
+  ): ResultAsync<void, OrganisationError> {
+    return this.#allowed(tenant, identity, role)
+      .andThen(() => this.#members.add(tenant.key, identity, role))
+      .andThen(() => this.#inDirectory(tenant, identity, role))
+  }
+
+  /** Whether `identity` is a member, and the change would not leave the organisation no admin. */
+  #allowed(
+    tenant: Tenant,
+    identity: IdentityId,
+    role: TenantRole,
+  ): ResultAsync<void, OrganisationError> {
+    return this.#lookup.roleOf(tenant, identity).andThen((current) => {
+      if (current === undefined) {
+        return errAsync<void, OrganisationError>(refused('no-such-member'))
+      }
+
+      if (current !== 'admin' || role === 'admin') {
+        return okAsync<void, OrganisationError>(undefined)
+      }
+
+      return this.#lookup
+        .adminsOf(tenant)
+        .andThen((admins) =>
+          admins > 1
+            ? okAsync<void, OrganisationError>(undefined)
+            : errAsync<void, OrganisationError>(refused('last-admin')),
+        )
+    })
+  }
+
+  /** The directory's membership of `identity` in the organisation holds `role`. */
+  #inDirectory(
+    tenant: Tenant,
+    identity: IdentityId,
+    role: TenantRole,
+  ): ResultAsync<void, OrganisationError> {
+    return writing(
+      this.#directory.db
+        .query(membershipSetRoleStatement, {
+          identity: recordId('identity', identity),
+          tenant: recordId('tenant', tenant.id),
+          role,
+        })
+        .retry(),
+      `could not set the role of ${identity} in ${tenant.key}`,
+    ).map(() => undefined)
+  }
+}

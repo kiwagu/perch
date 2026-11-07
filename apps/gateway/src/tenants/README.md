@@ -19,8 +19,8 @@ keeps one connection per organisation database in use, shared by every holder an
 nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
 unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
-organisations by key, lets an admin invite an existing identity by email and remove a member
-other than itself, lists the members with their emails to an admin (leaving out the rows of
+organisations by key, lets an admin invite an existing identity by email, change a member's role
+and remove a member other than itself, lists the members with their emails to an admin (leaving out the rows of
 identities that are gone), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change, answering once they
@@ -31,13 +31,13 @@ read again to be told, so a removal that fails after the directory (500) has rev
 all the same; asking again completes it. Until the revoke reaches the removed identity's
 connection, a batch its device pushes there may still be accepted: that window between the
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
-creations, the invites of it, its removals, its departure) run one after the other, each once
+creations, the invites of it, its role changes, its removals, its departure) run one after the other, each once
 the one before it and its notification have settled, so the directory and the organisation's
 database end as the last change left them and its devices hear the lists in that order. An
-invite, a removal and a departure also run, inside the identity's turn, in the turn of each
-organisation they change, and decide there from the rows as they are then: an invite or a
-removal is refused when its organisation went (`no-such-tenant`) or its admin is one no more,
-and a departure counts who else belongs. This holds within one gateway process; gateways in
+invite, a role change, a removal and a departure also run, inside the identity's turn, in the
+turn of each organisation they change, and decide there from the rows as they are then: an
+invite, a role change or a removal is refused when its organisation went (`no-such-tenant`) or
+its admin is one no more, and a departure counts who else belongs. This holds within one gateway process; gateways in
 several processes would need a durable revision of the memberships.
 An identity whose account goes leaves its organisations through `AccountDeparture`, judged by
 the directory's memberships and their roles: `blocked` is true while it is the only admin of a
@@ -61,9 +61,27 @@ ends the account's sessions there) happens only when it leaves; `after` once the
 (the auth module removes the account's own rows there), its failure the answer. A refused
 departure runs neither. It revokes no region and tells nobody: the caller closes the identity's
 connections in `before`, and the other members read the members when they ask.
+`OrganisationAdmission.admit(tenant, identity, role)` is the one operation that adds a member
+with a role: the directory's membership with that role, then the member row; an identity already in
+is refused `already-member` once its member row is written again with the role the directory
+holds. The direct invite calls it with `member`.
+`Organisations.setRole` changes a member's role for an admin, in the identity's turn and the
+organisation's, through the same check of the admin as the other changes (`OrganisationRoleChange`).
+It decides from the directory's rows as they are in the turn: an identity that is no member is
+refused `no-such-member`, the demotion of an admin while the directory counts one admin
+(`membership-admins.surql`) `last-admin`, and nothing is written. Otherwise it writes the
+organisation's member row first (the members list reads the roles there), then the directory's
+membership (`membership-set-role.surql`), then tells the identity's listeners. The directory is the
+authority, so a failure before its write leaves it as it was and the same admin asking again redoes
+the change, a self-demotion included; a failure of the telling is completed by asking again, but
+for a self-demotion, whose actor is no admin any more. The role an identity already holds is
+written and told again. Two admins demoting each other at once leave one admin: the second, no
+admin any more in its turn, is refused `not-admin`; a self-demotion and the other admin's departure
+at once leave one admin, the second refused `last-admin`.
 `Organisations` (`organisations/service.ts`) checks what is asked and orders the changes; each
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
-`OrganisationInvitation` (`invitation.ts`), `OrganisationRemoval` (`removal.ts`), and
+`OrganisationAdmission` (`admission.ts`), `OrganisationRoleChange` (`role-change.ts`),
+`OrganisationRemoval` (`removal.ts`), and
 `MembershipListeners` (`listeners.ts`), who hears the changes. They read the directory through
 `OrganisationLookup` and an organisation's `member` rows through `TenantMembers`;
 `MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a

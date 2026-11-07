@@ -67,8 +67,8 @@ function statusOf(code: OrganisationRefusalCode): number {
   return match(code)
     .with(P.union('invalid-key', 'invalid-name'), () => 400)
     .with(P.union('not-a-member', 'not-admin'), () => 403)
-    .with(P.union('no-such-tenant', 'no-such-identity'), () => 404)
-    .with(P.union('key-taken', 'already-member', 'self'), () => 409)
+    .with(P.union('no-such-tenant', 'no-such-identity', 'no-such-member'), () => 404)
+    .with(P.union('key-taken', 'already-member', 'self', 'last-admin'), () => 409)
     .exhaustive()
 }
 
