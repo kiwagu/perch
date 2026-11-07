@@ -23,15 +23,19 @@
  * Commits on the trunk, the engine's branch and an experiment, on a detached HEAD, and a merge
  * pass at once; a commit whose branch, files or message git cannot tell fails.
  *
- * A commit on `main` is judged as a landing instead (`takes/squash.ts`): a merge fails, and any
+ * A commit on `main` is judged as a landing instead (`takes/squash.ts`), against its parent:
+ * `main`'s HEAD, or, for an amend, the commit under the one it replaces. A merge fails, and any
  * other commit must be the squash of one branch's tip, with exactly one `Squashed-from: <branch>
  * (<tip>) [<cards>]` trailer naming a branch that exists by its exact ref and a tip that is its
- * tip or an ancestor of it, `main` under the tip, and the tree of the tip, a change of `main`.
- * Then every commit of the branch's round (the tip's commits that are neither on `main` nor
- * under the tip an earlier landing names, merges left out) is judged by the take rules as git
- * recorded it. The trunk and experiments never land, and the engine's branch is bound like any
- * branch but its round is not judged. `--round [<branch>]` prints that verdict for a branch
- * (the checked-out one by default) without writing anything.
+ * tip or an ancestor of it, the parent under the tip, and the tree of the tip, which differs from
+ * the parent's. Then every commit of the branch's round (the tip's commits that are neither on
+ * the parent nor under the tip an earlier landing names, merges left out) is judged by the take
+ * rules as git recorded it, so a recorded commit that breaks them stops the squash even when its
+ * own hook was skipped. The trunk and experiments never land, and the engine's branch is bound
+ * by the trailer like any branch but its round is not judged. `--round [<branch>]` prints that
+ * verdict for a branch (the checked-out one by default) without writing anything. The check sees
+ * only a commit that runs the commit-msg hook: a change of `main` that runs none (a
+ * fast-forward, a plain cherry-pick or revert, a rebase, `--no-verify`) goes unseen.
  *
  * Usage: bun run scripts/contract-take.ts <the message file>, from the commit-msg hook;
  * bun run scripts/contract-take.ts --round [<branch>] by hand.

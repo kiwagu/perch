@@ -93,8 +93,9 @@ pre-commit:
 
 # A merge git commits itself (`git merge` without a conflict to resolve) runs this hook,
 # not pre-commit. It runs pre-commit as a whole, the machine-local jobs included, so an
-# automatic merge, into main too, is checked as a commit is, and what a formatter fixes is
-# staged into it (lefthook stages fixed files only for a hook named pre-commit).
+# automatic merge is checked as a commit is, and what a formatter fixes is staged into it
+# (lefthook stages fixed files only for a hook named pre-commit). Those are the pre-commit
+# checks only: commit-msg runs after this hook and refuses a merge into main.
 # CONTRACT_AHEAD_MERGE tells scripts/contract-ahead.ts that git has written no MERGE_HEAD yet,
 # so it reads the commits the merge brings in from the merge's reflog action, and tells
 # scripts/contract-trunk.ts that the commit is a merge's.
@@ -109,10 +110,12 @@ pre-merge-commit:
 # line and holding the files it stages, or a business commit the rules let the branch write
 # itself, with `Written-on-branch: <card>`; nothing else there names the contract scope. The
 # trunk, the engine's branch, an experiment, a detached HEAD and a merge pass. A commit on main
-# is judged as a landing instead: the squash of a branch's tip, with `Squashed-from: <branch>
-# (<tip>) <card>`, whose round of commits is in a take's form; a merge into main is refused.
-# `bun run scripts/contract-take.ts --round` shows a branch's verdict beforehand
-# (scripts/contract-take.ts).
+# is judged as a landing instead: the squash of a branch's tip or of an ancestor of it, with
+# `Squashed-from: <branch> (<tip>) [<cards>]`, whose round of commits is in a take's form; the
+# engine's branch is bound by the trailer like any branch, its round is not judged. A merge
+# into main is refused. A change of main that runs no commit-msg (a fast-forward, a plain
+# cherry-pick or revert, a rebase, --no-verify) is not seen. `bun run scripts/contract-take.ts
+# --round` shows a branch's verdict beforehand (scripts/contract-take.ts).
 commit-msg:
   jobs:
     - name: an area branch takes the contract from the trunk
