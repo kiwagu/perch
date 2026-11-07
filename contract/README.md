@@ -1293,6 +1293,33 @@ that notices `lefthook.yml` changed (an edit in the same second as the last inst
 unnoticed), unless told not to (`--no-auto-install`), but a hook whose file went while
 `lefthook.yml` stayed the same stays missing.
 
+On `main` the same hook judges every commit as a landing (`scripts/contract-take.ts`), the squash
+of one branch. A merge into `main` is refused, as `main` takes only squashes; any other commit
+carries exactly one `Squashed-from: <branch> (<tip>) [<cards>]` trailer as its last paragraph,
+the cards optional. The branch must exist by its exact ref, `refs/heads/<branch>`, so a revision
+such as `feat/me~0` names none; the tip, 7 to 40 hex digits, must be that branch's tip or one of
+its ancestors, and a short id git cannot tell from another commit is refused. `main` (for an
+amend, the commit under the one it replaces) must lie under the tip, and the committed tree must
+equal the tip's tree and differ from `main`'s, so a landing is `git merge --squash <branch>` and
+nothing more or less. Then the branch's round is judged: the commits of the tip that are neither
+on `main` nor under the tip of an earlier landing's trailer, merges left out, each against the
+take rules above as git recorded it, its message and the files it changes, so a take no hook saw
+(a plain cherry-pick, a `--no-verify` commit) stops the squash. The refusal names each commit
+that fails and how to rewrite it; nothing bypasses it. `contract/trunk` and an experiment never
+land, an experiment being split into area branches first. The engine's branch,
+`feat/contract-first-pass`, is bound like any other branch, but its round is not judged, as its
+meta commits carry the `contract` scope with the engine's own files.
+`bun run scripts/contract-take.ts --round [<branch>]` prints that verdict for a branch (the
+checked-out one by default) without writing anything, so it runs before the gates; it ends with
+`contract take: every commit of <branch> since its last landing (<n>) is in its form` when every
+commit of the round is. The check has limits. A merge's own resolution is not judged, as a merge
+of the round is left out. Without `/proc` (another system) an amend is not detected, so the
+commit is judged against HEAD, and an amend that adds no change to `main` is refused as not
+changing it. An earlier landing's tip that the clone lacks cannot bound the round: its commits
+are judged again, and a refusal names those tips, so that the branch which landed them can be
+fetched. An amend of a landing is made before its merge back into the branch: after it, the
+replaced landing falls into the round and is judged there.
+
 ## The manifest
 
 `bun run contract:manifest` builds `ui-manifest/manifest.json` from the contract files and

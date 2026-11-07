@@ -20,10 +20,21 @@
  * commit amends and how git cleans its message up are read from the `git commit` running the hook
  * (`takes/command.ts`): an amend is judged as the whole commit it leaves, against HEAD's parent,
  * the amend of a merge passing as the merge it stays, and the message as git records it.
- * Commits on `main`, the trunk, the engine's branch and an experiment, on a detached HEAD, and a
- * merge pass at once; a commit whose branch, files or message git cannot tell fails.
+ * Commits on the trunk, the engine's branch and an experiment, on a detached HEAD, and a merge
+ * pass at once; a commit whose branch, files or message git cannot tell fails.
  *
- * Usage: bun run scripts/contract-take.ts <the message file>, from the commit-msg hook.
+ * A commit on `main` is judged as a landing instead (`takes/squash.ts`): a merge fails, and any
+ * other commit must be the squash of one branch's tip, with exactly one `Squashed-from: <branch>
+ * (<tip>) [<cards>]` trailer naming a branch that exists by its exact ref and a tip that is its
+ * tip or an ancestor of it, `main` under the tip, and the tree of the tip, a change of `main`.
+ * Then every commit of the branch's round (the tip's commits that are neither on `main` nor
+ * under the tip an earlier landing names, merges left out) is judged by the take rules as git
+ * recorded it. The trunk and experiments never land, and the engine's branch is bound like any
+ * branch but its round is not judged. `--round [<branch>]` prints that verdict for a branch
+ * (the checked-out one by default) without writing anything.
+ *
+ * Usage: bun run scripts/contract-take.ts <the message file>, from the commit-msg hook;
+ * bun run scripts/contract-take.ts --round [<branch>] by hand.
  */
 
 import { headRef } from './gates/tree.ts'
