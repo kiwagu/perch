@@ -13,61 +13,14 @@
  * from the hook git runs before an automatic merge's commit.
  */
 
-import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-
 import { DOMAIN_DIR, isBusinessFile, SCENARIOS_DIR, VOCABULARY_FILE } from '@workspace/ui-contract'
 
 import { headRef } from './gates/tree.ts'
+import { merging, stagedFiles } from './staged-commit.ts'
 
 const TRUNK = 'contract/trunk'
 
 const TRUNK_REF = `refs/heads/${TRUNK}`
-
-/** Set by the hook git runs before an automatic merge's commit (`lefthook.yml`). */
-const MERGE_HOOK = 'CONTRACT_AHEAD_MERGE'
-
-/** Runs git with `args` and returns its exit status and what it printed. */
-function git(args: readonly string[]): { readonly status: number | null; readonly out: string } {
-  const run = spawnSync('git', [...args], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit'],
-  })
-
-  return { status: run.status, out: run.stdout }
-}
-
-/**
- * Whether the commit is a merge's: one that waits for its commit (after a conflict, or
- * `--no-commit`) has a MERGE_HEAD, and the hook before an automatic merge's commit, which has
- * none yet, says so in its variable.
- */
-function merging(): boolean {
-  if (process.env[MERGE_HOOK] === '1') {
-    return true
-  }
-
-  const { status, out } = git(['rev-parse', '--git-path', 'MERGE_HEAD'])
-
-  return status === 0 && existsSync(out.trim())
-}
-
-/**
- * The files the commit stages, a move as both its paths and a submodule even where the
- * configuration ignores it, or undefined when git fails.
- */
-function stagedFiles(): readonly string[] | undefined {
-  const { status, out } = git([
-    'diff',
-    '--cached',
-    '--name-only',
-    '--no-renames',
-    '--ignore-submodules=none',
-    '-z',
-  ])
-
-  return status === 0 ? out.split('\0').filter((file) => file !== '') : undefined
-}
 
 /** What the hook says of a commit that stages `outside`, files beyond the business layer. */
 function refusal(outside: readonly string[]): string {
