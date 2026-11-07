@@ -655,6 +655,18 @@ describe('contract-take on main', () => {
     refuses(landing(root, squashedFrom(other)), `${other} is not on feat/me`)
   })
 
+  it("refuses an unknown branch in the check's own words, with no line of git's above them", () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const result = landing(root, squashedFrom(staged(fixture), 'feat/gone'))
+
+    refuses(result)
+    expect(result.stderr).not.toContain('fatal:')
+    expect(result.stderr).toBe(
+      `contract take: this commit's trailer names feat/gone, and git knows no branch feat/gone in this clone.\nA landing on main is ${SQUASH_FORM}\n`,
+    )
+  })
+
   it('refuses a landing that names its branch by a revision of it, and passes one by its name', () => {
     const fixture = trunk()
     const { root } = fixture

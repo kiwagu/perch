@@ -35,10 +35,17 @@ function commitOf(rev: string): string | undefined {
 
 /**
  * The id `refs/heads/<branch>` holds, read from that ref exactly, never from a revision of it
- * (`feat/me~0`), or undefined when git has no such branch.
+ * (`feat/me~0`), or undefined when git has no such branch. Whether the ref exists is asked first,
+ * in silence: `show-ref --hash` reports a missing ref on stderr, above the check's own refusal.
  */
 function branchTip(branch: string): string | undefined {
-  const { status, out } = git(['show-ref', '--verify', '--hash', `refs/heads/${branch}`])
+  const ref = `refs/heads/${branch}`
+
+  if (git(['show-ref', '--verify', '--quiet', ref]).status !== 0) {
+    return undefined
+  }
+
+  const { status, out } = git(['show-ref', '--verify', '--hash', ref])
   const id = out.trim()
 
   return status === 0 && id !== '' ? id : undefined
