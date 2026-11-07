@@ -1,19 +1,24 @@
 import { match, P } from 'ts-pattern'
 
-import { type Ability, defineAbilityFor, NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
+import { defineAbilityFor, NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 import {
   identityRegions,
   type RegionRef,
   type ReplicaSchema,
   tenantKeyOf,
 } from '@workspace/replica'
-import type { ClientMessage, Membership } from '@workspace/replica/protocol'
+import type { ClientMessage, Membership, TenantRole } from '@workspace/replica/protocol'
 import type { Actor } from '@workspace/replica/server'
 
 /** A region the device may name, and who it pushes there as. */
 export interface DeviceRegion {
   readonly ref: RegionRef
   readonly actor: Actor
+}
+
+/** Who an identity pushes as in an organisation's region: what its role allows there. */
+export function memberActor(identity: string, role: TenantRole, schema: ReplicaSchema): Actor {
+  return { id: identity, ability: defineAbilityFor({ id: identity, role }, schema) }
 }
 
 /**
@@ -32,14 +37,14 @@ export function regionsFor(
       const key = tenantKeyOf(ref)
       const role = key === undefined ? undefined : roles.get(key)
       // Only the private region is the identity's own; a tenant region without a role allows nothing.
-      const ability: Ability =
+      const actor: Actor =
         ref.kind === 'private'
-          ? OWNER_ABILITY
+          ? { id: identity, ability: OWNER_ABILITY }
           : role === undefined
-            ? NO_ABILITY
-            : defineAbilityFor({ id: identity, role }, schema)
+            ? { id: identity, ability: NO_ABILITY }
+            : memberActor(identity, role, schema)
 
-      return [ref.id, { ref, actor: { id: identity, ability } }]
+      return [ref.id, { ref, actor }]
     }),
   )
 }

@@ -7,6 +7,7 @@ import {
   type Membership,
   type ServerMessage,
   serverMessage,
+  type TenantRole,
 } from '@workspace/replica/protocol'
 
 import type { ConnectionState } from './connected-device'
@@ -136,6 +137,17 @@ export class SyncConnection {
    */
   revoke(region: string): Promise<void> {
     return this.#changes.revoke(region)
+  }
+
+  /**
+   * The identity's role in the organisation of `region` is now `role`: at once, whatever message
+   * is being handled, the device's pushes there are judged by it, those already queued included,
+   * and so are the ones of a subscription it makes later. Nothing is sent: the memberships
+   * follow. Resolves once that holds; while the hello is under way it applies right after the
+   * welcome, in the order of the changes told. Never rejects.
+   */
+  rerole(region: string, role: TenantRole): Promise<void> {
+    return this.#changes.rerole(region, role)
   }
 
   /**

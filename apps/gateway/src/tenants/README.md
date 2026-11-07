@@ -74,7 +74,10 @@ with the role the directory holds (as the admission does for `already-member`: a
 failed at the directory, followed by the other admin's, would otherwise leave the only admin shown
 as a member); a failure of that write answers instead, and nobody is told. Otherwise it writes the
 organisation's member row first (the members list reads the roles there), then the directory's
-membership (`membership-set-role.surql`), then tells the identity's listeners. The directory is the
+membership (`membership-set-role.surql`), then has the identity's open connections push into the
+organisation's region as the new role allows (the `rerole` option, with the role known and no read,
+as a removal revokes the region: a failure of the telling leaves no old privilege alive), then
+tells the identity's listeners. The directory is the
 authority, so a failure before its write leaves it as it was and the same admin asking again redoes
 the change, a self-demotion included; a failure of the telling is completed by asking again, but
 for a self-demotion, whose actor is no admin any more. The role an identity already holds is
@@ -84,7 +87,8 @@ at once leave one admin, the second refused `last-admin`.
 `Organisations` (`organisations/service.ts`) checks what is asked and orders the changes; each
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 `OrganisationAdmission` (`admission.ts`), `OrganisationRoleChange` (`role-change.ts`),
-`OrganisationRemoval` (`removal.ts`), and
+`OrganisationRemoval` (`removal.ts`), `AdminTurn` (`admin-turn.ts`, the organisation's turn held for
+a change one of its admins asked, once the admin is found still one), and
 `MembershipListeners` (`listeners.ts`), who hears the changes. They read the directory through
 `OrganisationLookup` and an organisation's `member` rows through `TenantMembers`;
 `MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a

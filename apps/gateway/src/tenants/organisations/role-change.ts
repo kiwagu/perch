@@ -1,6 +1,6 @@
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
-import { type LocalDb, recordId } from '@workspace/data'
+import { dataError, type LocalDb, recordId, tenantRegionId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { TenantRole } from '@workspace/replica/protocol'
 
@@ -15,28 +15,38 @@ export interface OrganisationRoleChangeOptions {
   readonly directory: LocalDb
   readonly lookup: OrganisationLookup
   readonly members: TenantMembers
+  /**
+   * Judges the pushes of an identity's open connections into the region of an organisation by the
+   * role it has there from now on, at once; resolves once every one of them does.
+   */
+  readonly rerole: (identity: IdentityId, region: string, role: TenantRole) => Promise<void>
 }
 
 /**
  * The change of a member's role in an organisation. The directory holds the authority (who is an
  * admin, how many admins there are), so it is written last: a failure before its write leaves the
  * authority as it was, and asking again redoes the whole change, a self-demotion included, as its
- * actor is still an admin to the directory. Each write is the same again when repeated.
+ * actor is still an admin to the directory. Each write is the same again when repeated. Right
+ * after the directory write, before anything can fail that tells the identity's devices, its open
+ * connections push into the organisation's region as the new role allows, the role known without
+ * a read, as a removal takes the region from them.
  */
 export class OrganisationRoleChange {
   readonly #directory: LocalDb
   readonly #lookup: OrganisationLookup
   readonly #members: TenantMembers
+  readonly #rerole: OrganisationRoleChangeOptions['rerole']
 
   constructor(options: OrganisationRoleChangeOptions) {
     this.#directory = options.directory
     this.#lookup = options.lookup
     this.#members = options.members
+    this.#rerole = options.rerole
   }
 
   /**
    * `identity` holds `role` in the organisation from now on: its member row first, then its
-   * membership in the directory. Decided from the directory's rows as they are now: refused
+   * membership in the directory, then its open connections are re-judged. Decided from the directory's rows as they are now: refused
    * `no-such-member` for an identity that is no member, writing nothing, and `last-admin` for
    * the demotion of the only admin, once its member row is written again with the role the
    * directory holds (a half-done self-demotion of it, followed by the other admin's, would
@@ -51,6 +61,7 @@ export class OrganisationRoleChange {
     return this.#allowed(tenant, identity, role)
       .andThen(() => this.#members.add(tenant.key, identity, role))
       .andThen(() => this.#inDirectory(tenant, identity, role))
+      .andThen(() => this.#reroleConnections(tenant, identity, role))
   }
 
   /**
@@ -100,5 +111,22 @@ export class OrganisationRoleChange {
         .retry(),
       `could not set the role of ${identity} in ${tenant.key}`,
     ).map(() => undefined)
+  }
+
+  /** The open connections of `identity` push into the organisation's region as `role` allows. */
+  #reroleConnections(
+    tenant: Tenant,
+    identity: IdentityId,
+    role: TenantRole,
+  ): ResultAsync<void, OrganisationError> {
+    return ResultAsync.fromPromise(
+      this.#rerole(identity, tenantRegionId(tenant.key), role),
+      (cause) =>
+        dataError(
+          'data:WRITE_FAILED',
+          `could not re-judge the pushes of ${identity} in ${tenant.key}`,
+          cause,
+        ),
+    )
   }
 }

@@ -105,7 +105,8 @@ interface Held {
  * engine of its own, and three identities: ann, bob and cat. A test can make one statement fail
  * on the organisations' databases, as a broken database would, or hold one there; it can watch
  * and fail the directory's statements. The connections of the identities are a record of the
- * regions taken from them; `steps` lists those revocations and the member-row deletes in order.
+ * regions taken from them and the roles given again; `steps` lists those revocations and
+ * re-judgings and the member-row deletes in order.
  */
 async function harness() {
   const directory = (
@@ -118,6 +119,8 @@ async function harness() {
   let held: Held | undefined
   /** Hears each statement sent to the directory; it may throw to make the statement fail. */
   let directoryQueries: ((text: string) => void) | undefined
+  /** Whether the connections take a re-judging. */
+  let rerolls = true
   const steps: string[] = []
   const databases = new TenantDatabases({
     open: (key) => {
@@ -161,6 +164,13 @@ async function harness() {
     databases,
     revoke: async (identity, region) => {
       steps.push(`revoke ${identity} ${region}`)
+    },
+    rerole: async (identity, region, role) => {
+      steps.push(`rerole ${identity} ${region} ${role}`)
+
+      if (!rerolls) {
+        throw new Error('the registry is down')
+      }
     },
     // No device subscribes to a region here: the hub has none to let go of.
     hub: { retire: () => okAsync(undefined) },
@@ -268,6 +278,11 @@ async function harness() {
     directoryQueries = listener
   }
 
+  /** The connections answer a re-judging (the default), or fail it. */
+  const letRerole = (allowed: boolean) => {
+    rerolls = allowed
+  }
+
   /**
    * Watches the queues of the organisations' turns. `untilQueued()` answers a promise that
    * resolves once a change asks for an organisation's turn after that call, holding it or
@@ -313,6 +328,7 @@ async function harness() {
     refuseInTenants,
     holdInTenants,
     onDirectoryQuery,
+    letRerole,
     watchQueue,
   }
 }
@@ -940,6 +956,70 @@ describe('Organisations.setRole', () => {
     expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
     expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
     expect(heard).toEqual([])
+  })
+
+  it("re-judges the identity's live connections right after the directory write, before the telling", async () => {
+    const { organisations, ann, bob, steps, onDirectoryQuery } = await withBob()
+
+    organisations.onChange(async () => {
+      steps.push('told')
+    })
+    onDirectoryQuery((text) => {
+      if (text === membershipSetRoleStatement) {
+        steps.push('directory write')
+      }
+    })
+
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+    expect(steps).toEqual(['directory write', `rerole ${bob.id} tenant:acme admin`, 'told'])
+  })
+
+  it('re-judges a role written again, and no connection for a change that is refused', async () => {
+    const { organisations, ann, bob, cat, steps } = await withBob()
+    const set = (actor: IdentityId, identity: IdentityId, role: 'member' | 'admin') =>
+      organisations.setRole({ actor, key: 'acme', identity, role })
+
+    expect(await set(ann.id, bob.id, 'member')).toEqual(ok(undefined))
+    expect(steps).toEqual([`rerole ${bob.id} tenant:acme member`])
+    steps.splice(0)
+
+    expect((await set(ann.id, ann.id, 'member'))._unsafeUnwrapErr()).toEqual(refused('last-admin'))
+    expect((await set(ann.id, cat.id, 'admin'))._unsafeUnwrapErr()).toEqual(
+      refused('no-such-member'),
+    )
+    expect((await set(bob.id, bob.id, 'admin'))._unsafeUnwrapErr()).toEqual(refused('not-admin'))
+    expect(steps).toEqual([])
+  })
+
+  it('a change whose connections fail to be re-judged answers failed, telling nobody, and asking again completes it', async () => {
+    const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf, letRerole } =
+      await withBob()
+
+    letRerole(false)
+
+    expect(
+      (
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: bob.id,
+          role: 'admin',
+        })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    // Both rows were written before.
+    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+    expect(heard).toEqual([])
+
+    letRerole(true)
+
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
   })
 
   it('refuses a member changing a role, an outsider and an unknown organisation', async () => {

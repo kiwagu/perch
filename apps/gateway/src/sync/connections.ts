@@ -1,6 +1,6 @@
 import { type DataError, dataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import type { Membership } from '@workspace/replica/protocol'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 /** A device's open connection, as far as its identity's memberships and sessions go. */
 export interface MembershipsListener {
@@ -14,6 +14,12 @@ export interface MembershipsListener {
    * it at once, whatever it is doing. Resolves once that holds; never rejects.
    */
   revoke(region: string): Promise<void>
+  /**
+   * The identity's role in the organisation of `region` is now `role`: the device's next pushes
+   * there are judged by it at once, whatever it is doing, the ones it has queued already
+   * included. Nothing is sent: the memberships follow. Resolves once that holds; never rejects.
+   */
+  rerole(region: string, role: TenantRole): Promise<void>
   /**
    * The device was signed out, from another device or over one of its sockets, or signed in
    * again into a new session: its socket closes with `code` at once, whatever it is doing.
@@ -132,6 +138,14 @@ export class ConnectionRegistry {
    */
   async revoke(identity: IdentityId, region: string): Promise<void> {
     await Promise.all(this.forIdentity(identity).map((each) => each.revoke(region)))
+  }
+
+  /**
+   * Judges the pushes of every live connection of `identity` into `region` by `role` from now
+   * on; resolves once each does.
+   */
+  async rerole(identity: IdentityId, region: string, role: TenantRole): Promise<void> {
+    await Promise.all(this.forIdentity(identity).map((each) => each.rerole(region, role)))
   }
 
   /**

@@ -120,6 +120,7 @@ export async function departureHarness() {
     }),
     databases,
     revoke: async () => {},
+    rerole: async () => {},
     hub,
   })
   const departure = new AccountDeparture({ directory, databases, hub })

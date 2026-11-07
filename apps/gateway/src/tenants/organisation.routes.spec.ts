@@ -446,6 +446,7 @@ describe('organisationRoutes', () => {
         directory,
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
+        rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
       }),
       routeOptions(new RequestLimits({ clock: manualClock() })),
@@ -474,6 +475,7 @@ describe('organisationRoutes', () => {
         directory,
         databases: root.databases,
         revoke: (identity, region) => root.connections.revoke(identity, region),
+        rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
       })
       const routes = organisationRoutes(

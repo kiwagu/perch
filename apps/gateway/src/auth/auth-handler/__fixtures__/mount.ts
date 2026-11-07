@@ -249,7 +249,13 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
 
   // No device subscribes to a region here: the hub has none to let go of.
   const hub = { retire: () => okAsync(undefined) }
-  const organisations = new Organisations({ directory, databases, revoke: async () => {}, hub })
+  const organisations = new Organisations({
+    directory,
+    databases,
+    revoke: async () => {},
+    rerole: async () => {},
+    hub,
+  })
   const departure = new AccountDeparture({ directory, databases, hub })
 
   return {
@@ -455,6 +461,7 @@ export function fakeConnection(): MembershipsListener & { readonly ended: number
     ended,
     memberships: () => Promise.resolve(),
     revoke: () => Promise.resolve(),
+    rerole: () => Promise.resolve(),
     end: (code) => {
       ended.push(code)
 

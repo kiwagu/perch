@@ -39,8 +39,16 @@ note names its own member as its author, and nobody changes the author of a note
 subscription carries the device's ability, built from its membership's role and the replica
 schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
 deletes only its own notes, an admin any, and the hub rejects any other write as
-`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
-role applies to a device's subscriptions from its next subscribe or hello. The hub also refuses
+`forbidden-action`. A change of role applies to a device's pushes at once, by two paths. Right
+after a role change's directory write, `Organisations` has the registry re-judge the identity's
+open connections in that organisation's region (`ConnectionRegistry.rerole`, as a removal revokes
+it): each connection builds the actor again from the role, without reading anything, keeps it in
+the regions the device may name, so a subscription it makes later pushes as it, and swaps it at the
+hub when the device subscribed (`RegionHub.changeActor`); a telling that fails afterwards leaves no
+old privilege alive. Whenever memberships are told, the connection also swaps the actor of every
+region it keeps (`RegionSubscriptions.changeActors`) before it sends the `memberships` message, a
+role changed or not. A batch already queued at the hub is judged by the actor the hub holds when it
+takes the batch in. The hub also refuses
 a batch that brings changes under a Loro peer another identity's batch was accepted under in the
 region (`foreign-peer`), so no member can write as another member's device and stop it.
 A connection registers in the `ConnectionRegistry` (`connections.ts`) once its session is read;
@@ -48,7 +56,8 @@ when an identity's memberships change, each of its connections leaves the region
 may no longer name at once, without waiting for the device's messages under way (one handled
 from then on that names such a region closes the socket with 4403, and the hub sends it nothing
 more there), and is sent a `memberships` message; it subscribes to a new organisation's region
-itself. A change told while a connection's hello is under way applies right after its welcome.
+itself. A change told while a connection's hello is under way (memberships, a revocation or a
+re-judging of a role) applies right after its welcome, in the order it was told.
 Text the protocol refuses (4400, a hello of an earlier protocol or one that names no device
 included), a token that reads no session of the device (4401), a region the device may not name
 (4403) and a hello that did not come within 10 seconds (4408, after which the device connects
@@ -93,7 +102,8 @@ reaches its logs.
   also exports `SocketLike`, `SyncConnectionDeps` and `SUPERSEDED` (1000, the close of a socket
   another connection or a new session of the device took over).
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
-  closes them, tells them their identity's memberships and takes regions from them.
+  closes them, tells them their identity's memberships, takes regions from them and re-judges the
+  role they push as in a region.
 - Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 8.
 
 ## Commands

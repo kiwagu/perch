@@ -170,11 +170,13 @@ export function createGatewayRoot(
       onFailure: (error) => connectionsLog.error({ code: error.code }, error.message),
     })
     // A removal takes the organisation's region from the removed identity's connections before
-    // anything else can fail; every change of memberships resolves once its devices were told.
+    // anything else can fail, and a role change has them push as the new role right after the
+    // directory's write; every change of memberships resolves once its devices were told.
     const organisations = new Organisations({
       directory: local,
       databases,
       revoke: (identity, region) => connections.revoke(identity, region),
+      rerole: (identity, region, role) => connections.rerole(identity, region, role),
       hub,
     })
 
