@@ -6,7 +6,7 @@
 
 import { git } from '../staged-commit.ts'
 
-import { SQUASHED } from './form.ts'
+import { COLON_TRAILERS, SQUASHED } from './form.ts'
 
 /** What a landing's trailer names: the branch it squashed, the branch's tip, and its cards. */
 export interface Landed {
@@ -59,6 +59,7 @@ const SEPARATOR = '\u001f'
 /** The tips the landings on `parent`'s history name, oldest first, each once, or undefined when git fails. */
 function landedTips(parent: string): readonly string[] | undefined {
   const { status, out } = git([
+    ...COLON_TRAILERS,
     'log',
     '--reverse',
     parent,

@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { git } from '../staged-commit.ts'
 
 import type { Cleanup } from './command.ts'
+import { COLON_TRAILERS } from './form.ts'
 
 export interface Trailer {
   readonly key: string
@@ -39,11 +40,12 @@ function scissors(comment: string): RegExp {
  * The subject and trailers of `text` as git reads them: the subject its first line that is not
  * blank, the trailers what `git interpret-trailers --parse` lists, each split at its first colon,
  * the value trimmed; comment lines start with `comment` where one is given, else with what the
- * repository's own setting says. Undefined when git cannot read them.
+ * repository's own setting says. A trailer is read with its colon, whatever `trailer.separators`
+ * is set to. Undefined when git cannot read them.
  */
 export function readingOf(text: string, comment?: string): Reading | undefined {
   const as = comment === undefined ? [] : ['-c', `core.commentString=${comment}`]
-  const parsed = git([...as, 'interpret-trailers', '--parse'], text)
+  const parsed = git([...COLON_TRAILERS, ...as, 'interpret-trailers', '--parse'], text)
 
   if (parsed.status !== 0) {
     return undefined

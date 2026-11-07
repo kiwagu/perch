@@ -15,6 +15,13 @@ export const WRITTEN = 'Written-on-branch'
 /** The trailer of a landing on `main`: the branch it squashes, the branch's tip, then its cards. */
 export const SQUASHED = 'Squashed-from'
 
+/**
+ * What makes git read a trailer as the forms here write it, `Key: value`, whatever
+ * `trailer.separators` the configuration holds: a configuration that prints a colon trailer with
+ * another separator, or leaves it out of the trailers, is not what a landing or a take is judged by.
+ */
+export const COLON_TRAILERS: readonly string[] = ['-c', 'trailer.separators=:']
+
 export const LAYER = `${DOMAIN_DIR}/, ${VOCABULARY_FILE}, ${SCENARIOS_DIR}/`
 
 export const TAKEN_FORM = `${TAKEN}: ${TRUNK} <first>^..<last> <card>`

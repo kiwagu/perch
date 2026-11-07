@@ -949,3 +949,74 @@ describe('contract-take on main', () => {
     )
   })
 })
+
+/** Sets `name` to `value` in `root`'s own configuration, as a developer's configuration of git does. */
+function configure(root: string, name: string, value: string): void {
+  git(root, 'config', '--local', name, value)
+}
+
+/**
+ * Sets the `trailer.separators` of `root` to `value`, and checks that git now parses a colon
+ * trailer without its colon, so that a reader which trusts the setting reads none.
+ */
+function separate(root: string, value: string): void {
+  configure(root, 'trailer.separators', value)
+  expect(feed(root, 'subject\n\nKey: value\n', 'interpret-trailers', '--parse')).not.toContain(
+    'Key: value',
+  )
+}
+
+describe('contract-take under the configuration of git', () => {
+  it("reads a landing's trailer and the round it lands whatever separators git is set to", () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    separate(root, '=:')
+
+    const tip = staged(fixture)
+
+    passes(commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(tip)))
+    expect(git(root, 'rev-parse', 'main^{tree}')).toBe(git(root, 'rev-parse', 'feat/me^{tree}'))
+  })
+
+  it("reads a recorded take's source whatever separators git is set to", () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    separate(root, '=:')
+    take(fixture)
+    code(root, 'shown')
+    passes(runRound(root))
+  })
+
+  it("reads an incoming take's source whatever separators git is set to", () => {
+    const { root, screen } = trunk()
+
+    separate(root, '=:')
+    pick(root, screen)
+    passes(
+      commitThroughHook(
+        root,
+        '-m',
+        'feat(contract): model the page',
+        '-m',
+        `Taken-from: contract/trunk ${screen} ABC-1`,
+      ),
+    )
+  })
+
+  it('leaves out what an earlier landing carried whatever separators git is set to', () => {
+    const { root } = trunk()
+
+    separate(root, '=')
+    oldForm(root)
+    land(root, 'feat/me')
+    merge(root, 'main')
+    code(root, 'shown')
+
+    const result = runRound(root)
+
+    passes(result)
+    expect(result.stdout).toEndWith('(1) is in its form\n')
+  })
+})
