@@ -119,7 +119,8 @@ for Bun.
     `{ search }`, the search parameter a field starts with; the source of
     `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
-    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
+    and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
+    on (the signed-in one, or the one an email parameter of a guest's action names), a
     reserved word no parameter of an action that sends a mail or a notice takes, the language
     also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's,
     a reserved word no parameter of an action that sends a mail takes, and

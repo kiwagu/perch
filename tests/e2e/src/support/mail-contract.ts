@@ -15,8 +15,9 @@ const { screens, problems } = loadScreens(ROOT)
 export interface MailValues {
   readonly params: Readonly<Record<string, string>>
   /**
-   * The account the mail is about: its email for a mail declared `to: account` (the signed-in
-   * account's), its language for one declared `language: account`.
+   * The account the mail is about, the one the action acts on (the signed-in account, or the one
+   * an email parameter of a guest's action names): its email for a mail declared `to: account`,
+   * its language for one declared `language: account`.
    */
   readonly account?: { readonly email: string; readonly language: string }
 }

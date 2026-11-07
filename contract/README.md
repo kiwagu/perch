@@ -124,14 +124,17 @@ The authored files, edited by hand or by a model in the modeling thread:
   the reserved anchors and the readiness line.
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
-  mail goes to, or `account`, the signed-in account's own email; `language`, the parameter
-  that holds the mail's language, `account`, the account's settings once it has them, else
-  the language it signed up in, or `recipient`, the account whose email the mail goes to, read
-  the same way, and the signed-in account's when no account has that email (an invitation
-  speaks the language of the account it invites, else the inviter's); `link`, the `screen` the
-  mail's link opens and the `search` parameter of that screen's route that carries the link's
-  token. `account` is a reserved word there: it always names the signed-in account, so an
-  action that sends a mail has no parameter named `account`; nor one named `recipient`. The
+  mail goes to, or `account`, the email of the account the action acts on; `language`, the
+  parameter that holds the mail's language, `account`, that account's settings once it has
+  them, else the language it signed up in, or `recipient`, the account whose email the mail
+  goes to, read the same way, and the signed-in account's when no account has that email (an
+  invitation speaks the language of the account it invites, else the inviter's); `link`, the
+  `screen` the mail's link opens and the `search` parameter of that screen's route that carries
+  the link's token. `account` is a reserved word there: it names the account the action acts
+  on, the signed-in one, or, for an action a guest runs, the one whose email its parameter
+  names (the resend of a verification, the reset of a password, which send nothing to an email
+  with no account), so an action that sends a mail has no parameter named `account`; nor one
+  named `recipient`. The
   check holds `to` and `language` to the action's parameters, refuses a parameter named
   `account` on an action that sends a mail or a notice and one named `recipient` on an action
   that sends a mail, takes `recipient` only as the language of a mail whose `to` is a
