@@ -34,7 +34,9 @@ modules' routes.
 
 - `application/shell-machine/`: the frame's flow as its machine (held to the contract by
   `platform/machines.spec.ts`; `machine.ts` assembles the events and deps of `events.ts` and
-  the transitions several states share, `transitions.ts`), made by the start (`src/main.tsx`) through
+  the transitions several states share, `transitions.ts`; `frame-states.ts` names each state of the
+  two regions of `running`, `screen` and `install`, as the partial value `matches` takes), made by
+  the start (`src/main.tsx`) through
   `presentation/shell/shell-frame.tsx` and handed to the shell container; `setting-writes.ts`
   tells a setting another tab or device stored from this tab's own write coming back.
 - `presentation/shell/shell.container.tsx` and `shell-view/`: the frame (`frame.view.tsx` lays it
@@ -75,8 +77,8 @@ modules' routes.
   before the container listened (the sync of a saved account starts with the page) is read from
   the session on mount (`protocolRefused()`). The flow shows
   `app-shell.update-message` (`new-version`, or `protocol-outdated`, which a newer build heard
-  later does not replace) with `app-shell.update-button` above the page, in `ready` and around a
-  crash, until the page loads again. The button asks the leave guard first (a leaving control)
+  later does not replace) with `app-shell.update-button` above the page, in `running` whatever the
+  screen and the install window are doing, until the page loads again. The button asks the leave guard first (a leaving control)
   and loads the page again. The tab going to the background (`platform.tab-hidden`, sent on
   `visibilitychange`) loads it again by itself when an update waits, no field holds unsaved
   input (`live.unsaved`, from the kit's `useUnsavedInput`) and this tab has not done so for the
@@ -87,15 +89,17 @@ modules' routes.
 - The state of the sync: the shell container reads `SYNC_STATUS` (`useSyncExternalStore`) and
   sends its value as the frame's platform event (`platform.synced`, `platform.sending`,
   `platform.connecting`, `platform.offline`, `platform.sync-stopped`) while an account is signed
-  in; the flow shows `app-shell.sync-message` with that code in the header, in `ready` and around
-  a crash, and clears it when the account signs out. On a phone it takes two short lines at most.
+  in; the flow shows `app-shell.sync-message` with that code in the header, in `running` whatever
+  the screen and the install window are doing, and clears it when the account signs out. On a phone it takes two short lines at most.
 - Installing the app: the shell container reads the device's install (`platform/install.ts`,
   `useDeviceInstall`) and sends its offer as the frame's platform event (`platform.install-offered`,
   `platform.install-by-steps`, `platform.installed`); the flow shows `app-shell.install-message`
-  above the page in `ready` (`install-available` with `app-shell.install-button`, or
-  `install-by-steps` with the steps), and both its buttons run an invoke (`installing`: the
-  browser's window, a decline put off as later; `postponing`: three days on this device) that
-  clears it. Around a crash its buttons take nothing.
+  above the page in `running` (`install-available` with `app-shell.install-button`, or
+  `install-by-steps` with the steps), whatever the screen is doing, and both its buttons run an
+  invoke in the `install` region (`installing`: the browser's window, a decline put off as later;
+  `postponing`: three days on this device) that clears it. Its buttons take nothing around a
+  crash or a page loading again (the guard `screenReady`), and no quiet reload starts while the
+  browser's window is open.
 - Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
   key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no

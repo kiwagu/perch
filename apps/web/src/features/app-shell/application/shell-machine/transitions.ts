@@ -1,6 +1,6 @@
 /**
  * The transitions and effects the frame's flow writes in several states, each as the machine's
- * config takes it.
+ * config takes it, and the frame's messages that `running` takes whatever its regions are doing.
  */
 
 export const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
@@ -82,4 +82,24 @@ export const PROTOCOL_OUTDATED = {
     'noteProtocol',
     { type: 'show', params: { anchor: 'app-shell.update-message', codes: ['protocol-outdated'] } },
   ],
+} as const
+/**
+ * The messages the frame hears while it runs, whatever the screen and the reminder to install are
+ * doing: the `on` of the state that holds both.
+ */
+export const FRAME_MESSAGES = {
+  'app-shell.theme-select': THEME_CHOSEN,
+  'platform.theme-set': THEME_SET,
+  'model.settings.locale': LOCALE_STORED,
+  'model.settings.theme': THEME_STORED,
+  'platform.signed-in': SIGNED_IN,
+  'platform.signed-out': SIGNED_OUT,
+  'platform.change-rejected': { actions: REJECTED },
+  'platform.changes-reloaded': { actions: RELOADED },
+  'platform.new-version': NEW_VERSION,
+  'platform.protocol-refused': PROTOCOL_OUTDATED,
+  ...SYNC,
+  'platform.install-offered': INSTALL_AVAILABLE,
+  'platform.install-by-steps': INSTALL_BY_STEPS,
+  'platform.installed': { actions: INSTALL_GONE },
 } as const
