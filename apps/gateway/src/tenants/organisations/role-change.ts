@@ -36,10 +36,12 @@ export class OrganisationRoleChange {
 
   /**
    * `identity` holds `role` in the organisation from now on: its member row first, then its
-   * membership in the directory. Decided from the directory's rows as they are now, nothing
-   * written otherwise: refused `no-such-member` for an identity that is no member, and
-   * `last-admin` for the demotion of the only admin. The role it already holds is written again,
-   * which completes a change that was interrupted.
+   * membership in the directory. Decided from the directory's rows as they are now: refused
+   * `no-such-member` for an identity that is no member, writing nothing, and `last-admin` for
+   * the demotion of the only admin, once its member row is written again with the role the
+   * directory holds (a half-done self-demotion of it, followed by the other admin's, would
+   * otherwise show the only admin as a member for good). The role it already holds is written
+   * again, which completes a change that was interrupted.
    */
   set(
     tenant: Tenant,
@@ -51,7 +53,11 @@ export class OrganisationRoleChange {
       .andThen(() => this.#inDirectory(tenant, identity, role))
   }
 
-  /** Whether `identity` is a member, and the change would not leave the organisation no admin. */
+  /**
+   * Whether `identity` is a member, and the change would not leave the organisation no admin;
+   * a refusal for the last one restores the member row of that admin, and fails with the
+   * restore's failure when that cannot be written.
+   */
   #allowed(
     tenant: Tenant,
     identity: IdentityId,
@@ -71,7 +77,9 @@ export class OrganisationRoleChange {
         .andThen((admins) =>
           admins > 1
             ? okAsync<void, OrganisationError>(undefined)
-            : errAsync<void, OrganisationError>(refused('last-admin')),
+            : this.#members
+                .add(tenant.key, identity, current)
+                .andThen(() => errAsync<void, OrganisationError>(refused('last-admin'))),
         )
     })
   }

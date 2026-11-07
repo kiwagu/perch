@@ -68,8 +68,11 @@ holds. The direct invite calls it with `member`.
 `Organisations.setRole` changes a member's role for an admin, in the identity's turn and the
 organisation's, through the same check of the admin as the other changes (`OrganisationRoleChange`).
 It decides from the directory's rows as they are in the turn: an identity that is no member is
-refused `no-such-member`, the demotion of an admin while the directory counts one admin
-(`membership-admins.surql`) `last-admin`, and nothing is written. Otherwise it writes the
+refused `no-such-member`, nothing written, and the demotion of an admin while the directory counts
+one admin (`membership-admins.surql`) `last-admin`, once that admin's member row is written again
+with the role the directory holds (as the admission does for `already-member`: a self-demotion that
+failed at the directory, followed by the other admin's, would otherwise leave the only admin shown
+as a member); a failure of that write answers instead, and nobody is told. Otherwise it writes the
 organisation's member row first (the members list reads the roles there), then the directory's
 membership (`membership-set-role.surql`), then tells the identity's listeners. The directory is the
 authority, so a failure before its write leaves it as it was and the same admin asking again redoes

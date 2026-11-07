@@ -49,6 +49,7 @@ import { TenantMembers } from '../tenant-members'
 
 import { OrganisationAdmission } from './admission'
 import { Organisations } from './service'
+import { MembershipTurns } from './turns'
 
 /** Closes what a test opened, the organisations' databases before the directory. */
 const cleanups: Array<() => Promise<void>> = []
@@ -267,6 +268,31 @@ async function harness() {
     directoryQueries = listener
   }
 
+  /**
+   * Watches the queues of the organisations' turns. `untilQueued()` answers a promise that
+   * resolves once a change asks for an organisation's turn after that call, holding it or
+   * waiting behind the change that holds it: the proof that it passed every check made before
+   * the turn, so one that settles it afterwards was decided in the turn.
+   */
+  const watchQueue = () => {
+    const asked = vi.spyOn(MembershipTurns.prototype, 'ofTenants')
+
+    cleanups.push(async () => asked.mockRestore())
+
+    return {
+      untilQueued: () => {
+        const before = asked.mock.calls.length
+
+        return vi.waitFor(
+          () => {
+            expect(asked.mock.calls.length).toBeGreaterThan(before)
+          },
+          { timeout: 5_000, interval: 1 },
+        )
+      },
+    }
+  }
+
   return {
     organisations,
     opened,
@@ -287,6 +313,7 @@ async function harness() {
     refuseInTenants,
     holdInTenants,
     onDirectoryQuery,
+    watchQueue,
   }
 }
 
@@ -897,7 +924,7 @@ describe('Organisations.setRole', () => {
     expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: 'member' }]]])
   })
 
-  it('refuses the only admin demoting itself `last-admin`, changing nothing and telling nobody', async () => {
+  it('refuses the only admin demoting itself `last-admin`, leaving every role as it was and telling nobody', async () => {
     const { organisations, ann, bob, heard, memberRolesIn, rolesOf } = await withBob()
 
     expect(
@@ -956,8 +983,8 @@ describe('Organisations.setRole', () => {
     expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
   })
 
-  it('decides on the directory: a lost member row of an admin changes nothing about who is the last admin', async () => {
-    const { organisations, ann, forgetMember, memberRolesIn, rolesOf } = await withBob()
+  it('decides on the directory: a lost member row of the only admin changes nothing about who is the last admin, and the refusal writes it again as the directory has it', async () => {
+    const { organisations, ann, bob, forgetMember, memberRolesIn, rolesOf } = await withBob()
 
     await forgetMember('acme', ann.id)
 
@@ -972,7 +999,28 @@ describe('Organisations.setRole', () => {
       )._unsafeUnwrapErr(),
     ).toEqual(refused('last-admin'))
     expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+
+  it('a `last-admin` refusal whose restore of the member row fails answers that failure, telling nobody', async () => {
+    const { organisations, ann, heard, forgetMember, memberRolesIn, refuseInTenants } =
+      await withBob()
+
+    await forgetMember('acme', ann.id)
+    refuseInTenants(memberAddStatement)
+
+    expect(
+      (
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: ann.id,
+          role: 'member',
+        })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
     expect(Object.keys(await memberRolesIn('acme'))).not.toContain(ann.id)
+    expect(heard).toEqual([])
   })
 
   it('a change whose member row cannot be written leaves the directory as it was, and asking again redoes it', async () => {
@@ -1040,6 +1088,52 @@ describe('Organisations.setRole', () => {
     expect(heard).toEqual([[ann.id, [{ tenant: acme.tenant, role: 'member' }]]])
   })
 
+  it("a self-demotion that failed at the directory, then the other admin's self-demotion: the retry is refused `last-admin` and its member row says admin again", async () => {
+    const { organisations, ann, bob, heard, memberRolesIn, rolesOf, onDirectoryQuery } =
+      await withTwoAdmins()
+
+    onDirectoryQuery((text) => {
+      if (text === membershipSetRoleStatement) {
+        throw new Error('the directory refused the write')
+      }
+    })
+
+    expect(
+      (
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: ann.id,
+          role: 'member',
+        })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    onDirectoryQuery(undefined)
+    // Half done: ann's member row says member, the directory still counts her an admin.
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'admin' })
+
+    expect(
+      await organisations.setRole({ actor: bob.id, key: 'acme', identity: bob.id, role: 'member' }),
+    ).toEqual(ok(undefined))
+    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'member', [bob.id]: 'member' })
+    heard.splice(0)
+
+    expect(
+      (
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: ann.id,
+          role: 'member',
+        })
+      )._unsafeUnwrapErr(),
+    ).toEqual(refused('last-admin'))
+    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(heard).toEqual([])
+  })
+
   it("another admin's demotion whose listeners fail to hear it is completed by asking again", async () => {
     const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf } = await withTwoAdmins()
     let deaf = true
@@ -1073,8 +1167,23 @@ describe('Organisations.setRole', () => {
   })
 
   it('two admins demoting each other at once: one succeeds, the other is no admin by its turn and is refused `not-admin`, one admin stays', async () => {
-    const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf, holdInTenants } =
-      await withTwoAdmins()
+    const {
+      organisations,
+      ann,
+      bob,
+      acme,
+      heard,
+      memberRolesIn,
+      rolesOf,
+      holdInTenants,
+      forgetMember,
+      watchQueue,
+    } = await withTwoAdmins()
+    const queue = watchQueue()
+
+    // Ann's member row is lost: a refusal about authorization writes nothing back for it.
+    await forgetMember('acme', ann.id)
+
     const held = holdInTenants(memberAddStatement)
     const first = organisations.setRole({
       actor: ann.id,
@@ -1085,7 +1194,9 @@ describe('Organisations.setRole', () => {
 
     await held.waiting
 
-    // Bob found himself an admin before ann's change wrote anything, and now waits for its turn.
+    // Bob found himself an admin before ann's change wrote anything, and waits for its turn:
+    // once he is queued behind it, only the check made in his turn can refuse him.
+    const queued = queue.untilQueued()
     const second = organisations.setRole({
       actor: bob.id,
       key: 'acme',
@@ -1093,19 +1204,21 @@ describe('Organisations.setRole', () => {
       role: 'member',
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await queued
     held.release()
 
     expect(await first).toEqual(ok(undefined))
     expect((await second)._unsafeUnwrapErr()).toEqual(refused('not-admin'))
     expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
     expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await memberRolesIn('acme')).toEqual({ [bob.id]: 'member' })
     expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
   })
 
   it("a self-demotion first and the other admin's departure at once: the departure is refused `last-admin`, an admin stays", async () => {
-    const { organisations, ann, bob, acme, heard, rolesOf, holdInTenants } = await withTwoAdmins()
+    const { organisations, ann, bob, acme, heard, rolesOf, holdInTenants, watchQueue } =
+      await withTwoAdmins()
+    const queue = watchQueue()
     const held = holdInTenants(memberAddStatement)
     const demotion = organisations.setRole({
       actor: ann.id,
@@ -1116,9 +1229,10 @@ describe('Organisations.setRole', () => {
 
     await held.waiting
 
+    const queued = queue.untilQueued()
     const departure = organisations.leaveAll(bob.id)
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await queued
     held.release()
 
     expect(await demotion).toEqual(ok(undefined))
@@ -1129,12 +1243,15 @@ describe('Organisations.setRole', () => {
   })
 
   it("the other admin's departure first and a self-demotion at once: the demotion is refused `last-admin`, an admin stays", async () => {
-    const { organisations, ann, bob, heard, rolesOf, holdInTenants } = await withTwoAdmins()
+    const { organisations, ann, bob, heard, rolesOf, holdInTenants, watchQueue } =
+      await withTwoAdmins()
+    const queue = watchQueue()
     const held = holdInTenants(memberRemoveStatement)
     const departure = organisations.leaveAll(bob.id)
 
     await held.waiting
 
+    const queued = queue.untilQueued()
     const demotion = organisations.setRole({
       actor: ann.id,
       key: 'acme',
@@ -1142,7 +1259,7 @@ describe('Organisations.setRole', () => {
       role: 'member',
     })
 
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    await queued
     held.release()
 
     expect(await departure).toEqual(ok(undefined))

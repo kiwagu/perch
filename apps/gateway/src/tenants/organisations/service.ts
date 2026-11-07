@@ -164,8 +164,9 @@ export class Organisations {
    * the identity's listeners hear it, in the identity's turn and the organisation's: decided from
    * the rows as they are in that turn, so two admins demoting each other at once leave one admin
    * (the second is no admin by its turn and is refused `not-admin`), and a demotion races a
-   * departure without leaving the organisation none (`last-admin`). Asking again completes a
-   * change that failed, but the telling of a self-demotion: its actor is no admin any more.
+   * departure without leaving the organisation none (`last-admin`, which first writes the member
+   * row of the only admin again as the directory has it). Asking again completes a change that
+   * failed, but the telling of a self-demotion: its actor is no admin any more.
    */
   setRole(input: {
     actor: IdentityId
