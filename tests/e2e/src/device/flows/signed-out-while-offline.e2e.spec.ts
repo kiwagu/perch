@@ -9,21 +9,15 @@ import {
   signUp,
   test,
 } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
-
-/**
- * How long a device back online may take to connect again: its reconnects back off up to
- * 30 seconds.
- */
-const RECONNECT_MS = 35_000
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 
 test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
   test('A device signed out from another one while it was offline learns why when it connects again', async ({
     page,
     freshDevice,
   }) => {
-    // A sign-in waits for the sync channel, and coming back online may wait out a reconnect delay
-    // of up to 30 seconds.
+    // A sign-in waits for the sync channel, and device B stays offline until its reconnect delay
+    // reaches 30 seconds.
     test.slow()
 
     const data = { ...generate.account(), name: generate.name() }
@@ -55,6 +49,9 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
     await test.step("3. Take device B's browser offline", async () => {
       await network.goOffline()
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
+      // Offline long enough for its reconnect delay to reach the longest, 30 seconds: coming back
+      // online in step 5 must not wait it out.
+      await network.untilLongestReconnectDelay()
     })
 
     await test.step("4. On device A, reload [/devices], click [device.list.revoke-button] on device B's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
@@ -72,7 +69,7 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
       await network.goOnline()
       // Expected: After step 5 device B is on [/sign-in] once it connects again, where
       //   [user.sign-in.notice-message] carries [code:signed-out-elsewhere]
-      await expectPathname(deviceB, '/sign-in', RECONNECT_MS)
+      await expectPathname(deviceB, '/sign-in', BACK_ONLINE_MS)
       await expect(signInNotice(deviceB, 'signed-out-elsewhere')).toBeVisible()
     })
   })

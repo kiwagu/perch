@@ -197,7 +197,9 @@ included, until the test lets them load or refuses them as a dropped network wou
 tab of the same browser still opens an account's data (a context's hold would stall that tab's
 sign-in too).
 `src/support/network.ts`: `SyncNetwork`, which routes a page's sync socket through the test so
-it can go offline and back (Playwright's offline mode leaves an open WebSocket up).
+it can go offline and back (Playwright's offline mode leaves an open WebSocket up), and can wait
+offline until the app's reconnect delay has grown to its longest (`untilLongestReconnectDelay`);
+`BACK_ONLINE_MS`, how long a page back online may take to connect again.
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
 `src/support/browsers.ts`: what every browser a test opens is held to, from before its first

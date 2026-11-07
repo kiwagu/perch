@@ -114,6 +114,7 @@ export {
   type PlatformNotice,
   type Problem,
   parseVocabulary,
+  RECIPIENT,
   readDescriptions,
   SCENARIOS_DIR,
   SCHEMA_OUTPUTS,
