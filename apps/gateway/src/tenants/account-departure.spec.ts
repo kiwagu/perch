@@ -3,13 +3,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, recordId } from '@workspace/data'
 import { membershipIdFactory, tenantIdFactory } from '@workspace/ids'
+import { manualClock } from '@workspace/replica/testing'
 
 import identityByEmailStatement from '../auth/surql/identity-by-email.surql'
 
 import { closeDepartures, departureHarness } from './__fixtures__/departures'
 import identityForget from './__fixtures__/identity-forget.surql'
+import invitationRows from './__fixtures__/invitation-rows.surql'
 import membershipPromote from './__fixtures__/membership-promote.surql'
 import tenantInterrupt from './__fixtures__/tenant-interrupt.surql'
+import { PendingInvitations } from './invitations'
 import departingMembershipsStatement from './surql/departing-memberships.surql'
 import memberRemoveStatement from './surql/member-remove.surql'
 import membershipAddStatement from './surql/membership-add.surql'
@@ -54,6 +57,32 @@ describe('AccountDeparture', () => {
 
     expect(again.tenant.key).toBe('t1')
     expect(await membersIn('t1')).toEqual([{ identity: bob, role: 'admin' }])
+  })
+
+  it('takes the invitations of an organisation that goes whole, and leaves those of every other', async () => {
+    const { organisations, directory, ann, bob, founded, invited } = await departureHarness()
+    const invitations = new PendingInvitations({
+      directory,
+      secret: 'test-secret-0123456789-0123456789-0123456789',
+      clock: manualClock(Date.UTC(2026, 10, 7)),
+    })
+    const solo = (await founded(ann, 't1')).tenant
+    const shared = (await founded(bob, 't3')).tenant
+
+    await invited(bob, 't3', 'ann@example.test')
+    for (const input of [
+      { tenant: solo, email: 'cat@example.test', role: 'member', inviter: ann },
+      { tenant: solo, email: 'dan@example.test', role: 'admin', inviter: ann },
+      { tenant: shared, email: 'cat@example.test', role: 'member', inviter: bob },
+    ] as const) {
+      expect((await invitations.replace(input)).isOk()).toBe(true)
+    }
+
+    expect(await organisations.leaveAll(ann)).toEqual(ok(undefined))
+
+    const [rows] = await directory.db.query<[Array<{ key: string; email: string }>]>(invitationRows)
+
+    expect(rows).toEqual([{ key: 't3', email: 'cat@example.test' }])
   })
 
   it('is blocked while the identity is the only admin of a ready organisation with other members, and a departure then is refused, changing nothing', async () => {

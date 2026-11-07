@@ -7,7 +7,8 @@ belongs to it, the services that create organisations and change their members, 
 routes over them. It also tells the region hub where each region lives
 (`region-databases.ts`). It has no domain rules of its own, so no `domain/` or `application/`
 folders, and no `index.ts` yet: it predates the index rule and is imported file by file. Its
-`organisations/` folder is the one unit split since, entered through its own `index.ts`.
+`organisations/` folder (split out of one file) and its `invitations/` folder are each entered
+through their own `index.ts`.
 
 Organisations live in the same namespace, each in a strict database `t_<key>` of its own that
 the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
@@ -76,6 +77,22 @@ creator again in its turn (`OrganisationLookup.existing`) and is refused `no-suc
 it is gone: one that waited for a departure whose `after` removed the identity writes no
 membership of an identity that is gone and provisions nothing.
 
+`PendingInvitations` (`invitations/`) keeps the invitations to organisations: one row of the
+directory's `invitation` table per organisation and email (the email in lower case), with the
+role the invited account takes on accepting, who invited it, the token its link carries and its
+expiry, seven days after it was sent on the gateway's clock. The token is signed by the gateway
+with a key derived from the auth secret, as the links of an account deletion are, and names the
+row's id; it is kept on the row, so a list of an organisation's invitations answers the very link
+the mail carried. A newer invitation of the email replaces the older in one transaction, so the
+older link names a row that is gone; the same transaction sweeps the organisation's expired rows,
+which otherwise stay until the organisation invites again or goes whole (an organisation that
+goes whole takes its invitations in the same transaction). `read` tells a link's token apart as
+an invitation, as one that expired (also once its row was swept) or as nothing (not signed by the
+gateway, replaced, removed, or to an organisation that is not ready); `ofTenant` lists an
+organisation's invitations not expired, newest first, whatever account has the email now;
+`forEmail` lists those to the ready organisations an identity does not belong to. Nothing of it
+logs, and no error names a token or an address.
+
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
@@ -101,9 +118,11 @@ token that holds no session does; an invitation or a creation over its limit ans
   (`tenant-databases.ts`), `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers`
   (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
   (`organisation-rows.ts`).
+  `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
+  seven-day lifetime and the link to the front's `/invitation` screen).
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
-- Queries: `surql/` (organisations, memberships, members, the organisation database's schema,
-  a departing identity's memberships and the removal of a whole organisation).
+- Queries: `surql/` (organisations, memberships, members, invitations, the organisation
+  database's schema, a departing identity's memberships and the removal of a whole organisation).
 - Built by the composition root, `src/composition/root.ts`; the sync registry hears the
   membership changes.
 
@@ -111,6 +130,7 @@ token that holds no session does; an invitation or a creation over its limit ans
 
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
   `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
-  `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`), each
-  organisation on an embedded in-memory database of its own.
+  `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
+  `invitations/token.spec.ts`, `invitations/pending.spec.ts`), each organisation on an embedded
+  in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.
