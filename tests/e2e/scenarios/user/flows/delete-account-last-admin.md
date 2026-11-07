@@ -2,8 +2,8 @@
 tags:
   - full
 devices:
-  A: admin
-  B: member
+  A: guest
+  B: admin
 data:
   Organisation key: generate
   Organisation name: generate

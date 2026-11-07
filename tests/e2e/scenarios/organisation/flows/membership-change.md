@@ -3,8 +3,8 @@ tags:
   - full
 devices:
   A: admin
-  B: member
-  C: member
+  B: identity
+  C: identity
 data:
   Organisation key: generate
   Organisation name: generate

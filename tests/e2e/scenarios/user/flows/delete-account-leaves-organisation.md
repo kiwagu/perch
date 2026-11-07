@@ -2,7 +2,7 @@
 tags:
   - full
 devices:
-  A: member
+  A: guest
   B: admin
 data:
   Organisation key: generate

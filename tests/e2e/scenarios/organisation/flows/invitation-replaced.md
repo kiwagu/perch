@@ -23,6 +23,6 @@ Where: [/org] on device A (user A, administrator) and [/invitation] from [mail:o
 6. On device B, open the link of the second [mail:organisations.invite] and click [organisation.invitation.accept-button]
 
 ### Expected result
-- After step 4 device A's [organisation.sent.list] holds one [organisation.sent.item], user B's, whose [organisation.sent.role-badge] carries [value:admin]
+- After step 4 device A's [organisation.sent.list] holds one [organisation.sent.item], user B's, whose [organisation.sent.role-badge] carries [value:admin], and [organisation.invite.role-select] shows [value:member] again
 - After step 5 [organisation.invitation.error] carries [code:link-invalid] on device B
 - After step 6 [organisation.page.role-badge] carries [value:admin] on device B, and [organisation.members.list] shows
