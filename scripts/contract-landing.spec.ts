@@ -639,6 +639,54 @@ describe('contract-take on main', () => {
     refuses(landing(root, squashedFrom(tip)), 'main takes squashes only', SQUASH_FORM)
   })
 
+  it('refuses a merge into main that names a landing, clean or after a conflict', () => {
+    const refusal = 'contract take: main takes squashes only, and this commit is a merge.'
+    const clean = trunk()
+
+    take(clean)
+
+    const tip = code(clean.root, 'shown')
+
+    git(clean.root, 'switch', '-q', 'main')
+
+    const before = git(clean.root, 'rev-parse', 'main')
+
+    refuses(
+      gitThroughHook(
+        clean.root,
+        '',
+        'merge',
+        '--no-ff',
+        '-m',
+        'feat(web): show the page',
+        '-m',
+        squashedFrom(tip),
+        'feat/me',
+      ),
+      refusal,
+      SQUASH_FORM,
+    )
+    expect(git(clean.root, 'rev-parse', 'main')).toBe(before)
+
+    const conflicted = trunk()
+    const { root } = conflicted
+    const conflictTip = code(root, 'shown')
+
+    git(root, 'switch', '-q', 'main')
+    code(root, 'shown otherwise')
+
+    const head = git(root, 'rev-parse', 'main')
+
+    expect(gitThroughHook(root, '', 'merge', '-q', 'feat/me').status).not.toBe(0)
+    git(root, 'checkout', '-q', 'feat/me', '--', 'apps/web/src/main.tsx')
+    refuses(
+      commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(conflictTip)),
+      refusal,
+      SQUASH_FORM,
+    )
+    expect(git(root, 'rev-parse', 'main')).toBe(head)
+  })
+
   it('refuses a landing without its trailer, with two, or with one out of form', () => {
     const fixture = trunk()
     const { root } = fixture
