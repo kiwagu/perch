@@ -30,6 +30,7 @@ import { Organisations } from '../organisations'
 import { TenantDatabases } from '../tenant-databases'
 
 import directoryRows from './directory-rows.surql'
+import { specInvitations } from './invitations'
 import memberRows from './member-rows.surql'
 import membershipRows from './membership-rows.surql'
 import namespaceInfo from './namespace-info.surql'
@@ -122,6 +123,7 @@ export async function departureHarness() {
     revoke: async () => {},
     rerole: async () => {},
     hub,
+    invitations: specInvitations(directory),
   })
   const departure = new AccountDeparture({ directory, databases, hub })
 

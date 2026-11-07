@@ -12,6 +12,11 @@ export type OrganisationRefusalCode =
   | 'self'
   | 'last-admin'
   | 'no-such-member'
+  | 'email-invalid'
+  | 'link-invalid'
+  | 'link-expired'
+  | 'invitation-gone'
+  | 'other-account'
 
 /** An organisation command refused for what was asked, not for a failure of the gateway. */
 export interface OrganisationRefusal {

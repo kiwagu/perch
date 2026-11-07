@@ -21,6 +21,7 @@ import { KeyedTurns } from '../../../keyed-turns'
 import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
+import { specInvitations } from '../../../tenants/__fixtures__/invitations'
 import { AccountDeparture } from '../../../tenants/account-departure'
 import { Organisations } from '../../../tenants/organisations'
 import { TenantDatabases } from '../../../tenants/tenant-databases'
@@ -255,6 +256,7 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
     revoke: async () => {},
     rerole: async () => {},
     hub,
+    invitations: specInvitations(directory),
   })
   const departure = new AccountDeparture({ directory, databases, hub })
 

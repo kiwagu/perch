@@ -33,6 +33,7 @@ import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { AccountDeparture } from '../tenants/account-departure'
+import { InvitationMails, invitationLink, PendingInvitations } from '../tenants/invitations'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -133,6 +134,7 @@ export function createGatewayRoot(
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
   const authLog = createLogger('auth')
+  const organisationsLog = createLogger('organisations')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -171,13 +173,29 @@ export function createGatewayRoot(
     })
     // A removal takes the organisation's region from the removed identity's connections before
     // anything else can fail, and a role change has them push as the new role right after the
-    // directory's write; every change of memberships resolves once its devices were told.
+    // directory's write; every change of memberships resolves once its devices were told. An
+    // invitation's link and its mail carry the same address of the front.
+    const invitationLinkTo = (token: string) => invitationLink(options.publicUrl, token)
     const organisations = new Organisations({
       directory: local,
       databases,
       revoke: (identity, region) => connections.revoke(identity, region),
       rerole: (identity, region, role) => connections.rerole(identity, region, role),
       hub,
+      invitations: {
+        pending: new PendingInvitations({
+          directory: local,
+          secret: options.authSecret,
+          clock: options.clock,
+        }),
+        mailer: new InvitationMails({
+          mail: options.mail,
+          directory: local,
+          link: invitationLinkTo,
+          log: organisationsLog,
+        }),
+        link: invitationLinkTo,
+      },
     })
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))

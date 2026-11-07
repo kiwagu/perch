@@ -1,43 +1,25 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
-import type { RegionHub } from '@workspace/replica/server'
 
 import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
 import { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
 import type { Member } from '../organisation-rows'
-import type { TenantDatabases } from '../tenant-databases'
 import { TenantMembers } from '../tenant-members'
 
 import { AdminTurn } from './admin-turn'
 import { OrganisationAdmission } from './admission'
 import { OrganisationCreation } from './creation'
+import { OrganisationInvitations } from './invitations'
 import { type MembershipListener, MembershipListeners } from './listeners'
+import type { OrganisationsOptions } from './options'
 import { OrganisationRemoval } from './removal'
 import { OrganisationRoleChange } from './role-change'
 import { MembershipTurns } from './turns'
-
-export interface OrganisationsOptions {
-  /** The directory database, opened as the gateway's namespace user. */
-  readonly directory: LocalDb
-  readonly databases: Pick<TenantDatabases, 'acquire' | 'evict'>
-  /**
-   * Takes the region of an organisation an identity was removed from from that identity's open
-   * connections at once; resolves once none of them may name it any more.
-   */
-  readonly revoke: (identity: IdentityId, region: string) => Promise<void>
-  /**
-   * Judges the pushes of an identity's open connections into the region of an organisation by the
-   * role it has there from now on, at once; resolves once every one of them does.
-   */
-  readonly rerole: (identity: IdentityId, region: string, role: TenantRole) => Promise<void>
-  /** The region hub, which lets go of the region of an organisation a departure takes whole. */
-  readonly hub: Pick<RegionHub, 'retire'>
-}
 
 /** The longest name an organisation may have, in characters. */
 const MAX_NAME = 80
@@ -61,6 +43,10 @@ const MAX_NAME = 80
  * or a demotion when it would leave the others without an admin. This orders them within one
  * gateway process only; gateways running in several processes would need a durable revision of
  * the memberships.
+ *
+ * The invitations to join an organisation are `invitations` (`OrganisationInvitations`): they
+ * share the turns, the lookup, the listeners and the admission of this class, so an accepted
+ * invitation is a change of memberships like any other.
  */
 export class Organisations {
   readonly #lookup: OrganisationLookup
@@ -73,19 +59,30 @@ export class Organisations {
   readonly #departure: AccountDeparture
   readonly #turns = new MembershipTurns()
   readonly #adminTurn: AdminTurn
+  /** The invitations of organisations: invited, revoked, read, accepted and declined. */
+  readonly invitations: OrganisationInvitations
 
   constructor(options: OrganisationsOptions) {
     const { directory, databases, revoke, rerole, hub } = options
     const lookup = new OrganisationLookup(directory)
     const members = new TenantMembers(databases)
     const listeners = new MembershipListeners(lookup)
+    const admission = new OrganisationAdmission({ directory, lookup, members })
 
     this.#adminTurn = new AdminTurn(this.#turns, lookup)
     this.#lookup = lookup
     this.#members = members
     this.#listeners = listeners
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
-    this.#admission = new OrganisationAdmission({ directory, lookup, members })
+    this.#admission = admission
+    this.invitations = new OrganisationInvitations({
+      ...options.invitations,
+      lookup,
+      turns: this.#turns,
+      adminTurn: this.#adminTurn,
+      admission,
+      listeners,
+    })
     this.#roleChange = new OrganisationRoleChange({ directory, lookup, members, rerole })
     this.#removal = new OrganisationRemoval({ directory, members, listeners, revoke })
     this.#departure = new AccountDeparture({ directory, databases, hub })

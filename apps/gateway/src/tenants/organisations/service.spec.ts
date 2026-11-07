@@ -28,6 +28,7 @@ import { DIRECTORY, NAMESPACE } from '../../config'
 import { Outbox } from '../../mail/__fixtures__/outbox'
 import directoryRows from '../__fixtures__/directory-rows.surql'
 import identityForget from '../__fixtures__/identity-forget.surql'
+import { specInvitations } from '../__fixtures__/invitations'
 import memberClear from '../__fixtures__/member-clear.surql'
 import memberForget from '../__fixtures__/member-forget.surql'
 import memberRows from '../__fixtures__/member-rows.surql'
@@ -174,6 +175,7 @@ async function harness() {
     },
     // No device subscribes to a region here: the hub has none to let go of.
     hub: { retire: () => okAsync(undefined) },
+    invitations: specInvitations(directory),
   })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 

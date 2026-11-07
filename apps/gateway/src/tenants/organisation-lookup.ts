@@ -2,7 +2,7 @@ import { err, errAsync, ok, okAsync, Result, type ResultAsync } from 'neverthrow
 
 import { type DataError, dataError, type LocalDb, recordId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import type { Membership, TenantRole } from '@workspace/replica/protocol'
+import { type Membership, type TenantRole, tenantRole } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { identityByEmail } from '../auth/identity-by-email'
@@ -23,6 +23,7 @@ import {
 } from './organisation-rows'
 import identitiesByIdStatement from './surql/identities-by-id.surql'
 import membershipAdminsStatement from './surql/membership-admins.surql'
+import membershipOfEmailStatement from './surql/membership-of-email.surql'
 import membershipRoleStatement from './surql/membership-role.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
 import tenantByKeyStatement from './surql/tenant-by-key.surql'
@@ -32,6 +33,12 @@ import tenantByKeyStatement from './surql/tenant-by-key.surql'
  * organisation has, and nothing else.
  */
 const adminCount = z.tuple([z.number().int().nonnegative()])
+
+/** What `identities-by-id.surql` answers for one identity: its row's email, or no row. */
+const emailRows = z.tuple([z.array(z.object({ email: z.string() }))])
+
+/** What `membership-of-email.surql` answers: the role found, if any. */
+const roleFound = z.tuple([tenantRole.nullish()])
 
 /**
  * What the directory says of organisations, their memberships and the identities in them: the
@@ -109,6 +116,48 @@ export class OrganisationLookup {
     ).andThen(([rows]) =>
       rows.length > 0 ? okAsync(identity) : errAsync(refused('no-such-identity')),
     )
+  }
+
+  /** The email the directory holds for `identity`; none when its account is gone. */
+  emailOf(identity: IdentityId): ResultAsync<string | undefined, DataError> {
+    return reading(
+      this.#directory.db.query(identitiesByIdStatement, {
+        ids: [recordId('identity', identity)],
+      }),
+      `could not read the email of ${identity}`,
+    ).andThen((answer) => {
+      const parsed = emailRows.safeParse(answer)
+
+      return parsed.success
+        ? ok(parsed.data[0][0]?.email)
+        : err(dataError('data:QUERY_FAILED', `the email of ${identity} has an unknown shape`))
+    })
+  }
+
+  /**
+   * The role held in the organisation by the member whose email is `email`, in any case; none
+   * when no member has it. One statement over the organisation's memberships, the same work
+   * whether the email has an account or not.
+   */
+  roleByEmail(tenant: Tenant, email: string): ResultAsync<TenantRole | undefined, DataError> {
+    return reading(
+      this.#directory.db.query(membershipOfEmailStatement, {
+        tenant: recordId('tenant', tenant.id),
+        email: email.toLowerCase(),
+      }),
+      `could not read who holds ${tenant.key} by email`,
+    ).andThen((answer) => {
+      const parsed = roleFound.safeParse(answer)
+
+      return parsed.success
+        ? ok(parsed.data[0] ?? undefined)
+        : err(
+            dataError(
+              'data:QUERY_FAILED',
+              `the member of ${tenant.key} found by email has an unknown shape`,
+            ),
+          )
+    })
   }
 
   /** The role the directory holds for `identity` in the organisation; none when it is no member. */

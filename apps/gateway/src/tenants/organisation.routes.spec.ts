@@ -10,6 +10,7 @@ import { z } from '@workspace/zod'
 import { DIRECTORY, NAMESPACE } from '../config'
 import { RequestLimits } from '../limits/request-limits'
 
+import { specInvitations } from './__fixtures__/invitations'
 import {
   ADDRESS,
   answer,
@@ -448,6 +449,7 @@ describe('organisationRoutes', () => {
         revoke: (identity, region) => root.connections.revoke(identity, region),
         rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
+        invitations: specInvitations(directory),
       }),
       routeOptions(new RequestLimits({ clock: manualClock() })),
     )
@@ -477,6 +479,7 @@ describe('organisationRoutes', () => {
         revoke: (identity, region) => root.connections.revoke(identity, region),
         rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
+        invitations: specInvitations(directory),
       })
       const routes = organisationRoutes(
         root.sessions,

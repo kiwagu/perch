@@ -45,6 +45,7 @@ import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { specInvitations } from '../../tenants/__fixtures__/invitations'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
 import memberRemoveStatement from '../../tenants/surql/member-remove.surql'
@@ -230,6 +231,7 @@ async function openGateway(options: GatewayOptions = {}) {
     revoke: (identity, region) => connections.revoke(identity, region),
     rerole: (identity, region, role) => connections.rerole(identity, region, role),
     hub,
+    invitations: specInvitations(local),
   })
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))

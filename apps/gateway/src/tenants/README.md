@@ -129,6 +129,36 @@ greets no one by name and names no inviter (the recipient may have no account, a
 see lives in the replicated profile, which mails do not read). A mail that did not go out is
 logged by its code alone, never with its address, its organisation or its link.
 
+`OrganisationInvitations` (`organisations/invitations.ts`, exposed as `Organisations.invitations`;
+the services above are the only way in) is the invitation workflow over that store, the mail and
+the organisation's turns. An admin of an organisation invites an email, in any case, with a role
+(`invite`): `AdminTurn` finds the organisation and the admin still right, one statement over the
+organisation's memberships by email (`membership-of-email.surql`) refuses an email a member has
+(`already-member`; the same work whether the email has an account or not), the email's pending
+invitation is replaced (its older link then reads as invalid), and the mail is started, never
+awaited and never failing the call; the answer carries the link of the very token mailed. An
+admin lists the organisation's invitations (`pending`) and revokes one (`revoke`, in the
+organisation's turn: an invitation of another organisation, or one already gone, is a success that
+deletes nothing). The page a link opens reads the token (`read`): the organisation's name and the
+role, and `forYou` when the viewer's directory email is the invitation's, never the email itself;
+a token the gateway did not sign or whose row is gone is refused `link-invalid`, one a week old
+`link-expired`; `mine` lists the invitations of the account's email to organisations it does not
+belong to. The invited account answers by the invitation's id or by its link's token (told apart
+by the invitation id schema alone) in `InvitationAnswers` (`organisations/invitation-answers.ts`):
+`accept` runs in the account's turn and the organisation's, reads the invitation, the account and
+its email again there (`invitation-gone`, `no-such-identity`, `other-account`: the invitation is
+bound to its email and the directory's email is the one compared), and an account that belongs
+already is refused `already-member`, its member row written again with the directory's role and the
+invitation kept. Otherwise `OrganisationAdmission.accept` writes the member row with the
+invitation's role, then one directory transaction (`invitation-accept.surql`) writes the
+membership and deletes the invitation, then the account's listeners hear it. The member row goes
+first: a failure before the transaction leaves the invitation live and asking again completes it,
+while a membership written before a member row that then failed would leave a member no list
+shows, with the invitation spent. A failure of the telling leaves the membership made, its member
+row right and the invitation spent. A spent link never readmits: once an admin removes the member,
+the old link answers `invitation-gone`. `decline` runs in the organisation's turn and deletes the
+row for the invited account alone.
+
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
@@ -136,9 +166,10 @@ the caller as its admin (201); `GET /organisations/:key/members` lists the membe
 (403 `not-admin` to a member); `POST /organisations/:key/members` with `{ email }` lets an admin
 invite an identity; and `DELETE /organisations/:key/members/:identity` lets an admin remove a
 member (204). A body or an identity that does not follow its schema answers 400 (`bad-request`);
-a refusal answers its code, with 400 for `invalid-key` and `invalid-name`, 403 for
-`not-a-member` and `not-admin`, 404 for `no-such-tenant` and `no-such-identity`, and 409 for
-`key-taken`, `already-member` and `self`, except a creation whose caller's identity went before
+a refusal answers its code, with 400 for `invalid-key`, `invalid-name` and `email-invalid`, 403
+for `not-a-member`, `not-admin` and `other-account`, 404 for `no-such-tenant`, `no-such-identity`,
+`no-such-member` and `link-invalid`, 409 for `key-taken`, `already-member`, `self` and
+`last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation whose caller's identity went before
 its turn (its account deleted after its session was read), which answers 401 `unauthorized` as a
 token that holds no session does; an invitation or a creation over its limit answers 429
 (`rate-limited`, see `src/limits/README.md`); a failure of the gateway answers 500 (`internal`).
@@ -153,7 +184,9 @@ token that holds no session does; an invitation or a creation over its limit ans
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
   (`tenant-databases.ts`), `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers`
   (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
-  (`organisation-rows.ts`).
+  (`organisation-rows.ts`). `OrganisationInvitations` (`organisations/invitations.ts`),
+  `InvitationAnswers` (`organisations/invitation-answers.ts`) and the views they answer
+  (`organisations/invitation-views.ts`).
   `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
   seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
   `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
@@ -168,6 +201,6 @@ token that holds no session does; an invitation or a creation over its limit ans
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
   `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
-  `invitations/token.spec.ts`, `invitations/pending.spec.ts`, `invitations/mails.spec.ts`), each organisation on an embedded
-  in-memory database of its own.
+  `organisations/invitations.spec.ts`, `invitations/token.spec.ts`, `invitations/pending.spec.ts`,
+  `invitations/mails.spec.ts`), each organisation on an embedded in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.
