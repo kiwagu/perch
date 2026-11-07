@@ -1,4 +1,4 @@
-import type { ResultAsync } from 'neverthrow'
+import { ResultAsync } from 'neverthrow'
 
 import type { LocalDb } from '@workspace/data'
 import { renderInvitationMail } from '@workspace/email'
@@ -39,7 +39,11 @@ export class InvitationMails implements InvitationMailer {
     this.#options = options
   }
 
-  /** Starts the mail of the invitation (`#language`, the render, then the mail port). */
+  /**
+   * Starts the mail of the invitation (`#language`, the render, then the mail port). The language
+   * lookup starts inside a promise callback, so a query that throws before it hands back anything
+   * rejects the chain, which is logged by its code, instead of escaping to the caller.
+   */
   invite({
     email,
     organisation,
@@ -49,7 +53,7 @@ export class InvitationMails implements InvitationMailer {
   }: Parameters<InvitationMailer['invite']>[0]): void {
     const { link, log, mail } = this.#options
 
-    void this.#language(email, inviter)
+    void new ResultAsync(Promise.resolve().then(() => this.#language(email, inviter)))
       .andThen((locale) =>
         renderInvitationMail({ to: email, organisation, role, link: link(token), locale }),
       )

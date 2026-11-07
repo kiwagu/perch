@@ -33,6 +33,8 @@ interface HarnessOptions {
   readonly failing?: (text: string) => boolean
   /** What every read of the settings' language answers, as a directory whose settings hold it. */
   readonly settingsAnswer?: unknown
+  /** Makes every query of the directory throw at once, not reject. */
+  readonly throwingAtOnce?: boolean
 }
 
 /**
@@ -46,6 +48,29 @@ function answeringSettings(local: LocalDb, answer: unknown): LocalDb {
     get(target, property) {
       if (property === 'query') {
         return query
+      }
+
+      const value: unknown = Reflect.get(target, property)
+
+      return typeof value === 'function' ? (value as () => unknown).bind(target) : value
+    },
+  })
+
+  return { ...local, db }
+}
+
+/**
+ * The directory whose every query throws at once, before it hands anything back: `interceptQueries`
+ * turns a throw into a rejection, so only a directory built by hand reaches the code that starts a
+ * query.
+ */
+function throwingAtOnce(local: LocalDb): LocalDb {
+  const db = new Proxy(local.db, {
+    get(target, property) {
+      if (property === 'query') {
+        return () => {
+          throw new Error(`the directory threw at once for ${BOB}`)
+        }
       }
 
       const value: unknown = Reflect.get(target, property)
@@ -103,10 +128,11 @@ async function harness(
             throw new Error(`the directory is down for ${BOB}`)
           }
         })
-  const read =
+  const answering =
     options.settingsAnswer === undefined
       ? directory
       : answeringSettings(directory, options.settingsAnswer)
+  const read = options.throwingAtOnce === true ? throwingAtOnce(answering) : answering
   const mails = new InvitationMails({
     mail: options.mail ?? opened.outbox,
     directory: read,
@@ -287,6 +313,22 @@ describe('InvitationMails', () => {
     expect(lines[0]).toMatchObject({ code: 'mail:SEND_FAILED' })
     expect(JSON.stringify(lines)).not.toContain(CAROL)
     expect(outbox.to(CAROL)).toHaveLength(0)
+  })
+
+  it('keeps a directory that throws at once from its caller, sends nothing and logs the code alone', async () => {
+    const { mails, outbox, identities, logged } = await harness('en', 'en', {
+      throwingAtOnce: true,
+    })
+
+    expect(invite(mails, identities.ann, BOB)).toBeUndefined()
+
+    const lines = await loggedLine(logged)
+
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toMatchObject({ code: 'mail:SEND_FAILED' })
+    expect(JSON.stringify(lines)).not.toContain(BOB)
+    expect(JSON.stringify(lines)).not.toContain(TOKEN)
+    expect(outbox.to(BOB)).toHaveLength(1)
   })
 
   it('logs a mail the mail server did not take by its code, naming no address or token', async () => {
