@@ -639,10 +639,10 @@ describe('contract-take on an area branch', () => {
 })
 
 describe('contract-take elsewhere', () => {
-  it('lets a business commit through on main, the trunk, the engine branch and an experiment', () => {
+  it('lets a business commit through on the trunk, the engine branch and an experiment', () => {
     const { root } = trunk()
 
-    for (const branch of ['main', 'contract/trunk', 'feat/contract-first-pass', 'experiment/me']) {
+    for (const branch of ['contract/trunk', 'feat/contract-first-pass', 'experiment/me']) {
       git(root, 'switch', '-q', '-C', branch)
       stage(root, SCREEN, branch)
 

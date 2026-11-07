@@ -1,25 +1,38 @@
 import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { writeFileSync } from 'node:fs'
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
   author,
   commit,
+  commitThroughHook,
   feed,
   git,
+  gitThroughHook,
   land,
+  made,
+  message,
   passes,
   pick,
   refuses,
   removeMade,
+  run,
   runRound,
   SCREEN,
   stage,
   type Trunk,
   trunk,
 } from './takes/__fixtures__/repo.ts'
-import { FORM, lookupOf, NEVER_LANDS, parseSquashed, readingOf } from './takes/index.ts'
+import {
+  FORM,
+  lookupOf,
+  NEVER_LANDS,
+  parseSquashed,
+  readingOf,
+  SQUASH_FORM,
+} from './takes/index.ts'
 
 /**
  * Each case runs git a dozen times or more, and the check itself over a branch: under the
@@ -181,6 +194,34 @@ function orphan(root: string, branch: string, subject: string, ...trailers: stri
   author(root, 'commit', '-q', '-m', subject, ...trailers.flatMap((trailer) => ['-m', trailer]))
 
   return git(root, 'rev-parse', '--short', 'HEAD')
+}
+
+/** Stages on `main` the squash of `branch`, as the landing procedure does, and returns the branch's short tip. */
+function squash(root: string, branch = 'feat/me'): string {
+  const tip = git(root, 'rev-parse', '--short', branch)
+
+  git(root, 'switch', '-q', 'main')
+  author(root, 'merge', '-q', '--squash', branch)
+
+  return tip
+}
+
+/** A round of a take and a code commit on `feat/me`, its squash staged on `main`; returns the branch's short tip. */
+function staged(fixture: Trunk): string {
+  take(fixture)
+  code(fixture.root, 'shown')
+
+  return squash(fixture.root)
+}
+
+/** The trailer of a landing of `branch` at `tip`. */
+function squashedFrom(tip: string, branch = 'feat/me'): string {
+  return `Squashed-from: ${branch} (${tip}) ABC-1`
+}
+
+/** Runs the check in `root` on a landing's message with `trailers`, as the hook does, without a git command above it. */
+function landing(root: string, ...trailers: string[]): ReturnType<typeof run> {
+  return run(root, message('feat(web): show the page', ...trailers))
 }
 
 describe('contract-take --round', () => {
@@ -517,5 +558,262 @@ describe('contract-take --round', () => {
       subject: 'feat(web): show the page',
       trailers: [],
     })
+  })
+})
+
+describe('contract-take on main', () => {
+  it('passes a squash made as the landing procedure makes it', () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const tip = staged(fixture)
+
+    passes(commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(tip)))
+    expect(git(root, 'log', '-1', '--format=%(trailers:key=Squashed-from,valueonly)')).toBe(
+      `feat/me (${tip}) ABC-1`,
+    )
+    expect(git(root, 'rev-parse', 'main^{tree}')).toBe(git(root, 'rev-parse', 'feat/me^{tree}'))
+  })
+
+  it('refuses a squash whose round holds a commit made past the hook', () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    take(fixture)
+
+    const raw = oldForm(root)
+    const tip = squash(root)
+    const before = git(root, 'rev-parse', 'main')
+
+    refuses(
+      commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(tip)),
+      `contract take: feat/me (${tip}) carries commits that are not in a take's form:\n- ${raw} feat(screens): model the page\n`,
+      FORM,
+    )
+    expect(git(root, 'rev-parse', 'main')).toBe(before)
+  })
+
+  it('refuses a merge into main, clean or after a conflict', () => {
+    const clean = trunk()
+
+    code(clean.root, 'shown')
+    git(clean.root, 'switch', '-q', 'main')
+
+    const before = git(clean.root, 'rev-parse', 'main')
+
+    refuses(
+      gitThroughHook(clean.root, '', 'merge', '--no-ff', '-m', 'Merge feat/me', 'feat/me'),
+      'main takes squashes only',
+      SQUASH_FORM,
+    )
+    expect(git(clean.root, 'rev-parse', 'main')).toBe(before)
+
+    const conflicted = trunk()
+    const { root } = conflicted
+    const tip = code(root, 'shown')
+
+    git(root, 'switch', '-q', 'main')
+    code(root, 'shown otherwise')
+    expect(gitThroughHook(root, '', 'merge', '-q', 'feat/me').status).not.toBe(0)
+    expect(git(root, 'rev-parse', '--verify', '--quiet', 'MERGE_HEAD')).not.toBe('')
+    refuses(landing(root, squashedFrom(tip)), 'main takes squashes only', SQUASH_FORM)
+  })
+
+  it('refuses a landing without its trailer, with two, or with one out of form', () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const tip = staged(fixture)
+
+    refuses(landing(root), 'names the branch it squashes in no trailer', SQUASH_FORM)
+    refuses(
+      landing(root, `${squashedFrom(tip)}\n${squashedFrom(tip)}`),
+      'in one trailer, and this commit has 2',
+    )
+    refuses(
+      landing(root, `Squashed-from: feat/me ${tip}`),
+      `"Squashed-from: feat/me ${tip}" is not.`,
+    )
+    refuses(
+      landing(root, `squashed-from: feat/me (${tip})`),
+      'written "Squashed-from:", in that case, not "squashed-from:"',
+    )
+  })
+
+  it('refuses a landing that names a branch or a tip git does not know, or a tip off its branch', () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    git(root, 'switch', '-q', '-c', 'feat/other')
+
+    const other = code(root, 'other')
+
+    git(root, 'switch', '-q', 'feat/me')
+
+    const tip = staged(fixture)
+
+    refuses(landing(root, squashedFrom(tip, 'feat/gone')), 'git knows no branch feat/gone')
+    refuses(landing(root, squashedFrom('deadbee')), 'git knows no commit deadbee')
+    refuses(landing(root, squashedFrom(other)), `${other} is not on feat/me`)
+  })
+
+  it('refuses a landing naming a tip git cannot tell from another commit', () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const { prefix, bodies } = colliding()
+
+    stored(root, 'tree', '')
+
+    for (const body of bodies) {
+      stored(root, 'commit', body)
+    }
+
+    staged(fixture)
+
+    const result = landing(root, squashedFrom(prefix))
+
+    refuses(result, `names ${prefix}, which git cannot tell from another commit`)
+    expect(result.stderr).not.toContain('knows no commit')
+  })
+
+  it("refuses a landing whose tree is not its tip's, or whose tip is not on top of main", () => {
+    const older = trunk()
+    const taken = take(older)
+
+    code(older.root, 'shown')
+    squash(older.root)
+    refuses(landing(older.root, squashedFrom(taken)), `is not the tree of ${taken}`)
+
+    const behind = trunk()
+    const { root } = behind
+
+    take(behind)
+    code(root, 'shown')
+    git(root, 'switch', '-q', 'main')
+
+    const later = code(root, 'shown')
+
+    const tip = squash(root)
+
+    refuses(landing(root, squashedFrom(tip)), `main (${later}) is not under ${tip}`)
+  })
+
+  it('refuses a landing that changes nothing, as an amend made without /proc reads', () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    take(fixture)
+    code(root, 'shown')
+    land(root, 'feat/me')
+    merge(root, 'main')
+
+    const back = git(root, 'rev-parse', '--short', 'feat/me')
+
+    git(root, 'switch', '-q', 'main')
+    refuses(landing(root, squashedFrom(back)), 'a landing changes main', SQUASH_FORM)
+  })
+
+  it('passes an amend of the squash read from its git command', () => {
+    const fixture = trunk()
+    const { root } = fixture
+    const tip = staged(fixture)
+
+    passes(commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(tip)))
+    passes(
+      commitThroughHook(
+        root,
+        '--amend',
+        '-m',
+        'feat(web): show the page again',
+        '-m',
+        squashedFrom(tip),
+      ),
+    )
+    expect(git(root, 'log', '-1', '--format=%s')).toBe('feat(web): show the page again')
+    expect(git(root, 'rev-list', '--count', 'main')).toBe('2')
+  })
+
+  it('refuses a landing on an unborn main', () => {
+    const root = mkdtempSync(join(tmpdir(), 'contract-take-'))
+
+    made.push(root)
+    git(root, 'init', '-q', '-b', 'feat/me')
+
+    const tip = code(root, 'shown')
+
+    git(root, 'symbolic-ref', 'HEAD', 'refs/heads/main')
+    refuses(landing(root, squashedFrom(tip)), 'main has no commit', SQUASH_FORM)
+  })
+
+  it("passes the engine's branch unjudged, refuses the trunk and an experiment", () => {
+    const { root } = trunk()
+
+    git(root, 'switch', '-q', '-c', 'experiment/x')
+    code(root, 'tried')
+    git(root, 'switch', '-q', '-c', 'feat/contract-first-pass', 'main')
+    stage(root, 'packages/ui-contract/src/x.ts', 'engine')
+    commit(root, 'feat(contract): judge the round')
+
+    const meta = squash(root, 'feat/contract-first-pass')
+
+    passes(
+      run(
+        root,
+        message('feat(contract): judge the round', squashedFrom(meta, 'feat/contract-first-pass')),
+      ),
+    )
+    author(root, 'reset', '-q', '--hard')
+
+    const line = squash(root, 'contract/trunk')
+
+    refuses(
+      landing(root, squashedFrom(line, 'contract/trunk')),
+      'contract/trunk never lands on main',
+      SQUASH_FORM,
+    )
+    author(root, 'reset', '-q', '--hard')
+
+    const tried = squash(root, 'experiment/x')
+
+    refuses(landing(root, squashedFrom(tried, 'experiment/x')), 'experiment/x never lands on main')
+  })
+
+  it("refuses a landing message git's cleanup reads two ways", () => {
+    const fixture = trunk()
+    const tip = staged(fixture)
+
+    passes(run(fixture.root, `feat(web): show the page\n\n# note\n${squashedFrom(tip)}\n`))
+    refuses(
+      run(fixture.root, `# note\n\nfeat(web): show the page\n\n${squashedFrom(tip)}\n`),
+      'reads one way when git strips its comment lines and another when it keeps them',
+      SQUASH_FORM,
+    )
+  })
+
+  it('reads the tree git commits under a temporary index', () => {
+    const all = trunk()
+    const tip = staged(all)
+
+    git(all.root, 'restore', '--staged', '--', 'apps/web/src/main.tsx')
+    passes(
+      commitThroughHook(all.root, '-a', '-m', 'feat(web): show the page', '-m', squashedFrom(tip)),
+    )
+    expect(git(all.root, 'rev-parse', 'main^{tree}')).toBe(
+      git(all.root, 'rev-parse', 'feat/me^{tree}'),
+    )
+
+    const some = trunk()
+    const one = staged(some)
+
+    refuses(
+      commitThroughHook(
+        some.root,
+        '-m',
+        'feat(web): show the page',
+        '-m',
+        squashedFrom(one),
+        '--',
+        SCREEN,
+      ),
+      `is not the tree of ${one}`,
+    )
   })
 })

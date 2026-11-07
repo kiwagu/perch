@@ -30,6 +30,7 @@ import { headRef } from './gates/tree.ts'
 import { git, merging, stagedFiles } from './staged-commit.ts'
 import {
   commitCommand,
+  landingRefusal,
   readMessage,
   roundOf,
   roundRefusal,
@@ -37,12 +38,8 @@ import {
   UNJUDGED_BRANCHES,
 } from './takes/index.ts'
 
-/** Branches whose commits are no area's: `main`, the trunk and the contract engine's branch. */
-const OWN_LAYERS = new Set([
-  'refs/heads/main',
-  'refs/heads/contract/trunk',
-  'refs/heads/feat/contract-first-pass',
-])
+/** Branches whose commits are no area's: the trunk and the contract engine's branch. */
+const OWN_LAYERS = new Set(['refs/heads/contract/trunk', 'refs/heads/feat/contract-first-pass'])
 
 /** An experiment's business commits go to the trunk when it is split. */
 const EXPERIMENTS = 'refs/heads/experiment/'
@@ -135,6 +132,31 @@ function round(branch: string | undefined): number {
   return 0
 }
 
+/**
+ * Judges the commit on `main` whose message is in `file` as a landing, read with the `git commit`
+ * running the hook, and prints the refusal if any.
+ */
+function landing(file: string | undefined): number {
+  const command = commitCommand()
+  const message = file === undefined ? undefined : readMessage(file, command.cleanup)
+
+  if (message === undefined) {
+    console.error("contract take: git cannot read this commit's message.")
+
+    return 1
+  }
+
+  const refusal = landingRefusal(message, command.amend)
+
+  if (refusal === undefined) {
+    return 0
+  }
+
+  console.error(refusal)
+
+  return 1
+}
+
 function main(): number {
   const [first, second] = process.argv.slice(2)
 
@@ -149,6 +171,10 @@ function main(): number {
     console.error('contract take: git cannot tell the branch this commit is on.')
 
     return 1
+  }
+
+  if (head === MAIN) {
+    return landing(file)
   }
 
   if (head === '' || OWN_LAYERS.has(head) || head.startsWith(EXPERIMENTS) || merging()) {

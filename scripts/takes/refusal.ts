@@ -17,12 +17,19 @@ import {
   WRITTEN,
   WRITTEN_FORM,
 } from './form.ts'
-import type { Message } from './message.ts'
+import type { Doubt, Message } from './message.ts'
 import { takenProblems } from './trunk.ts'
 
 const SUBJECT = /^[a-z]+\(contract\): \S/
 
 const SCOPES = /^[A-Za-z]*\(([^)]*)\)/
+
+/** What is wrong with a message git may record otherwise than it reads, by its `doubt`, and what to do. */
+export function doubtLine(doubt: Doubt): string {
+  return doubt === 'comment-lines'
+    ? "this commit's message reads one way when git strips its comment lines and another when it keeps them, as its cleanup mode decides (a message given with -m keeps them): write the subject first, and no line starting with the comment character above the trailer."
+    : "this commit's message reads one way or another by the comment character git picks for it (core.commentChar is auto): commit with one set, git -c core.commentChar='#' commit ..., or leave out the lines that start with one of #;@!$%^&|:."
+}
 
 /** Whether the subject names the `contract` scope, in whatever form. */
 function claimsScope(subject: string): boolean {
@@ -91,18 +98,8 @@ export function takeRefusal(
     return undefined
   }
 
-  if (message.doubt === 'comment-lines') {
-    return [
-      `contract take: on ${branch}, this commit's message reads one way when git strips its comment lines and another when it keeps them, as its cleanup mode decides (a message given with -m keeps them): write the subject first, and no line starting with the comment character above the trailer.`,
-      FORM,
-    ].join('\n')
-  }
-
-  if (message.doubt === 'comment-character') {
-    return [
-      `contract take: on ${branch}, this commit's message reads one way or another by the comment character git picks for it (core.commentChar is auto): commit with one set, git -c core.commentChar='#' commit ..., or leave out the lines that start with one of #;@!$%^&|:.`,
-      FORM,
-    ].join('\n')
+  if (message.doubt !== undefined) {
+    return [`contract take: on ${branch}, ${doubtLine(message.doubt)}`, FORM].join('\n')
   }
 
   if (claims) {

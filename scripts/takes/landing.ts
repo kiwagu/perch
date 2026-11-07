@@ -14,7 +14,7 @@ import { type Round, roundOf } from './round.ts'
 const PREFIX = 'contract take: '
 
 /** The short id of the commit `rev` names, or undefined when git knows none. */
-function shortOf(rev: string): string | undefined {
+export function shortOf(rev: string): string | undefined {
   const { status, out } = git(['rev-parse', '--short', '--verify', '--quiet', `${rev}^{commit}`])
 
   return status === 0 ? out.trim() : undefined
