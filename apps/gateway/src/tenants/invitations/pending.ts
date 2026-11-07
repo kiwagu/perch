@@ -1,6 +1,6 @@
-import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 
-import { type DataError, dataError, fromDriverValue, type LocalDb, recordId } from '@workspace/data'
+import { type DataError, type LocalDb, recordId } from '@workspace/data'
 import { type IdentityId, type InvitationId, idSchemas, invitationIdFactory } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { type TenantRole, tenantRole } from '@workspace/replica/protocol'
@@ -13,6 +13,7 @@ import invitationReplaceStatement from '../surql/invitation-replace.surql'
 import invitationsForEmailStatement from '../surql/invitations-for-email.surql'
 import invitationsOfTenantStatement from '../surql/invitations-of-tenant.surql'
 
+import { answered } from './answer'
 import { invitationKey, readInvitationToken, signInvitationToken } from './token'
 
 /** How long an invitation stays open after it was sent: seven days, on the gateway's clock. */
@@ -105,15 +106,6 @@ const receivedRow = z
  */
 const deletedRows = z.array(z.object({}))
 
-/** An answer of the directory parsed with `schema`; its values stay out of the error. */
-function parsed<T>(schema: z.ZodType<T>, value: unknown, what: string): Result<T, DataError> {
-  const answer = schema.safeParse(fromDriverValue(value))
-
-  return answer.success
-    ? ok(answer.data)
-    : err(dataError('data:QUERY_FAILED', `${what} has an unknown shape`))
-}
-
 /**
  * The invitations to organisations that an email has not yet answered. An invitation is a row of
  * the directory, one per organisation and email, so a newer invitation of the email replaces the
@@ -191,13 +183,13 @@ export class PendingInvitations {
   /** The organisation's invitations not expired, newest first, whatever account has the email now. */
   ofTenant(tenant: Tenant): ResultAsync<readonly PendingInvitation[], DataError> {
     return reading(
-      this.#directory.db.query<[unknown]>(invitationsOfTenantStatement, {
+      this.#directory.db.query(invitationsOfTenantStatement, {
         tenant: recordId('tenant', tenant.id),
         now: new Date(this.#clock.now()),
       }),
       `the invitations to ${tenant.key} could not be read`,
-    ).andThen(([rows]) =>
-      parsed(z.array(pendingRow), rows, 'the answer to the invitations to an organisation'),
+    ).andThen((answer) =>
+      answered(z.array(pendingRow), answer, 'the answer to the invitations to an organisation'),
     )
   }
 
@@ -210,29 +202,29 @@ export class PendingInvitations {
     email: string,
   ): ResultAsync<readonly ReceivedInvitation[], DataError> {
     return reading(
-      this.#directory.db.query<[unknown]>(invitationsForEmailStatement, {
+      this.#directory.db.query(invitationsForEmailStatement, {
         identity: recordId('identity', identity),
         email: email.toLowerCase(),
         now: new Date(this.#clock.now()),
       }),
       `the invitations of ${identity} could not be read`,
-    ).andThen(([rows]) =>
-      parsed(z.array(receivedRow), rows, 'the answer to the invitations of an email'),
+    ).andThen((answer) =>
+      answered(z.array(receivedRow), answer, 'the answer to the invitations of an email'),
     )
   }
 
   /** The invitation `id`; none when it is gone or expired. */
   byId(id: InvitationId): ResultAsync<PendingInvitation | undefined, DataError> {
     return reading(
-      this.#directory.db.query<[unknown]>(invitationByIdStatement, {
+      this.#directory.db.query(invitationByIdStatement, {
         id,
         now: new Date(this.#clock.now()),
       }),
       `the invitation ${id} could not be read`,
-    ).andThen(([row]) =>
-      row === undefined || row === null
-        ? ok(undefined)
-        : parsed(pendingRow, row, 'the answer to an invitation'),
+    ).andThen((answer) =>
+      answered(pendingRow.nullish(), answer, 'the answer to an invitation').map(
+        (row) => row ?? undefined,
+      ),
     )
   }
 
@@ -263,10 +255,10 @@ export class PendingInvitations {
   /** Deletes the invitation `id`: true when it was there, false when it was not. */
   remove(id: InvitationId): ResultAsync<boolean, DataError> {
     return writing(
-      this.#directory.db.query<[unknown]>(invitationRemoveStatement, { id }).retry(),
+      this.#directory.db.query(invitationRemoveStatement, { id }).retry(),
       `the invitation ${id} could not be removed`,
-    ).andThen(([deleted]) =>
-      parsed(deletedRows, deleted, 'the answer to the removal of an invitation').map(
+    ).andThen((answer) =>
+      answered(deletedRows, answer, 'the answer to the removal of an invitation').map(
         (rows) => rows.length > 0,
       ),
     )

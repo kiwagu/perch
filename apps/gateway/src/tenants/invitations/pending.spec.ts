@@ -321,6 +321,7 @@ describe('PendingInvitations', () => {
         clock: manualClock(START),
       })
 
+    // A row, a list or a count of the wrong shape inside the one statement's answer ...
     expect((await over([{ nonsense: 1 }]).byId(invitation.id))._unsafeUnwrapErr()).toMatchObject(
       unknown,
     )
@@ -336,5 +337,34 @@ describe('PendingInvitations', () => {
     expect((await over(['nonsense']).remove(invitation.id))._unsafeUnwrapErr()).toMatchObject(
       unknown,
     )
+
+    // ... and an answer that is not one array of one statement's result: none, a non-array, two.
+    for (const answer of [[], {}, [null, null]]) {
+      const store = over(answer)
+
+      expect((await store.byId(invitation.id))._unsafeUnwrapErr()).toMatchObject(unknown)
+      expect((await store.read(invitation.token))._unsafeUnwrapErr()).toMatchObject(unknown)
+      expect((await store.ofTenant(acme))._unsafeUnwrapErr()).toMatchObject(unknown)
+      expect((await store.forEmail(bob, 'bob@example.test'))._unsafeUnwrapErr()).toMatchObject(
+        unknown,
+      )
+      expect((await store.remove(invitation.id))._unsafeUnwrapErr()).toMatchObject(unknown)
+    }
+  })
+
+  it('still reads the one result of a statement that found no row as a missing row', async () => {
+    const { directory, invite } = await harness()
+    const invitation = await invite('carol@example.test')
+
+    for (const answer of [[undefined], [null]]) {
+      const store = new PendingInvitations({
+        directory: answering(directory, answer),
+        secret: SECRET,
+        clock: manualClock(START),
+      })
+
+      expect((await store.byId(invitation.id))._unsafeUnwrap()).toBeUndefined()
+      expect((await store.read(invitation.token))._unsafeUnwrap()).toEqual({ kind: 'invalid' })
+    }
   })
 })
