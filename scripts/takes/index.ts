@@ -18,4 +18,4 @@ export {
 export { recordedFiles, recordedMessage } from './recorded.ts'
 export { takeRefusal } from './refusal.ts'
 export { type Landed, type Lookup, lookupOf, parseSquashed, type Round, roundOf } from './round.ts'
-export { landingRefusal } from './squash.ts'
+export { branchTip, landingRefusal } from './squash.ts'

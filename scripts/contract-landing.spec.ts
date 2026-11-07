@@ -479,6 +479,27 @@ describe('contract-take --round', () => {
     expect(result.stdout).toBe('')
   })
 
+  it('judges a branch given as a revision of an existing one as unknown, and the branch by its name', () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    take(fixture)
+    code(root, 'shown')
+
+    const unknown = runRound(root, 'feat/me~0')
+
+    refuses(unknown, 'contract take: git knows no branch feat/me~0 in this clone.\n')
+    expect(unknown.stderr).not.toContain('fatal:')
+    expect(unknown.stdout).toBe('')
+
+    const named = runRound(root, 'feat/me')
+
+    passes(named)
+    expect(named.stdout).toBe(
+      'contract take: every commit of feat/me since its last landing (2) is in its form\n',
+    )
+  })
+
   it('reads a comment line above a recorded trailer as git does', () => {
     const fixture = trunk()
 

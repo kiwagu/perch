@@ -38,7 +38,7 @@ function commitOf(rev: string): string | undefined {
  * (`feat/me~0`), or undefined when git has no such branch. Whether the ref exists is asked first,
  * in silence: `show-ref --hash` reports a missing ref on stderr, above the check's own refusal.
  */
-function branchTip(branch: string): string | undefined {
+export function branchTip(branch: string): string | undefined {
   const ref = `refs/heads/${branch}`
 
   if (git(['show-ref', '--verify', '--quiet', ref]).status !== 0) {

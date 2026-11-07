@@ -29,6 +29,7 @@
 import { headRef } from './gates/tree.ts'
 import { git, merging, stagedFiles } from './staged-commit.ts'
 import {
+  branchTip,
   commitCommand,
   landingRefusal,
   readMessage,
@@ -94,9 +95,9 @@ function round(branch: string | undefined): number {
   }
 
   const name = head.slice('refs/heads/'.length)
-  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])
+  const oid = branchTip(name)
 
-  if (tip.status !== 0) {
+  if (oid === undefined) {
     console.error(`contract take: git knows no branch ${name} in this clone.`)
 
     return 1
@@ -108,7 +109,6 @@ function round(branch: string | undefined): number {
     return 0
   }
 
-  const oid = tip.out.trim()
   const judged = roundOf(oid, MAIN)
 
   if (typeof judged === 'string') {
