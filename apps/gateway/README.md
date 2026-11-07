@@ -133,7 +133,8 @@ the update; each device's next hello is then refused with 4401.
   hello closed with 4001, and a device signing itself out with `POST /auth/sign-out` (204 with
   its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
   identity, the organisation path (an organisation `smoke_<time>` created, a second identity
-  invited, each device welcomed with its membership and role, the invited device writing a note
+  invited by email and accepting the invitation by the id the invite answered, each device
+  welcomed with its membership and role, the invited device writing a note
   into the organisation's region that the owner's device receives, the owner editing that note
   as an admin, the invited device deleting its own note, a late device of the owner subscribing
   to a snapshot that holds the admin's note and not the deleted one, the invited device's edit
@@ -157,7 +158,8 @@ step signs up the devices it adds (`load-<run>-<n>@example.test`, each device fr
 client address of its own, as in the smoke, so no address spends its verification mails) and
 verifies each through the link of its mail, as the smoke does, which signs the device in; it
 groups every `--members` of them
-into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
+into an organisation `load_<run>_<k>` (the first creates it and invites the rest by email, each
+accepting by the id its invite answered), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends
 a note every `1 / --rate` seconds, at a random phase, and proposes a compaction when an ack asks
