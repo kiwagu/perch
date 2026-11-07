@@ -18,7 +18,7 @@ Where: [/settings] on device A (user A, member) and [/org] on device B (user B, 
 ### Steps
 1. On device A, sign up as user A, open the link of its [mail:sign-up] and wait for [/me]
 2. On device B, sign up as user B, open the link of its [mail:sign-up], open [/org], enter the key and the name into [organisation.create.key-input] and [organisation.create.name-input], click [organisation.create.submit-button], and invite user A with [organisation.invite.email-input] and [organisation.invite.submit-button]
-3. On device A, open [/org], wait for [organisation.page.heading] to show the organisation name, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
+3. On device A, open [/org], click [organisation.received.accept-button] on the organisation's [organisation.received.item], wait for [organisation.page.heading] to show the organisation name, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]
 4. On device A, open [/settings], enter user A's password into [user.settings.deletion.password-input], click [user.settings.deletion.send-button], open the link of its [mail:request-account-deletion], click [user.delete-account.delete-button] and confirm with [app-shell.confirmation.confirm-button]
 5. On device B, reload [/org] and wait for [organisation.notes.section] to reach [state:ready]
 
