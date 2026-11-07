@@ -28,6 +28,7 @@ import {
   actor,
   closeHubs,
   editFrom,
+  type HubFixtureOptions,
   hubWithHistory,
   hubWithTwoSubscribers,
   memberOf,
@@ -39,6 +40,7 @@ import {
   snapshotIn,
   snapshotOf,
   subscriber,
+  type TestSubscriber,
   underPeerOf,
 } from './__fixtures__/hub'
 import type { RegionHub, Subscriber } from './hub'
@@ -1443,6 +1445,202 @@ describe('retiring a region', () => {
 
     expect((await retired).isOk()).toBe(true)
     expect(releasedAtClose).toBe(1)
+  })
+})
+
+describe('changing the actor of a subscriber', () => {
+  const acme = { kind: 'tenant', id: 'tenant:acme' } as const
+
+  /** The acknowledgements and rejections a device was answered with, in order. */
+  const answers = (device: TestSubscriber) =>
+    device.received.filter((message) => message.type === 'ack' || message.type === 'reject')
+
+  /**
+   * An update that rewrites the note `id` as a device holding what `device` holds, on a document
+   * of its own: it stands on no change of an earlier batch of the device, accepted or not.
+   */
+  function editOf(device: TestSubscriber, id: string, text: string): Uint8Array {
+    const doc = new LoroDoc()
+
+    doc.import(snapshotOf(device.doc))
+
+    return noteUpdate(doc, { id, text })
+  }
+
+  /** The hub holds acme with a note ann wrote as a member, and ann subscribed. */
+  async function acmeWithNote(options: HubFixtureOptions = {}) {
+    const fixture = await openHub(options)
+    const ann = subscriber('ann')
+    const id = noteIdFactory.create()
+
+    ;(await fixture.hub.subscribe(acme, memberOf('idn_ann'), ann, null))._unsafeUnwrap()
+    ;(
+      await fixture.hub.push(acme.id, ann, 1, [
+        noteCreate(ann.doc, { id, author: 'idn_ann', text: 'hello' }),
+      ])
+    )._unsafeUnwrap()
+
+    return { ...fixture, ann, id }
+  }
+
+  /**
+   * Acme's queue held inside a batch of ann's until `open()`: whatever is asked of the region
+   * meanwhile waits behind it. `ahead()` asks for that batch and answers, once it is held, with
+   * the promise of its outcome.
+   */
+  function holdingAnnsBatch() {
+    const held = gate()
+    let holding = false
+    const options: HubFixtureOptions = {
+      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+    }
+    const ahead = async (hub: RegionHub, ann: TestSubscriber) => {
+      holding = true
+
+      const pushed = hub.push(acme.id, ann, 2, [
+        noteCreate(ann.doc, { id: noteIdFactory.create(), author: 'idn_ann', text: 'more' }),
+      ])
+
+      await drain()
+      holding = false
+
+      return { pushed }
+    }
+
+    return { options, ahead, open: held.open }
+  }
+
+  it("judges a subscriber's next batch by its new actor: an admin's edit of another's note is acknowledged, a member's again refused", async () => {
+    const { hub, id } = await acmeWithNote()
+    const bob = subscriber('bob')
+
+    ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
+    ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as a member')]))._unsafeUnwrap()
+
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    ;(await hub.push(acme.id, bob, 2, [editOf(bob, id, 'as an admin')]))._unsafeUnwrap()
+
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob'))
+    ;(await hub.push(acme.id, bob, 3, [editOf(bob, id, 'a member again')]))._unsafeUnwrap()
+
+    expect(answers(bob)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'forbidden-action' }),
+      expect.objectContaining({ type: 'ack', batch: 2 }),
+      expect.objectContaining({ type: 'reject', batch: 3, reason: 'forbidden-action' }),
+    ])
+  })
+
+  it('changes only the subscriber it names: another device of the region keeps its actor', async () => {
+    const { hub, id } = await acmeWithNote()
+    const bob = subscriber('bob')
+    const cat = subscriber('cat')
+
+    ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
+    ;(await hub.subscribe(acme, memberOf('idn_cat'), cat, null))._unsafeUnwrap()
+
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as an admin')]))._unsafeUnwrap()
+    ;(await hub.push(acme.id, cat, 1, [editOf(cat, id, 'as a member')]))._unsafeUnwrap()
+
+    expect(answers(bob)).toEqual([expect.objectContaining({ type: 'ack', batch: 1 })])
+    expect(answers(cat)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'forbidden-action' }),
+    ])
+  })
+
+  it('answers a subscription that waits in the queue into the actor it was swapped to meanwhile', async () => {
+    const queue = holdingAnnsBatch()
+    const { hub, ann, id } = await acmeWithNote(queue.options)
+    const bob = subscriber('bob')
+    const { pushed: annsBatch } = await queue.ahead(hub, ann)
+    const joining = hub.subscribe(acme, memberOf('idn_bob'), bob, null)
+
+    await drain()
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    queue.open()
+    ;(await annsBatch)._unsafeUnwrap()
+    ;(await joining)._unsafeUnwrap()
+    ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as an admin')]))._unsafeUnwrap()
+
+    expect(answers(bob)).toEqual([expect.objectContaining({ type: 'ack', batch: 1 })])
+  })
+
+  it('answers a subscription that waits in the queue into the actor it was swapped back to', async () => {
+    const queue = holdingAnnsBatch()
+    const { hub, ann, id } = await acmeWithNote(queue.options)
+    const bob = subscriber('bob')
+    const { pushed: annsBatch } = await queue.ahead(hub, ann)
+    const joining = hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null)
+
+    await drain()
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob'))
+    queue.open()
+    ;(await annsBatch)._unsafeUnwrap()
+    ;(await joining)._unsafeUnwrap()
+    ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as a member')]))._unsafeUnwrap()
+
+    expect(answers(bob)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'forbidden-action' }),
+    ])
+  })
+
+  it('judges a batch already queued in the region by the actor the hub holds when it takes the batch in', async () => {
+    const queue = holdingAnnsBatch()
+    const { hub, ann, id } = await acmeWithNote(queue.options)
+    const bob = subscriber('bob')
+
+    ;(await hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null))._unsafeUnwrap()
+
+    const { pushed: annsBatch } = await queue.ahead(hub, ann)
+    const bobsBatch = hub.push(acme.id, bob, 1, [editOf(bob, id, 'queued as an admin')])
+
+    await drain()
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob'))
+    queue.open()
+    ;(await annsBatch)._unsafeUnwrap()
+    ;(await bobsBatch)._unsafeUnwrap()
+
+    expect(answers(bob)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'forbidden-action' }),
+    ])
+  })
+
+  it('installs nothing for a subscriber that left while its subscription waited, a swap after it included', async () => {
+    const queue = holdingAnnsBatch()
+    const { hub, ann } = await acmeWithNote(queue.options)
+    const bob = subscriber('bob')
+    const { pushed: annsBatch } = await queue.ahead(hub, ann)
+    const joining = hub.subscribe(acme, memberOf('idn_bob'), bob, null)
+
+    await drain()
+    hub.unsubscribe(acme.id, bob.id)
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    queue.open()
+    ;(await annsBatch)._unsafeUnwrap()
+    ;(await joining)._unsafeUnwrap()
+    ;(await hub.push(acme.id, bob, 1, []))._unsafeUnwrap()
+
+    expect(bob.received).toEqual([expect.objectContaining({ type: 'error', code: 'protocol' })])
+  })
+
+  it('changes nothing for a region the hub does not hold, nor for a device that has not subscribed to it', async () => {
+    const { hub, id } = await acmeWithNote()
+    const ghost = subscriber('ghost')
+
+    hub.changeActor('tenant:elsewhere', ghost.id, memberOf('idn_ghost', 'admin'))
+    hub.changeActor(acme.id, ghost.id, memberOf('idn_ghost', 'admin'))
+
+    expect(hub.loadedRegions()).toBe(1)
+    ;(await hub.push(acme.id, ghost, 1, []))._unsafeUnwrap()
+    expect(ghost.received).toEqual([expect.objectContaining({ type: 'error', code: 'protocol' })])
+
+    // The swap left no actor behind for a later subscription of the device.
+    ;(await hub.subscribe(acme, memberOf('idn_ghost'), ghost, null))._unsafeUnwrap()
+    ;(await hub.push(acme.id, ghost, 2, [editOf(ghost, id, 'as a member')]))._unsafeUnwrap()
+
+    expect(answers(ghost)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 2, reason: 'forbidden-action' }),
+    ])
   })
 })
 
