@@ -32,6 +32,7 @@ export {
   platformMailSchema,
   platformNoticeSchema,
   platformSchema,
+  RECIPIENT,
   screenFileSchema,
   screenSchema,
   sourceSchema,
