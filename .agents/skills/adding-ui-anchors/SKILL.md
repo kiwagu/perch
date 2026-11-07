@@ -161,12 +161,14 @@ code and the tests follow; the checks hold them to the contract.
    it approves in advance: the last business commit of a rename or a removal, which drops the
    old names the card listed and nothing else.
    **Then the take**, on the feature's own branch with `main` merged in:
-   `git cherry-pick --no-commit <the card's trunk commits, oldest first>`, then one
-   `git commit` named for the card's goal, which runs the hook; where a commit of the card
-   sits next to another card's lines, the take keeps this card's lines only. The card notes
-   the take's hash. A business commit written on the feature's branch instead, a feature
-   begun there before the trunk or an amendment the developer allows there, **stops for
-   review**: hand the developer the output of `bun run contract:diff main`, the contract
+   `git cherry-pick --no-commit <the card's trunk commits, oldest first>`, then
+   `git commit -m "<type>(contract): <the card's goal>" -m "Taken-from: contract/trunk <first>^..<last> <card>"`,
+   which runs the hooks (the commit-msg hook holds that form); where a commit of the card
+   sits next to another card's lines, the take keeps this card's lines only, and the trailer
+   names the card's commits around the other's one by one. The card notes the take's hash.
+   A business commit written on the feature's branch instead, a feature begun there before
+   the trunk or an amendment the developer allows there, takes the same subject with
+   `Written-on-branch: <card>` in place of the take's trailer, and **stops for review**: hand the developer the output of `bun run contract:diff main`, the contract
    commits by hash with their diff and the meta landing they build on, the reason for every
    change and the gaps signalled (`references/templates.md`, "Review"), ask for the OK on
    those commits, and wait. A change that review brings (one the developer asks for, or one

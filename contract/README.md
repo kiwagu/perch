@@ -64,7 +64,8 @@ developer approved; the code takes no architectural decision of its own.
    signalled) and says when the card's contract is right: that is the OK, and the card names
    it with its trunk commits. The feature's own branch then takes the card as one business
    commit (`git cherry-pick --no-commit` of the card's commits, oldest first, then one
-   `git commit` through the hook), and the code and the tests, a test's scaffold included,
+   `git commit` through the hooks, `<type>(contract): <the card's goal>` with the trailer
+   `Taken-from: contract/trunk <first>^..<last> <card>`), and the code and the tests, a test's scaffold included,
    start on top of it, in commits of their own, which any session may write, the modeling
    one included: the contract and the code are never written at the same time, and the
    code never before its contract.
@@ -1252,6 +1253,33 @@ On `contract/trunk` the pre-commit hook first holds each commit to the business 
 by both its paths, fails, naming each such file and the branch it belongs on. The vocabulary
 counts whole, so an edit of its grammar there is the review's to see in the trunk's diff; a
 merge passes, as it brings `main` in with every layer.
+
+On any other branch but `main` and `feat/contract-first-pass` (an experiment's aside), the
+commit-msg hook holds a commit that changes the business layer to a take's form
+(`scripts/contract-take.ts`): its subject `<type>(contract): <the card's goal>`, the business
+layer alone, and as its last paragraph `Taken-from: contract/trunk <first>^..<last> <card>`,
+each commit or run of them oldest first, on the trunk's own line, changing every file it stages;
+a business commit the rules let the branch write itself (the last one of a rename or a removal,
+a feature begun there before the trunk, an amendment allowed there) names its cards in
+`Written-on-branch: <card>` instead. Nothing else there names the `contract` scope, so
+`git log main..<branch> -E --grep='^[a-z]*\(contract\):'` lists the branch's contract changes
+(`main..` leaves out the meta rounds `main` brings in) and `--grep='^Taken-from:'` its takes. A
+plain cherry-pick or rebase runs no hook and a revert of a take fails it. The check reads the
+`git commit` that runs the hook from `/proc`, its options parsed as git parses them: an amend is
+judged as the whole commit it leaves, and the message as git records it, cut at its scissors line
+under `--verbose` and its comment lines stripped or kept by the cleanup mode; where git's default
+mode leaves that to whether an editor opened, a message its comment lines change fails, and so
+does one the comment characters git may pick under `core.commentChar=auto` read differently.
+Without
+`/proc` (another system), an amend is judged by what it adds and the message is cut at a
+scissors line it holds. A take is checked against
+`main` and `contract/trunk` as the clone knows them, the remote's when it has no branch of its
+own. The pre-commit hook first refuses a commit
+while a hook `lefthook.yml` names is not installed (`scripts/hooks-installed.ts`): lefthook
+installs the hooks on `bunx lefthook install` (or `bun install`), and by itself on a hook run
+that notices `lefthook.yml` changed (an edit in the same second as the last install can pass
+unnoticed), unless told not to (`--no-auto-install`), but a hook whose file went while
+`lefthook.yml` stayed the same stays missing.
 
 ## The manifest
 
