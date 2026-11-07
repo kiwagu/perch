@@ -11,6 +11,11 @@ export interface LeftOnStand {
   readonly tenants: number
   /** The memberships of the accounts and the memberships in the manifest's organisations. */
   readonly memberships: number
+  /**
+   * The pending invitations to the manifest's organisations, whoever they are for, and to the
+   * manifest's accounts' addresses, whatever organisation they are to.
+   */
+  readonly invitations: number
   /** How many of the manifest's organisation databases `t_<key>` exist. */
   readonly databases: number
   readonly profiles: number
@@ -43,6 +48,7 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
     'identity',
     'tenant',
     'membership',
+    'invitation',
     'profile',
     'settings',
     '_replica_head',

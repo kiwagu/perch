@@ -28,6 +28,7 @@ import {
   type SettingsService,
 } from '../../features/user/application/settings/settings.service'
 import { UserModule } from '../../features/user/user.module'
+import { INVITATIONS } from '../../platform/invitations.port'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
@@ -37,7 +38,7 @@ import { type AppServices, createAppRoot } from '../root'
 import { memoryStorage } from '../storage'
 
 import { ensureAccount, readAccount } from './accounts'
-import { ensureMember, ensureOrganisation, readOrganisation } from './organisations'
+import { ensureInvited, ensureJoined, ensureOrganisation, readOrganisation } from './organisations'
 import type {
   ClientOptions,
   Inbox,
@@ -133,6 +134,7 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
   const device: SeedDevice & SeedOrganisationDevice = {
     session: services.session,
     organisations: services.organisations,
+    invitations: services.container.get(INVITATIONS),
     profiles,
     settings,
     notes,
@@ -144,7 +146,8 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
   return {
     signIn: (input) => enter(() => services.session.signIn(input)),
     ensureOrganisation: (input) => ensureOrganisation(device, input),
-    ensureMember: (key, email) => ensureMember(device, key, email),
+    ensureInvited: (key, email) => ensureInvited(device, key, email),
+    ensureJoined: (invitation) => ensureJoined(device, invitation),
     readOrganisation: (key, input) => readOrganisation(device, key, input),
     ensureAccount: (input) => ensureAccount(device, input),
     readAccount: (input) => readAccount(device, input),

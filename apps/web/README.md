@@ -391,7 +391,9 @@ and waits until the gateway acknowledged them, and whose `readAccount` signs in 
 profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one the account already
-administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and
+administers is found; one it only belongs to is refused), `ensureInvited` invites an existing
+account by email as a member and answers the invitation's id (`already-member` when it is one),
+`ensureJoined` accepts an invitation by its id as the signed-in account, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
 of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
 by default), which a test talking to the gateway directly uses to name a client address in
