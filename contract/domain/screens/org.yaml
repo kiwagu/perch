@@ -136,7 +136,7 @@ anchors:
     roles: [ member, admin ]
   organisation.members.list:
     kind: list
-    description: The members of the current organisation; rendered once they are read.
+    description: The members of the current organisation, read each time the list starts to show (the page opening, this account made an administrator) and rendered once read.
     roles: [ admin ]
     source:
       platform: organisations.members
@@ -197,7 +197,7 @@ anchors:
     roles: [ admin ]
   organisation.sent.list:
     kind: list
-    description: The invitations not accepted yet, the newest first; rendered once read, when there is at least one.
+    description: The invitations not accepted yet, the newest first, read each time the list may show (the page opening, this account made an administrator); rendered when there is at least one.
     roles: [ admin ]
     source:
       platform: organisations.invitations
