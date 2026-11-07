@@ -28,7 +28,14 @@
 
 import { headRef } from './gates/tree.ts'
 import { git, merging, stagedFiles } from './staged-commit.ts'
-import { commitCommand, readMessage, takeRefusal } from './takes/index.ts'
+import {
+  commitCommand,
+  readMessage,
+  roundOf,
+  roundRefusal,
+  takeRefusal,
+  UNJUDGED_BRANCHES,
+} from './takes/index.ts'
 
 /** Branches whose commits are no area's: `main`, the trunk and the contract engine's branch. */
 const OWN_LAYERS = new Set([
@@ -39,6 +46,9 @@ const OWN_LAYERS = new Set([
 
 /** An experiment's business commits go to the trunk when it is split. */
 const EXPERIMENTS = 'refs/heads/experiment/'
+
+/** The branch every round lands on, and is judged against. */
+const MAIN = 'refs/heads/main'
 
 /**
  * What an amend's commit is judged against: HEAD's parent, the empty tree for a first commit, or
@@ -66,8 +76,74 @@ function amendBase(): string | undefined {
   return empty.status === 0 ? empty.out.trim() : undefined
 }
 
+/**
+ * Judges the round of `branch`, the checked-out one when none is named, against `main` as a
+ * landing would, read-only, and prints the verdict: the refusal, or how many commits are in their
+ * form.
+ */
+function round(branch: string | undefined): number {
+  const head = branch === undefined ? headRef() : `refs/heads/${branch}`
+
+  if (head === undefined) {
+    console.error('contract take: git cannot tell the branch to judge.')
+
+    return 1
+  }
+
+  if (!head.startsWith('refs/heads/')) {
+    console.error('contract take: HEAD is on no branch; name the one to judge: --round <branch>.')
+
+    return 1
+  }
+
+  const name = head.slice('refs/heads/'.length)
+
+  if (UNJUDGED_BRANCHES.includes(name)) {
+    console.log(`contract take: ${name} is the contract engine's branch; its round is not judged`)
+
+    return 0
+  }
+
+  const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])
+
+  if (tip.status !== 0) {
+    console.error(`contract take: git knows no branch ${name} in this clone.`)
+
+    return 1
+  }
+
+  const oid = tip.out.trim()
+  const judged = roundOf(oid, MAIN)
+
+  if (typeof judged === 'string') {
+    console.error(`contract take: on ${name}, ${judged}`)
+
+    return 1
+  }
+
+  const refusal = roundRefusal(name, oid, MAIN, judged)
+
+  if (refusal !== undefined) {
+    console.error(refusal)
+
+    return 1
+  }
+
+  console.log(
+    `contract take: every commit of ${name} since its last landing (${judged.commits.length}) is in its form`,
+  )
+
+  return 0
+}
+
 function main(): number {
-  const [file] = process.argv.slice(2)
+  const [first, second] = process.argv.slice(2)
+
+  if (first === '--round') {
+    return round(second)
+  }
+
+  const file = first
   const head = headRef()
 
   if (head === undefined) {
