@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,6 +9,7 @@ import {
   author,
   commit,
   commitThroughHook,
+  ENV,
   feed,
   git,
   gitThroughHook,
@@ -118,13 +120,14 @@ function landedTip(root: string, tip: string): void {
   git(root, 'switch', '-q', 'feat/me')
 }
 
-/** Takes the trunk's three commits on the checked-out branch, unchecked, and returns the take's short id. */
-function take({ root, screen, scenario, vocabulary }: Trunk): string {
+/** Takes the trunk's three commits on the checked-out branch, unchecked, with `args` for the commit, and returns the take's short id. */
+function take({ root, screen, scenario, vocabulary }: Trunk, ...args: string[]): string {
   pick(root, screen, scenario, vocabulary)
   author(
     root,
     'commit',
     '-q',
+    ...args,
     '-m',
     'feat(contract): model the page',
     '-m',
@@ -966,6 +969,24 @@ function separate(root: string, value: string): void {
   )
 }
 
+/**
+ * Has `root` sign the commits made with `-S` by an SSH key made here, which needs no gpg, and show
+ * each signature's check in `git log`, as `log.showSignature` asks.
+ */
+function sign(root: string): void {
+  const key = join(root, '.git', 'key')
+  const made = spawnSync('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', key], {
+    encoding: 'utf8',
+    env: ENV,
+    stdio: 'pipe',
+  })
+
+  expect(made.status, `ssh-keygen: ${made.stderr}`).toBe(0)
+  configure(root, 'gpg.format', 'ssh')
+  configure(root, 'user.signingkey', `${key}.pub`)
+  configure(root, 'log.showSignature', 'true')
+}
+
 describe('contract-take under the configuration of git', () => {
   it("reads a landing's trailer and the round it lands whatever separators git is set to", () => {
     const fixture = trunk()
@@ -1011,6 +1032,57 @@ describe('contract-take under the configuration of git', () => {
     separate(root, '=')
     oldForm(root)
     land(root, 'feat/me')
+    merge(root, 'main')
+    code(root, 'shown')
+
+    const result = runRound(root)
+
+    passes(result)
+    expect(result.stdout).toEndWith('(1) is in its form\n')
+  })
+
+  it("reads a signed take's message and a landing of it whatever signatures git shows", () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    sign(root)
+    take(fixture, '-S')
+    expect(git(root, 'cat-file', 'commit', 'HEAD')).toContain('gpgsig')
+    expect(git(root, 'log', '-1', '--format=%B')).not.toBe(
+      git(root, 'log', '-1', '--no-show-signature', '--format=%B'),
+    )
+    code(root, 'shown')
+    passes(runRound(root))
+
+    const tip = squash(root)
+
+    passes(commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(tip)))
+  })
+
+  it('names a signed commit of the round by its subject whatever signatures git shows', () => {
+    const { root } = trunk()
+
+    sign(root)
+    stage(root, SCREEN, 'raw')
+    author(root, 'commit', '-q', '-S', '-m', 'feat(screens): model the page')
+
+    const raw = git(root, 'rev-parse', '--short', 'HEAD')
+    const result = runRound(root)
+
+    refuses(result, `\n- ${raw} feat(screens): model the page\n`)
+    expect(result.stderr).not.toContain('No signature')
+  })
+
+  it('leaves out what a signed earlier landing carried whatever signatures git shows', () => {
+    const { root } = trunk()
+
+    sign(root)
+    oldForm(root)
+
+    const tip = squash(root)
+
+    author(root, 'commit', '-q', '-S', '-m', 'feat(web): land the page', '-m', squashedFrom(tip))
+    git(root, 'switch', '-q', 'feat/me')
     merge(root, 'main')
     code(root, 'shown')
 

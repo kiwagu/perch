@@ -51,7 +51,7 @@ function faultsOf(branch: string, commit: string): readonly string[] {
     return []
   }
 
-  const label = git(['log', '-1', '--format=%h %s', commit])
+  const label = git(['log', '-1', '--no-show-signature', '--format=%h %s', commit])
   const line = label.status === 0 ? label.out.trim() : `${commit.slice(0, 7)} ${message.subject}`
 
   return [`- ${line}`, ...problemsOf(refusal)]

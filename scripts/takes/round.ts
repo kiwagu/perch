@@ -61,6 +61,7 @@ function landedTips(parent: string): readonly string[] | undefined {
   const { status, out } = git([
     ...COLON_TRAILERS,
     'log',
+    '--no-show-signature',
     '--reverse',
     parent,
     `--format=%(trailers:key=${SQUASHED},valueonly,unfold,separator=%x1f)`,

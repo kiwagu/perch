@@ -10,10 +10,11 @@ import { type Message, readingOf } from './message.ts'
 
 /**
  * The message git recorded for `commit`, read with the repository's own comment setting as git's
- * `%(trailers)` reads it, or undefined when git cannot read it or its trailers.
+ * `%(trailers)` reads it, without the check of its signature that `log.showSignature` prints above
+ * it, or undefined when git cannot read it or its trailers.
  */
 export function recordedMessage(commit: string): Message | undefined {
-  const logged = git(['log', '-1', '--format=%B', commit])
+  const logged = git(['log', '-1', '--no-show-signature', '--format=%B', commit])
 
   if (logged.status !== 0) {
     return undefined
