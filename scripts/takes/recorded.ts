@@ -6,9 +6,12 @@
 
 import { git } from '../staged-commit.ts'
 
-import type { Message } from './message.ts'
+import { type Message, readingOf } from './message.ts'
 
-/** The message git recorded for `commit`, or undefined when git cannot read it or its trailers. */
+/**
+ * The message git recorded for `commit`, read with the repository's own comment setting as git's
+ * `%(trailers)` reads it, or undefined when git cannot read it or its trailers.
+ */
 export function recordedMessage(commit: string): Message | undefined {
   const logged = git(['log', '-1', '--format=%B', commit])
 
@@ -16,23 +19,9 @@ export function recordedMessage(commit: string): Message | undefined {
     return undefined
   }
 
-  const parsed = git(['interpret-trailers', '--parse'], logged.out)
+  const reading = readingOf(logged.out)
 
-  if (parsed.status !== 0) {
-    return undefined
-  }
-
-  const trailers = parsed.out
-    .split('\n')
-    .filter((line) => line.includes(':'))
-    .map((line) => {
-      const colon = line.indexOf(':')
-
-      return { key: line.slice(0, colon), value: line.slice(colon + 1).trim() }
-    })
-  const subject = logged.out.split('\n').find((line) => line.trim() !== '') ?? ''
-
-  return { subject, trailers, doubt: undefined }
+  return reading === undefined ? undefined : { ...reading, doubt: undefined }
 }
 
 /**

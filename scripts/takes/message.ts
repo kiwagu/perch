@@ -28,36 +28,22 @@ export interface Message {
   readonly doubt: Doubt | undefined
 }
 
-type Reading = Pick<Message, 'subject' | 'trailers'>
+export type Reading = Pick<Message, 'subject' | 'trailers'>
 
 /** The line git cuts a message at, a comment line of its own: `<comment> -------- >8 --------`. */
 function scissors(comment: string): RegExp {
   return new RegExp(`^${comment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} -{24} >8 -{24}$`, 'm')
 }
 
-/** The subject and trailers of `text` cleaned up by git in `mode`, comment lines starting with `comment`. */
-function reading(
-  text: string,
-  mode: 'strip' | 'whitespace' | 'verbatim',
-  comment: string,
-): Reading | undefined {
-  const as = ['-c', `core.commentString=${comment}`]
-  let cleaned = text
-
-  if (mode !== 'verbatim') {
-    const stripped = git(
-      [...as, 'stripspace', ...(mode === 'strip' ? ['--strip-comments'] : [])],
-      text,
-    )
-
-    if (stripped.status !== 0) {
-      return undefined
-    }
-
-    cleaned = stripped.out
-  }
-
-  const parsed = git([...as, 'interpret-trailers', '--parse'], cleaned)
+/**
+ * The subject and trailers of `text` as git reads them: the subject its first line that is not
+ * blank, the trailers what `git interpret-trailers --parse` lists, each split at its first colon,
+ * the value trimmed; comment lines start with `comment` where one is given, else with what the
+ * repository's own setting says. Undefined when git cannot read them.
+ */
+export function readingOf(text: string, comment?: string): Reading | undefined {
+  const as = comment === undefined ? [] : ['-c', `core.commentString=${comment}`]
+  const parsed = git([...as, 'interpret-trailers', '--parse'], text)
 
   if (parsed.status !== 0) {
     return undefined
@@ -71,9 +57,32 @@ function reading(
 
       return { key: line.slice(0, colon), value: line.slice(colon + 1).trim() }
     })
-  const subject = cleaned.split('\n').find((line) => line.trim() !== '') ?? ''
+  const subject = text.split('\n').find((line) => line.trim() !== '') ?? ''
 
   return { subject, trailers }
+}
+
+/** The subject and trailers of `text` cleaned up by git in `mode`, comment lines starting with `comment`. */
+function reading(
+  text: string,
+  mode: 'strip' | 'whitespace' | 'verbatim',
+  comment: string,
+): Reading | undefined {
+  if (mode === 'verbatim') {
+    return readingOf(text, comment)
+  }
+
+  const stripped = git(
+    [
+      '-c',
+      `core.commentString=${comment}`,
+      'stripspace',
+      ...(mode === 'strip' ? ['--strip-comments'] : []),
+    ],
+    text,
+  )
+
+  return stripped.status === 0 ? readingOf(stripped.out, comment) : undefined
 }
 
 /** The message in `file` as git records it after `cleanup`, or undefined when it cannot be read. */

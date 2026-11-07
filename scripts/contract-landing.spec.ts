@@ -17,7 +17,7 @@ import {
   type Trunk,
   trunk,
 } from './takes/__fixtures__/repo.ts'
-import { FORM, lookupOf, NEVER_LANDS, parseSquashed } from './takes/index.ts'
+import { FORM, lookupOf, NEVER_LANDS, parseSquashed, readingOf } from './takes/index.ts'
 
 /**
  * Each case runs git a dozen times or more, and the check itself over a branch: under the
@@ -435,5 +435,19 @@ describe('contract-take --round', () => {
     expect(NEVER_LANDS('contract/trunk')).toBe(true)
     expect(NEVER_LANDS('experiment/x')).toBe(true)
     expect(NEVER_LANDS('feat/me')).toBe(false)
+  })
+
+  it("reads a message's subject and trailers as git does", () => {
+    const text =
+      '\nfeat(contract): model the page\n\n; a note\nTaken-from:  contract/trunk abc1234 ABC-1 \n'
+
+    expect(readingOf(text, ';')).toEqual({
+      subject: 'feat(contract): model the page',
+      trailers: [{ key: 'Taken-from', value: 'contract/trunk abc1234 ABC-1' }],
+    })
+    expect(readingOf('feat(web): show the page\n\nno trailer here\n', ';')).toEqual({
+      subject: 'feat(web): show the page',
+      trailers: [],
+    })
   })
 })
