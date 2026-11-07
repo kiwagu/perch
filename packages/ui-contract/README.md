@@ -120,13 +120,15 @@ for Bun.
     `contract/schemas/screen.schema.json`), `platformFileSchema`
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
-    on (the signed-in one, or the one a guest's action names by its parameters), a
+    on (the signed-in account for an action on its own account, else the one its parameters
+    name, whoever is signed in), a
     reserved word no parameter of an action that sends a mail or a notice takes, the language
     also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's,
     a reserved word no parameter of an action that sends a mail takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
     type `PlatformMail`) and `platformNoticeSchema` (a notice of the action's `notices`, a mail
-    that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, `to:
+    that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's,
+    never `RECIPIENT`, `to:
     account` being the account's email as it was before the action changed anything, and an
     optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
@@ -221,11 +223,12 @@ for Bun.
     reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
     its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
     platform action declares goes to a parameter of the action or the account, takes its
-    language from one or the account, and links to a screen whose every route declares its
-    search parameter; an action that sends a mail or a notice has no parameter named
-    `account`), `noticesProblems` (the notices of a platform action carry names unique within
-    it, go to a parameter of the action or the account, take their language from one or the
-    account, and link, when they do, to a screen with a route, every route of which needs no
+    language from one, the account or, for a mail to a parameter from an action no guest runs,
+    its recipient, and links to a screen whose every route declares its search parameter; an
+    action that sends a mail or a notice has no parameter named `account`, and one that sends
+    a mail none named `recipient`), `noticesProblems` (the notices of a platform action carry
+    names unique within it, go to a parameter of the action or the account, take their
+    language from one or the account, never the recipient, and link, when they do, to a screen with a route, every route of which needs no
     parameter: no `$param`, no splat, no required search key)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the

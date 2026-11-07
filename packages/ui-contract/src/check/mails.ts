@@ -3,9 +3,9 @@
  * it acts on, speaks the language a parameter of the action holds, that account's or its
  * recipient's, and links to a screen with a route, every route of which declares the search
  * parameter that carries the token. `account` is reserved: in a mail or a notice (rule 16,
- * `notices.ts`) it names the account the action acts on, the signed-in one or the one a guest's
- * action names by its parameters (an email, a link's token), so an action that sends either has
- * no parameter of that name. `recipient`, a mail's language alone, is reserved on an action that sends a mail: the
+ * `notices.ts`) it names the account the action acts on, the signed-in account for an action on
+ * its own account, else, whoever is signed in, the one its parameters name (an email, a link's
+ * token), so an action that sends either has no parameter of that name. `recipient`, a mail's language alone, is reserved on an action that sends a mail: the
  * account whose email the mail goes to, else the signed-in account, so the mail goes to a
  * parameter and only signed-in roles run the action.
  */

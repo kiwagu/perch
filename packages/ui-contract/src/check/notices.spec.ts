@@ -68,6 +68,15 @@ describe('noticesProblems', () => {
       `${AT}[0].language: "tongue" is neither a parameter of "password.change" nor account`,
     ])
   })
+  it('takes a parameter named recipient as the language of a notice: there it is no keyword', () => {
+    const contract = sending([{ name: 'password-changed', to: 'account', language: 'recipient' }])
+
+    Object.assign(contract.screens.platform.actions['password.change']?.params ?? {}, {
+      recipient: { type: 'string', description: 'A language.' },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
   it('refuses the recipient as the language of a notice: only a mail speaks it', () => {
     expect(
       printed(sending([{ name: 'password-changed', to: 'account', language: 'recipient' }])),

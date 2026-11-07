@@ -16,9 +16,10 @@ import { kebabNameSchema, screenNameSchema } from '../../names.schema'
 
 /**
  * The account the action acts on, as the recipient of a mail or a notice or the source of its
- * language: the signed-in account, or, for an action a guest runs, the account its parameters
- * name (the email of a password reset's request, the token of a link). A reserved word, so an
- * action that sends either has no parameter of that name (`check/mails.ts`).
+ * language: the signed-in account for an action on its own account, else, whoever is signed in,
+ * the account its parameters name (the email of a password reset's request, the token of a
+ * link). A reserved word, so an action that sends either has no parameter of that name
+ * (`check/mails.ts`).
  */
 export const ACCOUNT = 'account'
 
@@ -38,7 +39,7 @@ const languageSchema = nameSchema.describe(
 export const platformMailSchema = z
   .strictObject({
     to: nameSchema.describe(
-      'The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in one or the one its parameters name.',
+      'The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name.',
     ),
     language: nameSchema.describe(
       "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's.",

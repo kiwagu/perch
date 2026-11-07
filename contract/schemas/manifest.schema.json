@@ -5685,7 +5685,7 @@
                   "to": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in one or the one its parameters name."
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
                   },
                   "language": {
                     "type": "string",
