@@ -747,6 +747,41 @@ describe('contract-take on main', () => {
     expect(git(root, 'rev-list', '--count', 'main')).toBe('2')
   })
 
+  it('passes an amend of a landing with new content, read from its git command', () => {
+    const fixture = trunk()
+    const { root } = fixture
+
+    code(root, 'shown')
+    passes(
+      commitThroughHook(root, '-m', 'feat(web): show the page', '-m', squashedFrom(squash(root))),
+    )
+
+    const landed = git(root, 'rev-parse', '--short', 'main')
+
+    git(root, 'switch', '-q', 'feat/me')
+
+    const tip = take(fixture)
+
+    squash(root)
+    refuses(
+      run(root, message('feat(web): show the page again', squashedFrom(tip))),
+      `contract take: main (${landed}) is not under ${tip}: bring main into feat/me and squash it again, so that the landing sits on top of main.\n`,
+      SQUASH_FORM,
+    )
+    passes(
+      commitThroughHook(
+        root,
+        '--amend',
+        '-m',
+        'feat(web): show the page again',
+        '-m',
+        squashedFrom(tip),
+      ),
+    )
+    expect(git(root, 'rev-list', '--count', 'main')).toBe('2')
+    expect(git(root, 'rev-parse', 'main^{tree}')).toBe(git(root, 'rev-parse', 'feat/me^{tree}'))
+  })
+
   it('refuses a landing on an unborn main', () => {
     const root = mkdtempSync(join(tmpdir(), 'contract-take-'))
 
