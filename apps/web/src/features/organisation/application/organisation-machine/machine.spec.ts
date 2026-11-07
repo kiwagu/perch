@@ -11,6 +11,7 @@ const hello = noteIdFactory.create()
 const agenda = noteIdFactory.create()
 const bea = identityIdFactory.create()
 const ann = identityIdFactory.create()
+const cy = identityIdFactory.create()
 const toBea = invitationIdFactory.create()
 
 const refused = (code: string): ResultAsync<never, BusError> => errAsync({ code })
@@ -196,6 +197,24 @@ describe('organisation machine', () => {
     expect(snapshot().context.membersChanged).toBe(0)
   })
 
+  it('empties the form only while the organisation an invitation was sent in is current', async () => {
+    const invite = later()
+    const { actor, snapshot, emitted, becomes, region } = page({ invite: () => invite.result })
+
+    actor.send({
+      type: 'organisation.invite.submit-button',
+      email: 'bea@example.test',
+      role: 'admin',
+    })
+    // Another organisation becomes current without the page choosing it, and its form is typed in.
+    becomes('globex')
+    invite.done()
+    await region('invite', 'idle')
+
+    expect(emitted).toEqual([toast('invited')])
+    expect(snapshot().context.invitationsChanged).toBe(1)
+  })
+
   it('toasts a removal, reading the members again', async () => {
     const { actor, deps, snapshot, emitted, region } = page()
 
@@ -255,6 +274,49 @@ describe('organisation machine', () => {
     ).toBe(true)
   })
 
+  it('remembers a role set, with the read of the members that confirms it, until another is set on its row', async () => {
+    const { actor, snapshot, region } = page()
+
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.changingRole).toBeUndefined()
+    expect(snapshot().context.rolesSet).toEqual([{ identity: bea, role: 'admin', read: 1 }])
+
+    actor.send({ type: 'organisation.members.role-select', identity: cy, role: 'admin' })
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.rolesSet).toEqual([
+      { identity: bea, role: 'admin', read: 1 },
+      { identity: cy, role: 'admin', read: 2 },
+    ])
+
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.rolesSet).toEqual([
+      { identity: cy, role: 'admin', read: 2 },
+      { identity: bea, role: 'member', read: 3 },
+    ])
+  })
+
+  it('keeps the role set before when the next change of the row is refused', async () => {
+    let refuse = false
+    const { actor, snapshot, region } = page({
+      setRole: () => (refuse ? refused('not-admin') : okAsync(undefined)),
+    })
+
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    await region('member-roles', 'idle')
+
+    refuse = true
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.changingRole).toBeUndefined()
+    expect(snapshot().context.rolesSet).toEqual([{ identity: bea, role: 'admin', read: 1 }])
+  })
+
   it('does not read the members again after the account demoted itself', async () => {
     const { actor, snapshot, emitted, region } = page()
 
@@ -264,6 +326,19 @@ describe('organisation machine', () => {
     expect(emitted).toEqual([toast('role-changed')])
     expect(snapshot().context.membersChanged).toBe(0)
     expect(snapshot().context.changingRole).toBeUndefined()
+    expect(snapshot().context.rolesSet).toEqual([])
+  })
+
+  it('remembers no role set in an organisation that is no longer current', async () => {
+    const change = later()
+    const { actor, snapshot, becomes, region } = page({ setRole: vi.fn(() => change.result) })
+
+    actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
+    becomes('globex')
+    change.done()
+    await region('member-roles', 'idle')
+
+    expect(snapshot().context.rolesSet).toEqual([])
   })
 
   it('shows a refused role change under the invitation and lets the select show the role kept', async () => {
@@ -274,6 +349,7 @@ describe('organisation machine', () => {
 
     expect(snapshot().context.errors.codes).toEqual({ members: 'last-admin' })
     expect(snapshot().context.changingRole).toBeUndefined()
+    expect(snapshot().context.rolesSet).toEqual([])
     expect(snapshot().context.membersChanged).toBe(0)
     expect(emitted).toEqual([])
   })

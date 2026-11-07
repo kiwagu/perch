@@ -3,9 +3,10 @@ import { taken } from './events'
 
 /**
  * The region of the screen's flow for the members' roles: one changes at a time, the one chosen
- * last. The row shows the role being set while the change runs (`changingRole`), the members are
- * read again once it is done, except after the account's own demotion (the list stops showing),
- * and a refusal clears the role being set so the row shows the one the member keeps.
+ * last. The row shows the role being set while the change runs (`changingRole`), and once it is
+ * done the one set (`rolesSet`) until the members' read after it settles; the members are read
+ * again except after the account's own demotion (the list stops showing). A refusal clears the
+ * role being set so the row shows the one the member keeps.
  */
 export const MEMBER_ROLES_REGION = {
   initial: 'idle',

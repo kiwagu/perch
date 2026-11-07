@@ -7,6 +7,11 @@ import type { BusError } from '@workspace/cqrs'
 export interface Listed<Item> {
   readonly list: readonly Item[] | undefined
   readonly failure: string | undefined
+  /**
+   * The count of changes the latest settled read was made after, a failed read included: a
+   * change counted higher is one whose read is not in yet. None before the first read settles.
+   */
+  readonly settled: number | undefined
 }
 
 /** A read of the list of one scope: what it was for, with what it read or why it failed. */
@@ -40,7 +45,7 @@ export function useListed<Item>(
     void reading.current(scope).match(
       (list) => {
         if (live) {
-          setLast({ scope, list, failure: undefined })
+          setLast({ scope, list, failure: undefined, settled: changed })
         }
       },
       (failure) => {
@@ -49,6 +54,7 @@ export function useListed<Item>(
             scope,
             list: now?.scope === scope ? now.list : undefined,
             failure: failure.code,
+            settled: changed,
           }))
         }
       },
@@ -59,5 +65,7 @@ export function useListed<Item>(
     }
   }, [scope, changed])
 
-  return last !== undefined && last.scope === scope ? last : { list: undefined, failure: undefined }
+  return last !== undefined && last.scope === scope
+    ? last
+    : { list: undefined, failure: undefined, settled: undefined }
 }

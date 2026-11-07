@@ -19,6 +19,20 @@ export interface OrganisationErrors {
 
 export type ErrorPart = keyof OrganisationErrors
 
+/** A role set on a member's row. */
+export interface RoleSet {
+  readonly identity: IdentityId
+  readonly role: TenantRole
+}
+
+/**
+ * A role whose change is done, with the read of the members that confirms it: the `membersChanged`
+ * count that read is made for.
+ */
+export interface RoleRead extends RoleSet {
+  readonly read: number
+}
+
 export interface OrganisationContext {
   /**
    * The codes of the last refused changes, and the organisation they were refused in: another
@@ -35,7 +49,13 @@ export interface OrganisationContext {
   /** How many invitations for the account were accepted or declined here: they are read again. */
   readonly receivedChanged: number
   /** The role being set on a member's row while its change runs: the row's select shows it. */
-  readonly changingRole: { readonly identity: IdentityId; readonly role: TenantRole } | undefined
+  readonly changingRole: RoleSet | undefined
+  /**
+   * The roles set here whose change is done, one per member, in the organisation current then:
+   * the row's select keeps showing each until the members' read that confirms it settles, so it
+   * never shows the old role for a round trip.
+   */
+  readonly rolesSet: readonly RoleRead[]
 }
 
 /** The events of the screen's flow: the anchors acted on, with what their actions take. */

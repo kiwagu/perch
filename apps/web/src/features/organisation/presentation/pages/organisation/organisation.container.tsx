@@ -16,6 +16,7 @@ import { createOrganisationMachine } from '../../../application/organisation-mac
 
 import { organisationShape } from './organisation.model.gen'
 import { type OrganisationChoice, OrganisationView } from './organisation.view'
+import { roleShown } from './role-shown'
 import { useInviteDraft } from './use-invite-draft'
 import { useListed } from './use-listed'
 
@@ -137,7 +138,7 @@ export function OrganisationContainer() {
     'organisation.invite.role-select': invite.clearRole,
   })
 
-  const { errors, changingRole } = state.context
+  const { errors, changingRole, rolesSet } = state.context
   const shown = errors.of === key ? errors.codes : {}
   // The note being edited shows its text area while the state renders it.
   const editing = renders('organisation.notes.edit-textarea')
@@ -150,8 +151,15 @@ export function OrganisationContainer() {
       members={members.list?.map((member) => ({
         id: member.identity.id,
         email: member.identity.email,
-        // The row shows the role being set while its change runs, the listed one otherwise.
-        role: changingRole?.identity === member.identity.id ? changingRole.role : member.role,
+        // The row shows the role being set while its change runs, and the one just set until the
+        // members read after it settle; the listed one otherwise.
+        role: roleShown({
+          identity: member.identity.id,
+          listed: member.role,
+          changing: changingRole,
+          set: rolesSet,
+          settled: members.settled,
+        }),
         removable: member.identity.id !== user?.id,
       }))}
       sent={invitations.list}

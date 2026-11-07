@@ -30,9 +30,10 @@ on the replica schema are applied on the device before a command runs
   not accepted yet, with the link to copy and the revoke button), `OrganisationReceived` (the
   invitations for the account, with accept and decline) and `OrganisationErrorLine` (a
   refused change as its contract code and its copy), in `presentation/components/`; the page's
-  `useListed` hook (a list as last read: the members, the invitations sent, the invitations
-  for the account) and `useInviteDraft` (the invitation form's fields, which the flow empties)
-  sit beside its view.
+  `useListed` hook (a list as last read, and the change it settled after: the members, the
+  invitations sent, the invitations for the account), `roleShown` (the role a member's row
+  shows) and `useInviteDraft` (the invitation form's fields, which the flow empties) sit beside
+  its view.
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
@@ -56,8 +57,10 @@ on the replica schema are applied on the device before a command runs
   member's own notes are marked "Yours", and a change the rules forbid is explained
   (`note:FORBIDDEN`). An administrator also sees the members, each with a role select that
   applies at once (the administrator's own included while another administrator stays; the
-  row shows the role being set while the change runs, the listed role after a refusal), invites
-  an email by a mailed link with a role (the account may not exist yet), copies the link of or
+  row shows the role being set while the change runs and, once it is done, until the members
+  read after it settle, the listed role after a refusal), invites an email by a mailed link
+  with a role (the account may not exist yet; the form empties once it is sent, only while the
+  organisation it was sent in is still current), copies the link of or
   revokes an invitation not accepted yet (the clipboard is the `CLIPBOARD` port), and removes
   a member. The members and the invitations sent are read when they start to show (the page
   opening, the account made an administrator) and after each change made here, not after the

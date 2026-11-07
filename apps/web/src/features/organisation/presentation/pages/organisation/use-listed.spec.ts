@@ -55,6 +55,31 @@ describe('useListed', () => {
     expect(result.current.list).toEqual(['one'])
   })
 
+  it('says which count of changes the latest settled read was made for, a failed one included', async () => {
+    let fail = false
+    const read = vi.fn(() => (fail ? errAsync({ code: 'not-admin' }) : okAsync(['one'])))
+    const { result, rerender } = renderHook(
+      ({ changed }: { changed: number }) => useListed(read, 'acme', changed),
+      { initialProps: { changed: 0 } },
+    )
+
+    expect(result.current.settled).toBeUndefined()
+
+    await waitFor(() => expect(result.current.settled).toBe(0))
+
+    rerender({ changed: 1 })
+
+    // The read for the change has not settled yet: the list shown is the one read before it.
+    expect(result.current.settled).toBe(0)
+    await waitFor(() => expect(result.current.settled).toBe(1))
+
+    fail = true
+    rerender({ changed: 2 })
+
+    await waitFor(() => expect(result.current.settled).toBe(2))
+    expect(result.current.failure).toBe('not-admin')
+  })
+
   it('shows nothing of another scope until it is read', async () => {
     const read = vi.fn((scope: string) => okAsync([scope]))
     const { result, rerender } = renderHook(

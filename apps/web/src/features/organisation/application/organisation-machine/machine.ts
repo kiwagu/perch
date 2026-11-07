@@ -155,14 +155,20 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
             }
           : {},
       ),
-      // A field of the page is emptied by the host, which holds what it shows.
-      clear: enqueueActions(({ enqueue }, params: ClearParams) => {
+      // A field of the page is emptied by the host, which holds what it shows: the fields of the
+      // organisation current now, so a write made in another one leaves them as typed.
+      clear: enqueueActions(({ enqueue, event }, params: ClearParams) => {
+        if (originOf(event) !== deps.current()) {
+          return
+        }
+
         enqueue.emit({ type: 'clear', ...params })
       }),
       startAfresh: assign({
         errors: { of: undefined, codes: {} },
         editing: undefined,
         changingRole: undefined,
+        rolesSet: [],
       }),
       open: assign({
         editing: ({ event }) => {
@@ -176,15 +182,29 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
         invitationsChanged: ({ context }) => context.invitationsChanged + 1,
       }),
       rereadReceived: assign({ receivedChanged: ({ context }) => context.receivedChanged + 1 }),
-      // The account's own demotion leaves the members list: read as a member, it would be refused.
-      rereadAfterRole: assign({
-        membersChanged: ({ context }) => {
-          const { changingRole } = context
-          const demotedItself =
-            changingRole?.role === 'member' && changingRole.identity === deps.account()
+      // The account's own demotion leaves the members list: read as a member, it would be refused,
+      // and no row is left to show the role. Otherwise the members are read again, and the row
+      // keeps the role just set until that read settles (not for a change made in another
+      // organisation, whose rows are not these).
+      rereadAfterRole: assign(({ context, event }) => {
+        const { changingRole, membersChanged, rolesSet } = context
+        const demotedItself =
+          changingRole?.role === 'member' && changingRole.identity === deps.account()
 
-          return demotedItself ? context.membersChanged : context.membersChanged + 1
-        },
+        if (demotedItself) {
+          return {}
+        }
+
+        const read = membersChanged + 1
+        const remembered =
+          changingRole !== undefined && originOf(event) === deps.current()
+            ? [
+                ...rolesSet.filter((set) => set.identity !== changingRole.identity),
+                { ...changingRole, read },
+              ]
+            : rolesSet
+
+        return { membersChanged: read, rolesSet: remembered }
       }),
       startChanging: assign({
         changingRole: ({ event }) => {
@@ -205,6 +225,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
       invitationsChanged: 0,
       receivedChanged: 0,
       changingRole: undefined,
+      rolesSet: [],
     },
     states: {
       viewing: {
