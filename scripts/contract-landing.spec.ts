@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test'
 import { createHash } from 'node:crypto'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 import {
   author,
@@ -117,6 +119,40 @@ function take({ root, screen, scenario, vocabulary }: Trunk): string {
   )
 
   return git(root, 'rev-parse', '--short', 'HEAD')
+}
+
+/** The line git cuts a message at when it cleans it up, under the default comment character. */
+const SCISSORS = '# ------------------------ >8 ------------------------'
+
+/** The trailer of a take of the trunk's three commits. */
+function takenFrom({ screen, vocabulary }: Trunk): string {
+  return `Taken-from: contract/trunk ${screen}^..${vocabulary} ABC-1`
+}
+
+/** Takes the trunk's three commits on the checked-out branch with `text` as the message, recorded as written. */
+function recorded(fixture: Trunk, text: string): void {
+  const { root, screen, scenario, vocabulary } = fixture
+  const file = join(root, '.git', 'MESSAGE')
+
+  pick(root, screen, scenario, vocabulary)
+  writeFileSync(file, text)
+  author(root, 'commit', '-q', '--cleanup=verbatim', '-F', file)
+}
+
+/**
+ * Judges the round of the checked-out branch, whose tip is a take recorded as written, against
+ * git's own reading of that commit: a take git reads with its trailer passes, one git reads
+ * without it is refused as naming no source.
+ */
+function agreesWithGit(root: string): void {
+  const read = git(root, 'log', '-1', '--format=%(trailers:key=Taken-from,valueonly)', 'HEAD')
+  const result = runRound(root)
+
+  if (read === '') {
+    refuses(result, 'it names its source in no trailer')
+  } else {
+    passes(result)
+  }
 }
 
 /** Commits a change of `text` to the web app on the checked-out branch, and returns its short id. */
@@ -400,6 +436,38 @@ describe('contract-take --round', () => {
 
     refuses(result, 'contract take: git knows no branch feat/contract-first-pass in this clone.\n')
     expect(result.stdout).toBe('')
+  })
+
+  it('reads a comment line above a recorded trailer as git does', () => {
+    const fixture = trunk()
+
+    recorded(fixture, `feat(contract): model the page\n\n# note\n${takenFrom(fixture)}\n`)
+    agreesWithGit(fixture.root)
+  })
+
+  it('reads what a recorded scissors line cuts as git does', () => {
+    const below = trunk()
+
+    recorded(
+      below,
+      `feat(contract): model the page\n\n${SCISSORS}\nkept after the scissors\n\n${takenFrom(below)}\n`,
+    )
+    agreesWithGit(below.root)
+
+    const above = trunk()
+
+    recorded(
+      above,
+      `feat(contract): model the page\n\n${takenFrom(above)}\n${SCISSORS}\nkept after the scissors\n`,
+    )
+    agreesWithGit(above.root)
+  })
+
+  it('reads a recorded message with CRLF line endings as git does', () => {
+    const fixture = trunk()
+
+    recorded(fixture, `feat(contract): model the page\r\n\r\n${takenFrom(fixture)}\r\n`)
+    agreesWithGit(fixture.root)
   })
 
   it('reads a landing trailer in its form, and refuses one that is not', () => {
