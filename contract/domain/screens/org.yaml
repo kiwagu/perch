@@ -188,7 +188,7 @@ anchors:
     derived: [ option ]
   organisation.invite.error:
     kind: error
-    description: Why the last invitation, revoke, change of a role, removal, or read of the members or the invitations failed.
+    description: Why the last invitation, copy of a link, revoke, change of a role, removal, or read of the members or the invitations failed.
     roles: [ admin ]
   organisation.invite.submit-button:
     kind: button
@@ -263,6 +263,7 @@ anchors:
         invitation: organisation.received.item
   organisation.received.error:
     kind: error
+    description: Why the last acceptance or decline of an invitation for the account, or the read of those invitations, failed; rendered in place of the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
   ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an administrator, the invitations for the account, and the create toggle.
