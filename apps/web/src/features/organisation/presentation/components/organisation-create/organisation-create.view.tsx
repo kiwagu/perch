@@ -7,7 +7,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@workspace/ui/c
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
-import type { OrganisationEvent } from '../../../application/organisation.machine'
+import type { OrganisationEvent } from '../../../application/organisation-machine'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 /** The form that creates an organisation; the creator becomes its administrator. */

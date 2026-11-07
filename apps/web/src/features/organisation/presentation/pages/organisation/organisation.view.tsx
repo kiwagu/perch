@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/componen
 import type {
   OrganisationErrors,
   OrganisationEvent,
-} from '../../../application/organisation.machine'
+} from '../../../application/organisation-machine'
 import { OrganisationCreate } from '../../components/organisation-create/organisation-create.view'
 import {
   type MemberItem,

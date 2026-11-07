@@ -7,7 +7,7 @@ organisation, the current organisation's members for an administrator, invitatio
 removals, and the shared notes of the current organisation as the first table of the tenant
 region. `domain/` holds the organisation entity (the name bound) and one file per rule
 (`tenant-key.rule.ts`, `organisation-name.rule.ts`); `application/` the organisation and
-notes services and the page's machine (`organisation.machine.ts`). Reads and writes go to the current organisation's database. The write rules declared
+notes services and the page's machine (`organisation-machine/`). Reads and writes go to the current organisation's database. The write rules declared
 on the replica schema are applied on the device before a command runs
 (`OrganisationService.ability()`), the same rule the gateway applies on its fork.
 
@@ -31,7 +31,7 @@ on the replica schema are applied on the device before a command runs
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screen `organisation` in `contract/domain/screens/org.yaml`.
-- Behaviour: the page runs its screen's flow as its machine (`application/organisation.machine.ts`,
+- Behaviour: the page runs its screen's flow as its machine (`application/organisation-machine/`,
   held to `contract/domain/screens/org.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`: the create form, the notes' items, the invitation, the members
   and the new note are its regions, a write is an invoke of its action, a control is enabled

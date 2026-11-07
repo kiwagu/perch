@@ -8,7 +8,7 @@ import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
-import type { OrganisationEvent } from '../../../application/organisation.machine'
+import type { OrganisationEvent } from '../../../application/organisation-machine'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 export interface MemberItem {

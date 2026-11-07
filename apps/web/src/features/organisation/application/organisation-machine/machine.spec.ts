@@ -5,7 +5,7 @@ import { createActor, waitFor } from 'xstate'
 import type { BusError } from '@workspace/cqrs'
 import { identityIdFactory, noteIdFactory } from '@workspace/ids'
 
-import { createOrganisationMachine, type OrganisationMachineDeps } from './organisation.machine'
+import { createOrganisationMachine, type OrganisationMachineDeps } from '.'
 
 const hello = noteIdFactory.create()
 const agenda = noteIdFactory.create()
