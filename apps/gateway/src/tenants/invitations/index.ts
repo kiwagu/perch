@@ -3,6 +3,8 @@
  * carries, and the link itself.
  */
 export { INVITATION_PATH, invitationLink } from './link'
+export type { InvitationMailer } from './mailer'
+export { InvitationMails, type InvitationMailsOptions } from './mails'
 export {
   INVITATION_LIFETIME_MS,
   type InvitationRead,

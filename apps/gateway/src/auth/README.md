@@ -536,8 +536,8 @@ error carries one.
   account, which a change of the password or of the email ends) and the token of a verification
   link (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
-  (`account-locale.ts`), `accountAddressee` (`account-addressee.ts`: whom a mail about an
-  account goes to), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
+  (`account-locale.ts`), `accountAddressee` and `addresseeFailure` (`account-addressee.ts`: whom a
+  mail about an account goes to, and the code logged when it could not be read), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
   `DeletedAccount`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,

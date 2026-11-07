@@ -118,6 +118,17 @@ organisation's invitations not expired, newest first, whatever account has the e
 `forEmail` lists those to the ready organisations an identity does not belong to. Nothing of it
 logs, and no error names a token or an address.
 
+`InvitationMails` (`invitations/`, an `InvitationMailer`) writes and sends the mail of an
+invitation: it starts at once and returns, never awaited, so the request that invited never waits
+for the mail server. It speaks the recipient's language: the one the
+settings of the account with the invited email name, or the one that account signed up in before
+it has settings; an email with no account gets the inviter's, read the same way. A language that
+could not be read sends nothing (`mail:LOCALE_UNREADABLE`) and an account gone between the two
+reads sends nothing either (`mail:SEND_FAILED`), never a mail in a guessed language. The mail
+greets no one by name and names no inviter (the recipient may have no account, and the name people
+see lives in the replicated profile, which mails do not read). A mail that did not go out is
+logged by its code alone, never with its address, its organisation or its link.
+
 The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
@@ -144,7 +155,8 @@ token that holds no session does; an invitation or a creation over its limit ans
   (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
   (`organisation-rows.ts`).
   `PendingInvitations` (`invitations/`, through its `index.ts`: the store, the token reader, the
-  seven-day lifetime and the link to the front's `/invitation` screen).
+  seven-day lifetime and the link to the front's `/invitation` screen), `InvitationMails` and the
+  `InvitationMailer` interface it implements (`invitations/mails.ts`, `invitations/mailer.ts`).
 - `regionDatabases` (`region-databases.ts`): the database of each region, for the region hub.
 - Queries: `surql/` (organisations, memberships, members, invitations, the organisation
   database's schema, a departing identity's memberships and the removal of a whole organisation).
@@ -156,6 +168,6 @@ token that holds no session does; an invitation or a creation over its limit ans
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
   `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
-  `invitations/token.spec.ts`, `invitations/pending.spec.ts`), each organisation on an embedded
+  `invitations/token.spec.ts`, `invitations/pending.spec.ts`, `invitations/mails.spec.ts`), each organisation on an embedded
   in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.
