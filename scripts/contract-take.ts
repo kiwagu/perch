@@ -97,19 +97,18 @@ function round(branch: string | undefined): number {
   }
 
   const name = head.slice('refs/heads/'.length)
-
-  if (UNJUDGED_BRANCHES.includes(name)) {
-    console.log(`contract take: ${name} is the contract engine's branch; its round is not judged`)
-
-    return 0
-  }
-
   const tip = git(['rev-parse', '--verify', '--quiet', `${head}^{commit}`])
 
   if (tip.status !== 0) {
     console.error(`contract take: git knows no branch ${name} in this clone.`)
 
     return 1
+  }
+
+  if (UNJUDGED_BRANCHES.includes(name)) {
+    console.log(`contract take: ${name} is the contract engine's branch; its round is not judged`)
+
+    return 0
   }
 
   const oid = tip.out.trim()

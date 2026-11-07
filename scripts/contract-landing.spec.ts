@@ -282,6 +282,13 @@ describe('contract-take --round', () => {
     )
   })
 
+  it("judges an absent engine's branch as unknown", () => {
+    const result = runRound(trunk().root, 'feat/contract-first-pass')
+
+    refuses(result, 'contract take: git knows no branch feat/contract-first-pass in this clone.\n')
+    expect(result.stdout).toBe('')
+  })
+
   it('reads a landing trailer in its form, and refuses one that is not', () => {
     expect(parseSquashed('feat/me (abc1234) ABC-1 ABC-2')).toEqual({
       branch: 'feat/me',
