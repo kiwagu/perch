@@ -292,7 +292,7 @@ actions:
       role:
         type: string
         description: "member or admin: the role the account takes when it accepts."
-    result: "an invitation of the email with the role, pending for seven days, and a mail with its link goes to the email; an email with an account and one without get the same answer, in the same time; inviting an email again replaces its pending invitation, whose link stops working; the email of a member answers already-member; the email is a member only once the account with that email accepts"
+    result: "an invitation of the email with the role, pending for seven days, and the mail below on its way to the email; an email with an account and one without get the same answer, in the same time; inviting an email again replaces its pending invitation, whose link stops working; the email of a member answers already-member; the email is a member only once the account with that email accepts; the mails count toward the network address's budget of mails"
     codes:
       - no-such-identity
       - already-member
@@ -302,6 +302,10 @@ actions:
       - failed
     roles:
       - admin
+    mail:
+      to: email
+      language: recipient
+      link: { screen: organisation.invitation, search: token }
   organisations.invitations:
     description: Reads the pending invitations of the current organisation.
     params: {}
