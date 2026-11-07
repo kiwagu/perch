@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, setDefaultTimeout } from 'bun:test'
+import { createHash } from 'node:crypto'
 
 import {
   author,
   commit,
+  feed,
   git,
   land,
   passes,
@@ -26,6 +28,80 @@ setDefaultTimeout(30_000)
 afterEach(removeMade)
 
 const NEW_SCREEN = 'contract/domain/screens/new.yaml'
+
+/** The tree with nothing in it, which every commit object made here is on. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+/** Who made every commit object made here, and when. */
+const IDENTITY = 't <t@example.test> 1700000000 +0000'
+
+/** Two commit objects git cannot tell apart by their first seven hex digits, and those digits. */
+interface Collision {
+  readonly prefix: string
+  readonly bodies: readonly [string, string]
+}
+
+/** The collision found, once a test asks for one. */
+let collision: Collision | undefined
+
+/** The commit object on the empty tree, by `t` at one fixed time, whose message is `x <n>`. */
+function commitObject(n: number): string {
+  return `tree ${EMPTY_TREE}\nauthor ${IDENTITY}\ncommitter ${IDENTITY}\n\nx ${n}\n`
+}
+
+/** The id git gives `body` as a commit object: the SHA-1 of `commit <its bytes>\0<body>`. */
+function idOf(body: string): string {
+  const bytes = new TextEncoder().encode(body)
+
+  return createHash('sha1').update(`commit ${bytes.length}\0`).update(bytes).digest('hex')
+}
+
+/**
+ * The first two of `commitObject`'s objects, counted from 0, that share their first seven hex
+ * digits: hashed here, not written, until a pair is found, once, when the first test asks.
+ */
+function colliding(): Collision {
+  if (collision !== undefined) {
+    return collision
+  }
+
+  const seen = new Map<string, string>()
+
+  for (let n = 0; ; n += 1) {
+    const body = commitObject(n)
+    const prefix = idOf(body).slice(0, 7)
+    const earlier = seen.get(prefix)
+
+    if (earlier !== undefined) {
+      collision = { prefix, bodies: [earlier, body] }
+
+      return collision
+    }
+
+    seen.set(prefix, body)
+  }
+}
+
+/** Writes `body` into `root`'s objects as one of `type`, and returns its id. */
+function stored(root: string, type: 'tree' | 'blob' | 'commit', body: string): string {
+  return feed(root, body, 'hash-object', '-w', '-t', type, '--stdin')
+}
+
+/** Commits on `main`, without content, a landing of `feat/old` whose trailer names `tip`. */
+function landedTip(root: string, tip: string): void {
+  git(root, 'switch', '-q', 'main')
+  author(
+    root,
+    'commit',
+    '-q',
+    '--allow-empty',
+    '-m',
+    'feat(web): land the page',
+    '-m',
+    `Squashed-from: feat/old (${tip}) ABC-1`,
+  )
+  git(root, 'switch', '-q', 'feat/me')
+}
 
 /** Takes the trunk's three commits on the checked-out branch, unchecked, and returns the take's short id. */
 function take({ root, screen, scenario, vocabulary }: Trunk): string {
@@ -231,6 +307,43 @@ describe('contract-take --round', () => {
     )
   })
 
+  it('refuses an earlier landing naming a commit git cannot tell from another', () => {
+    const { root } = trunk()
+    const { prefix, bodies } = colliding()
+
+    stored(root, 'tree', '')
+
+    for (const body of bodies) {
+      stored(root, 'commit', body)
+    }
+
+    landedTip(root, prefix)
+    code(root, 'shown')
+
+    const result = runRound(root)
+
+    refuses(
+      result,
+      `contract take: on feat/me, an earlier landing names ${prefix}, which git cannot tell from another commit.\n`,
+    )
+    expect(result.stdout).toBe('')
+  })
+
+  it('judges again what sits under an earlier tip the clone has as no commit', () => {
+    const { root } = trunk()
+    const blob = stored(root, 'blob', 'no commit\n')
+
+    landedTip(root, blob)
+
+    const raw = oldForm(root)
+
+    refuses(
+      runRound(root),
+      `\n- ${raw} feat(screens): model the page\n`,
+      `\nAn earlier landing names ${blob}, which this clone lacks: commits under it are judged again; fetch the branch that landed them if one of these is among them.\n`,
+    )
+  })
+
   it('reads a root commit of the round against the empty tree', () => {
     const written = trunk().root
 
@@ -314,6 +427,7 @@ describe('contract-take --round', () => {
   it('reads what git says of a name it looks up', () => {
     expect(lookupOf(`${'0123456789abcdef'.repeat(2)}01234567 commit 231`)).toBe('found')
     expect(lookupOf('deadbee missing')).toBe('missing')
+    expect(lookupOf(`${'0123456789abcdef'.repeat(2)}01234567 blob 10`)).toBe('missing')
     expect(lookupOf('abc1234 ambiguous')).toBe('ambiguous')
   })
 

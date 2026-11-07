@@ -35,11 +35,12 @@ export const VOCABULARY = 'contract/vocabulary.md'
 /** The checkouts the tests made, removed after each test. */
 export const made: string[] = []
 
-/** Runs git in `cwd` without signing commits, and returns what it printed. */
-export function git(cwd: string, ...args: string[]): string {
+/** Runs git in `cwd` with `input` on its standard input, without signing commits, and returns what it printed. */
+export function feed(cwd: string, input: string, ...args: string[]): string {
   const run = spawnSync('git', ['-c', 'commit.gpgsign=false', ...args], {
     cwd,
     encoding: 'utf8',
+    input,
     stdio: 'pipe',
     env: ENV,
   })
@@ -47,6 +48,11 @@ export function git(cwd: string, ...args: string[]): string {
   expect(run.status, `git ${args.join(' ')}: ${run.stderr}`).toBe(0)
 
   return run.stdout.trim()
+}
+
+/** Runs git in `cwd` without signing commits, and returns what it printed. */
+export function git(cwd: string, ...args: string[]): string {
+  return feed(cwd, '', ...args)
 }
 
 /** Runs git in `root` as an author, for a command that makes a commit. */

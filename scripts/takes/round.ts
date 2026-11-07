@@ -37,13 +37,20 @@ export function parseSquashed(value: string): Landed | undefined {
   return { branch, tip, cards: (cards ?? '').split(' ').filter((card) => card !== '') }
 }
 
-/** What one line of `git cat-file --batch-check` says of the name it answers. */
+/**
+ * What one line of `git cat-file --batch-check` says of the name it answers: a commit found;
+ * missing, when the clone has no object by it, or one that is no commit; or ambiguous.
+ */
 export function lookupOf(line: string): Lookup {
   if (line.endsWith(' missing')) {
     return 'missing'
   }
 
-  return line.endsWith(' ambiguous') ? 'ambiguous' : 'found'
+  if (line.endsWith(' ambiguous')) {
+    return 'ambiguous'
+  }
+
+  return line.split(' ')[1] === 'commit' ? 'found' : 'missing'
 }
 
 /** What separates the values of one commit's trailers in `git log`'s output: `%x1f` there. */
@@ -71,7 +78,12 @@ function landedTips(parent: string): readonly string[] | undefined {
   return [...new Set(tips)]
 }
 
-/** The full ids of the commits among `tips` the clone has, and the tips it lacks, or what git could not do. */
+/**
+ * The full ids of the commits among `tips` the clone has, and the tips it lacks, or what git
+ * could not do. Each tip is looked up as written, among commits: a short id shared by a commit
+ * and another object names the commit, one shared by two commits is ambiguous (asked for as
+ * `<tip>^{commit}`, git would answer `missing` to it).
+ */
 function lookedUp(
   tips: readonly string[],
 ): { readonly found: readonly string[]; readonly missing: readonly string[] } | string {
@@ -80,8 +92,8 @@ function lookedUp(
   }
 
   const { status, out } = git(
-    ['cat-file', '--batch-check'],
-    tips.map((tip) => `${tip}^{commit}\n`).join(''),
+    ['-c', 'core.disambiguate=commit', 'cat-file', '--batch-check'],
+    tips.map((tip) => `${tip}\n`).join(''),
   )
   const lines = out.split('\n').filter((line) => line !== '')
 
