@@ -263,7 +263,7 @@ anchors:
         invitation: organisation.received.item
   organisation.received.error:
     kind: error
-    description: Why the last acceptance or decline of an invitation for the account, or the read of those invitations, failed; rendered in place of the list.
+    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list, which is read again.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
   ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an administrator, the invitations for the account, and the create toggle.
@@ -401,12 +401,17 @@ flow:
                   description: The account is a member with the invitation's role, and that organisation is current.
                 onError:
                   target: idle
+                  description: The invitations are read again; one gone meanwhile leaves the list.
                   actions:
                     - show: organisation.received.error
         received-decline:
           by: organisation.received.decline-button
           onDone:
             description: The invitation leaves the list.
+          onError:
+            description: The invitations are read again; one gone meanwhile leaves the list.
+            actions:
+              - show: organisation.received.error
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:
