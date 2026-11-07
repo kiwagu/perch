@@ -159,7 +159,7 @@ row right and the invitation spent. A spent link never readmits: once an admin r
 the old link answers `invitation-gone`. `decline` runs in the organisation's turn and deletes the
 row for the invited account alone.
 
-The organisation routes (`organisation.routes.ts`) are Bearer calls (`src/auth/README.md`).
+The organisation routes (`organisation-routes/`) are Bearer calls (`src/auth/README.md`).
 `GET /organisations` lists the
 caller's memberships; `POST /organisations` with `{ key, name }` creates an organisation with
 the caller as its admin (201); `GET /organisations/:key/members` lists the members to an admin
@@ -178,12 +178,14 @@ token that holds no session does; an invitation or a creation over its limit ans
 
 - Routes: `GET /organisations`, `POST /organisations`, `GET /organisations/:key/members`,
   `POST /organisations/:key/members`, `DELETE /organisations/:key/members/:identity`
-  (`organisation.routes.ts`).
+  (`organisation-routes/`, through its `index.ts`: the targets of a path, the handlers of the
+  memberships and members, and the routes that answer them; `organisation-http.ts` holds the
+  answers they share).
 - Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
   commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`
   (`tenant-databases.ts`), `OrganisationLookup` (`organisation-lookup.ts`), `TenantMembers`
-  (`tenant-members.ts`), the refusal codes (`organisation-refusal.ts`) and the rows they read
+  (`tenant-members.ts`), the refusal codes and their statuses (`organisation-refusal.ts`) and the rows they read
   (`organisation-rows.ts`). `OrganisationInvitations` (`organisations/invitations.ts`),
   `InvitationAnswers` (`organisations/invitation-answers.ts`) and the views they answer
   (`organisations/invitation-views.ts`).
@@ -199,7 +201,8 @@ token that holds no session does; an invitation or a creation over its limit ans
 ## Commands
 
 - `bun run test` in `apps/gateway` runs this module's specs (`organisations/service.spec.ts`,
-  `account-departure.spec.ts`, `organisation.routes.spec.ts`, `organisation.limits.spec.ts`,
+  `account-departure.spec.ts`, `organisation-routes/routes.spec.ts`,
+  `organisation-routes/limits.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
   `organisations/invitations.spec.ts`, `invitations/token.spec.ts`, `invitations/pending.spec.ts`,
   `invitations/mails.spec.ts`), each organisation on an embedded in-memory database of its own.

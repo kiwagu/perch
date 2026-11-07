@@ -19,7 +19,7 @@ import {
 import { createGatewayRoot, type GatewayRoot } from '../../composition/root'
 import { RequestLimits } from '../../limits/request-limits'
 import { Outbox } from '../../mail/__fixtures__/outbox'
-import { organisationRoutes } from '../organisation.routes'
+import { organisationRoutes } from '../organisation-routes'
 
 const PASSWORD = 'Pass-word-1'
 

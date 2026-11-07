@@ -15,7 +15,7 @@ import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
 import { clientAddress } from './limits/client-address'
 import { SyncConnection } from './sync/sync-connection'
-import { organisationRoutes } from './tenants/organisation.routes'
+import { organisationRoutes } from './tenants/organisation-routes'
 
 export interface ServerOptions {
   /** The port to listen on; 0 lets the system choose a free one. */

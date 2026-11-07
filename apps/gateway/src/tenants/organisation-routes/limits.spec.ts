@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ADDRESS, closeHarness, harness, request } from './__fixtures__/organisation-routes'
+import { ADDRESS, closeHarness, harness, request } from '../__fixtures__/organisation-routes'
 
 afterEach(closeHarness)
 

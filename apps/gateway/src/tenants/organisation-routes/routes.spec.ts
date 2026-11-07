@@ -7,10 +7,9 @@ import { membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
-import { DIRECTORY, NAMESPACE } from '../config'
-import { RequestLimits } from '../limits/request-limits'
-
-import { specInvitations } from './__fixtures__/invitations'
+import { DIRECTORY, NAMESPACE } from '../../config'
+import { RequestLimits } from '../../limits/request-limits'
+import { specInvitations } from '../__fixtures__/invitations'
 import {
   ADDRESS,
   answer,
@@ -21,9 +20,10 @@ import {
   request,
   routeOptions,
   type SignedUp,
-} from './__fixtures__/organisation-routes'
-import { organisationRoutes } from './organisation.routes'
-import { Organisations } from './organisations'
+} from '../__fixtures__/organisation-routes'
+import { Organisations } from '../organisations'
+
+import { organisationRoutes } from './routes'
 
 /** What a creation answers. */
 const created = z.object({ membership })
