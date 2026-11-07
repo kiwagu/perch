@@ -28,6 +28,7 @@ export {
   type PlatformNotice,
   platformMailSchema,
   platformNoticeSchema,
+  RECIPIENT,
 } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
 export { type PlatformComposite, platformCompositeSchema, platformSchema } from './platform'
