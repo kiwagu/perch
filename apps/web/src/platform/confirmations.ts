@@ -11,6 +11,7 @@ export const ASKING_CONTROLS: Readonly<Record<string, string>> = {
   'device.list.revoke-button': 'devices-revoke',
   'organisation.members.remove-button': 'organisations-remove',
   'organisation.notes.delete-button': 'note-delete',
+  'organisation.sent.revoke-button': 'organisations-revoke-invitation',
   'user.delete-account.delete-button': 'delete-account',
 }
 

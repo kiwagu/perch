@@ -16,6 +16,17 @@ export const TOAST_TEXTS: ToastWords = {
   },
   'member-removed': { tone: 'success', text: (t) => t('app.shell.toast.member-removed') },
   invited: { tone: 'success', text: (t) => t('app.shell.toast.invited') },
+  'invitation-revoked': { tone: 'success', text: (t) => t('app.shell.toast.invitation-revoked') },
+  'role-changed': { tone: 'success', text: (t) => t('app.shell.toast.role-changed') },
+  'link-copied': { tone: 'success', text: (t) => t('app.shell.toast.link-copied') },
+  'invitation-accepted': {
+    tone: 'success',
+    text: (t) => t('app.shell.toast.invitation-accepted'),
+  },
+  'invitation-declined': {
+    tone: 'success',
+    text: (t) => t('app.shell.toast.invitation-declined'),
+  },
   'profile-saved': { tone: 'success', text: (t) => t('app.shell.toast.profile-saved') },
   'device-signed-out': { tone: 'success', text: (t) => t('app.shell.toast.device-signed-out') },
   'password-changed': { tone: 'success', text: (t) => t('app.shell.toast.password-changed') },

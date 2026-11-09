@@ -17,12 +17,14 @@ import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync
 
 import type { Theme } from '../platform/theme'
 
+import { browserClipboard } from './browser-clipboard'
 import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
 import { warmEngines } from './engine-warm'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
 import { type AppStart, type BootFailure, createAppRoot } from './root'
 import { servedBuild } from './served-build'
@@ -160,6 +162,9 @@ export function bootBrowser(
       onOnlineChange: network.onOnlineChange,
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
+      invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
+      // Undefined in a page that is not a secure context: a copy then fails and says so.
+      clipboard: browserClipboard(navigator.clipboard),
       transport: (context) =>
         new WebSocketTransport({
           url: `${origin.replace(/^http/, 'ws')}/backend/sync`,

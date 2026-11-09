@@ -6,8 +6,9 @@ import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import { admitted } from '../../tenants/__fixtures__/invitations'
 import departingMembershipsStatement from '../../tenants/surql/departing-memberships.surql'
-import membershipAddStatement from '../../tenants/surql/membership-add.surql'
+import invitationAcceptStatement from '../../tenants/surql/invitation-accept.surql'
 import tenantRemoveStatement from '../../tenants/surql/tenant-remove.surql'
 import { deviceHeaders, signUpOn } from '../__fixtures__/auth-instance'
 
@@ -66,6 +67,21 @@ async function deletionLink(mounted: Mounted, account: Sender, email = ANN): Pro
 /** What a command a test starts from answers; one that fails fails the test. */
 async function done<T, E>(command: ResultAsync<T, E>): Promise<T> {
   return (await command)._unsafeUnwrap()
+}
+
+/** `invitee`, signed in with `email`, joins the organisation `key` through `actor`'s invitation. */
+function joins(
+  mounted: Mounted,
+  actor: SignedInAccount,
+  key: string,
+  invitee: SignedInAccount,
+  email: string,
+) {
+  return admitted(mounted.organisations, {
+    actor: actor.identity,
+    key,
+    invitee: { id: invitee.identity, email },
+  })
 }
 
 /** Whether `account`'s identity still signs in with its email. */
@@ -135,7 +151,7 @@ describe('authHandler, the request to delete the account', () => {
     const bob = await signedInOn(mounted, BOB, ['desk'])
 
     await done(mounted.organisations.create({ identity: ann.identity, key: 'acme', name: 'Acme' }))
-    await done(mounted.organisations.invite({ actor: ann.identity, key: 'acme', email: BOB }))
+    await joins(mounted, ann, 'acme', bob, BOB)
 
     const refused = await mounted.route(askToDelete(ann.on('laptop')), FROM)
 
@@ -310,7 +326,7 @@ describe('authHandler, the deletion of an account by its link', () => {
 
     await done(organisations.create({ identity: ann.identity, key: 'solo', name: 'Solo' }))
     await done(organisations.create({ identity: bob.identity, key: 'shared', name: 'Shared' }))
-    await done(organisations.invite({ actor: bob.identity, key: 'shared', email: ANN }))
+    await joins(mounted, bob, 'shared', ann, ANN)
 
     const token = await deletionLink(mounted, ann.on('laptop'))
 
@@ -404,7 +420,7 @@ describe('authHandler, the deletion of an account by its link', () => {
 
     const token = await deletionLink(mounted, ann.on('laptop'))
 
-    await done(mounted.organisations.invite({ actor: ann.identity, key: 'acme', email: BOB }))
+    await joins(mounted, ann, 'acme', bob, BOB)
 
     const refused = await mounted.route(press(token), FROM)
 
@@ -428,7 +444,7 @@ describe('authHandler, the deletion of an account by its link', () => {
     const watched = { steps: (): readonly string[] => [] }
     /** The reads of the departing memberships since the press asked for the departure. */
     let departureReads = 0
-    /** Holds the next membership an invite writes, while it is set. */
+    /** Holds the next membership an accepted invitation writes, while it is set. */
     let held: { readonly gate: Promise<void>; readonly reached: () => void } | undefined
     const mounted = await mountedOnRealAuth({
       organisationsDirectory: (local) =>
@@ -437,7 +453,7 @@ describe('authHandler, the deletion of an account by its link', () => {
             departureReads += 1
           }
 
-          if (text === membershipAddStatement && held !== undefined) {
+          if (text === invitationAcceptStatement && held !== undefined) {
             const { gate, reached } = held
 
             held = undefined
@@ -456,6 +472,14 @@ describe('authHandler, the deletion of an account by its link', () => {
     await done(mounted.organisations.create({ identity: ann.identity, key: 'acme', name: 'Acme' }))
 
     const token = await deletionLink(mounted, ann.on('laptop'))
+    const invitation = await done(
+      mounted.organisations.invitations.invite({
+        actor: ann.identity,
+        key: 'acme',
+        email: BOB,
+        role: 'member',
+      }),
+    )
     let release = (): void => {}
     const gate = new Promise<void>((resolve) => {
       release = resolve
@@ -463,9 +487,12 @@ describe('authHandler, the deletion of an account by its link', () => {
     const writing = new Promise<void>((reached) => {
       held = { gate, reached }
     })
-    // Bob's invitation holds acme's turn, his membership not written yet.
-    const invite = done(
-      mounted.organisations.invite({ actor: ann.identity, key: 'acme', email: BOB }),
+    // Bob's acceptance holds acme's turn, his membership not written yet.
+    const accepting = done(
+      mounted.organisations.invitations.accept({
+        identity: bob.identity,
+        invitation: invitation.id,
+      }),
     )
 
     await writing
@@ -473,10 +500,10 @@ describe('authHandler, the deletion of an account by its link', () => {
 
     const pressing = mounted.route(press(token), FROM)
 
-    // The press's departure found acme and waits for its turn, which the invitation holds.
+    // The press's departure found acme and waits for its turn, which the acceptance holds.
     await vi.waitFor(() => expect(departureReads).toBe(1))
     release()
-    await invite
+    await accepting
 
     const refusal = await pressing
 
@@ -502,7 +529,7 @@ describe('authHandler, the deletion of an account by its link', () => {
     const watched = { steps: (): readonly string[] => [] }
     /** The reads of the departing memberships since the press asked for the departure. */
     let departureReads = 0
-    /** Holds the next membership an invite writes, while it is set. */
+    /** Holds the next membership an accepted invitation writes, while it is set. */
     let held: { readonly gate: Promise<void>; readonly reached: () => void } | undefined
     const mounted = await mountedOnRealAuth({
       organisationsDirectory: (local) =>
@@ -511,7 +538,7 @@ describe('authHandler, the deletion of an account by its link', () => {
             departureReads += 1
           }
 
-          if (text === membershipAddStatement && held !== undefined) {
+          if (text === invitationAcceptStatement && held !== undefined) {
             const { gate, reached } = held
 
             held = undefined
@@ -527,11 +554,20 @@ describe('authHandler, the deletion of an account by its link', () => {
     const ann = await signedInOn(mounted, ANN, ['laptop'])
     const bob = await signedInOn(mounted, BOB, ['desk'])
 
-    await signedInOn(mounted, CAT, ['tablet'])
+    const cat = await signedInOn(mounted, CAT, ['tablet'])
+
     await done(mounted.organisations.create({ identity: bob.identity, key: 'shared', name: 'S' }))
-    await done(mounted.organisations.invite({ actor: bob.identity, key: 'shared', email: ANN }))
+    await joins(mounted, bob, 'shared', ann, ANN)
 
     const token = await deletionLink(mounted, ann.on('laptop'))
+    const invitation = await done(
+      mounted.organisations.invitations.invite({
+        actor: bob.identity,
+        key: 'shared',
+        email: CAT,
+        role: 'member',
+      }),
+    )
     let release = (): void => {}
     const gate = new Promise<void>((resolve) => {
       release = resolve
@@ -539,9 +575,12 @@ describe('authHandler, the deletion of an account by its link', () => {
     const writing = new Promise<void>((reached) => {
       held = { gate, reached }
     })
-    // Bob's invitation of Cat holds the turn of the organisation Ann belongs to.
-    const invite = done(
-      mounted.organisations.invite({ actor: bob.identity, key: 'shared', email: CAT }),
+    // Cat's acceptance of Bob's invitation holds the turn of the organisation Ann belongs to.
+    const accepting = done(
+      mounted.organisations.invitations.accept({
+        identity: cat.identity,
+        invitation: invitation.id,
+      }),
     )
 
     await writing
@@ -553,7 +592,7 @@ describe('authHandler, the deletion of an account by its link', () => {
     await vi.waitFor(() => expect(departureReads).toBe(1))
     await mounted.clock.advance(HOUR_MS)
     release()
-    await invite
+    await accepting
 
     const expired = await pressing
 

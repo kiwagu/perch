@@ -5,7 +5,7 @@ import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import { NO_ABILITY, OWNER_ABILITY } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
-import { regionsFor, regionsOf } from './device-regions'
+import { memberActor, regionsFor, regionsOf } from './device-regions'
 
 describe('regionsFor', () => {
   const identity = identityIdFactory.create()
@@ -31,6 +31,21 @@ describe('regionsFor', () => {
     const regions = regionsFor(identity, [membership('Not A Key')], replicaSchema)
 
     expect(regions.get('tenant:Not A Key')?.actor.ability).toBe(NO_ABILITY)
+  })
+})
+
+describe('memberActor', () => {
+  const identity = identityIdFactory.create()
+  const other = identityIdFactory.create()
+
+  it("is the identity pushing with the abilities of its role: a member's own notes, an admin's every note", () => {
+    const member = memberActor(identity, 'member', replicaSchema)
+    const admin = memberActor(identity, 'admin', replicaSchema)
+
+    expect(member.id).toBe(identity)
+    expect(admin.id).toBe(identity)
+    expect(member.ability.can('update', 'note', { author: `member:${other}` })).toBe(false)
+    expect(admin.ability.can('update', 'note', { author: `member:${other}` })).toBe(true)
   })
 })
 

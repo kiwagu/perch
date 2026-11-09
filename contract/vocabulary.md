@@ -180,28 +180,29 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `check-your-mail` | `user.sign-in.mail-message`, `user.verify-email.message`, `user.forgot-password.message`, `user.settings.email.message`, `user.settings.deletion.message` | a mail with a link is on its way to the email typed, if that email has an account the mail is for (one waiting for its verification, one whose password is to be set anew, or a new email no account has yet), or to the signed-in account's own email for its deletion; the same words when the email typed has none, so the page tells nobody which emails have accounts |
 | `email-not-verified` | `user.sign-in.error` | the email and the password are right, but the account's email is not verified yet: the link of its verification mail signs it in |
 | `verified-before` | `user.verify-email.message` | the link's email was verified before; the account signs in on the sign-in page |
-| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account is gone, or the account changed since the mail was sent) |
-| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error` | the link is too old: a verification or confirmation link after a day, a reset or deletion link after an hour; a new one is asked for |
+| `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account or its organisation is gone, the account changed since the mail was sent, or the invitation was declined or revoked) |
+| `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is too old: a verification or confirmation link after a day, a reset or deletion link after an hour, an invitation's after seven days; a new one is asked for |
 | `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error` | the email or the password is wrong |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
-| `email-invalid` | `user.settings.email.error` | the new email is not an email |
+| `email-invalid` | `user.settings.email.error`, `organisation.invite.error` | the email typed is not an email |
 | `password-reset` | `user.reset-password.message` | the password is the new one and every device of the account is signed out; the account signs in with it |
 | `email-changed` | `user.confirm-email.message` | the account's email is the new one, which signs it in from now on |
+| `sign-in-to-accept` | `organisation.invitation.message` | the invitation is for the account with the email its mail went to: sign in to it, or create it, then accept the invitation here or on the organisation page |
+| `invitation-gone` | `organisation.invitation.error`, `organisation.received.error` | the invitation was revoked, replaced by a newer one, accepted, declined or expired meanwhile |
 | `account-deleted` | `user.delete-account.message` | the account is gone for good, with its data, and every device of it is signed out; its email can sign up again |
 | `passwords-differ` | `user.sign-in.error`, `user.reset-password.error`, `user.settings.password.error` | the password typed again is not the same as the password, so no account is asked for and nothing is sent |
-| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error` | too many attempts were made, so the user waits and tries again |
-| `other-account` | `user.sign-in.error`, `user.verify-email.error` | another account is signed in on this browser and must be signed out first |
+| `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invitation.error` | too many attempts were made, so the user waits and tries again |
+| `other-account` | `user.sign-in.error`, `user.verify-email.error`, `organisation.invitation.error`, `organisation.received.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
-| `no-such-identity` | `organisation.invite.error` | no account has this email |
-| `already-member` | `organisation.invite.error` | the account is already a member of the organisation |
+| `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
 | `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
-| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error` | the account is the only administrator of an organisation that has other members, so it cannot be deleted; the organisation page shows them, and the deletion goes through once they are removed |
+| `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
 | `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |
@@ -242,6 +243,16 @@ choice, never its label, and its meaning says what the choice is, not how the pa
 | `user.sign-in.toggle-button` | `sign-in` | the button switches the form to signing in |
 | `organisation.page.role-badge` | `admin` | the signed-in member administers the organisation |
 | `organisation.page.role-badge` | `member` | the signed-in member is a plain member of the organisation |
+| `organisation.invitation.role-badge` | `admin` | the invitation makes the account an administrator of the organisation |
+| `organisation.invitation.role-badge` | `member` | the invitation makes the account a plain member of the organisation |
+| `organisation.invite.role-select.option` | `member` | the option invites the account as a plain member |
+| `organisation.invite.role-select.option` | `admin` | the option invites the account as an administrator |
+| `organisation.members.role-select.option` | `member` | the option makes the member a plain member |
+| `organisation.members.role-select.option` | `admin` | the option makes the member an administrator |
+| `organisation.sent.role-badge` | `member` | the invitation makes the account a plain member |
+| `organisation.sent.role-badge` | `admin` | the invitation makes the account an administrator |
+| `organisation.received.role-badge` | `member` | the invitation makes the account a plain member |
+| `organisation.received.role-badge` | `admin` | the invitation makes the account an administrator |
 | `organisation.page.current-select.option` | `^[a-z][a-z0-9_]{1,31}$` | the option selects the organisation with this key (a pattern that every organisation key matches) |
 
 ## Screen names in use
@@ -258,11 +269,12 @@ screen name of its own.
 | `user.reset-password` | the page the link of a password reset mail opens, which sets a new password (`/reset-password`) |
 | `user.confirm-email` | the page the link of an email confirmation mail opens, which changes the account's email (`/confirm-email`) |
 | `user.profile` | the signed-in account's own profile (`/me`) |
-| `organisation` | the current organisation with its notes, and its members for an administrator (`/org`) |
+| `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
 | `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email, and the deletion of the account (`/settings`) |
 | `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
+| `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
 
 ## Roles
 

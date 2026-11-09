@@ -156,7 +156,15 @@ modeling stage.
   which the organisation page words as "too many attempts"; any other status
   named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
   it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once, added to the newest list any tab kept. `devicesApi` is the `DEVICES` port over
+  creates its membership on the device at once, added to the newest list any tab kept; the
+  invitations of an organisation (an invite with a role, the pending ones, a revocation) and a
+  member's role change (`PATCH` of the member) adopt nothing: every device of the member learns
+  the role over the sync channel. `invitationsApi` is the `INVITATIONS` port over
+  `POST /invitations/read` (the link's token in the body, with the session token only when the
+  device holds one: `jsonAsWhoever`), `GET /invitations`, `POST /invitations/accept` and
+  `POST /invitations/decline` (`createInvitations`: an accepted invitation is the membership on
+  this device at once, as a created organisation is, and the answer comes once it is adopted, so
+  the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. One tab per browser leads the
@@ -241,7 +249,7 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`EventBus` of
+  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
@@ -251,7 +259,10 @@ modeling stage.
   (`/ui-manifest/manifest.json`, never cached) when the frame starts watching, each time the tab
   comes back to the foreground and every ten minutes while it is there, against the build this
   tab runs (`virtual:perch-build`, below); a manifest the server does not serve, or a failed
-  read, says nothing. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
+  read, says nothing. It provides `CLIPBOARD` too (`browser-clipboard.ts`): the browser's
+  `navigator.clipboard.writeText`, which an administrator's copy of an invitation's link goes
+  through; a page that is not a secure context has no clipboard, and a write then fails naming
+  it, as the browser's own refusal does. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
   signed-in account, the same in every tab: the leading tab shares its channel, whether its
   space holds unsent changes and a sync stopped for good as the record `perch.sync.leader` in
   the browser's storage, written on each change of its channel and every two seconds while it
@@ -383,7 +394,9 @@ and waits until the gateway acknowledged them, and whose `readAccount` signs in 
 profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one the account already
-administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and
+administers is found; one it only belongs to is refused), `ensureInvited` invites an existing
+account by email as a member and answers the invitation's id (`already-member` when it is one),
+`ensureJoined` accepts an invitation by its id as the signed-in account, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
 of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
 by default), which a test talking to the gateway directly uses to name a client address in
