@@ -244,6 +244,7 @@ describe('bindingsProblems', () => {
 
     Object.assign(screenIn(contract, 'sample').anchors, {
       'sample.form.remove-button': { kind: 'button', binding: update('sample.thing-item') },
+      'sample.thing-cell': { kind: 'cell', binding: update('sample.thing-item') },
       'sample.bare-item': { kind: 'item', binding: update('sample.bare-item') },
       'sample.lone.thing-item': { kind: 'item', dataId: 'thing' },
       'sample.lone.remove-button': { kind: 'button', binding: update('sample.lone.thing-item') },
@@ -255,6 +256,7 @@ describe('bindingsProblems', () => {
 
     expect(printed(contract)).toEqual([
       `${AT}["sample.form.remove-button"].binding.params.id: takes the data-id of "sample.thing-item" on "sample.form.remove-button", which is not in its part "sample": only a control in the item's part, rendered in each entry, carries it`,
+      `${AT}["sample.thing-cell"].binding.params.id: takes the data-id of "sample.thing-item" on "sample.thing-cell", a cell, which is no control: a control in it (a link) carries it`,
       `${AT}["sample.bare-item"].binding.params.id: "sample.bare-item" declares no dataId: a parameter takes the data-id of an entry, which its dataId says`,
       `${AT}["sample.bare-item"].binding.params.id: takes the data-id of "sample.bare-item" on the entry itself, which is no control: a control in it (a link) carries it`,
       `${AT}["sample.lone.remove-button"].binding.params.id: "sample.lone.thing-item" is an entry of no list, table or section of the screen: an entry is declared under its container or beside it in its part`,

@@ -47,9 +47,32 @@ describe("a navigate's search that takes the data-id of an entry", () => {
 
     Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
       'sample.open-link': { actions: [navigate({ id: { item: ITEM }, tab: 'a' })] },
+      'sample.a-button': { actions: [navigate({ id: { item: ITEM } })] },
     })
 
     expect(printed(contract)).toEqual([])
+  })
+
+  it('refuses it on an anchor of the entry part that is no control: a cell, a sibling item', () => {
+    const contract = sample()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.label-cell': { kind: 'cell' },
+      'sample.other-item': { kind: 'item', dataId: 'thing' },
+    })
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'sample.label-cell': { actions: [navigate({ id: { item: ITEM } })] },
+      'sample.other-item': { actions: [navigate({ id: { item: ITEM } })] },
+    })
+
+    const on = `${AT}.states.editing.on`
+    const item = 'actions[0].params.search.id.item: takes the data-id of "sample.thing-item"'
+    const noControl = 'which is no control: a control in it (a link) carries it'
+
+    expect(printed(contract)).toEqual([
+      `${on}["sample.label-cell"].${item} on "sample.label-cell", a cell, ${noControl}`,
+      `${on}["sample.other-item"].${item} on "sample.other-item", a item, ${noControl}`,
+    ])
   })
 
   it('wants an item or a row of its own screen, with a dataId, of a list, table or section', () => {

@@ -115,7 +115,7 @@ describe('instructionsOf', () => {
   })
   it('says a navigate may carry into a search the data-id of the entry whose control acted', () => {
     expect(instructions.screenMap).toContain(
-      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
+      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control (a button, a link, a tab or a field) in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
     )
     expect(instructions.screenMap).toContain(
       'an item or a row as a value of `params` or `input` gives the `data-id` of the entry whose control acts, likewise',

@@ -2,6 +2,7 @@ export { baseOf, isKnownAnchor, testIdFor } from './derive'
 export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
 export {
   ANCHOR_PATTERN,
+  CONTROL_KINDS,
   FIELD_KINDS,
   isAnchor,
   isUnder,

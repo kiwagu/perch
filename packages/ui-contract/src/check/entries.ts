@@ -2,12 +2,13 @@
  * An entry named as a value: an `item` or a `row` whose `data-id` an action's parameter or a
  * navigate's search takes, the id of the entry whose control the user acted on. The entry is
  * declared on the screen that names it, carries a `dataId`, and belongs to a list, a table or a
- * section of that screen (`containersOf`); the control that gives its id is in the entry's part
- * (`<part>.<name>`, like the entry: `inPartOf`), rendered in each entry, so it acts on the entry
- * it is in, and never the entry itself, which is no control.
+ * section of that screen (`containersOf`); the control that gives its id is a control
+ * (`CONTROL_KINDS`: a button, a link, a tab or a field) in the entry's part (`<part>.<name>`,
+ * like the entry: `inPartOf`), rendered in each entry, so it acts on the entry it is in, and
+ * never the entry itself, a cell or a sibling entry, which are no controls.
  */
 
-import { containersOf, ENTRY_KINDS, inPartOf, partOf } from '../anchors'
+import { CONTROL_KINDS, containersOf, ENTRY_KINDS, inPartOf, kindOf, partOf } from '../anchors'
 import type { AnchorDef, Problem, Screen } from '../files'
 
 import { type InScreens, own } from './contract'
@@ -84,8 +85,10 @@ const isOwnAnchor = (screen: Screen, event: string): boolean =>
 
 /**
  * Why `event` cannot give the data-id of `item`, or undefined when it can: it is the entry
- * itself, no control of the screen (a platform or data event, another screen's anchor), or a
- * control outside the entry's part. `on` says where the event is (`on "<event>"`).
+ * itself, no control of the screen (a platform or data event, another screen's anchor), an
+ * anchor of a kind that is no control (a cell, a sibling entry: its declared kind, or for a
+ * derived part the kind its suffix ends with), or a control outside the entry's part. `on` says
+ * where the event is (`on "<event>"`).
  */
 export function carrierProblem(
   screen: Screen,
@@ -101,6 +104,12 @@ export function carrierProblem(
 
   if (!isOwnAnchor(screen, event)) {
     return `${takes} ${on(`"${event}"`)}, which is no control of the screen: ${CARRIED}`
+  }
+
+  const kind = own(screen.anchors, event)?.kind ?? kindOf(event)
+
+  if (!CONTROL_KINDS.has(kind)) {
+    return `${takes} ${on(`"${event}"`)}, a ${kind}, which is no control: a control in it (a link) carries it`
   }
 
   return inPartOf(item, event)

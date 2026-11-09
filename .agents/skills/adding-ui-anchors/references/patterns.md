@@ -131,7 +131,8 @@ await expect(deviceBRow).toHaveAttribute('data-state', 'revoked')
 await expect(deviceBRow.getByTestId('device.list.revoked-cell')).toBeVisible()
 ```
 
-A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`)
+A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`;
+a button, a link, a tab or a field, never a cell or a sibling entry)
 is rendered in each entry and acts on the entry it is in: an action's parameter that names the
 item takes that entry's `data-id` (`params: { device: device.list.session-item }`). A row that
 opens the entity it shows does it the same way, with a link in the row whose transition puts

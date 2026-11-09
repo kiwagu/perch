@@ -381,7 +381,8 @@ An anchor's `binding` says what the element does or shows:
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
   An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control
-  acts: a control in the item's part (`<part>.<name>`, like the item), rendered in each entry
+  acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the
+  item's part (`<part>.<name>`, like the item), rendered in each entry
   (`device.list.revoke-button` passes `device: device.list.session-item`, the device of its
   own row). The item is an entry of a list, a table or a section of its own screen, declared
   under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one
@@ -550,8 +551,9 @@ as it holds its router to the bindings.
   `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
   A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item` or `row`
   whose control the user acted on, so that the selection is in the address and a reload or a
-  copied link reaches the same entry. Only the event of a control in the item's part
-  (`<part>.<name>`, like the item), rendered in each entry, carries it, so the navigate sits
+  copied link reaches the same entry. Only the event of a control (a button, a link, a tab or
+  a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the
+  item), rendered in each entry, carries it, so the navigate sits
   in the actions of that event's transition, never in an `entry`, an `exit` or the outcome of
   an invoke, where no entry was acted on. The item is an entry of a list, a table or a section
   of the flow's own screen, declared under it or beside it in its part, and declares its
@@ -1290,8 +1292,9 @@ gap is fixed in the contract files first, never worked around in a test.
   "Composites" name each other, each item state a row state;
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
   constant or a search parameter, an item or a row of its own screen with a `dataId`, of a
-  list, a table or a section, from a control in its part (in an invoke's `input`, a state only
-  such controls enter), and a parameter two fields of a button's part pass with
+  list, a table or a section, from a control (a button, a link, a tab or a field) in its part
+  (in an invoke's `input`, a state only such controls enter), and a parameter two fields of a
+  button's part pass with
   different values written by the button, each param of a platform source a parameter of its
   action taking a constant or a search parameter every route of the screen declares,
   never `page` or `size`; a paged source's action pages with its sizes each once, the smallest

@@ -185,7 +185,8 @@ for Bun.
     or more alone, each listed once), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
     input; an item or a row of its own screen with a `dataId`, of a list, a table or a
-    section, taken from a control in its part), a constant or a search parameter every route
+    section, taken from a control, a button, a link, a tab or a field, in its part), a
+    constant or a search parameter every route
     of the screen declares, routes,
     the search parameter a field starts with, one every route of the screen declares, never on
     another kind nor a secret field, sources, a platform source's params each a parameter of
@@ -201,7 +202,8 @@ for Bun.
     moves to, each value a literal, `{ anchor }`, a field its own screen declares (never a
     `visibility-button` nor a secret field), or `{ item }`, an entry of its own screen with a
     `dataId`, of a list, a table or a section, into a key that takes a string, taken on the
-    event of a control in the entry's part, never in an entry, an exit or an invoke's outcome,
+    event of a control (`CONTROL_KINDS`) in the entry's part, never in an entry, an exit or an
+    invoke's outcome,
     and an invoke's input that takes an entry run in a state only such controls enter
     (`flow/items.ts`), and `page: 1` beside any key a paged list of the screen it moves to
     reads (`flow/pages.ts`),
@@ -485,7 +487,9 @@ for Bun.
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
   `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
-  `partOf(anchor)`, the part it sits in (the anchor without its last segment). The roles a
+  `partOf(anchor)`, the part it sits in (the anchor without its last segment);
+  `CONTROL_KINDS`, the kinds a person acts on (a button, a link, a tab and the `FIELD_KINDS`),
+  the only carriers of an entry's `data-id`. The roles a
   device holds: `GUEST` (`guest`, nobody signed in) and `IDENTITY` (`identity`, an account
   signed in), the two of which a device holds exactly one, `heldRoles(signedIn, others)` (the
   set it holds: `guest` alone, else `identity` and each other role) and `admits(roles, held)`
