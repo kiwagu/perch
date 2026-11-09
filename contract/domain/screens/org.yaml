@@ -263,7 +263,7 @@ anchors:
         invitation: organisation.received.item
   organisation.received.error:
     kind: error
-    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list, which is read again.
+    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
   ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an administrator, the invitations for the account, and the create toggle.
