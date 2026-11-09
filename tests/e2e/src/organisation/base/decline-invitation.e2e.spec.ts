@@ -7,11 +7,12 @@ import {
   createOrganisation,
   expectInvitationMail,
   expectMembers,
+  invitationsRead,
   inviteEmail,
   receivedItem,
 } from '../../support/organisation'
 
-test.describe('Decline an invitation on the organisation page', () => {
+test.describe('Decline an invitation on the organisation page', { tag: '@full' }, () => {
   test("The invited account declines on its organisation page; the invitation leaves its list and the administrator's, and its link no longer works", async ({
     page,
     anotherAccount,
@@ -66,10 +67,13 @@ test.describe('Decline an invitation on the organisation page', () => {
     })
 
     await test.step('5. On device A, reload [/org]', async () => {
+      const sent = invitationsRead(page, 'sent')
+
       await page.reload()
       // Expected: After step 5 device A shows no [organisation.sent.list], and
       //   [organisation.members.list] holds only user A's [organisation.members.item]
       await expectMembers(page, [userA.email])
+      expect(await sent, 'the invitations sent, read after the reload').toBe(0)
       await expect(page.getByTestId('organisation.sent.list')).toHaveCount(0)
     })
 

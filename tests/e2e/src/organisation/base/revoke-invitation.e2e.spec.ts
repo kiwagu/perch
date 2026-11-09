@@ -6,11 +6,12 @@ import { mailbox } from '../../support/mailbox'
 import {
   createOrganisation,
   expectInvitationMail,
+  invitationsRead,
   inviteEmail,
   sentItems,
 } from '../../support/organisation'
 
-test.describe('Revoke an invitation', () => {
+test.describe('Revoke an invitation', { tag: '@full' }, () => {
   test('An administrator revokes a pending invitation once the frame has asked; its link then no longer works, and the invited account has no invitation', async ({
     page,
     anotherAccount,
@@ -77,6 +78,8 @@ test.describe('Revoke an invitation', () => {
     })
 
     await test.step('6. On device B, open [/org]', async () => {
+      const received = invitationsRead(deviceB, 'received')
+
       await deviceB.getByTestId('app-shell.nav.organisation-link').click()
       // Expected: After step 6 device B shows [organisation.page.status] in [state:empty] and no
       //   [organisation.received.list]
@@ -84,6 +87,7 @@ test.describe('Revoke an invitation', () => {
         'data-state',
         'empty',
       )
+      expect(await received, 'the invitations for user B, read on opening the page').toBe(0)
       await expect(deviceB.getByTestId('organisation.received.list')).toHaveCount(0)
     })
   })

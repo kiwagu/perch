@@ -5,7 +5,7 @@ import { openMailLink } from '../../support/mail-contract'
 import { mailbox } from '../../support/mailbox'
 import { createOrganisation, expectInvitationMail, inviteEmail } from '../../support/organisation'
 
-test.describe('Accept an invitation by the link of its mail', () => {
+test.describe('Accept an invitation by the link of its mail', { tag: '@full' }, () => {
   test("The invitation mail speaks the invited account's language; its link shows the organisation and the role and, accepted, opens the organisation; the same link then no longer works", async ({
     page,
     anotherAccount,

@@ -26,6 +26,42 @@ export const receivedItem = (page: Page, organisationName: string) =>
   page.getByTestId('organisation.received.item').filter({ hasText: organisationName })
 
 /**
+ * The next read of a list of invitations `page` makes, waited for from now (so started before
+ * the reload or the navigation that reads it): `sent` an organisation's
+ * (`/organisations/<key>/invitations`), `received` the signed-in account's (`/invitations`). It
+ * must succeed; answers how many invitations it held. The page renders no list both before its
+ * read answers and when it holds none, so a check that no list shows waits for this first. Only
+ * the count is read: the invitations sent carry their links, and a failure must not print one.
+ */
+export async function invitationsRead(page: Page, list: 'sent' | 'received'): Promise<number> {
+  const response = await page.waitForResponse(
+    (each) => {
+      const path = new URL(each.url()).pathname
+
+      return (
+        each.request().method() === 'GET' &&
+        (list === 'sent'
+          ? /\/organisations\/[^/]+\/invitations$/.test(path)
+          : path.endsWith('/invitations') && !path.includes('/organisations/'))
+      )
+    },
+    { timeout: 10_000 },
+  )
+
+  expect(response.ok(), `the read of the ${list} invitations succeeded`).toBe(true)
+
+  const body: unknown = await response.json()
+  const invitations =
+    typeof body === 'object' && body !== null && 'invitations' in body
+      ? body.invitations
+      : undefined
+
+  expect(Array.isArray(invitations), `the read of the ${list} invitations listed them`).toBe(true)
+
+  return Array.isArray(invitations) ? invitations.length : Number.NaN
+}
+
+/**
  * Creates the organisation from the open "/org" page: the heading then names it and the role
  * badge says the creator administers it.
  */

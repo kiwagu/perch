@@ -12,7 +12,7 @@ import {
   sentItems,
 } from '../../support/organisation'
 
-test.describe("Copy an invitation's link", () => {
+test.describe("Copy an invitation's link", { tag: '@full' }, () => {
   test('The copied link is the link the invitation mail carries, and it lets the invited account join', async ({
     page,
     anotherAccount,

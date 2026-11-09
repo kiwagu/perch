@@ -6,11 +6,12 @@ import {
   createOrganisation,
   expectInvitationMail,
   expectMembers,
+  invitationsRead,
   receivedItem,
   sentItems,
 } from '../../support/organisation'
 
-test.describe('Invite an email that has no account yet', () => {
+test.describe('Invite an email that has no account yet', { tag: '@full' }, () => {
   test("An invitation to an email with no account is mailed in the inviter's language and waits; the account later made with that email finds it on the organisation page and joins", async ({
     page,
     freshDevices,
@@ -120,10 +121,13 @@ test.describe('Invite an email that has no account yet', () => {
     })
 
     await test.step('5. On device A, reload [/org]', async () => {
+      const sent = invitationsRead(page, 'sent')
+
       await page.reload()
       // Expected: After step 5 device A shows user B's [organisation.members.item] in
       //   [organisation.members.list] and no [organisation.sent.list]
       await expectMembers(page, [userA.email, data.invitedEmail])
+      expect(await sent, 'the invitations sent, read after the reload').toBe(0)
       await expect(page.getByTestId('organisation.sent.list')).toHaveCount(0)
     })
   })
