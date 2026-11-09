@@ -15,6 +15,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | `item` | one entry of a list | `getByRole('listitem')` |
 | `list` | a list of entries | `getByRole('list')` |
 | `message` | a notice or a hint | `getByRole('status')` |
+| `option` | one entry of a select, with `data-value` | `getByRole('option')` |
 | `page` | the root of a screen | |
 | `status` | the readiness line of a page | `getByRole('status')` |
 

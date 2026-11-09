@@ -177,7 +177,8 @@ for Bun.
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
-    screens is in the vocabulary, every code is used, no choice values for a
+    screens is in the vocabulary, every derived suffix ends with a kind of it, every code is
+    used, no choice values for a
     `visibility-button`, whose values its suffix defines, the platform's composites and the
     rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
     never named like a derived one, entry and names, `secret` on a field alone, a

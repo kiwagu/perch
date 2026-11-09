@@ -1283,7 +1283,8 @@ gap is fixed in the contract files first, never worked around in a test.
 - `bun run contract:check`: the files on their own and against each other. Each file parses
   and holds its shape, and each screen file is named by its first binding; every anchor
   follows the grammar, starts with its screen's id and is declared once; every kind,
-  suffix, state, code, role and choice value is in the vocabulary, and every code of the
+  suffix, state, code, role and choice value is in the vocabulary, every derived suffix ends
+  with a kind of it (the kind of the part it marks), and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
   every route of the screen declares, which only a field that holds no secret starts with;
   `secret` is on a field alone, and a `visibility-button` on a secret input alone;

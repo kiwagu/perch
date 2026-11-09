@@ -86,6 +86,7 @@ state of one anchor, never a second anchor.
 | `page` | the root element of a screen | |
 | `heading` | the title of a page or a card that a test reads | `getByRole('heading')` |
 | `message` | an informational text such as a notice, a hint or an empty state, with `data-code` | |
+| `range` | the text of a paged list that says which entries its page shows, with `data-from`, `data-to` and `data-total` | |
 | `error` | a validation or failure text next to a field or a form, with `data-code`; its `fields` name the field each code concerns | |
 | `toast` | one notification that shows for a short while; several may show at once, the newest at the top, each carrying `data-code` | |
 | `badge` | a marker such as a counter, a role or "this device", with `data-value` when it names a choice | |
