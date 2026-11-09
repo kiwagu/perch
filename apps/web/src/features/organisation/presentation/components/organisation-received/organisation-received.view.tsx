@@ -16,8 +16,9 @@ export interface ReceivedItem {
 
 /**
  * The invitations to the account's email, newest first, each with its accept and decline
- * buttons; what failed (their read, or an acceptance or a decline) shows in place of the list.
- * Nothing is rendered while there is none and nothing failed.
+ * buttons; what failed shows above them: a failed acceptance or decline beside the list, a
+ * failed read alone (the page passes no list then). Nothing is rendered while there is none and
+ * nothing failed.
  */
 export function OrganisationReceived(props: {
   readonly invitations: readonly ReceivedItem[] | undefined
@@ -41,10 +42,11 @@ export function OrganisationReceived(props: {
           <h2>{t('organisation.received.title')}</h2>
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        {props.error !== undefined ? (
+      <CardContent className="flex flex-col gap-2">
+        {props.error !== undefined && (
           <OrganisationErrorLine code={props.error} testId="organisation.received.error" />
-        ) : (
+        )}
+        {invitations !== undefined && invitations.length > 0 && (
           <ul className="flex flex-col gap-2" data-testid="organisation.received.list">
             {invitations?.map((invitation) => (
               <li

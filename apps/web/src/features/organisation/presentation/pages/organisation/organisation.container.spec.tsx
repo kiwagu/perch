@@ -20,6 +20,7 @@ import {
 import { fakeServices } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
+import type { InvitationsPort, ReceivedInvitation } from '../../../../../platform/invitations.port'
 import { defineModule } from '../../../../../platform/module'
 import type {
   InvitationView,
@@ -54,13 +55,24 @@ const sentToBea: InvitationView = {
 const acme = membership('acme', 'Acme', 'admin')
 const globex = membership('globex', 'Globex', 'admin')
 
+const fromInitech: ReceivedInvitation = {
+  id: invitationIdFactory.create(),
+  organisation: { name: 'Initech' },
+  role: 'member',
+}
+
 /**
  * The organisation page of `ann`, a member of `memberships` (the first is current), over
- * `gateway`. `select` makes another organisation current without the page choosing it.
+ * `gateway` and the invitations to her (`invitations`). `select` makes another organisation
+ * current without the page choosing it.
  */
-async function openPage(memberships: Parameters<typeof sessionIn>[1], gateway: OrganisationsPort) {
+async function openPage(
+  memberships: Parameters<typeof sessionIn>[1],
+  gateway: OrganisationsPort,
+  invitations: InvitationsPort = noInvitations,
+) {
   const { session, select } = sessionIn(ann, memberships)
-  const organisations = new OrganisationService(session, gateway, noInvitations, replicaSchema)
+  const organisations = new OrganisationService(session, gateway, invitations, replicaSchema)
   const services = fakeServices(session)
 
   services.container
@@ -243,6 +255,67 @@ describe('OrganisationContainer', () => {
       expect(screen.getByTestId('organisation.invite.error').getAttribute('data-code')).toBe(
         'not-admin',
       )
+    })
+  })
+
+  describe('the invitations for the account', () => {
+    /** The invitations port of `ann` with `mine` read and `more` of it changed. */
+    const invitationsWith = (more: Partial<InvitationsPort>): InvitationsPort => ({
+      ...noInvitations,
+      ...more,
+    })
+
+    it.each([
+      ['accept', 'organisation.received.accept-button'],
+      ['decline', 'organisation.received.decline-button'],
+    ] as const)('keeps the list beside a failed %s and reads it again', async (answer, button) => {
+      const mine = vi.fn(() => okAsync([fromInitech]))
+      const refusal = later<never>()
+
+      await openPage(
+        [acme],
+        gatewayWith({}),
+        invitationsWith({ mine, [answer]: () => refusal.result }),
+      )
+      fireEvent.click(await screen.findByTestId(button))
+      await act(async () => {
+        refusal.refuse('other-account')
+      })
+
+      await waitFor(() => expect(mine).toHaveBeenCalledTimes(2))
+      expect(screen.getByTestId('organisation.received.error').getAttribute('data-code')).toBe(
+        'other-account',
+      )
+      expect(screen.getAllByTestId('organisation.received.item')).toHaveLength(1)
+      expect(
+        (screen.getByTestId(button) as HTMLButtonElement).disabled,
+        'the invitation can be answered again',
+      ).toBe(false)
+    })
+
+    it('shows a failed read in place of the list, even one read before it', async () => {
+      const reread = later<readonly ReceivedInvitation[]>()
+      let reads = 0
+      const refusal = later<never>()
+
+      await openPage(
+        [acme],
+        gatewayWith({}),
+        invitationsWith({
+          mine: () => (++reads === 1 ? okAsync([fromInitech]) : reread.result),
+          decline: () => refusal.result,
+        }),
+      )
+      fireEvent.click(await screen.findByTestId('organisation.received.decline-button'))
+      await act(async () => {
+        refusal.refuse('other-account')
+      })
+      await act(async () => {
+        reread.refuse('offline')
+      })
+
+      await waitFor(() => expect(screen.queryByTestId('organisation.received.list')).toBeNull())
+      expect(screen.getByTestId('organisation.received.error')).toBeTruthy()
     })
   })
 })

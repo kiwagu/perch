@@ -4,7 +4,8 @@ import { taken } from './events'
 /**
  * The region of the screen's flow for the invitations for the account: accepting one makes its
  * organisation current and starts every area afresh; a refusal shows on the invitations'
- * own error. The invitations are read again once one is accepted.
+ * own error. The invitations are read again once an acceptance ends, refused or not, so one
+ * gone meanwhile leaves the list.
  */
 export const RECEIVED_REGION = {
   initial: 'idle',
@@ -18,7 +19,7 @@ export const RECEIVED_REGION = {
           target: '#organisation.viewing',
           actions: ['rereadReceived', INVITATION_ACCEPTED],
         },
-        onError: { target: 'idle', actions: [ACCEPT_REFUSED] },
+        onError: { target: 'idle', actions: ['rereadReceived', ACCEPT_REFUSED] },
       },
     },
   },

@@ -163,11 +163,16 @@ export function OrganisationContainer() {
         removable: member.identity.id !== user?.id,
       }))}
       sent={invitations.list}
-      received={received.list?.map((invitation) => ({
-        id: invitation.id,
-        name: invitation.organisation.name,
-        role: invitation.role,
-      }))}
+      // A failed read shows in place of the list, even of one read before it.
+      received={
+        received.failure === undefined
+          ? received.list?.map((invitation) => ({
+              id: invitation.id,
+              name: invitation.organisation.name,
+              role: invitation.role,
+            }))
+          : undefined
+      }
       errors={{
         ...shown,
         members: shown.members ?? members.failure ?? invitations.failure,

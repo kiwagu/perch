@@ -113,7 +113,7 @@ export const SENT_REVOKE_REGION = {
   },
 } as const
 
-/** Declines an invitation for the account: the invitations for it are read again. */
+/** Declines an invitation for the account: the invitations for it are read again, refused or not. */
 export const RECEIVED_DECLINE_REGION = {
   initial: 'idle',
   states: {
@@ -126,7 +126,7 @@ export const RECEIVED_DECLINE_REGION = {
           target: 'idle',
           actions: [forget('received'), 'rereadReceived', INVITATION_DECLINED],
         },
-        onError: { target: 'idle', actions: [DECLINE_REFUSED] },
+        onError: { target: 'idle', actions: ['rereadReceived', DECLINE_REFUSED] },
       },
     },
   },

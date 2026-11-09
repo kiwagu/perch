@@ -846,7 +846,7 @@ describe('OrganisationView of the invitations for the account', () => {
     expect(screen.queryByText(en['organisation.received.title'])).toBeNull()
   })
 
-  it('shows what failed in place of the list', () => {
+  it('shows why an answer failed beside the list, and a failure alone when no list was read', () => {
     const { rerender } = renderView({
       received: [fromGlobex],
       errors: { received: 'invitation-gone' },
@@ -865,7 +865,7 @@ describe('OrganisationView of the invitations for the account', () => {
 
       expect(error.getAttribute('data-code')).toBe(code)
       expect(error.textContent).toBe(en[key])
-      expect(screen.queryByTestId('organisation.received.list')).toBeNull()
+      expect(screen.getAllByTestId('organisation.received.item')).toHaveLength(1)
     }
 
     rerender({ received: undefined, errors: { received: 'data:OFFLINE' } })
@@ -873,6 +873,7 @@ describe('OrganisationView of the invitations for the account', () => {
     expect(screen.getByTestId('organisation.received.error').getAttribute('data-code')).toBe(
       'failed',
     )
+    expect(screen.queryByTestId('organisation.received.list')).toBeNull()
 
     rerender({ received: [fromGlobex], errors: {} })
 

@@ -419,7 +419,7 @@ describe('organisation machine', () => {
     expect(snapshot().matches({ viewing: { 'create-form': 'closed' } })).toBe(true)
   })
 
-  it('shows a refused acceptance on the invitations for the account, and takes the next one', async () => {
+  it('shows a refused acceptance on the invitations for the account, reads them again, and takes the next one', async () => {
     let refuse = true
     const { actor, snapshot, emitted, region } = page({
       accept: () => (refuse ? refused('invitation-gone') : okAsync(undefined)),
@@ -429,17 +429,17 @@ describe('organisation machine', () => {
     await region('received', 'idle')
 
     expect(snapshot().context.errors.codes).toEqual({ received: 'invitation-gone' })
-    expect(snapshot().context.receivedChanged).toBe(0)
+    expect(snapshot().context.receivedChanged).toBe(1)
     expect(emitted).toEqual([])
 
     refuse = false
     actor.send({ type: 'organisation.received.accept-button', invitation: toBea })
-    await waitFor(actor, (state) => state.context.receivedChanged === 1)
+    await waitFor(actor, (state) => state.context.receivedChanged === 2)
 
     expect(snapshot().context.errors).toEqual({ of: undefined, codes: {} })
   })
 
-  it('declines an invitation, toasts and reads the invitations for the account again; a refusal shows there', async () => {
+  it('declines an invitation, toasts and reads the invitations for the account again; a refusal shows there and reads them again', async () => {
     let refuse = false
     const { actor, deps, snapshot, emitted, region } = page({
       decline: vi.fn(() => (refuse ? refused('other-account') : okAsync(undefined))),
@@ -458,7 +458,7 @@ describe('organisation machine', () => {
     await region('received-decline', 'idle')
 
     expect(snapshot().context.errors.codes).toEqual({ received: 'other-account' })
-    expect(snapshot().context.receivedChanged).toBe(1)
+    expect(snapshot().context.receivedChanged).toBe(2)
     expect(emitted).toHaveLength(1)
   })
 
