@@ -175,9 +175,23 @@ describe('bindingsProblems', () => {
     anchorIn(contract, 'sample.page').source = { entity: 'gadget' }
 
     expect(printed(contract)).toEqual([
+      `${AT}["sample.page"].source: a page has no entries: a source sits on a list, a section or a table`,
       `${AT}["sample.page"].source.entity: no entity "gadget" in the model`,
       `${AT}["sample.list"].source.order: entity "thing" has no field "rank"`,
       `${AT}["sample.devices-list"].source.platform: no platform action "devices.all"`,
+    ])
+  })
+  it('keeps a source to a list, a section or a table', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-section': { kind: 'section', source: { platform: 'devices.list' } },
+      'sample.devices-table': { kind: 'table', source: { platform: 'devices.list' } },
+    })
+    anchorIn(contract, 'sample.save-button').source = { platform: 'devices.list' }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.save-button"].source: a button has no entries: a source sits on a list, a section or a table`,
     ])
   })
   it('resolves a derived anchor of a param only through its base derived', () => {

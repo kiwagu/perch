@@ -5,7 +5,8 @@
  * `model.<entity>.<field>` of a field of the model an anchor of the screen shows; a `show` names
  * a declared anchor and codes it carries, a `clear` a declared anchor that carries codes, of any
  * kind and screen, which then shows none, else a field of the flow's own screen, which it
- * empties (a secret one included; never a visibility-button), a `navigate` the path of a binding
+ * empties (a secret one included; never a visibility-button), a `read` a list of the flow's own
+ * screen whose `source` is a platform action, which it reads again (`reads.ts`), a `navigate` the path of a binding
  * and search parameters of that binding, each a literal or the value a field of the flow's own
  * screen holds (`{ anchor }`, never a visibility-button nor a secret field, which would put a
  * password into an address and its history); an address is a binding of the flow's own screen
@@ -25,6 +26,7 @@ import {
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
+import { readProblems } from './reads'
 
 /** A platform event is named as a platform action is: `platform.<name>`. */
 const PLATFORM_EVENT = PLATFORM_ACTION
@@ -157,6 +159,10 @@ export function effectProblems(
 
     if (effect.type === 'clear') {
       return clearProblems(inFlow, effect.params.anchor, [...params, 'anchor'])
+    }
+
+    if (effect.type === 'read') {
+      return readProblems(inFlow, effect.params.anchor, [...params, 'anchor'])
     }
 
     const { anchor } = effect.params

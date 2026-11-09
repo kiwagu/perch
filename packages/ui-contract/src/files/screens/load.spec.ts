@@ -516,6 +516,23 @@ describe('loadScreens', () => {
       expect(screens?.toasts).toEqual([])
       expect(frame?.anchors['app-shell.toast']?.codes).toBeUndefined()
     })
+
+    it('keeps read: false of a region by its button on the loaded invoke, the toast opt-out taken away', () => {
+      writeToastScreens({ add: { by: 'sample.form.add-button', toast: false, read: false } })
+
+      const { screens, problems: found } = loadScreens(root)
+      const sample = screens?.screens.find((screen) => screen.id === 'sample')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(sample?.flow?.states['viewing']).toMatchObject({
+        states: {
+          add: { states: { running: { invoke: { src: 'thing.createThing', read: false } } } },
+        },
+      })
+      expect(sample?.flow?.states['viewing']).not.toMatchObject({
+        states: { add: { states: { running: { invoke: { toast: false } } } } },
+      })
+    })
   })
 
   describe('a composite of the platform', () => {

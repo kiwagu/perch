@@ -31,6 +31,18 @@ export const toastOptOutSchema = z
   )
 
 /**
+ * The opt-out of a read after the action: the invoke changes nothing a list of the screen shows,
+ * so nothing reads after it. A region written `by` its button passes it to its invoke; the
+ * canonical flow keeps it on the invoke, a statement for the checks that XState ignores and the
+ * machine comparison leaves out.
+ */
+export const readOptOutSchema = z
+  .literal(false)
+  .describe(
+    'Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused.',
+  )
+
+/**
  * A guard by failure code: it holds when the action of the invoke whose `onError` it guards
  * failed with one of its codes, so a bare `show` on its branch shows exactly them.
  */
@@ -65,6 +77,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       .describe('Per parameter, the anchor whose value it takes or a constant.'),
     onDone: transitions.describe('What follows when the action succeeds.'),
     onError: transitions.exactOptional().describe('What follows when the action fails.'),
+    read: readOptOutSchema.exactOptional(),
   }
   const invoke = (
     parts.toastOptOut === true

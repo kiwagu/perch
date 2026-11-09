@@ -14,6 +14,8 @@ const show = (anchor: string, codes: string[]) =>
 
 const clear = (anchor: string) => ({ type: 'clear', params: { anchor } }) as const
 
+const read = (anchor: string) => ({ type: 'read', params: { anchor } }) as const
+
 describe('flowProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -313,6 +315,75 @@ describe('flowProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([])
+  })
+  it('takes a read of a list of its own screen whose source is a platform action', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-table': { kind: 'table', source: { platform: 'devices.list' } },
+    })
+    flowStateIn(contract, 'editing').entry = [read('sample.devices-list')]
+    Object.assign(flowStateIn(contract, 'saving').invoke ?? {}, {
+      onDone: { target: 'editing', actions: [read('sample.devices-table')] },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses a read of what has no platform source, or is not its own, and says what it may name', () => {
+    const contract = sampleContract()
+    const may =
+      'a read names a list of its own screen whose source is a platform action, which it reads again'
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.devices-list': { kind: 'list', source: { platform: 'devices.list' } },
+    })
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-button': { kind: 'button', source: { platform: 'devices.list' } },
+      'sample.plain-list': { kind: 'list' },
+    })
+    flowStateIn(contract, 'editing').entry = [
+      read('sample.gone-list'),
+      read('sample.list'),
+      read('sample.page'),
+      read('sample.save-button'),
+      read('app-shell.devices-list'),
+      read('sample.title-input.visibility-button'),
+      read('sample.devices-button'),
+      read('sample.plain-list'),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.entry[0].params.anchor: "sample.gone-list" is not a declared anchor`,
+      `${AT}.states.editing.entry[1].params.anchor: "sample.list" lists the entity thing, which it follows as the stored data changes and never reads: ${may}`,
+      `${AT}.states.editing.entry[2].params.anchor: "sample.page" is a page, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[3].params.anchor: "sample.save-button" is a button, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[4].params.anchor: "app-shell.devices-list" is an anchor of another screen: ${may}`,
+      `${AT}.states.editing.entry[5].params.anchor: "sample.title-input.visibility-button" is a visibility-button, presentation only: ${may}`,
+      `${AT}.states.editing.entry[6].params.anchor: "sample.devices-button" is a button, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[7].params.anchor: "sample.plain-list" is a list with no source: ${may}`,
+    ])
+  })
+  it('refuses an invoke that says read: false and reads in one of its outcomes', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(invoke, { read: false })
+
+    expect(printed(contract)).toEqual([])
+
+    invoke.onDone = { target: 'editing', actions: [read('sample.devices-list')] }
+    invoke.onError = [
+      { target: 'editing', guard: 'titleGiven' },
+      { target: 'editing', actions: [read('sample.devices-list')] },
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onDone reads "sample.devices-list": a read after the action, or read: false, never both`,
+      `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onError[1] reads "sample.devices-list": a read after the action, or read: false, never both`,
+    ])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {
     const contract = sampleContract()

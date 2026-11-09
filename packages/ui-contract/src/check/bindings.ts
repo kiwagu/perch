@@ -6,11 +6,11 @@
  * compute, and `$id` is minted); `route` is the path of a binding; `search` starts a field (an
  * anchor of a field kind, never a secret one) with a search parameter every route of the screen
  * declares; a
- * `source` names an entity and its order field, or a platform action. What a flow names is rule
- * 8's (`flow/`).
+ * `source` sits on a list, a section or a table and names an entity and its order field, or a
+ * platform action. What a flow names is rule 8's (`flow/`).
  */
 
-import { FIELD_KINDS } from '../anchors'
+import { FIELD_KINDS, LISTING_KINDS } from '../anchors'
 import type { AnchorDef, BindingRef, Problem } from '../files'
 
 import { bindingRefsOf, type Contract, declaredAnchors, fieldProblem, has, own } from './contract'
@@ -81,6 +81,25 @@ function sourceProblems(
     return []
   }
 
+  return [
+    ...(LISTING_KINDS.has(def.kind)
+      ? []
+      : [
+          inScreens(
+            at,
+            `a ${def.kind} has no entries: a source sits on a list, a section or a table`,
+          ),
+        ]),
+    ...sourceRefProblems({ contract, inScreens }, source, at),
+  ]
+}
+
+/** What a source names exists: a platform action, or an entity with its order field. */
+function sourceRefProblems(
+  { contract, inScreens }: Pick<Lookups, 'contract' | 'inScreens'>,
+  source: NonNullable<AnchorDef['source']>,
+  at: readonly PropertyKey[],
+): Problem[] {
   if ('platform' in source) {
     return has(contract.screens.platform.actions, source.platform)
       ? []

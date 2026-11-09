@@ -5,7 +5,8 @@
  * engine's comparison (`@workspace/ui-contract/machines`): the same initial state, states,
  * final states, parallel states with the same regions and initial states, events with their
  * targets and guard names, invoke sources, the contract's effects on the same transitions, and
- * what each state renders (`meta.renders`).
+ * what each state renders (`meta.renders`); an invoke's `read: false` is a statement the
+ * contract check reads, not held here.
  * The app adds actions of its own (an `assign`), and its `input` is the app's, but no
  * mechanism the flow has no counterpart for. On a branch the pre-commit hook sets
  * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a

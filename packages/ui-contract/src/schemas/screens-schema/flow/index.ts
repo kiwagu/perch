@@ -6,6 +6,7 @@ export {
   controlRegionSchema,
   draftPatternSchema,
   navigateShortSchema,
+  readShortSchema,
   showAllSchema,
   showSomeSchema,
 } from './authored'
