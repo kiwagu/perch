@@ -2,15 +2,19 @@
  * Rule 5: the route parameters a page sets have their controls. Every enum value of a
  * `params` or `search` property has a control under `x-perch.values` (and no other value
  * does), every control is a declared anchor, a `controlValue` is a choice value of its
- * control in the vocabulary, and `retain` names search parameters. That the schemas are
- * flat objects of primitives is the Zod schema's job (`flatJsonSchema`); that each is a
- * valid JSON Schema (a `pattern` that compiles, `required` without repeats) is Ajv's, and
- * so, once it is, is that every one of a property's `examples` matches that property and
- * that a path parameter a link must fill (a `$param`) has a value its schema accepts
+ * control in the vocabulary, and `retain` names search parameters. One control the engine
+ * knows already: on a screen with a paged list, the `size` of its `search` is chosen by the
+ * derived `<list>.size-select.option` (`derive/paging.ts`), so its enum values name none, and
+ * an `x-perch` written on it is refused (a screen file never writes a derived part's facts).
+ * That the schemas are flat objects of primitives is the Zod schema's job (`flatJsonSchema`);
+ * that each is a valid JSON Schema (a `pattern` that compiles, `required` without repeats) is
+ * Ajv's, and so, once it is, is that every one of a property's `examples` matches that property
+ * and that a path parameter a link must fill (a `$param`) has a value its schema accepts
  * (`parameterSample` for a path segment): one without needs an example. A path segment is
  * never empty, so neither is an example of a path parameter.
  */
 
+import { SIZE } from '../anchors'
 import {
   type Binding,
   createValidator,
@@ -28,7 +32,9 @@ import {
   knownAnchors,
   locate,
   own,
+  sizeOptionOf,
 } from './contract'
+import { pagedListOf } from './lookups'
 import { parameterSample } from './parameter-sample'
 import { parseRoutePath } from './routes'
 
@@ -39,6 +45,12 @@ interface Lookups {
   readonly vocabulary: Vocabulary
   readonly known: (anchor: string) => boolean
   readonly inScreens: InScreens
+}
+
+/** A property of a route schema whose control the engine derives: `size` on a paged screen. */
+interface DerivedControl {
+  readonly property: string
+  readonly control: string
 }
 
 /** What the anchor of a control lacks to choose `value`: its own choice values have no such row. */
@@ -155,7 +167,8 @@ const requiredParameters = (path: string): string[] =>
 
 /**
  * A route schema: valid as a JSON Schema, then its examples and, for the `params` of the
- * route path `path`, a value for each parameter a link must carry; and its controls.
+ * route path `path`, a value for each parameter a link must carry; and its controls, save
+ * the one of `derived`, which the engine knows.
  */
 function routeSchemaProblems(
   lookups: Lookups,
@@ -163,6 +176,7 @@ function routeSchemaProblems(
   schema: FlatSchema | undefined,
   path: string | undefined,
   at: readonly PropertyKey[],
+  derived?: DerivedControl,
 ): Problem[] {
   const validity = validityProblems(lookups, screen, schema, at)
   const filled = path === undefined ? [] : requiredParameters(path)
@@ -174,20 +188,37 @@ function routeSchemaProblems(
           ...exampleProblems(lookups, schema, path !== undefined, at),
           ...unsampledProblems(lookups, schema, filled, at),
         ]),
-    ...schemaProblems(lookups, schema, at),
+    ...schemaProblems(lookups, schema, at, derived),
   ]
 }
+
+/** Why the page size of a paged list writes no `x-perch`: the engine derives its control. */
+const derivedControlProblem = (
+  { inScreens }: Lookups,
+  { property, control }: DerivedControl,
+  at: readonly PropertyKey[],
+): Problem =>
+  inScreens(
+    [...at, 'x-perch'],
+    `"${property}" is the page size of a paged list: its control is the derived "${control}", never written under x-perch`,
+  )
 
 function schemaProblems(
   lookups: Lookups,
   schema: FlatSchema | undefined,
   at: readonly PropertyKey[],
+  derived?: DerivedControl,
 ): Problem[] {
   const { known, inScreens } = lookups
 
   return Object.entries(schema?.properties ?? {}).flatMap(([name, property]) => {
     const here = [...at, 'properties', name]
     const perch = property['x-perch']
+
+    if (derived !== undefined && name === derived.property) {
+      return perch === undefined ? [] : [derivedControlProblem(lookups, derived, here)]
+    }
+
     const values = perch?.values ?? {}
     const enumValues = (property.enum ?? []).map(String)
     const control = (anchor: string | undefined, path: readonly PropertyKey[]): Problem[] =>
@@ -227,20 +258,31 @@ export function searchProblems(contract: Contract): Problem[] {
   }
   const { inScreens } = lookups
 
-  return contract.screens.screens.flatMap((screen, index) =>
-    screen.bindings.flatMap((binding, number) => {
+  return contract.screens.screens.flatMap((screen, index) => {
+    const paged = pagedListOf(screen)
+    const derived =
+      paged === undefined ? undefined : { property: SIZE, control: sizeOptionOf(paged.anchor) }
+
+    return screen.bindings.flatMap((binding, number) => {
       const at = ['screens', index, 'bindings', number]
       const searchNames = Object.keys(binding.search?.properties ?? {})
 
       return [
         ...routeSchemaProblems(lookups, screen.id, binding.params, binding.path, [...at, 'params']),
-        ...routeSchemaProblems(lookups, screen.id, binding.search, undefined, [...at, 'search']),
+        ...routeSchemaProblems(
+          lookups,
+          screen.id,
+          binding.search,
+          undefined,
+          [...at, 'search'],
+          derived,
+        ),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)
             ? []
             : [inScreens([...at, 'retain', position], `"${name}" is not a search parameter`)],
         ),
       ]
-    }),
-  )
+    })
+  })
 }

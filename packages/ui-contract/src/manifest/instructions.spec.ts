@@ -96,7 +96,7 @@ describe('instructionsOf', () => {
       'each time the organisation or account it reads for becomes another or a search parameter it reads does',
     )
     expect(instructions.screenMap).toContain(
-      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes`)',
+      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes` and choose the route\'s `size`, which writes no `x-perch`)',
     )
     expect(instructions.screenMap).toContain(
       'a navigate that sets a search parameter a paged list reads says `page: 1`',

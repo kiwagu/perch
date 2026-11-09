@@ -160,6 +160,10 @@ export const inFile = (file: string, message: string, line?: number): Problem =>
 /** The derived `option` of a select, one per choice. */
 const OPTION = 'option'
 
+/** The options of the size select of the paged list `anchor`: `<list>.size-select.option`. */
+export const sizeOptionOf = (anchor: string): string =>
+  testIdFor(testIdFor(anchor, SIZE_SELECT), OPTION)
+
 /**
  * The options of each paged list's size select, `<list>.size-select.option`, with the values
  * they carry: the page sizes of the list's action, each as its `data-value`.
@@ -174,12 +178,7 @@ export function pageSizeOptionsOf(screens: ScreensFile): Map<string, string[]> {
 
       return paged === undefined
         ? []
-        : [
-            [
-              testIdFor(testIdFor(anchor, SIZE_SELECT), OPTION),
-              paged.sizes.map((size) => String(size)),
-            ] as const,
-          ]
+        : [[sizeOptionOf(anchor), paged.sizes.map((size) => String(size))] as const]
     }),
   )
 }

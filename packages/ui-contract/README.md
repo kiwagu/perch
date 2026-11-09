@@ -232,7 +232,9 @@ for Bun.
     `./machines` reaches every state and takes every transition and guarded branch to its
     target with its effects; a machine XState will not build is a problem, never a crash),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
-    (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
+    (enum controls, save the `size` of a screen with a paged list, whose control is the derived
+    `<list>.size-select.option` and which writes no `x-perch`; `retain`; each example of a
+    parameter against that parameter, Ajv's
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
     path parameter, and a value for each `$param`, else `needs an example` at its property),
     `leavingProblems` (each action of `platform.leaving` exists and is listed once),

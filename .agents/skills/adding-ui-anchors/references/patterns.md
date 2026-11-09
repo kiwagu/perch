@@ -715,7 +715,8 @@ on:
 ```
 
 The loader derives `console.users.list.range`, `.previous-link`, `.next-link` and
-`.size-select` (its options `.size-select.option`, one per size with `data-value`); the file
+`.size-select` (its options `.size-select.option`, one per size with `data-value`, the controls
+of `size`, which writes no `x-perch`: the check derives them and refuses one written); the file
 never writes them. The view renders the range with `data-from`, `data-to` and `data-total` once
 the read is in, each link only where there is such a page, and the select wherever the list is,
 each built with `testIdFor` and each moving with `pageSearchOf(search, { page, size },

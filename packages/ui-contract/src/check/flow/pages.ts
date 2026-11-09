@@ -8,6 +8,7 @@
 
 import { PAGE, searchKeysOf } from '../../anchors'
 import type { Effect, Problem } from '../../files'
+import { pagedListOf } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
 
@@ -21,14 +22,9 @@ function pagedListAt(
   const screen = contract.screens.screens.find(({ bindings }) =>
     bindings.some((binding) => binding.path === path),
   )
+  const list = screen === undefined ? undefined : pagedListOf(screen)
 
-  for (const [anchor, { source }] of Object.entries(screen?.anchors ?? {})) {
-    if (source !== undefined && 'platform' in source && source.paged === true) {
-      return { anchor, keys: searchKeysOf(source) }
-    }
-  }
-
-  return undefined
+  return list === undefined ? undefined : { anchor: list.anchor, keys: searchKeysOf(list.source) }
 }
 
 /** A navigate to `to` that sets a key its paged list reads, and not `page: 1`. */

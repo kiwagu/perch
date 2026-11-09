@@ -91,7 +91,8 @@ code and the tests follow; the checks hold them to the contract.
    it reads for or a search parameter its source takes becomes another, and nothing says that
    (its `params` take a search parameter or a constant, never a field; `paged: true` pages it
    by the route's `page` and `size`, the action declaring `paged: { sizes, default }`, derives
-   `range`, `previous-link`, `next-link` and `size-select`, and a navigate that sets a key it
+   `range`, `previous-link`, `next-link` and `size-select`, whose options are the controls of
+   `size`, so it writes no `x-perch`, and a navigate that sets a key it
    reads says `page: 1`: pattern 17); every other read is the flow's
    effect `read: <list>` on the outcome of the invoke that changed what the list shows (a
    list of the flow's own screen with a platform source, never an entity source, which follows

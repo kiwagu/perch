@@ -456,8 +456,10 @@ the number of entries in all (`51-100 of 312`), carried as `data-from`, `data-to
 `<list>.previous-link`: a link to the same route, the same search and `page` one less, on every
 page but the first. `<list>.next-link`: the same with `page` one more, on every page that does
 not hold the last entry. `<list>.size-select`: a select of the page size, shown wherever the
-list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value`;
-choosing one moves to the same route and search with that `size` and page 1. A part leaves out
+list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value`
+and are the controls of `size`, which therefore writes no `x-perch` (the check derives them and
+refuses one written); choosing one moves to the same route and search with that `size` and
+page 1. A part leaves out
 of the address a value equal to its default (page 1, the action's default size), as every link
 of the app does. A range or a link that does not apply is absent from the page, never
 disabled, so a state that lists the list in `meta.renders` does not require them; the size
@@ -1025,7 +1027,8 @@ Four derived parts belong to a paged list (see "Reading a screen file", `source`
 `previous-link`, `next-link` and `size-select`. The loader lists them in the `derived` of the
 list whose source says `paged: true`, and a screen file never writes them. The options of the
 size select, `<list>.size-select.option`, carry the action's page sizes as `data-value`, the
-values of the action and never rows of "Choice values".
+values of the action and never rows of "Choice values", and choose the route's `size`: the
+check knows them, so the binding writes no `x-perch` on `size`.
 
 One literal per rendered name:
 
