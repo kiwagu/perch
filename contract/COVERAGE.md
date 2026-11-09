@@ -14,7 +14,7 @@ run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
-The contract declares 13 screens, 181 anchors and 77 codes.
+The contract declares 13 screens, 181 anchors and 76 codes.
 
 Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 73/74, ignored 2.
 

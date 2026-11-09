@@ -43,14 +43,7 @@ export const INVITE_REFUSED = {
   type: 'show',
   params: {
     anchor: 'organisation.invite.error',
-    codes: [
-      'no-such-identity',
-      'already-member',
-      'email-invalid',
-      'not-admin',
-      'rate-limited',
-      'failed',
-    ],
+    codes: ['already-member', 'email-invalid', 'not-admin', 'rate-limited', 'failed'],
   },
 } as const
 export const ROLE_REFUSED = {
