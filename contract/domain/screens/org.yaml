@@ -273,6 +273,9 @@ flow:
   id: organisation
   description: The page's independent areas are the regions of viewing; choosing another organisation, creating one or accepting an invitation starts them all afresh.
   initial: viewing
+  meta:
+    guards:
+      ownDemotion: the account changed its own role to member
   states:
     viewing:
       type: parallel
@@ -369,10 +372,13 @@ flow:
                 src: platform.organisations.set-role
                 input: { identity: organisation.members.item, role: organisation.members.role-select }
                 onDone:
-                  target: idle
-                  description: The member's devices show the new role without a reload.
-                  actions:
-                    - read: organisation.members.list
+                  - target: idle
+                    guard: ownDemotion
+                    description: The account is a member now, so the members list goes and nothing reads it.
+                  - target: idle
+                    description: The member's devices show the new role without a reload.
+                    actions:
+                      - read: organisation.members.list
                 onError:
                   target: idle
                   description: The select shows the role the member still has, and the error shows under the invitation.
