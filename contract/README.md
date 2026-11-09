@@ -1338,8 +1338,10 @@ gap is fixed in the contract files first, never worked around in a test.
   every route needs no parameter; no binding's `guard` sends away an account its `roles` name
   (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among
   those its screen's bindings serve (the frame aside), a link to a route whose roles name
-  neither `guest` nor `identity` is shown only to the roles it serves (its own `roles`, else
-  those of the anchor it is declared under, else its screen's), and the binding at `/$` names
+  neither `guest` nor `identity` is shown to no device the route refuses: every restriction
+  above it (its own `roles`, those of each anchor it is declared under, and its screen's, the
+  frame aside) admits a device by the roles it holds together, so one restriction naming only
+  roles the route serves is enough, wherever it sits on the chain, and the binding at `/$` names
   `guest` and `identity` (see "Roles"); the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value

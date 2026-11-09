@@ -22,8 +22,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    are the roles the route serves: an account that holds none gets the not-found screen at
    the same address, after the `guard` and before the search is read. A route that must not
    show itself to a guest leaves `guard` out and names no `guest`; a link to a route whose
-   roles name neither `guest` nor `identity` names the roles that see it (the frame's nav link
-   to such a route says `roles` itself), each a role the route serves.
+   roles name neither `guest` nor `identity` is seen by no device the route refuses: its own
+   `roles`, or those of a container it is declared under (the frame's nav link to such a route
+   says `roles` itself, or sits in a nav that does), name only roles the route serves.
 5. **The root.** A container that scopes the screen: a page `status`, a `form` or a
    `section`.
 6. **The controls.** Every control a test or an agent drives (button, link, input,

@@ -130,4 +130,28 @@ describe('accessProblems', () => {
       `${SAMPLE} anchors["sample.console-link"].binding.route: "member" is shown a link to /console, which serves operator alone`,
     ])
   })
+
+  it('sees a link through every container above it, by the roles a device holds together', () => {
+    const contract = withConsole()
+    const link = (roles?: string[]): AnchorDef => ({
+      kind: 'link',
+      binding: { route: '/console' },
+      ...(roles === undefined ? {} : { roles }),
+    })
+
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.nav': { kind: 'nav', roles: ['operator'] },
+      'app-shell.nav.section': { kind: 'section', roles: ['identity'] },
+      'app-shell.nav.section.console-link': link(),
+      'app-shell.wide-nav': { kind: 'nav', roles: ['identity', 'member', 'admin'] },
+      'app-shell.wide-nav.console-link': link(),
+      'app-shell.wide-nav.operator-link': link(['operator']),
+      'app-shell.wide-nav.member-link': link(['member', 'operator']),
+    })
+
+    expect(printed(contract)).toEqual([
+      `${FRAME} anchors["app-shell.wide-nav.console-link"].binding.route: "identity" is shown a link to /console, which serves operator alone`,
+      `${FRAME} anchors["app-shell.wide-nav.member-link"].roles[0]: "member" is shown a link to /console, which serves operator alone`,
+    ])
+  })
 })

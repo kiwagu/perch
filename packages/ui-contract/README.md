@@ -254,7 +254,8 @@ for Bun.
     parameter: no `$param`, no splat, no required search key), `accessProblems` (rule 17, who a
     route serves: no binding's `guard` sends away an account its `roles` name, an anchor's
     `roles` are among those its screen's bindings serve, the frame aside, a link to a route
-    whose roles name neither `guest` nor `identity` is shown only to the roles it serves, and
+    whose roles name neither `guest` nor `identity` is shown to no device the route refuses,
+    every restriction above it admitting the device by the roles it holds together, and
     the binding at `/$` names `guest` and `identity`), `pagingProblems` (rule 18, a paged
     list: its action pages, its sizes each once, the smallest first, its default one of them,
     taking the number parameters `page` and `size`; every route of its screen declares `page`,

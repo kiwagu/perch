@@ -6,12 +6,14 @@
  * roles leave `guest` out; `guest` sends a signed-in account away, so its roles name `guest`
  * alone); an anchor's `roles` are among those its screen's bindings serve (the frame, which has
  * no binding, aside); a link to a route that neither a guest nor any signed-in account opens
- * (its roles name neither `guest` nor `identity`) is shown only to the roles it serves, which the
- * link names itself, or the nearest anchor it is declared under, or else its screen's bindings;
- * and the binding at `/$` serves every account, so its roles name `guest` and `identity`.
+ * (its roles name neither `guest` nor `identity`) is shown to no device the route refuses: every
+ * restriction above the link (its own `roles`, those of each anchor it is declared under, and
+ * the roles its screen's bindings serve, the frame aside) admits a device by the roles it holds
+ * together (`heldRoles`), so a device every restriction admits holds a role the route serves; and
+ * the binding at `/$` serves every account, so its roles name `guest` and `identity`.
  */
 
-import { GUEST, IDENTITY } from '../anchors'
+import { admits, GUEST, heldRoles, IDENTITY } from '../anchors'
 import type { Binding, Problem, Screen } from '../files'
 
 import {
@@ -116,31 +118,45 @@ function anchorRolesProblems({ def, screen, at }: DeclaredAnchor, inScreens: InS
 }
 
 /**
- * Who sees an anchor, and whether it writes that itself: its own `roles`, else those of the
- * nearest anchor of its screen it is declared under, else the roles its screen's bindings serve.
+ * The restrictions a device passes to see an anchor, each a list of roles that admits a device
+ * holding one of them: the anchor's own `roles`, those of each anchor of its screen it is
+ * declared under, and the roles its screen's bindings serve (none for the frame, which has no
+ * binding). A device sees the anchor when every one admits it.
  */
-function shownTo({ anchor, def, screen }: DeclaredAnchor): {
-  readonly roles: readonly string[]
-  readonly own: boolean
-} {
-  if (def.roles !== undefined) {
-    return { roles: def.roles, own: true }
-  }
+const restrictionsOf = ({
+  anchor,
+  def,
+  screen,
+}: DeclaredAnchor): ReadonlyArray<readonly string[]> => [
+  ...(def.roles === undefined ? [] : [def.roles]),
+  ...Object.entries(screen.anchors).flatMap(([other, { roles }]) =>
+    roles !== undefined && anchor.startsWith(`${other}.`) ? [roles] : [],
+  ),
+  ...(screen.frame === true ? [] : [servedBy(screen)]),
+]
 
-  const [above] = Object.entries(screen.anchors)
-    .filter(([other, { roles }]) => roles !== undefined && anchor.startsWith(`${other}.`))
-    .sort(([one], [other]) => other.length - one.length)
+/**
+ * Every set of roles a device may hold among `roles`, the smallest first: `guest` alone, else
+ * `identity` with each subset of the other roles (`heldRoles`). A role none of them names changes
+ * what no restriction admits, so these are the sets that tell.
+ */
+function heldSetsAmong(roles: readonly string[]): ReadonlySet<string>[] {
+  const others = [...new Set(roles.filter((role) => role !== GUEST && role !== IDENTITY))]
+  const subsets = others
+    .reduce<string[][]>((all, role) => [...all, ...all.map((subset) => [...subset, role])], [[]])
+    .sort((one, other) => one.length - other.length)
 
-  return { roles: above?.[1].roles ?? servedBy(screen), own: false }
+  return [heldRoles(false), ...subsets.map((subset) => heldRoles(true, subset))]
 }
 
-/** A link to a route some roles alone open, shown only to those roles. */
+/** A link to a route some roles alone open, shown to no device the route refuses. */
 function linkProblems(
   declared: DeclaredAnchor,
   routes: ReadonlyMap<string, Binding>,
   inScreens: InScreens,
 ): Problem[] {
   const { def, at } = declared
+  const restrictions = restrictionsOf(declared)
 
   return bindingRefsOf(def).flatMap(({ ref, at: refAt }) => {
     const binding = 'route' in ref ? routes.get(ref.route) : undefined
@@ -149,23 +165,33 @@ function linkProblems(
       return []
     }
 
-    const { roles, own } = shownTo(declared)
     const serves = `${binding.path}, which serves ${binding.roles.join(', ')} alone`
 
-    if (roles.length === 0) {
+    if (restrictions.length === 0) {
       return [inScreens(at, `a link to ${serves}, names who sees it: roles`)]
     }
 
-    return roles.flatMap((role, index) =>
-      binding.roles.includes(role)
-        ? []
-        : [
-            inScreens(
-              own ? [...at, 'roles', index] : [...at, ...refAt, 'route'],
-              `"${role}" is shown a link to ${serves}`,
-            ),
-          ],
+    const shown = heldSetsAmong([...restrictions.flat(), ...binding.roles]).find(
+      (held) => restrictions.every((roles) => admits(roles, held)) && !admits(binding.roles, held),
     )
+
+    if (shown === undefined) {
+      return []
+    }
+
+    const named =
+      def.roles?.find((role) => shown.has(role)) ??
+      [...shown].find((held) => held !== IDENTITY) ??
+      IDENTITY
+
+    return [
+      inScreens(
+        def.roles === undefined
+          ? [...at, ...refAt, 'route']
+          : [...at, 'roles', def.roles.indexOf(named)],
+        `"${named}" is shown a link to ${serves}`,
+      ),
+    ]
   })
 }
 
