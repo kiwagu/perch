@@ -200,7 +200,6 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
-| `no-such-identity` | `organisation.invite.error` | no account has this email |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
 | `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
 | `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
