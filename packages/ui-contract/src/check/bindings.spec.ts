@@ -226,4 +226,39 @@ describe('bindingsProblems', () => {
 
     expect(printed(contract)).toEqual([])
   })
+  it("takes an entry's data-id as a param from a control in the entry's part", () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.remove-button': {
+        kind: 'button',
+        binding: { action: 'thing.updateThing', params: { id: 'sample.thing-item' } },
+      },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses an entry param outside its part, on the entry, or that no list holds', () => {
+    const contract = sampleContract()
+    const update = (id: string) => ({ action: 'thing.updateThing', params: { id } })
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.form.remove-button': { kind: 'button', binding: update('sample.thing-item') },
+      'sample.bare-item': { kind: 'item', binding: update('sample.bare-item') },
+      'sample.lone.thing-item': { kind: 'item', dataId: 'thing' },
+      'sample.lone.remove-button': { kind: 'button', binding: update('sample.lone.thing-item') },
+      'sample.frame-button': { kind: 'button', binding: update('app-shell.thing-item') },
+    })
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.thing-item': { kind: 'item', dataId: 'thing' },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.form.remove-button"].binding.params.id: takes the data-id of "sample.thing-item" on "sample.form.remove-button", which is not in its part "sample": only a control in the item's part, rendered in each entry, carries it`,
+      `${AT}["sample.bare-item"].binding.params.id: "sample.bare-item" declares no dataId: a parameter takes the data-id of an entry, which its dataId says`,
+      `${AT}["sample.bare-item"].binding.params.id: takes the data-id of "sample.bare-item" on the entry itself, which is no control: a control in it (a link) carries it`,
+      `${AT}["sample.lone.remove-button"].binding.params.id: "sample.lone.thing-item" is an entry of no list, table or section of the screen: an entry is declared under its container or beside it in its part`,
+      `${AT}["sample.frame-button"].binding.params.id: "app-shell.thing-item" is an anchor of another screen: a parameter takes the data-id of an entry of its own screen`,
+    ])
+  })
 })

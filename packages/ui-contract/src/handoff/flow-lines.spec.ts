@@ -211,6 +211,33 @@ describe('flowLines', () => {
     ])
     expect(lines.filter((line) => line.startsWith('guard '))).toHaveLength(2)
   })
+  it("writes a navigate that takes an entry's data-id with the item it names", () => {
+    const flow: Flow = {
+      initial: 'viewing',
+      states: {
+        viewing: {
+          on: {
+            'sample.list.open-link': {
+              target: 'opened',
+              actions: [
+                {
+                  type: 'navigate',
+                  params: { to: '/thing', search: { id: { item: 'sample.list.thing-item' } } },
+                },
+              ],
+            },
+          },
+        },
+        opened: { type: 'final' },
+      },
+    }
+
+    expect(flowLines(flow)).toEqual([
+      'initial viewing',
+      'viewing on sample.list.open-link -> opened navigate /thing {"id":{"item":"sample.list.thing-item"}}',
+      'opened final',
+    ])
+  })
   it('writes an exit, and a transition without a target, guard or effect as its event alone', () => {
     const flow = flowIn(sampleContract())
 

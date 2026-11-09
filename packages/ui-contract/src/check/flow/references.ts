@@ -7,10 +7,13 @@
  * kind and screen, which then shows none, else a field of the flow's own screen, which it
  * empties (a secret one included; never a visibility-button), a `read` a list of the flow's own
  * screen whose `source` is a platform action, which it reads again (`reads.ts`), a `navigate` the path of a binding
- * and search parameters of that binding, each a literal or the value a field of the flow's own
+ * and search parameters of that binding, each a literal, the value a field of the flow's own
  * screen holds (`{ anchor }`, never a visibility-button nor a secret field, which would put a
- * password into an address and its history); an address is a binding of the flow's own screen
- * (its first one when the path is left out) with search parameters of that binding.
+ * password into an address and its history), or the data-id of an entry of the flow's own screen
+ * (`{ item }`, an item or a row with a `dataId` of a list, a table or a section, into a key that
+ * takes a string: `../entries.ts`; which event carries it, `items.ts`); an address is a binding
+ * of the flow's own screen (its first one when the path is left out) with search parameters of
+ * that binding.
  */
 
 import { FIELD_KINDS, VISIBILITY_BUTTON } from '../../anchors'
@@ -23,6 +26,7 @@ import {
   PLATFORM_ACTION,
   presentationOnly,
 } from '../contract'
+import { entryProblems } from '../entries'
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
@@ -54,17 +58,21 @@ const searchProblems = (
 
 type NavigateSearch = Extract<Effect, { type: 'navigate' }>['params']['search']
 
-/** The values a navigate's search takes from a field: each a field the flow's own screen declares. */
-const carriedProblems = (
-  { screen, visibilityButtons, inScreens }: InFlow,
-  search: NavigateSearch,
-  at: At,
-): Problem[] =>
+/**
+ * The values a navigate's search takes from the screen: each `{ anchor }` a field the flow's own
+ * screen declares, each `{ item }` an entry of it.
+ */
+const carriedProblems = (inFlow: InFlow, search: NavigateSearch, at: At): Problem[] =>
   Object.entries(search ?? {}).flatMap(([key, value]) => {
     if (typeof value !== 'object') {
       return []
     }
 
+    if ('item' in value) {
+      return entryProblems(inFlow, value.item, 'a search', [...at, key, 'item'])
+    }
+
+    const { screen, visibilityButtons, inScreens } = inFlow
     const { anchor } = value
     const where = [...at, key, 'anchor']
     const def = own(screen.anchors, anchor)
@@ -89,6 +97,29 @@ const carriedProblems = (
     return def.secret === true
       ? [inScreens(where, `"${anchor}" is a secret field: never a value a search carries`)]
       : []
+  })
+
+/** Each key a navigate fills with an entry's data-id takes a string, as a data-id is one. */
+const idKeyProblems = (
+  { inScreens }: InFlow,
+  binding: Binding,
+  search: NavigateSearch,
+  at: At,
+): Problem[] =>
+  Object.entries(search ?? {}).flatMap(([key, value]) => {
+    const type =
+      typeof value === 'object' && 'item' in value
+        ? own(binding.search?.properties ?? {}, key)?.type
+        : undefined
+
+    return type === undefined || type === 'string'
+      ? []
+      : [
+          inScreens(
+            [...at, key],
+            `"${key}" of "${binding.path}" takes ${type}: a data-id is a string`,
+          ),
+        ]
   })
 
 /** What a clear may name: each problem of a clear that names something else says it. */
@@ -152,7 +183,10 @@ export function effectProblems(
       return [
         ...(binding === undefined
           ? routeProblems(inFlow, to, [...params, 'to'])
-          : searchProblems(inFlow, binding, search, [...params, 'search'])),
+          : [
+              ...searchProblems(inFlow, binding, search, [...params, 'search']),
+              ...idKeyProblems(inFlow, binding, search, [...params, 'search']),
+            ]),
         ...carriedProblems(inFlow, search, [...params, 'search']),
       ]
     }

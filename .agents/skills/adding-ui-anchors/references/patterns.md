@@ -131,6 +131,26 @@ await expect(deviceBRow).toHaveAttribute('data-state', 'revoked')
 await expect(deviceBRow.getByTestId('device.list.revoked-cell')).toBeVisible()
 ```
 
+A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`)
+is rendered in each entry and acts on the entry it is in: an action's parameter that names the
+item takes that entry's `data-id` (`params: { device: device.list.session-item }`). A row that
+opens the entity it shows does it the same way, with a link in the row whose transition puts
+the id into the address, so a reload or a copied link reaches the same entry:
+
+```yaml
+<screen>.list.open-link:
+  kind: link
+# flow, on the state that shows the list:
+<screen>.list.open-link:
+  target: opened
+  actions:
+    - navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }
+```
+
+The item declares its `dataId`, the target binding's `id` takes a string, and the navigate sits
+on the link's event, never in an `entry`, an `exit` or an invoke's outcome, where no entry was
+acted on (`contract:check` refuses each).
+
 ## 6. A choice with `data-value`
 
 A choice that is not an entity carries the key the code already uses, never its label, and

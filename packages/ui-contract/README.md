@@ -140,8 +140,9 @@ for Bun.
     `<anchor>.<rest>`, which are rendered where it is or where they are listed themselves;
     never on a region an authored flow writes by its pattern or its button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
     failure codes it holds for), its `effectSchema` (`show`, `clear`, `read`, a list of the
-    flow's own screen with a platform source reading it again, and `navigate`, whose search value is a literal or `{ anchor }`, the
-    value a field of the screen holds), an invoke's `read: false` (nothing reads after its
+    flow's own screen with a platform source reading it again, and `navigate`, whose search value is a literal, `{ anchor }`, the
+    value a field of the screen holds, or `{ item }`, the data-id of the entry whose control
+    the user acted on), an invoke's `read: false` (nothing reads after its
     action; XState ignores it) and `transitionSchema`, with the types `Flow`,
     `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`),
@@ -179,7 +180,9 @@ for Bun.
     `visibility-button` derived by a secret `input` alone, `ranked` on a message of two codes
     or more alone, each listed once), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
-    input), a constant or a search parameter every route of the screen declares, routes,
+    input; an item or a row of its own screen with a `dataId`, of a list, a table or a
+    section, taken from a control in its part), a constant or a search parameter every route
+    of the screen declares, routes,
     the search parameter a field starts with, one every route of the screen declares, never on
     another kind nor a secret field, sources), `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
@@ -189,8 +192,12 @@ for Bun.
     never a `visibility-button`), a read's anchor a list, section or table of its own screen
     whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`),
     an invoke that says `read: false` reading in none of its outcomes, a navigate's search keys of the binding it
-    moves to, each value a literal or `{ anchor }`, a field its own screen declares (never a
-    `visibility-button` nor a secret field),
+    moves to, each value a literal, `{ anchor }`, a field its own screen declares (never a
+    `visibility-button` nor a secret field), or `{ item }`, an entry of its own screen with a
+    `dataId`, of a list, a table or a section, into a key that takes a string, taken on the
+    event of a control in the entry's part, never in an entry, an exit or an invoke's outcome,
+    and an invoke's input that takes an entry run in a state only such controls enter
+    (`flow/items.ts`),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
@@ -454,7 +461,12 @@ for Bun.
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
-  `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`).
+  `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
+  `partOf(anchor)`, the part it sits in (the anchor without its last segment). The entries of a
+  list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
+  sections it belongs to: those it is declared under, the nearest first, then those beside it
+  in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
+  entry, never the entry itself).
   What a state renders, read from a flow or from an app's machine config alike:
   `renderedAt(config, value)` returns the `RenderedAt` of XState's state value (`listed`, the
   names any state lists in `meta.renders`; `rendered`, those the states the machine is in

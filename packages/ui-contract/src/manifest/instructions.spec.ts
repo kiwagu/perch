@@ -91,6 +91,14 @@ describe('instructionsOf', () => {
   it('says a navigate may carry into a search what a field of the screen holds', () => {
     expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
   })
+  it('says a navigate may carry into a search the data-id of the entry whose control acted', () => {
+    expect(instructions.screenMap).toContain(
+      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
+    )
+    expect(instructions.screenMap).toContain(
+      'an item or a row as a value of `params` or `input` gives the `data-id` of the entry whose control acts, likewise',
+    )
+  })
   it('says what a clear does to a field and to an anchor that carries codes', () => {
     expect(instructions.screenMap).toContain(
       '`clear` empties a field of the screen, a secret one included, so it holds no input any more, as if nothing was typed',

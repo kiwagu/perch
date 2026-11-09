@@ -1,4 +1,5 @@
 export { baseOf, isKnownAnchor, testIdFor } from './derive'
+export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
 export {
   ANCHOR_PATTERN,
   FIELD_KINDS,
@@ -6,6 +7,7 @@ export {
   isUnder,
   kindOf,
   LISTING_KINDS,
+  partOf,
   screenOf,
   segmentsOf,
 } from './grammar'

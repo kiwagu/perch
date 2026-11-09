@@ -350,6 +350,12 @@ An anchor's `binding` says what the element does or shows:
   parameter names the anchor whose value it takes, a constant `{ value: true }`, or
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
+  An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control
+  acts: a control in the item's part (`<part>.<name>`, like the item), rendered in each entry
+  (`device.list.revoke-button` passes `device: device.list.session-item`, the device of its
+  own row). The item is an entry of a list, a table or a section of its own screen, declared
+  under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one
+  the same way, in a state that only the events of such controls enter.
 - `{ route: /path }`: the path of a binding of some screen.
 - `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
   switch): the field starts with the value of that search parameter of the route the screen
@@ -473,6 +479,16 @@ as it holds its router to the bindings.
   value would stay in the address, the browser's history and the logs). A link that carries
   the email typed so far to the page that asks for a password reset:
   `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
+  A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item` or `row`
+  whose control the user acted on, so that the selection is in the address and a reload or a
+  copied link reaches the same entry. Only the event of a control in the item's part
+  (`<part>.<name>`, like the item), rendered in each entry, carries it, so the navigate sits
+  in the actions of that event's transition, never in an `entry`, an `exit` or the outcome of
+  an invoke, where no entry was acted on. The item is an entry of a list, a table or a section
+  of the flow's own screen, declared under it or beside it in its part, and declares its
+  `dataId`; the search key it fills takes a string. A row that opens the entity it shows:
+  `navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }` on
+  `<screen>.list.open-link`.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
   anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
@@ -1193,7 +1209,9 @@ gap is fixed in the contract files first, never worked around in a test.
   file writes `derivedFrom`; the platform's composites and the rows of the vocabulary's
   "Composites" name each other, each item state a row state;
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
-  constant or a search parameter, and a parameter two fields of a button's part pass with
+  constant or a search parameter, an item or a row of its own screen with a `dataId`, of a
+  list, a table or a section, from a control in its part (in an invoke's `input`, a state only
+  such controls enter), and a parameter two fields of a button's part pass with
   different values written by the button,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
@@ -1204,7 +1222,9 @@ gap is fixed in the contract files first, never worked around in a test.
   one with an entity source or none, and an invoke that says `read: false` reading in none of
   its outcomes, a navigate's
   search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
-  that holds no secret),
+  that holds no secret, each `{ item }` an entry with a `dataId` of a list, a table or a
+  section of the flow's own screen, taken on the event of a control in its part into a key
+  that takes a string),
   reaches each of its states
   and leaves each one that is not final, lists in a state's `meta.renders` anchors its own
   screen declares (a derived part's base, never the part), each once and never beside an
