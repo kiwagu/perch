@@ -73,6 +73,37 @@ const toast = (code: string) => ({
 })
 
 describe('the invitation page', () => {
+  it.each([
+    ['signed out', 'signing-in', 'ann', undefined],
+    ['signed in', 'elsewhere', undefined, 'ann'],
+  ] as const)(
+    'asks who is signed in once the read answers: %s meanwhile, it ends in %s',
+    async (_change, ends, before, after) => {
+      let who: string | undefined = before
+      let answer: (link: InvitationOnLink) => void = () => undefined
+      const answered = ResultAsync.fromSafePromise<InvitationOnLink, BusError>(
+        new Promise((resolve) => {
+          answer = resolve
+        }),
+      )
+      const actor = createActor(
+        createInvitationMachine({
+          token: 'the-token',
+          read: () => answered,
+          accept: () => okAsync(undefined),
+          decline: () => okAsync(undefined),
+          current: () => who,
+        }),
+      ).start()
+
+      expect(actor.getSnapshot().matches('checking')).toBe(true)
+
+      who = after
+      answer(forSomeoneElse)
+
+      await waitFor(actor, (state) => state.matches(ends))
+    },
+  )
   it("checks the address's token first, with nothing taken", () => {
     const { actor, deps } = page({ read: () => never() })
 
