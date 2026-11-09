@@ -257,7 +257,7 @@ describe('organisation machine', () => {
 
     actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'admin' })
 
-    expect(snapshot().context.changingRole).toEqual({ identity: bea, role: 'admin' })
+    expect(snapshot().context.changingRole).toEqual({ identity: bea, role: 'admin', of: 'acme' })
     expect(
       snapshot().can({ type: 'organisation.members.role-select', identity: ann, role: 'member' }),
     ).toBe(false)
@@ -281,22 +281,24 @@ describe('organisation machine', () => {
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
-    expect(snapshot().context.rolesSet).toEqual([{ identity: bea, role: 'admin', read: 1 }])
+    expect(snapshot().context.rolesSet).toEqual([
+      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+    ])
 
     actor.send({ type: 'organisation.members.role-select', identity: cy, role: 'admin' })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: bea, role: 'admin', read: 1 },
-      { identity: cy, role: 'admin', read: 2 },
+      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+      { identity: cy, role: 'admin', read: 2, of: 'acme' },
     ])
 
     actor.send({ type: 'organisation.members.role-select', identity: bea, role: 'member' })
     await region('member-roles', 'idle')
 
     expect(snapshot().context.rolesSet).toEqual([
-      { identity: cy, role: 'admin', read: 2 },
-      { identity: bea, role: 'member', read: 3 },
+      { identity: cy, role: 'admin', read: 2, of: 'acme' },
+      { identity: bea, role: 'member', read: 3, of: 'acme' },
     ])
   })
 
@@ -314,7 +316,9 @@ describe('organisation machine', () => {
     await region('member-roles', 'idle')
 
     expect(snapshot().context.changingRole).toBeUndefined()
-    expect(snapshot().context.rolesSet).toEqual([{ identity: bea, role: 'admin', read: 1 }])
+    expect(snapshot().context.rolesSet).toEqual([
+      { identity: bea, role: 'admin', read: 1, of: 'acme' },
+    ])
   })
 
   it('does not read the members again after the account demoted itself', async () => {

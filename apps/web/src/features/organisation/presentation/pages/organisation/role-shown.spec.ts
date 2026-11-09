@@ -12,9 +12,10 @@ describe('roleShown', () => {
     expect(
       roleShown({
         identity: bea,
+        organisation: 'acme',
         listed: 'member',
-        changing: { identity: cy, role: 'admin' },
-        set: [{ identity: cy, role: 'admin', read: 1 }],
+        changing: { identity: cy, role: 'admin', of: 'acme' },
+        set: [{ identity: cy, role: 'admin', read: 1, of: 'acme' }],
         settled: 0,
       }),
     ).toBe('member')
@@ -24,22 +25,43 @@ describe('roleShown', () => {
     expect(
       roleShown({
         identity: bea,
+        organisation: 'acme',
         listed: 'member',
-        changing: { identity: bea, role: 'member' },
-        set: [{ identity: bea, role: 'admin', read: 1 }],
+        changing: { identity: bea, role: 'member', of: 'acme' },
+        set: [{ identity: bea, role: 'admin', read: 1, of: 'acme' }],
         settled: 0,
       }),
     ).toBe('member')
   })
 
   it('shows the role just set until the read after its change settled', () => {
-    const set = [{ identity: bea, role: 'admin', read: 2 }] as const
+    const set = [{ identity: bea, role: 'admin', read: 2, of: 'acme' }] as const
     const shown = (settled: number | undefined) =>
-      roleShown({ identity: bea, listed: 'member', changing: undefined, set, settled })
+      roleShown({
+        identity: bea,
+        organisation: 'acme',
+        listed: 'member',
+        changing: undefined,
+        set,
+        settled,
+      })
 
     expect(shown(undefined)).toBe('admin')
     expect(shown(1)).toBe('admin')
     expect(shown(2)).toBe('member')
     expect(shown(3)).toBe('member')
+  })
+
+  it('shows no role set in another organisation, whose rows list the same identity', () => {
+    expect(
+      roleShown({
+        identity: bea,
+        organisation: 'globex',
+        listed: 'member',
+        changing: { identity: bea, role: 'admin', of: 'acme' },
+        set: [{ identity: bea, role: 'admin', read: 1, of: 'acme' }],
+        settled: undefined,
+      }),
+    ).toBe('member')
   })
 })

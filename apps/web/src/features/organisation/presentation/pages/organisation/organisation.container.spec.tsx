@@ -191,6 +191,31 @@ describe('OrganisationContainer', () => {
   })
 
   describe("a member's role select", () => {
+    it('shows the role being set only in the organisation the change runs in', async () => {
+      const change = later<void>()
+      const setRole = vi.fn(() => change.result)
+      const members = vi.fn(() => okAsync([annAdmin, beaMember]))
+      const { select } = await openPage([acme, globex], gatewayWith({ members, setRole }))
+
+      await makeAdmin(beaMember)
+      await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
+
+      expect(await roleOf(beaMember)).toBe('admin')
+
+      // The membership in Acme goes away on another device, which makes Globex current here;
+      // bea is a member there too, and nobody changed her role in it.
+      act(() => select('globex'))
+      await waitFor(() => expect(members).toHaveBeenCalledWith('globex'))
+
+      expect(await roleOf(beaMember)).toBe('member')
+
+      await act(async () => {
+        change.done(undefined)
+      })
+
+      expect(await roleOf(beaMember)).toBe('member')
+    })
+
     it('keeps the role just set until the members read after the change settle', async () => {
       const reread = later<readonly MemberView[]>()
       let reads = 0

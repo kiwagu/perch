@@ -155,6 +155,7 @@ export function OrganisationContainer() {
         // members read after it settle; the listed one otherwise.
         role: roleShown({
           identity: member.identity.id,
+          organisation: key,
           listed: member.role,
           changing: changingRole,
           set: rolesSet,

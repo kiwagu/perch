@@ -210,7 +210,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
         changingRole: ({ event }) => {
           assertEvent(event, 'organisation.members.role-select')
 
-          return { identity: event.identity, role: event.role }
+          return { identity: event.identity, role: event.role, of: deps.current() }
         },
       }),
       settleRole: assign({ changingRole: undefined }),

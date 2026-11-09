@@ -19,10 +19,14 @@ export interface OrganisationErrors {
 
 export type ErrorPart = keyof OrganisationErrors
 
-/** A role set on a member's row. */
+/**
+ * A role set on a member's row, in the organisation current when the change started: the rows of
+ * another organisation, which may list the same identity, never show it.
+ */
 export interface RoleSet {
   readonly identity: IdentityId
   readonly role: TenantRole
+  readonly of: string | undefined
 }
 
 /**
