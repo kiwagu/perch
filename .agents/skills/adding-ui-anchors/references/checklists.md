@@ -18,7 +18,12 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    directly (a tab, a filter, a selection) is a path or search parameter, so the route is its
    address. A path parameter carries `examples`, fake values it accepts
    (`examples: [ org_01hzx9k2 ]`), so the binding's example link is concrete (one whose
-   schema no value can be built for must); check it with `bun run contract:routes`.
+   schema no value can be built for must); check it with `bun run contract:routes`. `roles`
+   are the roles the route serves: an account that holds none gets the not-found screen at
+   the same address, after the `guard` and before the search is read. A route that must not
+   show itself to a guest leaves `guard` out and names no `guest`; a link to a route whose
+   roles name neither `guest` nor `identity` names the roles that see it (the frame's nav link
+   to such a route says `roles` itself), each a role the route serves.
 5. **The root.** A container that scopes the screen: a page `status`, a `form` or a
    `section`.
 6. **The controls.** Every control a test or an agent drives (button, link, input,

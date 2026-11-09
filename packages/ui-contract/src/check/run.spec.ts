@@ -68,7 +68,7 @@ describe('checkContract', () => {
       'contract/domain/platform.yaml:1: version: Invalid input: expected 1',
       'contract/vocabulary.md:1: missing section "Kinds"',
       'contract/vocabulary.md:9: unknown section "Kind list"',
-      'contract/vocabulary.md:75: section "Roles" appears twice',
+      'contract/vocabulary.md:76: section "Roles" appears twice',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.a: Invalid key in record',
     ])
   })

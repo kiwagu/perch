@@ -26,6 +26,7 @@ export {
   VISIBILITY_VALUES,
 } from './anchors'
 export {
+  accessProblems,
   activitiesProblems,
   bindingsProblems,
   type Contract,

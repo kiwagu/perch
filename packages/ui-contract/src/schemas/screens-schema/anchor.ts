@@ -135,7 +135,9 @@ export const anchorDefSchema = z
     roles: z
       .array(roleSchema)
       .optional()
-      .describe('The roles that see the element; absent: every role of the screen.'),
+      .describe(
+        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+      ),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
     holdsInput: z
       .boolean()

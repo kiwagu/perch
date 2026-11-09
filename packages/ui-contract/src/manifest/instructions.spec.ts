@@ -88,6 +88,14 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`contract.derivedParts`')
     expect(instructions.gaps).toContain('whether a password input shows what it holds')
   })
+  it('says who a route serves, in which order the router decides, and who sees an anchor', () => {
+    expect(instructions.screenMap).toContain(
+      '`roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other)',
+    )
+    expect(instructions.screenMap).toContain(
+      "`roles` (who sees it, among the roles its screen's bindings serve; absent: every role of the screen)",
+    )
+  })
   it('says a navigate may carry into a search what a field of the screen holds', () => {
     expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
   })

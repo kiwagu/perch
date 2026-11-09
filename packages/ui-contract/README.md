@@ -240,7 +240,11 @@ for Bun.
     a mail none named `recipient`), `noticesProblems` (the notices of a platform action carry
     names unique within it, go to a parameter of the action or the account, take their
     language from one or the account, never the recipient, and link, when they do, to a screen with a route, every route of which needs no
-    parameter: no `$param`, no splat, no required search key)
+    parameter: no `$param`, no splat, no required search key), `accessProblems` (rule 17, who a
+    route serves: no binding's `guard` sends away an account its `roles` name, an anchor's
+    `roles` are among those its screen's bindings serve, the frame aside, a link to a route
+    whose roles name neither `guest` nor `identity` is shown only to the roles it serves, and
+    the binding at `/$` names `guest` and `identity`)
     and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file; in each text, the where,
@@ -365,11 +369,13 @@ for Bun.
     removed, sorted; an anchor removed and one
     added are a rename when they are the only ones of their screen and kind; on the anchors
     both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
-    them), the codes as `<anchor> <code>`, the states as `<anchor> <state>` and an error's
+    them), the codes as `<anchor> <code>`, the states as `<anchor> <state>`, the roles each is
+    shown to as `<anchor> <role>` and an error's
     fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
     as `<anchor> holds input` and the messages that rank their codes as
     `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
-    the actions of `platform.leaving` added and removed, the entries of
+    who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added
+    whole with every line; the actions of `platform.leaving` added and removed, the entries of
     `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
     actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
@@ -462,7 +468,11 @@ for Bun.
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
   `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
   `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
-  `partOf(anchor)`, the part it sits in (the anchor without its last segment). The entries of a
+  `partOf(anchor)`, the part it sits in (the anchor without its last segment). The roles a
+  device holds: `GUEST` (`guest`, nobody signed in) and `IDENTITY` (`identity`, an account
+  signed in), the two of which a device holds exactly one, `heldRoles(signedIn, others)` (the
+  set it holds: `guest` alone, else `identity` and each other role) and `admits(roles, held)`
+  (a binding's or an anchor's roles admit a device that holds one of them). The entries of a
   list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
   sections it belongs to: those it is declared under, the nearest first, then those beside it
   in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
@@ -538,8 +548,8 @@ for Bun.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived
-  parts, the codes, the states and the error fields the anchors both hold gain or lose
-  (derived ones included), the fields that start or
+  parts, the codes, the states, the roles and the error fields the anchors both hold gain or
+  lose (derived ones included), who each route serves, the fields that start or
   stop holding input, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform

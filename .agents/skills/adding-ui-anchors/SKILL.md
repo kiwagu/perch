@@ -72,7 +72,8 @@ code and the tests follow; the checks hold them to the contract.
    search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns; `ranked: true` on a message whose codes more than one source may raise before it
    shows, its `codes` then in rank order: of those raised, it shows the first),
-   `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
+   `states`, `dataId` or `dataValue`, `derived`, `roles` (among those its screen's bindings
+   serve) and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds and of the actions its flow invokes against it, with the codes its

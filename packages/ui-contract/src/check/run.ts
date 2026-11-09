@@ -20,6 +20,7 @@ import {
   VOCABULARY_FILE,
 } from '../files'
 
+import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
 import { bindingsProblems } from './bindings'
 import { confirmationsProblems } from './confirmations'
@@ -111,6 +112,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   searchProblems,
   mailsProblems,
   noticesProblems,
+  accessProblems,
   scenariosProblems,
   descriptionsProblems,
 ]

@@ -296,6 +296,36 @@ search reaches the same state after a reload. The application's router builds an
 every binding (`apps/web/src/platform/routes-router.spec.ts`, a parameter's first example
 its sample), and the module routes equal the bindings (`routes-contract.spec.ts` beside it).
 
+**Roles.** A role is a row of the vocabulary's Roles table. A device holds a set of roles:
+`guest` when nobody is signed in on it, else `identity` and, beside it, every other role that
+applies to the signed-in account (its role in the current organisation, `member` or `admin`;
+a role of the platform; any role a later row adds). `guest` and `identity` are the two roles
+of which a device holds exactly one; every other role is held beside `identity`, never alone.
+The contract names the roles; how a device learns the ones beside `identity` is the app's.
+`GUEST`, `IDENTITY`, `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read them
+for the app and the checks alike.
+
+A binding's `roles` are the roles it serves: the router serves it only to an account that
+holds at least one of them. An account that holds none gets the screen of the binding at `/$`
+(the not-found screen) at the same address, as an address no route takes does: the URL and the
+history entry stay as they are, and nothing on the page, the tab's title included, says there
+is a route there. The router decides in this order: the binding's `guard` (`authenticated`
+sends a guest to `/sign-in`, `guest` sends a signed-in account to `/me`), then its `roles`,
+and only then reads the search, so a search the screen would refuse shows an account its roles
+miss the not-found screen, never the screen's refusal. A route that must not show itself to a
+guest leaves its `guard` out and names no `guest`: a guest gets not-found, as any account the
+roles miss does. The binding at `/$` serves every account: its `roles` name `guest` and
+`identity`.
+
+The roles of a device change while a screen is open: an account signs in or out, another
+organisation becomes the current one, a role is granted or taken back. The router decides
+again when the app learns of it. A screen whose binding no longer serves the account is
+replaced by the not-found screen and its state is dropped, as when another screen opens (a
+read of its in flight is dropped with it); a not-found screen at an address whose binding now
+serves the account is replaced by that screen, which opens as a screen opens (a list with a
+platform source reads it, see `source`). An app that learns of a change late decides again
+when it learns; no check sees the interval.
+
 A parameter of `params` or `search` may carry `examples`: fake values it accepts, of its
 type (`key: { type: string, examples: [ thg_01hzx9k2 ] }`); `contract:check` holds each one
 to the parameter's schema. `bun run contract:routes` (`ui-contract routes [--json]`) prints
@@ -375,8 +405,8 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders; a secret `input` alone may render
-`visibility-button`, see "Anchors"), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+`visibility-button`, see "Anchors"), `roles` (who sees it, among the roles its screen's
+bindings serve; absent: every role of the screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
 what is typed; derived, see "What a screen leaves out"), `secret` (`true` on a field that
 holds a secret: a password, its confirmation, a current password, anything that never leaves
 the page but in the request of the action that takes it; only a field has it, no navigate
@@ -1245,7 +1275,12 @@ gap is fixed in the contract files first, never worked around in a test.
   screen whose every route declares the search parameter that
   carries its token; every notice it declares has a name no other notice of the action has,
   goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose
-  every route needs no parameter; the versions agree; the generated schemas
+  every route needs no parameter; no binding's `guard` sends away an account its `roles` name
+  (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among
+  those its screen's bindings serve (the frame aside), a link to a route whose roles name
+  neither `guest` nor `identity` is shown only to the roles it serves (its own `roles`, else
+  those of the anchor it is declared under, else its screen's), and the binding at `/$` names
+  `guest` and `identity` (see "Roles"); the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
@@ -1474,9 +1509,9 @@ inside it, holds none) makes the command fail and write nothing.
 This is the delivery of a finished change; the review before the code is described in "The
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
-renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the messages among them that rank their
-codes, with their order, the platform actions added or removed
+renamed, the composites added or removed, the derived parts, the codes, the states, the roles
+and the error fields the anchors both sides hold gain or lose, the messages among them that
+rank their codes, with their order, who each route serves, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
 hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
 lines of each platform action added, removed or changed, and each written description added,
@@ -1510,6 +1545,9 @@ screen and kind. The derived parts of an anchor are listed by name,
 error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
+route's `guard` and each role it serves are listed as `<path> guard <guard>` and `<path>
+serves <role>`, a route added whole with every line, and each role an anchor both sides hold
+is shown to as `<anchor> <role>`. A
 ranked message is listed with its order, `<anchor> ranks <code> > <code>`: a new order shows
 as its old line removed and its new one added, which its codes, compared as a set, do not
 show. A

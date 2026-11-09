@@ -32,7 +32,7 @@
             "description": "The route path: static segments, `$param`, `{-$param}` (optional) and `$` (splat), from `/`."
           },
           "guard": {
-            "description": "Who may open the route: only a guest, or only a signed-in account; absent: anyone.",
+            "description": "Where an account the route is not for is sent: a guest to sign-in (`authenticated`), or a signed-in account to the profile (`guest`); absent: nobody is sent.",
             "type": "string",
             "enum": [
               "guest",
@@ -47,7 +47,7 @@
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
               "description": "A role of the vocabulary."
             },
-            "description": "The roles the route serves."
+            "description": "The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other."
           },
           "params": {
             "description": "The path parameters, as a flat JSON Schema.",
@@ -673,7 +673,7 @@
             "description": "What the anchor is bound to: one binding, or several in a non-empty list."
           },
           "roles": {
-            "description": "The roles that see the element; absent: every role of the screen.",
+            "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
             "type": "array",
             "items": {
               "type": "string",

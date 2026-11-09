@@ -68,6 +68,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | Screen | Meaning |
 |---|---|
 | `app-shell` | the frame around the screens |
+| `not-found` | the screen of an address no route takes (`/$`) |
 | `sample` | the sample screen (`/sample/$key`) |
 
 ## Roles
@@ -75,6 +76,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | Role | Meaning |
 |---|---|
 | `guest` | nobody signed in |
+| `identity` | an account signed in |
 | `member` | a member of the organisation |
 
 ## Reserved anchors
