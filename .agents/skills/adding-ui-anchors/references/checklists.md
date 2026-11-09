@@ -18,7 +18,13 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    directly (a tab, a filter, a selection) is a path or search parameter, so the route is its
    address. A path parameter carries `examples`, fake values it accepts
    (`examples: [ org_01hzx9k2 ]`), so the binding's example link is concrete (one whose
-   schema no value can be built for must); check it with `bun run contract:routes`.
+   schema no value can be built for must); check it with `bun run contract:routes`. `roles`
+   are the roles the route serves: an account that holds none gets the not-found screen at
+   the same address, after the `guard` and before the search is read. A route that must not
+   show itself to a guest leaves `guard` out and names no `guest`; a link to a route whose
+   roles name neither `guest` nor `identity` is seen by no device the route refuses: its own
+   `roles`, or those of a container it is declared under (the frame's nav link to such a route
+   says `roles` itself, or sits in a nav that does), name only roles the route serves.
 5. **The root.** A container that scopes the screen: a page `status`, a `form` or a
    `section`.
 6. **The controls.** Every control a test or an agent drives (button, link, input,
@@ -26,7 +32,10 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 7. **The lists.** The container (`list` or `table`); every entry (`item` or `row`) with
    `dataId`, and its row states when an entry differs or changes in place; the controls of
    an entry; the cells a test reads. A choice that is not an entity has `dataValue`, and each
-   fixed value is a row of "Choice values".
+   fixed value is a row of "Choice values". A list read from a platform action says its
+   `source`: its `params` from the route's search or constants, and `paged: true` with the
+   action's `paged: { sizes, default }` and the route's `page` and `size` when it pages (the
+   parts it derives are never written; pattern 17).
 8. **The dialogs.** Each one a `ConfirmDialog` mounted with its own `testId` and `code`,
    its buttons in `derived`.
 9. **The messages.** Every `error`, `message` and notice a test asserts, with its `codes`,

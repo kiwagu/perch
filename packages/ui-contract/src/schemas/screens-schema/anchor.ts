@@ -11,7 +11,7 @@ import {
 } from '../../names.schema'
 import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
-import { actionParamsSchema } from './params'
+import { actionParamsSchema, sourceParamsSchema } from './params'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -60,7 +60,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+        'The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`.',
       ),
   ])
   .describe(
@@ -98,9 +98,16 @@ export const sourceSchema = z
         platform: platformActionNameSchema.describe(
           'The platform action whose result the anchor lists.',
         ),
+        params: sourceParamsSchema.optional(),
+        paged: z
+          .literal(true)
+          .optional()
+          .describe(
+            "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+          ),
       })
       .describe(
-        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another, and where a flow says `read: <anchor>`.",
+        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`.",
       ),
   ])
   .describe('Where the entries of a list, a section or a table come from; no other kind has one.')
@@ -112,7 +119,7 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
   )
 
 /** Where a derived anchor of a composite comes from, written by the loader only. */
@@ -135,7 +142,9 @@ export const anchorDefSchema = z
     roles: z
       .array(roleSchema)
       .optional()
-      .describe('The roles that see the element; absent: every role of the screen.'),
+      .describe(
+        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+      ),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
     holdsInput: z
       .boolean()

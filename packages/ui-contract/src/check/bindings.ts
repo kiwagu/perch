@@ -3,17 +3,30 @@
  * entity of the model; `action` names an entity action or a platform action, and its
  * `params` keys are that action's parameters, each taking a declared anchor, a constant, or a
  * search parameter every route of the screen declares (a parameter left out is the view's to
- * compute, and `$id` is minted); `route` is the path of a binding; `search` starts a field (an
+ * compute, and `$id` is minted), an anchor that is an item or a row giving the data-id of the
+ * entry the bound control acts on: an entry of its own screen, which the control sits in the
+ * part of (`entries.ts`); `route` is the path of a binding; `search` starts a field (an
  * anchor of a field kind, never a secret one) with a search parameter every route of the screen
  * declares; a
  * `source` sits on a list, a section or a table and names an entity and its order field, or a
- * platform action. What a flow names is rule 8's (`flow/`).
+ * platform action, each key of its `params` a parameter of that action taking a constant or a
+ * search parameter every route of the screen declares (its paging is rule 18's, `paging.ts`).
+ * What a flow names is rule 8's (`flow/`).
  */
 
 import { FIELD_KINDS, LISTING_KINDS } from '../anchors'
-import type { AnchorDef, BindingRef, Problem } from '../files'
+import type { AnchorDef, BindingRef, ParamValue, Problem } from '../files'
 
-import { bindingRefsOf, type Contract, declaredAnchors, fieldProblem, has, own } from './contract'
+import {
+  bindingRefsOf,
+  type Contract,
+  type DeclaredAnchor,
+  declaredAnchors,
+  fieldProblem,
+  has,
+  own,
+} from './contract'
+import { carrierProblem, type EntryLookups, entryProblems, isEntry } from './entries'
 import { actionProblems, type Lookups, lookupsOf, routeProblems, searchOf } from './lookups'
 
 function bindingProblems(
@@ -71,10 +84,12 @@ function bindingProblems(
 }
 
 function sourceProblems(
-  { contract, inScreens }: Lookups,
+  lookups: Lookups,
   def: AnchorDef,
   at: readonly PropertyKey[],
+  search: ReadonlySet<string>,
 ): Problem[] {
+  const { contract, inScreens } = lookups
   const { source } = def
 
   if (source === undefined) {
@@ -91,6 +106,15 @@ function sourceProblems(
           ),
         ]),
     ...sourceRefProblems({ contract, inScreens }, source, at),
+    ...('platform' in source && has(contract.screens.platform.actions, source.platform)
+      ? actionProblems(
+          lookups,
+          `platform.${source.platform}`,
+          source.params,
+          { action: [...at, 'platform'], params: [...at, 'params'] },
+          search,
+        )
+      : []),
   ]
 }
 
@@ -117,13 +141,56 @@ function sourceRefProblems(
     : [inScreens([...at, 'order'], `entity "${source.entity}" has no field "${source.order}"`)]
 }
 
+/** The params of a declared anchor's binding that take an entry's data-id, as the header says. */
+function entryParamProblems(
+  entries: Omit<EntryLookups, 'screen'>,
+  { anchor, screen }: DeclaredAnchor,
+  params: Readonly<Record<string, ParamValue>> | undefined,
+  at: readonly PropertyKey[],
+): Problem[] {
+  return Object.entries(params ?? {}).flatMap(([key, value]) => {
+    if (typeof value !== 'string' || !isEntry(entries, value)) {
+      return []
+    }
+
+    const where = [...at, key]
+    const carried =
+      own(screen.anchors, value) === undefined
+        ? undefined
+        : carrierProblem(screen, value, anchor, (what) => `on ${what}`)
+
+    return [
+      ...entryProblems({ ...entries, screen }, value, 'a parameter', where),
+      ...(carried === undefined ? [] : [entries.inScreens(where, carried)]),
+    ]
+  })
+}
+
 function anchorProblems(lookups: Lookups): Problem[] {
-  return declaredAnchors(lookups.contract.screens).flatMap(({ def, at, screen }) => [
-    ...bindingRefsOf(def).flatMap((entry) =>
-      bindingProblems(lookups, { ref: entry.ref, def }, [...at, ...entry.at], searchOf(screen)),
-    ),
-    ...sourceProblems(lookups, def, [...at, 'source']),
-  ])
+  const declared = declaredAnchors(lookups.contract.screens)
+  const entries = {
+    defs: new Map(declared.map(({ anchor, def }) => [anchor, def])),
+    inScreens: lookups.inScreens,
+  }
+
+  return declared.flatMap((one) => {
+    const { def, at, screen } = one
+
+    return [
+      ...bindingRefsOf(def).flatMap((entry) => [
+        ...bindingProblems(
+          lookups,
+          { ref: entry.ref, def },
+          [...at, ...entry.at],
+          searchOf(screen),
+        ),
+        ...('action' in entry.ref
+          ? entryParamProblems(entries, one, entry.ref.params, [...at, ...entry.at, 'params'])
+          : []),
+      ]),
+      ...sourceProblems(lookups, def, [...at, 'source'], searchOf(screen)),
+    ]
+  })
 }
 
 export const bindingsProblems = (contract: Contract): Problem[] =>

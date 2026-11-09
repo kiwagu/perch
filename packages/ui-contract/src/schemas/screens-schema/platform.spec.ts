@@ -138,3 +138,29 @@ describe('platformSchema composites', () => {
     }
   })
 })
+
+describe('platformSchema paged', () => {
+  const paged = (value: unknown) =>
+    platformSchema.safeParse({
+      ...PLATFORM,
+      actions: { 'accounts.list': { ...ACTION, paged: value } },
+    }).success
+
+  it('accepts the page sizes an action answers and its default', () => {
+    expect(paged({ sizes: [10, 25, 50], default: 25 })).toBe(true)
+    expect(paged({ sizes: [20], default: 20 })).toBe(true)
+  })
+  it('refuses no size, a size under 1 or not whole, no default, and a key of its own', () => {
+    for (const value of [
+      { sizes: [], default: 25 },
+      { sizes: [0, 25], default: 25 },
+      { sizes: [2.5], default: 2.5 },
+      { sizes: [25] },
+      { sizes: [25], default: 25, max: 50 },
+      { size: 50 },
+      true,
+    ]) {
+      expect(paged(value), JSON.stringify(value)).toBe(false)
+    }
+  })
+})

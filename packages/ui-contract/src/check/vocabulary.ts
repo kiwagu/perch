@@ -2,7 +2,9 @@
  * Rule 1: the screen files, the platform file and the model speak only the vocabulary's
  * words. Every kind, derived suffix, code, state, role and screen name the screens and the
  * platform use is listed in `vocabulary.md`, and so is every role the model grants a
- * permission to; every choice value belongs to an anchor that exists and is no visibility-button,
+ * permission to; every derived suffix ends with a kind of the vocabulary, the kind of the part
+ * it marks (`kindOf`, as the manifest's `derivedParts` says it);
+ * every choice value belongs to an anchor that exists and is no visibility-button,
  * whose values its suffix defines; every code listed is
  * used somewhere; the platform's status states and reserved anchors are the vocabulary's own.
  * The platform's composites and the vocabulary's "Composites" rows name each other both ways,
@@ -11,7 +13,7 @@
  * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { screenOf, VISIBILITY_BUTTON } from '../anchors'
+import { kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
   jsonPath,
@@ -268,12 +270,27 @@ function unusedCodeProblems({ vocabulary, screens }: Contract): Problem[] {
     .map((code) => inVocabulary(`code "${code}" is documented but unused`))
 }
 
+/** Every derived suffix ends with a kind of the vocabulary: the kind of the part it marks. */
+const suffixKindProblems = ({ vocabulary }: Contract): Problem[] =>
+  Object.keys(vocabulary.suffixes).flatMap((suffix) => {
+    const kind = kindOf(suffix)
+
+    return has(vocabulary.kinds, kind)
+      ? []
+      : [
+          inVocabulary(
+            `derived suffix "${suffix}": its kind "${kind}" is not a kind of the vocabulary`,
+          ),
+        ]
+  })
+
 export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...screenProblems(contract),
   ...modelRoleProblems(contract),
   ...platformProblems(contract),
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
+  ...suffixKindProblems(contract),
   ...ruleRowProblems(contract, 'toasts', contract.screens.toasts, TOAST_RULE_ROW),
   ...ruleRowProblems(contract, 'questions', contract.screens.questions, CONFIRM_RULE_ROW),
 ]

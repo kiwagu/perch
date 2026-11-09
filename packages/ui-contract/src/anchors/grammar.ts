@@ -28,6 +28,15 @@ export const FIELD_KINDS: ReadonlySet<string> = new Set([
   'switch',
 ])
 
+/**
+ * The kinds a person acts on, whose event a flow handles: a button, a link, a tab and the
+ * field kinds. A cell, an entry or a container is no control, whatever it is nested in.
+ */
+export const CONTROL_KINDS: ReadonlySet<string> = new Set(['button', 'link', 'tab', ...FIELD_KINDS])
+
+/** The part an anchor sits in: the anchor without its last segment. */
+export const partOf = (anchor: string): string => anchor.slice(0, anchor.lastIndexOf('.'))
+
 /** The kinds that show entries, the only ones a `source` gives entries to. */
 export const LISTING_KINDS: ReadonlySet<string> = new Set(['list', 'section', 'table'])
 

@@ -1,15 +1,16 @@
 /**
  * The question before a destructive action, which the frame's confirmation asks: an action of
  * the model is destructive when its verb is `delete`, one of the platform when the first word of
- * its last segment is `delete`, `remove` or `revoke`. Its code is `<object>-<verb>` for the model
- * (the entity standing for the object when the action names none), the platform action's name
- * with `.` as `-` for the platform: its name does not say what it removes. The vocabulary lists
- * the codes by one rule row, keyed `CONFIRM_RULE_ROW`.
+ * its last segment is `ban`, `delete`, `remove` or `revoke` (a whole word: `unban` and `banish`
+ * are not `ban`). Its code is `<object>-<verb>` for the model (the entity standing for the object
+ * when the action names none), the platform action's name with `.` as `-` for the platform: its
+ * name does not say what it removes. The vocabulary lists the codes by one rule row, keyed
+ * `CONFIRM_RULE_ROW`.
  */
 
 const PLATFORM = 'platform.'
 const MODEL_VERBS: ReadonlySet<string> = new Set(['delete'])
-const PLATFORM_VERBS: ReadonlySet<string> = new Set(['delete', 'remove', 'revoke'])
+const PLATFORM_VERBS: ReadonlySet<string> = new Set(['ban', 'delete', 'remove', 'revoke'])
 
 /** The key of the vocabulary's row that stands for every derived question code. */
 export const CONFIRM_RULE_ROW = '<object>-<verb>'

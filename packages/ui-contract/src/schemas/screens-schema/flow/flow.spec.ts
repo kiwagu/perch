@@ -179,6 +179,23 @@ describe('flowSchema', () => {
       }).success,
     ).toBe(true)
   })
+  it('takes a search value from the entry an item names, and nothing else of it', () => {
+    const navigating = (search: unknown): boolean =>
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'navigate', params: { to: '/sign-in', search } }],
+        })
+      })
+
+    expect(navigating({ id: { item: 'console.users.list.account-item' }, page: 1 })).toBe(true)
+    expect(navigating({ id: { item: 1 } })).toBe(false)
+    expect(navigating({ id: { item: 'id' } })).toBe(false)
+    expect(
+      navigating({
+        id: { item: 'console.users.list.account-item', anchor: 'user.sign-in.email-input' },
+      }),
+    ).toBe(false)
+  })
   it('refuses an id of two segments, as XState splits an id target on `.`', () => {
     expect(
       changed((config) => {

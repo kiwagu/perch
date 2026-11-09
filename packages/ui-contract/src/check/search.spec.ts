@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem } from '../files'
+import { PAGING_PARTS } from '../anchors'
+import { type AnchorDef, formatProblem } from '../files'
 import { flatJsonSchema } from '../schemas'
 
 import { sampleContract, screenIn } from './contract.fixture'
@@ -22,6 +23,41 @@ function sampleBinding(contract: ReturnType<typeof sampleContract>) {
   return binding
 }
 
+/** The page size of a paged list's route, as rule 18 wants it and with no control written. */
+const size = () => ({ type: 'integer' as const, enum: [10, 25, 50], default: 25 })
+
+/**
+ * The sample with a paged list of accounts: its action pages by 10, 25 or 50, and the route
+ * declares `page` and `size` as the list reads them, `size` with no `x-perch` of its own.
+ */
+function pagedSample(): ReturnType<typeof sampleContract> {
+  const contract = sampleContract()
+
+  contract.screens.platform.actions['accounts.list'] = {
+    description: 'Reads the accounts.',
+    params: {
+      page: { type: 'number', description: 'The page, from 1.' },
+      size: { type: 'number', description: 'The entries a page holds.' },
+    },
+    paged: { sizes: [10, 25, 50], default: 25 },
+    result: 'the page of accounts and how many there are',
+    codes: ['failed'],
+  }
+  screenIn(contract, 'sample').anchors['sample.accounts-list'] = {
+    kind: 'list',
+    source: { platform: 'accounts.list', paged: true },
+    derived: [...PAGING_PARTS],
+  } as AnchorDef
+  Object.assign(sampleBinding(contract).search?.properties ?? {}, {
+    page: { type: 'integer', minimum: 1, default: 1 },
+    size: size(),
+  })
+
+  return contract
+}
+
+const SIZE_OPTION = 'sample.accounts-list.size-select.option'
+
 describe('searchProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -40,6 +76,7 @@ describe('searchProblems', () => {
           },
         },
         page: { type: 'integer', enum: [1, 2] },
+        size: size(),
       },
       additionalProperties: false,
     }
@@ -48,6 +85,45 @@ describe('searchProblems', () => {
       `${AT}.search.properties.tab: the enum value "b" has no control under x-perch.values`,
       `${AT}.search.properties.tab: the enum value "c" has no control under x-perch.values`,
       `${AT}.search.properties.tab["x-perch"].values.z: "z" is not an enum value`,
+      `${AT}.search.properties.page: the enum value "1" has no control under x-perch.values`,
+      `${AT}.search.properties.page: the enum value "2" has no control under x-perch.values`,
+      `${AT}.search.properties.size: the enum value "10" has no control under x-perch.values`,
+      `${AT}.search.properties.size: the enum value "25" has no control under x-perch.values`,
+      `${AT}.search.properties.size: the enum value "50" has no control under x-perch.values`,
+    ])
+  })
+  it('takes the control of the size of a paged list from its derived size select', () => {
+    expect(printed(pagedSample())).toEqual([])
+  })
+  it('refuses an x-perch on the size of a paged list: its control is derived', () => {
+    for (const perch of [
+      { values: { '10': { control: SIZE_OPTION }, '25': { control: SIZE_OPTION } } },
+      { control: 'sample.mode-select' },
+    ]) {
+      const contract = pagedSample()
+
+      Object.assign(sampleBinding(contract).search?.properties['size'] ?? {}, { 'x-perch': perch })
+
+      expect(printed(contract)).toEqual([
+        `${AT}.search.properties.size["x-perch"]: "size" is the page size of a paged list: its control is the derived "${SIZE_OPTION}", never written under x-perch`,
+      ])
+    }
+  })
+  it('wants every other enum of a screen with a paged list to name its controls, size in params too', () => {
+    const contract = pagedSample()
+    const binding = sampleBinding(contract)
+
+    Object.assign(binding.search?.properties ?? {}, { page: { type: 'integer', enum: [1, 2] } })
+    binding.params = {
+      type: 'object',
+      properties: { key: { type: 'string' }, size: size() },
+      additionalProperties: false,
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.params.properties.size: the enum value "10" has no control under x-perch.values`,
+      `${AT}.params.properties.size: the enum value "25" has no control under x-perch.values`,
+      `${AT}.params.properties.size: the enum value "50" has no control under x-perch.values`,
       `${AT}.search.properties.page: the enum value "1" has no control under x-perch.values`,
       `${AT}.search.properties.page: the enum value "2" has no control under x-perch.values`,
     ])

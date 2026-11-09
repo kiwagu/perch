@@ -7,12 +7,15 @@ import type { ContractChanges } from './diff'
 /** The lists in the order of the block, each with its singular and plural noun. */
 const LISTS = [
   ['screens', 'screen', 'screens'],
+  ['routeAccess', 'route access line', 'route access lines'],
   ['anchors', 'anchor', 'anchors'],
+  ['sources', 'list source', 'list sources'],
   ['derived', 'derived anchor', 'derived anchors'],
   ['composites', 'composite', 'composites'],
   ['codes', 'code', 'codes'],
   ['anchorCodes', 'anchor code', 'anchor codes'],
   ['anchorStates', 'anchor state', 'anchor states'],
+  ['anchorRoles', 'anchor role', 'anchor roles'],
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],

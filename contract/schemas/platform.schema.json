@@ -70,6 +70,33 @@
               "description": "A role of the vocabulary."
             }
           },
+          "paged": {
+            "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+            "type": "object",
+            "properties": {
+              "sizes": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "description": "The sizes a page may have, each once, the smallest first."
+              },
+              "default": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "The size of a page the route does not name, a size."
+              }
+            },
+            "required": [
+              "sizes",
+              "default"
+            ],
+            "additionalProperties": false
+          },
           "mail": {
             "description": "The mail the action sends, when it sends one.",
             "type": "object",

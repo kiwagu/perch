@@ -22,9 +22,14 @@ export const bindingSchema = z
       .enum(['guest', 'authenticated'])
       .optional()
       .describe(
-        'Who may open the route: only a guest, or only a signed-in account; absent: anyone.',
+        'Where an account the route is not for is sent: a guest to sign-in (`authenticated`), or a signed-in account to the profile (`guest`); absent: nobody is sent.',
       ),
-    roles: z.array(roleSchema).min(1).describe('The roles the route serves.'),
+    roles: z
+      .array(roleSchema)
+      .min(1)
+      .describe(
+        'The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other.',
+      ),
     params: flatJsonSchema.optional().describe('The path parameters, as a flat JSON Schema.'),
     search: flatJsonSchema.optional().describe('The search parameters, as a flat JSON Schema.'),
     history: z

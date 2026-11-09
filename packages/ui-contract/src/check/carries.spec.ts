@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { anchorCarries } from './carries'
 import { anchorIn, sampleContract, screenIn } from './contract.fixture'
+import { referenceResolver } from './scenarios'
 
 describe('anchorCarries', () => {
   it('reads the codes, the states and the choice values an anchor declares', () => {
@@ -81,5 +82,51 @@ describe('anchorCarries', () => {
 
     expect(carries('app-shell.toast', 'code', 'thing-created')).toBe(true)
     expect(carries('sample.save-button', 'code', 'thing-created')).toBe(false)
+  })
+})
+
+describe('the page sizes of a paged list', () => {
+  /** The sample with a paged list of devices, whose action pages by 10 or 25. */
+  function paged(): ReturnType<typeof sampleContract> {
+    const contract = sampleContract()
+    const action = contract.screens.platform.actions['devices.list']
+
+    Object.assign(action ?? {}, { paged: { sizes: [10, 25], default: 25 } })
+    Object.assign(anchorIn(contract, 'sample.devices-list'), {
+      source: { platform: 'devices.list', paged: true },
+      derived: ['range', 'previous-link', 'next-link', 'size-select'],
+    })
+
+    return contract
+  }
+
+  it('are the values the options of its size select carry, and the list with them', () => {
+    const carries = anchorCarries(paged())
+
+    expect(carries('sample.devices-list.size-select.option', 'value', '10')).toBe(true)
+    expect(carries('sample.devices-list.size-select', 'value', '25')).toBe(true)
+    expect(carries('sample.devices-list', 'value', '25')).toBe(true)
+    expect(carries('sample.devices-list.size-select.option', 'value', '50')).toBe(false)
+    expect(carries('sample.mode-select.option', 'value', '10')).toBe(false)
+  })
+
+  it('are known as anchors and values of the contract, which no list that does not page has', () => {
+    const resolve = referenceResolver(paged())
+    const option = 'sample.devices-list.size-select.option'
+
+    expect(resolve({ kind: 'anchor', value: option, raw: option })).toBeUndefined()
+    expect(resolve({ kind: 'value', value: '10', raw: '10' })).toBeUndefined()
+    expect(resolve({ kind: 'value', value: '30', raw: '30' })).toBe(
+      '30 is not a choice value of the vocabulary',
+    )
+
+    const plain = referenceResolver(sampleContract())
+
+    expect(plain({ kind: 'anchor', value: option, raw: option })).toBe(
+      `${option} is not a declared anchor`,
+    )
+    expect(plain({ kind: 'value', value: '10', raw: '10' })).toBe(
+      '10 is not a choice value of the vocabulary',
+    )
   })
 })

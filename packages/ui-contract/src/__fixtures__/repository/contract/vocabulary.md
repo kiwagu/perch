@@ -15,6 +15,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | `item` | one entry of a list | `getByRole('listitem')` |
 | `list` | a list of entries | `getByRole('list')` |
 | `message` | a notice or a hint | `getByRole('status')` |
+| `option` | one entry of a select, with `data-value` | `getByRole('option')` |
 | `page` | the root of a screen | |
 | `status` | the readiness line of a page | `getByRole('status')` |
 
@@ -68,6 +69,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | Screen | Meaning |
 |---|---|
 | `app-shell` | the frame around the screens |
+| `not-found` | the screen of an address no route takes (`/$`) |
 | `sample` | the sample screen (`/sample/$key`) |
 
 ## Roles
@@ -75,6 +77,7 @@ An anchor is 2 to 4 dot-separated kebab-case segments: the screen name first, th
 | Role | Meaning |
 |---|---|
 | `guest` | nobody signed in |
+| `identity` | an account signed in |
 | `member` | a member of the organisation |
 
 ## Reserved anchors

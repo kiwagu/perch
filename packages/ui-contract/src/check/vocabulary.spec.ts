@@ -96,6 +96,23 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('wants every derived suffix to end with a kind of the vocabulary, the kind of its part', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.suffixes['range'] = 'the entries the page shows'
+    contract.vocabulary.suffixes['error-message'] = 'the error text of a field'
+    contract.vocabulary.suffixes['close-button'] = 'the X that closes a dialog'
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: derived suffix "range": its kind "range" is not a kind of the vocabulary',
+      'contract/vocabulary.md:1: derived suffix "error-message": its kind "message" is not a kind of the vocabulary',
+    ])
+
+    contract.vocabulary.kinds['range'] = 'the range'
+    contract.vocabulary.kinds['message'] = 'the message'
+
+    expect(printed(contract)).toEqual([])
+  })
   it('asks no row of a derived toast code, but the rule row once one is derived', () => {
     const contract = sampleContract()
     const toast = anchorIn(contract, 'sample.save-button')

@@ -11,7 +11,9 @@
  * not final has a way out (`reach.ts`); within a parallel state an event belongs to one area
  * (`areas.ts`); what a state renders names the screen's anchors, and a state renders the
  * anchors it handles (`renders.ts`); a guard by failure code guards only a branch of an
- * invoke's `onError`, naming codes its action fails with (`code-guards.ts`).
+ * invoke's `onError`, naming codes its action fails with (`code-guards.ts`); the data-id of an
+ * entry, in a navigate's search or an invoke's input, comes on the event of a control in the
+ * entry's part (`items.ts`).
  */
 
 import type { FlowState, Problem } from '../../files'
@@ -22,6 +24,7 @@ import { actionProblems, lookupsOf, searchOf } from '../lookups'
 import { areaProblems } from './areas'
 import { codeGuardProblems } from './code-guards'
 import type { At, InFlow } from './in-flow'
+import { itemProblems } from './items'
 import { stuckProblems, unreachableProblems } from './reach'
 import { readOptOutProblems } from './reads'
 import { addressProblems, effectProblems, eventProblems } from './references'
@@ -141,6 +144,7 @@ export function flowProblems(contract: Contract): Problem[] {
       ...areaProblems(inFlow),
       ...rendersProblems(inFlow),
       ...codeGuardProblems(inFlow),
+      ...itemProblems(inFlow),
       ...unusedGuardProblems(inFlow),
       ...unreachableProblems(inFlow),
       ...stuckProblems(inFlow),

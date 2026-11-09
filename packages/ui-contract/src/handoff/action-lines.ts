@@ -1,6 +1,7 @@
 /**
  * A platform action as lines for the hand-over diff, one per fact it declares: each parameter
- * with its type, its result, each code its failure shows, each role that may run it, the mail it
+ * with its type, its result, each code its failure shows, each role that may run it, the page
+ * sizes it answers with its default when it pages, the mail it
  * sends (who it goes to, the language it speaks, the screen its link opens and the search
  * parameter that carries the token) and each notice (its name, who it goes to, its language and
  * the screen of its plain link). The descriptions are left out, as a flow's are; the result
@@ -24,6 +25,9 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     `result: ${action.result}`,
     ...action.codes.map((code) => `code ${code}`),
     ...(action.roles ?? []).map((role) => `role ${role}`),
+    ...(action.paged === undefined
+      ? []
+      : [`paged by ${action.paged.sizes.join(', ')}, ${action.paged.default} by default`]),
     ...(mail === undefined
       ? []
       : [
