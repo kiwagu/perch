@@ -342,14 +342,17 @@ flow:
         invite:
           by: organisation.invite.submit-button
           onDone:
-            description: The invitation is mailed and the invitations are read again; the email empties and the role is member again.
+            description: The invitation is mailed; the email empties and the role is member again.
             actions:
               - clear: organisation.invite.email-input
               - clear: organisation.invite.role-select
+              - read: organisation.sent.list
         members:
           by: organisation.members.remove-button
           onDone:
-            description: The members are read again; the removed member's devices lose the organisation without a reload.
+            description: The removed member's devices lose the organisation without a reload.
+            actions:
+              - read: organisation.members.list
           onError:
             description: The removal has no error of its own; it shows under the invitation.
             actions:
@@ -367,7 +370,9 @@ flow:
                 input: { identity: organisation.members.item, role: organisation.members.role-select }
                 onDone:
                   target: idle
-                  description: The members are read again; the member's devices show the new role without a reload.
+                  description: The member's devices show the new role without a reload.
+                  actions:
+                    - read: organisation.members.list
                 onError:
                   target: idle
                   description: The select shows the role the member still has, and the error shows under the invitation.
@@ -375,13 +380,15 @@ flow:
                     - show: organisation.invite.error
         sent-copy:
           by: organisation.sent.copy-button
+          read: false
           onError:
             actions:
               - show: organisation.invite.error
         sent-revoke:
           by: organisation.sent.revoke-button
           onDone:
-            description: The invitations are read again.
+            actions:
+              - read: organisation.sent.list
           onError:
             actions:
               - show: organisation.invite.error
@@ -401,17 +408,19 @@ flow:
                   description: The account is a member with the invitation's role, and that organisation is current.
                 onError:
                   target: idle
-                  description: The invitations are read again; one gone meanwhile leaves the list.
+                  description: One gone meanwhile leaves the list.
                   actions:
                     - show: organisation.received.error
+                    - read: organisation.received.list
         received-decline:
           by: organisation.received.decline-button
           onDone:
             description: The invitation leaves the list.
           onError:
-            description: The invitations are read again; one gone meanwhile leaves the list.
+            description: One gone meanwhile leaves the list.
             actions:
               - show: organisation.received.error
+              - read: organisation.received.list
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:
