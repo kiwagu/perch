@@ -315,7 +315,33 @@ describe('OrganisationContainer', () => {
       })
 
       await waitFor(() => expect(screen.queryByTestId('organisation.received.list')).toBeNull())
-      expect(screen.getByTestId('organisation.received.error')).toBeTruthy()
+      const error = screen.getByTestId('organisation.received.error')
+
+      expect(error.getAttribute('data-code'), 'the read failure, not the refusal').toBe('failed')
+      expect(error.textContent).toBe(en['organisation.error.failed'])
+    })
+
+    it('lets an invitation gone meanwhile leave the list read after a failed answer', async () => {
+      let reads = 0
+      const refusal = later<never>()
+
+      await openPage(
+        [acme],
+        gatewayWith({}),
+        invitationsWith({
+          mine: () => okAsync(++reads === 1 ? [fromInitech] : []),
+          accept: () => refusal.result,
+        }),
+      )
+      fireEvent.click(await screen.findByTestId('organisation.received.accept-button'))
+      await act(async () => {
+        refusal.refuse('invitation-gone')
+      })
+
+      await waitFor(() => expect(screen.queryByTestId('organisation.received.item')).toBeNull())
+      expect(screen.getByTestId('organisation.received.error').getAttribute('data-code')).toBe(
+        'invitation-gone',
+      )
     })
   })
 })

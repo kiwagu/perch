@@ -176,7 +176,8 @@ export function OrganisationContainer() {
       errors={{
         ...shown,
         members: shown.members ?? members.failure ?? invitations.failure,
-        received: shown.received ?? received.failure,
+        // A failed read says why the list is missing, before an answer's refusal.
+        received: received.failure ?? shown.received,
       }}
       can={(event) => state.can(event)}
       creating={
