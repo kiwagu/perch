@@ -192,10 +192,10 @@ A body or an identity that does not follow its schema answers 400 (`bad-request`
 a refusal answers its code, with 400 for `invalid-key`, `invalid-name` and `email-invalid`, 403
 for `not-a-member`, `not-admin` and `other-account`, 404 for `no-such-tenant`, `no-such-identity`,
 `no-such-member` and `link-invalid`, 409 for `key-taken`, `already-member`, `self` and
-`last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation or an
-acceptance whose account was deleted after its session was read, which answers 401 `unauthorized`
-as a token that holds no session does; an invite, an organisation creation or a read of a link
-over its limit answers 429 (`rate-limited`, see `src/limits/README.md`); a failure of the gateway
+`last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation, an
+acceptance or a decline whose account was deleted after its session was read, which answers 401
+`unauthorized` as a token that holds no session does; an invite, an organisation creation or a
+read of a link over its limit answers 429 (`rate-limited`, see `src/limits/README.md`); a failure of the gateway
 answers 500 (`internal`). `refusalStatus` (`organisation-refusal.ts`) is the one table of those
 statuses, and `organisation-http.ts` the answers both route folders share.
 

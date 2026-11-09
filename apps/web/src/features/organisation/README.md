@@ -60,16 +60,19 @@ on the replica schema are applied on the device before a command runs
   (`note:FORBIDDEN`). An administrator also sees the members, each with a role select that
   applies at once (the administrator's own included while another administrator stays; the
   row shows the role being set while the change runs and, once it is done, until the members
-  read after it settle, the listed role after a refusal), invites an email by a mailed link
+  read after it settle, the listed role after a refusal; a role being set shows only in the
+  organisation it is set in), invites an email by a mailed link
   with a role (the account may not exist yet; the form empties once it is sent, only while the
   organisation it was sent in is still current), copies the link of or
   revokes an invitation not accepted yet (the clipboard is the `CLIPBOARD` port), and removes
   a member. The members and the invitations sent are read when they start to show (the page
-  opening, the account made an administrator) and after each change made here, not after the
-  account's own demotion, whose role comes over the sync channel. Every account sees the
-  invitations to its email above the create form, read when the page opens and after each
-  accept or decline, and accepts one (its organisation becomes current) or declines it;
-  what failed shows in place of that list. The page follows the memberships as they change,
+  opening, the account made an administrator) and again after each change made here that
+  touches them: the members after a removal or a role change (not after the account's own
+  demotion, whose role comes over the sync channel), the invitations sent after an invite or a
+  revoke. Every account sees the invitations to its email above the create form, read when the
+  page opens and after each accept or decline, refused or not, and accepts one (its
+  organisation becomes current) or declines it; a failed accept or decline shows beside that
+  list, a failed read in place of it. The page follows the memberships as they change,
   without a reload. A refused change the gateway limits (`rate-limited`) is worded as "too many
   attempts".
 
