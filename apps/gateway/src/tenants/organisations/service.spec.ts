@@ -295,13 +295,14 @@ async function harness() {
   }
 
   /**
-   * Watches the queues of the organisations' turns. `untilQueued()` answers a promise that
-   * resolves once a change asks for an organisation's turn after that call, holding it or
-   * waiting behind the change that holds it: the proof that it passed every check made before
-   * the turn, so one that settles it afterwards was decided in the turn.
+   * Watches the queues of the organisations' turns (`ofTenants`, the default) or of the
+   * identities' (`ofIdentity`). `untilQueued()` answers a promise that resolves once a change asks
+   * for such a turn after that call, holding it or waiting behind the change that holds it: the
+   * proof that it passed every check made before the turn, so one that settles it afterwards was
+   * decided in the turn.
    */
-  const watchQueue = () => {
-    const asked = vi.spyOn(MembershipTurns.prototype, 'ofTenants')
+  const watchQueue = (turns: 'ofTenants' | 'ofIdentity' = 'ofTenants') => {
+    const asked = vi.spyOn(MembershipTurns.prototype, turns)
 
     cleanups.push(async () => asked.mockRestore())
 
@@ -591,6 +592,7 @@ describe('Organisations', () => {
       founded,
       holdInTenants,
       onDirectoryQuery,
+      watchQueue,
     } = await harness()
     const acme = await founded()
     const invitation = (
@@ -613,13 +615,15 @@ describe('Organisations', () => {
 
     onDirectoryQuery((text) => directorySteps.push(text))
 
+    const asked = watchQueue('ofIdentity').untilQueued()
     const accepting = organisations.invitations.accept({
       identity: bob.id,
       invitation: invitation.id,
     })
 
-    // The acceptance waits for the removal's turn of bob: it writes no membership meanwhile.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // The acceptance asked for bob's turn, which the removal holds: it writes no membership
+    // meanwhile.
+    await asked
     expect(directorySteps).not.toContain(invitationAcceptStatement)
 
     held.release()
@@ -654,6 +658,7 @@ describe('Organisations', () => {
       invited,
       holdInTenants,
       onDirectoryQuery,
+      watchQueue,
     } = await harness()
 
     await founded()
@@ -682,13 +687,15 @@ describe('Organisations', () => {
 
     onDirectoryQuery((text) => directorySteps.push(text))
 
+    const asked = watchQueue('ofIdentity').untilQueued()
     const accepting = organisations.invitations.accept({
       identity: bob.id,
       invitation: invitation.id,
     })
 
-    // The acceptance waits for the departure's turn of bob: it writes no membership meanwhile.
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // The acceptance asked for bob's turn, which the departure holds: it writes no membership
+    // meanwhile.
+    await asked
     expect(directorySteps).not.toContain(invitationAcceptStatement)
 
     held.release()
