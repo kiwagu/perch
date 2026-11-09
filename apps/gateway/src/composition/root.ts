@@ -176,6 +176,12 @@ export function createGatewayRoot(
     // directory's write; every change of memberships resolves once its devices were told. An
     // invitation's link and its mail carry the same address of the front.
     const invitationLinkTo = (token: string) => invitationLink(options.publicUrl, token)
+    const invitationMails = new InvitationMails({
+      mail: options.mail,
+      directory: local,
+      link: invitationLinkTo,
+      log: organisationsLog,
+    })
     const organisations = new Organisations({
       directory: local,
       databases,
@@ -188,12 +194,7 @@ export function createGatewayRoot(
           secret: options.authSecret,
           clock: options.clock,
         }),
-        mailer: new InvitationMails({
-          mail: options.mail,
-          directory: local,
-          link: invitationLinkTo,
-          log: organisationsLog,
-        }),
+        mailer: invitationMails,
         link: invitationLinkTo,
       },
     })
@@ -261,6 +262,8 @@ export function createGatewayRoot(
       accountTurns,
       clock: options.clock,
       close: async () => {
+        // An invitation mail reads its recipient's language from the directory before it closes.
+        await invitationMails.languagesRead()
         await hub.close()
         await databases.close()
         await local.close()

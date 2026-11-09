@@ -362,4 +362,19 @@ describe('InvitationMails', () => {
 
     await expect.poll(reached).toBe(1)
   })
+
+  it('lets a closing gateway close its directory once the started mails read their language, the mail server answering or not', async () => {
+    const { port, reached } = silentPort()
+    const { mails, identities, local, logged } = await harness('en', 'en', { mail: port })
+
+    await mails.languagesRead()
+
+    invite(mails, identities.ann, CAROL)
+    await mails.languagesRead()
+    await local.close()
+
+    // Read before the directory closed, written and handed to a mail server that never answers.
+    await expect.poll(reached).toBe(1)
+    expect(logged()).toEqual([])
+  })
 })

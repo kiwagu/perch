@@ -34,6 +34,8 @@ export interface InvitationMailsOptions {
  */
 export class InvitationMails implements InvitationMailer {
   readonly #options: InvitationMailsOptions
+  /** The mails started whose recipient's language is still being read from the directory. */
+  readonly #reading = new Set<Promise<void>>()
 
   constructor(options: InvitationMailsOptions) {
     this.#options = options
@@ -53,7 +55,19 @@ export class InvitationMails implements InvitationMailer {
   }: Parameters<InvitationMailer['invite']>[0]): void {
     const { link, log, mail } = this.#options
 
-    void new ResultAsync(Promise.resolve().then(() => this.#language(email, inviter)))
+    const language = new ResultAsync(Promise.resolve().then(() => this.#language(email, inviter)))
+    const reading = language
+      .match(
+        () => undefined,
+        () => undefined,
+      )
+      // A query that threw is the send chain's to log.
+      .catch(() => undefined)
+
+    this.#reading.add(reading)
+    void reading.then(() => this.#reading.delete(reading))
+
+    void language
       .andThen((locale) =>
         renderInvitationMail({ to: email, organisation, role, link: link(token), locale }),
       )
@@ -63,6 +77,15 @@ export class InvitationMails implements InvitationMailer {
         (error) => log.error({ code: error.code }, 'an invitation mail did not go out'),
       )
       .catch(() => log.error({ code: 'mail:SEND_FAILED' }, 'an invitation mail failed'))
+  }
+
+  /**
+   * Resolves once every mail started so far has read its recipient's language from the directory,
+   * or failed to, for a gateway that closes its directory; a mail the mail server has not taken
+   * yet does not hold it, since sending reads nothing.
+   */
+  async languagesRead(): Promise<void> {
+    await Promise.all(this.#reading)
   }
 
   /**
