@@ -406,6 +406,8 @@ flow:
                 onDone:
                   target: "#organisation.viewing"
                   description: The account is a member with the invitation's role, and that organisation is current.
+                  actions:
+                    - read: organisation.received.list
                 onError:
                   target: idle
                   description: One gone meanwhile leaves the list.
@@ -416,6 +418,8 @@ flow:
           by: organisation.received.decline-button
           onDone:
             description: The invitation leaves the list.
+            actions:
+              - read: organisation.received.list
           onError:
             description: One gone meanwhile leaves the list.
             actions:
