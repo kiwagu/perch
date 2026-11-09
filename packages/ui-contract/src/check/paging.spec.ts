@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAnchor, PAGING_PARTS } from '../anchors'
+import { isAnchor, PAGING_PARTS, sizeOptionOf } from '../anchors'
 import { type AnchorDef, formatProblem } from '../files'
 
-import { type Contract, sizeOptionOf } from './contract'
+import type { Contract } from './contract'
 import { sampleContract, screenIn } from './contract.fixture'
 import { pagingProblems } from './paging'
 

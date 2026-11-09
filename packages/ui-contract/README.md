@@ -487,7 +487,11 @@ for Bun.
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
-  `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  `baseOf(anchor, suffixes)`, `sizeOptionOf(list)` (a paged list's size options,
+  `<list>.size-select.option`), `isSizeOption(anchor, paged)` (whether an anchor names those of
+  one of the paged lists) and `isKnownAnchor(anchor, declared, suffixes, paged)` (a declared
+  anchor, a declared base with a suffix, or a paged list's size options, as the engine's
+  `knownAnchors` tells them); `CONTRACT_VERSION`.
   `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
   `partOf(anchor)`, the part it sits in (the anchor without its last segment);
   `CONTROL_KINDS`, the kinds a person acts on (a button, a link, a tab and the `FIELD_KINDS`),

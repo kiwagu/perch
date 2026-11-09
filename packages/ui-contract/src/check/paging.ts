@@ -10,17 +10,10 @@
  * an anchor has 5 at most. A navigate that starts a new search says `page: 1` (`flow/pages.ts`).
  */
 
-import { PAGE, SIZE, segmentsOf } from '../anchors'
+import { PAGE, SIZE, segmentsOf, sizeOptionOf } from '../anchors'
 import type { Binding, Problem } from '../files'
 
-import {
-  type Contract,
-  declaredAnchors,
-  type InScreens,
-  locate,
-  own,
-  sizeOptionOf,
-} from './contract'
+import { type Contract, declaredAnchors, type InScreens, locate, own } from './contract'
 import { searchOf } from './lookups'
 
 type PlatformAction = Contract['screens']['platform']['actions'][string]

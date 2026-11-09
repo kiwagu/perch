@@ -14,7 +14,7 @@
  * never empty, so neither is an example of a path parameter.
  */
 
-import { SIZE } from '../anchors'
+import { SIZE, sizeOptionOf } from '../anchors'
 import {
   type Binding,
   createValidator,
@@ -32,7 +32,6 @@ import {
   knownAnchors,
   locate,
   own,
-  sizeOptionOf,
 } from './contract'
 import { pagedListOf } from './lookups'
 import { parameterSample } from './parameter-sample'
