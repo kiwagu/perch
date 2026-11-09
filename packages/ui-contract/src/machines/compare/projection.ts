@@ -40,11 +40,16 @@ export interface Projection {
   readonly states: Readonly<Record<string, ProjectedState>>
 }
 
-/** The contract's effects among actions: the app's own (`assign`, a named action) left out. */
+/**
+ * The contract's effects among actions: the app's own (`assign`, a named action) left out. An
+ * invoke's `read: false` is no effect and no key the projection reads: the check holds it.
+ */
 const effectsIn = (actions: unknown): ProjectedEffect[] =>
   listOf(actions)
     .filter(isRecord)
-    .filter(({ type }) => type === 'show' || type === 'clear' || type === 'navigate')
+    .filter(
+      ({ type }) => type === 'show' || type === 'clear' || type === 'read' || type === 'navigate',
+    )
     .map(({ type, params }) => ({ type, params }))
 
 /**

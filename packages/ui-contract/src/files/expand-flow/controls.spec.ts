@@ -178,6 +178,21 @@ describe('the region of a button bound to one action', () => {
     expect(Object.keys(regions)).toEqual(['list', 'form'])
   })
 
+  it('passes read: false, that nothing reads after the action, on to its invoke', () => {
+    const { regions, issues } = regionsOf(
+      viewing({ other: OTHER, form: { by: 'sample.form.add-button', read: false } }),
+      [ADD],
+    )
+
+    expect(issues).toEqual([])
+    expect(regions['form']).toMatchObject({
+      states: { running: { invoke: { src: 'thing.createThing', read: false } } },
+    })
+    expect(regionsOf(viewing({ other: OTHER }), [ADD]).regions['form-add']).not.toMatchObject({
+      states: { running: { invoke: { read: false } } },
+    })
+  })
+
   it('keeps a target an outcome names, and names a mistake inside an outcome once, at its place', () => {
     const { regions, issues } = regionsOf(
       viewing({

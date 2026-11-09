@@ -774,7 +774,7 @@
                   "entity"
                 ],
                 "additionalProperties": false,
-                "description": "The entries come from an entity of the model."
+                "description": "The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read."
               },
               {
                 "type": "object",
@@ -789,7 +789,7 @@
                   "platform"
                 ],
                 "additionalProperties": false,
-                "description": "The entries come from a platform action."
+                "description": "The entries come from a platform action, which the anchor reads each time it starts to render (the screen opening, a state that renders it entered, the account's role or the organisation or account it reads for becoming another) and where a flow says `read: <anchor>`."
               }
             ],
             "description": "Where the entries of a list, a section or a table come from."
@@ -1096,6 +1096,11 @@
                           }
                         ]
                       },
+                      "read": {
+                        "type": "boolean",
+                        "const": false,
+                        "description": "Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused."
+                      },
                       "toast": {
                         "type": "boolean",
                         "const": false,
@@ -1318,6 +1323,11 @@
                               "type": "boolean",
                               "const": false,
                               "description": "No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself."
+                            },
+                            "read": {
+                              "type": "boolean",
+                              "const": false,
+                              "description": "Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused."
                             }
                           },
                           "required": [
@@ -1514,6 +1524,11 @@
                                           }
                                         ]
                                       },
+                                      "read": {
+                                        "type": "boolean",
+                                        "const": false,
+                                        "description": "Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused."
+                                      },
                                       "toast": {
                                         "type": "boolean",
                                         "const": false,
@@ -1665,6 +1680,37 @@
               "properties": {
                 "type": {
                   "type": "string",
+                  "const": "read",
+                  "description": "The effect: a list reads its source again."
+                },
+                "params": {
+                  "type": "object",
+                  "properties": {
+                    "anchor": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                      "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                    }
+                  },
+                  "required": [
+                    "anchor"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Which anchor."
+                }
+              },
+              "required": [
+                "type",
+                "params"
+              ],
+              "additionalProperties": false,
+              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
                   "const": "navigate",
                   "description": "The effect: the app moves to a binding."
                 },
@@ -1726,7 +1772,7 @@
               "description": "The app moves to that binding."
             }
           ],
-          "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+          "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
         },
         {
           "type": "object",
@@ -1787,6 +1833,21 @@
           ],
           "additionalProperties": false,
           "description": "`clear: <anchor>`: a field is emptied, or the anchor stops showing its code."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "read": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+              "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+            }
+          },
+          "required": [
+            "read"
+          ],
+          "additionalProperties": false,
+          "description": "`read: <anchor>`: the list reads its source again."
         },
         {
           "type": "object",
