@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ADDRESS, closeHarness, harness, request } from './__fixtures__/organisation-routes'
+import { ADDRESS, closeHarness, harness, request } from '../__fixtures__/organisation-routes'
 
 afterEach(closeHarness)
 
@@ -8,46 +8,50 @@ describe('organisationRoutes', () => {
   describe('limits', () => {
     const minute = 60_000
 
-    /** The body inviting the n-th email nobody has an account for: refused 404, still an attempt. */
-    const stranger = (n: number) => ({ email: `stranger-${n}@example.test` })
+    /** The path an admin invites on. */
+    const invitationsOf = (key: string) => `/organisations/${key}/invitations`
+
+    /** The body inviting the n-th email nobody has an account for: accepted, and an attempt. */
+    const stranger = (n: number) => ({ email: `stranger-${n}@example.test`, role: 'member' })
 
     it("lets an admin's 30 invites within 10 minutes reach the service, unknown emails included, and answers the 31st 429 without calling it", async () => {
       const { root, ann, ask, founded } = await harness()
-      const invite = vi.spyOn(root.organisations, 'invite')
+      const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
 
       for (let n = 0; n < 30; n += 1) {
         expect(
-          await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(n) }),
-        ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+          (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).status,
+        ).toBe(201)
       }
 
       expect(invite).toHaveBeenCalledTimes(30)
 
-      const refused = await ask('POST', '/organisations/acme/members', {
-        as: ann,
-        body: stranger(30),
-      })
+      const refused = await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(30) })
 
       expect(refused).toEqual({ status: 429, body: { code: 'rate-limited' } })
       expect(invite).toHaveBeenCalledTimes(30)
     })
 
     it('answers 429 with Retry-After in whole seconds', async () => {
-      const { routes, ann, founded } = await harness()
+      const { routes, floor, ann, founded } = await harness()
 
       await founded()
 
       for (let n = 0; n < 30; n += 1) {
-        await routes(
-          request('POST', '/organisations/acme/members', { as: ann, body: stranger(n) }),
+        const answered = routes(
+          request('POST', invitationsOf('acme'), { as: ann, body: stranger(n) }),
           ADDRESS,
         )
+
+        await vi.waitFor(() => expect(floor.pending()).toBe(1))
+        await floor.advance(300)
+        await answered
       }
 
       const response = await routes(
-        request('POST', '/organisations/acme/members', { as: ann, body: stranger(30) }),
+        request('POST', invitationsOf('acme'), { as: ann, body: stranger(30) }),
         ADDRESS,
       )
 
@@ -64,21 +68,23 @@ describe('organisationRoutes', () => {
       )._unsafeUnwrap()
 
       for (let n = 0; n <= 30; n += 1) {
-        await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
       expect(
-        await ask('POST', '/organisations/bobco/members', {
-          as: bob,
-          from: '203.0.113.2',
-          body: stranger(0),
-        }),
-      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+        (
+          await ask('POST', invitationsOf('bobco'), {
+            as: bob,
+            from: '203.0.113.2',
+            body: stranger(0),
+          })
+        ).status,
+      ).toBe(201)
     })
 
     it('takes 60 invites from one address across three admins and answers the 61st 429', async () => {
       const { root, ann, bob, cat, ask, founded } = await harness()
-      const invite = vi.spyOn(root.organisations, 'invite')
+      const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
       ;(
@@ -89,42 +95,135 @@ describe('organisationRoutes', () => {
       )._unsafeUnwrap()
 
       for (let n = 0; n < 30; n += 1) {
-        await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(n) })
-        await ask('POST', '/organisations/bobco/members', { as: bob, body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+        await ask('POST', invitationsOf('bobco'), { as: bob, body: stranger(n) })
       }
 
       expect(invite).toHaveBeenCalledTimes(60)
-      expect(
-        await ask('POST', '/organisations/catco/members', { as: cat, body: stranger(0) }),
-      ).toEqual({ status: 429, body: { code: 'rate-limited' } })
+      expect(await ask('POST', invitationsOf('catco'), { as: cat, body: stranger(0) })).toEqual({
+        status: 429,
+        body: { code: 'rate-limited' },
+      })
       expect(invite).toHaveBeenCalledTimes(60)
       // The same admin from another address is let in: cat's own bucket was charged only once.
       expect(
-        await ask('POST', '/organisations/catco/members', {
-          as: cat,
-          from: '203.0.113.9',
-          body: stranger(1),
-        }),
-      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+        (
+          await ask('POST', invitationsOf('catco'), {
+            as: cat,
+            from: '203.0.113.9',
+            body: stranger(1),
+          })
+        ).status,
+      ).toBe(201)
     })
 
     it('counts nothing for an invitation whose body does not follow the schema', async () => {
       const { root, ann, ask, founded } = await harness()
-      const invite = vi.spyOn(root.organisations, 'invite')
+      const invite = vi.spyOn(root.organisations.invitations, 'invite')
 
       await founded()
 
       for (let n = 0; n < 40; n += 1) {
         expect(
-          await ask('POST', '/organisations/acme/members', { as: ann, body: { email: 'nope' } }),
+          await ask('POST', invitationsOf('acme'), {
+            as: ann,
+            body: { email: 'bob@example.test', role: 'owner' },
+          }),
         ).toEqual({ status: 400, body: { code: 'bad-request' } })
       }
 
       for (let n = 0; n < 30; n += 1) {
-        await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
       expect(invite).toHaveBeenCalledTimes(30)
+    })
+
+    it('counts an invitation whose email is not one, though the service is not asked', async () => {
+      const { root, ann, ask, founded } = await harness()
+      const invite = vi.spyOn(root.organisations.invitations, 'invite')
+
+      await founded()
+
+      for (let n = 0; n < 30; n += 1) {
+        expect(
+          await ask('POST', invitationsOf('acme'), {
+            as: ann,
+            body: { email: 'nope', role: 'member' },
+          }),
+        ).toEqual({ status: 400, body: { code: 'email-invalid' } })
+      }
+
+      expect(await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(0) })).toEqual({
+        status: 429,
+        body: { code: 'rate-limited' },
+      })
+      expect(invite).not.toHaveBeenCalled()
+    })
+
+    it('answers the 201st mail of an address 429, sign-ups and invites together, its invite windows untouched', async () => {
+      const { limits, ann, ask, founded } = await harness()
+
+      await founded()
+
+      // 195 of the address's mails went out as sign-ups.
+      for (let n = 0; n < 195; n += 1) {
+        expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
+      }
+
+      for (let n = 0; n < 5; n += 1) {
+        expect(
+          (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).status,
+        ).toBe(201)
+      }
+
+      // Refused by the address's mails: nothing of ann's 30 nor of the address's 60 is spent.
+      for (let n = 5; n < 15; n += 1) {
+        expect(await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })).toEqual({
+          status: 429,
+          body: { code: 'rate-limited' },
+        })
+      }
+
+      // Another address: 25 more of ann's 30 are left.
+      for (let n = 15; n < 40; n += 1) {
+        expect(
+          (
+            await ask('POST', invitationsOf('acme'), {
+              as: ann,
+              from: '203.0.113.9',
+              body: stranger(n),
+            })
+          ).status,
+        ).toBe(201)
+      }
+
+      expect(
+        (
+          await ask('POST', invitationsOf('acme'), {
+            as: ann,
+            from: '203.0.113.9',
+            body: stranger(40),
+          })
+        ).status,
+      ).toBe(429)
+    })
+
+    it('gives the address its mail back when an invite window refuses the invite', async () => {
+      const { limits, ann, ask, founded } = await harness()
+
+      await founded()
+
+      for (let n = 0; n < 31; n += 1) {
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
+      }
+
+      // 30 of the address's 200 mails went out: the refused 31st invite took none.
+      for (let n = 0; n < 170; n += 1) {
+        expect(limits.verificationMail(ADDRESS).allowed).toBe(true)
+      }
+
+      expect(limits.verificationMail(ADDRESS).allowed).toBe(false)
     })
 
     it('lets the admin invite again 10 minutes after the window started', async () => {
@@ -133,13 +232,13 @@ describe('organisationRoutes', () => {
       await founded()
 
       for (let n = 0; n <= 30; n += 1) {
-        await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(n) })
+        await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(n) })
       }
 
       await clock.advance(10 * minute)
       expect(
-        await ask('POST', '/organisations/acme/members', { as: ann, body: stranger(31) }),
-      ).toEqual({ status: 404, body: { code: 'no-such-identity' } })
+        (await ask('POST', invitationsOf('acme'), { as: ann, body: stranger(31) })).status,
+      ).toBe(201)
     })
 
     it('answers the 11th organisation an identity creates within an hour 429 and provisions nothing, while another identity still creates', async () => {

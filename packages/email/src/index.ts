@@ -11,6 +11,7 @@ export {
   type EmailChangedNoticeInput,
   renderEmailChangedNotice,
 } from './email-changed-notice.render'
+export { type InvitationMailInput, renderInvitationMail } from './invitation-mail.render'
 export type { MailWriteError } from './mail.error'
 export type { RenderedMail } from './mail.render'
 export {

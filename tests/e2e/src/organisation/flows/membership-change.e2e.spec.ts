@@ -1,13 +1,23 @@
 // scenario: organisation/flows/membership-change
 import { generate } from '../../support/data'
-import { appReady, expect, pageLoads, signUp, test } from '../../support/fixtures'
-import { createOrganisation, expectInvited } from '../../support/organisation'
+import { appReady, expect, pageLoads, signIn, signUp, test } from '../../support/fixtures'
+import { mailbox } from '../../support/mailbox'
+import {
+  createOrganisation,
+  expectMembers,
+  inviteEmail,
+  memberItems,
+  openInvitationMail,
+} from '../../support/organisation'
 import { databases, organisationDatabase } from '../../support/storage'
 
-test.describe('Deliver an invitation and a removal to a signed-in device', { tag: '@full' }, () => {
-  test('Device B gains the organisation when invited and loses it when removed, without a reload', async ({
+test.describe('Deliver an accepted invitation and a removal to a signed-in device', {
+  tag: '@full',
+}, () => {
+  test('Device B gains the organisation when its account accepts the invitation elsewhere and loses it when removed, without a reload', async ({
     page,
     anotherAccount,
+    freshDevice,
   }, testInfo) => {
     const data = {
       key: generate.tenantKey(),
@@ -48,8 +58,35 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         return account
       })
 
-    const database =
+    const seen =
       await test.step('3. On device A, invite user B with [organisation.invite.email-input] and [organisation.invite.submit-button]', async () => {
+        // User B's mails before the invitation: its sign-up's, which the invitation follows.
+        const mails = await mailbox.count(userB.email)
+
+        await inviteEmail(page, userB.email)
+
+        return mails
+      })
+
+    const database =
+      await test.step('4. On device C, sign in as user B with [user.sign-in.email-input], [user.sign-in.password-input] and [user.sign-in.submit-button], open the link of [mail:organisations.invite] and click [organisation.invitation.accept-button]', async () => {
+        const deviceC = await freshDevice.open()
+
+        await signIn(deviceC, userB)
+        await openInvitationMail(
+          deviceC,
+          {
+            email: userB.email,
+            inviter: { email: userA.email, language: 'en' },
+            recipientLanguage: 'en',
+          },
+          seen,
+        )
+
+        const accept = deviceC.getByTestId('organisation.invitation.accept-button')
+
+        await expect(accept).toBeVisible()
+
         // When device B shows the organisation and the note by A, read on the clock both
         // browsers share.
         const shownAt = deviceB
@@ -68,12 +105,11 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
 
         // Awaited after the assertions below, which report a timeout better.
         shownAt.catch(() => undefined)
-        await page.getByTestId('organisation.invite.email-input').fill(userB.email)
 
         const clickedAt = Date.now()
 
-        await page.getByTestId('organisation.invite.submit-button').click()
-        // Expected: Within 5 seconds of step 3 device B shows the organisation in
+        await accept.click()
+        // Expected: Within 5 seconds of step 4 device B shows the organisation in
         //   [organisation.page.heading] and the note by A in [organisation.notes.list], without a
         //   reload; the delay is reported as "membership-change-ms"
         await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
@@ -91,10 +127,9 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         const shown = await shownAt
         const latency = typeof shown === 'number' ? shown - clickedAt : Number.NaN
 
-        expect(latency, 'the delay from the invitation to device B').toBeGreaterThanOrEqual(0)
-        expect(latency, 'the delay from the invitation to device B').toBeLessThanOrEqual(5_000)
+        expect(latency, 'the delay from the acceptance to device B').toBeGreaterThanOrEqual(0)
+        expect(latency, 'the delay from the acceptance to device B').toBeLessThanOrEqual(5_000)
         testInfo.annotations.push({ type: 'membership-change-ms', description: String(latency) })
-        await expectInvited(page, userB.email)
 
         // Device B keeps the organisation in a database of its own, which the removal must delete.
         const name = await organisationDatabase(deviceB, data.key)
@@ -104,7 +139,9 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
         return name
       })
 
-    await test.step("4. On device A, click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("5. On device A, reload [/org], click [organisation.members.remove-button] on user B's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+      await page.reload()
+      await appReady(page)
       await page
         .getByTestId('organisation.members.item')
         .filter({ hasText: userB.email })
@@ -114,7 +151,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
     })
 
     // Expected:
-    // - Within 5 seconds of step 4 device B shows [organisation.page.status] in [state:empty] (not
+    // - Within 5 seconds of step 5 device B shows [organisation.page.status] in [state:empty] (not
     //   a member of any organisation yet) again, without a reload, and its organisation data is
     //   gone from the device: a reload of [/org] still shows no organisation
     await Promise.all([
@@ -145,9 +182,7 @@ test.describe('Deliver an invitation and a removal to a signed-in device', { tag
     await expect(deviceB.getByTestId('organisation.page.heading')).toHaveCount(0)
     expect(await databases(deviceB)).not.toContain(database)
     // - Device A shows [organisation.members.list] without user B
-    await expect(
-      page.getByTestId('organisation.members.item').filter({ hasText: userB.email }),
-    ).toHaveCount(0)
-    await expect(page.getByTestId('organisation.members.item')).toHaveText([userA.email])
+    await expect(memberItems(page).filter({ hasText: userB.email })).toHaveCount(0)
+    await expectMembers(page, [userA.email])
   })
 })

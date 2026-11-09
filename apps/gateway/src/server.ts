@@ -1,9 +1,9 @@
 /**
  * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes and the auth mount under `/auth` (Better Auth's sign-up, sign-in, verification and
- * resend, and the gateway's own recovery and changes of a password and an email and deletion of an
- * account), the device routes in front so the two sign-outs under `/auth` are the gateway's own;
- * and the sync connection of each device over a WebSocket at `/sync`.
+ * routes, the invitation routes and the auth mount under `/auth` (Better Auth's sign-up, sign-in,
+ * verification and resend, and the gateway's own recovery and changes of a password and an email
+ * and deletion of an account), the device routes in front so the two sign-outs under `/auth` are
+ * the gateway's own; and the sync connection of each device over a WebSocket at `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
@@ -15,7 +15,8 @@ import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
 import { clientAddress } from './limits/client-address'
 import { SyncConnection } from './sync/sync-connection'
-import { organisationRoutes } from './tenants/organisation.routes'
+import { invitationRoutes } from './tenants/invitation-routes'
+import { organisationRoutes } from './tenants/organisation-routes'
 
 export interface ServerOptions {
   /** The port to listen on; 0 lets the system choose a free one. */
@@ -38,7 +39,8 @@ interface SocketData {
 /**
  * The largest request body the server reads: a body is a sign-up's name, email and password, a
  * sign-in's email and password, a link's token, an email to send a link to again, a password with
- * a new password or a new email, an organisation's key and name, or an email to invite.
+ * a new password or a new email, an organisation's key and name, an email to invite with its role,
+ * an invitation's token or id, or a member's new role.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -87,7 +89,12 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       onFailure,
       clock: root.clock,
     }),
-    organisationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
+    organisationRoutes(root.sessions, root.organisations, {
+      onFailure,
+      limits: root.limits,
+      clock: root.clock,
+    }),
+    invitationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
     authHandler({
       auth: root.auth,
       sessions: root.sessions,

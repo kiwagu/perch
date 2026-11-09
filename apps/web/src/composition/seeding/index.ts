@@ -21,6 +21,7 @@ export type {
   AccountView,
   ClientOptions,
   Inbox,
+  Invited,
   OrganisationView,
   SeedClient,
   SeedError,

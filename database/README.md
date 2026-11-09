@@ -39,9 +39,12 @@ only the gateway's own writes change it (the profile's email through the confirm
   characters), `settings` (an account's settings, today its language and its theme, one row per identity in
   its private region; its owner reads it, only the gateway writes it, through replication),
   `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
-  name, namespace, database and status; closed to every record user) and `membership` (an
+  name, namespace, database and status; closed to every record user), `membership` (an
   identity's role in an organisation, `member` or `admin`; an identity reads only its own rows,
-  and only the gateway writes them).
+  and only the gateway writes them) and `invitation` (the pending invitations of an email to an
+  organisation: the role the account takes on accepting, who invited it, the token its link
+  carries and its expiry; one per organisation and email, the email kept in lower case; closed
+  to every record user, written by the gateway only).
 - `schema/tenant/`: `member` (a member of the organisation keyed by the identity id, with its
   role; server-only) and `note` (the organisation's notes in the `tenant` region, each naming
   its author member, a text of at most 500 characters; only the gateway reads or writes it on
@@ -51,8 +54,8 @@ only the gateway's own writes change it (the profile's email through the confirm
   into `src/replica.schema.gen.ts`, so every runtime that replicates reads the same one.
 - `tests/suites/*.toml`: SurrealKit suites, run on one ephemeral database that holds every
   schema folder: the permissions of `identity` (with `account`), `profile`, `settings`,
-  `membership` (with `tenant`) and `device_session`, the structure of the tenant tables
-  (`tenant-structure`), and the generated suites of the shapes.
+  `membership` (with `tenant`), `device_session` and `invitation`, the structure of the tenant
+  tables (`tenant-structure`), and the generated suites of the shapes.
   `setup.surql`, which SurrealKit runs in each test database before it applies the schema,
   defines a record access method `identity` for that database only: the suites' record actors
   sign up and in through it, which creates the identity row and its credential row as the

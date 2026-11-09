@@ -64,7 +64,7 @@ flow:
             actions:
               - show: user.delete-account.error
           - target: asking
-            description: "The error says why nothing was deleted; the button stays, so the same link works again within its hour, once the other members are removed."
+            description: "The error says why nothing was deleted; the button stays, so the same link works again within its hour, once another member administers it or the others are removed."
             actions:
               - show: user.delete-account.error
     link-dead:

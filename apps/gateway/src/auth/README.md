@@ -418,8 +418,8 @@ turn the token is judged again on the clock as it is then. The rest runs in the 
 account's memberships (`Organisations.leaveAll`, `src/tenants`), whose check, made from the rows
 as they are there, is the one that decides: an account that is the only admin of an organisation
 with other members answers 409 `last-admin` with nothing changed, its link still pending and its
-sessions alive, so the same link deletes it once those members are removed, an invitation that
-overtook the press included. Only once the departure is allowed, and before it writes anything,
+sessions alive, so the same link deletes it once another member is made an admin or those
+members are removed, an invitation that overtook the press included. Only once the departure is allowed, and before it writes anything,
 does the deletion take effect (the departure's `before` step): the token is judged once more on
 the gateway's clock, as the departure may have waited for an organisation's turn past the link's
 hour (401 `link-expired`, nothing changed), and the pending deletion is spent
@@ -508,7 +508,7 @@ error carries one.
   confirmation (`email-change.ts`), the request to delete an account and the deletion
   (`account-deletion.ts`), the confirmation of a signed-in caller's password
   (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
-  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`floor.ts`), the close of a
+  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the close of a
   device's sockets, and the requests and refusals as Better Auth and the client get them),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
@@ -536,8 +536,8 @@ error carries one.
   account, which a change of the password or of the email ends) and the token of a verification
   link (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
-  (`account-locale.ts`), `accountAddressee` (`account-addressee.ts`: whom a mail about an
-  account goes to), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
+  (`account-locale.ts`), `accountAddressee` and `addresseeFailure` (`account-addressee.ts`: whom a
+  mail about an account goes to, and the code logged when it could not be read), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
   `DeletedAccount`),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,

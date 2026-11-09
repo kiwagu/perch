@@ -134,7 +134,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
   (`Actor`: its identity id and its `Ability`); a subscription after `close()` is answered with
   an internal error before anything else, and a private region other than the actor's own with
-  `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
+  `forbidden-region`, neither holding the region; `changeActor(region, subscriberId, actor)`
+  judges the device's batches by `actor` from then on, at once: a subscription still waiting in the
+  region's queue takes it too and is answered as it (never as the actor it was asked with), a batch
+  already queued is judged by the actor the hub holds when it takes the batch in, and a region the
+  hub does not hold or a device that did not subscribe to it changes nothing;
+  `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
   ability refuses, `foreign-peer` for a batch under the server's Loro peer or one another

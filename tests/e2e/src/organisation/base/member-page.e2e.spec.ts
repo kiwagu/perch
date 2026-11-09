@@ -1,10 +1,16 @@
 // scenario: organisation/base/member-page
 import { generate } from '../../support/data'
 import { expect, signUp, test } from '../../support/fixtures'
-import { createOrganisation, expectInvited } from '../../support/organisation'
+import {
+  acceptOnOrg,
+  createOrganisation,
+  expectMembers,
+  inviteEmail,
+  sentItems,
+} from '../../support/organisation'
 
 test.describe('Open the organisation page as a member', { tag: '@smoke' }, () => {
-  test('An administrator invites an account, which then sees the organisation as a member, without its members or the invitation', async ({
+  test('An administrator invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations', async ({
     page,
     anotherAccount,
   }) => {
@@ -14,9 +20,6 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
       unknownEmail: generate.email(),
     }
     const userB = anotherAccount.account
-    const members = page
-      .getByTestId('organisation.members.list')
-      .getByTestId('organisation.members.item')
 
     const deviceB =
       await test.step('1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]', async () => {
@@ -33,46 +36,45 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
 
         await page.getByTestId('app-shell.nav.organisation-link').click()
         await createOrganisation(page, data)
-        await expect(members).toHaveText([account.email])
+        await expectMembers(page, [account.email])
 
         return account
       })
 
     await test.step('3. On device A, enter the unknown email into [organisation.invite.email-input] and click [organisation.invite.submit-button]', async () => {
-      await page.getByTestId('organisation.invite.email-input').fill(data.unknownEmail)
-      await page.getByTestId('organisation.invite.submit-button').click()
-      // Expected: After step 3 device A shows [organisation.invite.error] carrying
-      //   [code:no-such-identity], and [organisation.members.list] holds only user A's
-      //   [organisation.members.item]
-      await expect(page.getByTestId('organisation.invite.error')).toHaveAttribute(
-        'data-code',
-        'no-such-identity',
-      )
-      await expect(members).toHaveText([userA.email])
+      // Expected: After step 3 device A shows [app-shell.toast] carrying [code:invited] and the
+      //   unknown email in [organisation.sent.list], and [organisation.members.list] holds only
+      //   user A's [organisation.members.item]
+      await inviteEmail(page, data.unknownEmail)
+      await expectMembers(page, [userA.email])
     })
 
-    await test.step('4. On device A, clear [organisation.invite.email-input], enter the email of user B into it and click [organisation.invite.submit-button]', async () => {
-      await page.getByTestId('organisation.invite.email-input').clear()
-      await page.getByTestId('organisation.invite.email-input').fill(userB.email)
-      await page.getByTestId('organisation.invite.submit-button').click()
-      // Expected: After step 4 device A shows [app-shell.toast] carrying [code:invited] and user
-      //   B's [organisation.members.item] in [organisation.members.list], with
-      //   [organisation.members.remove-button]
-      await expectInvited(page, userB.email)
-      await expect(
-        members.filter({ hasText: userB.email }).getByTestId('organisation.members.remove-button'),
-      ).toBeVisible()
+    await test.step('4. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]', async () => {
+      await inviteEmail(page, userB.email)
+      // Expected: After step 4 [organisation.sent.list] holds both emails, each
+      //   [organisation.sent.item] with [organisation.sent.copy-button] and
+      //   [organisation.sent.revoke-button], and [organisation.members.list] still holds only
+      //   user A's [organisation.members.item]
+      await expect(sentItems(page)).toHaveCount(2)
+
+      for (const email of [data.unknownEmail, userB.email]) {
+        const item = sentItems(page).filter({ hasText: email })
+
+        await expect(item).toHaveCount(1)
+        await expect(item.getByTestId('organisation.sent.copy-button')).toBeVisible()
+        await expect(item.getByTestId('organisation.sent.revoke-button')).toBeVisible()
+      }
+
+      await expectMembers(page, [userA.email])
     })
 
-    await test.step('5. On device B, open [/org]', async () => {
-      await deviceB.getByTestId('app-shell.nav.organisation-link').click()
+    await test.step("5. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+      await acceptOnOrg(deviceB, data.name)
       // Expected: After step 5 device B shows the organisation name in
       //   [organisation.page.heading], [organisation.page.role-badge] carrying [value:member],
       //   [organisation.notes.section] in [state:empty] with [organisation.notes.new-textarea]
       //   and [organisation.notes.add-button], and [organisation.create.toggle-button]
-      await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
-        timeout: 10_000,
-      })
+      await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name)
       await expect(deviceB.getByTestId('organisation.page.role-badge')).toHaveAttribute(
         'data-value',
         'member',
@@ -86,10 +88,11 @@ test.describe('Open the organisation page as a member', { tag: '@smoke' }, () =>
     })
 
     // Expected:
-    // - Device B shows no [organisation.members.list], no [organisation.invite.form] and no
-    //   [organisation.page.status]
+    // - Device B shows no [organisation.members.list], no [organisation.invite.form], no
+    //   [organisation.sent.list] and no [organisation.page.status]
     await expect(deviceB.getByTestId('organisation.members.list')).toHaveCount(0)
     await expect(deviceB.getByTestId('organisation.invite.form')).toHaveCount(0)
+    await expect(deviceB.getByTestId('organisation.sent.list')).toHaveCount(0)
     await expect(deviceB.getByTestId('organisation.page.status')).toHaveCount(0)
   })
 })
