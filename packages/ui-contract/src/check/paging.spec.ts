@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { PAGING_PARTS } from '../anchors'
+import { isAnchor, PAGING_PARTS } from '../anchors'
 import { type AnchorDef, formatProblem } from '../files'
 
-import type { Contract } from './contract'
+import { type Contract, sizeOptionOf } from './contract'
 import { sampleContract, screenIn } from './contract.fixture'
 import { pagingProblems } from './paging'
 
@@ -138,6 +138,24 @@ describe('pagingProblems', () => {
     expect(printed(contract)).toEqual([
       `${SAMPLE} anchors["sample.more-list"].source.paged: "${LIST}" pages already: a screen pages one list, as a route has one "page"`,
     ])
+  })
+
+  it('keeps a paged list within 3 segments, as its size options add two to its name', () => {
+    const contract = sample()
+    const { anchors } = screenIn(contract, 'sample')
+    const { [LIST]: _list, ...others } = anchors
+
+    screenIn(contract, 'sample').anchors = { ...others, 'sample.results.more.list': pagedList() }
+
+    expect(printed(contract)).toEqual([
+      `${SAMPLE} anchors["sample.results.more.list"].source.paged: a paged list derives "sample.results.more.list.size-select.option", past the 5 segments of an anchor: a paged list has at most 3 segments`,
+    ])
+
+    screenIn(contract, 'sample').anchors = { ...others, 'sample.results.list': pagedList() }
+
+    expect(printed(contract)).toEqual([])
+    expect(isAnchor(sizeOptionOf('sample.results.list'))).toBe(true)
+    expect(isAnchor(sizeOptionOf('sample.results.more.list'))).toBe(false)
   })
 
   it('wants a paged action to take page and size numbers, and its sizes in order with the default', () => {

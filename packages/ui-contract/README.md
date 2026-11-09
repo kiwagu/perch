@@ -260,7 +260,7 @@ for Bun.
     taking the number parameters `page` and `size`; every route of its screen declares `page`,
     an integer from 1 whose default is 1, and `size`, an integer of the action's sizes whose
     default is the action's; no source's `params` names `page` or `size`; a screen pages one
-    list) and `scenariosProblems` (bracket references, a mail by the platform action that declares
+    list; a paged list has at most 3 segments, its size options adding two to its name) and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file; in each text, the where,
     the scenario sentence, a step or an expected result, a `[code:x]`, `[state:x]` or

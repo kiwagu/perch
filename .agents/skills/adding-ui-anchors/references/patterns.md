@@ -718,7 +718,9 @@ on:
 The loader derives `console.users.list.range`, `.previous-link`, `.next-link` and
 `.size-select` (its options `.size-select.option`, one per size with `data-value`, the controls
 of `size`, which writes no `x-perch`: the check derives them and refuses one written); the file
-never writes them. The view renders the range with `data-from`, `data-to` and `data-total` once
+never writes them. The option is two segments past the list, and an anchor has five at most,
+so a paged list has at most three (`console.users.list`, never `a.b.c.list`: the check refuses
+it). The view renders the range with `data-from`, `data-to` and `data-total` once
 the read is in, each link only where there is such a page, and the select wherever the list is,
 each built with `testIdFor` and each moving with `pageSearchOf(search, { page, size },
 defaultSize)` of `@workspace/ui-contract/anchors`; `pagerOf({ page, size, shown, total })` says

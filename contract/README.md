@@ -451,7 +451,9 @@ its default, which every route of the screen declares; the source takes them fro
 that sets a search parameter the list reads, or `size`, says `page: 1`.
 
 A paged list derives four parts, which its `derived` lists and a screen file never writes.
-`<list>.range`, once the read is in: the numbers of the first and the last entry of the page and
+Its name has at most 3 segments (`console.users.list`, never `a.b.c.list`): its size options
+add two (`<list>.size-select.option`), and an anchor has 5 at most, so the check refuses a
+longer paged list. `<list>.range`, once the read is in: the numbers of the first and the last entry of the page and
 the number of entries in all (`51-100 of 312`), carried as `data-from`, `data-to` and
 `data-total`, with `0` and `0` where the page holds no entry (`0 of 312`: a page past the last).
 `<list>.previous-link`: a link to the same route, the same search and `page` one less, on every
@@ -1299,7 +1301,8 @@ gap is fixed in the contract files first, never worked around in a test.
   action taking a constant or a search parameter every route of the screen declares,
   never `page` or `size`; a paged source's action pages with its sizes each once, the smallest
   first, its default one of them, and takes the number parameters `page` and `size`, every route
-  of its screen declares `page` and `size` as it reads them, and a screen pages one list,
+  of its screen declares `page` and `size` as it reads them, a screen pages one list, and a
+  paged list has at most 3 segments, as its size options add two to its name,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,

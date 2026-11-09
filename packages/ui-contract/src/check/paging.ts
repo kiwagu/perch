@@ -5,17 +5,28 @@
  * default one of them), taking the number parameters `page` and `size`; every route of its
  * screen declares `page`, an integer from 1 whose default is 1, and `size`, an integer of the
  * action's sizes whose default is the action's; no source's `params` names `page` or `size`, which
- * the route gives; and a screen pages one list, as a route has one `page`. A navigate that starts
- * a new search says `page: 1` (`flow/pages.ts`).
+ * the route gives; a screen pages one list, as a route has one `page`; and a paged list has at
+ * most 3 segments, since its size options (`<list>.size-select.option`) add two to its name and
+ * an anchor has 5 at most. A navigate that starts a new search says `page: 1` (`flow/pages.ts`).
  */
 
-import { PAGE, SIZE } from '../anchors'
+import { PAGE, SIZE, segmentsOf } from '../anchors'
 import type { Binding, Problem } from '../files'
 
-import { type Contract, declaredAnchors, type InScreens, locate, own } from './contract'
+import {
+  type Contract,
+  declaredAnchors,
+  type InScreens,
+  locate,
+  own,
+  sizeOptionOf,
+} from './contract'
 import { searchOf } from './lookups'
 
 type PlatformAction = Contract['screens']['platform']['actions'][string]
+
+/** The segments a paged list has at most: its size options add two to the 5 of an anchor. */
+const PAGED_LIST_SEGMENTS = 3
 
 /** What a source names of its paging: the page and the size the route gives. */
 const SOURCE_PARAMS = {
@@ -123,6 +134,14 @@ export function pagingProblems(contract: Contract): Problem[] {
 
       return [
         ...reserved,
+        ...(segmentsOf(anchor).length > PAGED_LIST_SEGMENTS
+          ? [
+              inScreens(
+                where,
+                `a paged list derives "${sizeOptionOf(anchor)}", past the 5 segments of an anchor: a paged list has at most ${PAGED_LIST_SEGMENTS} segments`,
+              ),
+            ]
+          : []),
         ...(paged === undefined && own(actions, source.platform) !== undefined
           ? [
               inScreens(
