@@ -223,7 +223,7 @@ actions:
       device:
         type: string
         description: The device session id of that device.
-    result: that device signs out, and the answer lists the account's devices as they are then
+    result: that device signs out; the answer lists the account's devices as they are then, or none when they could not be read
     codes:
       - device-sign-out-failed
   theme.set:
