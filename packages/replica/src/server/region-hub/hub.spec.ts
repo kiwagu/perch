@@ -1485,14 +1485,25 @@ describe('changing the actor of a subscriber', () => {
 
   /**
    * Acme's queue held inside a batch of ann's until `open()`: whatever is asked of the region
-   * meanwhile waits behind it. `ahead()` asks for that batch and answers, once it is held, with
-   * the promise of its outcome.
+   * meanwhile waits behind it. `ahead()` asks for that batch and answers, once the batch reached
+   * its held statement, with the promise of its outcome.
    */
   function holdingAnnsBatch() {
     const held = gate()
+    const reached = gate()
     let holding = false
     const options: HubFixtureOptions = {
-      intercept: (text) => (holding && text === acceptStatement ? held.opened : undefined),
+      intercept: (text) => {
+        if (!holding || text !== acceptStatement) {
+          return undefined
+        }
+
+        // Only the first batch to get there is held.
+        holding = false
+        reached.open()
+
+        return held.opened
+      },
     }
     const ahead = async (hub: RegionHub, ann: TestSubscriber) => {
       holding = true
@@ -1501,8 +1512,7 @@ describe('changing the actor of a subscriber', () => {
         noteCreate(ann.doc, { id: noteIdFactory.create(), author: 'idn_ann', text: 'more' }),
       ])
 
-      await drain()
-      holding = false
+      await reached.opened
 
       return { pushed }
     }
