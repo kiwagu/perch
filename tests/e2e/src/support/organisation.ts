@@ -131,6 +131,25 @@ export async function acceptOnOrg(page: Page, organisationName: string): Promise
   ])
 }
 
+/** The item of the member at `email` on an administrator's "/org" page. */
+export const memberItem = (page: Page, email: string) =>
+  memberItems(page).filter({ hasText: email })
+
+/**
+ * The option `role` of the members' role select open on `page`: the options open apart from the
+ * rows, and a select closed meanwhile may still hold its options hidden, so the visible one.
+ */
+export const memberRoleOption = (page: Page, role: Role) =>
+  page.locator(
+    `[data-testid="organisation.members.role-select.option"][data-value="${role}"]:visible`,
+  )
+
+/** Chooses `role` in the role select of the member at `email` on an administrator's "/org" page. */
+export async function chooseMemberRole(page: Page, email: string, role: Role): Promise<void> {
+  await memberItem(page, email).getByTestId('organisation.members.role-select').click()
+  await memberRoleOption(page, role).click()
+}
+
 /** What a test knows of an invitation's mail: the invited email and the account that invited. */
 export interface InvitationMail {
   readonly email: string

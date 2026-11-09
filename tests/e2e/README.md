@@ -68,10 +68,11 @@ afresh by restarting the gateway, as one client running them one after another w
 workers share an address, so the limits do not bind their number. Per worker, with two, a run
 spent when it was measured: at most 12 credential checks (sign-ups, sign-ins, verifications,
 changes of a password or an email and requests to delete an account) in any ten seconds, of 20;
-under 80 of 200 mails per quarter hour (sign-ups, resends, reset requests, email changes and
-deletion requests: about 150 in the whole run); at most 7 of 20 attempts at a reset link per ten
-minutes, 4 of 20 at a confirmation link and 4 of 20 at a deletion link; 11 of 30 organisations
-created an hour and at most 6 of 60 invitations per ten minutes. The limits a test runs into on
+at most 103 of 200 mails per quarter hour (sign-ups, resends, reset requests, email changes,
+deletion requests and invitations: about 200 in the whole run); at most 8 of 20 attempts at a
+reset link per ten minutes, 5 of 20 at a confirmation link, 4 of 20 at a deletion link and 8 of
+20 reads of an invitation's link; 15 of 30 organisations created an hour; at most 13 of 60
+invitations per ten minutes, and 2 of an administrator's 30. The limits a test runs into on
 purpose (`resend-limit`, `forgot-password-limit`) are an email's, and every test uses fresh
 emails. A test uses as few emails, sign-ins and links as its scenario needs; a new one that signs
 up, mails, opens a link or creates an organisation counts against these.
@@ -154,13 +155,28 @@ up, mails, opens a link or creates an organisation counts against these.
   organisation page) edits and deletes only its own notes while an administrator edits and
   deletes any; B's edit reaches A, A's edit of B's note reaches B, and each deletion reaches the
   other device, all within 5 seconds and without a reload.
+- `organisation/flows/invitation-elsewhere`: the link of an invitation to an email with no
+  account, opened by another account, shows the organisation and the role with `other-account`
+  and no buttons; opened by a guest, it asks to sign in to the invited account and links to
+  `/sign-in`.
+- `organisation/flows/invitation-replaced`: a second invitation of the same email, as an
+  administrator, replaces the first: one item in the invitations sent, the first link
+  `link-invalid`, the second makes B an administrator.
+- `organisation/flows/role-change`: A makes B an administrator; within 5 seconds and without a
+  reload B shows the administrator's page and may delete A's note, which leaves A's page; B makes
+  A a member, A's page drops the administrator's regions within 5 seconds; B, the last
+  administrator, cannot make itself a member (`last-admin`, its select still `admin`).
+- `user/flows/delete-account-after-handover`: the only administrator makes B an administrator and
+  itself a member, then deletes its account; B keeps the organisation, alone among its members,
+  with A's note.
 
-Five specs write measurements into the test's annotations, shown in the HTML report:
+Six specs write measurements into the test's annotations, shown in the HTML report:
 `sync-latency-ms` (from the click on device B to the new name on device A),
 `idle-frames-per-minute`, `note-sync-latency-ms` (from the click on "Add note" on device B to
 the note on device A), `note-edit-sync-latency-ms` (from the click on "Save" on device B to the
-edited note on device A) and `membership-change-ms` (from the click on "Accept" on device C to
-the organisation and its note on device B).
+edited note on device A), `membership-change-ms` (from the click on "Accept" on device C to
+the organisation and its note on device B) and `role-change-ms` (from the choice of the
+administrator role in B's role select on device A to the administrator's page on device B).
 
 ## Key exports
 
