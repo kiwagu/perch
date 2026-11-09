@@ -740,7 +740,7 @@ out, and the loader derives it, the same way every time:
   kind `confirmation`, `app-shell.confirmation`), every control whose binding names a
   destructive action asks it before the action runs: an action of the model whose verb is
   `delete`, an action of the platform whose verb (the first word of its last segment) is
-  `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
+  `ban`, `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
   code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
   the platform action's name with `.` as `-` (`organisations.remove` gives
   `organisations-remove`); the confirmation carries every code asked with, which the

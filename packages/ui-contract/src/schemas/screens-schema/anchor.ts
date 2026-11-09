@@ -112,7 +112,7 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
   )
 
 /** Where a derived anchor of a composite comes from, written by the loader only. */

@@ -84,7 +84,7 @@ code and the tests follow; the checks hold them to the contract.
    model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
-   bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
+   bound to a ban, delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
    its anchor to run it without asking). A list whose `source` is a platform action reads it
    each time it starts to render after it did not and each time the organisation or account
    it reads for becomes another, and nothing says that; every other read is the flow's

@@ -1190,7 +1190,7 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
                 },
                 "composite": {
                   "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
@@ -6196,7 +6196,7 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
           },
           "composite": {
             "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
