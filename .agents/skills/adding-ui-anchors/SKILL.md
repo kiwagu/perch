@@ -86,7 +86,8 @@ code and the tests follow; the checks hold them to the contract.
    toast for a message of its own), and the question before a destructive action (a control
    bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
    its anchor to run it without asking). A list whose `source` is a platform action reads it
-   each time it starts to render, and nothing says that; every other read is the flow's
+   each time it starts to render after it did not and each time the organisation or account
+   it reads for becomes another, and nothing says that; every other read is the flow's
    effect `read: <list>` on the outcome of the invoke that changed what the list shows (a
    list of the flow's own screen with a platform source, never an entity source, which follows
    the stored data), and an invoke after which nothing reads says `read: false`, on it or on a

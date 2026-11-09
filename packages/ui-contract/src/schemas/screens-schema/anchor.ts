@@ -100,10 +100,10 @@ export const sourceSchema = z
         ),
       })
       .describe(
-        "The entries come from a platform action, which the anchor reads each time it starts to render (the screen opening, a state that renders it entered, the account's role or the organisation or account it reads for becoming another) and where a flow says `read: <anchor>`.",
+        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another, and where a flow says `read: <anchor>`.",
       ),
   ])
-  .describe('Where the entries of a list, a section or a table come from.')
+  .describe('Where the entries of a list, a section or a table come from; no other kind has one.')
 
 /** The question a control asks before its destructive action runs, derived by the loader. */
 export const asksSchema = z

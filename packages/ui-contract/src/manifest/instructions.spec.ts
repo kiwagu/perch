@@ -105,7 +105,7 @@ describe('instructionsOf', () => {
       '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
     )
     expect(instructions.screenMap).toContain(
-      'such a list also reads it each time it starts to render; one whose `source` is an entity follows the stored data and is never read',
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another; one whose `source` is an entity follows the stored data and is never read',
     )
     expect(instructions.screenMap).toContain(
       '`read: false` on an invoke says nothing reads after its action',

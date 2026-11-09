@@ -340,6 +340,10 @@ describe('flowProblems', () => {
     Object.assign(screenIn(contract, 'app-shell').anchors, {
       'app-shell.devices-list': { kind: 'list', source: { platform: 'devices.list' } },
     })
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-button': { kind: 'button', source: { platform: 'devices.list' } },
+      'sample.plain-list': { kind: 'list' },
+    })
     flowStateIn(contract, 'editing').entry = [
       read('sample.gone-list'),
       read('sample.list'),
@@ -347,15 +351,19 @@ describe('flowProblems', () => {
       read('sample.save-button'),
       read('app-shell.devices-list'),
       read('sample.title-input.visibility-button'),
+      read('sample.devices-button'),
+      read('sample.plain-list'),
     ]
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.entry[0].params.anchor: "sample.gone-list" is not a declared anchor`,
       `${AT}.states.editing.entry[1].params.anchor: "sample.list" lists the entity thing, which it follows as the stored data changes and never reads: ${may}`,
-      `${AT}.states.editing.entry[2].params.anchor: "sample.page" is a page with no source: ${may}`,
-      `${AT}.states.editing.entry[3].params.anchor: "sample.save-button" is a button with no source: ${may}`,
+      `${AT}.states.editing.entry[2].params.anchor: "sample.page" is a page, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[3].params.anchor: "sample.save-button" is a button, which lists nothing: ${may}`,
       `${AT}.states.editing.entry[4].params.anchor: "app-shell.devices-list" is an anchor of another screen: ${may}`,
       `${AT}.states.editing.entry[5].params.anchor: "sample.title-input.visibility-button" is a visibility-button, presentation only: ${may}`,
+      `${AT}.states.editing.entry[6].params.anchor: "sample.devices-button" is a button, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[7].params.anchor: "sample.plain-list" is a list with no source: ${may}`,
     ])
   })
   it('refuses an invoke that says read: false and reads in one of its outcomes', () => {

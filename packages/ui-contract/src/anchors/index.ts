@@ -5,6 +5,7 @@ export {
   isAnchor,
   isUnder,
   kindOf,
+  LISTING_KINDS,
   screenOf,
   segmentsOf,
 } from './grammar'

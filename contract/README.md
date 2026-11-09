@@ -380,12 +380,15 @@ list's entries come from, below). An anchor's `description` says what it is for;
 say it, the file leaves it out.
 
 A `source` says where the entries of a list, a section or a table come from, and with it when
-they are read. `{ platform: <action> }`: the entries are the answer of that platform action,
-which the anchor reads each time it starts to render: the screen opening, a state that renders
-it (`meta.renders`) being entered, the account's role becoming one its `roles` admit, another
-organisation or account becoming the one it reads for. Every other read is said by the flow,
-with the effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed what the
-list shows, never prose in a description. `{ entity: <entity>, order, direction }`: the entries
+they are read; no other kind carries one. `{ platform: <action> }`: the entries are the answer
+of that platform action, which the anchor reads each time it starts to render after it did
+not: the screen opening, a state entered that renders it (`meta.renders`) after one that did
+not, the account's role becoming one its `roles` admit; and, while it renders, each time the
+organisation or account it reads for becomes another. A state entered after another that
+rendered it too reads nothing, so an anchor no state lists, rendered in every state, is read
+only at those moments. Every other read is said by the flow, with the effect `read: <anchor>`
+(below, the effects of a flow): a read after an action that changed what the list shows,
+never prose in a description. `{ entity: <entity>, order, direction }`: the entries
 are the stored entries of that entity of the model, which the anchor follows as they change,
 here or on another device; such a list is never read.
 

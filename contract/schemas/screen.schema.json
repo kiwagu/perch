@@ -789,10 +789,10 @@
                   "platform"
                 ],
                 "additionalProperties": false,
-                "description": "The entries come from a platform action, which the anchor reads each time it starts to render (the screen opening, a state that renders it entered, the account's role or the organisation or account it reads for becoming another) and where a flow says `read: <anchor>`."
+                "description": "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another, and where a flow says `read: <anchor>`."
               }
             ],
-            "description": "Where the entries of a list, a section or a table come from."
+            "description": "Where the entries of a list, a section or a table come from; no other kind has one."
           },
           "composite": {
             "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",

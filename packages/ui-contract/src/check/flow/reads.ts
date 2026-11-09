@@ -1,13 +1,13 @@
 /**
  * What a flow says of the reads of a list: a `read` names a list, section or table the flow's
- * own screen declares whose `source` is a platform action, which it reads again (one whose
- * source is an entity of the model follows the stored data as it changes, here or on another
- * device, and is never read; one with no source has nothing to read; never a
- * visibility-button, nor another screen's anchor), and an invoke that says `read: false`,
- * nothing reads after its action, reads in none of its outcomes.
+ * own screen declares whose `source` is a platform action, which it reads again (any other kind
+ * lists nothing; one whose source is an entity of the model follows the stored data as it
+ * changes, here or on another device, and is never read; one with no source has nothing to
+ * read; never a visibility-button, nor another screen's anchor), and an invoke that says
+ * `read: false`, nothing reads after its action, reads in none of its outcomes.
  */
 
-import { VISIBILITY_BUTTON } from '../../anchors'
+import { LISTING_KINDS, VISIBILITY_BUTTON } from '../../anchors'
 import type { FlowState, FlowTransition, Problem } from '../../files'
 import { own } from '../contract'
 
@@ -35,6 +35,10 @@ export function readProblems(
     return defs.has(anchor)
       ? [inScreens(at, `"${anchor}" is an anchor of another screen: ${READ_NAMES}`)]
       : [inScreens(at, `"${anchor}" is not a declared anchor`)]
+  }
+
+  if (!LISTING_KINDS.has(def.kind)) {
+    return [inScreens(at, `"${anchor}" is a ${def.kind}, which lists nothing: ${READ_NAMES}`)]
   }
 
   if (def.source === undefined) {
