@@ -136,17 +136,62 @@ const restrictionsOf = ({
 ]
 
 /**
- * Every set of roles a device may hold among `roles`, the smallest first: `guest` alone, else
- * `identity` with each subset of the other roles (`heldRoles`). A role none of them names changes
- * what no restriction admits, so these are the sets that tell.
+ * A device every restriction admits and `binding` refuses, when one exists: a guest, else a
+ * signed-in account holding every role the restrictions name but those `binding` serves
+ * (`heldRoles`). Of signed-in accounts, one holding more roles passes every restriction a
+ * holder of fewer does, so that account sees the link whenever any refused account does.
  */
-function heldSetsAmong(roles: readonly string[]): ReadonlySet<string>[] {
-  const others = [...new Set(roles.filter((role) => role !== GUEST && role !== IDENTITY))]
-  const subsets = others
-    .reduce<string[][]>((all, role) => [...all, ...all.map((subset) => [...subset, role])], [[]])
-    .sort((one, other) => one.length - other.length)
+function refusedViewer(
+  restrictions: ReadonlyArray<readonly string[]>,
+  binding: Binding,
+): ReadonlySet<string> | undefined {
+  const widest = heldRoles(
+    true,
+    restrictions.flat().filter((role) => !binding.roles.includes(role)),
+  )
 
-  return [heldRoles(false), ...subsets.map((subset) => heldRoles(true, subset))]
+  return [heldRoles(false), widest].find(
+    (held) => restrictions.every((roles) => admits(roles, held)) && !admits(binding.roles, held),
+  )
+}
+
+/**
+ * The fewest roles of `viewer`, a signed-in account every restriction admits, that still pass
+ * every restriction: none (`identity` alone), else one, in the order the restrictions name
+ * them, else one kept per restriction not yet passed (an `own` role of the link first, then the
+ * order the restriction lists them), each dropped again when the ones kept after it suffice.
+ */
+function fewestRoles(
+  restrictions: ReadonlyArray<readonly string[]>,
+  own: readonly string[],
+  viewer: ReadonlySet<string>,
+): ReadonlySet<string> {
+  const pass = (held: readonly string[]): boolean =>
+    restrictions.every((roles) => admits(roles, heldRoles(true, held)))
+  const one = [[], ...[...viewer].filter((role) => role !== IDENTITY).map((role) => [role])].find(
+    pass,
+  )
+
+  if (one !== undefined) {
+    return heldRoles(true, one)
+  }
+
+  const kept = restrictions.reduce<string[]>((held, roles) => {
+    const role =
+      own.find((candidate) => roles.includes(candidate) && viewer.has(candidate)) ??
+      roles.find((candidate) => viewer.has(candidate))
+
+    return role === undefined || admits(roles, heldRoles(true, held)) ? held : [...held, role]
+  }, [])
+
+  return heldRoles(
+    true,
+    kept.reduceRight<string[]>((held, role) => {
+      const rest = held.filter((other) => other !== role)
+
+      return pass(rest) ? rest : held
+    }, kept),
+  )
 }
 
 /** A link to a route some roles alone open, shown to no device the route refuses. */
@@ -171,14 +216,13 @@ function linkProblems(
       return [inScreens(at, `a link to ${serves}, names who sees it: roles`)]
     }
 
-    const shown = heldSetsAmong([...restrictions.flat(), ...binding.roles]).find(
-      (held) => restrictions.every((roles) => admits(roles, held)) && !admits(binding.roles, held),
-    )
+    const refused = refusedViewer(restrictions, binding)
 
-    if (shown === undefined) {
+    if (refused === undefined) {
       return []
     }
 
+    const shown = refused.has(GUEST) ? refused : fewestRoles(restrictions, def.roles ?? [], refused)
     const named =
       def.roles?.find((role) => shown.has(role)) ??
       [...shown].find((held) => held !== IDENTITY) ??

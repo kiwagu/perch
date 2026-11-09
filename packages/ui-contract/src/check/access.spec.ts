@@ -47,6 +47,33 @@ function sample(notFound: readonly string[] = ['guest', 'identity']): Contract {
   return contract
 }
 
+/** Twenty-five roles of a console: more sets of them than a check may try one by one. */
+const MANY_ROLES = Array.from({ length: 25 }, (_, index) => `role-${index + 1}`)
+
+/** The sample with a console those roles alone open, at `/console`, and a frame link to it. */
+function withWideConsole(linkRoles: readonly string[]): Contract {
+  const contract = sample()
+
+  Object.assign(
+    contract.vocabulary.roles,
+    Object.fromEntries(MANY_ROLES.map((role) => [role, `holds ${role}`])),
+  )
+  addScreen(contract, 'contract/domain/screens/console.yaml', 'console', {
+    path: '/console',
+    roles: [...MANY_ROLES],
+    history: 'push',
+  })
+  Object.assign(screenIn(contract, 'app-shell').anchors, {
+    'app-shell.console-link': {
+      kind: 'link',
+      binding: { route: '/console' },
+      roles: [...linkRoles],
+    },
+  })
+
+  return contract
+}
+
 /** The sample with a console only an operator opens, at `/console`. */
 function withConsole(): Contract {
   const contract = sample()
@@ -154,4 +181,14 @@ describe('accessProblems', () => {
       `${FRAME} anchors["app-shell.wide-nav.member-link"].roles[0]: "member" is shown a link to /console, which serves operator alone`,
     ])
   })
+
+  it('passes a link among many roles that names exactly those the route serves, at once', () => {
+    expect(printed(withWideConsole(MANY_ROLES))).toEqual([])
+  }, 1000)
+
+  it('names the one role among many that a link shows and its route refuses, at once', () => {
+    expect(printed(withWideConsole([...MANY_ROLES, 'viewer']))).toEqual([
+      `${FRAME} anchors["app-shell.console-link"].roles[25]: "viewer" is shown a link to /console, which serves ${MANY_ROLES.join(', ')} alone`,
+    ])
+  }, 1000)
 })
