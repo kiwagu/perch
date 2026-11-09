@@ -1,6 +1,7 @@
 // scenario: organisation/base/create-organisation
 import { generate } from '../../support/data'
 import { appReady, expect, signUp, test, toast } from '../../support/fixtures'
+import { expectMembers } from '../../support/organisation'
 
 test.describe('Create the first organisation', { tag: '@smoke' }, () => {
   test('An account that belongs to no organisation creates one and administers it', async ({
@@ -84,11 +85,12 @@ test.describe('Create the first organisation', { tag: '@smoke' }, () => {
       'data-code',
       'no-notes',
     )
+    // Its own item shows its role select beside its email: the email is looked for in it.
+    await expectMembers(page, [account.email])
     const members = page
       .getByTestId('organisation.members.list')
       .getByTestId('organisation.members.item')
 
-    await expect(members).toHaveText([account.email])
     await expect(members.getByTestId('organisation.members.remove-button')).toHaveCount(0)
     await expect(page.getByTestId('organisation.invite.form')).toBeVisible()
     // - After step 3 [organisation.create.form] is closed behind
