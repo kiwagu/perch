@@ -118,12 +118,17 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
       testInfo.annotations.push({ type: 'role-change-ms', description: String(latency) })
     })
 
+    // Full page loads of device A from here, after its own reload of step 5: the deletion and its
+    // demotion must reach it without one.
+    const loadsOfA = pageLoads(page)
+
     await test.step('6. On device B, click [organisation.notes.delete-button] on the note by A and confirm with [app-shell.confirmation.confirm-button]', async () => {
       await noteItem(deviceB, data.noteByA).getByTestId('organisation.notes.delete-button').click()
       await deviceB.getByTestId('app-shell.confirmation.confirm-button').click()
       // Expected: Within 5 seconds of step 6 device A no longer shows the note by A, without a
       //   reload
       await expect(noteItem(page, data.noteByA)).toHaveCount(0, { timeout: 5_000 })
+      expect(loadsOfA(), 'pages device A loaded since step 5').toBe(0)
     })
 
     await test.step("7. On device B, on user A's [organisation.members.item], set [organisation.members.role-select] to [value:member]", async () => {
@@ -138,6 +143,7 @@ test.describe('Promote and demote a member', { tag: '@full' }, () => {
       )
       await expect(page.getByTestId('organisation.members.list')).toHaveCount(0)
       await expect(page.getByTestId('organisation.invite.form')).toHaveCount(0)
+      expect(loadsOfA(), 'pages device A loaded since step 5').toBe(0)
     })
 
     await test.step('8. On device B, on its own [organisation.members.item], set [organisation.members.role-select] to [value:member]', async () => {

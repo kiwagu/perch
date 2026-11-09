@@ -72,7 +72,9 @@ at most 103 of 200 mails per quarter hour (sign-ups, resends, reset requests, em
 deletion requests and invitations: about 200 in the whole run); at most 8 of 20 attempts at a
 reset link per ten minutes, 5 of 20 at a confirmation link, 4 of 20 at a deletion link and 8 of
 20 reads of an invitation's link; 15 of 30 organisations created an hour; at most 13 of 60
-invitations per ten minutes, and 2 of an administrator's 30. The limits a test runs into on
+invitations per ten minutes, and 2 of an administrator's 30. An invitation's own work, from the
+request's start to its wait for the floor, took 3 to 10 ms in the run (19 invitations), well
+under the 300 ms floor that makes every invitation answer in the same time. The limits a test runs into on
 purpose (`resend-limit`, `forgot-password-limit`) are an email's, and every test uses fresh
 emails. A test uses as few emails, sign-ins and links as its scenario needs; a new one that signs
 up, mails, opens a link or creates an organisation counts against these.
