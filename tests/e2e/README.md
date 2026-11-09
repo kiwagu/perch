@@ -136,23 +136,27 @@ up, mails, opens a link or creates an organisation counts against these.
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
-- `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B sees
-  it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
-  the members nor A's profile.
+- `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B
+  accepts the invitation on its organisation page and sees the organisation and A's note
+  without a reload, B's note reaches A within 5 seconds, and B sees neither the members nor
+  A's profile.
 - `organisation/flows/outsider`: an account that was not invited sees no organisation and no
   notes, and its own organisation shows none of the other's.
-- `organisation/flows/membership-change`: an invitation reaches B's open page within 5
-  seconds; a removal takes the organisation away within 5 seconds, and its IndexedDB database
-  is gone from B's browser within 5 seconds; after a reload B still shows no organisation.
-- `organisation/flows/edit-own-admin-any`: a member edits and deletes only its own notes while
-  an administrator edits and deletes any; B's edit reaches A, A's edit of B's note reaches B,
-  and each deletion reaches the other device, all within 5 seconds and without a reload.
+- `organisation/flows/membership-change`: user B accepts the invitation on a third browser,
+  signed in and through the link of the invitation mail, and the organisation reaches B's open
+  page within 5 seconds; a removal takes the organisation away within 5 seconds, and its
+  IndexedDB database is gone from B's browser within 5 seconds; after a reload B still shows no
+  organisation.
+- `organisation/flows/edit-own-admin-any`: a member (who accepted its invitation on its
+  organisation page) edits and deletes only its own notes while an administrator edits and
+  deletes any; B's edit reaches A, A's edit of B's note reaches B, and each deletion reaches the
+  other device, all within 5 seconds and without a reload.
 
 Five specs write measurements into the test's annotations, shown in the HTML report:
 `sync-latency-ms` (from the click on device B to the new name on device A),
 `idle-frames-per-minute`, `note-sync-latency-ms` (from the click on "Add note" on device B to
 the note on device A), `note-edit-sync-latency-ms` (from the click on "Save" on device B to the
-edited note on device A) and `membership-change-ms` (from the click on "Invite" on device A to
+edited note on device A) and `membership-change-ms` (from the click on "Accept" on device C to
 the organisation and its note on device B).
 
 ## Key exports
@@ -181,9 +185,10 @@ devices of such an account as the test opens, each a browser context of its own)
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
 the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
-500 ms), `signUp` (`startSignUp`, then
-opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
-`/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
+500 ms), `signUp` (counts the email's mails, `startSignUp`, then
+opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
+which signs the account in, on `/me`: an email invited before it signs up holds the invitation
+first), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
 from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for
 "without a reload"), and `notice`,
 `signInNotice` and `checkYourMail`, which locate `app-shell.notice-message`,
@@ -223,8 +228,15 @@ Of the anchors a screen renders only where its flow lists them, one the state do
 is not visible, and one it renders is on the page and visible; a test fails at its end with
 every problem a state it passed through showed, though no line of the test asks for it.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
-page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
-and `expectInvited` (the toast `invited` and the account in the members list).
+page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteEmail` (an
+email with an account or without one, a role when given: the toast `invited` and the email in
+the invitations sent), `acceptOnOrg` (opens "/org" by the navigation, accepts the invitation of
+the organisation of that name among those received, and waits for the toast
+`invitation-accepted` and the heading), `expectMembers` (the members list holds exactly these
+emails: an item shows its email beside its role select), `expectInvitationMail` and
+`openInvitationMail` (the mail of `organisations.invite` after the mails of the address counted
+before the invitation, held to its declaration, the second one also opening its link), and the
+locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
 `src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
 `/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
 its send button and waits for the gateway's answer), `resetRequested` (its message),
@@ -257,7 +269,9 @@ moment a test saw the answer to an action that must send none until `MAIL_DELIVE
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
 with the declared search parameter set, and the `lang` of its HTML's root element as parse5
-reads it, from the action's parameters or the account; each check asserts a comparison's outcome
+reads it, from the action's parameters, the account, or, for an invitation to an email that has
+an account, that account's language (`recipient`; an email with none is mailed in the inviter's
+language); each check asserts a comparison's outcome
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).

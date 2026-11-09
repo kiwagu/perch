@@ -6,6 +6,7 @@ import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './br
 import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
+import { mailbox } from './mailbox'
 
 export { expect }
 
@@ -174,15 +175,18 @@ export async function startSignUp(page: Page, account: SeedAccount): Promise<voi
  * Signs `account` (a fresh one by default) up through the sign-in page in the app's language
  * `locale` (the browser's, `en`, unless the test chose another), then opens the link of the mail
  * the sign-up declares, held to its declaration, in the same page, which signs it in; returns it
- * on `/me`.
+ * on `/me`. The mail is the account's email's first after the ones it already holds, counted
+ * before the sign-up: an email invited before it signs up holds the invitation first.
  */
 export async function signUp(
   page: Page,
   account = freshAccount(),
   locale = 'en',
 ): Promise<SeedAccount> {
+  const seen = await mailbox.count(account.email)
+
   await startSignUp(page, account)
-  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } })
+  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } }, seen)
   await expectPathname(page, '/me')
 
   return account
