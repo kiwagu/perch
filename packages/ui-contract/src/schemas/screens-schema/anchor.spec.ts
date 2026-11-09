@@ -117,3 +117,32 @@ describe('a composite on an anchor', () => {
     expect(anchorDefSchema.safeParse({ kind: 'input', composite: 'Password' }).success).toBe(false)
   })
 })
+
+describe('a source', () => {
+  const list = (source: unknown) => ({ kind: 'list', source })
+
+  it('takes params from the search or as constants, and pages, on a platform source alone', () => {
+    expect(
+      anchorDefSchema.safeParse(
+        list({
+          platform: 'accounts.list',
+          params: { q: { search: 'q' }, kind: { value: 'all' } },
+          paged: true,
+        }),
+      ).success,
+    ).toBe(true)
+    expect(anchorDefSchema.safeParse(list({ platform: 'accounts.list' })).success).toBe(true)
+  })
+  it('refuses a param from a field, a paged that is not true, and either on an entity source', () => {
+    for (const source of [
+      { platform: 'accounts.list', params: { q: 'console.users.search-input' } },
+      { platform: 'accounts.list', params: { q: { anchor: 'console.users.search-input' } } },
+      { platform: 'accounts.list', paged: false },
+      { platform: 'accounts.list', paged: { size: 25 } },
+      { entity: 'note', paged: true },
+      { entity: 'note', params: { q: { search: 'q' } } },
+    ]) {
+      expect(anchorDefSchema.safeParse(list(source)).success, JSON.stringify(source)).toBe(false)
+    }
+  })
+})

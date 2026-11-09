@@ -88,7 +88,11 @@ code and the tests follow; the checks hold them to the contract.
    bound to a ban, delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
    its anchor to run it without asking). A list whose `source` is a platform action reads it
    each time it starts to render after it did not and each time the organisation or account
-   it reads for becomes another, and nothing says that; every other read is the flow's
+   it reads for or a search parameter its source takes becomes another, and nothing says that
+   (its `params` take a search parameter or a constant, never a field; `paged: true` pages it
+   by the route's `page` and `size`, the action declaring `paged: { sizes, default }`, derives
+   `range`, `previous-link`, `next-link` and `size-select`, and a navigate that sets a key it
+   reads says `page: 1`: pattern 17); every other read is the flow's
    effect `read: <list>` on the outcome of the invoke that changed what the list shows (a
    list of the flow's own screen with a platform source, never an entity source, which follows
    the stored data), and an invoke after which nothing reads says `read: false`, on it or on a

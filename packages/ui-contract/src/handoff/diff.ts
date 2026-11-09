@@ -5,7 +5,8 @@
  * composites the platform declares, the codes, the states, the roles and the error fields it
  * adds or removes on the anchors both hold (written or derived, so a constraint added to the
  * model shows as the code it gives), who each route serves (its guard and its roles), the
- * fields that start or stop holding input, the messages that
+ * platform action each list reads with its params and its paging, the fields that start or stop
+ * holding input, the messages that
  * rank their codes, with their order, the actions that
  * leave what the user typed behind and how each leave that would lose it asks, the notices the
  * platform actions declare, the transitions it adds or removes in each activity both contracts
@@ -25,6 +26,7 @@ import { byName, type Change, changeOf } from './change'
 import { type DescriptionChange, descriptionChanges } from './description-changes'
 import { flowLines } from './flow-lines'
 import { routeAccessLines } from './route-access'
+import { sourceLines } from './source-lines'
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
@@ -59,6 +61,8 @@ export interface ContractChanges {
   screens: Change
   /** As `<path> guard <guard>` and `<path> serves <role>`, who each route serves (`routeAccessLines`). */
   routeAccess: Change
+  /** As `<anchor> reads platform.<action> [<param>=...] [paged]`, each list's source (`sourceLines`). */
+  sources: Change
   entities: Change
   /** As `entity.field`. */
   fields: Change
@@ -300,6 +304,7 @@ export function diffContracts(
       (after?.screens.screens ?? []).map(({ id }) => id),
     ),
     routeAccess: changeOf(routeAccessLines(before), routeAccessLines(after)),
+    sources: changeOf(sourceLines(before), sourceLines(after)),
     entities: changeOf(
       Object.keys(before?.model.entities ?? {}),
       Object.keys(after?.model.entities ?? {}),

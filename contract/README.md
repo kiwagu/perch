@@ -389,7 +389,8 @@ An anchor's `binding` says what the element does or shows:
 - `{ route: /path }`: the path of a binding of some screen.
 - `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
   switch): the field starts with the value of that search parameter of the route the screen
-  was opened at, and the user may change it; every binding of the screen declares it under
+  was opened at, takes it again each time that parameter becomes another, and the user may
+  change it; every binding of the screen declares it under
   `search`. It sits in a list beside the action the field gives its value to: the email a
   link carried into `/forgot-password?email=...` fills the email input the request is sent
   with, `[ { search: email }, { action: platform.request-password-reset, params: { email:
@@ -420,13 +421,49 @@ they are read; no other kind carries one. `{ platform: <action> }`: the entries 
 of that platform action, which the anchor reads each time it starts to render after it did
 not: the screen opening, a state entered that renders it (`meta.renders`) after one that did
 not, the account's role becoming one its `roles` admit; and, while it renders, each time the
-organisation or account it reads for becomes another. A state entered after another that
-rendered it too reads nothing, so an anchor no state lists, rendered in every state, is read
-only at those moments. Every other read is said by the flow, with the effect `read: <anchor>`
-(below, the effects of a flow): a read after an action that changed what the list shows,
-never prose in a description. `{ entity: <entity>, order, direction }`: the entries
-are the stored entries of that entity of the model, which the anchor follows as they change,
-here or on another device; such a list is never read.
+organisation or account it reads for becomes another, or a search parameter its source takes
+does (a `{ search: <name> }` of its `params`, and `page` and `size` when it is paged). The list
+shows none of the entries of the earlier search once the search is another, and a read still in
+flight when what it reads for becomes another is dropped: its answer is shown nowhere. A state
+entered after another that rendered it too reads nothing, so an anchor no state lists, rendered
+in every state, is read only at those moments. Every other read is said by the flow, with the
+effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed
+what the list shows, never prose in a description. `{ entity: <entity>, order, direction }`:
+the entries are the stored entries of that entity of the model, which the anchor follows as
+they change, here or on another device; such a list is never read.
+
+A platform source's `params` give the action's parameters their values: each a search parameter
+of the route, `{ search: <name> }`, one every route of the screen declares, or a constant,
+`{ value: ... }`; never a field, since what a list shows is a state of the address and what is
+typed is not, so a search box moves the route with a navigate and the list reads the new
+search. A parameter left out is the implementation's to compute, as in a binding.
+
+`paged: true` makes the list a page of the action's entries. The action says it pages and
+which page sizes it answers, `paged: { sizes: [ 10, 25, 50 ], default: 25 }` in `platform.yaml`
+(each size once, the smallest first, the default one of them): it takes the number parameters
+`page`, from 1, and `size`, one of the sizes, and answers the entries of that page, in the
+order its `result` says, with the number of entries the other parameters find in all. The page
+and the size are the route's search parameters `page`, an integer with a minimum of 1 and a
+default of 1, and `size`, an integer whose `enum` is the action's sizes and whose default is
+its default, which every route of the screen declares; the source takes them from there, so no
+`params` names them, and a screen pages one list. A new search starts at page 1: a navigate
+that sets a search parameter the list reads, or `size`, says `page: 1`.
+
+A paged list derives four parts, which its `derived` lists and a screen file never writes.
+`<list>.range`, once the read is in: the numbers of the first and the last entry of the page and
+the number of entries in all (`51-100 of 312`), carried as `data-from`, `data-to` and
+`data-total`, with `0` and `0` where the page holds no entry (`0 of 312`: a page past the last).
+`<list>.previous-link`: a link to the same route, the same search and `page` one less, on every
+page but the first. `<list>.next-link`: the same with `page` one more, on every page that does
+not hold the last entry. `<list>.size-select`: a select of the page size, shown wherever the
+list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value`;
+choosing one moves to the same route and search with that `size` and page 1. A part leaves out
+of the address a value equal to its default (page 1, the action's default size), as every link
+of the app does. A range or a link that does not apply is absent from the page, never
+disabled, so a state that lists the list in `meta.renders` does not require them; the size
+select it does. `pagerOf`, `searchKeysOf` and `pageSearchOf` of `@workspace/ui-contract/anchors`
+compute what a page shows, which search keys a list reads for and the search a part moves to,
+for the app and the tests alike.
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -984,6 +1021,12 @@ enables, it is always enabled, and it holds no input, so no binding's `params` a
 locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest
 lists it in `contract.derivedParts` with its kind and its values.
 
+Four derived parts belong to a paged list (see "Reading a screen file", `source`): `range`,
+`previous-link`, `next-link` and `size-select`. The loader lists them in the `derived` of the
+list whose source says `paged: true`, and a screen file never writes them. The options of the
+size select, `<list>.size-select.option`, carry the action's page sizes as `data-value`, the
+values of the action and never rows of "Choice values".
+
 One literal per rendered name:
 
 - every anchor is declared once, in one screen file, and written once in the sources;
@@ -1031,7 +1074,11 @@ literals, pass a prop, or derive the part.
 - `data-value` on an `option`, a `badge` or a `button` that switches a mode: the stable key
   of a choice that is not an entity, the key the code already uses and never its label. Each
   fixed value is a row of "Choice values" with its meaning. On a `visibility-button` it is
-  `show` or `hide`, the values of its suffix.
+  `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the
+  page size it chooses.
+- `data-from`, `data-to` and `data-total` on the `range` of a paged list: the first and the
+  last entry the page shows, from 1 (`0` and `0` when it shows none), and how many the search
+  finds in all.
 - `data-state` on a `status`, `list`, `section` or `item`: an app, container or row state.
 - `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says.
 
@@ -1242,7 +1289,11 @@ gap is fixed in the contract files first, never worked around in a test.
   constant or a search parameter, an item or a row of its own screen with a `dataId`, of a
   list, a table or a section, from a control in its part (in an invoke's `input`, a state only
   such controls enter), and a parameter two fields of a button's part pass with
-  different values written by the button,
+  different values written by the button, each param of a platform source a parameter of its
+  action taking a constant or a search parameter every route of the screen declares,
+  never `page` or `size`; a paged source's action pages with its sizes each once, the smallest
+  first, its default one of them, and takes the number parameters `page` and `size`, every route
+  of its screen declares `page` and `size` as it reads them, and a screen pages one list,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
@@ -1254,7 +1305,7 @@ gap is fixed in the contract files first, never worked around in a test.
   search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
   that holds no secret, each `{ item }` an entry with a `dataId` of a list, a table or a
   section of the flow's own screen, taken on the event of a control in its part into a key
-  that takes a string),
+  that takes a string, and `page: 1` beside any key a paged list of its screen reads),
   reaches each of its states
   and leaves each one that is not final, lists in a state's `meta.renders` anchors its own
   screen declares (a derived part's base, never the part), each once and never beside an
@@ -1455,7 +1506,8 @@ where listed, with their derived parts, one the state does not render is not vis
 it renders is on the page and visible, unless data decides whether it shows: an anchor with
 `roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these, which
 only the first holds, as are the parts a page shows on demand (a select's `option`, a
-composite's `item`, a field's `error-message`). The anchors every state renders are not held:
+composite's `item`, a field's `error-message`, a paged list's `range`, `previous-link` and
+`next-link`, which its read decides; its `size-select` shows wherever the list does). The anchors every state renders are not held:
 a message shows when it carries a code, and an error when there is one.
 
 ## Coverage
@@ -1511,7 +1563,8 @@ order of work". A change to the contract goes with the output of `bun run contra
 description (the screens, anchors, codes, entities, fields and activities added, removed or
 renamed, the composites added or removed, the derived parts, the codes, the states, the roles
 and the error fields the anchors both sides hold gain or lose, the messages among them that
-rank their codes, with their order, who each route serves, the platform actions added or removed
+rank their codes, with their order, who each route serves, the platform action each list reads
+with its params and its paging, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
 hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
 lines of each platform action added, removed or changed, and each written description added,
@@ -1547,7 +1600,10 @@ written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and it
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
 route's `guard` and each role it serves are listed as `<path> guard <guard>` and `<path>
 serves <role>`, a route added whole with every line, and each role an anchor both sides hold
-is shown to as `<anchor> <role>`. A
+is shown to as `<anchor> <role>`. A list that reads a platform action is listed as `<anchor>
+reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged`
+when it pages: a list moved to another search or to paging shows as its old line removed and
+its new one added, and a list added whole shows its line. A
 ranked message is listed with its order, `<anchor> ranks <code> > <code>`: a new order shows
 as its old line removed and its new one added, which its codes, compared as a set, do not
 show. A
@@ -1567,7 +1623,8 @@ flow shows no flow line. A platform action is listed by its name, and its lines 
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
-shows (`code rate-limited`), each role that may run it, its mail (`mail to email language
+shows (`code rate-limited`), each role that may run it, its page sizes when it pages (`paged by
+10, 25, 50, 25 by default`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or

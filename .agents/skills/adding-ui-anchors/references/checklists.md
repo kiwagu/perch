@@ -31,7 +31,10 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 7. **The lists.** The container (`list` or `table`); every entry (`item` or `row`) with
    `dataId`, and its row states when an entry differs or changes in place; the controls of
    an entry; the cells a test reads. A choice that is not an entity has `dataValue`, and each
-   fixed value is a row of "Choice values".
+   fixed value is a row of "Choice values". A list read from a platform action says its
+   `source`: its `params` from the route's search or constants, and `paged: true` with the
+   action's `paged: { sizes, default }` and the route's `page` and `size` when it pages (the
+   parts it derives are never written; pattern 17).
 8. **The dialogs.** Each one a `ConfirmDialog` mounted with its own `testId` and `code`,
    its buttons in `derived`.
 9. **The messages.** Every `error`, `message` and notice a test asserts, with its `codes`,

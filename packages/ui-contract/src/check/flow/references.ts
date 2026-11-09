@@ -11,7 +11,8 @@
  * screen holds (`{ anchor }`, never a visibility-button nor a secret field, which would put a
  * password into an address and its history), or the data-id of an entry of the flow's own screen
  * (`{ item }`, an item or a row with a `dataId` of a list, a table or a section, into a key that
- * takes a string: `../entries.ts`; which event carries it, `items.ts`); an address is a binding
+ * takes a string: `../entries.ts`; which event carries it, `items.ts`), a new search of a
+ * paged list starting at page 1 (`pages.ts`); an address is a binding
  * of the flow's own screen (its first one when the path is left out) with search parameters of
  * that binding.
  */
@@ -30,6 +31,7 @@ import { entryProblems } from '../entries'
 import { routeProblems } from '../lookups'
 
 import type { At, InFlow } from './in-flow'
+import { pageResetProblems } from './pages'
 import { readProblems } from './reads'
 
 /** A platform event is named as a platform action is: `platform.<name>`. */
@@ -186,6 +188,7 @@ export function effectProblems(
           : [
               ...searchProblems(inFlow, binding, search, [...params, 'search']),
               ...idKeyProblems(inFlow, binding, search, [...params, 'search']),
+              ...pageResetProblems(inFlow, to, search, [...params, 'search']),
             ]),
         ...carriedProblems(inFlow, search, [...params, 'search']),
       ]

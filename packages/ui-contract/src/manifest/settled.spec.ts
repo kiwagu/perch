@@ -150,6 +150,45 @@ describe('a settled state held to what it renders', () => {
     ).toEqual([])
   })
 
+  it('holds the size select of a paged list with it, and leaves its range and links to the data', () => {
+    const contract: SettledContract = {
+      screens: [
+        {
+          id: 'x.y',
+          flow: {
+            initial: 'listing',
+            states: { listing: { meta: { renders: ['x.y.page-list'] } }, idle: {} },
+          },
+        },
+      ],
+      ids: {
+        'x.y.page-list': {
+          screen: 'x.y',
+          derived: ['range', 'previous-link', 'next-link', 'size-select'],
+        },
+      },
+    }
+
+    expect(settledProblems(contract, settled('listing', [shown('x.y.page-list')]))).toEqual([
+      'x.y in listing: "x.y.page-list.size-select" is not on the page, but the state renders it',
+    ])
+    expect(
+      settledProblems(
+        contract,
+        settled('listing', [shown('x.y.page-list'), shown('x.y.page-list.size-select')]),
+      ),
+    ).toEqual([])
+    expect(
+      settledProblems(
+        contract,
+        settled('idle', [shown('x.y.page-list.next-link'), shown('x.y.page-list.range')]),
+      ),
+    ).toEqual([
+      'x.y in idle: "x.y.page-list.next-link" is visible, but the state does not render it',
+      'x.y in idle: "x.y.page-list.range" is visible, but the state does not render it',
+    ])
+  })
+
   it('lets data decide whether a rendered anchor with roles or own, an entry or what is under them shows', () => {
     const open = { viewing: { form: 'open', notes: 'editing' } }
 

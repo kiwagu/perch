@@ -21,6 +21,20 @@ export {
   type SettledState,
   type SettledValue,
 } from './page-helper'
+export {
+  NEXT_LINK,
+  PAGE,
+  PAGING_PARTS,
+  type Pager,
+  PREVIOUS_LINK,
+  pagerOf,
+  pageSearchOf,
+  RANGE,
+  type SearchedSource,
+  SIZE,
+  SIZE_SELECT,
+  searchKeysOf,
+} from './paging'
 export { isListed, isRendered, listedBy, type RenderedAt, renderedAt } from './rendered'
 export { admits, GUEST, heldRoles, IDENTITY } from './roles'
 export { CONTRACT_VERSION } from './version'

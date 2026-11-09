@@ -9,6 +9,7 @@ const LISTS = [
   ['screens', 'screen', 'screens'],
   ['routeAccess', 'route access line', 'route access lines'],
   ['anchors', 'anchor', 'anchors'],
+  ['sources', 'list source', 'list sources'],
   ['derived', 'derived anchor', 'derived anchors'],
   ['composites', 'composite', 'composites'],
   ['codes', 'code', 'codes'],

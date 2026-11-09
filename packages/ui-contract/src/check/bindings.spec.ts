@@ -261,4 +261,25 @@ describe('bindingsProblems', () => {
       `${AT}["sample.frame-button"].binding.params.id: "app-shell.thing-item" is an anchor of another screen: a parameter takes the data-id of an entry of its own screen`,
     ])
   })
+  it("holds a source's params to its action's parameters and the screen's search", () => {
+    const contract = sampleContract()
+
+    contract.screens.platform.actions['devices.list'] = {
+      description: 'Lists the devices.',
+      params: { q: { type: 'string', description: 'The text a device contains.' } },
+      result: 'the devices',
+      codes: ['devices-read-failed'],
+      roles: ['member'],
+    }
+    anchorIn(contract, 'sample.devices-list').source = {
+      platform: 'devices.list',
+      params: { q: { search: 'tab' }, kind: { value: 'all' }, when: { search: 'since' } },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}["sample.devices-list"].source.params.kind: "kind" is not a parameter of "platform.devices.list"`,
+      `${AT}["sample.devices-list"].source.params.when: "when" is not a parameter of "platform.devices.list"`,
+      `${AT}["sample.devices-list"].source.params.when: "since" is not a search parameter of every route of the screen`,
+    ])
+  })
 })

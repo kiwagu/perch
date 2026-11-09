@@ -33,7 +33,9 @@ for Bun.
     another composite has, and a `derivedFrom` the file writes (`composites.ts`); a button's
     params, for each action it binds the union of those the fields of its part pass to it, a
     param it writes winning key by key, two fields passing one param with different values a
-    problem of the button (`form-params.ts`); the failures of the actions; an error's codes, from
+    problem of the button (`form-params.ts`); the parts of a paged list, `range`,
+    `previous-link`, `next-link` and `size-select`, after the suffixes its `derived` writes, one
+    the file writes a problem (`paging.ts`); the failures of the actions; an error's codes, from
     the actions bound beside it, the actions its flow invokes whose failure shows on it and the
     codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
     `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
@@ -116,8 +118,10 @@ for Bun.
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
     those of `authoredAnchorDefSchema`, whose `binding` is a model field, an action, a route or
-    `{ search }`, the search parameter a field starts with; the source of
-    `contract/schemas/screen.schema.json`), `platformFileSchema`
+    `{ search }`, the search parameter a field starts with, and whose platform `source` takes
+    `params` (each `{ search }` or `{ value }`, never a field) and `paged: true`; the source of
+    `contract/schemas/screen.schema.json`), `platformFileSchema` (an action's `paged`, the page
+    sizes it answers each once, the smallest first, with its `default`)
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
     on (the signed-in account for an action on its own account, else the one its parameters
@@ -184,7 +188,9 @@ for Bun.
     section, taken from a control in its part), a constant or a search parameter every route
     of the screen declares, routes,
     the search parameter a field starts with, one every route of the screen declares, never on
-    another kind nor a secret field, sources), `flowProblems` (a flow names states, events
+    another kind nor a secret field, sources, a platform source's params each a parameter of
+    its action taking a constant or a search parameter every route of the screen declares),
+    `flowProblems` (a flow names states, events
     (never a `visibility-button`, which is presentation only), guards, actions with their
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
     that exist, a clear's anchor one that carries codes, which then shows none, whatever its
@@ -197,7 +203,8 @@ for Bun.
     `dataId`, of a list, a table or a section, into a key that takes a string, taken on the
     event of a control in the entry's part, never in an entry, an exit or an invoke's outcome,
     and an invoke's input that takes an entry run in a state only such controls enter
-    (`flow/items.ts`),
+    (`flow/items.ts`), and `page: 1` beside any key a paged list of the screen it moves to
+    reads (`flow/pages.ts`),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
@@ -244,8 +251,12 @@ for Bun.
     route serves: no binding's `guard` sends away an account its `roles` name, an anchor's
     `roles` are among those its screen's bindings serve, the frame aside, a link to a route
     whose roles name neither `guest` nor `identity` is shown only to the roles it serves, and
-    the binding at `/$` names `guest` and `identity`)
-    and `scenariosProblems` (bracket references, a mail by the platform action that declares
+    the binding at `/$` names `guest` and `identity`), `pagingProblems` (rule 18, a paged
+    list: its action pages, its sizes each once, the smallest first, its default one of them,
+    taking the number parameters `page` and `size`; every route of its screen declares `page`,
+    an integer from 1 whose default is 1, and `size`, an integer of the action's sizes whose
+    default is the action's; no source's `params` names `page` or `size`; a screen pages one
+    list) and `scenariosProblems` (bracket references, a mail by the platform action that declares
     it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
     activity a scenario names, as problems of each scenario's file; in each text, the where,
     the scenario sentence, a step or an expected result, a `[code:x]`, `[state:x]` or
@@ -360,7 +371,8 @@ for Bun.
     per problem: of the screen's anchors rendered only where listed, with their derived parts,
     one visible where the state does not render it, and one the state renders that is not on
     the page or hidden, unless it, or an anchor it is under, has `roles`, `own` or a `dataId`,
-    or it is a part shown on demand (`option`, `item`, `error-message`).
+    or it is a part shown on demand (`option`, `item`, `error-message`, and a paged list's
+    `range`, `previous-link` and `next-link`).
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
@@ -375,7 +387,9 @@ for Bun.
     as `<anchor> holds input` and the messages that rank their codes as
     `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
     who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added
-    whole with every line; the actions of `platform.leaving` added and removed, the entries of
+    whole with every line; each list that reads a platform action as `<anchor> reads
+    platform.<action>`, its params by name (`q=search:q`, `kind="all"`) and `paged` when it
+    pages (`handoff/source-lines.ts`); the actions of `platform.leaving` added and removed, the entries of
     `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
     actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
@@ -395,7 +409,8 @@ for Bun.
     action either side holds, the lines of the action added and removed (an action one side
     lacks has none, so an action added or removed whole shows every line, its mail among them),
     `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
-    <type>`, `result: <text>`, `code <code>`, `role <role>`, `mail to <to> language
+    <type>`, `result: <text>`, `code <code>`, `role <role>`, `paged by <sizes>, <default> by
+    default`, `mail to <to> language
     <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
     <screen>]`, descriptions aside; and last `descriptions`, by `descriptionChanges(before,
     after, renamed)` (`handoff/description-changes.ts`): sorted by place, each description of
@@ -476,7 +491,15 @@ for Bun.
   list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
   sections it belongs to: those it is declared under, the nearest first, then those beside it
   in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
-  entry, never the entry itself).
+  entry, never the entry itself). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
+  search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
+  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
+  `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to
+  `0` when it shows none, and the page before and after where there is one),
+  `searchKeysOf(source)` (the search parameters a source reads, which read it again when one
+  changes: those its params take, then `page` and `size` when it pages) and
+  `pageSearchOf(search, { page, size }, defaultSize)` (the search a part moves to, the other
+  keys kept and a value equal to its default left out).
   What a state renders, read from a flow or from an app's machine config alike:
   `renderedAt(config, value)` returns the `RenderedAt` of XState's state value (`listed`, the
   names any state lists in `meta.renders`; `rendered`, those the states the machine is in
@@ -549,7 +572,8 @@ for Bun.
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived
   parts, the codes, the states, the roles and the error fields the anchors both hold gain or
-  lose (derived ones included), who each route serves, the fields that start or
+  lose (derived ones included), who each route serves, the source each list reads with its
+  params and its paging, the fields that start or
   stop holding input, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform

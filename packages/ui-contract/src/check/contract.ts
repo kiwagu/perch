@@ -6,7 +6,7 @@
  * and a problem located in a screen's file, the platform file or another file at a line.
  */
 
-import { baseOf, testIdFor, VISIBILITY_BUTTON, VISIBILITY_VALUES } from '../anchors'
+import { baseOf, SIZE_SELECT, testIdFor, VISIBILITY_BUTTON, VISIBILITY_VALUES } from '../anchors'
 import {
   type Activity,
   type AnchorDef,
@@ -157,16 +157,45 @@ export const locate =
 export const inFile = (file: string, message: string, line?: number): Problem =>
   line === undefined ? { file, message } : { file, line, message }
 
+/** The derived `option` of a select, one per choice. */
+const OPTION = 'option'
+
+/**
+ * The options of each paged list's size select, `<list>.size-select.option`, with the values
+ * they carry: the page sizes of the list's action, each as its `data-value`.
+ */
+export function pageSizeOptionsOf(screens: ScreensFile): Map<string, string[]> {
+  return new Map(
+    declaredAnchors(screens).flatMap(({ anchor, def: { source } }) => {
+      const paged =
+        source !== undefined && 'platform' in source && source.paged === true
+          ? own(screens.platform.actions, source.platform)?.paged
+          : undefined
+
+      return paged === undefined
+        ? []
+        : [
+            [
+              testIdFor(testIdFor(anchor, SIZE_SELECT), OPTION),
+              paged.sizes.map((size) => String(size)),
+            ] as const,
+          ]
+    }),
+  )
+}
+
 /**
  * Whether an anchor is declared, or derived from a declared base with a suffix that base
- * lists in `derived`: a suffix of the vocabulary alone names no element the base renders.
+ * lists in `derived` (a suffix of the vocabulary alone names no element the base renders), or
+ * an option of a paged list's size select.
  */
 export function knownAnchors(contract: Contract): (anchor: string) => boolean {
   const defs = new Map(declaredAnchors(contract.screens).map(({ anchor, def }) => [anchor, def]))
   const suffixes = Object.keys(contract.vocabulary.suffixes)
+  const sizeOptions = pageSizeOptionsOf(contract.screens)
 
   return (anchor) => {
-    if (defs.has(anchor)) {
+    if (defs.has(anchor) || sizeOptions.has(anchor)) {
       return true
     }
 
@@ -240,14 +269,18 @@ export const isChoiceValue = (vocabulary: Vocabulary, value: string): boolean =>
   Object.values(vocabulary.choiceValues).some((rows) => isValueOf(rows, value))
 
 /**
- * Whether `value` is a `data-value` of the contract: a choice value, or, once an input renders a
- * visibility-button, one of the values its suffix defines (`show`, `hide`).
+ * Whether `value` is a `data-value` of the contract: a choice value, once an input renders a
+ * visibility-button one of the values its suffix defines (`show`, `hide`), or a page size of a
+ * paged list.
  */
 export function contractValues(contract: Contract): (value: string) => boolean {
   const visibility = visibilityButtonsOf(contract.screens).size > 0
+  const sizes = new Set([...pageSizeOptionsOf(contract.screens).values()].flat())
 
   return (value) =>
-    isChoiceValue(contract.vocabulary, value) || (visibility && has(VISIBILITY_VALUES, value))
+    isChoiceValue(contract.vocabulary, value) ||
+    (visibility && has(VISIBILITY_VALUES, value)) ||
+    sizes.has(value)
 }
 
 /** The paths of every binding of every screen. */

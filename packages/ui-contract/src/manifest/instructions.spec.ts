@@ -88,6 +88,20 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`contract.derivedParts`')
     expect(instructions.gaps).toContain('whether a password input shows what it holds')
   })
+  it('says what a paged list reads and derives, and that a new search starts at page 1', () => {
+    expect(instructions.bindings).toContain(
+      'gives it that value again each time the parameter becomes another',
+    )
+    expect(instructions.screenMap).toContain(
+      'each time the organisation or account it reads for becomes another or a search parameter it reads does',
+    )
+    expect(instructions.screenMap).toContain(
+      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes`)',
+    )
+    expect(instructions.screenMap).toContain(
+      'a navigate that sets a search parameter a paged list reads says `page: 1`',
+    )
+  })
   it('says who a route serves, in which order the router decides, and who sees an anchor', () => {
     expect(instructions.screenMap).toContain(
       '`roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other)',
@@ -121,7 +135,7 @@ describe('instructionsOf', () => {
       '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
     )
     expect(instructions.screenMap).toContain(
-      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another; one whose `source` is an entity follows the stored data and is never read',
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
     )
     expect(instructions.screenMap).toContain(
       '`read: false` on an invoke says nothing reads after its action',

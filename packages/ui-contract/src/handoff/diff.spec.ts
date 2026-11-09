@@ -171,6 +171,7 @@ describe('diffContracts', () => {
       notices: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       routeAccess: { added: [], removed: [] },
+      sources: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },
       activities: {
@@ -791,6 +792,50 @@ describe('diffContracts and the ranked messages', () => {
     anchor.codes = ['failed', 'saved']
 
     expect(formatChanges(diffContracts(before, after))).toBe('contract changes: none')
+  })
+})
+
+describe('diffContracts and the sources of the lists', () => {
+  /** The fixture contract with a list of accounts read as `source` says. */
+  const reading = (source?: Record<string, unknown>): Contract => {
+    const contract = fixtureContract()
+    const [screen] = contract.screens.screens
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no screen')
+    }
+
+    if (source !== undefined) {
+      screen.anchors['sample.accounts-list'] = {
+        kind: 'list',
+        source: { platform: 'accounts.list', ...source },
+      }
+    }
+
+    return contract
+  }
+
+  it('lists a source that comes to page or reads another search, as its line removed and added', () => {
+    const changes = diffContracts(
+      reading({ params: { q: { search: 'q' } } }),
+      reading({ params: { q: { search: 'term' } }, paged: true }),
+    )
+
+    expect(changes.sources).toEqual({
+      added: ['sample.accounts-list reads platform.accounts.list q=search:term paged'],
+      removed: ['sample.accounts-list reads platform.accounts.list q=search:q'],
+    })
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 list source added, 1 list source removed',
+      'list sources added: sample.accounts-list reads platform.accounts.list q=search:term paged',
+      'list sources removed: sample.accounts-list reads platform.accounts.list q=search:q',
+    ])
+  })
+  it('lists the source of a list added whole, which nothing else in the summary says', () => {
+    expect(diffContracts(reading(), reading({ paged: true })).sources).toEqual({
+      added: ['sample.accounts-list reads platform.accounts.list paged'],
+      removed: [],
+    })
   })
 })
 
