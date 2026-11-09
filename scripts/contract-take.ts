@@ -20,25 +20,48 @@
  * commit amends and how git cleans its message up are read from the `git commit` running the hook
  * (`takes/command.ts`): an amend is judged as the whole commit it leaves, against HEAD's parent,
  * the amend of a merge passing as the merge it stays, and the message as git records it.
- * Commits on `main`, the trunk, the engine's branch and an experiment, on a detached HEAD, and a
- * merge pass at once; a commit whose branch, files or message git cannot tell fails.
+ * Commits on the trunk, the engine's branch and an experiment, on a detached HEAD, and a merge
+ * pass at once; a commit whose branch, files or message git cannot tell fails.
  *
- * Usage: bun run scripts/contract-take.ts <the message file>, from the commit-msg hook.
+ * A commit on `main` is judged as a landing instead (`takes/squash.ts`), against its parent:
+ * `main`'s HEAD, or, for an amend, the commit under the one it replaces. A merge fails, and any
+ * other commit must be the squash of one branch's tip, with exactly one `Squashed-from: <branch>
+ * (<tip>) [<cards>]` trailer naming a branch that exists by its exact ref and a tip that is its
+ * tip or an ancestor of it, the parent under the tip, and the tree of the tip, which differs from
+ * the parent's. Then every commit of the branch's round (the tip's commits that are neither on
+ * the parent nor under the tip an earlier landing names, merges left out) is judged by the take
+ * rules as git recorded it, so a recorded commit that breaks them stops the squash even when its
+ * own hook was skipped. The trunk and experiments never land, and the engine's branch is bound
+ * by the trailer like any branch but its round is not judged. `--round [<branch>]` prints that
+ * verdict for a branch (the checked-out one by default) without writing anything. The check sees
+ * only a commit that runs the commit-msg hook: a change of `main` that runs none (a
+ * fast-forward, a plain cherry-pick or revert, a rebase, `--no-verify`) goes unseen.
+ *
+ * Usage: bun run scripts/contract-take.ts <the message file>, from the commit-msg hook;
+ * bun run scripts/contract-take.ts --round [<branch>] by hand.
  */
 
 import { headRef } from './gates/tree.ts'
 import { git, merging, stagedFiles } from './staged-commit.ts'
-import { commitCommand, readMessage, takeRefusal } from './takes/index.ts'
+import {
+  branchTip,
+  commitCommand,
+  landingRefusal,
+  readMessage,
+  roundOf,
+  roundRefusal,
+  takeRefusal,
+  UNJUDGED_BRANCHES,
+} from './takes/index.ts'
 
-/** Branches whose commits are no area's: `main`, the trunk and the contract engine's branch. */
-const OWN_LAYERS = new Set([
-  'refs/heads/main',
-  'refs/heads/contract/trunk',
-  'refs/heads/feat/contract-first-pass',
-])
+/** Branches whose commits are no area's: the trunk and the contract engine's branch. */
+const OWN_LAYERS = new Set(['refs/heads/contract/trunk', 'refs/heads/feat/contract-first-pass'])
 
 /** An experiment's business commits go to the trunk when it is split. */
 const EXPERIMENTS = 'refs/heads/experiment/'
+
+/** The branch every round lands on, and is judged against. */
+const MAIN = 'refs/heads/main'
 
 /**
  * What an amend's commit is judged against: HEAD's parent, the empty tree for a first commit, or
@@ -66,14 +89,107 @@ function amendBase(): string | undefined {
   return empty.status === 0 ? empty.out.trim() : undefined
 }
 
+/**
+ * Judges the round of `branch`, the checked-out one when none is named, against `main` as a
+ * landing would, read-only, and prints the verdict: the refusal, or how many commits are in their
+ * form.
+ */
+function round(branch: string | undefined): number {
+  const head = branch === undefined ? headRef() : `refs/heads/${branch}`
+
+  if (head === undefined) {
+    console.error('contract take: git cannot tell the branch to judge.')
+
+    return 1
+  }
+
+  if (!head.startsWith('refs/heads/')) {
+    console.error('contract take: HEAD is on no branch; name the one to judge: --round <branch>.')
+
+    return 1
+  }
+
+  const name = head.slice('refs/heads/'.length)
+  const oid = branchTip(name)
+
+  if (oid === undefined) {
+    console.error(`contract take: git knows no branch ${name} in this clone.`)
+
+    return 1
+  }
+
+  if (UNJUDGED_BRANCHES.includes(name)) {
+    console.log(`contract take: ${name} is the contract engine's branch; its round is not judged`)
+
+    return 0
+  }
+
+  const judged = roundOf(oid, MAIN)
+
+  if (typeof judged === 'string') {
+    console.error(`contract take: on ${name}, ${judged}`)
+
+    return 1
+  }
+
+  const refusal = roundRefusal(name, oid, MAIN, judged)
+
+  if (refusal !== undefined) {
+    console.error(refusal)
+
+    return 1
+  }
+
+  console.log(
+    `contract take: every commit of ${name} since its last landing (${judged.commits.length}) is in its form`,
+  )
+
+  return 0
+}
+
+/**
+ * Judges the commit on `main` whose message is in `file` as a landing, read with the `git commit`
+ * running the hook, and prints the refusal if any.
+ */
+function landing(file: string | undefined): number {
+  const command = commitCommand()
+  const message = file === undefined ? undefined : readMessage(file, command.cleanup)
+
+  if (message === undefined) {
+    console.error("contract take: git cannot read this commit's message.")
+
+    return 1
+  }
+
+  const refusal = landingRefusal(message, command.amend)
+
+  if (refusal === undefined) {
+    return 0
+  }
+
+  console.error(refusal)
+
+  return 1
+}
+
 function main(): number {
-  const [file] = process.argv.slice(2)
+  const [first, second] = process.argv.slice(2)
+
+  if (first === '--round') {
+    return round(second)
+  }
+
+  const file = first
   const head = headRef()
 
   if (head === undefined) {
     console.error('contract take: git cannot tell the branch this commit is on.')
 
     return 1
+  }
+
+  if (head === MAIN) {
+    return landing(file)
   }
 
   if (head === '' || OWN_LAYERS.has(head) || head.startsWith(EXPERIMENTS) || merging()) {
