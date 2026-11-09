@@ -90,16 +90,20 @@ export const sourceSchema = z
         order: z.string().optional().describe('The field the entries are ordered by.'),
         direction: z.enum(['asc', 'desc']).optional().describe('The order direction.'),
       })
-      .describe('The entries come from an entity of the model.'),
+      .describe(
+        'The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read.',
+      ),
     z
       .strictObject({
         platform: platformActionNameSchema.describe(
           'The platform action whose result the anchor lists.',
         ),
       })
-      .describe('The entries come from a platform action.'),
+      .describe(
+        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another, and where a flow says `read: <anchor>`.",
+      ),
   ])
-  .describe('Where the entries of a list, a section or a table come from.')
+  .describe('Where the entries of a list, a section or a table come from; no other kind has one.')
 
 /** The question a control asks before its destructive action runs, derived by the loader. */
 export const asksSchema = z

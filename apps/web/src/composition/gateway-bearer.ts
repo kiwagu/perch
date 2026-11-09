@@ -1,7 +1,8 @@
 /**
  * Calls of the gateway's routes that act for the signed-in device: each carries the device's
  * session token (`Authorization: Bearer`) and its id (`X-Perch-Device`). A refused token is dead,
- * so the call is not made again.
+ * so the call is not made again. A call anybody may make (`jsonAsWhoever`) carries them only
+ * while the device holds a session.
  */
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
@@ -28,6 +29,16 @@ export interface BearerCalls {
     schema: z.ZodType<T>,
     body?: unknown,
   ): ResultAsync<T, DataError>
+  /**
+   * A call answered with a body that anybody may make: it carries the session token and the
+   * device's id only when the device holds a session, and none otherwise.
+   */
+  jsonAsWhoever<T>(
+    path: string,
+    method: string,
+    schema: z.ZodType<T>,
+    body?: unknown,
+  ): ResultAsync<T, DataError>
   /** A call answered without a body (204); a refusal fails. */
   empty(path: string, method: string, body?: unknown): ResultAsync<void, DataError>
 }
@@ -35,7 +46,7 @@ export interface BearerCalls {
 const refusalBody = z.object({ code: z.string() })
 
 /** The statuses the gateway refuses a request with a code of its own. */
-const REJECTED = new Set([400, 403, 404, 409, 429])
+const REJECTED = new Set([400, 403, 404, 409, 410, 429])
 
 const authFailed = (message: string) => dataError('data:AUTH_FAILED', message)
 
@@ -79,24 +90,32 @@ function refusal(response: Response): ResultAsync<never, DataError> {
 export function bearerCalls(baseUrl: string, deps: BearerDeps): BearerCalls {
   const fetcher = deps.fetcher ?? fetch
 
+  /** One request, with the token and the device when there is a token, as nobody otherwise. */
   const send = (
     path: string,
     method: string,
-    token: string,
+    token: string | undefined,
     body?: unknown,
   ): ResultAsync<Response, DataError> =>
     ResultAsync.fromPromise(
       fetcher(`${baseUrl}${path}`, {
         method,
         headers: {
-          Authorization: `Bearer ${token}`,
-          'X-Perch-Device': deps.device(),
+          ...(token === undefined
+            ? {}
+            : { Authorization: `Bearer ${token}`, 'X-Perch-Device': deps.device() }),
           ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
         },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       }),
       (cause) => dataError('data:OFFLINE', 'could not reach the gateway', cause),
     )
+
+  /** The answer to a request that sent `token`: a 401 ends it, the token is dead. */
+  const live = (response: Response): ResultAsync<Response, DataError> =>
+    response.status === 401
+      ? errAsync(authFailed('the gateway refused the session token'))
+      : okAsync(response)
 
   /** One request with the token the device holds now; a 401 ends it: the token is dead. */
   const withToken = (
@@ -110,16 +129,29 @@ export function bearerCalls(baseUrl: string, deps: BearerDeps): BearerCalls {
       return errAsync(authFailed('the device holds no session token'))
     }
 
+    return send(path, method, token, body).andThen(live)
+  }
+
+  /** One request with the token the device holds, if any: a 401 of a token it sent ends it. */
+  const asWhoever = (
+    path: string,
+    method: string,
+    body?: unknown,
+  ): ResultAsync<Response, DataError> => {
+    const token = deps.token()
+
     return send(path, method, token, body).andThen((response) =>
-      response.status === 401
-        ? errAsync(authFailed('the gateway refused the session token'))
-        : okAsync(response),
+      token === undefined ? okAsync(response) : live(response),
     )
   }
 
   return {
     json: (path, method, schema, body) =>
       withToken(path, method, body).andThen((response) =>
+        response.ok ? readBody(response, schema) : refusal(response),
+      ),
+    jsonAsWhoever: (path, method, schema, body) =>
+      asWhoever(path, method, body).andThen((response) =>
         response.ok ? readBody(response, schema) : refusal(response),
       ),
     empty: (path, method, body) =>

@@ -1,10 +1,11 @@
-import { okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { dataError } from '@workspace/data'
+import { identityIdFactory, invitationIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
-import type { MemberView } from '../platform/organisations.port'
+import type { InvitationView, MemberView } from '../platform/organisations.port'
 
 import { openTestWorld, type TestWorld } from './__fixtures__/session'
 import { createOrganisations } from './organisations'
@@ -38,9 +39,17 @@ const bob: MemberView = {
   role: 'member',
 }
 
+const invitationToBob: InvitationView = {
+  id: invitationIdFactory.create(),
+  email: 'bob@example.test',
+  role: 'member',
+  link: 'https://perch.example.test/invitation?token=bob',
+}
+
 /** The gateway's organisation routes as they answer Ann, who creates Acme and invites Bob. */
 function answering() {
   const created: Array<{ key: string; name: string }> = []
+  const calls: Array<readonly unknown[]> = []
   const api: OrganisationsApi = {
     list: () => okAsync([acme]),
     create: (input) => {
@@ -49,11 +58,30 @@ function answering() {
       return okAsync(acme)
     },
     members: () => okAsync([bob]),
-    invite: () => okAsync(bob),
+    invite: (...input) => {
+      calls.push(['invite', ...input])
+
+      return okAsync(invitationToBob)
+    },
+    invitations: (key) => {
+      calls.push(['invitations', key])
+
+      return okAsync([invitationToBob])
+    },
+    revokeInvitation: (...input) => {
+      calls.push(['revokeInvitation', ...input])
+
+      return okAsync(undefined)
+    },
+    setRole: (...input) => {
+      calls.push(['setRole', ...input])
+
+      return okAsync(undefined)
+    },
     remove: () => okAsync(undefined),
   }
 
-  return { api, created }
+  return { api, created, calls }
 }
 
 let opened: TestWorld | undefined
@@ -142,14 +170,59 @@ describe('createOrganisations', () => {
     )
   })
 
-  it("answers members, invites and removals as the gateway did, leaving the session's memberships alone", async () => {
+  it("answers members, invitations and removals as the gateway did, leaving the session's memberships alone", async () => {
     const { session } = await annSignedIn()
-    const organisations = createOrganisations(answering().api, session)
+    const { api, calls } = answering()
+    const organisations = createOrganisations(api, session)
 
     expect((await organisations.members('acme'))._unsafeUnwrap()).toEqual([bob])
-    expect((await organisations.invite('acme', bob.identity.email))._unsafeUnwrap()).toEqual(bob)
+    expect(
+      (await organisations.invite('acme', bob.identity.email, 'admin'))._unsafeUnwrap(),
+    ).toEqual(invitationToBob)
+    expect((await organisations.invitations('acme'))._unsafeUnwrap()).toEqual([invitationToBob])
+    expect((await organisations.revokeInvitation('acme', invitationToBob.id)).isOk()).toBe(true)
     expect((await organisations.remove('acme', bob.identity.id)).isOk()).toBe(true)
+    expect(calls).toEqual([
+      ['invite', 'acme', bob.identity.email, 'admin'],
+      ['invitations', 'acme'],
+      ['revokeInvitation', 'acme', invitationToBob.id],
+    ])
     expect(session.memberships()).toEqual([])
     expect(session.space()?.tenants()).toEqual([])
+  })
+
+  it('setRole asks the gateway and adopts nothing: the new role reaches every device over the sync channel', async () => {
+    const { session, storage, tenantsOpened } = await annSignedIn()
+    const { api, calls } = answering()
+    const organisations = createOrganisations(api, session)
+
+    expect((await organisations.create({ key: 'acme', name: 'Acme' })).isOk()).toBe(true)
+
+    const before = savedMemberships(storage, ann.identity.id)
+    const opened = tenantsOpened()
+
+    expect((await organisations.setRole('acme', bob.identity.id, 'admin')).isOk()).toBe(true)
+    expect(calls).toEqual([['setRole', 'acme', bob.identity.id, 'admin']])
+    expect(session.memberships()).toEqual([acme])
+    expect(savedMemberships(storage, ann.identity.id)).toEqual(before)
+    expect(tenantsOpened()).toEqual(opened)
+  })
+
+  it('setRole passes a refusal of the gateway on and still adopts nothing', async () => {
+    const { session, storage } = await annSignedIn()
+    const refusing: OrganisationsApi = {
+      ...answering().api,
+      setRole: () => errAsync(dataError('data:WRITE_REJECTED', 'last-admin')),
+    }
+    const organisations = createOrganisations(refusing, session)
+
+    expect(
+      (await organisations.setRole('acme', bob.identity.id, 'member'))._unsafeUnwrapErr(),
+    ).toMatchObject({
+      code: 'data:WRITE_REJECTED',
+      message: 'last-admin',
+    })
+    expect(session.memberships()).toEqual([])
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
   })
 })

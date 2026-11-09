@@ -88,6 +88,30 @@ describe('flowLines', () => {
 
     expect(flowLines(flow)).toContain('saving invoke thing.updateThing')
   })
+  it('writes a read as an effect, and read: false on the line of its invoke', () => {
+    const flow = flowIn(sampleContract())
+    const saving = flow.states['saving']
+
+    if (saving === undefined || saving.type === 'parallel' || saving.invoke === undefined) {
+      throw new Error('the sample flow lost its saving state')
+    }
+
+    saving.invoke.onDone = {
+      target: 'editing',
+      actions: [{ type: 'read', params: { anchor: 'sample.devices-list' } }],
+    }
+
+    expect(flowLines(flow)).toContain('saving onDone -> editing read sample.devices-list')
+    expect(flowLines(flow)).toContain(
+      'saving invoke thing.updateThing {"title":"sample.title-input"}',
+    )
+
+    saving.invoke.read = false
+
+    expect(flowLines(flow)).toContain(
+      'saving invoke thing.updateThing {"title":"sample.title-input"} read: false',
+    )
+  })
   it('walks a parallel state into its regions, naming states by their path', () => {
     expect(flowLines(PARALLEL)).toEqual([
       'initial viewing',

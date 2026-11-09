@@ -21,6 +21,7 @@ import { KeyedTurns } from '../../../keyed-turns'
 import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
+import { specInvitations } from '../../../tenants/__fixtures__/invitations'
 import { AccountDeparture } from '../../../tenants/account-departure'
 import { Organisations } from '../../../tenants/organisations'
 import { TenantDatabases } from '../../../tenants/tenant-databases'
@@ -249,7 +250,14 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
 
   // No device subscribes to a region here: the hub has none to let go of.
   const hub = { retire: () => okAsync(undefined) }
-  const organisations = new Organisations({ directory, databases, revoke: async () => {}, hub })
+  const organisations = new Organisations({
+    directory,
+    databases,
+    revoke: async () => {},
+    rerole: async () => {},
+    hub,
+    invitations: specInvitations(directory),
+  })
   const departure = new AccountDeparture({ directory, databases, hub })
 
   return {
@@ -455,6 +463,7 @@ export function fakeConnection(): MembershipsListener & { readonly ended: number
     ended,
     memberships: () => Promise.resolve(),
     revoke: () => Promise.resolve(),
+    rerole: () => Promise.resolve(),
     end: (code) => {
       ended.push(code)
 

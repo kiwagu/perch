@@ -99,6 +99,19 @@ describe('instructionsOf', () => {
       'and makes an anchor that carries codes show none until one is shown again',
     )
   })
+  it('says when a list with a platform source reads it, what a read does, and what read: false says', () => {
+    expect(instructions.screenMap).toContain('effects `show`, `clear`, `read` and `navigate`')
+    expect(instructions.screenMap).toContain(
+      '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
+    )
+    expect(instructions.screenMap).toContain(
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another; one whose `source` is an entity follows the stored data and is never read',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on an invoke says nothing reads after its action',
+    )
+    expect(instructions.screenMap).toContain('the four effects')
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')

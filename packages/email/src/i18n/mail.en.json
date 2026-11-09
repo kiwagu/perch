@@ -64,5 +64,17 @@
   "mail.account-deleted.body": "The Perch account of {email} was deleted for good. Nothing can bring it back.",
   "mail.account-deleted.again": "You can sign up again with this address whenever you like.",
   "mail.account-deleted.stranger": "If you did not delete it, someone else knew your password and could read this mailbox: keep the mailbox safe by changing its password.",
-  "mail.account-deleted.reason": "You got this mail because this address was the email of a Perch account."
+  "mail.account-deleted.reason": "You got this mail because this address was the email of a Perch account.",
+  "mail.invitation.subject": "You are invited to join an organisation on Perch",
+  "mail.invitation.preview": "Open the link to see your invitation to an organisation on Perch.",
+  "mail.invitation.heading": "You are invited to join an organisation",
+  "mail.invitation.greeting": "Hello,",
+  "mail.invitation.body": "You were invited to join {organisation} on Perch as {role}. Open this link to see the invitation, where you can accept or decline it:",
+  "mail.invitation.role.member": "a member",
+  "mail.invitation.role.admin": "an admin",
+  "mail.invitation.action": "See the invitation",
+  "mail.invitation.fallback": "If the button does not open, copy this link into your browser:",
+  "mail.invitation.expiry": "The link works once and for seven days, and only the newest invitation to this organisation works.",
+  "mail.invitation.ignore": "If you were not expecting this invitation, ignore this mail: nothing happens without the link.",
+  "mail.invitation.reason": "You got this mail because someone invited this address to an organisation on Perch."
 }

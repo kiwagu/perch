@@ -1,4 +1,4 @@
-import { okAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
@@ -8,6 +8,7 @@ import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
 import { devicesApi } from '../devices-api'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppRootOptions, type BootStep, createAppRoot } from '../root'
 import type { MemoryStorage } from '../storage'
@@ -62,6 +63,11 @@ export async function bootRoot(
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),
+    invitationsApi: (deps) =>
+      invitationsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
@@ -75,6 +81,10 @@ export async function bootRoot(
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     servedBuild: { watch: () => () => {} },
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a test root has no clipboard' }),
+    },
     logger: { info: () => {}, warn: () => {} },
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),

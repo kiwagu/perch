@@ -28,6 +28,9 @@ export const FIELD_KINDS: ReadonlySet<string> = new Set([
   'switch',
 ])
 
+/** The kinds that show entries, the only ones a `source` gives entries to. */
+export const LISTING_KINDS: ReadonlySet<string> = new Set(['list', 'section', 'table'])
+
 /**
  * Whether `other` is `anchor` itself or an anchor under it (`<anchor>.<rest>`): a declared
  * anchor nested in it, such as a composite's item under its list, or a part derived from it.

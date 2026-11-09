@@ -24,6 +24,11 @@ export const CONFIRM_TEXTS: Readonly<Record<string, ConfirmWords>> = {
     body: (t) => t('app.shell.confirm.organisations-remove.body'),
     confirm: (t) => t('app.shell.confirm.organisations-remove.confirm'),
   },
+  'organisations-revoke-invitation': {
+    title: (t) => t('app.shell.confirm.organisations-revoke-invitation.title'),
+    body: (t) => t('app.shell.confirm.organisations-revoke-invitation.body'),
+    confirm: (t) => t('app.shell.confirm.organisations-revoke-invitation.confirm'),
+  },
   'devices-revoke': {
     title: (t) => t('app.shell.confirm.devices-revoke.title'),
     body: (t) => t('app.shell.confirm.devices-revoke.body'),

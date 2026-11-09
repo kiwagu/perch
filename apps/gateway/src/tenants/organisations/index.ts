@@ -3,5 +3,8 @@
  * hears the changes.
  */
 
+export type { InvitationOnLink, InvitationView } from './invitation-views'
+export type { OrganisationInvitations } from './invitations'
 export type { MembershipListener } from './listeners'
-export { Organisations, type OrganisationsOptions } from './service'
+export type { OrganisationsOptions } from './options'
+export { Organisations } from './service'

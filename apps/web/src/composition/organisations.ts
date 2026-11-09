@@ -1,7 +1,8 @@
 /**
  * The `ORGANISATIONS` port over the gateway's routes: an organisation the identity creates is its
- * membership on this device at once, without waiting for the gateway to tell the channel. Invites
- * and removals change other identities' memberships, which the gateway tells their own devices.
+ * membership on this device at once, without waiting for the gateway to tell the channel. Invites,
+ * removals and role changes adopt nothing: they change memberships, whose devices (this one's
+ * among them, for a role) the gateway tells over the channel.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -12,7 +13,7 @@ import type { OrganisationsPort } from '../platform/organisations.port'
 
 import type { OrganisationsApi } from './organisations-api'
 
-/** How an organisation the signed-in identity created becomes its membership on this device. */
+/** How an organisation the signed-in identity created or accepted an invitation to becomes its membership on this device. */
 export interface MembershipsHolder {
   adoptMembership(created: Membership): Promise<void>
 }
@@ -29,7 +30,10 @@ export function createOrganisations(
           ResultAsync.fromSafePromise(session.adoptMembership(created)).map(() => created),
         ),
     members: (key) => api.members(key),
-    invite: (key, email) => api.invite(key, email),
+    invite: (key, email, role) => api.invite(key, email, role),
+    invitations: (key) => api.invitations(key),
+    revokeInvitation: (key, invitation) => api.revokeInvitation(key, invitation),
+    setRole: (key, identity, role) => api.setRole(key, identity, role),
     remove: (key, identity) => api.remove(key, identity),
   }
 }

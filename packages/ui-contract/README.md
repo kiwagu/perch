@@ -139,8 +139,10 @@ for Bun.
     parallel state's too, and a listed anchor the anchors declared under it,
     `<anchor>.<rest>`, which are rendered where it is or where they are listed themselves;
     never on a region an authored flow writes by its pattern or its button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
-    failure codes it holds for), its `effectSchema` (a navigate's search value a literal or `{ anchor }`, the
-    value a field of the screen holds) and `transitionSchema`, with the types `Flow`,
+    failure codes it holds for), its `effectSchema` (`show`, `clear`, `read`, a list of the
+    flow's own screen with a platform source reading it again, and `navigate`, whose search value is a literal or `{ anchor }`, the
+    value a field of the screen holds), an invoke's `read: false` (nothing reads after its
+    action; XState ignores it) and `transitionSchema`, with the types `Flow`,
     `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
     `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
@@ -184,7 +186,9 @@ for Bun.
     `input` (taken from no `visibility-button` either), anchors with their codes and bindings
     that exist, a clear's anchor one that carries codes, which then shows none, whatever its
     kind and screen, else a field of its own screen, which it empties (a secret one included;
-    never a `visibility-button`), a navigate's search keys of the binding it
+    never a `visibility-button`), a read's anchor a list, section or table of its own screen
+    whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`),
+    an invoke that says `read: false` reading in none of its outcomes, a navigate's search keys of the binding it
     moves to, each value a literal or `{ anchor }`, a field its own screen declares (never a
     `visibility-button` nor a secret field),
     resolves every target as XState does (a state of the root or a deep target
@@ -371,7 +375,7 @@ for Bun.
     `<path> address <path> <search as JSON, keys sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
     `meta.renders`), `<path> entry|exit <effect>`, `<path> on
     <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
-    sorted>`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
+    sorted> [read: false]`, `<path> onDone|onError ...`, `<path> final`, descriptions aside; a guarded
     alternative and an entry or exit effect carry their position, `#<n>`, among more than
     one, as order runs the machine; so a screen file written shorter that loads to the same
     flow shows no change); the platform actions by name, added and removed; per platform
@@ -477,7 +481,7 @@ for Bun.
   the cases the flow says. An app holds a machine of its own to its flow with
   `projected(config)` (initial state, states, final states, what each state renders
   (`meta.renders`, as a set), regions, events with their targets and guards, invoke sources,
-  the contract's effects; the app's own actions left out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  the contract's effects, `read` among them; the app's own actions and an invoke's `read: false` left out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
   counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
   say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is

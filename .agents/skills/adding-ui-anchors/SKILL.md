@@ -85,7 +85,13 @@ code and the tests follow; the checks hold them to the contract.
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
    bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). A button may leave out the params the fields of its
+   its anchor to run it without asking). A list whose `source` is a platform action reads it
+   each time it starts to render after it did not and each time the organisation or account
+   it reads for becomes another, and nothing says that; every other read is the flow's
+   effect `read: <list>` on the outcome of the invoke that changed what the list shows (a
+   list of the flow's own screen with a platform source, never an entity source, which follows
+   the stored data), and an invoke after which nothing reads says `read: false`, on it or on a
+   region `by` its button; a description never says a read. A button may leave out the params the fields of its
    part pass to its action in their own bindings; a param it writes wins over theirs, key by key
    (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
    `locale: app-shell.locale-select`, which no field passes). A request leaves out its failure:

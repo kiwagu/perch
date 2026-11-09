@@ -17,7 +17,9 @@ stand's SurrealDB as a system user on the gateway's database. All seed data uses
 on `example.test`, which is how the sweep finds it. The catalog is standalone, so e2e tests
 generate their data from the same presets. Organisations are seeded after every account
 exists: the administrator signs in, creates the organisation (the key `acme`; a `fresh` seed
-suffixes the run id, `acme_<run>`) and invites the members by email. The gateway smoke test leaves an organisation `smoke_<time>`
+suffixes the run id, `acme_<run>`) and invites the members by email; each invite answers the
+invitation's id, and each member then signs in and accepts it by that id (a member of the
+organisation already, as on a second run, answers none and accepts nothing). The gateway smoke test leaves an organisation `smoke_<time>`
 behind, created by an `@example.test` identity, so the sweep removes it too.
 
 ## Key exports
@@ -38,8 +40,9 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   `fetcher` replaces the global `fetch` for the gateway's HTTP routes (the CLI passes none);
   `inbox` is where the verification mails are read (the CLI passes a `Mailbox`).
 - `sweep(target, { emails? })`: removes the seeded accounts (or only those at `emails`)
-  with the organisations they created (their databases `t_<key>`, memberships and directory
-  rows), their memberships in organisations of others with the member rows in those
+  with the organisations they created (their databases `t_<key>`, memberships, pending
+  invitations and directory rows), the pending invitations to their addresses, their
+  memberships in organisations of others with the member rows in those
   organisations' databases, their profiles and the server's copy of their regions (`_replica_head`,
   `_replica_snapshot`, `_replica_update`, `_replica_projected`, `_replica_peer`). Of a region
   the gateway keeps in memory only what a connected device subscribed to, unloaded 60 s after the last
@@ -70,7 +73,7 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   run over such a stand fails at their sign-in as invalid credentials, so seed it with `--reset`
   (which sweeps the seed data first) to recreate them with the new password.
 - `bun run seed:sweep`: removes the seed data from the stand (same stand flags).
-- `bun run test`: the offline catalog check, and that `runSeed` calls the gateway through the `fetcher` it is given.
+- `bun run test`: the offline catalog check, that `runSeed` calls the gateway through the `fetcher` it is given, and that each organisation's members join by accepting the invitation their own invite answered, none on a second run.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
   `GATEWAY_URL`, its SurrealDB at `SURREAL_URL` and its mailbox at `MAILBOX_URL`, where the seed

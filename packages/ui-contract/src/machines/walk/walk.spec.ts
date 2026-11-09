@@ -113,6 +113,42 @@ describe('the walk of a flow', () => {
 
     expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([[navigate]])
   })
+  it('carries a read of a list, as written, and runs an invoke that says read: false', () => {
+    const read = { type: 'read', params: { anchor: 'sample.devices-list' } } as const
+    const flow = flowOf({
+      initial: 'viewing',
+      states: {
+        viewing: {
+          on: {
+            'sample.remove-button': { target: 'removing' },
+            'sample.copy-button': { target: 'copying' },
+          },
+        },
+        removing: {
+          invoke: {
+            src: 'platform.devices.revoke',
+            onDone: { target: 'viewing', actions: [read] },
+            onError: { target: 'viewing', actions: [show(['failed']), read] },
+          },
+        },
+        copying: {
+          invoke: { src: 'platform.invitations.copy', onDone: { target: 'viewing' }, read: false },
+        },
+      },
+    })
+
+    for (const { label, expected, actual } of walk(flow).cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([
+      [],
+      [],
+      [read],
+      [show(['failed']), read],
+      [],
+    ])
+  })
   it('carries a clear that empties a field, a secret one, as written', () => {
     const emptied = { type: 'clear', params: { anchor: 'sample.password-input' } } as const
     const flow = flowOf({
