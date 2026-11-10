@@ -1,7 +1,9 @@
 /**
  * The `INVITATIONS` port over the gateway's routes: an invitation the account accepts is its
  * membership on this device at once, as an organisation it creates is, without waiting for the
- * gateway to tell the channel. Reading, listing and declining change no membership.
+ * gateway to tell the channel; it is adopted only into the space that asked (the adopter is
+ * taken before the request) and never in place of an entry the saved memberships hold. Reading,
+ * listing and declining change no membership.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -21,12 +23,13 @@ export function createInvitations(
   return {
     read: (token) => api.read(token),
     mine: () => api.mine(),
-    accept: (invitation) =>
-      api
+    accept: (invitation) => {
+      const adopt = session.membershipAdopter()
+
+      return api
         .accept(invitation)
-        .andThen((accepted) =>
-          ResultAsync.fromSafePromise(session.adoptMembership(accepted)).map(() => accepted),
-        ),
+        .andThen((accepted) => ResultAsync.fromSafePromise(adopt(accepted)).map(() => accepted))
+    },
     decline: (invitation) => api.decline(invitation),
   }
 }

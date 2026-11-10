@@ -36,6 +36,7 @@ import membershipRows from './membership-rows.surql'
 import namespaceInfo from './namespace-info.surql'
 import noteRows from './note-rows.surql'
 import noteWrite from './note-write.surql'
+import { specRetell } from './retell'
 import tenantRows from './tenant-rows.surql'
 
 /** Closes what a test opened, the organisations' databases before the directory. */
@@ -124,8 +125,11 @@ export async function departureHarness() {
     rerole: async () => {},
     hub,
     invitations: specInvitations(directory),
+    retell: specRetell(),
   })
   const departure = new AccountDeparture({ directory, databases, hub })
+
+  cleanups.push(() => organisations.close())
 
   /** An identity written straight into the directory. */
   const identity = async (email: string): Promise<IdentityId> => {

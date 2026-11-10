@@ -17,6 +17,8 @@ import { IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
+import { type MembershipAdopter, MembershipAdoption } from './membership-adoption'
+import type { OpenSpace } from './open-space'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
@@ -56,6 +58,7 @@ export class SessionService implements SessionPort {
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   readonly #elsewhere: SessionElsewhere
+  readonly #adoption: MembershipAdoption
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
   readonly #signInNotice: SignInNotice
@@ -118,6 +121,11 @@ export class SessionService implements SessionPort {
       organisations: this.#organisations,
       signingIn: this.#signingIn,
       signingOut: this.#signingOut,
+    })
+    this.#adoption = new MembershipAdoption({
+      host,
+      organisations: this.#organisations,
+      signingOut: (open) => barrier.signingOut(open.heard),
     })
 
     const spaces: SpaceSource = {
@@ -242,12 +250,19 @@ export class SessionService implements SessionPort {
    */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
     const saved = savedIdentity(this.#options.storage)
+    let produced: OpenSpace | undefined
     const restoring = this.#transitions.serially((generation) =>
-      this.#signingIn.restore(generation),
+      this.#signingIn.restore(generation).map((user) => {
+        // The space this restore opened: the one open as its own transition ends. A transition
+        // queued before it may have opened one meanwhile, which this restore closed on its way.
+        produced = user === undefined ? undefined : this.#state.open()
+
+        return user
+      }),
     )
 
     // The saved identity is current while its space opens, so the page renders for it at once.
-    return saved ? this.#state.startOpening(saved, restoring) : restoring
+    return saved ? this.#state.startOpening(saved, restoring, () => produced) : restoring
   }
 
   /**
@@ -313,18 +328,12 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * An organisation this device created joins the identity's memberships; see
-   * `SessionOrganisations.adopt`. One created while the start opens the saved identity's space
-   * joins once that space is open, and nobody else's.
+   * An adopter for a membership the gateway is about to answer (an organisation created, an
+   * invitation accepted), taken before the request: it adopts only into the space open now, or
+   * into the one the start's open under way produces; see `MembershipAdoption`.
    */
-  adoptMembership(created: Membership): Promise<void> {
-    const opening = this.#state.opening()
-
-    return opening
-      ? opening.settled.then(() =>
-          this.#state.openFor(opening) ? this.#organisations.adopt(created) : undefined,
-        )
-      : this.#organisations.adopt(created)
+  membershipAdopter(): MembershipAdopter {
+    return this.#adoption.adopter()
   }
 
   /**

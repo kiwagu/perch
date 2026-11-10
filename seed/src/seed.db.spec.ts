@@ -13,7 +13,7 @@ import {
   signInAndRead,
 } from './__fixtures__/device'
 import { simulatedFront } from './__fixtures__/simulated-front'
-import { leftOnStand, membersIn } from './__fixtures__/stand'
+import { leftOnStand, membersIn, writeMemberIn } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
 import { openStand, runSeed, type StandTarget, sweep } from './seed'
 
@@ -291,6 +291,56 @@ describe('seeding through the gateway', () => {
     // The outsider's organisation keeps its own member row; ann's goes with her membership.
     expect(await membersIn(target, outside)).toHaveLength(1)
     expect(await membersIn(target, outside)).not.toContain(annId)
+  })
+
+  it('sweeps an organisation whose database holds a member row with no membership', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
+    const ann = accountFor(
+      catalog.accounts.find((preset) => preset.ref === 'ann') ?? expect.unreachable('a preset ann'),
+      demo,
+    )
+    const organisation = { key: `orphan_${outsider.run}`, name: 'Orphan member' }
+    // The key of an identity the directory has never held.
+    const stray = `stray_${outsider.run}`
+
+    expect((await ensureOrganisationAs(client, ann, organisation)).isOk()).toBe(true)
+
+    const created = (await readOrganisation(client, organisation.key, ann))._unsafeUnwrap()
+    const seeded = {
+      ...manifest,
+      organisations: {
+        ...manifest.organisations,
+        orphan: { id: created.membership.tenant.id, ...organisation },
+      },
+    }
+
+    await writeMemberIn(target, organisation.key, stray)
+    expect(await membersIn(target, organisation.key)).toHaveLength(2)
+    expect(await membersIn(target, organisation.key)).toContain(stray)
+    expect(await leftOnStand(target, seeded)).toMatchObject({
+      identities: 2,
+      // Acme and the organisation of the stray row.
+      tenants: 2,
+      // Ann and beto in acme, and ann in the other.
+      memberships: 3,
+      databases: 2,
+    })
+    expect((await sweep(target, { emails }))._unsafeUnwrap()).toEqual({
+      accounts: 2,
+      organisations: 2,
+    })
+    expect(await leftOnStand(target, seeded)).toEqual({
+      identities: 0,
+      tenants: 0,
+      memberships: 0,
+      invitations: 0,
+      databases: 0,
+      profiles: 0,
+      settings: 0,
+      regionRows: 0,
+      accepted: 0,
+    })
   })
 
   it('sweeps the pending invitations of the organisations it removes, to any address, and those to the accounts it removes', async () => {

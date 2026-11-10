@@ -16,6 +16,7 @@ import { OrganisationAdmission } from './admission'
 import { OrganisationCreation } from './creation'
 import { OrganisationInvitations } from './invitations'
 import { type MembershipListener, MembershipListeners } from './listeners'
+import { MembersList } from './members-list'
 import type { OrganisationsOptions } from './options'
 import { OrganisationRemoval } from './removal'
 import { OrganisationRoleChange } from './role-change'
@@ -29,8 +30,9 @@ const MAX_NAME = 80
  * organisation and every membership; each organisation's own database holds its members, the
  * word its data is checked against. A command that fails with a `DataError` after some of its
  * rows were written leaves those rows in place, and asking again completes it: a creation by its
- * creator, a role change, a removal. Each change of memberships but a departure resolves once the
- * listeners heard the identity's new memberships.
+ * creator, a role change, a removal. Each change of memberships but a departure resolves once
+ * its tell settled: the listeners heard the identity's new memberships, or the telling failed
+ * and is retold later (`MembershipListeners`); no change fails for the telling.
  *
  * The changes of one identity's memberships (its creations, its acceptances of invitations, its
  * role changes, its removals and its departure) run one after the other, each once the one before
@@ -49,11 +51,11 @@ const MAX_NAME = 80
  */
 export class Organisations {
   readonly #lookup: OrganisationLookup
-  readonly #members: TenantMembers
   readonly #listeners: MembershipListeners
   readonly #creation: OrganisationCreation
   readonly #roleChange: OrganisationRoleChange
   readonly #removal: OrganisationRemoval
+  readonly #membersList: MembersList
   readonly #departure: AccountDeparture
   readonly #turns = new MembershipTurns()
   readonly #adminTurn: AdminTurn
@@ -64,12 +66,11 @@ export class Organisations {
     const { directory, databases, revoke, rerole, hub } = options
     const lookup = new OrganisationLookup(directory)
     const members = new TenantMembers(databases)
-    const listeners = new MembershipListeners(lookup)
+    const listeners = new MembershipListeners(lookup, this.#turns, options.retell)
     const admission = new OrganisationAdmission({ directory, lookup, members })
 
     this.#adminTurn = new AdminTurn(this.#turns, lookup)
     this.#lookup = lookup
-    this.#members = members
     this.#listeners = listeners
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
     this.invitations = new OrganisationInvitations({
@@ -82,6 +83,7 @@ export class Organisations {
     })
     this.#roleChange = new OrganisationRoleChange({ directory, lookup, members, rerole })
     this.#removal = new OrganisationRemoval({ directory, members, listeners, revoke })
+    this.#membersList = new MembersList({ lookup, members })
     this.#departure = new AccountDeparture({ directory, databases, hub })
   }
 
@@ -130,7 +132,7 @@ export class Organisations {
    * (the second is no admin by its turn and is refused `not-admin`), and a demotion races a
    * departure without leaving the organisation none (`last-admin`, which first writes the member
    * row of the only admin again as the directory has it). Asking again completes a change that
-   * failed, but the telling of a self-demotion: its actor is no admin any more.
+   * failed; a failure of the telling alone fails nothing and is retold.
    */
   setRole(input: {
     actor: IdentityId
@@ -214,7 +216,12 @@ export class Organisations {
     )
   }
 
-  /** The members of the organisation with their emails, for its admins, the earliest first. */
+  /**
+   * The members of the organisation with their emails, for its admins, the earliest membership
+   * first: the directory's, once the organisation's member rows are settled to them
+   * (`MembersList`), in the organisation's turn, where no change of its memberships is between
+   * its two writes.
+   */
   membersOf(input: {
     actor: IdentityId
     key: string
@@ -224,12 +231,22 @@ export class Organisations {
     return this.#lookup
       .tenantOf(key)
       .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
-      .andThen(() => this.#members.list(key))
-      .andThen((rows) => this.#lookup.withEmails(key, rows))
+      .andThen((tenant) =>
+        this.#adminTurn.run(actor, tenant, (current) => this.#membersList.list(current)),
+      )
   }
 
   /** Hears that an identity's memberships changed, with the new list. */
   onChange(listener: MembershipListener): () => void {
     return this.#listeners.add(listener)
+  }
+
+  /**
+   * Stops the re-tells of failed tells for good, and resolves once the one running, if any,
+   * settled; the changes under way are not waited for. Closed before what the re-tells read and
+   * tell.
+   */
+  close(): Promise<void> {
+    return this.#listeners.close()
   }
 }
