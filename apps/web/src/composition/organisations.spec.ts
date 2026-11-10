@@ -11,11 +11,15 @@ import { openTestWorld, type TestWorld } from './__fixtures__/session'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import {
+  IDENTITY_KEY,
+  type KeptDevice,
   MEMBERSHIPS_KEY,
+  type MemoryStorage,
   memoryStorage,
   saveDevice,
   savedMemberships,
   saveMemberships,
+  TOKEN_KEY,
 } from './storage'
 
 const ann = {
@@ -38,6 +42,9 @@ const bob: MemberView = {
   identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
   role: 'member',
 }
+
+/** Bob as another tab of the browser keeps him once it signed him in. */
+const bobsDevice: KeptDevice = { identity: bob.identity, token: 'token-bob', memberships: [] }
 
 const invitationToBob: InvitationView = {
   id: invitationIdFactory.create(),
@@ -101,6 +108,17 @@ async function annSignedIn(): Promise<TestWorld> {
   expect((await opened.session.restore()).isOk()).toBe(true)
 
   return opened
+}
+
+/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
+function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
+  const other = memoryStorage()
+
+  saveDevice(other, device)
+
+  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
+    storage.changeElsewhere(key, other.get(key))
+  }
 }
 
 describe('createOrganisations', () => {
@@ -168,6 +186,30 @@ describe('createOrganisations', () => {
           .sort(),
       ).toEqual(['acme', 'globex']),
     )
+  })
+
+  it('create adopts nothing into a space that replaced the asking one while the gateway answered', async () => {
+    const { session, storage, tenantsOpened } = await annSignedIn()
+    let answer = (): void => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const api: OrganisationsApi = {
+      ...answering().api,
+      create: () => ResultAsync.fromSafePromise(answered).map(() => acme),
+    }
+    const creating = createOrganisations(api, session).create({ key: 'acme', name: 'Acme' })
+
+    // Meanwhile another tab signed Bob in: this tab's space is his now.
+    signInElsewhere(storage, bobsDevice)
+    await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
+    answer()
+
+    expect((await creating)._unsafeUnwrap()).toEqual(acme)
+    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(session.memberships()).toEqual([])
+    expect(session.space()?.tenants()).toEqual([])
+    expect(tenantsOpened()).toEqual([])
   })
 
   it("answers members, invitations and removals as the gateway did, leaving the session's memberships alone", async () => {
