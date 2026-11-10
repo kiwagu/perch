@@ -10,11 +10,10 @@ import {
   type IdentityRow,
   identityIdOf,
   keyOf,
-  type Member,
-  type MemberRow,
   type MembershipRow,
   reading,
   type Tenant,
+  type TenantMembership,
   type TenantRow,
   toMembership,
   toTenant,
@@ -24,6 +23,7 @@ import membershipAdminsStatement from './surql/membership-admins.surql'
 import membershipOfEmailStatement from './surql/membership-of-email.surql'
 import membershipRoleStatement from './surql/membership-role.surql'
 import membershipsOfStatement from './surql/memberships-of.surql'
+import membershipsOfTenantStatement from './surql/memberships-of-tenant.surql'
 import tenantByKeyStatement from './surql/tenant-by-key.surql'
 
 /**
@@ -37,6 +37,14 @@ const emailRows = z.tuple([z.array(z.object({ email: z.string() }))])
 
 /** What `membership-of-email.surql` answers: the role found, if any. */
 const roleFound = z.tuple([tenantRole.nullish()])
+
+/**
+ * What `memberships-of-tenant.surql` answers: the rows of the organisation's memberships, the
+ * identity still a driver's record id, with no email for an identity that is gone.
+ */
+const membershipsOfTenantRows = z.tuple([
+  z.array(z.object({ identity: z.unknown(), role: tenantRole, email: z.string().optional() })),
+])
 
 /**
  * What the directory says of organisations, their memberships and the identities in them: the
@@ -181,29 +189,31 @@ export class OrganisationLookup {
   }
 
   /**
-   * The members with the emails the directory holds for their identities, in the same order. A
-   * member row whose identity is gone (the seed's sweep leaves such rows) is left out.
+   * The memberships of the organisation with the emails of their identities, the earliest
+   * first: those the directory holds, whether the identity still exists (it has an email) or not
+   * (the seed's sweep leaves such memberships).
    */
-  withEmails(key: string, rows: readonly MemberRow[]): ResultAsync<readonly Member[], DataError> {
-    return Result.combine(
-      rows.map((row) => identityIdOf(keyOf(row.id)).map((id) => ({ id, role: row.role }))),
-    )
-      .asyncAndThen((members) =>
-        reading(
-          this.#directory.db.query<[IdentityRow[]]>(identitiesByIdStatement, {
-            ids: members.map((member) => recordId('identity', member.id)),
-          }),
-          `could not read the identities of the members of ${key}`,
-        ).map(([identities]) => ({ members, identities })),
-      )
-      .map(({ members, identities }) => {
-        const emails = new Map(identities.map((row) => [keyOf(row.id), row.email]))
+  membershipsOfTenant(tenant: Tenant): ResultAsync<readonly TenantMembership[], DataError> {
+    return reading(
+      this.#directory.db.query(membershipsOfTenantStatement, {
+        tenant: recordId('tenant', tenant.id),
+      }),
+      `could not read the memberships of ${tenant.key}`,
+    ).andThen((answer) => {
+      const parsed = membershipsOfTenantRows.safeParse(answer)
 
-        return members.flatMap(({ id, role }): Member[] => {
-          const email = emails.get(id)
-
-          return email === undefined ? [] : [{ identity: { id, email }, role }]
-        })
-      })
+      return parsed.success
+        ? Result.combine(
+            parsed.data[0].map(({ identity, role, email }) =>
+              identityIdOf(keyOf(identity)).map((id) => ({ identity: id, role, email })),
+            ),
+          )
+        : err(
+            dataError(
+              'data:QUERY_FAILED',
+              `the memberships of ${tenant.key} have an unknown shape`,
+            ),
+          )
+    })
   }
 }

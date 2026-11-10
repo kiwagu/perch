@@ -32,8 +32,9 @@ export interface InvitationAnswersOptions {
  * declined, accepted or expired meanwhile is `invitation-gone`. Each answer decides from the rows
  * as they are in the organisation's turn, ordered with the invites, revocations, removals and
  * departures of the organisation. An accept that fails before the directory's transaction leaves
- * its invitation live, and asking again completes it; one whose telling fails leaves the
- * membership made and the invitation spent.
+ * its invitation live, and asking again completes it; a telling that fails after the transaction
+ * fails nothing: the membership is made, the invitation spent, and the account is told again
+ * later.
  */
 export class InvitationAnswers {
   readonly #lookup: OrganisationLookup

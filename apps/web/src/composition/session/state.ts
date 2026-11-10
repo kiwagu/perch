@@ -18,10 +18,15 @@ import type { SessionTransitions } from './transitions'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
-/** The saved identity while the start opens its space, and the end of that open. */
+/**
+ * The saved identity while the start opens its space, the end of that open, and the space that
+ * open produced: the one open at the end of its own restore transition, none before `settled`
+ * or when the space did not open.
+ */
 export interface Opening {
   readonly user: AuthUser
   readonly settled: Promise<unknown>
+  readonly produced: () => OpenSpace | undefined
 }
 
 export class SessionState implements SessionHost {
@@ -146,15 +151,17 @@ export class SessionState implements SessionHost {
   }
 
   /**
-   * The start opens the space of the saved `user`; `restoring` ends that open, opened or not.
-   * What it gives: `restoring`, but with nobody signed in once this tab left the open
-   * (`leaveUnopened`), whether it then failed or was dropped.
+   * The start opens the space of the saved `user`; `restoring` ends that open, opened or not,
+   * and `produced` reads the space its own transition left open. What it gives: `restoring`,
+   * but with nobody signed in once this tab left the open (`leaveUnopened`), whether it then
+   * failed or was dropped.
    */
   startOpening(
     user: AuthUser,
     restoring: ResultAsync<AuthUser | undefined, DataError>,
+    produced: () => OpenSpace | undefined,
   ): ResultAsync<AuthUser | undefined, DataError> {
-    const opening: Opening = { user, settled: Promise.resolve(restoring) }
+    const opening: Opening = { user, settled: Promise.resolve(restoring), produced }
 
     this.#opening = opening
     void opening.settled.then(() => this.#opened(opening))

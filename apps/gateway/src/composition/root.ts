@@ -173,8 +173,9 @@ export function createGatewayRoot(
     })
     // A removal takes the organisation's region from the removed identity's connections before
     // anything else can fail, and a role change has them push as the new role right after the
-    // directory's write; every change of memberships resolves once its devices were told. An
-    // invitation's link and its mail carry the same address of the front.
+    // directory's write; every change of memberships resolves once its devices were told, or
+    // once a telling that failed is left to the re-tells (on the gateway's clock, logged as the
+    // organisations' own). An invitation's link and its mail carry the same address of the front.
     const invitationLinkTo = (token: string) => invitationLink(options.publicUrl, token)
     const invitationMails = new InvitationMails({
       mail: options.mail,
@@ -197,6 +198,7 @@ export function createGatewayRoot(
         mailer: invitationMails,
         link: invitationLinkTo,
       },
+      retell: { clock: options.clock, random: Math.random, log: organisationsLog },
     })
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
@@ -262,7 +264,10 @@ export function createGatewayRoot(
       accountTurns,
       clock: options.clock,
       close: async () => {
-        // An invitation mail reads its recipient's language from the directory before it closes.
+        // The re-tells stop first, the one running awaited, before anything they read or tell
+        // through closes; then an invitation mail reads its recipient's language from the
+        // directory before it closes.
+        await organisations.close()
         await invitationMails.languagesRead()
         await hub.close()
         await databases.close()

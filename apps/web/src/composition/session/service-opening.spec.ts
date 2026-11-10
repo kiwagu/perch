@@ -171,7 +171,9 @@ describe("the start's open of the saved identity's space", () => {
   it('adopts an organisation created while the space opens, once it is open', async () => {
     const { session, open } = await annOpeningHeld()
     const restoring = session.restore()
-    const adopted = session.adoptMembership(acme)
+    // The adopter is taken before the request, while the space opens; the answer comes before it is open.
+    const adopt = session.membershipAdopter()
+    const adopted = adopt(acme)
 
     open()
 
