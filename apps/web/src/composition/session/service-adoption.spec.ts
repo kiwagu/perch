@@ -412,6 +412,9 @@ describe('the adopter of a membership the gateway answers', () => {
 
     const adopting = adopt(acme)
 
+    // Both happened before the adopter returned: before its promise could yield at all.
+    expect(order).toEqual(['write', 'follow'])
+
     queueMicrotask(() => order.push('yield'))
     await adopting
 
