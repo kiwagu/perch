@@ -75,6 +75,9 @@ anchors:
   console.users.list.operator-badge:
     kind: badge
     description: Marks an operator of the platform.
+  console.users.list.open-link:
+    kind: link
+    description: Opens the account's card, with the account in the address.
   console.users.error:
     kind: error
     description: Why the accounts could not be read, in the place of the list.
@@ -94,6 +97,13 @@ flow:
           description: A new search starts at page 1 with the page size kept.
           actions:
             - navigate: { to: /console/users, search: { q: { anchor: console.users.search-input }, page: 1 } }
+        console.users.list.open-link:
+          target: opened
+          actions:
+            - navigate: { to: /console/account, search: { id: { item: console.users.list.account-item } } }
+    opened:
+      description: The app has moved to the account's card.
+      type: final
 wireframe: |-
   - heading "Accounts" [level=1]
   - textbox "Search"

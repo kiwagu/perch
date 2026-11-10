@@ -1,0 +1,317 @@
+# yaml-language-server: $schema=../../../schemas/screen.schema.json
+id: console.account
+title: Account
+description: "One account of the platform, for an operator: what it is, its organisations, and the actions on it, each in an area of its own; the account is in the address."
+flag: null
+bindings:
+  - path: /console/account
+    roles: [ operator ]
+    history: push
+    search:
+      type: object
+      properties:
+        id:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: The identity id of the account, as the entry of the accounts list carries it.
+          examples: [ idn_01jkq5x3y8z2h9m4n6p7r8s9t0 ]
+      additionalProperties: false
+entry: [ console.account.heading, console.account.section, console.account.error ]
+anchors:
+  console.account.heading:
+    kind: heading
+    description: The name of the account, as the accounts list names it.
+  console.account.back-link:
+    kind: link
+    description: Leads back to the accounts.
+    binding: { route: /console/users }
+  console.account.section:
+    kind: section
+    description: "The account as read: its email, its dates, its marks, its ban and its organisations, with the areas that act on it; read again after each action."
+    source:
+      platform: accounts.read
+      params: { id: { search: id } }
+  console.account.email-cell:
+    kind: cell
+    description: The email of the account.
+  console.account.created-cell:
+    kind: cell
+    description: When the account was made.
+  console.account.seen-cell:
+    kind: cell
+    description: When one of the account's devices was last seen, among its sessions still kept; absent when none is.
+  console.account.verified-badge:
+    kind: badge
+    description: Marks an account whose email is verified.
+  console.account.banned-badge:
+    kind: badge
+    description: Marks a banned account.
+  console.account.operator-badge:
+    kind: badge
+    description: Marks an operator of the platform.
+  console.account.reason-cell:
+    kind: cell
+    description: Why the account was banned, as the operator wrote it; shown while it is banned and a reason was given.
+  console.account.organisations.list:
+    kind: list
+    description: "The organisations the account is a member of, with its role in each: what a removal refused with last-admin points at; absent when it is in none."
+  console.account.organisations.item:
+    kind: item
+    description: One organisation of the account.
+    dataId: organisation
+  console.account.organisations.name-cell:
+    kind: cell
+    description: The name of the organisation.
+  console.account.organisations.role-badge:
+    kind: badge
+    description: The account's role in the organisation.
+    dataValue: true
+  console.account.error:
+    kind: error
+    description: Why the account could not be read, in the place of the section.
+    codes: [ not-operator, account-gone, failed ]
+  console.account.name.form:
+    kind: form
+    description: Renames the account's profile; shown while the account has a profile.
+  console.account.name.name-input:
+    kind: input
+    description: The name, as read or as typed.
+    binding:
+      action: platform.accounts.rename
+      params:
+        name: console.account.name.name-input
+  console.account.name.save-button:
+    kind: button
+    description: Saves the name.
+    binding:
+      action: platform.accounts.rename
+      params:
+        id: { search: id }
+  console.account.name.error:
+    kind: error
+    fields:
+      name-required: console.account.name.name-input
+      name-too-long: console.account.name.name-input
+  console.account.email.form:
+    kind: form
+    description: Asks to change the account's email; the account keeps its email until the link sent to the new one is opened.
+  console.account.email.email-input:
+    kind: input
+    description: The new email (type email).
+    binding:
+      action: platform.accounts.change-email
+      params:
+        email: console.account.email.email-input
+  console.account.email.send-button:
+    kind: button
+    description: Sends the new email the mail that confirms it.
+    binding:
+      action: platform.accounts.change-email
+      params:
+        id: { search: id }
+  console.account.email.error:
+    kind: error
+    fields:
+      email-invalid: console.account.email.email-input
+      email-taken: console.account.email.email-input
+  console.account.ban.form:
+    kind: form
+    description: Bans the account with an optional reason, or lifts its ban.
+  console.account.ban.reason-input:
+    kind: input
+    description: "Optional: why the account is banned, for operators alone; shown while it is not banned."
+    binding:
+      action: platform.accounts.ban
+      params:
+        reason: console.account.ban.reason-input
+  console.account.ban.ban-button:
+    kind: button
+    description: Bans the account until an operator lifts the ban, signing its devices out; shown while it is not banned.
+    binding:
+      action: platform.accounts.ban
+      params:
+        id: { search: id }
+  console.account.ban.unban-button:
+    kind: button
+    description: Lifts the ban; shown while the account is banned.
+    binding:
+      action: platform.accounts.unban
+      params:
+        id: { search: id }
+  console.account.ban.error:
+    kind: error
+  console.account.sessions.revoke-button:
+    kind: button
+    description: Signs every device of the account out.
+    binding:
+      action: platform.accounts.revoke-sessions
+      params:
+        id: { search: id }
+  console.account.sessions.error:
+    kind: error
+  console.account.reset.send-button:
+    kind: button
+    description: Sends the account the mail whose link sets a new password.
+    binding:
+      action: platform.accounts.send-reset
+      params:
+        id: { search: id }
+  console.account.reset.error:
+    kind: error
+  console.account.verification.resend-button:
+    kind: button
+    description: Sends the account the mail whose link verifies its email, again; shown while the email is not verified.
+    binding:
+      action: platform.accounts.resend-verification
+      params:
+        id: { search: id }
+  console.account.verification.error:
+    kind: error
+  console.account.removal.remove-button:
+    kind: button
+    description: Removes the account for good, as its own deletion would.
+    binding:
+      action: platform.accounts.remove
+      params:
+        id: { search: id }
+  console.account.removal.error:
+    kind: error
+states:
+  loading: "console.account.section in loading: the account is being read."
+  ready: "The heading and console.account.section with the account's email, dates, marks, ban and organisations, and the areas that act on it: two forms, the ban form and the buttons of the other actions."
+  error: "console.account.error in the place of the section: the account could not be read, or it is gone; the way back is the link to the accounts."
+flow:
+  id: account
+  initial: viewing
+  states:
+    viewing:
+      type: parallel
+      description: The account as read, with the areas that act on it; each reads the account again once its action ends.
+      states:
+        name:
+          description: Renaming the account's profile.
+          by: console.account.name.save-button
+          onDone:
+            description: The heading shows the new name once the account is read again.
+            actions:
+              - read: console.account.section
+          onError:
+            actions:
+              - show: console.account.name.error
+              - read: console.account.section
+        email:
+          description: Changing the account's email, confirmed from the new mailbox.
+          by: console.account.email.send-button
+          onDone:
+            description: The mail is on its way to the new email; the account keeps its email until the link is opened.
+            actions:
+              - clear: console.account.email.email-input
+              - read: console.account.section
+          onError:
+            actions:
+              - show: console.account.email.error
+              - read: console.account.section
+        ban:
+          description: Banning the account, or lifting its ban.
+          initial: idle
+          states:
+            idle:
+              on:
+                console.account.ban.ban-button: banning
+                console.account.ban.unban-button: unbanning
+            banning:
+              invoke:
+                src: platform.accounts.ban
+                input: { id: { search: id }, reason: console.account.ban.reason-input }
+                onDone:
+                  target: idle
+                  description: The account is banned and its devices are signed out; the account read again shows the ban with its reason.
+                  actions:
+                    - clear: console.account.ban.reason-input
+                    - read: console.account.section
+                onError:
+                  target: idle
+                  actions:
+                    - show: console.account.ban.error
+                    - read: console.account.section
+            unbanning:
+              invoke:
+                src: platform.accounts.unban
+                input: { id: { search: id } }
+                onDone:
+                  target: idle
+                  actions:
+                    - read: console.account.section
+                onError:
+                  target: idle
+                  actions:
+                    - show: console.account.ban.error
+                    - read: console.account.section
+        sessions:
+          description: Signing every device of the account out.
+          by: console.account.sessions.revoke-button
+          onDone:
+            actions:
+              - read: console.account.section
+          onError:
+            actions:
+              - show: console.account.sessions.error
+              - read: console.account.section
+        reset:
+          description: Sending the account a password reset.
+          by: console.account.reset.send-button
+          onDone:
+            actions:
+              - read: console.account.section
+          onError:
+            actions:
+              - show: console.account.reset.error
+              - read: console.account.section
+        verification:
+          description: Sending the account its verification mail again.
+          by: console.account.verification.resend-button
+          onDone:
+            actions:
+              - read: console.account.section
+          onError:
+            actions:
+              - show: console.account.verification.error
+              - read: console.account.section
+        removal:
+          description: Removing the account for good.
+          by: console.account.removal.remove-button
+          onDone:
+            target: "#account.removed"
+            description: The account is gone; the app moves to the accounts, where the toast says so.
+            actions:
+              - navigate: /console/users
+          onError:
+            description: A removal refused with last-admin leaves the account as it is, its organisations shown.
+            actions:
+              - show: console.account.removal.error
+              - read: console.account.section
+    removed:
+      description: The app has moved to /console/users.
+      type: final
+wireframe: |-
+  - link "Accounts"
+  - heading /.+/ [level=1]
+  - text: /.+@.+/
+  - text: Verified
+  - text: /Created .+/
+  - text: /Last seen .+/
+  - list:
+    - listitem:
+      - text: /.+/
+      - text: admin
+  - textbox "Name"
+  - button "Save the name"
+  - textbox "New email"
+  - button "Send the confirmation"
+  - textbox "Reason"
+  - button "Ban"
+  - button "Sign out everywhere"
+  - button "Send a password reset"
+  - button "Resend the verification"
+  - button "Remove the account"

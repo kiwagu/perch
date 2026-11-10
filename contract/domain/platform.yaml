@@ -425,6 +425,160 @@ actions:
     roles:
       - operator
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
+  accounts.read:
+    description: Reads one account for an operator, with its organisations.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made, when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given, and its organisations, each with its key, its name and the account's role in it; an id with no account answers account-gone"
+    codes:
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+  accounts.rename:
+    description: Sets the name of an account's profile, as the account's own profile page would.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+      name:
+        type: string
+        description: The name, 1 to 80 characters.
+    result: "the profile's name is the new one, and the account's devices show it as they show any change of the profile; an account with no profile yet (it never signed in) has no name to set, so the card offers no rename then"
+    codes:
+      - name-required
+      - name-too-long
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+  accounts.change-email:
+    description: Asks to change an account's email for it; the mail below goes to the new email, and its link makes the change.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+      email:
+        type: string
+        description: The new email.
+    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, by the account or by an operator, and the account keeps its email until that link is opened, which also marks the new email verified; a new email that has an account answers email-taken and sends nothing, and one that is not an email email-invalid; the mails count toward the operator's network address's budget of mails"
+    codes:
+      - email-invalid
+      - email-taken
+      - rate-limited
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+    mail:
+      to: email
+      language: account
+      link: { screen: user.confirm-email, search: token }
+  accounts.ban:
+    description: Bans an account until an operator lifts the ban, with a reason for operators alone, and signs its devices out.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+      reason:
+        type: string
+        description: "Optional: why, for operators alone; the account never sees it."
+    result: "the account is banned and every device of it is signed out in the same step, so each lands on /sign-in told account-banned, and a sign-in with the right password answers account-banned until accounts.unban; an account banned already keeps its ban, with the reason given now; the operator's own account answers own-account and nothing changes"
+    codes:
+      - own-account
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+  accounts.unban:
+    description: Lifts the ban of an account, which signs in again.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: the account is not banned and signs in as before; the devices its ban signed out stay signed out; an account not banned stays as it is
+    codes:
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+  accounts.revoke-sessions:
+    description: Signs every device of an account out.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: every device of the account signs out, and /sign-in shows signed-out-elsewhere on each; the operator's own account answers own-account, since its own devices page does that
+    codes:
+      - own-account
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+  accounts.send-reset:
+    description: Sends an account the mail whose link sets a new password, as the account could ask for itself.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: "the mail below is on its way to the account's email, its link replacing the links of earlier requests, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; the mails count toward the operator's network address's budget of mails"
+    codes:
+      - rate-limited
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+    mail:
+      to: account
+      language: account
+      link: { screen: user.reset-password, search: token }
+  accounts.resend-verification:
+    description: Sends an account whose email is not verified yet the mail whose link verifies it, again.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: "the mail below is on its way to the account's email, under the account's own allowances: one email takes three within a quarter of an hour, and a fourth answers rate-limited and sends nothing; an account whose email is verified answers verified-before and sends nothing; the mails count toward the operator's network address's budget of mails"
+    codes:
+      - verified-before
+      - rate-limited
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+    mail:
+      to: account
+      language: account
+      link: { screen: user.verify-email, search: token }
+  accounts.remove:
+    description: Removes an account for good, as its own deletion would, without a mailed link.
+    params:
+      id:
+        type: string
+        description: The identity id of the account.
+    result: "the account is gone for good, as delete-account leaves it: its profile and its settings, its sessions, so every device of it is signed out, and its memberships; each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once; an account that is the only administrator of an organisation with other members answers last-admin and nothing changes, until another member of it is made an administrator or those members are removed; the operator's own account answers own-account"
+    codes:
+      - last-admin
+      - own-account
+      - not-operator
+      - account-gone
+      - failed
+    roles:
+      - operator
+    notices:
+      - name: account-deleted
+        to: account
+        language: account
 events:
   started: "The start is done: the browser keeps site data and the app knows who is signed in on this device, so the frame and the open screen can render."
   start-failed: The app's code did not load or run on this device, so it could not start or tell who is signed in.
@@ -461,6 +615,14 @@ toasts:
   invitations.decline: invitation-declined
   devices.revoke: device-signed-out
   change-password: password-changed
+  accounts.rename: name-saved
+  accounts.change-email: email-change-sent
+  accounts.ban: ban-set
+  accounts.unban: ban-lifted
+  accounts.revoke-sessions: sessions-revoked
+  accounts.send-reset: reset-sent
+  accounts.resend-verification: verification-sent
+  accounts.remove: account-removed
 leaving:
   - platform.sign-out
   - platform.sign-out-everywhere
