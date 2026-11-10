@@ -5,7 +5,8 @@
  * restores it by), each anchor a state lists in `meta.renders`, each entry and exit effect, each
  * transition on an event with its target, guard and effects, each invoke with its input, its
  * `read: false` when it says nothing reads after its action, and
- * its outcomes, each final state. A state is named by its path (`viewing.form.open`);
+ * its outcomes (a branch with its target, guard, its `read: false` when it says nothing reads
+ * after that outcome, and effects), each final state. A state is named by its path (`viewing.form.open`);
  * descriptions are left out, as they change nothing that runs. The diff compares lines as
  * sets, so where order runs the machine a line carries its position, `#<n>`, in a sequence
  * of more than one: the guarded alternatives of an event or an outcome (the first that holds
@@ -53,12 +54,13 @@ const addressLine = (path: string, address: FlowAddress): string =>
     ...(address.search === undefined ? [] : [canonicalJson(address.search)]),
   ].join(' ')
 
-/** `<head>`, then the transition's target, guard and effects, those it has. */
+/** `<head>`, then the transition's target, guard, `read: false` and effects, those it has. */
 const transitionLine = (head: string, transition: FlowTransition): string =>
   [
     head,
     ...(transition.target === undefined ? [] : [`-> ${transition.target}`]),
     ...(transition.guard === undefined ? [] : [`[${transition.guard}]`]),
+    ...(transition.read === false ? ['read: false'] : []),
     ...(transition.actions ?? []).map(effectText),
   ].join(' ')
 
