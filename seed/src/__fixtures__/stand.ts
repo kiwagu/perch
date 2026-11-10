@@ -1,7 +1,8 @@
-import type { Shape } from '@workspace/data'
+import { type Command, runCommand, type Shape } from '@workspace/data'
 
 import { openStand, openStandTenant, type SeedManifest, type StandOptions } from '../seed'
 
+import memberWriteText from './member-write.surql'
 import membersText from './members.surql'
 import standCountsText from './stand-counts.surql'
 
@@ -67,6 +68,16 @@ const members: Shape<Record<string, never>, readonly string[]> = {
   tables: ['member'],
 }
 
+const memberWrite: Command<{ readonly identity: string }> = {
+  id: 'fixture.memberWrite',
+  kind: 'command',
+  text: memberWriteText,
+  params: [{ name: 'identity', type: 'string' }],
+  tables: ['member'],
+  region: 'server',
+  ops: [],
+}
+
 /** Reads, as the stand's operator, what a seed run left there for the accounts of its manifest. */
 export async function leftOnStand(
   target: StandOptions,
@@ -99,6 +110,26 @@ export async function membersIn(target: StandOptions, key: string): Promise<read
 
   try {
     return (await stand.runner.read(members, {}))._unsafeUnwrap()
+  } finally {
+    await stand.close()
+  }
+}
+
+/**
+ * Writes, as the stand's operator, a member row for the identity key `identity` into the database
+ * of organisation `key`, whatever the directory holds: a row no membership stands behind.
+ */
+export async function writeMemberIn(
+  target: StandOptions,
+  key: string,
+  identity: string,
+): Promise<void> {
+  const stand = (await openStandTenant(target, `t_${key}`))._unsafeUnwrap()
+
+  try {
+    const written = await runCommand(stand.local, memberWrite, { identity })
+
+    written._unsafeUnwrap()
   } finally {
     await stand.close()
   }
