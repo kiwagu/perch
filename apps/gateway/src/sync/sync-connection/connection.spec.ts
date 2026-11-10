@@ -11,7 +11,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
-import { idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
+import { type IdentityId, idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -24,6 +24,7 @@ import {
   PROTOCOL_VERSION,
   type ServerMessage,
   serverMessage,
+  type TenantRole,
 } from '@workspace/replica/protocol'
 import { RegionHub, singleDatabase } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
@@ -35,17 +36,21 @@ import {
   openAuth,
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
+import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
 import { authHandler } from '../../auth/auth-handler'
 import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
+import { DeviceSessions } from '../../auth/device-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { admitted, specInvitations } from '../../tenants/__fixtures__/invitations'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
 import memberRemoveStatement from '../../tenants/surql/member-remove.surql'
 import membershipRemoveStatement from '../../tenants/surql/membership-remove.surql'
+import membershipSetRoleStatement from '../../tenants/surql/membership-set-role.surql'
 import membershipsOfStatement from '../../tenants/surql/memberships-of.surql'
 import { TenantDatabases } from '../../tenants/tenant-databases'
 import { noteCreate, noteUpdate } from '../__fixtures__/note'
@@ -128,11 +133,13 @@ interface ConnectOptions {
   ) => Promise<SessionRead>
   /** Ends the session of a device that signs out over its channel; the directory ends it by default. */
   readonly signOut?: SyncConnectionDeps['sessions']['signOut']
+  /** Marks a device seen in place of the directory, which answers at once by default. */
+  readonly seen?: SyncConnectionDeps['devices']['seen']
 }
 
 interface GatewayOptions {
   /** Runs before each query sent to an organisation's database; it may throw to make the query fail. */
-  readonly tenantQueries?: (text: string) => void
+  readonly tenantQueries?: (text: string) => void | Promise<void>
   /** Runs before each query the organisations send to the directory; it may throw to make the query fail. */
   readonly directoryQueries?: (text: string) => void
   /** Holds each write of a profile's email into the region until it resolves. */
@@ -222,7 +229,9 @@ async function openGateway(options: GatewayOptions = {}) {
     directory: options.directoryQueries ? interceptQueries(local, options.directoryQueries) : local,
     databases,
     revoke: (identity, region) => connections.revoke(identity, region),
+    rerole: (identity, region, role) => connections.rerole(identity, region, role),
     hub,
+    invitations: specInvitations(local),
   })
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
@@ -306,6 +315,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
   const unsubscribed: string[] = []
   const socket = new FakeSocket()
   const read = (token: string) => sessions.read(token)
+  const devices = new DeviceSessions({ directory: gateway.local, clock: gateway.clock })
   const connection = new SyncConnection(socket, {
     sessions: {
       read: (token) => {
@@ -319,8 +329,9 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
       seen: (device) => {
         seen.push(device)
 
-        return okAsync(undefined)
+        return options.seen ? options.seen(device) : okAsync(undefined)
       },
+      byToken: (token) => devices.byToken(token),
     },
     hub: {
       subscribe: hub.subscribe.bind(hub),
@@ -328,6 +339,7 @@ function open(gateway: Gateway, options: ConnectOptions = {}) {
         unsubscribed.push(region)
         hub.unsubscribe(region, subscriber)
       },
+      changeActor: hub.changeActor.bind(hub),
       pull: hub.pull.bind(hub),
       push: hub.push.bind(hub),
       heads: hub.heads.bind(hub),
@@ -460,6 +472,19 @@ async function connectedAsAnn(options: ConnectOptions = {}, gatewayOptions: Gate
   return { ...fixture, doc: RegionDoc.inMemory('private', fixture.region) }
 }
 
+/** Bob joins Acme the way an account does: Ann invites him and he accepts the invitation. */
+function joinAcme(
+  gateway: Awaited<ReturnType<typeof openGateway>>,
+  anns: { readonly identity: { readonly id: IdentityId } },
+  bobs: { readonly identity: { readonly id: IdentityId } },
+) {
+  return admitted(gateway.organisations, {
+    actor: anns.identity.id,
+    key: 'acme',
+    invitee: { id: bobs.identity.id, email: bob.email },
+  })
+}
+
 /**
  * A gateway where Ann and Bob have signed up and Ann has created the organisation Acme;
  * Bob belongs to it when `bobInvited`.
@@ -473,9 +498,7 @@ async function withAcme(bobInvited: boolean, options: GatewayOptions = {}) {
   )._unsafeUnwrap()
 
   if (bobInvited) {
-    ;(
-      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
-    )._unsafeUnwrap()
+    await joinAcme(gateway, anns, bobs)
   }
 
   return { gateway, anns, bobs, acme }
@@ -527,6 +550,54 @@ describe('SyncConnection', () => {
     expect(clock.pending()).toBe(0)
   })
 
+  it('welcomes a device once the mark of its hello landed, so it is seen before it hears anything', async () => {
+    let reach = () => {}
+    let release = () => {}
+    const reached = new Promise<void>((resolve) => {
+      reach = resolve
+    })
+    const landed = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const { socket, connection, ann } = await connect({
+      seen: () => {
+        reach()
+
+        return ResultAsync.fromSafePromise(landed)
+      },
+    })
+    const helloed = hello(connection, ann.token)
+
+    await reached
+
+    // Every other step of the hello has time to run meanwhile: the welcome waits for the mark.
+    const first = await Promise.race([
+      helloed.then(() => 'welcomed'),
+      new Promise<string>((resolve) => {
+        setTimeout(() => resolve('still marking'), 200)
+      }),
+    ])
+
+    expect(first).toBe('still marking')
+    expect(socket.sent).toEqual([])
+
+    release()
+    await helloed
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+  })
+
+  it('welcomes a device all the same when the mark of its hello failed, and logs it', async () => {
+    const { socket, connection, ann, logLines } = await connect({
+      seen: () => errAsync(dataError('data:QUERY_FAILED', 'the directory is away')),
+    })
+
+    await hello(connection, ann.token)
+
+    expect(socket.sent.map((message) => message.type)).toEqual(['welcome'])
+    expect(logLines.join('\n')).toContain('the device could not be marked seen')
+  })
+
   it.each<{ readonly name: string; readonly token: (fixture: Connected) => Promise<string> }>([
     { name: 'a token nobody holds', token: async () => 'garbage' },
     {
@@ -557,6 +628,50 @@ describe('SyncConnection', () => {
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
     expect(seen).toEqual([])
+  })
+
+  it.each([
+    { reason: 'revoked', code: CLOSE.revoked, text: 'signed out from another device' },
+    {
+      reason: 'password-changed',
+      code: CLOSE.passwordChanged,
+      text: 'signed out because the password changed',
+    },
+    {
+      reason: 'device-limit',
+      code: CLOSE.deviceLimit,
+      text: 'signed out by a sign-in past the limit of devices',
+    },
+  ])(
+    'closes with $code the hello of a device whose session ended as $reason while it was offline',
+    async ({ reason, code, text }) => {
+      const { socket, connection, ann, connections, seen, local, clock } = await connect()
+
+      await local.db.query(endWithStatement, {
+        session_token: ann.token,
+        ended_at: new Date(clock.now()),
+        reason,
+      })
+      await hello(connection, ann.token)
+
+      expect(socket.closes).toEqual([[code, text]])
+      expect(socket.sent).toEqual([])
+      expect(connections.forIdentity(ann.identity.id)).toEqual([])
+      expect(seen).toEqual([])
+    },
+  )
+
+  it("closes 4401 a hello under another device than its ended session's, whatever ended it", async () => {
+    const { socket, connection, ann, local, clock } = await connect()
+
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await hello(connection, ann.token, 'device-phone')
+
+    expect(socket.closes).toEqual([[CLOSE.unauthorized, 'the session was not accepted']])
   })
 
   it('closes as a failed server a hello whose session could not be read, and welcomes it once it can', async () => {
@@ -829,6 +944,32 @@ describe('SyncConnection', () => {
     await helloed
 
     expect(socket.closes).toEqual([[CLOSE.revoked, 'signed out from another device']])
+    expect(socket.sent).toEqual([])
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
+    expect(seen).toEqual([])
+  })
+
+  it('closes a hello refused at its registration with the code its ended session keeps, 4003 for the limit of devices', async () => {
+    const held = heldRead()
+    const { socket, connection, ann, connections, seen, local, clock } = await connect({
+      read: held.read,
+    })
+    const helloed = hello(connection, ann.token)
+
+    await held.reached
+    // As a sign-in past the limit does: the session first, then the sockets.
+    await local.db.query(endWithStatement, {
+      session_token: ann.token,
+      ended_at: new Date(clock.now()),
+      reason: 'device-limit',
+    })
+    await connections.close(ann.identity.id, DEVICE, CLOSE.deviceLimit)
+    held.release()
+    await helloed
+
+    expect(socket.closes).toEqual([
+      [CLOSE.deviceLimit, 'signed out by a sign-in past the limit of devices'],
+    ])
     expect(socket.sent).toEqual([])
     expect(connections.forIdentity(ann.identity.id)).toEqual([])
     expect(seen).toEqual([])
@@ -1257,14 +1398,12 @@ describe('SyncConnection', () => {
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
   })
 
-  it('sends memberships with the new organisation when the identity is invited while connected', async () => {
+  it('sends memberships with the new organisation when the identity joins it while connected', async () => {
     const { gateway, anns, bobs, acme } = await withAcme(false)
     const { socket, connection } = open(gateway)
 
     await hello(connection, bobs.token)
-    ;(
-      await gateway.organisations.invite({ actor: anns.identity.id, key: 'acme', email: bob.email })
-    )._unsafeUnwrap()
+    await joinAcme(gateway, anns, bobs)
     // The region is not subscribed on the device's behalf: the device subscribes, and now may.
     await connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
 
@@ -1446,6 +1585,378 @@ describe('SyncConnection', () => {
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'error'])
     expect(socket.closedWith?.[0]).toBe(CLOSE.forbidden)
   })
+})
+
+/** The acknowledgements and rejections among what a socket was sent. */
+function answersOf(sent: readonly ServerMessage[]): ServerMessage[] {
+  return sent.filter((message) => message.type === 'ack' || message.type === 'reject')
+}
+
+/** Pushes `update` into the region of Acme as the device's batch `batch`. */
+function pushToAcme(
+  device: ReturnType<typeof open>,
+  batch: number,
+  update: Uint8Array<ArrayBuffer>,
+) {
+  return device.connection.receive(
+    encode({ type: 'push', region: 'tenant:acme', batch, updates: [update] }),
+  )
+}
+
+/** Subscribes the device to the region of Acme. */
+function subscribeToAcme(device: ReturnType<typeof open>) {
+  return device.connection.receive(encode({ type: 'subscribe', region: 'tenant:acme', vv: null }))
+}
+
+/**
+ * Ann's device subscribes to Acme and pushes a note of hers. Answers the note's id and
+ * `rewrite(text)`, the update by which a device that holds the note rewrites it: each is written
+ * on a document of its own, so none stands on a change of another that was refused.
+ */
+async function annsNoteInAcme(gateway: Gateway, anns: Awaited<ReturnType<Gateway['signUp']>>) {
+  const device = open(gateway)
+  const id = noteIdFactory.create()
+  const created = await noteCreate(RegionDoc.inMemory('tenant', 'tenant:acme'), {
+    id,
+    author: anns.identity.id,
+    text: 'from ann',
+  })
+
+  await hello(device.connection, anns.token)
+  await subscribeToAcme(device)
+  await pushToAcme(device, 1, created._unsafeUnwrap())
+
+  return {
+    device,
+    id,
+    rewrite: async (text: string) => {
+      const copy = RegionDoc.inMemory('tenant', 'tenant:acme')
+
+      copy.doc.import(created._unsafeUnwrap())
+
+      return (await noteUpdate(copy, { id, text }))._unsafeUnwrap()
+    },
+  }
+}
+
+/** The directory fails the read of memberships that follows a write of a role, once `fail()`. */
+function failingTell() {
+  let armed = false
+  let written = false
+
+  return {
+    queries: (text: string) => {
+      if (armed && text === membershipSetRoleStatement) {
+        written = true
+      } else if (written && text === membershipsOfStatement) {
+        throw new Error('the directory went away for a moment')
+      }
+    },
+    fail: () => {
+      armed = true
+    },
+  }
+}
+
+/** A query of an organisation's database held, once armed, until it is released. */
+function heldQuery() {
+  let armed = false
+  let release = () => {}
+  let reached = () => {}
+  const gate = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  const waiting = new Promise<void>((resolve) => {
+    reached = resolve
+  })
+
+  return {
+    reached: waiting,
+    arm: () => {
+      armed = true
+    },
+    release: () => release(),
+    before: (): void | Promise<void> => {
+      if (!armed) {
+        return undefined
+      }
+
+      armed = false
+      reached()
+
+      return gate
+    },
+  }
+}
+
+describe('SyncConnection, a role change', () => {
+  const member: TenantRole = 'member'
+  const admin: TenantRole = 'admin'
+
+  it("judges a device's next push by its new role: an admin's edit of another's note is acknowledged, a member's again refused", async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+    const { rewrite } = await annsNoteInAcme(gateway, anns)
+    const bobsDevice = open(gateway)
+
+    await hello(bobsDevice.connection, bobs.token)
+    await subscribeToAcme(bobsDevice)
+    await pushToAcme(bobsDevice, 1, await rewrite('as a member'))
+    ;(
+      await gateway.organisations.setRole({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+        role: admin,
+      })
+    )._unsafeUnwrap()
+    await pushToAcme(bobsDevice, 2, await rewrite('as an admin'))
+    ;(
+      await gateway.organisations.setRole({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+        role: member,
+      })
+    )._unsafeUnwrap()
+    await pushToAcme(bobsDevice, 3, await rewrite('a member again'))
+
+    expect(answersOf(bobsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ type: 'reject', batch: 1, reason: 'forbidden-action' }),
+      expect.objectContaining({ type: 'ack', batch: 2 }),
+      expect.objectContaining({ type: 'reject', batch: 3, reason: 'forbidden-action' }),
+    ])
+    expect(bobsDevice.socket.sent.filter((message) => message.type === 'memberships')).toEqual([
+      expect.objectContaining({ memberships: [expect.objectContaining({ role: admin })] }),
+      expect.objectContaining({ memberships: [expect.objectContaining({ role: member })] }),
+    ])
+  })
+
+  it('swaps the actor at the hub before the memberships are sent, directly and again as they are told', async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+
+    await annsNoteInAcme(gateway, anns)
+
+    /** What the socket had been sent whenever the connection swapped the device's actor. */
+    const sentWhenSwapped: string[][] = []
+    const bobsDevice = open(gateway, {
+      hub: {
+        changeActor: (region, subscriber, actor) => {
+          sentWhenSwapped.push(types(bobsDevice.socket.sent))
+          gateway.hub.changeActor(region, subscriber, actor)
+        },
+      },
+    })
+
+    await hello(bobsDevice.connection, bobs.token)
+    await subscribeToAcme(bobsDevice)
+    ;(
+      await gateway.organisations.setRole({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+        role: admin,
+      })
+    )._unsafeUnwrap()
+
+    expect(sentWhenSwapped).toEqual([
+      ['welcome', 'updates'],
+      ['welcome', 'updates'],
+    ])
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'memberships'])
+  })
+
+  it('swaps the actor of the regions it keeps whenever memberships are told, the directory saying what it says', async () => {
+    const { gateway, anns, bobs, acme } = await withAcme(true)
+    const { rewrite } = await annsNoteInAcme(gateway, anns)
+    const bobsDevice = open(gateway)
+
+    await hello(bobsDevice.connection, bobs.token)
+    await subscribeToAcme(bobsDevice)
+    await gateway.connections.tell(bobs.identity.id, [{ tenant: acme.tenant, role: admin }])
+    await pushToAcme(bobsDevice, 1, await rewrite('as an admin'))
+    await gateway.connections.tell(bobs.identity.id, [{ tenant: acme.tenant, role: member }])
+    await pushToAcme(bobsDevice, 2, await rewrite('a member again'))
+
+    expect(answersOf(bobsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+      expect.objectContaining({ type: 'reject', batch: 2, reason: 'forbidden-action' }),
+    ])
+  })
+
+  it("refuses a self-demoted admin's next edit of another's note although the directory read of the telling failed", async () => {
+    const tell = failingTell()
+    const { gateway, anns, bobs } = await withAcme(true, { directoryQueries: tell.queries })
+
+    ;(
+      await gateway.organisations.setRole({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+        role: admin,
+      })
+    )._unsafeUnwrap()
+
+    const { rewrite } = await annsNoteInAcme(gateway, anns)
+    const bobsDevice = open(gateway)
+
+    await hello(bobsDevice.connection, bobs.token)
+    await subscribeToAcme(bobsDevice)
+    await pushToAcme(bobsDevice, 1, await rewrite('as an admin'))
+
+    tell.fail()
+
+    const demotion = await gateway.organisations.setRole({
+      actor: bobs.identity.id,
+      key: 'acme',
+      identity: bobs.identity.id,
+      role: member,
+    })
+
+    expect(demotion._unsafeUnwrapErr()).toMatchObject({ code: 'data:QUERY_FAILED' })
+    await pushToAcme(bobsDevice, 2, await rewrite('a member now'))
+
+    expect(answersOf(bobsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ type: 'ack', batch: 1 }),
+      expect.objectContaining({ type: 'reject', batch: 2, reason: 'forbidden-action' }),
+    ])
+    // Nothing was told: the device shows the memberships it was welcomed with.
+    expect(types(bobsDevice.socket.sent)).not.toContain('memberships')
+  })
+
+  it.each([
+    { from: member, to: admin, outcome: 'ack' },
+    { from: admin, to: member, outcome: 'reject' },
+  ] as const)(
+    'a device that subscribes only after its role went from $from to $to pushes as $to, although the telling failed ($outcome)',
+    async ({ from, to, outcome }) => {
+      const tell = failingTell()
+      const { gateway, anns, bobs } = await withAcme(true, { directoryQueries: tell.queries })
+
+      if (from === admin) {
+        ;(
+          await gateway.organisations.setRole({
+            actor: anns.identity.id,
+            key: 'acme',
+            identity: bobs.identity.id,
+            role: admin,
+          })
+        )._unsafeUnwrap()
+      }
+
+      const { rewrite } = await annsNoteInAcme(gateway, anns)
+      const bobsDevice = open(gateway)
+
+      await hello(bobsDevice.connection, bobs.token)
+      tell.fail()
+      expect(
+        (
+          await gateway.organisations.setRole({
+            actor: anns.identity.id,
+            key: 'acme',
+            identity: bobs.identity.id,
+            role: to,
+          })
+        )._unsafeUnwrapErr(),
+      ).toMatchObject({ code: 'data:QUERY_FAILED' })
+
+      await subscribeToAcme(bobsDevice)
+      await pushToAcme(bobsDevice, 1, await rewrite(`as ${to}`))
+
+      expect(answersOf(bobsDevice.socket.sent)).toEqual([
+        expect.objectContaining(
+          outcome === 'ack'
+            ? { type: 'ack', batch: 1 }
+            : { type: 'reject', batch: 1, reason: 'forbidden-action' },
+        ),
+      ])
+    },
+  )
+
+  it("takes effect in the order of the hello's changes: a re-judging told while the hello is under way applies right after the welcome", async () => {
+    const { gateway, anns, bobs } = await withAcme(true)
+    const { rewrite } = await annsNoteInAcme(gateway, anns)
+    const heads = holding()
+    const bobsDevice = openHolding(gateway, heads)
+    const reached = heads.hold()
+    const helloed = hello(bobsDevice.connection, bobs.token)
+
+    // The hello read Bob's memberships, a member's, and waits for the heads.
+    await reached
+    await gateway.connections.rerole(bobs.identity.id, 'tenant:acme', admin)
+    expect(bobsDevice.socket.sent).toEqual([])
+
+    heads.release()
+    await helloed
+    await subscribeToAcme(bobsDevice)
+    await pushToAcme(bobsDevice, 1, await rewrite('as an admin'))
+
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+  })
+
+  it.each([
+    ['a re-judging then a revocation', ['rerole', 'revoke']],
+    ['a revocation then a re-judging', ['revoke', 'rerole']],
+  ] as const)(
+    '%s told while the hello is under way leave the region gone after the welcome, never recreated',
+    async (_, order) => {
+      const { gateway, bobs } = await withAcme(true)
+      const heads = holding()
+      const bobsDevice = openHolding(gateway, heads)
+      const reached = heads.hold()
+      const helloed = hello(bobsDevice.connection, bobs.token)
+
+      await reached
+
+      for (const change of order) {
+        await (change === 'rerole'
+          ? gateway.connections.rerole(bobs.identity.id, 'tenant:acme', admin)
+          : gateway.connections.revoke(bobs.identity.id, 'tenant:acme'))
+      }
+
+      heads.release()
+      await helloed
+      await subscribeToAcme(bobsDevice)
+
+      expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'error'])
+      expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+    },
+  )
+
+  it.each([
+    ['a re-judging then a revocation', ['rerole', 'revoke']],
+    ['a revocation then a re-judging', ['revoke', 'rerole']],
+  ] as const)(
+    '%s while a subscription is joining leave the region gone: the device is sent nothing of it, and the region is never recreated',
+    async (_, order) => {
+      const query = heldQuery()
+      const { gateway, bobs } = await withAcme(true, { tenantQueries: () => query.before() })
+      const bobsDevice = open(gateway)
+
+      await hello(bobsDevice.connection, bobs.token)
+      query.arm()
+
+      // The region is loaded for the subscription, which waits in the hub's queue until then.
+      const subscribing = subscribeToAcme(bobsDevice)
+
+      await query.reached
+
+      for (const change of order) {
+        await (change === 'rerole'
+          ? gateway.connections.rerole(bobs.identity.id, 'tenant:acme', admin)
+          : gateway.connections.revoke(bobs.identity.id, 'tenant:acme'))
+      }
+
+      query.release()
+      await subscribing
+      await bobsDevice.connection.receive(
+        encode({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() }),
+      )
+
+      expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'error'])
+      expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
+      expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
+    },
+  )
 })
 
 /**

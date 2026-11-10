@@ -6,6 +6,8 @@ import { z } from '@workspace/zod'
 
 import {
   ensureOrganisationAs,
+  inviteAndJoin,
+  inviteAs,
   inviteInto,
   readOrganisation,
   signInAndRead,
@@ -213,6 +215,8 @@ describe('seeding through the gateway', () => {
       settings: 2,
       tenants: 1,
       memberships: 2,
+      // Beto accepted his invitation: none is left pending.
+      invitations: 0,
       databases: 1,
     })
     expect(before.accepted).toBeGreaterThan(0)
@@ -227,7 +231,7 @@ describe('seeding through the gateway', () => {
     const account = accountFor(ann ?? expect.unreachable('a preset ann'), demo)
     const organisation = { key: `mbr_${outsider.run}`, name: 'Outside member' }
 
-    expect((await inviteInto(client, outsider, organisation, account.email)).isOk()).toBe(true)
+    expect((await inviteAndJoin(client, outsider, organisation, account)).isOk()).toBe(true)
     // Ann belongs to it as a member: the key is taken by someone else's organisation.
     expect(
       (await ensureOrganisationAs(client, account, organisation))._unsafeUnwrapErr(),
@@ -241,14 +245,15 @@ describe('seeding through the gateway', () => {
     const annId = manifest.accounts['ann']?.id ?? expect.unreachable('the account ann')
     const outside = `out_${outsider.run}`
 
-    // An organisation of someone else that ann belongs to: only the sweep of ann's own memberships reaches it.
+    // An organisation of someone else that ann belongs to, as she accepted its invitation: only the
+    // sweep of ann's own memberships reaches it.
     expect(
       (
-        await inviteInto(
+        await inviteAndJoin(
           client,
           outsider,
           { key: outside, name: 'Outside' },
-          accountFor(ann ?? expect.unreachable('a preset ann'), demo).email,
+          accountFor(ann ?? expect.unreachable('a preset ann'), demo),
         )
       ).isOk(),
     ).toBe(true)
@@ -263,6 +268,8 @@ describe('seeding through the gateway', () => {
       tenants: 1,
       // Ann and beto in acme, and ann in the outsider's organisation.
       memberships: 3,
+      // Both invitations were accepted.
+      invitations: 0,
       databases: 1,
     })
     expect(before.regionRows).toBeGreaterThan(0)
@@ -274,6 +281,7 @@ describe('seeding through the gateway', () => {
       identities: 0,
       tenants: 0,
       memberships: 0,
+      invitations: 0,
       databases: 0,
       profiles: 0,
       settings: 0,
@@ -283,5 +291,31 @@ describe('seeding through the gateway', () => {
     // The outsider's organisation keeps its own member row; ann's goes with her membership.
     expect(await membersIn(target, outside)).toHaveLength(1)
     expect(await membersIn(target, outside)).not.toContain(annId)
+  })
+
+  it('sweeps the pending invitations of the organisations it removes, to any address, and those to the accounts it removes', async () => {
+    expect((await sweep(target, { emails })).isOk()).toBe(true)
+    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
+    const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
+    const ann = accountFor(
+      catalog.accounts.find((preset) => preset.ref === 'ann') ?? expect.unreachable('a preset ann'),
+      demo,
+    )
+    const pending = { key: `pnd_${outsider.run}`, name: 'Pending' }
+
+    // In an organisation the sweep removes, to an address no swept account has: only the sweep of
+    // the organisation's invitations reaches it.
+    expect(
+      (await inviteAs(client, ann, acme.key, `nobody.${outsider.run}@example.test`)).isOk(),
+    ).toBe(true)
+    // To a swept account, from an organisation that stays: only the sweep of the account's address
+    // reaches it. Ann never accepts.
+    expect((await inviteInto(client, outsider, pending, ann.email)).isOk()).toBe(true)
+    expect((await leftOnStand(target, manifest)).invitations).toBe(2)
+    expect((await sweep(target, { emails }))._unsafeUnwrap()).toEqual({
+      accounts: 2,
+      organisations: 1,
+    })
+    expect((await leftOnStand(target, manifest)).invitations).toBe(0)
   })
 })

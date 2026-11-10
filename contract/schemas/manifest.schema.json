@@ -388,7 +388,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the screen is for: the task it serves and when it is shown."
+            "description": "What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters."
           },
           "frame": {
             "description": "The frame around every screen: it has no route of its own.",
@@ -405,7 +405,7 @@
                   "description": "The route path: static segments, `$param`, `{-$param}` (optional) and `$` (splat), from `/`."
                 },
                 "guard": {
-                  "description": "Who may open the route: only a guest, or only a signed-in account; absent: anyone.",
+                  "description": "Where an account the route is not for is sent: a guest to sign-in (`authenticated`), or a signed-in account to the profile (`guest`); absent: nobody is sent.",
                   "type": "string",
                   "enum": [
                     "guest",
@@ -420,7 +420,7 @@
                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                     "description": "A role of the vocabulary."
                   },
-                  "description": "The roles the route serves."
+                  "description": "The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other."
                 },
                 "params": {
                   "description": "The path parameters, as a flat JSON Schema.",
@@ -509,7 +509,7 @@
                             "type": "string"
                           },
                           "description": {
-                            "description": "What the parameter means.",
+                            "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                             "type": "string"
                           },
                           "x-perch": {
@@ -670,7 +670,7 @@
                             "type": "string"
                           },
                           "description": {
-                            "description": "What the parameter means.",
+                            "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                             "type": "string"
                           },
                           "x-perch": {
@@ -807,7 +807,7 @@
                   "description": "The kind of the anchor; matches the end of its last segment."
                 },
                 "description": {
-                  "description": "What the element is, for a reader.",
+                  "description": "What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
                   "type": "string"
                 },
                 "binding": {
@@ -922,7 +922,7 @@
                             "search"
                           ],
                           "additionalProperties": false,
-                          "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
+                          "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
                         }
                       ],
                       "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1040,7 +1040,7 @@
                               "search"
                             ],
                             "additionalProperties": false,
-                            "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
+                            "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
                           }
                         ],
                         "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1051,7 +1051,7 @@
                   "description": "What the anchor is bound to: one binding, or several in a non-empty list."
                 },
                 "roles": {
-                  "description": "The roles that see the element; absent: every role of the screen.",
+                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1080,6 +1080,11 @@
                     "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                     "description": "A code of the vocabulary (data-code)."
                   }
+                },
+                "ranked": {
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.",
+                  "type": "boolean",
+                  "const": true
                 },
                 "fields": {
                   "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
@@ -1147,7 +1152,7 @@
                         "entity"
                       ],
                       "additionalProperties": false,
-                      "description": "The entries come from an entity of the model."
+                      "description": "The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read."
                     },
                     {
                       "type": "object",
@@ -1156,16 +1161,65 @@
                           "type": "string",
                           "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                           "description": "The platform action whose result the anchor lists."
+                        },
+                        "params": {
+                          "type": "object",
+                          "propertyNames": {
+                            "type": "string"
+                          },
+                          "additionalProperties": {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "value": {
+                                    "description": "The constant: a string, a number or a boolean.",
+                                    "type": [
+                                      "string",
+                                      "number",
+                                      "boolean"
+                                    ]
+                                  }
+                                },
+                                "required": [
+                                  "value"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A constant the parameter always takes: `{ \"value\": true }`."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "search": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-zA-Z0-9]*$",
+                                    "description": "The name of a search parameter every route of the screen declares."
+                                  }
+                                },
+                                "required": [
+                                  "search"
+                                ],
+                                "additionalProperties": false,
+                                "description": "The value of a search parameter of the route the screen was opened at: `{ \"search\": \"token\" }`, the token a link carries."
+                              }
+                            ]
+                          },
+                          "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
+                        },
+                        "paged": {
+                          "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+                          "type": "boolean",
+                          "const": true
                         }
                       },
                       "required": [
                         "platform"
                       ],
                       "additionalProperties": false,
-                      "description": "The entries come from a platform action."
+                      "description": "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`."
                     }
                   ],
-                  "description": "Where the entries of a list, a section or a table come from."
+                  "description": "Where the entries of a list, a section or a table come from; no other kind has one."
                 },
                 "asks": {
                   "type": "object",
@@ -1185,7 +1239,7 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
                 },
                 "composite": {
                   "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
@@ -1222,13 +1276,14 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The states of the screen with their meaning.",
+            "description": "The container states of the screen, each with what is visible in it.",
             "type": "object",
             "propertyNames": {
               "type": "string"
             },
             "additionalProperties": {
-              "type": "string"
+              "type": "string",
+              "description": "What is visible on the screen in this container state; the vocabulary says what the state means, and each anchor what it is for in a description of its own. At most 200 characters."
             }
           },
           "flow": {
@@ -1240,7 +1295,7 @@
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
               "description": {
-                "description": "What the flow is, for a reader.",
+                "description": "What the flow does as a whole that no single state says: how its areas or its modes go together. Its states, events, guards and effects say the rest. At most 200 characters.",
                 "type": "string"
               },
               "initial": {
@@ -1264,7 +1319,7 @@
                       "anyOf": [
                         {
                           "type": "string",
-                          "description": "What the guard holds, in a sentence."
+                          "description": "What the guard holds, in one sentence the app implements; a guard that tells the failures of an action apart takes their codes, `{ codes }`, instead. At most 200 characters."
                         },
                         {
                           "type": "object",
@@ -1306,7 +1361,7 @@
                       "type": "object",
                       "properties": {
                         "description": {
-                          "description": "What the state is, for a reader.",
+                          "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                           "type": "string"
                         },
                         "type": {
@@ -1442,6 +1497,37 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
+                                    "const": "read",
+                                    "description": "The effect: a list reads its source again."
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "properties": {
+                                      "anchor": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                        "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                      }
+                                    },
+                                    "required": [
+                                      "anchor"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Which anchor."
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "params"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
                                     "const": "navigate",
                                     "description": "The effect: the app moves to a binding."
                                   },
@@ -1482,10 +1568,25 @@
                                               ],
                                               "additionalProperties": false,
                                               "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "item": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "An item or a row of the screen, with a `dataId`."
+                                                }
+                                              },
+                                              "required": [
+                                                "item"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                             }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                       }
                                     },
                                     "required": [
@@ -1503,7 +1604,7 @@
                                 "description": "The app moves to that binding."
                               }
                             ],
-                            "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                            "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                           }
                         },
                         "exit": {
@@ -1590,6 +1691,37 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
+                                    "const": "read",
+                                    "description": "The effect: a list reads its source again."
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "properties": {
+                                      "anchor": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                        "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                      }
+                                    },
+                                    "required": [
+                                      "anchor"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Which anchor."
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "params"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
                                     "const": "navigate",
                                     "description": "The effect: the app moves to a binding."
                                   },
@@ -1630,10 +1762,25 @@
                                               ],
                                               "additionalProperties": false,
                                               "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "item": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "An item or a row of the screen, with a `dataId`."
+                                                }
+                                              },
+                                              "required": [
+                                                "item"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                             }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                       }
                                     },
                                     "required": [
@@ -1651,7 +1798,7 @@
                                 "description": "The app moves to that binding."
                               }
                             ],
-                            "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                            "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                           }
                         },
                         "on": {
@@ -1774,6 +1921,37 @@
                                           "properties": {
                                             "type": {
                                               "type": "string",
+                                              "const": "read",
+                                              "description": "The effect: a list reads its source again."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which anchor."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
                                               "const": "navigate",
                                               "description": "The effect: the app moves to a binding."
                                             },
@@ -1814,10 +1992,25 @@
                                                         ],
                                                         "additionalProperties": false,
                                                         "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "item": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "An item or a row of the screen, with a `dataId`."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "item"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                       }
                                                     ]
                                                   },
-                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                 }
                                               },
                                               "required": [
@@ -1835,12 +2028,12 @@
                                           "description": "The app moves to that binding."
                                         }
                                       ],
-                                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                      "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                     },
                                     "description": "The effects, in order."
                                   },
                                   "description": {
-                                    "description": "What happens, for a reader.",
+                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                     "type": "string"
                                   }
                                 },
@@ -1946,6 +2139,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -1986,10 +2210,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -2007,12 +2246,12 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       },
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2181,6 +2420,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -2221,10 +2491,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -2242,12 +2527,12 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       },
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2353,6 +2638,37 @@
                                               "properties": {
                                                 "type": {
                                                   "type": "string",
+                                                  "const": "read",
+                                                  "description": "The effect: a list reads its source again."
+                                                },
+                                                "params": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "anchor": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                      "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "anchor"
+                                                  ],
+                                                  "additionalProperties": false,
+                                                  "description": "Which anchor."
+                                                }
+                                              },
+                                              "required": [
+                                                "type",
+                                                "params"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
                                                   "const": "navigate",
                                                   "description": "The effect: the app moves to a binding."
                                                 },
@@ -2393,10 +2709,25 @@
                                                             ],
                                                             "additionalProperties": false,
                                                             "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "item": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "An item or a row of the screen, with a `dataId`."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "item"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                           }
                                                         ]
                                                       },
-                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                     }
                                                   },
                                                   "required": [
@@ -2414,12 +2745,12 @@
                                               "description": "The app moves to that binding."
                                             }
                                           ],
-                                          "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                          "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                         },
                                         "description": "The effects, in order."
                                       },
                                       "description": {
-                                        "description": "What happens, for a reader.",
+                                        "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                         "type": "string"
                                       }
                                     },
@@ -2530,6 +2861,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -2570,10 +2932,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -2591,12 +2968,12 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       },
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -2702,6 +3079,37 @@
                                               "properties": {
                                                 "type": {
                                                   "type": "string",
+                                                  "const": "read",
+                                                  "description": "The effect: a list reads its source again."
+                                                },
+                                                "params": {
+                                                  "type": "object",
+                                                  "properties": {
+                                                    "anchor": {
+                                                      "type": "string",
+                                                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                      "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                    }
+                                                  },
+                                                  "required": [
+                                                    "anchor"
+                                                  ],
+                                                  "additionalProperties": false,
+                                                  "description": "Which anchor."
+                                                }
+                                              },
+                                              "required": [
+                                                "type",
+                                                "params"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
                                                   "const": "navigate",
                                                   "description": "The effect: the app moves to a binding."
                                                 },
@@ -2742,10 +3150,25 @@
                                                             ],
                                                             "additionalProperties": false,
                                                             "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                          },
+                                                          {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "item": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "An item or a row of the screen, with a `dataId`."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "item"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                           }
                                                         ]
                                                       },
-                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                      "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                     }
                                                   },
                                                   "required": [
@@ -2763,12 +3186,12 @@
                                               "description": "The app moves to that binding."
                                             }
                                           ],
-                                          "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                          "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                         },
                                         "description": "The effects, in order."
                                       },
                                       "description": {
-                                        "description": "What happens, for a reader.",
+                                        "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                         "type": "string"
                                       }
                                     },
@@ -2778,6 +3201,11 @@
                                   "description": "Guarded transitions in order: the first whose guard holds is taken."
                                 }
                               ]
+                            },
+                            "read": {
+                              "type": "boolean",
+                              "const": false,
+                              "description": "Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused."
                             }
                           },
                           "required": [
@@ -2795,7 +3223,7 @@
                       "type": "object",
                       "properties": {
                         "description": {
-                          "description": "What the state is, for a reader.",
+                          "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                           "type": "string"
                         },
                         "type": {
@@ -2931,6 +3359,37 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
+                                    "const": "read",
+                                    "description": "The effect: a list reads its source again."
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "properties": {
+                                      "anchor": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                        "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                      }
+                                    },
+                                    "required": [
+                                      "anchor"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Which anchor."
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "params"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
                                     "const": "navigate",
                                     "description": "The effect: the app moves to a binding."
                                   },
@@ -2971,10 +3430,25 @@
                                               ],
                                               "additionalProperties": false,
                                               "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "item": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "An item or a row of the screen, with a `dataId`."
+                                                }
+                                              },
+                                              "required": [
+                                                "item"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                             }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                       }
                                     },
                                     "required": [
@@ -2992,7 +3466,7 @@
                                 "description": "The app moves to that binding."
                               }
                             ],
-                            "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                            "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                           }
                         },
                         "exit": {
@@ -3079,6 +3553,37 @@
                                 "properties": {
                                   "type": {
                                     "type": "string",
+                                    "const": "read",
+                                    "description": "The effect: a list reads its source again."
+                                  },
+                                  "params": {
+                                    "type": "object",
+                                    "properties": {
+                                      "anchor": {
+                                        "type": "string",
+                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                        "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                      }
+                                    },
+                                    "required": [
+                                      "anchor"
+                                    ],
+                                    "additionalProperties": false,
+                                    "description": "Which anchor."
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "params"
+                                ],
+                                "additionalProperties": false,
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
                                     "const": "navigate",
                                     "description": "The effect: the app moves to a binding."
                                   },
@@ -3119,10 +3624,25 @@
                                               ],
                                               "additionalProperties": false,
                                               "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "item": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "An item or a row of the screen, with a `dataId`."
+                                                }
+                                              },
+                                              "required": [
+                                                "item"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                             }
                                           ]
                                         },
-                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                        "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                       }
                                     },
                                     "required": [
@@ -3140,7 +3660,7 @@
                                 "description": "The app moves to that binding."
                               }
                             ],
-                            "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                            "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                           }
                         },
                         "on": {
@@ -3263,6 +3783,37 @@
                                           "properties": {
                                             "type": {
                                               "type": "string",
+                                              "const": "read",
+                                              "description": "The effect: a list reads its source again."
+                                            },
+                                            "params": {
+                                              "type": "object",
+                                              "properties": {
+                                                "anchor": {
+                                                  "type": "string",
+                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                  "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                }
+                                              },
+                                              "required": [
+                                                "anchor"
+                                              ],
+                                              "additionalProperties": false,
+                                              "description": "Which anchor."
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "params"
+                                          ],
+                                          "additionalProperties": false,
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
                                               "const": "navigate",
                                               "description": "The effect: the app moves to a binding."
                                             },
@@ -3303,10 +3854,25 @@
                                                         ],
                                                         "additionalProperties": false,
                                                         "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "item": {
+                                                            "type": "string",
+                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                            "description": "An item or a row of the screen, with a `dataId`."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "item"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                       }
                                                     ]
                                                   },
-                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                 }
                                               },
                                               "required": [
@@ -3324,12 +3890,12 @@
                                           "description": "The app moves to that binding."
                                         }
                                       ],
-                                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                      "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                     },
                                     "description": "The effects, in order."
                                   },
                                   "description": {
-                                    "description": "What happens, for a reader.",
+                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                     "type": "string"
                                   }
                                 },
@@ -3435,6 +4001,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -3475,10 +4072,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -3496,12 +4108,12 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       },
                                       "description": "The effects, in order."
                                     },
                                     "description": {
-                                      "description": "What happens, for a reader.",
+                                      "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                       "type": "string"
                                     }
                                   },
@@ -3525,7 +4137,7 @@
                             "type": "object",
                             "properties": {
                               "description": {
-                                "description": "What the area is, for a reader.",
+                                "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                                 "type": "string"
                               },
                               "initial": {
@@ -3544,7 +4156,7 @@
                                   "type": "object",
                                   "properties": {
                                     "description": {
-                                      "description": "What the state is, for a reader.",
+                                      "description": "What a tester or a user tells apart in the state that its events, effects and `meta.renders` do not say. At most 200 characters.",
                                       "type": "string"
                                     },
                                     "meta": {
@@ -3648,6 +4260,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -3688,10 +4331,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -3709,7 +4367,7 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       }
                                     },
                                     "exit": {
@@ -3796,6 +4454,37 @@
                                             "properties": {
                                               "type": {
                                                 "type": "string",
+                                                "const": "read",
+                                                "description": "The effect: a list reads its source again."
+                                              },
+                                              "params": {
+                                                "type": "object",
+                                                "properties": {
+                                                  "anchor": {
+                                                    "type": "string",
+                                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                    "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                  }
+                                                },
+                                                "required": [
+                                                  "anchor"
+                                                ],
+                                                "additionalProperties": false,
+                                                "description": "Which anchor."
+                                              }
+                                            },
+                                            "required": [
+                                              "type",
+                                              "params"
+                                            ],
+                                            "additionalProperties": false,
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "type": {
+                                                "type": "string",
                                                 "const": "navigate",
                                                 "description": "The effect: the app moves to a binding."
                                               },
@@ -3836,10 +4525,25 @@
                                                           ],
                                                           "additionalProperties": false,
                                                           "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "item": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "An item or a row of the screen, with a `dataId`."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "item"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                         }
                                                       ]
                                                     },
-                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                    "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                   }
                                                 },
                                                 "required": [
@@ -3857,7 +4561,7 @@
                                             "description": "The app moves to that binding."
                                           }
                                         ],
-                                        "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                        "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                       }
                                     },
                                     "on": {
@@ -3980,6 +4684,37 @@
                                                       "properties": {
                                                         "type": {
                                                           "type": "string",
+                                                          "const": "read",
+                                                          "description": "The effect: a list reads its source again."
+                                                        },
+                                                        "params": {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "anchor": {
+                                                              "type": "string",
+                                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                              "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "anchor"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "Which anchor."
+                                                        }
+                                                      },
+                                                      "required": [
+                                                        "type",
+                                                        "params"
+                                                      ],
+                                                      "additionalProperties": false,
+                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                    },
+                                                    {
+                                                      "type": "object",
+                                                      "properties": {
+                                                        "type": {
+                                                          "type": "string",
                                                           "const": "navigate",
                                                           "description": "The effect: the app moves to a binding."
                                                         },
@@ -4020,10 +4755,25 @@
                                                                     ],
                                                                     "additionalProperties": false,
                                                                     "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                  },
+                                                                  {
+                                                                    "type": "object",
+                                                                    "properties": {
+                                                                      "item": {
+                                                                        "type": "string",
+                                                                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                        "description": "An item or a row of the screen, with a `dataId`."
+                                                                      }
+                                                                    },
+                                                                    "required": [
+                                                                      "item"
+                                                                    ],
+                                                                    "additionalProperties": false,
+                                                                    "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                   }
                                                                 ]
                                                               },
-                                                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                              "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                             }
                                                           },
                                                           "required": [
@@ -4041,12 +4791,12 @@
                                                       "description": "The app moves to that binding."
                                                     }
                                                   ],
-                                                  "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                  "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                 },
                                                 "description": "The effects, in order."
                                               },
                                               "description": {
-                                                "description": "What happens, for a reader.",
+                                                "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                 "type": "string"
                                               }
                                             },
@@ -4152,6 +4902,37 @@
                                                         "properties": {
                                                           "type": {
                                                             "type": "string",
+                                                            "const": "read",
+                                                            "description": "The effect: a list reads its source again."
+                                                          },
+                                                          "params": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "anchor": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "anchor"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "Which anchor."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "type",
+                                                          "params"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "type": {
+                                                            "type": "string",
                                                             "const": "navigate",
                                                             "description": "The effect: the app moves to a binding."
                                                           },
@@ -4192,10 +4973,25 @@
                                                                       ],
                                                                       "additionalProperties": false,
                                                                       "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "item": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "An item or a row of the screen, with a `dataId`."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "item"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                     }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                               }
                                                             },
                                                             "required": [
@@ -4213,12 +5009,12 @@
                                                         "description": "The app moves to that binding."
                                                       }
                                                     ],
-                                                    "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                    "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                   },
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4387,6 +5183,37 @@
                                                         "properties": {
                                                           "type": {
                                                             "type": "string",
+                                                            "const": "read",
+                                                            "description": "The effect: a list reads its source again."
+                                                          },
+                                                          "params": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "anchor": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "anchor"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "Which anchor."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "type",
+                                                          "params"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "type": {
+                                                            "type": "string",
                                                             "const": "navigate",
                                                             "description": "The effect: the app moves to a binding."
                                                           },
@@ -4427,10 +5254,25 @@
                                                                       ],
                                                                       "additionalProperties": false,
                                                                       "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "item": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "An item or a row of the screen, with a `dataId`."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "item"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                     }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                               }
                                                             },
                                                             "required": [
@@ -4448,12 +5290,12 @@
                                                         "description": "The app moves to that binding."
                                                       }
                                                     ],
-                                                    "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                    "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                   },
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4559,6 +5401,37 @@
                                                           "properties": {
                                                             "type": {
                                                               "type": "string",
+                                                              "const": "read",
+                                                              "description": "The effect: a list reads its source again."
+                                                            },
+                                                            "params": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "anchor": {
+                                                                  "type": "string",
+                                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                  "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "anchor"
+                                                              ],
+                                                              "additionalProperties": false,
+                                                              "description": "Which anchor."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "type",
+                                                            "params"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "type": {
+                                                              "type": "string",
                                                               "const": "navigate",
                                                               "description": "The effect: the app moves to a binding."
                                                             },
@@ -4599,10 +5472,25 @@
                                                                         ],
                                                                         "additionalProperties": false,
                                                                         "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "item": {
+                                                                            "type": "string",
+                                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                            "description": "An item or a row of the screen, with a `dataId`."
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "item"
+                                                                        ],
+                                                                        "additionalProperties": false,
+                                                                        "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                       }
                                                                     ]
                                                                   },
-                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                                 }
                                                               },
                                                               "required": [
@@ -4620,12 +5508,12 @@
                                                           "description": "The app moves to that binding."
                                                         }
                                                       ],
-                                                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                      "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                     },
                                                     "description": "The effects, in order."
                                                   },
                                                   "description": {
-                                                    "description": "What happens, for a reader.",
+                                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                     "type": "string"
                                                   }
                                                 },
@@ -4736,6 +5624,37 @@
                                                         "properties": {
                                                           "type": {
                                                             "type": "string",
+                                                            "const": "read",
+                                                            "description": "The effect: a list reads its source again."
+                                                          },
+                                                          "params": {
+                                                            "type": "object",
+                                                            "properties": {
+                                                              "anchor": {
+                                                                "type": "string",
+                                                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                              }
+                                                            },
+                                                            "required": [
+                                                              "anchor"
+                                                            ],
+                                                            "additionalProperties": false,
+                                                            "description": "Which anchor."
+                                                          }
+                                                        },
+                                                        "required": [
+                                                          "type",
+                                                          "params"
+                                                        ],
+                                                        "additionalProperties": false,
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      },
+                                                      {
+                                                        "type": "object",
+                                                        "properties": {
+                                                          "type": {
+                                                            "type": "string",
                                                             "const": "navigate",
                                                             "description": "The effect: the app moves to a binding."
                                                           },
@@ -4776,10 +5695,25 @@
                                                                       ],
                                                                       "additionalProperties": false,
                                                                       "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                    },
+                                                                    {
+                                                                      "type": "object",
+                                                                      "properties": {
+                                                                        "item": {
+                                                                          "type": "string",
+                                                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                          "description": "An item or a row of the screen, with a `dataId`."
+                                                                        }
+                                                                      },
+                                                                      "required": [
+                                                                        "item"
+                                                                      ],
+                                                                      "additionalProperties": false,
+                                                                      "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                     }
                                                                   ]
                                                                 },
-                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                                "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                               }
                                                             },
                                                             "required": [
@@ -4797,12 +5731,12 @@
                                                         "description": "The app moves to that binding."
                                                       }
                                                     ],
-                                                    "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                    "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                   },
                                                   "description": "The effects, in order."
                                                 },
                                                 "description": {
-                                                  "description": "What happens, for a reader.",
+                                                  "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                   "type": "string"
                                                 }
                                               },
@@ -4908,6 +5842,37 @@
                                                           "properties": {
                                                             "type": {
                                                               "type": "string",
+                                                              "const": "read",
+                                                              "description": "The effect: a list reads its source again."
+                                                            },
+                                                            "params": {
+                                                              "type": "object",
+                                                              "properties": {
+                                                                "anchor": {
+                                                                  "type": "string",
+                                                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                  "description": "The list, section or table of the flow's own screen whose source is a platform action: it reads that action again."
+                                                                }
+                                                              },
+                                                              "required": [
+                                                                "anchor"
+                                                              ],
+                                                              "additionalProperties": false,
+                                                              "description": "Which anchor."
+                                                            }
+                                                          },
+                                                          "required": [
+                                                            "type",
+                                                            "params"
+                                                          ],
+                                                          "additionalProperties": false,
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        },
+                                                        {
+                                                          "type": "object",
+                                                          "properties": {
+                                                            "type": {
+                                                              "type": "string",
                                                               "const": "navigate",
                                                               "description": "The effect: the app moves to a binding."
                                                             },
@@ -4948,10 +5913,25 @@
                                                                         ],
                                                                         "additionalProperties": false,
                                                                         "description": "The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`."
+                                                                      },
+                                                                      {
+                                                                        "type": "object",
+                                                                        "properties": {
+                                                                          "item": {
+                                                                            "type": "string",
+                                                                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                                                            "description": "An item or a row of the screen, with a `dataId`."
+                                                                          }
+                                                                        },
+                                                                        "required": [
+                                                                          "item"
+                                                                        ],
+                                                                        "additionalProperties": false,
+                                                                        "description": "The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`."
                                                                       }
                                                                     ]
                                                                   },
-                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id) or `{ anchor }`, the value a field of the screen holds."
+                                                                  "description": "Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on."
                                                                 }
                                                               },
                                                               "required": [
@@ -4969,12 +5949,12 @@
                                                           "description": "The app moves to that binding."
                                                         }
                                                       ],
-                                                      "description": "An effect, which the implementation provides: `show`, `clear` or `navigate`."
+                                                      "description": "An effect, which the implementation provides: `show`, `clear`, `read` or `navigate`."
                                                     },
                                                     "description": "The effects, in order."
                                                   },
                                                   "description": {
-                                                    "description": "What happens, for a reader.",
+                                                    "description": "What follows that the target, the guard and the effects do not say: where a success leads, what a failure shows, what restarts what. At most 200 characters.",
                                                     "type": "string"
                                                   }
                                                 },
@@ -4984,6 +5964,11 @@
                                               "description": "Guarded transitions in order: the first whose guard holds is taken."
                                             }
                                           ]
+                                        },
+                                        "read": {
+                                          "type": "boolean",
+                                          "const": false,
+                                          "description": "Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused."
                                         }
                                       },
                                       "required": [
@@ -5139,7 +6124,7 @@
                   "type": "string"
                 },
                 "description": {
-                  "description": "What the parameter means.",
+                  "description": "What the route parameter means. Its type, bounds, default and examples say the rest. At most 200 characters.",
                   "type": "string"
                 },
                 "x-perch": {
@@ -5348,7 +6333,7 @@
                       "search"
                     ],
                     "additionalProperties": false,
-                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
+                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
                   }
                 ],
                 "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -5466,7 +6451,7 @@
                         "search"
                       ],
                       "additionalProperties": false,
-                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`."
+                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
                     }
                   ],
                   "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -5484,6 +6469,11 @@
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
               "description": "A code of the vocabulary (data-code)."
             }
+          },
+          "ranked": {
+            "description": "The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.",
+            "type": "boolean",
+            "const": true
           },
           "fields": {
             "description": "An error's codes, each with the field it concerns.",
@@ -5525,7 +6515,7 @@
             }
           },
           "roles": {
-            "description": "The roles that see the element.",
+            "description": "The roles that see the element, among those its screen's bindings serve.",
             "type": "array",
             "items": {
               "type": "string",
@@ -5555,7 +6545,7 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform)."
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
           },
           "composite": {
             "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
@@ -5616,7 +6606,7 @@
             "properties": {
               "description": {
                 "type": "string",
-                "description": "What the action does."
+                "description": "What the platform action does. What holds once it succeeds is its `result`, and its parameters, codes, roles and mail say the rest. At most 200 characters."
               },
               "params": {
                 "type": "object",
@@ -5633,7 +6623,7 @@
                     },
                     "description": {
                       "type": "string",
-                      "description": "What the value is and its limits."
+                      "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
                     }
                   },
                   "required": [
@@ -5667,6 +6657,33 @@
                   "description": "A role of the vocabulary."
                 }
               },
+              "paged": {
+                "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+                "type": "object",
+                "properties": {
+                  "sizes": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 9007199254740991
+                    },
+                    "description": "The sizes a page may have, each once, the smallest first."
+                  },
+                  "default": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991,
+                    "description": "The size of a page the route does not name, a size."
+                  }
+                },
+                "required": [
+                  "sizes",
+                  "default"
+                ],
+                "additionalProperties": false
+              },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
                 "type": "object",
@@ -5674,12 +6691,12 @@
                   "to": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email."
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
                   },
                   "language": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
                   },
                   "link": {
                     "type": "object",
@@ -5730,7 +6747,7 @@
                     "language": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
                     },
                     "link": {
                       "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
@@ -5777,7 +6794,8 @@
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
           "additionalProperties": {
-            "type": "string"
+            "type": "string",
+            "description": "What the event means: when the platform raises it. What follows is said by the flows that handle it. At most 200 characters."
           }
         },
         "leaving": {
@@ -5816,7 +6834,7 @@
               "description": {
                 "type": "string",
                 "minLength": 1,
-                "description": "What the composite is, for a reader: the list it derives carries it."
+                "description": "What the composite is for: the list it derives on a screen carries it, and each item has a description of its own. At most 200 characters."
               },
               "list": {
                 "type": "string",
@@ -5843,7 +6861,8 @@
                 },
                 "additionalProperties": {
                   "type": "string",
-                  "minLength": 1
+                  "minLength": 1,
+                  "description": "What the item of the composite's list says: every screen that opts in derives an item anchor with it as its description, and the composite's `itemState` marks it. At most 200 characters."
                 },
                 "minProperties": 1,
                 "description": "The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state."
@@ -5984,7 +7003,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the activity is for: the task it serves across its screens."
+            "description": "What the activity is for: the task it serves across its screens. Its states are the visits, and the screens do the work. At most 200 characters."
           },
           "roles": {
             "minItems": 1,
@@ -6010,7 +7029,7 @@
                 "description": {
                   "type": "string",
                   "minLength": 1,
-                  "description": "What it is, for a reader."
+                  "description": "What the activity carries from screen to screen; `model` names the field of the model it is. At most 200 characters."
                 },
                 "model": {
                   "type": "string",
@@ -6043,7 +7062,8 @@
                   "description": "A guard: a camelCase name of the flow `meta.guards`."
                 },
                 "additionalProperties": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "What the guard holds, in one sentence the app implements. At most 200 characters."
                 }
               }
             },
@@ -6060,7 +7080,7 @@
               "type": "object",
               "properties": {
                 "description": {
-                  "description": "What the visit is, for a reader.",
+                  "description": "What the visit is for in the task. Its `meta` names the screen and the address, and the screen has a description of its own. At most 200 characters.",
                   "type": "string"
                 },
                 "type": {
@@ -6123,7 +7143,7 @@
                             "description": "A guard: a camelCase name of the flow `meta.guards`."
                           },
                           "description": {
-                            "description": "What happens, for a reader.",
+                            "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                             "type": "string"
                           }
                         },
@@ -6150,7 +7170,7 @@
                               "description": "A guard: a camelCase name of the flow `meta.guards`."
                             },
                             "description": {
-                              "description": "What happens, for a reader.",
+                              "description": "What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. At most 200 characters.",
                               "type": "string"
                             }
                           },

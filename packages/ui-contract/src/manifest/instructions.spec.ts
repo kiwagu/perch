@@ -88,8 +88,38 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`contract.derivedParts`')
     expect(instructions.gaps).toContain('whether a password input shows what it holds')
   })
+  it('says what a paged list reads and derives, and that a new search starts at page 1', () => {
+    expect(instructions.bindings).toContain(
+      'gives it that value again each time the parameter becomes another',
+    )
+    expect(instructions.screenMap).toContain(
+      'each time the organisation or account it reads for becomes another or a search parameter it reads does',
+    )
+    expect(instructions.screenMap).toContain(
+      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes` and choose the route\'s `size`, which writes no `x-perch`; a paged list has at most 3 segments, as its options add two to its name)',
+    )
+    expect(instructions.screenMap).toContain(
+      'a navigate that sets a search parameter a paged list reads says `page: 1`',
+    )
+  })
+  it('says who a route serves, in which order the router decides, and who sees an anchor', () => {
+    expect(instructions.screenMap).toContain(
+      '`roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other)',
+    )
+    expect(instructions.screenMap).toContain(
+      "`roles` (who sees it, among the roles its screen's bindings serve; absent: every role of the screen)",
+    )
+  })
   it('says a navigate may carry into a search what a field of the screen holds', () => {
     expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
+  })
+  it('says a navigate may carry into a search the data-id of the entry whose control acted', () => {
+    expect(instructions.screenMap).toContain(
+      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control (a button, a link, a tab or a field) in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
+    )
+    expect(instructions.screenMap).toContain(
+      'an item or a row as a value of `params` or `input` gives the `data-id` of the entry whose control acts, likewise',
+    )
   })
   it('says what a clear does to a field and to an anchor that carries codes', () => {
     expect(instructions.screenMap).toContain(
@@ -98,6 +128,19 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain(
       'and makes an anchor that carries codes show none until one is shown again',
     )
+  })
+  it('says when a list with a platform source reads it, what a read does, and what read: false says', () => {
+    expect(instructions.screenMap).toContain('effects `show`, `clear`, `read` and `navigate`')
+    expect(instructions.screenMap).toContain(
+      '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
+    )
+    expect(instructions.screenMap).toContain(
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on an invoke says nothing reads after its action',
+    )
+    expect(instructions.screenMap).toContain('the four effects')
   })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
@@ -141,6 +184,11 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain(
       'each marked `derivedFrom` with the composite and, for an item, its name',
+    )
+  })
+  it('says a ranked message shows the first of the codes raised before it shows, unless cleared', () => {
+    expect(instructions.screenMap).toContain(
+      '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a `clear` of it, in any flow, takes away every code raised before it)',
     )
   })
   it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {

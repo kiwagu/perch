@@ -43,6 +43,7 @@ export type ShellEvent =
   | { readonly type: 'platform.started' }
   | { readonly type: 'platform.opened' }
   | { readonly type: 'platform.open-failed' }
+  | { readonly type: 'platform.start-failed' }
   | { readonly type: 'platform.storage-blocked' }
   | { readonly type: 'app-shell.locale-select'; readonly locale: Locale }
   | { readonly type: 'app-shell.theme-select'; readonly theme: Theme }
@@ -50,6 +51,7 @@ export type ShellEvent =
   | { readonly type: 'model.settings.locale' }
   | { readonly type: 'model.settings.theme' }
   | { readonly type: 'app-shell.sign-out-here-button' }
+  | { readonly type: 'platform.signed-in' }
   | { readonly type: 'platform.signed-out' }
   | { readonly type: 'platform.change-rejected' }
   | { readonly type: 'platform.changes-reloaded' }

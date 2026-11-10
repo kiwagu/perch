@@ -6,7 +6,9 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
 sign accounts up and verify their emails, sign devices in and out, list and sign out an
-identity's devices, and serve organisations and their members; devices sync over a WebSocket at `/sync`; `GET /health` answers `ok`.
+identity's devices, serve organisations and their members, and invite emails to organisations by
+a mailed link that the invited account accepts or declines; devices sync over a WebSocket at
+`/sync`; `GET /health` answers `ok`.
 
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
@@ -22,7 +24,7 @@ changes). The modules that predate the index rule have no
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
-  and their routes.
+  their invitations and roles, and their routes.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
 - [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
   written by `@workspace/email`.
@@ -116,22 +118,23 @@ the update; each device's next hello is then refused with 4401.
   identity with a phone's socket open (a reset request answered 202 with no body for it and for
   an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
   new password with 200 and `signedOut` false, as opened with no session, which closes the
-  phone's socket with 4002 and refuses its token at
-  hello, refuses the old password, signs in with the new one and mails the notice of a changed
+  phone's socket with 4002 and closes its token's hello with 4002 too (why its session ended),
+  refuses the old password, signs in with the new one and mails the notice of a changed
   password; the same link again answered 401 `link-invalid`); then on another identity its device
   sessions: a hello
   under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
   400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone
   signed out from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row
-  showing `revokedAt`, its token's hello closed with 4401) and signed in again (the old token
-  refused at hello with 4401 and by `GET /devices` with 401, the new one welcomed), a tablet
+  showing `revokedAt`, its token's hello closed with 4001) and signed in again (the old token's
+  hello closed with 4001 all the same, a call with it answered 401, the new one welcomed), a tablet
   signed in twice (the first session ended by the second), then every device signed out from
   the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
-  refused), a sign-in right after it answered 200 with a working token, the laptop's old token
-  refused at hello (4401), and a device signing itself out with `POST /auth/sign-out` (204 with
+  refused), a sign-in right after it answered 200 with a working token, the laptop's old token's
+  hello closed with 4001, and a device signing itself out with `POST /auth/sign-out` (204 with
   its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
   identity, the organisation path (an organisation `smoke_<time>` created, a second identity
-  invited, each device welcomed with its membership and role, the invited device writing a note
+  invited by email and accepting the invitation by the id the invite answered, each device
+  welcomed with its membership and role, the invited device writing a note
   into the organisation's region that the owner's device receives, the owner editing that note
   as an admin, the invited device deleting its own note, a late device of the owner subscribing
   to a snapshot that holds the admin's note and not the deleted one, the invited device's edit
@@ -155,7 +158,8 @@ step signs up the devices it adds (`load-<run>-<n>@example.test`, each device fr
 client address of its own, as in the smoke, so no address spends its verification mails) and
 verifies each through the link of its mail, as the smoke does, which signs the device in; it
 groups every `--members` of them
-into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
+into an organisation `load_<run>_<k>` (the first creates it and invites the rest by email, each
+accepting by the id its invite answered), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends
 a note every `1 / --rate` seconds, at a random phase, and proposes a compaction when an ack asks

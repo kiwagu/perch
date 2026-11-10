@@ -9,8 +9,9 @@ import {
   roleSchema,
   stateSchema,
 } from '../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
-import { actionParamsSchema } from './params'
+import { actionParamsSchema, sourceParamsSchema } from './params'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -59,7 +60,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+        'The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`.',
       ),
   ])
   .describe(
@@ -89,16 +90,27 @@ export const sourceSchema = z
         order: z.string().optional().describe('The field the entries are ordered by.'),
         direction: z.enum(['asc', 'desc']).optional().describe('The order direction.'),
       })
-      .describe('The entries come from an entity of the model.'),
+      .describe(
+        'The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read.',
+      ),
     z
       .strictObject({
         platform: platformActionNameSchema.describe(
           'The platform action whose result the anchor lists.',
         ),
+        params: sourceParamsSchema.optional(),
+        paged: z
+          .literal(true)
+          .optional()
+          .describe(
+            "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+          ),
       })
-      .describe('The entries come from a platform action.'),
+      .describe(
+        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`.",
+      ),
   ])
-  .describe('Where the entries of a list, a section or a table come from.')
+  .describe('Where the entries of a list, a section or a table come from; no other kind has one.')
 
 /** The question a control asks before its destructive action runs, derived by the loader. */
 export const asksSchema = z
@@ -107,7 +119,7 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
   )
 
 /** Where a derived anchor of a composite comes from, written by the loader only. */
@@ -125,12 +137,14 @@ export const derivedFromSchema = z
 export const anchorDefSchema = z
   .strictObject({
     kind: z.string().describe('The kind of the anchor; matches the end of its last segment.'),
-    description: z.string().optional().describe('What the element is, for a reader.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.anchor),
     binding: anchorBindingSchema.optional(),
     roles: z
       .array(roleSchema)
       .optional()
-      .describe('The roles that see the element; absent: every role of the screen.'),
+      .describe(
+        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+      ),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
     holdsInput: z
       .boolean()
@@ -145,6 +159,12 @@ export const anchorDefSchema = z
         'A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.',
       ),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()

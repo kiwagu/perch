@@ -143,6 +143,12 @@ const idSchema = z
     screen: screenNameSchema.describe('The id of the screen that declares the anchor.'),
     binding: anchorBindingSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()
@@ -157,7 +163,10 @@ const idSchema = z
       .array(kebabNameSchema)
       .optional()
       .describe('The derived suffixes the element renders.'),
-    roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
+    roles: z
+      .array(roleSchema)
+      .optional()
+      .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
     asks: asksSchema.optional(),
     composite: kebabNameSchema

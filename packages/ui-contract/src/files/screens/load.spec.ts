@@ -516,6 +516,23 @@ describe('loadScreens', () => {
       expect(screens?.toasts).toEqual([])
       expect(frame?.anchors['app-shell.toast']?.codes).toBeUndefined()
     })
+
+    it('keeps read: false of a region by its button on the loaded invoke, the toast opt-out taken away', () => {
+      writeToastScreens({ add: { by: 'sample.form.add-button', toast: false, read: false } })
+
+      const { screens, problems: found } = loadScreens(root)
+      const sample = screens?.screens.find((screen) => screen.id === 'sample')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(sample?.flow?.states['viewing']).toMatchObject({
+        states: {
+          add: { states: { running: { invoke: { src: 'thing.createThing', read: false } } } },
+        },
+      })
+      expect(sample?.flow?.states['viewing']).not.toMatchObject({
+        states: { add: { states: { running: { invoke: { toast: false } } } } },
+      })
+    })
   })
 
   describe('a composite of the platform', () => {
@@ -604,6 +621,36 @@ describe('loadScreens', () => {
     ])
   })
 
+  it('derives the parts of a paged list, and refuses one the file writes', () => {
+    writeSample((screen) => {
+      const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+      anchors['sample.page-list'] = {
+        kind: 'list',
+        source: { platform: 'sign-out', paged: true },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found.map(formatProblem)).toEqual([])
+    expect(screens?.screens[0]?.anchors['sample.page-list']?.derived).toEqual([
+      'range',
+      'previous-link',
+      'next-link',
+      'size-select',
+    ])
+
+    writeSample((screen) => {
+      const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+      anchors['sample.page-list'] = { ...anchors['sample.page-list'], derived: ['next-link'] }
+    })
+
+    expect(problems().map(formatProblem)).toEqual([
+      `${SAMPLE_FILE}:1: anchors["sample.page-list"].derived[0]: "next-link" is derived by the paged source of the list: a screen file never writes it`,
+    ])
+  })
   it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
     writeSample((screen) => {
       screen['anchors'] = {

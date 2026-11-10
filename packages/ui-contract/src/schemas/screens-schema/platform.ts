@@ -15,6 +15,7 @@ import {
   roleSchema,
   stateSchema,
 } from '../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
 import { platformMailSchema, platformNoticeSchema } from './mail'
@@ -22,19 +23,31 @@ import { platformMailSchema, platformNoticeSchema } from './mail'
 const actionParameterSchema = z
   .strictObject({
     type: z.string().describe('The type of the value: string, boolean, number.'),
-    description: z.string().describe('What the value is and its limits.'),
+    description: z.string().describe(DESCRIPTION_PURPOSES.actionParameter),
   })
   .describe('One parameter of a platform action.')
 
 const platformActionSchema = z
   .strictObject({
-    description: z.string().describe('What the action does.'),
+    description: z.string().describe(DESCRIPTION_PURPOSES.action),
     params: z
       .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), actionParameterSchema)
       .describe('The parameters by name.'),
     result: z.string().describe('What holds once the action succeeds.'),
     codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
+    paged: z
+      .strictObject({
+        sizes: z
+          .array(z.int().min(1))
+          .min(1)
+          .describe('The sizes a page may have, each once, the smallest first.'),
+        default: z.int().min(1).describe('The size of a page the route does not name, a size.'),
+      })
+      .optional()
+      .describe(
+        'The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.',
+      ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
       .array(platformNoticeSchema)
@@ -84,10 +97,7 @@ const unsavedInputSchema = z
 /** A composite the platform declares once, derived into every screen that opts in. */
 export const platformCompositeSchema = z
   .strictObject({
-    description: z
-      .string()
-      .min(1)
-      .describe('What the composite is, for a reader: the list it derives carries it.'),
+    description: z.string().min(1).describe(DESCRIPTION_PURPOSES.composite),
     list: kebabNameSchema
       .regex(/-list$/)
       .describe(
@@ -97,7 +107,7 @@ export const platformCompositeSchema = z
       'The data-state each item takes once what it says holds: a row state of the vocabulary (`met`).',
     ),
     items: z
-      .record(kebabNameSchema, z.string().min(1))
+      .record(kebabNameSchema, z.string().min(1).describe(DESCRIPTION_PURPOSES.compositeItem))
       .refine((items) => Object.keys(items).length > 0, { message: 'a composite has items' })
       .meta({ minProperties: 1 })
       .describe(
@@ -116,7 +126,7 @@ export const platformSchema = z
       .record(platformActionNameSchema, platformActionSchema)
       .describe('The platform actions by name: `platform.<name>` in a binding.'),
     events: z
-      .record(kebabNameSchema, z.string())
+      .record(kebabNameSchema, z.string().describe(DESCRIPTION_PURPOSES.event))
       .optional()
       .describe(
         'The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.',

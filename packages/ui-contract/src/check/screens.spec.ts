@@ -138,6 +138,32 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].secret: only a field holds a secret',
     ])
   })
+  it('takes ranked on a message of two codes or more, each once, and refuses it elsewhere', () => {
+    const contract = sampleContract()
+    const sample = screenIn(contract, 'sample')
+
+    sample.anchors['sample.status-message'] = {
+      kind: 'message',
+      codes: ['saved', 'failed'],
+      ranked: true,
+    }
+
+    expect(printed(contract)).toEqual([])
+
+    anchorIn(contract, 'sample.save-button').ranked = true
+    sample.anchors['sample.saved-message'] = { kind: 'message', codes: ['saved'], ranked: true }
+    sample.anchors['sample.again-message'] = {
+      kind: 'message',
+      codes: ['saved', 'failed', 'saved'],
+      ranked: true,
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-button"].ranked: only a message ranks its codes',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.saved-message"].ranked: a ranked message carries two codes or more',
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.again-message"].codes[2]: "saved" is ranked twice',
+    ])
+  })
   it('wants every anchor to start with its screen id and end with its kind', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')

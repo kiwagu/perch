@@ -24,8 +24,9 @@ anchors:
     description: The form, in the mode sign-in or sign-up; its heading names the mode.
   user.sign-in.notice-message:
     kind: message
-    description: Why the last session on this device ended; shown once, while the page stays open.
-    codes: [ resend-after-sign-in, signed-out-elsewhere, password-changed-elsewhere, password-reset-elsewhere, delete-pending ]
+    description: Why the last session on this device ended, even while it was offline, if it connects again within 30 days of the end; shown once, while the page stays open.
+    ranked: true
+    codes: [ resend-after-sign-in, delete-pending, password-reset-elsewhere, signed-out-elsewhere, password-changed-elsewhere, device-limit-elsewhere ]
   user.sign-in.mail-message:
     kind: message
     description: Asks to open the link of the verification mail, once a sign-up or a resend went through.
@@ -92,6 +93,16 @@ anchors:
     kind: button
     description: Sends the verification mail again.
     binding: { action: platform.resend-verification }
+  user.sign-in.device-limit-dialog:
+    kind: dialog
+    description: Asks whether to sign in all the same and sign out the account's device seen least recently.
+    binding:
+      action: platform.sign-in
+      params:
+        signOutOldest:
+          value: true
+    codes: [ device-limit ]
+    derived: [ confirm-button, cancel-button ]
 states:
   ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
 flow:
@@ -99,6 +110,7 @@ flow:
   meta:
     guards:
       emailNotVerified: { codes: [ email-not-verified ] }
+      atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
       passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
       passwordsDiffer: the password typed again is not the same as the password
       confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
@@ -186,7 +198,36 @@ flow:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
         onDone:
+          - target: device-limit
+            guard: atDeviceLimit
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
+    device-limit:
+      description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.device-limit-dialog ] }
+      on:
+        user.sign-in.device-limit-dialog.confirm-button: signing-in-anyway
+        user.sign-in.device-limit-dialog.cancel-button: sign-in
+    signing-in-anyway:
+      meta: { renders: [ user.sign-in.forgot-link ] }
+      invoke:
+        src: platform.sign-in
+        input: { email: user.sign-in.email-input, password: user.sign-in.password-input, signOutOldest: { value: true } }
+        onDone:
           target: done
+          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
           actions:
             - show: { app-shell.notice-message: [ welcome ] }
             - navigate: /me

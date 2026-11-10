@@ -28,15 +28,17 @@ import {
   type SettingsService,
 } from '../../features/user/application/settings/settings.service'
 import { UserModule } from '../../features/user/user.module'
+import { INVITATIONS } from '../../platform/invitations.port'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppServices, createAppRoot } from '../root'
 import { memoryStorage } from '../storage'
 
 import { ensureAccount, readAccount } from './accounts'
-import { ensureMember, ensureOrganisation, readOrganisation } from './organisations'
+import { ensureInvited, ensureJoined, ensureOrganisation, readOrganisation } from './organisations'
 import type {
   ClientOptions,
   Inbox,
@@ -132,6 +134,7 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
   const device: SeedDevice & SeedOrganisationDevice = {
     session: services.session,
     organisations: services.organisations,
+    invitations: services.container.get(INVITATIONS),
     profiles,
     settings,
     notes,
@@ -143,7 +146,8 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
   return {
     signIn: (input) => enter(() => services.session.signIn(input)),
     ensureOrganisation: (input) => ensureOrganisation(device, input),
-    ensureMember: (key, email) => ensureMember(device, key, email),
+    ensureInvited: (key, email) => ensureInvited(device, key, email),
+    ensureJoined: (invitation) => ensureJoined(device, invitation),
     readOrganisation: (key, input) => readOrganisation(device, key, input),
     ensureAccount: (input) => ensureAccount(device, input),
     readAccount: (input) => readAccount(device, input),
@@ -193,6 +197,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     onOnlineChange: () => () => {},
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
+    invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: (context) =>
       new WebSocketTransport({
         url: gatewaySyncUrl(options.gatewayUrl),
@@ -209,6 +214,11 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     visibility: { current: () => 'visible', onChange: () => () => {} },
     // A seed client shows no frame to offer a newer build in.
     servedBuild: { watch: () => () => {} },
+    // Nor does it copy an invitation's link: it accepts the invitation itself.
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a seed client has no clipboard' }),
+    },
     logger: options.logger ?? silent,
     onError: (error) => failures.push(error),
     onSyncState: () => {},

@@ -13,7 +13,9 @@ import {
   accountFor,
   type Catalog,
   catalog,
+  type OrganisationPreset,
   organisationFor,
+  type SeedAccount,
   type SeedMode,
   validateCatalog,
 } from '../catalog'
@@ -70,48 +72,93 @@ function seedAccounts(
   )
 }
 
-/** Each organisation of the catalog: its administrator signs in, creates it and invites its members. */
-function seedOrganisations(
+/** A member and the invitation its invite answered. */
+interface Invitation {
+  readonly member: SeedAccount
+  readonly invitation: string
+}
+
+/** The account of a preset ref, or why the catalog has none. */
+function accountOf(
+  presets: Catalog,
+  ref: string,
+  mode: SeedMode,
+): ResultAsync<SeedAccount, SeedError> {
+  const preset = presets.accounts.find((account) => account.ref === ref)
+
+  return preset
+    ? okAsync(accountFor(preset, mode))
+    : errAsync(dataError('data:QUERY_FAILED', `no account ${ref}`))
+}
+
+/**
+ * One organisation: its administrator signs in, creates it and invites each member, which answers
+ * the invitation each member then signs in to accept by its id; a member that is one already (a
+ * second run) answers none, and does not sign in.
+ */
+function seedOrganisation(
+  client: SeedClient,
+  presets: Catalog,
+  mode: SeedMode,
+  preset: OrganisationPreset,
+): ResultAsync<SeededOrganisation, SeedError> {
+  const organisation = organisationFor(preset, mode)
+
+  return accountOf(presets, preset.admin, mode)
+    .andThen((admin) => client.signIn(admin))
+    .andThen(() => client.ensureOrganisation(organisation))
+    .andThen((membership) =>
+      preset.members
+        .reduce<ResultAsync<readonly Invitation[], SeedError>>(
+          (invited, ref) =>
+            invited.andThen((invitations) =>
+              accountOf(presets, ref, mode).andThen((member) =>
+                client
+                  .ensureInvited(organisation.key, member.email)
+                  .map((answer) =>
+                    answer.kind === 'invited'
+                      ? [...invitations, { member, invitation: answer.invitation }]
+                      : invitations,
+                  ),
+              ),
+            ),
+          okAsync([]),
+        )
+        .andThen((invitations) =>
+          invitations.reduce<ResultAsync<void, SeedError>>(
+            (joined, { member, invitation }) =>
+              joined
+                .andThen(() => client.signIn(member))
+                .andThen(() => client.ensureJoined(invitation))
+                .map(() => undefined),
+            okAsync(undefined),
+          ),
+        )
+        .map(() => ({
+          id: membership.tenant.id,
+          key: membership.tenant.key,
+          name: membership.tenant.name,
+        })),
+    )
+}
+
+/**
+ * Each organisation of the catalog, one after the other: its administrator creates it and invites
+ * its members, who join by accepting (so every account exists first).
+ */
+export function seedOrganisations(
   client: SeedClient,
   presets: Catalog,
   mode: SeedMode,
 ): ResultAsync<Record<string, SeededOrganisation>, SeedError> {
   return presets.organisations.reduce<ResultAsync<Record<string, SeededOrganisation>, SeedError>>(
     (done, preset) =>
-      done.andThen((organisations) => {
-        const admin = presets.accounts.find((account) => account.ref === preset.admin)
-        const organisation = organisationFor(preset, mode)
-
-        if (!admin) {
-          return errAsync(dataError('data:QUERY_FAILED', `no account ${preset.admin}`))
-        }
-
-        return client
-          .signIn(accountFor(admin, mode))
-          .andThen(() => client.ensureOrganisation(organisation))
-          .andThen((membership) =>
-            preset.members
-              .reduce<ResultAsync<void, SeedError>>(
-                (invited, ref) =>
-                  invited.andThen(() => {
-                    const member = presets.accounts.find((account) => account.ref === ref)
-
-                    return member
-                      ? client.ensureMember(organisation.key, accountFor(member, mode).email)
-                      : errAsync(dataError('data:QUERY_FAILED', `no account ${ref}`))
-                  }),
-                okAsync(undefined),
-              )
-              .map(() => ({
-                ...organisations,
-                [preset.ref]: {
-                  id: membership.tenant.id,
-                  key: membership.tenant.key,
-                  name: membership.tenant.name,
-                },
-              })),
-          )
-      }),
+      done.andThen((organisations) =>
+        seedOrganisation(client, presets, mode, preset).map((seeded) => ({
+          ...organisations,
+          [preset.ref]: seeded,
+        })),
+      ),
     okAsync({}),
   )
 }
@@ -119,7 +166,7 @@ function seedOrganisations(
 /**
  * Seeds the catalog's accounts through the gateway as a device would, one account at a time,
  * each new one verified through the mail `inbox` reads, then its organisations, whose
- * administrators invite the members (so every account exists first). With `reset`, the stand's
+ * administrators invite the members, who join by accepting (so every account exists first). With `reset`, the stand's
  * seed data is swept first. A catalog the run would not hold (an organisation key the run's
  * suffix makes too long, among others) is refused before anything.
  */

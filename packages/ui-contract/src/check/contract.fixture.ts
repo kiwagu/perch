@@ -156,7 +156,17 @@ export function sampleContract(): Contract {
   return structuredClone({
     vocabulary: {
       version: 1,
-      kinds: meaning(['button', 'link', 'input', 'list', 'item', 'select', 'page', 'status']),
+      kinds: meaning([
+        'button',
+        'link',
+        'input',
+        'list',
+        'item',
+        'select',
+        'option',
+        'page',
+        'status',
+      ]),
       suffixes: meaning(['option', 'item', 'confirm-button', 'visibility-button']),
       attributes: {},
       appStates: meaning(['opening', 'ready']),
@@ -216,6 +226,7 @@ export function sampleContract(): Contract {
       },
     ],
     scenarioLines: new Map(),
+    descriptions: [],
     model: {
       document: {},
       entities: {

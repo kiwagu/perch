@@ -4,7 +4,7 @@ import type { IdentityId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from '../storage'
+import { deviceIdFrom, type KeyValueStorage, savedTokenOf } from '../storage'
 
 import type { TransportContext } from './options'
 
@@ -17,6 +17,8 @@ export interface SessionChannelEvents {
   readonly revoked: () => void
   /** The device was signed out because the account's password changed (4002). */
   readonly passwordChanged: () => void
+  /** The device was signed out because a sign-in went past the account's limit of devices (4003). */
+  readonly deviceLimit: () => void
   /** The gateway no longer takes the protocol of this build (4400): the channel ended for good. */
   readonly protocolRefused: () => void
 }
@@ -36,18 +38,17 @@ export function sessionTransportContext(
   storage: KeyValueStorage,
   events: SessionChannelEvents,
 ): TransportContext {
-  const saved = () => savedIdentity(storage)?.id === identity
-
   return {
     identity,
     device: deviceIdFrom(storage),
-    credentials: () => (saved() ? credentialsOf(savedToken(storage)) : undefined),
+    credentials: () => credentialsOf(savedTokenOf(storage, identity)),
     onMemberships: events.memberships,
     onEnded: (reason) =>
       match(reason)
         .with('unauthorized', events.refused)
         .with('revoked', events.revoked)
         .with('password-changed', events.passwordChanged)
+        .with('device-limit', events.deviceLimit)
         // The sync engine stops and reports it; the app is told so that the page loads again.
         .with('protocol', events.protocolRefused)
         // A sign-out this device asked for is heard by `signOut`, through the sync engine.

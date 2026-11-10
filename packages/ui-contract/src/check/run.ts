@@ -14,19 +14,23 @@ import {
   loadScreensWith,
   type Problem,
   parseVocabulary,
+  readDescriptions,
   schemaDrift,
   sortProblems,
   VOCABULARY_FILE,
 } from '../files'
 
+import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
 import { bindingsProblems } from './bindings'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
+import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
 import { noticesProblems } from './notices'
+import { pagingProblems } from './paging'
 import { routesProblems } from './routes'
 import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
@@ -52,7 +56,10 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   return parseVocabulary(markdown)
 }
 
-/** The contract files, the activities and the scenarios, or what keeps them from loading. */
+/**
+ * The contract files, the activities and the scenarios, with the descriptions they write, or what
+ * keeps them from loading.
+ */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
   const { model, problems: modelLoad } = loadModel(root)
@@ -67,8 +74,14 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
     ...scenariosLoad,
   ]
 
-  return problems.length > 0 || screens === undefined || model === undefined
-    ? { problems: sortProblems(problems) }
+  if (problems.length > 0 || screens === undefined || model === undefined) {
+    return { problems: sortProblems(problems) }
+  }
+
+  const { descriptions, problems: descriptionsRead } = readDescriptions(root)
+
+  return descriptionsRead.length > 0
+    ? { problems: sortProblems(descriptionsRead) }
     : {
         contract: {
           vocabulary,
@@ -78,6 +91,7 @@ export function loadContract(root: string): { contract?: Contract; problems: Pro
           activityLines,
           scenarios,
           scenarioLines,
+          descriptions,
         },
         problems: [],
       }
@@ -99,7 +113,10 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   searchProblems,
   mailsProblems,
   noticesProblems,
+  accessProblems,
+  pagingProblems,
   scenariosProblems,
+  descriptionsProblems,
 ]
 
 export function checkContract(root: string): Problem[] {

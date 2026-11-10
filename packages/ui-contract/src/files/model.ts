@@ -5,7 +5,7 @@
 
 import { z } from '@workspace/zod'
 
-import { entityDefinitionSchema, type entityFieldSchema } from '../schemas'
+import { DESCRIPTION_PURPOSES, entityDefinitionSchema, type entityFieldSchema } from '../schemas'
 
 import { parseFile } from './parse-file'
 import { MODEL_FILE } from './paths'
@@ -45,7 +45,12 @@ export interface Model {
   entities: Record<string, ModelEntity>
 }
 
+/**
+ * The document around the entities: a JSON Schema whose own keywords pass through, so its
+ * `description`, the model's own, takes its purpose here, where the engine defines its shape.
+ */
 const documentSchema = z.looseObject({
+  description: z.string().optional().describe(DESCRIPTION_PURPOSES.model),
   $defs: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.unknown()),
 })
 

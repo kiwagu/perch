@@ -72,13 +72,15 @@ export class SpaceDeletion {
   /**
    * Closes the space and deletes its databases: `deleted` once they are all gone, `in-use` when
    * the identity was signed in again first, `pending` when the delete is still held up after the
-   * grace, which leaves it going, the identity listed until it ends and the sign-in page a word; a
-   * failure within the grace fails, one after it is reported. The space closes before the lock is
-   * taken, so a tab never holds the database open while it waits for another tab's delete of it;
-   * the grace runs from the close.
+   * grace, which leaves it going, the identity listed until it ends and the sign-in page a word,
+   * which names the sign-in the ended session came after (`raised`, its `signInMark`); a failure
+   * within the grace fails, one after it is reported. The space closes before the lock is taken,
+   * so a tab never holds the database open while it waits for another tab's delete of it; the
+   * grace runs from the close.
    */
   destroy(
     space: Pick<IdentitySpace, 'identity' | 'close' | 'destroy'>,
+    raised: string,
   ): ResultAsync<DeleteOutcome, DataError> {
     const identity = space.identity.id
 
@@ -93,6 +95,7 @@ export class SpaceDeletion {
             () => this.#nothingLeft(identity),
           ),
         ),
+        raised,
       ),
     )
   }
@@ -101,10 +104,13 @@ export class SpaceDeletion {
    * Deletes the databases of an identity whose space did not open, its own and every
    * organisation database counted for it, as `destroy` does those of an open one.
    */
-  deleteUnopened(identity: IdentityId): ResultAsync<DeleteOutcome, DataError> {
+  deleteUnopened(identity: IdentityId, raised: string): ResultAsync<DeleteOutcome, DataError> {
     addLeftoverIdentity(this.#options.storage, identity)
 
-    return this.#withinGrace(this.#deleteUnlessInUse(identity, () => this.#deleteClosed(identity)))
+    return this.#withinGrace(
+      this.#deleteUnlessInUse(identity, () => this.#deleteClosed(identity)),
+      raised,
+    )
   }
 
   /**
@@ -198,17 +204,19 @@ export class SpaceDeletion {
 
   /**
    * How `deleting` went within the grace, which runs from now; a failure after it is reported,
-   * nobody waiting for it any more.
+   * nobody waiting for it any more. The word a delete held up past it leaves the sign-in page
+   * names the sign-in `raised`: one made since ended it (`saveNotice`).
    */
   #withinGrace(
     deleting: ResultAsync<'deleted' | 'in-use', DataError>,
+    raised: string,
   ): ResultAsync<DeleteOutcome, DataError> {
     const answer = new Promise<Result<DeleteOutcome, DataError>>((resolve) => {
       let answered = false
       const cancel = this.#options.clock.schedule(DELETE_GRACE_MS, () => {
         answered = true
         // The sign-in page says the data goes once the other tabs are closed.
-        saveNotice(this.#options.storage, 'delete-pending')
+        saveNotice(this.#options.storage, 'delete-pending', raised)
         resolve(ok('pending'))
       })
 

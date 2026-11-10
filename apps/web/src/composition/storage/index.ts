@@ -16,7 +16,7 @@ export {
   saveMemberships,
   saveTenant,
 } from './memberships'
-export { forgetNotice, savedNotice, saveNotice } from './notice'
+export { forgetNotice, markSignIn, savedNotice, saveNotice, signInMark } from './notice'
 export { PASSWORD_RESET_KEY, savePasswordReset } from './password-reset'
 export {
   addPendingRevoke,
@@ -32,8 +32,10 @@ export {
   saveDevice,
   savedIdentity,
   savedToken,
+  savedTokenOf,
   saveIdentityEmail,
   TOKEN_KEY,
+  tokenRecord,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
 export { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'

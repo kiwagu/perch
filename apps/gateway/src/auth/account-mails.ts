@@ -13,7 +13,12 @@ import type { IdentityId } from '@workspace/ids'
 
 import type { MailError, MailMessage, MailPort } from '../mail'
 
-import { type AccountAddressee, type AddresseeUnread, accountAddressee } from './account-addressee'
+import {
+  type AccountAddressee,
+  accountAddressee,
+  addresseeFailure,
+  type MailFailure,
+} from './account-addressee'
 import type { DeletedAccount } from './account-teardown'
 import type { AuthLog } from './auth-log'
 
@@ -32,22 +37,6 @@ export const FORGOT_PASSWORD_PATH = '/forgot-password'
 /** The link to the front's `path` carrying `token`. */
 export const tokenLink = (publicUrl: string, path: string, token: string): string =>
   `${publicUrl}${path}?${new URLSearchParams({ token }).toString()}`
-
-/** A mail that could not be read, written or sent: logged by its code alone. */
-interface MailFailure {
-  readonly code: string
-  readonly message: string
-}
-
-/**
- * A mail whose account could not be read: `mail:SEND_FAILED` for the account itself (gone too),
- * `mail:LOCALE_UNREADABLE` for the language its settings name.
- */
-function unreadAccount({ part }: AddresseeUnread): MailFailure {
-  return part === 'account'
-    ? { code: 'mail:SEND_FAILED', message: 'the account of a mail could not be read' }
-    : { code: 'mail:LOCALE_UNREADABLE', message: 'the language of a mail could not be read' }
-}
 
 export interface AccountMailsOptions {
   readonly mail: MailPort
@@ -152,7 +141,7 @@ export class AccountMails {
   ): void {
     this.#send(
       what,
-      accountAddressee(this.#options.directory, identity).mapErr(unreadAccount),
+      accountAddressee(this.#options.directory, identity).mapErr(addresseeFailure),
       write,
     )
   }

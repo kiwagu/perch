@@ -12,16 +12,19 @@ import { deleteLocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
 import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
+import type { DeviceNetwork } from '@workspace/replica/sync'
 import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
 
 import type { Theme } from '../platform/theme'
 
+import { browserClipboard } from './browser-clipboard'
 import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
 import { devicesApi } from './devices-api'
 import { warmEngines } from './engine-warm'
 import { gatewayAuth } from './gateway-auth'
 import type { SyncState, Visibility } from './identity-space'
+import { invitationsApi } from './invitations-api'
 import { organisationsApi } from './organisations-api'
 import { type AppStart, type BootFailure, createAppRoot } from './root'
 import { servedBuild } from './served-build'
@@ -85,8 +88,14 @@ export interface BrowserStart extends AppStart {
   readonly warm: () => void
 }
 
-/** Boots the app; `theme` is the theme this device shows now, as the page's start made it. */
-export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailure> {
+/**
+ * Boots the app; `theme` is the theme this device shows now, as the page's start made it. The
+ * start itself fails only when the browser keeps no site data; the open of the saved account's
+ * data says later whether it failed.
+ */
+export function bootBrowser(
+  theme: () => Theme,
+): Result<BrowserStart, Extract<BootFailure, { readonly kind: 'storage-blocked' }>> {
   const store = siteStorage(window)
 
   // Without site storage nothing is kept: neither who is signed in nor the device's own id.
@@ -104,6 +113,20 @@ export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailur
   // Undefined in a page that is not a secure context: such a page does not sync, and says so.
   const locks: LockManager | undefined = navigator.locks
   const visibility = documentVisibility(document)
+  // The browser's network: the sync status reads it in every tab, and the leading tab's channel
+  // hears it come back to connect again at once.
+  const network: DeviceNetwork = {
+    online: () => navigator.onLine,
+    onOnlineChange: (listener) => {
+      window.addEventListener('online', listener)
+      window.addEventListener('offline', listener)
+
+      return () => {
+        window.removeEventListener('online', listener)
+        window.removeEventListener('offline', listener)
+      }
+    },
+  }
 
   showSync({ leader: false, channel: 'down' })
 
@@ -135,18 +158,13 @@ export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailur
       gatewayAuth: gatewayAuth(`${origin}/backend`),
       deviceLabel: deviceLabel(navigator),
       theme,
-      online: () => navigator.onLine,
-      onOnlineChange: (listener) => {
-        window.addEventListener('online', listener)
-        window.addEventListener('offline', listener)
-
-        return () => {
-          window.removeEventListener('online', listener)
-          window.removeEventListener('offline', listener)
-        }
-      },
+      online: network.online,
+      onOnlineChange: network.onOnlineChange,
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
+      invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
+      // Undefined in a page that is not a secure context: a copy then fails and says so.
+      clipboard: browserClipboard(navigator.clipboard),
       transport: (context) =>
         new WebSocketTransport({
           url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
@@ -155,6 +173,7 @@ export function bootBrowser(theme: () => Theme): Result<BrowserStart, BootFailur
           onMemberships: context.onMemberships,
           onEnded: context.onEnded,
           clock: systemClock,
+          network,
         }),
       locks,
       hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),

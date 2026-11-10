@@ -2,6 +2,7 @@ import { Link, useRouter, useRouterState } from '@tanstack/react-router'
 import { useSelector } from '@xstate/react'
 import {
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -27,10 +28,12 @@ import { useDismissToast, useToasts } from '../../../../platform/toasts'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
 import { NOTHING_SEEN } from '../../application/setting-writes'
 import { shellEvents } from '../../application/shell.events'
+import { FRAME_STATES } from '../../application/shell-machine'
 
 import { pageTitle } from './page-title'
-import { type ShellLinkProps, ShellView } from './shell.view'
 import { useShellFrame } from './shell-frame'
+import { type ShellLinkProps, ShellView } from './shell-view'
+import { useSignedOut } from './signed-out'
 import { deliverStored } from './stored-settings'
 
 const RouterLink = ({ to, ...props }: ShellLinkProps) => <Link to={to} {...props} />
@@ -100,7 +103,6 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const { actor, live } = frame
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
-  const signedInAs = useRef<string | undefined>(undefined)
   const pathname = useRouterState({ select: (state) => state.location.pathname })
   // The path of the route matched, as it is declared (`/$` for an unknown address).
   const route = useRouterState({
@@ -139,6 +141,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
   const frameSnapshot = useSelector(actor, (state) => state)
   const frameState = frameSnapshot.value
+  // A new value object comes with every new snapshot, so the effects below key on the
+  // configuration it names and run when that changes.
+  const frameKey = JSON.stringify(frameState)
   // A signed-in account's data still opening: the frame shows no message of the platform yet, so
   // what the platform says reaches the frame's flow once the data is open.
   const dataOpening = actor.getSnapshot().matches('opening-data')
@@ -151,29 +156,24 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
 
   // The stored language and theme arriving or changing, from this tab or another, or another
   // device: the frame's data events, handed again on each move of the frame, so a value that came
-  // while its state took none (the data still opening, the app being installed) reaches it once
-  // one does, the first read after the data opened counting as one this tab has not seen yet.
+  // while its state took none (the data still opening) reaches it once one does, the first read
+  // after the data opened counting as one this tab has not seen yet.
   const storedLocale = row?.locale
   const storedTheme = row?.theme
 
   useEffect(() => {
     deliverStored(frame, 'locale', storedLocale)
-  }, [frameState, user?.id, storedLocale, frame])
+  }, [frameKey, user?.id, storedLocale, frame])
 
   useEffect(() => {
     deliverStored(frame, 'theme', storedTheme)
-  }, [frameState, user?.id, storedTheme, frame])
+  }, [frameKey, user?.id, storedTheme, frame])
 
-  // The account going away, by its own sign-out or from another device: the frame's platform event.
-  useEffect(() => {
-    const before = signedInAs.current
+  // The account going away, by its own sign-out or from another device, another account in its
+  // place included: the frame's platform event, heard from the session while a screen renders.
+  const shown = useCallback(() => live.account, [live])
 
-    signedInAs.current = user?.id
-
-    if (before !== undefined && user?.id === undefined) {
-      actor.send({ type: 'platform.signed-out' })
-    }
-  }, [user?.id, actor])
+  useSignedOut(session, actor, true, shown)
 
   // The frame's flow says its notice and clears it, as every screen's flow does.
   useFrameEffects(actor)
@@ -305,12 +305,12 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
             return
           }
 
-          const crashed = actor.getSnapshot().matches('crashed')
+          const crashed = actor.getSnapshot().matches(FRAME_STATES.crashed)
 
           actor.send({ type: 'app-shell.locale-select', locale })
 
           // A language chosen around a crash renders the screen that failed again.
-          if (crashed && !actor.getSnapshot().matches('crashed')) {
+          if (crashed && !actor.getSnapshot().matches(FRAME_STATES.crashed)) {
             live.renderAgain?.()
           }
         })

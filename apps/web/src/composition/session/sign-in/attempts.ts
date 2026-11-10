@@ -9,7 +9,14 @@ import { err, errAsync, okAsync, type Result, ResultAsync } from 'neverthrow'
 import { type AuthUser, type DataError, dataError, type SignInInput } from '@workspace/data'
 
 import type { NamedDevice, SignedInDevice } from '../../gateway-auth'
-import { deviceIdFrom, forgetDevice, IDENTITY_KEY, saveDevice, savedIdentity } from '../../storage'
+import {
+  deviceIdFrom,
+  forgetDevice,
+  IDENTITY_KEY,
+  markSignIn,
+  saveDevice,
+  savedIdentity,
+} from '../../storage'
 import type { SessionHost } from '../host'
 import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from '../one-account'
 import type { PendingRevoke } from '../pending-revoke'
@@ -165,6 +172,8 @@ export class SessionSignIn {
             }
 
             saveDevice(this.#host.options.storage, { ...device, memberships })
+            // The words left for the sign-in page so far end with this sign-in, in every tab.
+            markSignIn(this.#host.options.storage)
 
             return device
           })

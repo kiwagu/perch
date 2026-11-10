@@ -143,6 +143,83 @@ describe('the projection of a navigate', () => {
   })
 })
 
+describe("the projection of a navigate that takes an entry's data-id", () => {
+  const config = (search: Record<string, unknown>) =>
+    ({
+      initial: 'list',
+      states: {
+        list: {
+          on: {
+            'sample.list.open-link': {
+              target: 'gone',
+              actions: [{ type: 'navigate', params: { to: '/thing', search } }],
+            },
+          },
+        },
+        gone: { type: 'final' },
+      },
+    }) as const
+
+  it('holds the item it names: only the same item equals it', () => {
+    const item = { id: { item: 'sample.list.thing-item' } }
+    const flow = flowSchema.parse(config(item))
+
+    expect(projected(createMachine(config(item)).config)).toEqual(projected(flow))
+
+    for (const other of [
+      { id: { item: 'sample.list.other-item' } },
+      { id: { anchor: 'sample.list.thing-item' } },
+      { id: 'thg_1' },
+      { key: { item: 'sample.list.thing-item' } },
+      {},
+    ]) {
+      expect(projected(createMachine(config(other)).config)).not.toEqual(projected(flow))
+    }
+  })
+})
+
+describe('the projection of a read', () => {
+  interface Read {
+    readonly type: 'read'
+    readonly params: { readonly anchor: string }
+  }
+  const config = (actions: readonly Read[], invoke: Record<string, unknown> = {}) =>
+    ({
+      initial: 'viewing',
+      states: {
+        viewing: { on: { 'sample.remove-button': { target: 'removing' } } },
+        removing: {
+          invoke: {
+            src: 'platform.devices.revoke',
+            onDone: { target: 'viewing', ...(actions.length === 0 ? {} : { actions }) },
+            ...invoke,
+          },
+        },
+      },
+    }) as const
+  const read = { type: 'read', params: { anchor: 'sample.devices-list' } } as const
+
+  it('holds a read, the list it names included, as it holds the other effects', () => {
+    const flow = flowSchema.parse(config([read]))
+
+    expect(projected(createMachine(config([read])).config)).toEqual(projected(flow))
+    expect(projected(createMachine(config([])).config)).not.toEqual(projected(flow))
+    expect(
+      projected(
+        createMachine(config([{ type: 'read', params: { anchor: 'sample.other-list' } }])).config,
+      ),
+    ).not.toEqual(projected(flow))
+  })
+
+  it("leaves an invoke's read: false out: a statement for the check, nothing a machine runs", () => {
+    const flow = flowSchema.parse(config([], { read: false }))
+    const machine = createMachine(config([]))
+
+    expect(beyondTheSubset(machine.config)).toEqual([])
+    expect(projected(machine.config)).toEqual(projected(flow))
+  })
+})
+
 describe('the projection of a clear', () => {
   it('holds the field a clear empties, as it holds an anchor whose code it clears', () => {
     const config = (anchor: string) =>

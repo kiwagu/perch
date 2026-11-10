@@ -19,7 +19,8 @@
     "MAILBOX_DEV_URL",
     "GATEWAY_URL",
     "LOG_LEVEL",
-    "LOG_FORMAT"
+    "LOG_FORMAT",
+    "VITEST_MAX_WORKERS"
   ],
   "tasks": {
     "build": {
@@ -79,6 +80,9 @@
       "cache": false
     },
     "//#e2e:coverage": {
+      "cache": false
+    },
+    "//#contract:coverage:check": {
       "cache": false
     },
     "//#contract:check": {

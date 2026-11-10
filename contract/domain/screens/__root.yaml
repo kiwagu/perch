@@ -10,7 +10,7 @@ anchors:
   app-shell.status:
     kind: status
     description: "The readiness line of the app: its state says where the start is; in ready it is a visually hidden text, in opening-data a visible line beside the open screen, otherwise the visible message."
-    states: [ opening, opening-data, ready, failed, storage-blocked ]
+    states: [ opening, opening-data, ready, failed, start-failed, storage-blocked ]
   app-shell.notice-message:
     kind: message
     description: The latest notice for the user, one at a time; a newer notice replaces it, and it outlives the page that raised it.
@@ -107,9 +107,10 @@ anchors:
     derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the app is starting, with the theme select and the language select; no screen is rendered.
-  opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, toast, crash message or message of the sync, update or install shows yet.
+  opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, crash message or message of the sync, update or install shows yet.
   ready: The open screen in the frame, with the navigation and the sync state for a signed-in account, the theme and language selects for a guest, the update and install messages when they apply.
-  failed: app-shell.status says this device could not open the data, with app-shell.sign-out-here-button when an account is saved, and the theme select and the language select; no screen is rendered.
+  failed: app-shell.status says this device could not open the saved account's data, with app-shell.sign-out-here-button, the theme select and the language select; no screen is rendered.
+  start-failed: app-shell.status says the app could not start on this device, with the theme select and the language select; no screen is rendered.
   storage-blocked: app-shell.status says the browser keeps no site data, with the theme select and the language select; no screen and no sign-in form.
 flow:
   initial: opening
@@ -119,18 +120,19 @@ flow:
       storedElsewhere: the stored language is one this tab neither stored nor has seen yet
       themeStoredElsewhere: the stored theme is one this tab neither stored nor has seen yet
       protocolTaken: the server has not refused the sync protocol of the version this tab runs since the page loaded
-      quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, and this tab has not loaded again by itself for the same update"
+      quietReload: "an update waits (a newer version served, or the protocol refused, since the page loaded), no field holds unsaved input, this tab has not reloaded by itself for it, and no install window is open"
+      screenReady: the frame shows the open screen as usual, neither its crash message nor a page loading again
   states:
     opening:
       description: "The app starts: it checks the site storage and who is signed in on this device; no screen is rendered."
       on:
         platform.started:
-          - target: ready
+          - target: running
             guard: signedOut
             description: Nobody is signed in, so there is no data to open and the screen renders at once, the sign-in form loading no database engine.
           - target: opening-data
             description: An account is signed in, so its frame and the open screen render at once while its data opens.
-        platform.open-failed: failed
+        platform.start-failed: start-failed
         platform.storage-blocked: storage-blocked
         app-shell.locale-select:
           target: opening
@@ -140,16 +142,22 @@ flow:
       description: The signed-in account's frame and the open screen, while its local data is being opened.
       meta: { renders: [ app-shell.nav ] }
       on:
-        platform.opened: ready
+        platform.opened: running
         platform.open-failed: failed
-    ready:
-      description: The frame with the open screen.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
+        platform.signed-out:
+          target: running
+          description: Signed out while its data opened, in another tab or from another device; nothing is left to open, so the tab goes on as a guest's and its screen moves to the sign-in page.
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
+    running:
+      type: parallel
+      description: The frame around the open screen; its messages follow the platform whatever the screen and the reminder to install are doing.
       meta: { renders: [ app-shell.nav ] }
       on:
-        app-shell.locale-select:
-          - target: ready
-            guard: signedOut
-            description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
         app-shell.theme-select: {}
         platform.theme-set:
           guard: signedOut
@@ -160,6 +168,9 @@ flow:
         model.settings.theme:
           guard: themeStoredElsewhere
           description: Another tab or device stored a theme; the app shows it at once.
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
         platform.signed-out:
           actions:
             - clear: app-shell.notice-message
@@ -170,9 +181,6 @@ flow:
         platform.changes-reloaded:
           actions:
             - show: { app-shell.notice-message: [ changes-reloaded ] }
-        platform.crashed:
-          target: crashed
-          description: The open screen failed to render.
         platform.new-version:
           guard: protocolTaken
           description: A refused protocol says more, so its message stays.
@@ -181,10 +189,6 @@ flow:
         platform.protocol-refused:
           actions:
             - show: { app-shell.update-message: [ protocol-outdated ] }
-        app-shell.update-button: updating
-        platform.tab-hidden:
-          target: updating
-          guard: quietReload
         platform.synced:
           actions:
             - show: { app-shell.sync-message: [ synced ] }
@@ -209,115 +213,107 @@ flow:
         platform.installed:
           actions:
             - clear: app-shell.install-message
-        app-shell.install-button: installing
-        app-shell.install-later-button: postponing
-    crashed:
-      description: The open screen failed to render; the frame stays.
-      meta: { renders: [ app-shell.nav, app-shell.reload-button ] }
-      entry:
-        - show: { app-shell.crash-message: [ screen-crashed ] }
-      exit:
-        - clear: app-shell.crash-message
-      on:
-        app-shell.reload-button: reloading
-        platform.navigated: ready
-        app-shell.locale-select:
-          - target: ready
-            guard: signedOut
-            description: The screen renders again in the guest's chosen language, with no settings to store it.
-        app-shell.theme-select: {}
-        platform.theme-set:
-          guard: signedOut
-          description: Another tab of this browser chose a theme for this device; the app shows it at once.
-        model.settings.locale:
-          guard: storedElsewhere
-          description: Another tab or device stored a language; the app speaks it at once.
-        model.settings.theme:
-          guard: themeStoredElsewhere
-          description: Another tab or device stored a theme; the app shows it at once.
-        platform.signed-out:
-          actions:
-            - clear: app-shell.notice-message
-            - clear: app-shell.sync-message
-        platform.change-rejected:
-          actions:
-            - show: { app-shell.notice-message: [ change-rejected ] }
-        platform.changes-reloaded:
-          actions:
-            - show: { app-shell.notice-message: [ changes-reloaded ] }
-        platform.new-version:
-          guard: protocolTaken
-          description: A refused protocol says more, so its message stays.
-          actions:
-            - show: { app-shell.update-message: [ new-version ] }
-        platform.protocol-refused:
-          actions:
-            - show: { app-shell.update-message: [ protocol-outdated ] }
-        app-shell.update-button: reloading
-        platform.tab-hidden:
-          target: reloading
-          guard: quietReload
-        platform.synced:
-          actions:
-            - show: { app-shell.sync-message: [ synced ] }
-        platform.sending:
-          actions:
-            - show: { app-shell.sync-message: [ sending ] }
-        platform.connecting:
-          actions:
-            - show: { app-shell.sync-message: [ connecting ] }
-        platform.offline:
-          actions:
-            - show: { app-shell.sync-message: [ offline ] }
-        platform.sync-stopped:
-          actions:
-            - show: { app-shell.sync-message: [ sync-stopped ] }
-    reloading:
-      description: The page loads again from the server.
-      meta: { renders: [ app-shell.nav ] }
-      invoke:
-        src: platform.reload
-        onDone:
-          target: crashed
-          description: Only while the page has not loaded again; the crash message shows again.
-    updating:
-      description: The page loads again on the version the server serves.
-      meta: { renders: [ app-shell.nav ] }
-      invoke:
-        src: platform.reload
-        onDone:
-          target: ready
-          description: Only while the page has not loaded again; the update message stays.
-    installing:
-      description: The browser's own window asks the user to install the app.
-      meta: { renders: [ app-shell.nav ] }
-      invoke:
-        src: platform.install.prompt
-        onDone:
-          target: ready
-          description: "The browser answered: installed, the reminder goes for good; declined, it is put off as by the later button."
-          actions:
-            - clear: app-shell.install-message
-        onError:
-          target: ready
-          description: The browser showed no window after all; the reminder goes until the browser offers again.
-          actions:
-            - clear: app-shell.install-message
-    postponing:
-      description: The reminder is put off for three days on this device.
-      meta: { renders: [ app-shell.nav ] }
-      invoke:
-        src: platform.install.postpone
-        onDone:
-          target: ready
-          description: The reminder goes until three days have passed.
-          actions:
-            - clear: app-shell.install-message
+      states:
+        screen:
+          description: What the frame does with the open screen.
+          initial: ready
+          states:
+            ready:
+              description: The frame with the open screen.
+              on:
+                app-shell.locale-select:
+                  - target: ready
+                    guard: signedOut
+                    description: No account is signed in, so the app speaks the chosen language with no settings to store it; a signed-in account chooses on its settings screen.
+                platform.crashed:
+                  target: crashed
+                  description: The open screen failed to render.
+                app-shell.update-button: updating
+                platform.tab-hidden:
+                  target: updating
+                  guard: quietReload
+            crashed:
+              description: The open screen failed to render; the frame stays.
+              meta: { renders: [ app-shell.reload-button ] }
+              entry:
+                - show: { app-shell.crash-message: [ screen-crashed ] }
+              exit:
+                - clear: app-shell.crash-message
+              on:
+                app-shell.reload-button: reloading
+                platform.navigated: ready
+                app-shell.locale-select:
+                  - target: ready
+                    guard: signedOut
+                    description: The screen renders again in the guest's chosen language, with no settings to store it.
+                app-shell.update-button: reloading
+                platform.tab-hidden:
+                  target: reloading
+                  guard: quietReload
+            reloading:
+              description: The page loads again from the server.
+              invoke:
+                src: platform.reload
+                onDone:
+                  target: crashed
+                  description: Only while the page has not loaded again; the crash message shows again.
+            updating:
+              description: The page loads again on the version the server serves.
+              invoke:
+                src: platform.reload
+                onDone:
+                  target: ready
+                  description: Only while the page has not loaded again; the update message stays.
+        install:
+          description: The reminder to install the app.
+          initial: offering
+          states:
+            offering:
+              description: The reminder waits for the user while the browser offers to install the app.
+              on:
+                app-shell.install-button:
+                  target: installing
+                  guard: screenReady
+                app-shell.install-later-button:
+                  target: postponing
+                  guard: screenReady
+            installing:
+              description: The browser's own window asks the user to install the app.
+              invoke:
+                src: platform.install.prompt
+                onDone:
+                  target: offering
+                  description: "The browser answered: installed, the reminder goes for good; declined, it is put off as by the later button."
+                  actions:
+                    - clear: app-shell.install-message
+                onError:
+                  target: offering
+                  description: The browser showed no window after all; the reminder goes until the browser offers again.
+                  actions:
+                    - clear: app-shell.install-message
+            postponing:
+              description: The reminder is put off for three days on this device.
+              invoke:
+                src: platform.install.postpone
+                onDone:
+                  target: offering
+                  description: The reminder goes until three days have passed.
+                  actions:
+                    - clear: app-shell.install-message
     failed:
       description: The saved account's data could not be opened; no screen is rendered.
       meta: { renders: [ app-shell.sign-out-here-button ] }
       on:
         app-shell.sign-out-here-button: signing-out
+        platform.signed-in:
+          actions:
+            - clear: user.sign-in.notice-message
+        platform.signed-out:
+          target: running
+          description: The saved account was signed out, in another tab or from another device; the tab goes on as a guest's, its screen on the sign-in page, and offers no sign-out of an account it no longer holds.
+          actions:
+            - clear: app-shell.notice-message
+            - clear: app-shell.sync-message
         app-shell.locale-select:
           target: failed
           description: The app speaks the chosen language; the account's data did not open, so no settings store it.
@@ -337,6 +333,13 @@ flow:
           description: A failed sign-out also loads the sign-in page again; no code is shown.
           actions:
             - navigate: /sign-in
+    start-failed:
+      description: The app's code did not load or run, so the start stopped before it knew who is signed in; no screen is rendered.
+      on:
+        app-shell.locale-select:
+          target: start-failed
+          description: The app speaks the chosen language; the start opened no settings to store it.
+        app-shell.theme-select: {}
     storage-blocked:
       description: The browser keeps no site data, so the app stops with a message.
       type: final

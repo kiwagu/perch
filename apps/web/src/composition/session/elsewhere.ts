@@ -99,6 +99,7 @@ export class SessionElsewhere {
       revoked: () => void this.#outElsewhere(identity),
       passwordChanged: () =>
         void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
+      deviceLimit: () => void this.#outElsewhere(identity, undefined, 'device-limit-elsewhere'),
       // The build is what the gateway refuses, whichever account's channel heard it, and while
       // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
@@ -115,12 +116,16 @@ export class SessionElsewhere {
 
   /**
    * Another tab changed the saved identity: this tab follows, closing a space that is no longer
-   * it and, with none open, opening the space of the identity another tab signed in.
+   * it and, with none open, opening the space of the identity another tab signed in. An identity
+   * this tab shows without its space leaves at once, not behind the start's open, so nothing
+   * more is asked or shown in its name meanwhile.
    */
   follow(): void {
     if (this.#host.isClosed()) {
       return
     }
+
+    this.#host.leaveUnopened()
 
     void this.#host
       .serially((generation) => {
@@ -143,10 +148,11 @@ export class SessionElsewhere {
   }
 
   /**
-   * Signed out from another device (4001), everywhere at this device's request, or by a change of
-   * the account's password (4002, whose `notice` says so): as a refused token, and the sign-in
-   * page says why. Whichever of two runs second changes nothing, and so does one whose session is
-   * no longer open (`still`) when its turn comes.
+   * Signed out from another device (4001), everywhere at this device's request, by a change of
+   * the account's password (4002), or by a sign-in past the account's limit of devices (4003),
+   * whose `notice` says so: as a refused token, and the sign-in page says why. Whichever of two
+   * runs second changes nothing, and so does one whose session is no longer open (`still`) when
+   * its turn comes.
    */
   #outElsewhere(
     identity: IdentityId,

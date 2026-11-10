@@ -1,8 +1,24 @@
+import { ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { identityIdFactory } from '@workspace/ids'
+
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
-import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
-import { savedIdentity } from '../storage'
+import {
+  browserDatabases,
+  openTestWorld,
+  signUpVerified,
+  type TestWorld,
+} from '../__fixtures__/session'
+import {
+  type MemoryStorage,
+  memoryStorage,
+  saveDevice,
+  savedIdentity,
+  savedToken,
+  TOKEN_KEY,
+  tokenRecord,
+} from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -29,10 +45,48 @@ async function signedIn() {
   return { ...world, auth }
 }
 
+/**
+ * Ann signed up in this browser, whose page then loads again: the start opens her space, and her
+ * database opens only once the test lets it (`open`).
+ */
+async function annOpening() {
+  const auth = fakeGatewayAuth()
+  const storage = memoryStorage()
+  const before = await openTestWorld({ auth, storage, online: false })
+
+  expect((await signUpVerified(before.session, auth, annSignUp)).isOk()).toBe(true)
+  await before.close()
+  expect(before.failures).toEqual([])
+  auth.requests.splice(0)
+
+  let open: () => void = () => {}
+  const held = new Promise<void>((resolve) => {
+    open = resolve
+  })
+  const shared = browserDatabases()
+  const tab = await openTestWorld({
+    auth,
+    storage,
+    online: false,
+    databases: {
+      open: (identity) => ResultAsync.fromSafePromise(held).andThen(() => shared.open(identity)),
+    },
+  })
+
+  worlds.push(tab)
+
+  const restoring = tab.session.restore()
+
+  expect(tab.session.current()?.email).toBe(annSignUp.email)
+  expect(tab.session.space()).toBeUndefined()
+
+  return { auth, storage, session: tab.session, open, restoring }
+}
+
 describe("a change of the signed-in account's password or email", () => {
   it('asks the gateway with the session this device holds, and stays signed in', async () => {
     const { session, auth, storage } = await signedIn()
-    const token = storage.get('perch.session.token')
+    const token = savedToken(storage)
     const device = storage.get('perch.device.id')
 
     expect((await session.changePassword(annSignUp.password, 'Secret-new1')).isOk()).toBe(true)
@@ -63,6 +117,65 @@ describe("a change of the signed-in account's password or email", () => {
     ).toBe('data:AUTH_FAILED')
     expect(auth.requests).toEqual([])
   })
+
+  it("asks the gateway with the session this device saved while the start opens the account's space", async () => {
+    const { auth, storage, session, open, restoring } = await annOpening()
+
+    expect((await session.changePassword(annSignUp.password, 'Secret-new1')).isOk()).toBe(true)
+    expect(auth.requests).toEqual([
+      {
+        kind: 'change-password',
+        token: savedToken(storage),
+        device: storage.get('perch.device.id'),
+      },
+    ])
+
+    open()
+
+    expect((await restoring).isOk()).toBe(true)
+  })
+
+  it.each([
+    [
+      'signed Ann out and Bob in',
+      (storage: MemoryStorage) =>
+        saveDevice(storage, {
+          identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+          token: 'token-bob',
+          memberships: [],
+        }),
+    ],
+    [
+      "wrote Bob's token, not yet his identity",
+      (storage: MemoryStorage) =>
+        storage.set(TOKEN_KEY, tokenRecord(identityIdFactory.create(), 'token-bob')),
+    ],
+  ])(
+    "asks nothing with another account's session that another tab saved while the space opens: it %s",
+    async (_, saved) => {
+      const { auth, storage, session, open, restoring } = await annOpening()
+
+      // This tab follows once its start is done.
+      saved(storage)
+
+      const asked = [
+        await session.changePassword(annSignUp.password, 'Secret-new1'),
+        await session.changeEmail('ann.new@example.test', annSignUp.password),
+        await session.requestAccountDeletion(annSignUp.password),
+      ]
+
+      expect(asked.map((answer) => answer._unsafeUnwrapErr().code)).toEqual([
+        'data:AUTH_FAILED',
+        'data:AUTH_FAILED',
+        'data:AUTH_FAILED',
+      ])
+      expect(auth.requests).toEqual([])
+
+      open()
+
+      expect((await restoring).isOk()).toBe(true)
+    },
+  )
 })
 
 describe('the confirmation of a new email', () => {

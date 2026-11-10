@@ -83,11 +83,39 @@ describe('flowSchema', () => {
       }),
     ).toBe(false)
   })
-  it('refuses an effect other than show, clear and navigate', () => {
+  it('refuses an effect other than show, clear, read and navigate', () => {
     expect(
       changed((config) => {
         Object.assign(stateOf(config, 'sign-in'), { entry: [{ type: 'assign', params: {} }] })
       }),
+    ).toBe(false)
+  })
+  it('takes a read of an anchor, in full and by its name, and nothing more of it', () => {
+    expect(
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          entry: [{ type: 'read', params: { anchor: 'device.list' } }],
+        })
+      }),
+    ).toBe(true)
+    expect(
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          entry: [{ type: 'read', params: { anchor: 'device.list', codes: ['failed'] } }],
+        })
+      }),
+    ).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: { a: { entry: [{ read: 'device.list' }] } },
+      }).success,
+    ).toBe(true)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: { a: { entry: [{ read: { 'device.list': ['failed'] } }] } },
+      }).success,
     ).toBe(false)
   })
   it('refuses a clear naming codes', () => {
@@ -150,6 +178,23 @@ describe('flowSchema', () => {
         },
       }).success,
     ).toBe(true)
+  })
+  it('takes a search value from the entry an item names, and nothing else of it', () => {
+    const navigating = (search: unknown): boolean =>
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'navigate', params: { to: '/sign-in', search } }],
+        })
+      })
+
+    expect(navigating({ id: { item: 'console.users.list.account-item' }, page: 1 })).toBe(true)
+    expect(navigating({ id: { item: 1 } })).toBe(false)
+    expect(navigating({ id: { item: 'id' } })).toBe(false)
+    expect(
+      navigating({
+        id: { item: 'console.users.list.account-item', anchor: 'user.sign-in.email-input' },
+      }),
+    ).toBe(false)
   })
   it('refuses an id of two segments, as XState splits an id target on `.`', () => {
     expect(
@@ -408,6 +453,38 @@ describe('the toast opt-out', () => {
         },
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('the read opt-out', () => {
+  const flowWith = (invoke: Record<string, unknown>) => ({
+    initial: 'saving',
+    states: { saving: { invoke: { src: 'thing.createThing', onDone: 'saving', ...invoke } } },
+  })
+
+  it('lets an authored invoke and a region by its button say nothing reads', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ read: false })).success).toBe(true)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', read: false }).success,
+    ).toBe(true)
+  })
+
+  it('takes only false, and the canonical flow keeps it on the invoke for the checks', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ read: true })).success).toBe(false)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', read: 'device.list' }).success,
+    ).toBe(false)
+
+    const canonical = (read: unknown) =>
+      flowSchema.safeParse({
+        initial: 'saving',
+        states: {
+          saving: { invoke: { src: 'thing.createThing', onDone: { target: 'saving' }, read } },
+        },
+      }).success
+
+    expect(canonical(false)).toBe(true)
+    expect(canonical(true)).toBe(false)
   })
 })
 

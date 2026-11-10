@@ -6,7 +6,7 @@ import type { Membership } from '@workspace/replica/protocol'
 import { keptAccountStart } from './account-start'
 import { memoryStorage } from './key-value'
 import { savedMemberships, savedTenant, saveTenant } from './memberships'
-import { forgetDevice, saveDevice, savedIdentity, savedToken } from './signed-in'
+import { forgetDevice, saveDevice, savedIdentity, savedToken, savedTokenOf } from './signed-in'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
@@ -28,7 +28,6 @@ describe('the signed-in device', () => {
 
     expect(savedIdentity(storage)).toEqual(ann.identity)
     expect(savedToken(storage)).toBe('token-1')
-    expect(storage.get('perch.session.token')).toBe('token-1')
     expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
 
     forgetDevice(storage)
@@ -38,6 +37,30 @@ describe('the signed-in device', () => {
     expect(storage.get('perch.session.token')).toBeUndefined()
     expect(savedMemberships(storage, ann.identity.id)).toEqual([])
     expect(savedTenant(storage)).toBeUndefined()
+  })
+
+  it('keeps the token with the identity it was issued to, and gives it for that identity alone', () => {
+    const storage = memoryStorage()
+    const bob = identityIdFactory.create()
+
+    saveDevice(storage, ann)
+
+    expect(JSON.parse(storage.get('perch.session.token') ?? 'null')).toEqual({
+      identity: ann.identity.id,
+      token: 'token-1',
+    })
+    expect(savedTokenOf(storage, ann.identity.id)).toBe('token-1')
+    expect(savedTokenOf(storage, bob)).toBeUndefined()
+  })
+
+  it('reads no token from a value that does not name the identity it was issued to', () => {
+    const storage = memoryStorage()
+
+    // As an older build kept it: the token alone.
+    storage.set('perch.session.token', 'token-1')
+
+    expect(savedToken(storage)).toBeUndefined()
+    expect(savedTokenOf(storage, ann.identity.id)).toBeUndefined()
   })
 
   it('forgets, with the device, the start of the account the browser kept to finish', () => {

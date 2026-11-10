@@ -7,7 +7,7 @@ import { GATES } from './tree.ts'
 /** The root script that runs each suite, and what it runs before the recorder's command. */
 const SUITE_SCRIPT = {
   db: { name: 'test:db', before: 'mcproc exec --' },
-  e2e: { name: 'test:e2e', before: 'mcproc exec --memory 4G --note e2e --' },
+  e2e: { name: 'test:e2e', before: 'mcproc exec --memory 4G --exclusive e2e --note e2e --' },
 } as const
 
 const scripts = (): Readonly<Record<string, string>> => {

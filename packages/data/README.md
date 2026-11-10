@@ -15,7 +15,9 @@ ids and datetimes do not leave it.
 - Ports with tokens: `ShapeRunnerPort` / `SHAPE_RUNNER`, `WritePathPort` / `WRITE_PATH`,
   `LocalDbPort` / `LOCAL_DB`.
 - Account types: `AuthUser` (an identity's id and email), `SignUpInput` (email, password, the
-  account's own name and its language), `SignInInput`.
+  account's own name and its language), `SignInInput` (email, password, and `signOutOldest`, which
+  confirms a sign-in past the account's limit of devices; unconfirmed, such a sign-in fails as
+  `data:DEVICE_LIMIT`).
 - Adapters: `openLocalDb`, `applySchema`, `ShapeRunner`, `runCommand`, `SurrealWritePath`.
   `applySchema(local, schema)` applies a schema to an open database and remembers it, as
   `openLocalDb` does when the schema changed, failing with `data:QUERY_FAILED`. A

@@ -9,6 +9,7 @@
 import { z } from '@workspace/zod'
 
 import { anchorSchema, codeSchema, kebabNameSchema } from '../../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { actionNameSchema } from '../anchor'
 import { routePathSchema } from '../binding'
 import { actionParamsSchema } from '../params'
@@ -30,6 +31,18 @@ export const toastOptOutSchema = z
   )
 
 /**
+ * The opt-out of a read after the action: the invoke changes nothing a list of the screen shows,
+ * so nothing reads after it. A region written `by` its button passes it to its invoke; the
+ * canonical flow keeps it on the invoke, a statement for the checks that XState ignores and the
+ * machine comparison leaves out.
+ */
+export const readOptOutSchema = z
+  .literal(false)
+  .describe(
+    'Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused.',
+  )
+
+/**
  * A guard by failure code: it holds when the action of the invoke whose `onError` it guards
  * failed with one of its codes, so a bare `show` on its branch shows exactly them.
  */
@@ -45,7 +58,7 @@ export const codeGuardSchema = z
   )
 
 const guardSchema = z
-  .union([z.string().describe('What the guard holds, in a sentence.'), codeGuardSchema])
+  .union([z.string().describe(DESCRIPTION_PURPOSES.guard), codeGuardSchema])
   .describe('What a guard holds: a sentence, or the failure codes it holds for.')
 
 /** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
@@ -64,13 +77,14 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       .describe('Per parameter, the anchor whose value it takes or a constant.'),
     onDone: transitions.describe('What follows when the action succeeds.'),
     onError: transitions.exactOptional().describe('What follows when the action fails.'),
+    read: readOptOutSchema.exactOptional(),
   }
   const invoke = (
     parts.toastOptOut === true
       ? z.strictObject({ ...invokeShape, toast: toastOptOutSchema.exactOptional() })
       : z.strictObject(invokeShape)
   ).describe('The action the state runs while the machine is in it.')
-  const description = z.string().exactOptional().describe('What the state is, for a reader.')
+  const description = z.string().exactOptional().describe(DESCRIPTION_PURPOSES.state)
   const entry = effects.exactOptional().describe('The effects on entering the state.')
   const exit = effects.exactOptional().describe('The effects on leaving the state.')
   const on = z
@@ -130,7 +144,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     )
   const region = z
     .strictObject({
-      description: z.string().exactOptional().describe('What the area is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
       initial: flowStateNameSchema.describe('The state the region starts in.'),
       states: z
         .record(flowStateNameSchema, regionState)
@@ -200,7 +214,7 @@ export function flowSchemaOf<
         .describe(
           'The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
         ),
-      description: z.string().exactOptional().describe('What the flow is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.flow),
       initial: flowStateNameSchema.describe('The state the screen opens in.'),
       meta: z
         .strictObject({

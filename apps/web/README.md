@@ -24,7 +24,8 @@ modeling stage.
   blocks site data stops at a message that says so, instead of forgetting who signed in, the
   device's id and the updates the tab already loaded the page again for. A saved identity whose
   space does not open stops the start too, and the shell offers to sign out on this device
-  (`SessionService.signOutUnopened()`): its session token is left to sign out and its databases deleted,
+  (`SessionService.signOutUnopened(identity)`), of that identity alone and only while it is still
+  the saved one: its session token is left to sign out and its databases deleted,
   so a database that will never open is no dead end. Signing up asks the gateway to create the
   account and mail its verification link (`SessionService.signUp`, the gateway's own
   `POST /backend/auth/sign-up/email` with the name, the email, the password and the language the
@@ -34,7 +35,10 @@ modeling stage.
   client over `POST /backend/auth/sign-in/email` on the page's own origin, the device in
   `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
   answer's body, never the signed one of its `set-auth-token` header; a 401 is
-  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 429 `data:RATE_LIMITED`, and the
+  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
+  account is signed in on as many devices as it may be: nothing is signed in, and the sign-in page
+  asks before it signs in all the same with `signOutOldest`, which signs out the account's device
+  seen least recently), a 429 `data:RATE_LIMITED`, and the
   sign-in page says to wait; an unreachable gateway is `data:OFFLINE`, keeping nothing of what the
   request carried).
   A verification link's token signs the device in the same way the first time it is exchanged
@@ -103,7 +107,10 @@ modeling stage.
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
   "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
   same id in its hello and every organisation call sends it as `X-Perch-Device`. The
-  identity, its session token (`perch.session.token`, kept as it is until a sign-out)
+  identity, its session token (`perch.session.token`, kept until a sign-out together with the
+  identity it was issued to, `{ identity, token }`: the calls made for an identity, its own, the
+  organisation and device routes' and its channel's, read the token through its owner in one
+  step, never another account's that another tab saved since)
   and its memberships (`perch.session.memberships`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
@@ -149,7 +156,15 @@ modeling stage.
   which the organisation page words as "too many attempts"; any other status
   named without its body). `organisationsApi` calls the gateway's `/organisations` routes with
   it; the `ORGANISATIONS` port (`createOrganisations`) makes an organisation the identity
-  creates its membership on the device at once, added to the newest list any tab kept. `devicesApi` is the `DEVICES` port over
+  creates its membership on the device at once, added to the newest list any tab kept; the
+  invitations of an organisation (an invite with a role, the pending ones, a revocation) and a
+  member's role change (`PATCH` of the member) adopt nothing: every device of the member learns
+  the role over the sync channel. `invitationsApi` is the `INVITATIONS` port over
+  `POST /invitations/read` (the link's token in the body, with the session token only when the
+  device holds one: `jsonAsWhoever`), `GET /invitations`, `POST /invitations/accept` and
+  `POST /invitations/decline` (`createInvitations`: an accepted invitation is the membership on
+  this device at once, as a created organisation is, and the answer comes once it is adopted, so
+  the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. One tab per browser leads the
@@ -163,7 +178,10 @@ modeling stage.
   `perch.session.leftover-identities` before its databases are deleted and taken off once they
   are gone (`SpaceDeletion`); a delete another tab still holds up after 5 seconds (it keeps the
   database open) goes on without the sign-out, whose tab then hears of it, and the sign-in page
-  says the data leaves the device once the other tabs are closed. Each start deletes the
+  says the data leaves the device once the other tabs are closed, unless an account signed in on
+  the browser since the session ended: each word left for the sign-in page names the last sign-in
+  before the session ended (`perch.session.notice.<sign-in>.<code>`), and a sign-in ends every word naming
+  an earlier one as it is kept (`perch.session.sign-ins`), a late one included. Each start deletes the
   databases of the identities still listed, but the one signed in, and opening an identity's
   database waits for a delete of it that the page runs. A sign-out the gateway did not confirm (offline, or
   giving unsent changes up, or kept by a frozen tab while offline) leaves the session token, whose
@@ -215,7 +233,10 @@ modeling stage.
   load the page again even when it starts listening later. One account per browser: a
   tab follows another tab's sign-out by closing its space and another tab's sign-in by opening
   the space of the identity it saved (the sign-in page then moves to the profile, unless the
-  sign-in is its own); a sign-in that finds another account saved is refused with
+  sign-in is its own); an identity the tab shows without its space (the start opening it, or
+  done without opening it) leaves at once when another tab signs it out, not behind the open,
+  which then attaches nothing, and the frame goes on as a guest's. A sign-in that finds another
+  account saved is refused with
   `data:OTHER_ACCOUNT` ("Sign it out first"), before it asks the gateway, or after it when
   another tab saved one meanwhile, whose new token is then left to sign out. A new password set
   through a reset link writes `perch.password.reset` once the gateway took it, a fresh value each
@@ -228,7 +249,7 @@ modeling stage.
   container's runner and write
   path follow the current space and refuse while nobody is signed in. The command bus
   logs each command, validates its params and sets the execution context (actor, device
-  and correlation ids). The root makes the app's domain event bus (`EventBus` of
+  and correlation ids). The root makes the app's domain event bus (`app-events.ts`: `EventBus` of
   `@workspace/cqrs`, provided as `EVENTS`) and is its only publisher: the command bus
   publishes `<command id>.done` or `.failed` once the write path resolved (a failing
   subscriber is logged, never the command's failure), the session publishes
@@ -238,14 +259,19 @@ modeling stage.
   (`/ui-manifest/manifest.json`, never cached) when the frame starts watching, each time the tab
   comes back to the foreground and every ten minutes while it is there, against the build this
   tab runs (`virtual:perch-build`, below); a manifest the server does not serve, or a failed
-  read, says nothing. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
+  read, says nothing. It provides `CLIPBOARD` too (`browser-clipboard.ts`): the browser's
+  `navigator.clipboard.writeText`, which an administrator's copy of an invitation's link goes
+  through; a page that is not a secure context has no clipboard, and a write then fails naming
+  it, as the browser's own refusal does. And `SYNC_STATUS` (`sync-status.ts`): the state of this device's sync for a
   signed-in account, the same in every tab: the leading tab shares its channel, whether its
   space holds unsent changes and a sync stopped for good as the record `perch.sync.leader` in
   the browser's storage, written on each change of its channel and every two seconds while it
   leads (it says synced only once a read of the outbox, asked in its current leading period and
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
-  away. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
+  `WebSocketTransport`): once the browser is back online it connects at once instead of waiting
+  out its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
   of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
   `perch.theme` tells `platform.theme-set`); the storage's own
@@ -337,10 +363,12 @@ modeling stage.
   `app-shell.notice-message` sets the notice, a `clear` of it clears it, one on
   `user.sign-in.notice-message`, from any screen, leaves its word for this tab's next sign-in
   page (`SessionPort.leaveNotice`: a fact of this tab's move, kept in its memory, never in the
-  browser's storage, and dropped by a sign-in of another account in the tab; the page reads it
-  with the browser's word, `perch.session.notice`, and says the browser's word on the device's
-  data, `resend-after-sign-in` or `delete-pending`, first, then the tab's own, then the
-  browser's other words, and takes both), one code each, while
+  browser's storage; the page reads it with the browser's words, `perch.session.notice.<sign-in>.<code>`,
+  says the first by the rank the contract gives the anchor's codes, `SESSION_NOTICES`, and
+  takes them all; each slot holds the words left since the last sign-in on the browser, which
+  ends the browser's as it is kept), one code each, and a `clear` of it, the frame's on a sign-in
+  heard (`platform.signed-in`), drops this tab's own word left before that sign-in
+  (`SessionPort.dropNotice`), however late it is heard, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
   opened, read once, so the field then holds what is typed).
@@ -366,7 +394,9 @@ and waits until the gateway acknowledged them, and whose `readAccount` signs in 
 profile the gateway sends; one device, it signs the account it is in out before it
 enters another (one account per device), and stays in the last one. As the
 signed-in account, `ensureOrganisation` creates an organisation (one the account already
-administers is found; one it only belongs to is refused), `ensureMember` invites an existing account by email, and
+administers is found; one it only belongs to is refused), `ensureInvited` invites an existing
+account by email as a member and answers the invitation's id (`already-member` when it is one),
+`ensureJoined` accepts an invitation by its id as the signed-in account, and
 `readOrganisation` signs in, makes the organisation current and reads its notes. Its HTTP calls
 of the gateway go through `fetcher` (`openClient({ gatewayUrl, fetcher })`, the global `fetch`
 by default), which a test talking to the gateway directly uses to name a client address in
