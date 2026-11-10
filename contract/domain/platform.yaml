@@ -39,10 +39,11 @@ actions:
       signOutOldest:
         type: boolean
         description: "Optional: sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many."
-    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices
+    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in
     codes:
       - invalid-credentials
       - email-not-verified
+      - account-banned
       - rate-limited
       - other-account
       - failed
@@ -52,10 +53,11 @@ actions:
       token:
         type: string
         description: The token the link of the verification mail carries in the address of /verify-email.
-    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired"
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired; a link of an account an operator banned verifies the email, signs nothing in and answers account-banned"
     codes:
       - link-invalid
       - link-expired
+      - account-banned
       - other-account
       - rate-limited
       - failed
