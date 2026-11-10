@@ -4,8 +4,9 @@
  * are the screen's independent areas (`files/flow-nodes.ts`). Its `initial` is a state of the flow and
  * a region's `initial` a state of that region; every `target` leads where XState resolves
  * it (`targets.ts`); every event, effect and address names what the contract declares
- * (`references.ts`; a read a list of its own screen with a platform source, and an invoke that
- * says `read: false` reads in no outcome, `reads.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
+ * (`references.ts`; a read a list of its own screen with a platform source, an invoke that
+ * says `read: false` reads in no outcome, and a branch that says it is an outcome of an
+ * invoke, reads nothing itself and sits under no invoke that says it already, `reads.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
  * by that action's parameters; every guard is declared in `meta.guards` and every declared
  * one is used, across the whole tree; every state is reachable and every plain state that is
  * not final has a way out (`reach.ts`); within a parallel state an event belongs to one area
@@ -26,7 +27,7 @@ import { codeGuardProblems } from './code-guards'
 import type { At, InFlow } from './in-flow'
 import { itemProblems } from './items'
 import { stuckProblems, unreachableProblems } from './reach'
-import { readOptOutProblems } from './reads'
+import { branchReadOptOutProblems, readOptOutProblems } from './reads'
 import { addressProblems, effectProblems, eventProblems } from './references'
 import { rendersProblems } from './renders'
 import { transitionsProblems } from './targets'
@@ -66,6 +67,7 @@ function stateProblems(
             : transitionsProblems(inFlow, invoke.onError, [...at, 'invoke', 'onError'], within)),
           ...readOptOutProblems(inFlow, invoke, [...at, 'invoke']),
         ]),
+    ...branchReadOptOutProblems(inFlow, state, at),
   ]
 }
 

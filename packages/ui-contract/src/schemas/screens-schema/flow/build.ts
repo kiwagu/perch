@@ -32,9 +32,10 @@ export const toastOptOutSchema = z
 
 /**
  * The opt-out of a read after the action: the invoke changes nothing a list of the screen shows,
- * so nothing reads after it. A region written `by` its button passes it to its invoke; the
- * canonical flow keeps it on the invoke, a statement for the checks that XState ignores and the
- * machine comparison leaves out.
+ * so nothing reads after it, in every outcome. A region written `by` its button passes it to its
+ * invoke; the canonical flow keeps it on the invoke, a statement for the checks that XState
+ * ignores and the machine comparison leaves out. One outcome alone says it on its branch
+ * (`branchReadOptOutSchema`, `transitions.ts`), never both.
  */
 export const readOptOutSchema = z
   .literal(false)

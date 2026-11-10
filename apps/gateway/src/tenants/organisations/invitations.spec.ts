@@ -22,6 +22,7 @@ import { type MailedInvitation, specInvitations, specLink } from '../__fixtures_
 import memberForget from '../__fixtures__/member-forget.surql'
 import memberRows from '../__fixtures__/member-rows.surql'
 import membershipRows from '../__fixtures__/membership-rows.surql'
+import { readFailingAfter, specRetell } from '../__fixtures__/retell'
 import { INVITATION_LIFETIME_MS } from '../invitations'
 import { OrganisationLookup } from '../organisation-lookup'
 import type { OrganisationRefusalCode } from '../organisation-refusal'
@@ -72,7 +73,8 @@ function gated() {
 
 /**
  * The invitations of organisations over an embedded directory, with each organisation's database
- * on an embedded engine of its own, a clock the test moves, and four emails: ann's (the founder),
+ * on an embedded engine of its own, a clock the test moves (the invitations' lifetime and the
+ * re-tells run on it), and four emails: ann's (the founder),
  * bob's and cat's (accounts) and dan's (no account). A test can make a statement fail or wait, on
  * the directory or on the organisations' databases, and make the listeners fail to hear.
  */
@@ -128,6 +130,7 @@ async function harness() {
     rerole: async () => {},
     hub: { retire: () => okAsync(undefined) },
     invitations,
+    retell: specRetell({ clock }),
   })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 
@@ -138,6 +141,7 @@ async function harness() {
 
     heard.push([identity, memberships])
   })
+  cleanups.push(() => organisations.close())
 
   /** An account written straight into the directory. */
   const account = async (email: string) => {
@@ -274,6 +278,23 @@ async function harness() {
     hearing = allowed
   }
 
+  /**
+   * Moves the clock past the first re-tell delay, and waits until the harness's listener heard
+   * one more change: the re-tell due, once its turn came and it read the directory.
+   */
+  const retold = async () => {
+    const before = heard.length
+
+    await clock.advance(1_200)
+    await vi.waitFor(
+      () => {
+        expect(heard.length).toBe(before + 1)
+      },
+      { timeout: 5_000, interval: 1 },
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
   /** An admission over the same directory and databases, to make members behind the service's back. */
   const admission = new OrganisationAdmission({
     directory: watched,
@@ -329,6 +350,7 @@ async function harness() {
     holdInDirectory,
     onDirectoryQuery,
     letHear,
+    retold,
     admission,
     watchQueue,
     directory,
@@ -943,30 +965,34 @@ describe('OrganisationInvitations', () => {
       expect(await everything.rows()).toEqual([])
     })
 
-    it('answers failed when the telling fails after the commit, with the membership made, its member row right and the link spent', async () => {
+    it('answers the membership when the telling fails after the commit, with the member row right and the link spent; the listeners hear it after the delay', async () => {
       const everything = await harness()
-      const { organisations, bob, founded, invited, lastMailed } = everything
-
-      await founded()
+      const { organisations, bob, heard, founded, invited, lastMailed, retold } = everything
+      const acme = await founded()
 
       const view = await invited(bob.email)
       const { token } = lastMailed()
 
+      heard.splice(0)
       everything.letHear(false)
 
       expect(
         (
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
-        )._unsafeUnwrapErr(),
-      ).toMatchObject({ code: 'data:WRITE_FAILED' })
+        )._unsafeUnwrap(),
+      ).toEqual({ tenant: acme.tenant, role: 'member' })
       expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
       expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('member')
       expect(await everything.rows()).toEqual([])
       expect((await organisations.invitations.read({ token }))._unsafeUnwrapErr()).toEqual(
         refused('link-invalid'),
       )
+      expect(heard).toEqual([])
 
       everything.letHear(true)
+      await retold()
+
+      expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
 
       for (const invitation of [view.id, token]) {
         expect(
@@ -975,6 +1001,84 @@ describe('OrganisationInvitations', () => {
           )._unsafeUnwrapErr(),
         ).toEqual(refused('invitation-gone'))
       }
+    })
+
+    describe('a failed tell', () => {
+      it('whose memberships read fails once after the commit answers the membership, and the listeners hear the list after the delay', async () => {
+        const everything = await harness()
+        const { organisations, bob, heard, founded, invited, onDirectoryQuery, retold } = everything
+        const acme = await founded()
+        const view = await invited(bob.email)
+
+        heard.splice(0)
+        onDirectoryQuery(readFailingAfter(invitationAcceptStatement))
+
+        expect(
+          (
+            await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
+          )._unsafeUnwrap(),
+        ).toEqual({ tenant: acme.tenant, role: 'member' })
+        expect(await everything.memberRolesIn('acme')).toEqual({
+          [everything.ann.id]: 'admin',
+          [bob.id]: 'member',
+        })
+        expect(await everything.rows()).toEqual([])
+        expect(heard).toEqual([])
+
+        await retold()
+
+        expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+      })
+
+      it.each(['rejects', 'throws'] as const)(
+        'whose listener %s once answers the membership: the others hear the list at once, and every one after the delay',
+        async (how) => {
+          const everything = await harness()
+          const { organisations, bob, heard, founded, invited, retold } = everything
+          const acme = await founded()
+          const view = await invited(bob.email)
+          const deaf: Array<readonly [IdentityId, readonly Membership[]]> = []
+          let failing = true
+
+          heard.splice(0)
+
+          organisations.onChange((identity, memberships) => {
+            deaf.push([identity, memberships])
+
+            if (!failing) {
+              return Promise.resolve()
+            }
+
+            failing = false
+
+            if (how === 'throws') {
+              throw new Error('the registry is down')
+            }
+
+            return Promise.reject(new Error('the registry is down'))
+          })
+
+          expect(
+            (
+              await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
+            )._unsafeUnwrap(),
+          ).toEqual({ tenant: acme.tenant, role: 'member' })
+
+          const told = [bob.id, [{ tenant: acme.tenant, role: 'member' }]] as const
+
+          expect(await everything.memberRolesIn('acme')).toEqual({
+            [everything.ann.id]: 'admin',
+            [bob.id]: 'member',
+          })
+          expect(heard).toEqual([told])
+          expect(deaf).toEqual([told])
+
+          await retold()
+
+          expect(heard).toEqual([told, told])
+          expect(deaf).toEqual([told, told])
+        },
+      )
     })
 
     it('answers invitation-gone to the old link once an admin removed the member: a spent link never readmits', async () => {

@@ -615,6 +615,22 @@ describe('diffContracts and the order and the inputs of a flow', () => {
       },
     })
   })
+  it('lists a branch that starts saying nothing reads after its outcome, as a changed line', () => {
+    const outcomes = (branch: FlowTransition) => (flow: Flow) => {
+      const { invoke } = plainState(flow, 'saving')
+
+      if (invoke !== undefined) {
+        invoke.onDone = [branch, otherwise]
+      }
+    }
+
+    expect(flowsBetween(outcomes(given), outcomes({ ...given, read: false }))).toEqual({
+      sample: {
+        added: ['saving onDone #1 -> saving [titleGiven] read: false'],
+        removed: ['saving onDone #1 -> saving [titleGiven]'],
+      },
+    })
+  })
   it('lists an invoke whose input takes a parameter from elsewhere', () => {
     expect(
       flowsBetween(

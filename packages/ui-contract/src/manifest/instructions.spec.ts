@@ -140,7 +140,13 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain(
       '`read: false` on an invoke says nothing reads after its action',
     )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on one branch of its `onDone` or `onError` says nothing reads after that outcome, where another branch reads',
+    )
     expect(instructions.screenMap).toContain('the four effects')
+    expect(instructions.screenMap).toContain(
+      "an invoke's `read: false`, or a branch's, is a statement of the contract, nothing the machine runs",
+    )
   })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')

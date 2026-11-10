@@ -2,8 +2,8 @@
  * A screen's flow as XState runs it: `setup({ guards, actions, actors }).createMachine(flow)`
  * takes the flow of the contract unchanged, with a stub per guard of `meta.guards` (it holds
  * while `holds` names it), the effects `show`, `clear`, `read` and `navigate` as no-ops and an actor per
- * `invoke.src`, of a state of the root or of a region, that resolves. An invoke's `read: false`
- * rides along: XState reads no such key.
+ * `invoke.src`, of a state of the root or of a region, that resolves. An invoke's `read: false`,
+ * or a branch's, rides along: XState reads no such key.
  */
 
 import { type AnyEventObject, fromPromise, setup } from 'xstate'
