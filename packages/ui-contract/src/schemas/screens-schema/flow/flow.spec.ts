@@ -488,6 +488,65 @@ describe('the read opt-out', () => {
   })
 })
 
+describe('the read opt-out of a branch', () => {
+  const branchedWith = (branch: Record<string, unknown>, outcome = 'onDone') => ({
+    initial: 'saving',
+    meta: { guards: { ownChange: 'the account changed its own role' } },
+    states: {
+      saving: {
+        invoke: {
+          src: 'thing.createThing',
+          onDone: { target: 'saving' },
+          [outcome]: [{ target: 'saving', guard: 'ownChange', ...branch }, { target: 'saving' }],
+        },
+      },
+    },
+  })
+
+  it('lets a branch of an onDone or an onError say nothing reads after it, authored or canonical', () => {
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: false })).success).toBe(true)
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: false }, 'onError')).success).toBe(
+      true,
+    )
+    expect(flowSchema.safeParse(branchedWith({ read: false })).success).toBe(true)
+    expect(flowSchema.safeParse(branchedWith({ read: false }, 'onError')).success).toBe(true)
+    expect(
+      controlRegionSchema.safeParse({
+        by: 'sample.form.add-button',
+        onDone: [{ guard: 'ownChange', read: false }, { target: 'idle' }],
+      }).success,
+    ).toBe(true)
+  })
+
+  it('takes only false on a branch, and keeps it beside the branch effects', () => {
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: true })).success).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse(branchedWith({ read: 'sample.devices-list' })).success,
+    ).toBe(false)
+    expect(flowSchema.safeParse(branchedWith({ read: true })).success).toBe(false)
+
+    const parsed = flowSchema.parse(
+      branchedWith({
+        read: false,
+        actions: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
+      }),
+    )
+    const saving = parsed.states['saving']
+
+    expect(
+      saving !== undefined && saving.type !== 'parallel' ? saving.invoke?.onDone : undefined,
+    ).toEqual([
+      {
+        target: 'saving',
+        guard: 'ownChange',
+        read: false,
+        actions: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
+      },
+      { target: 'saving' },
+    ])
+  })
+})
+
 describe('the anchors a state renders, `meta.renders`', () => {
   const RENDERS = ['organisation.create.form', 'organisation.create.toggle-button']
 

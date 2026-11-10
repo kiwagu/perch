@@ -112,6 +112,34 @@ describe('flowLines', () => {
       'saving invoke thing.updateThing {"title":"sample.title-input"} read: false',
     )
   })
+  it('writes read: false of a branch after its guard and before its effects', () => {
+    const flow = flowIn(sampleContract())
+    const saving = flow.states['saving']
+
+    if (saving === undefined || saving.type === 'parallel' || saving.invoke === undefined) {
+      throw new Error('the sample flow lost its saving state')
+    }
+
+    saving.invoke.onDone = [
+      {
+        target: 'editing',
+        guard: 'titleGiven',
+        read: false,
+        actions: [{ type: 'show', params: { anchor: 'sample.save-button', codes: ['saved'] } }],
+      },
+      {
+        target: 'editing',
+        actions: [{ type: 'read', params: { anchor: 'sample.devices-list' } }],
+      },
+    ]
+    saving.invoke.onError = { target: 'editing', read: false }
+
+    expect(flowLines(flow)).toContain(
+      'saving onDone #1 -> editing [titleGiven] read: false show sample.save-button: saved',
+    )
+    expect(flowLines(flow)).toContain('saving onDone #2 -> editing read sample.devices-list')
+    expect(flowLines(flow)).toContain('saving onError -> editing read: false')
+  })
   it('walks a parallel state into its regions, naming states by their path', () => {
     expect(flowLines(PARALLEL)).toEqual([
       'initial viewing',
