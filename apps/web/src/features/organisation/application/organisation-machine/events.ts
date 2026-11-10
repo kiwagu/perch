@@ -46,11 +46,11 @@ export interface OrganisationContext {
   readonly errors: { readonly of: string | undefined; readonly codes: OrganisationErrors }
   /** The note whose edit form is open while the notes' items edit: the one acted on last. */
   readonly editing: NoteId | undefined
-  /** How many changes of the members were made here: the members are read again after each. */
+  /** How many reads of the members the flow asked for here: the view reads them after each. */
   readonly membersChanged: number
-  /** How many changes of the invitations sent were made here: they are read again after each. */
+  /** How many reads of the invitations sent the flow asked for here: read after each. */
   readonly invitationsChanged: number
-  /** How many invitations for the account were accepted or declined here: they are read again. */
+  /** How many reads of the invitations for the account the flow asked for here: read after each. */
   readonly receivedChanged: number
   /** The role being set on a member's row while its change runs: the row's select shows it. */
   readonly changingRole: RoleSet | undefined

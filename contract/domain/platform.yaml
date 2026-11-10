@@ -223,7 +223,7 @@ actions:
       device:
         type: string
         description: The device session id of that device.
-    result: that device signs out; the list is read again
+    result: that device signs out; the answer lists the account's devices as they are then, or none when they could not be read
     codes:
       - device-sign-out-failed
   theme.set:
@@ -331,7 +331,7 @@ actions:
       invitation:
         type: string
         description: The id of the invitation.
-    result: the invitation is gone and its link stops working; the invitations are read again
+    result: the invitation is gone and its link stops working
     codes:
       - not-admin
       - failed

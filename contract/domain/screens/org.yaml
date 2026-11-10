@@ -136,7 +136,7 @@ anchors:
     roles: [ member, admin ]
   organisation.members.list:
     kind: list
-    description: The members of the current organisation, read each time the list starts to show (the page opening, this account made an administrator) and rendered once read.
+    description: The members of the current organisation, rendered once read.
     roles: [ admin ]
     source:
       platform: organisations.members
@@ -197,7 +197,7 @@ anchors:
     roles: [ admin ]
   organisation.sent.list:
     kind: list
-    description: The invitations not accepted yet, the newest first, read each time the list may show (the page opening, this account made an administrator); rendered when there is at least one.
+    description: The invitations not accepted yet, the newest first; rendered when there is at least one.
     roles: [ admin ]
     source:
       platform: organisations.invitations
@@ -263,7 +263,7 @@ anchors:
         invitation: organisation.received.item
   organisation.received.error:
     kind: error
-    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list, which is read again.
+    description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
   ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an administrator, the invitations for the account, and the create toggle.
@@ -273,6 +273,9 @@ flow:
   id: organisation
   description: The page's independent areas are the regions of viewing; choosing another organisation, creating one or accepting an invitation starts them all afresh.
   initial: viewing
+  meta:
+    guards:
+      ownDemotion: the account changed its own role to member
   states:
     viewing:
       type: parallel
@@ -342,14 +345,17 @@ flow:
         invite:
           by: organisation.invite.submit-button
           onDone:
-            description: The invitation is mailed and the invitations are read again; the email empties and the role is member again.
+            description: The invitation is mailed; the email empties and the role is member again.
             actions:
               - clear: organisation.invite.email-input
               - clear: organisation.invite.role-select
+              - read: organisation.sent.list
         members:
           by: organisation.members.remove-button
           onDone:
-            description: The members are read again; the removed member's devices lose the organisation without a reload.
+            description: The removed member's devices lose the organisation without a reload.
+            actions:
+              - read: organisation.members.list
           onError:
             description: The removal has no error of its own; it shows under the invitation.
             actions:
@@ -366,8 +372,13 @@ flow:
                 src: platform.organisations.set-role
                 input: { identity: organisation.members.item, role: organisation.members.role-select }
                 onDone:
-                  target: idle
-                  description: The members are read again; the member's devices show the new role without a reload.
+                  - target: idle
+                    guard: ownDemotion
+                    description: The account is a member now, so the members list goes and nothing reads it.
+                  - target: idle
+                    description: The member's devices show the new role without a reload.
+                    actions:
+                      - read: organisation.members.list
                 onError:
                   target: idle
                   description: The select shows the role the member still has, and the error shows under the invitation.
@@ -375,13 +386,15 @@ flow:
                     - show: organisation.invite.error
         sent-copy:
           by: organisation.sent.copy-button
+          read: false
           onError:
             actions:
               - show: organisation.invite.error
         sent-revoke:
           by: organisation.sent.revoke-button
           onDone:
-            description: The invitations are read again.
+            actions:
+              - read: organisation.sent.list
           onError:
             actions:
               - show: organisation.invite.error
@@ -399,19 +412,25 @@ flow:
                 onDone:
                   target: "#organisation.viewing"
                   description: The account is a member with the invitation's role, and that organisation is current.
+                  actions:
+                    - read: organisation.received.list
                 onError:
                   target: idle
-                  description: The invitations are read again; one gone meanwhile leaves the list.
+                  description: One gone meanwhile leaves the list.
                   actions:
                     - show: organisation.received.error
+                    - read: organisation.received.list
         received-decline:
           by: organisation.received.decline-button
           onDone:
             description: The invitation leaves the list.
+            actions:
+              - read: organisation.received.list
           onError:
-            description: The invitations are read again; one gone meanwhile leaves the list.
+            description: One gone meanwhile leaves the list.
             actions:
               - show: organisation.received.error
+              - read: organisation.received.list
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:
