@@ -406,6 +406,25 @@ actions:
       - failed
     roles:
       - admin
+  accounts.list:
+    description: Reads a page of the platform's accounts, found by a part of their email or name, for an operator.
+    params:
+      q:
+        type: string
+        description: "Optional: a part of the email or of the name, matched whatever its case; absent or empty, every account."
+      page:
+        type: number
+        description: The page, from 1.
+      size:
+        type: number
+        description: "The accounts a page holds: one of the sizes below."
+    result: "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all: for each its identity id, its name (its profile's, or the one it signed up with while it has no profile), its email, whether the email is verified, whether it is banned, whether it is an operator, and when it was made; a page past the last holds none"
+    codes:
+      - not-operator
+      - failed
+    roles:
+      - operator
+    paged: { sizes: [ 10, 25, 50 ], default: 25 }
 events:
   started: "The start is done: the browser keeps site data and the app knows who is signed in on this device, so the frame and the open screen can render."
   start-failed: The app's code did not load or run on this device, so it could not start or tell who is signed in.
@@ -477,6 +496,7 @@ reserved:
   - app-shell.nav.organisation-link
   - app-shell.nav.devices-link
   - app-shell.nav.settings-link
+  - app-shell.nav.console-link
   - app-shell.theme-select
   - app-shell.locale-select
   - app-shell.sign-out-here-button

@@ -205,11 +205,12 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error` | the name is longer than 80 characters |
 | `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
-| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
 | `not-admin` | `organisation.invite.error` | only an administrator of the organisation may do this |
+| `not-operator` | `console.users.error` | only an operator of the platform may do this; an account without the role gets not-found at the console, so the code shows only when the role was taken away while the console was open |
 | `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
@@ -283,6 +284,7 @@ screen name of its own.
 | `user.settings` | the settings of the signed-in account: the theme, the language, the password and the email, and the deletion of the account (`/settings`) |
 | `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
 | `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
+| `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
 
 ## Roles
 
@@ -292,6 +294,7 @@ screen name of its own.
 | `identity` | an account is signed in, with or without organisations |
 | `member` | the signed-in account is a member of the current organisation |
 | `admin` | the signed-in account administers the current organisation |
+| `operator` | the signed-in account operates the platform: it sees every account from the console and acts on it |
 
 ## Reserved anchors
 
@@ -303,11 +306,12 @@ included.
 |---|---|
 | `app-shell.status` | the readiness line of the app, which carries `data-state` from "App states" and renders no derived anchor |
 | `app-shell.notice-message` | the latest notice for the user, one at a time, which carries `data-code` and renders no derived anchor |
-| `app-shell.nav` | the main navigation, whose links are the four anchors below, declared on their own and not derived |
+| `app-shell.nav` | the main navigation, whose links are the five anchors below, declared on their own and not derived |
 | `app-shell.nav.profile-link` | the link to `/me`, which renders no derived anchor |
 | `app-shell.nav.organisation-link` | the link to `/org`, which renders no derived anchor |
 | `app-shell.nav.devices-link` | the link to `/devices`, which renders no derived anchor |
 | `app-shell.nav.settings-link` | the link to `/settings`, which renders no derived anchor |
+| `app-shell.nav.console-link` | the link to `/console/users`, shown to an operator alone, which renders no derived anchor |
 | `app-shell.theme-select` | the theme of this device for a guest, which renders `app-shell.theme-select.option` for each theme with its value in `data-value` |
 | `app-shell.locale-select` | the language of the app, which renders `app-shell.locale-select.option` for each language with its value in `data-value` |
 | `app-shell.sign-out-here-button` | the button that signs the saved account out on this device when its data could not be opened, which renders no derived anchor |
