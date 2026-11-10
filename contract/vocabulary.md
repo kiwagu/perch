@@ -86,6 +86,7 @@ state of one anchor, never a second anchor.
 | `page` | the root element of a screen | |
 | `heading` | the title of a page or a card that a test reads | `getByRole('heading')` |
 | `message` | an informational text such as a notice, a hint or an empty state, with `data-code` | |
+| `range` | the text of a paged list that says which entries its page shows, with `data-from`, `data-to` and `data-total` | |
 | `error` | a validation or failure text next to a field or a form, with `data-code`; its `fields` name the field each code concerns | |
 | `toast` | one notification that shows for a short while; several may show at once, the newest at the top, each carrying `data-code` | |
 | `badge` | a marker such as a counter, a role or "this device", with `data-value` when it names a choice | |
@@ -103,6 +104,10 @@ state of one anchor, never a second anchor.
 | `option` | one entry of a select, with `data-value` |
 | `item` | one entry a composite renders, with `data-id` |
 | `error-message` | the error text of a field |
+| `range` | the text of a paged list that says which entries the page shows and how many there are in all, carrying `data-from`, `data-to` and `data-total`; shown once its read is in |
+| `previous-link` | the link of a paged list to the page before, on every page but the first |
+| `next-link` | the link of a paged list to the page after, on every page that does not hold the last entry |
+| `size-select` | the select of a paged list's page size, shown wherever the list is: its options are the sizes its action declares, each carrying its size as `data-value` |
 | `visibility-button` | the eye beside a password `input` that shows what the input holds as typed, or hides it again: it carries `data-value` `show` while the input hides its value (a click shows it) and `hide` while it shows it, so the value names what the click does; only an `input` renders it, and it is presentation only, never an event of a flow or an activity, never a value an action takes, and always enabled |
 
 ## Attributes
@@ -111,9 +116,12 @@ state of one anchor, never a second anchor.
 |---|---|---|
 | `data-testid` | the element | the anchor of the element |
 | `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's identity, a device session) |
-| `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix |
+| `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the page size it chooses |
 | `data-state` | a `status`, a `list`, a `section`, an `item` | an app, container or row state from the tables below |
 | `data-code` | a `message`, `error`, `toast` or `dialog` | the stable code of what the element says, which tests assert instead of the wording |
+| `data-from` | the `range` of a paged list | the number of the first entry the page shows, from 1; `0` when it shows none |
+| `data-to` | the `range` of a paged list | the number of the last entry the page shows; `0` when it shows none |
+| `data-total` | the `range` of a paged list | the number of entries the search finds in all |
 | `data-boot-step` | `<html>` | the step the start of the app has reached, set by the composition root |
 | `data-sync-leader` | `<html>` | `1` in the tab that leads the sync and `0` in every other tab |
 | `data-sync-channel` | `<html>` | the state of the tab's sync channel |

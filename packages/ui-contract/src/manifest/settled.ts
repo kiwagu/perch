@@ -13,6 +13,9 @@ import {
   isListed,
   isRendered,
   isUnder,
+  NEXT_LINK,
+  PREVIOUS_LINK,
+  RANGE,
   renderedAt,
   type SettledState,
   type SettledValue,
@@ -30,9 +33,19 @@ export interface SettledContract {
 
 /**
  * The derived parts a page shows on demand, never with their base alone: a select's options
- * while it is open, a composite's entries (its data), a field's error text when it has one.
+ * while it is open, a composite's entries (its data), a field's error text when it has one, and
+ * a paged list's range and links, which its read decides (the range once the read is in, the
+ * previous link past the first page, the next one before the last). A paged list's size select
+ * is no such part: it shows wherever the list does.
  */
-const ON_DEMAND: ReadonlySet<string> = new Set(['option', 'item', 'error-message'])
+const ON_DEMAND: ReadonlySet<string> = new Set([
+  'option',
+  'item',
+  'error-message',
+  RANGE,
+  PREVIOUS_LINK,
+  NEXT_LINK,
+])
 
 /** `sign-up`, or `viewing (form: open, notes: idle)` for a parallel state. */
 const stateText = (value: SettledValue): string =>

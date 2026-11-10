@@ -13,13 +13,15 @@
  *   input fields; one part, whose `<part>.error`, else the screen's `<screen>.error`; no part
  *   at all (no control enters, the input names no field), the screen's `<screen>.error`.
  *
- * Read on the flow as written or as expanded: a transition may be its target alone.
+ * Each request also says whether its area starts in it and what enters it: each transition's
+ * event, none for an invoke's outcome, with the state it leaves (what the checks of an entry an
+ * invoke takes read). Read on the flow as written or as expanded: a transition may be its
+ * target alone.
  */
 
+import { partOf } from '../../anchors'
 import { entriesOf, isRecord, listOf, recordOf } from '../../records'
 import { enteredBy, type Place } from '../flow-places'
-
-import { partOf } from './form-params'
 
 export interface Request {
   /** The state's name among its siblings. */
@@ -36,6 +38,10 @@ export interface Request {
   readonly back: { readonly state: string } | { readonly why: string }
   /** The error anchor a failure shows its codes on, or why there is none. */
   readonly error: { readonly anchor: string } | { readonly why: string }
+  /** Whether its area starts in it: it is the `initial` of the root or of its region. */
+  readonly starts: boolean
+  /** What enters it: the state each transition leaves, and its event, none for an outcome. */
+  readonly entered: ReadonlyArray<{ readonly from: string; readonly event: string | undefined }>
 }
 
 interface Located {
@@ -236,6 +242,8 @@ export function requestsOf(
             onError: invoke['onError'],
             back: backOf(state, entering),
             error: errorOf(state, entering, screen, declared),
+            starts: state.starts,
+            entered: entering.map(({ from, event }) => ({ from: from.name, event })),
           },
         ]
       : []

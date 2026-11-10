@@ -41,8 +41,31 @@ describe('requestsOf', () => {
         onError: undefined,
         back: { state: 'idle' },
         error: { anchor: 'user.sign-in.error' },
+        starts: false,
+        entered: [{ from: 'idle', event: 'user.sign-in.submit-button' }],
       },
     ])
+  })
+
+  it('says where its area starts and what enters it: an event, or an outcome with none', () => {
+    const flow = {
+      initial: 'loading',
+      states: {
+        loading: { invoke: { src: 'platform.sign-in', onDone: 'idle', onError: 'idle' } },
+        idle: { on: { 'user.sign-in.retry-button': 'loading' } },
+        first: { invoke: { src: 'platform.sign-up', onDone: 'second' } },
+        second: { invoke: { src: 'platform.sign-in', onDone: 'idle' } },
+      },
+    }
+
+    expect(requestOf(flow, 'user.sign-in', 'loading')).toMatchObject({
+      starts: true,
+      entered: [{ from: 'idle', event: 'user.sign-in.retry-button' }],
+    })
+    expect(requestOf(flow, 'user.sign-in', 'second')).toMatchObject({
+      starts: false,
+      entered: [{ from: 'first', event: undefined }],
+    })
   })
 
   it("takes the part of the control's error, else the screen's", () => {

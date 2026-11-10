@@ -12,6 +12,9 @@ import {
   MEMBER_REMOVED,
   NOTE_CREATED,
   NOTE_REFUSED,
+  READ_MEMBERS,
+  READ_RECEIVED,
+  READ_SENT,
   REMOVE_REFUSED,
   REVOKE_REFUSED,
 } from './effects'
@@ -20,8 +23,8 @@ import { taken } from './events'
 /**
  * The regions of the screen's flow that wait for the one action a button runs (`by` a button in
  * the contract): idle until the button is pressed, running until its action ends. A done change
- * forgets the error of its part and says itself in a toast; the changes of the members count so
- * the members are read again.
+ * forgets the error of its part and says itself in a toast, and reads again the list it changed
+ * (`read`), as its flow says.
  */
 
 /** Invites an email: the invitation is mailed and the form's fields empty. */
@@ -35,7 +38,7 @@ export const INVITE_REGION = {
         input: taken('organisation.invite.submit-button'),
         onDone: {
           target: 'idle',
-          actions: [CLEAR_EMAIL, CLEAR_ROLE, forget('members'), 'rereadInvitations', INVITED],
+          actions: [CLEAR_EMAIL, CLEAR_ROLE, forget('members'), READ_SENT, INVITED],
         },
         onError: { target: 'idle', actions: [INVITE_REFUSED] },
       },
@@ -54,7 +57,7 @@ export const MEMBERS_REGION = {
         input: taken('organisation.members.remove-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('members'), 'rereadMembers', MEMBER_REMOVED],
+          actions: [forget('members'), READ_MEMBERS, MEMBER_REMOVED],
         },
         onError: { target: 'idle', actions: [REMOVE_REFUSED] },
       },
@@ -105,7 +108,7 @@ export const SENT_REVOKE_REGION = {
         input: taken('organisation.sent.revoke-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('members'), 'rereadInvitations', INVITATION_REVOKED],
+          actions: [forget('members'), READ_SENT, INVITATION_REVOKED],
         },
         onError: { target: 'idle', actions: [REVOKE_REFUSED] },
       },
@@ -124,9 +127,9 @@ export const RECEIVED_DECLINE_REGION = {
         input: taken('organisation.received.decline-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('received'), 'rereadReceived', INVITATION_DECLINED],
+          actions: [forget('received'), READ_RECEIVED, INVITATION_DECLINED],
         },
-        onError: { target: 'idle', actions: ['rereadReceived', DECLINE_REFUSED] },
+        onError: { target: 'idle', actions: [DECLINE_REFUSED, READ_RECEIVED] },
       },
     },
   },

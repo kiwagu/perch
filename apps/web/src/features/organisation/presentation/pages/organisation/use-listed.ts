@@ -21,8 +21,8 @@ interface Read<Item> extends Listed<Item> {
 
 /**
  * The list of one scope (an organisation's key, an account), none to read while `scope` is
- * undefined: read when it starts to show and again whenever `changed` counts another change
- * made here. A read that fails keeps the list read before it.
+ * undefined: read when it starts to show and again whenever `changed` counts another read its
+ * screen's flow asked for. A read that fails keeps the list read before it.
  */
 export function useListed<Item>(
   read: (scope: string) => ResultAsync<readonly Item[], BusError>,

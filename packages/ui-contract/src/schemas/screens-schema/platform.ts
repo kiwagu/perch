@@ -36,6 +36,18 @@ const platformActionSchema = z
     result: z.string().describe('What holds once the action succeeds.'),
     codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
+    paged: z
+      .strictObject({
+        sizes: z
+          .array(z.int().min(1))
+          .min(1)
+          .describe('The sizes a page may have, each once, the smallest first.'),
+        default: z.int().min(1).describe('The size of a page the route does not name, a size.'),
+      })
+      .optional()
+      .describe(
+        'The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.',
+      ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
       .array(platformNoticeSchema)

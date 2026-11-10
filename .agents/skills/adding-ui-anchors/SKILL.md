@@ -72,7 +72,8 @@ code and the tests follow; the checks hold them to the contract.
    search parameter a field starts with, or a list of them), and its `codes` (an error's `fields` with them: the field each code
    concerns; `ranked: true` on a message whose codes more than one source may raise before it
    shows, its `codes` then in rank order: of those raised, it shows the first),
-   `states`, `dataId` or `dataValue`, `derived`, `roles` and `own` as they apply.
+   `states`, `dataId` or `dataValue`, `derived`, `roles` (among those its screen's bindings
+   serve) and `own` as they apply.
    Leave out what the contract says elsewhere ("What a screen leaves out" in
    `contract/README.md`): an error's `codes` and `fields` when they are the failures of the
    actions its part binds and of the actions its flow invokes against it, with the codes its
@@ -84,8 +85,19 @@ code and the tests follow; the checks hold them to the contract.
    model, and for a platform action the platform's `toasts` lists; a notice or an error written on the outcome leaves it on; write
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
-   bound to a delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). A button may leave out the params the fields of its
+   bound to a ban, delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
+   its anchor to run it without asking). A list whose `source` is a platform action reads it
+   each time it starts to render after it did not and each time the organisation or account
+   it reads for or a search parameter its source takes becomes another, and nothing says that
+   (its `params` take a search parameter or a constant, never a field; `paged: true` pages it
+   by the route's `page` and `size`, the action declaring `paged: { sizes, default }`, derives
+   `range`, `previous-link`, `next-link` and `size-select`, whose options are the controls of
+   `size`, so it writes no `x-perch`, and a navigate that sets a key it
+   reads says `page: 1`: pattern 17); every other read is the flow's
+   effect `read: <list>` on the outcome of the invoke that changed what the list shows (a
+   list of the flow's own screen with a platform source, never an entity source, which follows
+   the stored data), and an invoke after which nothing reads says `read: false`, on it or on a
+   region `by` its button; a description never says a read. A button may leave out the params the fields of its
    part pass to its action in their own bindings; a param it writes wins over theirs, key by key
    (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
    `locale: app-shell.locale-select`, which no field passes). A request leaves out its failure:
