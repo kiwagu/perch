@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../../files'
+import { parallelIn, regionStateIn, withAreas } from '../areas.fixture'
 import { flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
 import { flowProblems } from './problems'
@@ -383,6 +384,75 @@ describe('flowProblems', () => {
     expect(printed(contract)).toEqual([
       `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onDone reads "sample.devices-list": a read after the action, or read: false, never both`,
       `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onError[1] reads "sample.devices-list": a read after the action, or read: false, never both`,
+    ])
+  })
+  it('takes read: false on a branch of an onDone or an onError, a single outcome included', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    invoke.onDone = [
+      { target: 'editing', guard: 'titleGiven', read: false },
+      { target: 'editing', actions: [read('sample.devices-list')] },
+    ]
+    invoke.onError = { target: 'editing', read: false }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses read: false on a transition of an event, of a root, a region or a parallel state', () => {
+    const contract = withAreas()
+
+    flowStateIn(contract, 'saving').on = { 'sample.b-button': { target: 'editing', read: false } }
+    parallelIn(contract).on = {
+      'sample.save-button': [
+        { guard: 'titleGiven', target: 'saving' },
+        { actions: [show('sample.save-button', ['failed'])], read: false },
+      ],
+    }
+    regionStateIn(contract, 'form', 'closed').on = {
+      'sample.a-button': { target: 'open', read: false },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.save-button"][1].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+      `${AT}.states.editing.states.form.states.closed.on["sample.a-button"].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+      `${AT}.states.saving.on["sample.b-button"].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+    ])
+  })
+  it('refuses a branch that says read: false and reads, once per read', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-table': { kind: 'table', source: { platform: 'devices.list' } },
+    })
+    invoke.onDone = [
+      {
+        target: 'editing',
+        guard: 'titleGiven',
+        read: false,
+        actions: [read('sample.devices-list'), read('sample.devices-table')],
+      },
+      { target: 'editing' },
+    ]
+    invoke.onError = { target: 'editing', read: false, actions: [read('sample.devices-list')] }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-list": a read after this outcome, or read: false, never both`,
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-table": a read after this outcome, or read: false, never both`,
+      `${AT}.states.saving.invoke.onError.read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-list": a read after this outcome, or read: false, never both`,
+    ])
+  })
+  it('refuses a branch that says read: false under an invoke that says it of every outcome', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(invoke, { read: false })
+    invoke.onDone = [{ target: 'editing', guard: 'titleGiven', read: false }, { target: 'editing' }]
+    invoke.onError = { target: 'editing', read: false }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the invoke says it of every outcome already: read: false on the invoke or on its branch, never both`,
+      `${AT}.states.saving.invoke.onError.read: says nothing reads after this outcome of thing.updateThing, and the invoke says it of every outcome already: read: false on the invoke or on its branch, never both`,
     ])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {

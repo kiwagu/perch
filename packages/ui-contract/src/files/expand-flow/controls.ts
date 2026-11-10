@@ -3,7 +3,8 @@
  * button's event moves it to `running`, which invokes the action with the parameters the
  * binding passes, and both outcomes lead back to `idle`; a failure shows its codes on the error
  * anchor of the button's part. A region written as `by: <button>` is that region with the
- * outcomes it writes (a transition without a target goes back to `idle`) and the `toast: false`
+ * outcomes it writes (a transition without a target goes back to `idle`; a branch that says
+ * `read: false`, nothing reads after that outcome, keeps the key) and the `toast: false`
  * or `read: false` it says, passed on to its invoke; a button bound to one
  * action that no state of the flow handles gets it, when the root of the flow has one parallel
  * state.

@@ -17,7 +17,8 @@
  *   later branch, one of those the code-guarded branches before it leave.
  * - An invoke, or a region written `by` its button, may say `toast: false`: the success of its
  *   action shows no derived toast; or `read: false`: the action changes nothing a list of the
- *   screen shows, so nothing reads after it.
+ *   screen shows, so nothing reads after it. One branch of an invoke's `onDone` or `onError`
+ *   may say `read: false` instead: nothing reads after that outcome, where another does.
  */
 
 import { z } from '@workspace/zod'

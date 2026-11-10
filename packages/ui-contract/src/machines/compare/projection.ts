@@ -42,7 +42,8 @@ export interface Projection {
 
 /**
  * The contract's effects among actions: the app's own (`assign`, a named action) left out. An
- * invoke's `read: false` is no effect and no key the projection reads: the check holds it.
+ * invoke's `read: false`, or a branch's, is no effect and no key the projection reads
+ * (`transitionsIn` picks a branch's target, guard and effects): the check holds it.
  */
 const effectsIn = (actions: unknown): ProjectedEffect[] =>
   listOf(actions)

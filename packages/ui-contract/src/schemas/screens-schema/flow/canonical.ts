@@ -7,8 +7,9 @@
  * `<parallel>.<region>.<state>`, and one of a region's state a state of the root as
  * `#<flow id>.<state>`. Everything else XState knows (`context`, `after`, `always`, deeper
  * nesting, history, other targets by `#id`, `.child`, actions named by a string) is refused:
- * every object is strict. One key of an invoke is the contract's alone, `read: false`, which
- * XState ignores and the machine comparison leaves out: nothing reads after the action. This
+ * every object is strict. One key is the contract's alone, `read: false`, which XState ignores
+ * and the machine comparison leaves out: on an invoke, nothing reads after its action; on a
+ * branch of an invoke's `onDone` or `onError`, nothing reads after that outcome. This
  * is the flow every check, the walk in XState, the manifest and
  * an app's machine read; a screen file may author it shorter (`authored.ts`), and the loader
  * expands that into this.
