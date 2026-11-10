@@ -28,7 +28,7 @@ bindings:
           default: 25
           description: The accounts a page holds.
       additionalProperties: false
-entry: [ console.users.heading, console.users.search-form, console.users.page.status, console.users.list ]
+entry: [ console.users.heading, console.users.search-form, console.users.list, console.users.error ]
 anchors:
   console.users.heading:
     kind: heading
@@ -42,10 +42,6 @@ anchors:
   console.users.search-button:
     kind: button
     description: Moves to the first page of the accounts the text typed finds.
-  console.users.page.status:
-    kind: status
-    description: Says the accounts are being read, or that the search found none; replaced by the list once read.
-    states: [ loading, empty ]
   console.users.list:
     kind: list
     description: "The accounts the search finds, the newest first, one page of them: each with its name, email, marks and when it was made."
@@ -53,6 +49,7 @@ anchors:
       platform: accounts.list
       params: { q: { search: q } }
       paged: true
+    states: [ loading, ready, empty ]
   console.users.list.account-item:
     kind: item
     description: One account of the page.
@@ -83,9 +80,9 @@ anchors:
     description: Why the accounts could not be read, in the place of the list.
     codes: [ not-operator, failed ]
 states:
-  loading: "console.users.page.status in loading: the page of accounts is being read."
+  loading: "console.users.list in loading: the page of accounts is being read."
   ready: "console.users.list with an item per account of the page, its range, its page size select and the links to the pages before and after where there are any; a page past the last holds no item."
-  empty: "console.users.page.status in empty: the search found no account."
+  empty: "console.users.list in empty: the search found no account."
   error: "console.users.error in the place of the list: the accounts could not be read."
 flow:
   initial: viewing

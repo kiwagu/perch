@@ -32,6 +32,7 @@ anchors:
     source:
       platform: accounts.read
       params: { id: { search: id } }
+    states: [ loading, ready ]
   console.account.email-cell:
     kind: cell
     description: The email of the account.
