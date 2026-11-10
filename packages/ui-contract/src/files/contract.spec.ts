@@ -39,6 +39,7 @@ const KINDS = [
   'page',
   'heading',
   'message',
+  'range',
   'error',
   'toast',
   'badge',

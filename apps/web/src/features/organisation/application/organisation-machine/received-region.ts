@@ -1,4 +1,4 @@
-import { ACCEPT_REFUSED, INVITATION_ACCEPTED } from './effects'
+import { ACCEPT_REFUSED, INVITATION_ACCEPTED, READ_RECEIVED } from './effects'
 import { taken } from './events'
 
 /**
@@ -17,9 +17,9 @@ export const RECEIVED_REGION = {
         input: taken('organisation.received.accept-button'),
         onDone: {
           target: '#organisation.viewing',
-          actions: ['rereadReceived', INVITATION_ACCEPTED],
+          actions: [READ_RECEIVED, INVITATION_ACCEPTED],
         },
-        onError: { target: 'idle', actions: ['rereadReceived', ACCEPT_REFUSED] },
+        onError: { target: 'idle', actions: [ACCEPT_REFUSED, READ_RECEIVED] },
       },
     },
   },

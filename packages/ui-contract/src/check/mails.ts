@@ -10,13 +10,11 @@
  * parameter and only signed-in roles run the action.
  */
 
+import { GUEST } from '../anchors'
 import { ACCOUNT, type PlatformMail, type Problem, RECIPIENT } from '../files'
 
 import { type Contract, locate } from './contract'
 import { searchOf } from './lookups'
-
-/** The role of a device nobody is signed in on, which has no account to fall back on. */
-const GUEST = 'guest'
 
 /** A platform action, as the check reads it. */
 type PlatformAction = Contract['screens']['platform']['actions'][string]

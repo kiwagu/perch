@@ -8,7 +8,7 @@
  * derived (`derive/`): a composite a secret input opts into, derived as its list and items
  * (`derive/composites.ts`); the params of a form's button, from what the fields of its part pass
  * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
- * reads them as if written; an error anchor's codes and fields from the failures of the actions
+ * reads them as if written; the parts a paged list derives (`derive/paging.ts`); an error anchor's codes and fields from the failures of the actions
  * its part binds and its flow shows on it, as the model and the platform give them, and the codes
  * the flow shows on it (`derive/errors.ts`); whether a field holds input, from its kind and its
  * bindings; and, with a confirmation on the frame, the question each control of a destructive
@@ -35,6 +35,7 @@ import {
   withDerivedComposites,
   withDerivedErrors,
   withDerivedInputs,
+  withDerivedPaging,
   withDerivedParams,
   withDerivedQuestions,
   withQuestionCodes,
@@ -96,11 +97,12 @@ function readScreenFiles(
       if (yaml.problems.length === 0) {
         const composed = withDerivedComposites(file, yaml.value, composites)
         const bound = withDerivedParams(file, composed.value)
+        const paged = withDerivedPaging(file, bound.value)
 
-        problems.push(...composed.problems, ...bound.problems)
+        problems.push(...composed.problems, ...bound.problems, ...paged.problems)
         read.push({
           file,
-          value: withDerivedInputs(withDerivedErrors(bound.value, failureOf)),
+          value: withDerivedInputs(withDerivedErrors(paged.value, failureOf)),
         })
       }
     } else {
