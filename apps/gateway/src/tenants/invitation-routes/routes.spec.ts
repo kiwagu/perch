@@ -20,7 +20,9 @@ import {
   request,
   routeOptions,
 } from '../__fixtures__/organisation-routes'
+import { organisationsRetelling, specRetell } from '../__fixtures__/retell'
 import { Organisations } from '../organisations'
+import invitationAcceptStatement from '../surql/invitation-accept.surql'
 import membershipAddStatement from '../surql/membership-add.surql'
 
 import { invitationRoutes } from './routes'
@@ -575,6 +577,7 @@ describe('invitationRoutes', () => {
           rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
           hub: root.hub,
           invitations: specInvitations(directory),
+          retell: specRetell(),
         }),
         routeOptions(new RequestLimits({ clock: manualClock() })),
       )
@@ -583,6 +586,40 @@ describe('invitationRoutes', () => {
         await answer(await routes(request('GET', '/invitations', { as: bob }), ADDRESS)),
       ).toEqual({ status: 500, body: { code: 'internal' } })
       expect(failures.splice(0).map((failure) => failure.code)).toEqual(['data:QUERY_FAILED'])
+    })
+
+    it('answers 200 to an accept whose tell failed, and the listeners hear the list after the delay', async () => {
+      const { root, bob, invite } = await invitedHarness()
+      const { id } = await invite('bob@example.test')
+      const { organisations, heard, retold } = organisationsRetelling(
+        root,
+        invitationAcceptStatement,
+      )
+      const routes = invitationRoutes(
+        root.sessions,
+        organisations,
+        routeOptions(new RequestLimits({ clock: manualClock() })),
+      )
+      const { status, body } = await answer(
+        await routes(
+          request('POST', '/invitations/accept', { as: bob, body: { invitation: id } }),
+          ADDRESS,
+        ),
+      )
+
+      expect(status).toBe(200)
+      expect(accepted.parse(body).membership.role).toBe('member')
+      expect(heard).toEqual([])
+
+      await retold()
+
+      expect(heard).toEqual([
+        [
+          bob.identity.id,
+          (await root.organisations.membershipsOf(bob.identity.id))._unsafeUnwrap(),
+        ],
+      ])
+      expect(heard[0]?.[1]).toEqual([expect.objectContaining({ role: 'member' })])
     })
   })
 })

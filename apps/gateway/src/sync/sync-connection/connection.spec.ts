@@ -1,4 +1,4 @@
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -46,8 +46,10 @@ import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
 import { admitted, specInvitations } from '../../tenants/__fixtures__/invitations'
+import { specRetell } from '../../tenants/__fixtures__/retell'
 import { Organisations } from '../../tenants/organisations'
 import { regionDatabases } from '../../tenants/region-databases'
+import departingMembershipsStatement from '../../tenants/surql/departing-memberships.surql'
 import memberRemoveStatement from '../../tenants/surql/member-remove.surql'
 import membershipRemoveStatement from '../../tenants/surql/membership-remove.surql'
 import membershipSetRoleStatement from '../../tenants/surql/membership-set-role.surql'
@@ -182,7 +184,8 @@ function profileEmailsOver(
 
 /**
  * The gateway's services on a fresh embedded directory, each organisation's database on an
- * embedded engine of its own: Better Auth and the sessions it reads, organisations, a real hub
+ * embedded engine of its own: Better Auth and the sessions it reads, organisations (their
+ * re-tells on `clock`, the hub's and the connections'), a real hub
  * over both, and the registry of connections, which hears every change of memberships as the
  * composition root wires it.
  */
@@ -211,12 +214,6 @@ async function openGateway(options: GatewayOptions = {}) {
     onError: (error) => reported.push(error),
   })
 
-  cleanups.push(async () => {
-    await hub.close()
-    await databases.close()
-    await opened.close()
-  })
-
   // Sessions end on the clock of Better Auth's hooks, which lies behind the system clock.
   const sessions = new AuthSessions({
     auth: opened.auth,
@@ -232,9 +229,19 @@ async function openGateway(options: GatewayOptions = {}) {
     rerole: (identity, region, role) => connections.rerole(identity, region, role),
     hub,
     invitations: specInvitations(local),
+    retell: specRetell({ clock }),
   })
 
   organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
+
+  // As the composition root closes: the re-tells stop first, then the hub, the organisations'
+  // databases and the directory.
+  cleanups.push(async () => {
+    await organisations.close()
+    await hub.close()
+    await databases.close()
+    await opened.close()
+  })
 
   /** What the gateway logged of the auth module's work, every argument kept. */
   const authLogs: AuthLogLine[] = []
@@ -1504,7 +1511,7 @@ describe('SyncConnection', () => {
     expect(socket.closedWith).toBeUndefined()
   })
 
-  it('a removal whose memberships reread fails still takes the region from the live connection', async () => {
+  it('a removal whose memberships reread fails still takes the region from the live connection, answers ok, and tells the device after the delay', async () => {
     let removed = false
     const { gateway, anns, bobs } = await withAcme(true, {
       // The directory goes away for a moment once the membership is deleted.
@@ -1512,6 +1519,7 @@ describe('SyncConnection', () => {
         if (text === membershipRemoveStatement) {
           removed = true
         } else if (removed && text === membershipsOfStatement) {
+          removed = false
           throw new Error('the directory went away for a moment')
         }
       },
@@ -1529,14 +1537,13 @@ describe('SyncConnection', () => {
       )
     }
 
-    const removal = await gateway.organisations.remove({
-      actor: anns.identity.id,
-      key: 'acme',
-      identity: bobs.identity.id,
-    })
-
-    expect(removal._unsafeUnwrapErr().code).toBe('data:QUERY_FAILED')
-    removed = false
+    expect(
+      await gateway.organisations.remove({
+        actor: anns.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+      }),
+    ).toEqual(ok(undefined))
 
     await annsDevice.connection.receive(
       encode({
@@ -1546,16 +1553,22 @@ describe('SyncConnection', () => {
         updates: [await acmeNote(anns.identity.id, 'from ann')],
       }),
     )
+
+    // Not told yet (the memberships could not be read), yet out of the region: no note of Ann's.
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates'])
+    expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
+    expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
+
+    await retold(gateway, bobsDevice)
+
+    expect(bobsDevice.socket.sent[2]).toEqual({ type: 'memberships', memberships: [] })
+
     await bobsDevice.connection.receive(
       encode({ type: 'pull', region: 'tenant:acme', vv: new Uint8Array() }),
     )
 
-    // Not told (the memberships could not be read), yet out of the region: no note of Ann's,
-    // and a pull is refused.
-    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'error'])
+    expect(types(bobsDevice.socket.sent)).toEqual(['welcome', 'updates', 'memberships', 'error'])
     expect(bobsDevice.socket.closedWith?.[0]).toBe(CLOSE.forbidden)
-    expect(bobsDevice.unsubscribed).toEqual(['tenant:acme'])
-    expect(types(annsDevice.socket.sent)).toEqual(['welcome', 'updates', 'ack'])
   })
 
   it('a change of memberships told during the hello applies right after the welcome', async () => {
@@ -1639,7 +1652,10 @@ async function annsNoteInAcme(gateway: Gateway, anns: Awaited<ReturnType<Gateway
   }
 }
 
-/** The directory fails the read of memberships that follows a write of a role, once `fail()`. */
+/**
+ * The directory fails the read of memberships that follows a write of a role, once `fail()`: the
+ * one the change's tell makes right after its commit, and that one only.
+ */
 function failingTell() {
   let armed = false
   let written = false
@@ -1649,6 +1665,7 @@ function failingTell() {
       if (armed && text === membershipSetRoleStatement) {
         written = true
       } else if (written && text === membershipsOfStatement) {
+        written = false
         throw new Error('the directory went away for a moment')
       }
     },
@@ -1656,6 +1673,19 @@ function failingTell() {
       armed = true
     },
   }
+}
+
+/** The `memberships` messages among what a socket was sent. */
+function membershipsSent(sent: readonly ServerMessage[]): ServerMessage[] {
+  return sent.filter((message) => message.type === 'memberships')
+}
+
+/** Moves the gateway's clock past the first re-tell delay, and waits for the device to be told. */
+async function retold(gateway: Gateway, device: ReturnType<typeof open>): Promise<void> {
+  const before = membershipsSent(device.socket.sent).length
+
+  await gateway.clock.advance(1_200)
+  await vi.waitFor(() => expect(membershipsSent(device.socket.sent)).toHaveLength(before + 1))
 }
 
 /** A query of an organisation's database held, once armed, until it is released. */
@@ -1783,7 +1813,7 @@ describe('SyncConnection, a role change', () => {
     ])
   })
 
-  it("refuses a self-demoted admin's next edit of another's note although the directory read of the telling failed", async () => {
+  it("refuses a self-demoted admin's next edit of another's note although the directory read of the telling failed: the demotion answers ok, and the device is told after the delay", async () => {
     const tell = failingTell()
     const { gateway, anns, bobs } = await withAcme(true, { directoryQueries: tell.queries })
 
@@ -1805,29 +1835,35 @@ describe('SyncConnection, a role change', () => {
 
     tell.fail()
 
-    const demotion = await gateway.organisations.setRole({
-      actor: bobs.identity.id,
-      key: 'acme',
-      identity: bobs.identity.id,
-      role: member,
-    })
-
-    expect(demotion._unsafeUnwrapErr()).toMatchObject({ code: 'data:QUERY_FAILED' })
+    expect(
+      await gateway.organisations.setRole({
+        actor: bobs.identity.id,
+        key: 'acme',
+        identity: bobs.identity.id,
+        role: member,
+      }),
+    ).toEqual(ok(undefined))
     await pushToAcme(bobsDevice, 2, await rewrite('a member now'))
 
     expect(answersOf(bobsDevice.socket.sent)).toEqual([
       expect.objectContaining({ type: 'ack', batch: 1 }),
       expect.objectContaining({ type: 'reject', batch: 2, reason: 'forbidden-action' }),
     ])
-    // Nothing was told: the device shows the memberships it was welcomed with.
+    // Nothing was told yet: the device shows the memberships it was welcomed with.
     expect(types(bobsDevice.socket.sent)).not.toContain('memberships')
+
+    await retold(gateway, bobsDevice)
+
+    expect(membershipsSent(bobsDevice.socket.sent)).toEqual([
+      expect.objectContaining({ memberships: [expect.objectContaining({ role: member })] }),
+    ])
   })
 
   it.each([
     { from: member, to: admin, outcome: 'ack' },
     { from: admin, to: member, outcome: 'reject' },
   ] as const)(
-    'a device that subscribes only after its role went from $from to $to pushes as $to, although the telling failed ($outcome)',
+    'a device that subscribes only after its role went from $from to $to pushes as $to although the telling failed ($outcome), and is told after the delay',
     async ({ from, to, outcome }) => {
       const tell = failingTell()
       const { gateway, anns, bobs } = await withAcme(true, { directoryQueries: tell.queries })
@@ -1849,15 +1885,13 @@ describe('SyncConnection, a role change', () => {
       await hello(bobsDevice.connection, bobs.token)
       tell.fail()
       expect(
-        (
-          await gateway.organisations.setRole({
-            actor: anns.identity.id,
-            key: 'acme',
-            identity: bobs.identity.id,
-            role: to,
-          })
-        )._unsafeUnwrapErr(),
-      ).toMatchObject({ code: 'data:QUERY_FAILED' })
+        await gateway.organisations.setRole({
+          actor: anns.identity.id,
+          key: 'acme',
+          identity: bobs.identity.id,
+          role: to,
+        }),
+      ).toEqual(ok(undefined))
 
       await subscribeToAcme(bobsDevice)
       await pushToAcme(bobsDevice, 1, await rewrite(`as ${to}`))
@@ -1869,6 +1903,80 @@ describe('SyncConnection, a role change', () => {
             : { type: 'reject', batch: 1, reason: 'forbidden-action' },
         ),
       ])
+      expect(types(bobsDevice.socket.sent)).not.toContain('memberships')
+
+      await retold(gateway, bobsDevice)
+
+      expect(membershipsSent(bobsDevice.socket.sent)).toEqual([
+        expect.objectContaining({ memberships: [expect.objectContaining({ role: to })] }),
+      ])
+    },
+  )
+
+  it.each([
+    ['the welcome', 'welcome'],
+    ["the socket's close", 'close'],
+  ] as const)(
+    'a retell waits for a registered hello until %s, and a departure of the identity queued behind it proceeds after',
+    async (_, release) => {
+      const tell = failingTell()
+      const sent: string[] = []
+      const { gateway, anns, bobs } = await withAcme(true, {
+        directoryQueries: (text) => {
+          sent.push(text)
+          tell.queries(text)
+        },
+      })
+
+      tell.fail()
+      expect(
+        await gateway.organisations.setRole({
+          actor: anns.identity.id,
+          key: 'acme',
+          identity: bobs.identity.id,
+          role: admin,
+        }),
+      ).toEqual(ok(undefined))
+
+      const heads = holding()
+      const bobsDevice = openHolding(gateway, heads)
+      const reached = heads.hold()
+      const helloed = hello(bobsDevice.connection, bobs.token)
+
+      // The hello registered the device and read its memberships; it waits for the heads.
+      await reached
+      // The re-tell takes bob's turn, reads the directory and waits for the welcome; the
+      // departure asks for the turn right after and waits behind it.
+      await gateway.clock.advance(1_200)
+
+      const departure = gateway.organisations.leaveAll(bobs.identity.id)
+
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(sent).not.toContain(departingMembershipsStatement)
+
+      if (release === 'close') {
+        bobsDevice.connection.closed()
+      }
+
+      heads.release()
+      await helloed
+
+      expect(await departure).toEqual(ok(undefined))
+      expect(sent).toContain(departingMembershipsStatement)
+      expect((await gateway.organisations.membershipsOf(bobs.identity.id))._unsafeUnwrap()).toEqual(
+        [],
+      )
+
+      // The re-tell told the list it read before the departure, or nothing to a closed socket.
+      expect(types(bobsDevice.socket.sent)).toEqual(
+        release === 'welcome' ? ['welcome', 'memberships'] : [],
+      )
+
+      if (release === 'welcome') {
+        expect(membershipsSent(bobsDevice.socket.sent)).toEqual([
+          expect.objectContaining({ memberships: [expect.objectContaining({ role: admin })] }),
+        ])
+      }
     },
   )
 

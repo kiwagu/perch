@@ -86,5 +86,19 @@ export const REMOVE_REFUSED = {
   params: { anchor: 'organisation.invite.error', codes: ['not-admin', 'failed'] },
 } as const
 
+/** The page's lists its flow reads again after a change: the view reads each anew. */
+export const MEMBERS_LIST = 'organisation.members.list'
+export const SENT_LIST = 'organisation.sent.list'
+export const RECEIVED_LIST = 'organisation.received.list'
+
+/** The params of the flow's `read` on this page: one of its lists. */
+export interface ListRead {
+  readonly anchor: typeof MEMBERS_LIST | typeof SENT_LIST | typeof RECEIVED_LIST
+}
+
+export const READ_MEMBERS = { type: 'read', params: { anchor: MEMBERS_LIST } } as const
+export const READ_SENT = { type: 'read', params: { anchor: SENT_LIST } } as const
+export const READ_RECEIVED = { type: 'read', params: { anchor: RECEIVED_LIST } } as const
+
 /** Forgets the error of a part once a change of that part was done. */
 export const forget = (part: ErrorPart) => ({ type: 'forget', params: { part } }) as const

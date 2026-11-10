@@ -2,8 +2,10 @@
  * The session's side of the signed-in identity's organisations on this device: the memberships
  * are read after the sign-in, then come from the leading tab's channel and from the other tabs
  * through the storage; they are kept in the storage, handed to the identity's space and told to
- * the subscribers, with the organisation chosen on this browser. It keeps the inventory of the
- * organisation databases the device holds for the identity.
+ * the subscribers, with the organisation chosen on this browser. A membership the gateway
+ * answered this tab (`adopt`) joins the saved list when it does not name the organisation yet,
+ * never in place of an entry a list wrote. It keeps the inventory of the organisation databases
+ * the device holds for the identity.
  */
 
 import type { IdentityId } from '@workspace/ids'
@@ -120,10 +122,9 @@ export class SessionOrganisations {
   }
 
   /**
-   * The signed-in identity's memberships changed (the gateway said so, or this device created an
-   * organisation): they are kept for the other tabs, before the space counts and opens or
-   * deletes databases to match; resolves once it has. Nothing changes once another tab signed
-   * someone else in.
+   * The signed-in identity's memberships changed (the gateway said so over the channel): they
+   * are kept for the other tabs, before the space counts and opens or deletes databases to
+   * match; resolves once it has. Nothing changes once another tab signed someone else in.
    */
   apply(next: readonly Membership[]): Promise<void> {
     const space = this.#options.open()?.space
@@ -138,20 +139,32 @@ export class SessionOrganisations {
   }
 
   /**
-   * An organisation this device created is a membership at once: it joins the memberships saved
-   * for the identity (the newest list any tab kept, which this tab's space may not have followed
-   * yet), in place of one of the same key, and the list is applied; see `apply`.
+   * A membership the gateway answered this tab (an organisation created, an invitation accepted)
+   * joins the memberships saved for the identity of `space`, the newest list any tab kept (which
+   * this tab's space may not have followed yet), unless that list names the organisation already:
+   * its entry came from a list heard after the gateway's tell, or the next list sets it right, so
+   * nothing is written in its place. The check that the identity is still the saved one, the
+   * read, the write and the start of the follow happen in one step, with no await between them:
+   * the follow keeps its place among this tab's writes and the storage events handled after it.
+   * Resolves once the space followed the list read or written, waiting for no later list; nothing
+   * changes once another tab signed someone else in.
    */
-  adopt(created: Membership): Promise<void> {
-    const space = this.#options.open()?.space
-
-    if (!space || !this.#stillSignedIn(space)) {
+  adopt(space: IdentitySpace, joined: Membership): Promise<void> {
+    if (!this.#stillSignedIn(space)) {
       return Promise.resolve()
     }
 
     const saved = savedMemberships(this.#options.storage, space.identity.id)
 
-    return this.apply([...saved.filter(({ tenant }) => tenant.key !== created.tenant.key), created])
+    if (saved.some(({ tenant }) => tenant.key === joined.tenant.key)) {
+      return this.#follow(space, saved)
+    }
+
+    const next = [...saved, joined]
+
+    saveMemberships(this.#options.storage, space.identity.id, next)
+
+    return this.#follow(space, next)
   }
 
   /** Another tab kept new memberships of the identity this tab shows: its space follows them. */

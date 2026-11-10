@@ -17,6 +17,7 @@ import {
   SENT_REVOKE_REGION,
 } from './button-regions'
 import { CREATE_FORM_REGION } from './create-form-region'
+import { type ListRead, MEMBERS_LIST, RECEIVED_LIST, SENT_LIST } from './effects'
 import {
   type ErrorPart,
   type OrganisationContext,
@@ -64,7 +65,8 @@ function originOf(event: object): string | undefined {
  * creating one or accepting an invitation starts them all afresh. One note is edited at a time,
  * the one acted on last, and one role is changed at a time. A control is enabled while a state
  * handles its event (`snapshot.can`). Its `show` keeps the code of the page's own errors for the
- * view and emits any other; its `clear` is emitted for the host to empty a field.
+ * view and emits any other; its `clear` is emitted for the host to empty a field; its `read`
+ * counts a read of the list it names, which the view makes.
  */
 export function createOrganisationMachine(deps: OrganisationMachineDeps) {
   /**
@@ -120,6 +122,11 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
       'platform.invitations.decline': write(
         ({ invitation }: { readonly invitation: InvitationId }) => deps.decline(invitation),
       ),
+    },
+    guards: {
+      // The account changed its own role to member: the members list stops showing.
+      ownDemotion: ({ context: { changingRole } }) =>
+        changingRole?.role === 'member' && changingRole.identity === deps.account(),
     },
     actions: {
       show: enqueueActions(({ enqueue, event, context }, params: ShowParams) => {
@@ -177,34 +184,30 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
           return event.id
         },
       }),
-      rereadMembers: assign({ membersChanged: ({ context }) => context.membersChanged + 1 }),
-      rereadInvitations: assign({
-        invitationsChanged: ({ context }) => context.invitationsChanged + 1,
-      }),
-      rereadReceived: assign({ receivedChanged: ({ context }) => context.receivedChanged + 1 }),
-      // The account's own demotion leaves the members list: read as a member, it would be refused,
-      // and no row is left to show the role. Otherwise the members are read again, and the row
-      // keeps the role just set until that read settles (not for a change made in another
-      // organisation, whose rows are not these).
-      rereadAfterRole: assign(({ context, event }) => {
-        const { changingRole, membersChanged, rolesSet } = context
-        const demotedItself =
-          changingRole?.role === 'member' && changingRole.identity === deps.account()
-
-        if (demotedItself) {
-          return {}
+      // A list the flow reads again is counted: the view reads it anew for each count.
+      read: assign(({ context }, params: ListRead) => {
+        switch (params.anchor) {
+          case MEMBERS_LIST:
+            return { membersChanged: context.membersChanged + 1 }
+          case SENT_LIST:
+            return { invitationsChanged: context.invitationsChanged + 1 }
+          case RECEIVED_LIST:
+            return { receivedChanged: context.receivedChanged + 1 }
         }
+      }),
+      // The row keeps the role just set until the members' read after it settles, the read just
+      // counted (not for a change made in another organisation, whose rows are not these).
+      rememberRole: assign(({ context, event }) => {
+        const { changingRole, membersChanged, rolesSet } = context
 
-        const read = membersChanged + 1
-        const remembered =
-          changingRole !== undefined && originOf(event) === deps.current()
-            ? [
+        return changingRole !== undefined && originOf(event) === deps.current()
+          ? {
+              rolesSet: [
                 ...rolesSet.filter((set) => set.identity !== changingRole.identity),
-                { ...changingRole, read },
-              ]
-            : rolesSet
-
-        return { membersChanged: read, rolesSet: remembered }
+                { ...changingRole, read: membersChanged },
+              ],
+            }
+          : {}
       }),
       startChanging: assign({
         changingRole: ({ event }) => {

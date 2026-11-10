@@ -12,16 +12,27 @@ import type { InvitationsPort, ReceivedInvitation } from '../platform/invitation
 import { openTestWorld, type TestWorld } from './__fixtures__/session'
 import { createInvitations } from './invitations'
 import {
+  IDENTITY_KEY,
+  type KeptDevice,
   MEMBERSHIPS_KEY,
+  type MemoryStorage,
   memoryStorage,
   saveDevice,
   savedMemberships,
   saveMemberships,
+  TOKEN_KEY,
 } from './storage'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   token: 'token-ann',
+  memberships: [],
+}
+
+/** Bob as another tab of the browser keeps him once it signed him in. */
+const bob: KeptDevice = {
+  identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+  token: 'token-bob',
   memberships: [],
 }
 
@@ -89,6 +100,17 @@ async function annSignedIn(): Promise<TestWorld> {
   return opened
 }
 
+/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
+function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
+  const other = memoryStorage()
+
+  saveDevice(other, device)
+
+  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
+    storage.changeElsewhere(key, other.get(key))
+  }
+}
+
 describe('createInvitations', () => {
   it('accept saves the membership into the session as a creation does, its database open when it answers', async () => {
     const { session, storage, tenantsOpened } = await annSignedIn()
@@ -142,6 +164,30 @@ describe('createInvitations', () => {
           .sort(),
       ).toEqual(['acme', 'globex']),
     )
+  })
+
+  it('accept adopts nothing into a space that replaced the asking one while the gateway answered', async () => {
+    const { session, storage, tenantsOpened } = await annSignedIn()
+    let answer = (): void => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const api: InvitationsPort = {
+      ...answering().api,
+      accept: () => ResultAsync.fromSafePromise(answered).map(() => acme),
+    }
+    const accepting = createInvitations(api, session).accept(received.id)
+
+    // Meanwhile another tab signed Bob in: this tab's space is his now.
+    signInElsewhere(storage, bob)
+    await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
+    answer()
+
+    expect((await accepting)._unsafeUnwrap()).toEqual(acme)
+    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(session.memberships()).toEqual([])
+    expect(session.space()?.tenants()).toEqual([])
+    expect(tenantsOpened()).toEqual([])
   })
 
   it('a refused accept adopts nothing and answers the refusal as it came', async () => {
