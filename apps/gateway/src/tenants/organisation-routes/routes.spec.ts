@@ -8,6 +8,7 @@ import { membership, tenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
+import type { GatewayRoot } from '../../composition/root'
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { RequestLimits } from '../../limits/request-limits'
 import { specInvitations } from '../__fixtures__/invitations'
@@ -22,7 +23,11 @@ import {
   routeOptions,
   type SignedUp,
 } from '../__fixtures__/organisation-routes'
+import { organisationsRetelling, specRetell } from '../__fixtures__/retell'
 import { Organisations } from '../organisations'
+import membershipRemoveStatement from '../surql/membership-remove.surql'
+import membershipSetRoleStatement from '../surql/membership-set-role.surql'
+import tenantReadyStatement from '../surql/tenant-ready.surql'
 
 import { INVITE_FLOOR_MS } from './invitation-handlers'
 import { organisationRoutes } from './routes'
@@ -808,6 +813,7 @@ describe('organisationRoutes', () => {
         rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
         invitations: specInvitations(directory),
+        retell: specRetell(),
       }),
       routeOptions(new RequestLimits({ clock: manualClock() })),
     )
@@ -838,6 +844,7 @@ describe('organisationRoutes', () => {
         rerole: (identity, region, role) => root.connections.rerole(identity, region, role),
         hub: root.hub,
         invitations: specInvitations(directory),
+        retell: specRetell(),
       })
       const routes = organisationRoutes(
         root.sessions,
@@ -915,5 +922,88 @@ describe('organisationRoutes', () => {
     ]) {
       expect(await routes(request('GET', path, { as: ann }), ADDRESS)).toBeUndefined()
     }
+  })
+})
+
+describe('organisationRoutes, a failed tell', () => {
+  /** The organisation routes over organisations whose tell fails once after `statement`. */
+  const retellingRoutes = (root: GatewayRoot, statement: string) => {
+    const retelling = organisationsRetelling(root, statement)
+    const routes = organisationRoutes(
+      root.sessions,
+      retelling.organisations,
+      routeOptions(new RequestLimits({ clock: manualClock() })),
+    )
+
+    return { ...retelling, routes }
+  }
+
+  it('answers 201 to a creation whose tell failed, and the listeners hear the list after the delay', async () => {
+    const { root, ann } = await harness()
+    const { routes, heard, retold } = retellingRoutes(root, tenantReadyStatement)
+    const { status, body } = await answer(
+      await routes(
+        request('POST', '/organisations', { as: ann, body: { key: 'acme', name: 'Acme' } }),
+        ADDRESS,
+      ),
+    )
+    const answered = created.parse(body).membership
+
+    expect(status).toBe(201)
+    expect(answered).toMatchObject({ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' })
+    expect(heard).toEqual([])
+
+    await retold()
+
+    expect(heard).toEqual([[ann.identity.id, [answered]]])
+  })
+
+  it('answers 204 to a role change whose tell failed, and the listeners hear the list after the delay', async () => {
+    const { root, ann, bob, founded, invited } = await harness()
+    const acme = await founded()
+
+    await invited()
+
+    const { routes, heard, retold } = retellingRoutes(root, membershipSetRoleStatement)
+
+    expect(
+      await answer(
+        await routes(
+          request('PATCH', `/organisations/acme/members/${bob.identity.id}`, {
+            as: ann,
+            body: { role: 'admin' },
+          }),
+          ADDRESS,
+        ),
+      ),
+    ).toEqual({ status: 204, body: undefined })
+    expect(heard).toEqual([])
+
+    await retold()
+
+    expect(heard).toEqual([[bob.identity.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+  })
+
+  it('answers 204 to a removal whose tell failed, and the listeners hear the list after the delay', async () => {
+    const { root, ann, bob, founded, invited } = await harness()
+
+    await founded()
+    await invited()
+
+    const { routes, heard, retold } = retellingRoutes(root, membershipRemoveStatement)
+
+    expect(
+      await answer(
+        await routes(
+          request('DELETE', `/organisations/acme/members/${bob.identity.id}`, { as: ann }),
+          ADDRESS,
+        ),
+      ),
+    ).toEqual({ status: 204, body: undefined })
+    expect(heard).toEqual([])
+
+    await retold()
+
+    expect(heard).toEqual([[bob.identity.id, []]])
   })
 })

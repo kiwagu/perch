@@ -33,6 +33,7 @@ import memberForget from '../__fixtures__/member-forget.surql'
 import memberRows from '../__fixtures__/member-rows.surql'
 import membershipRows from '../__fixtures__/membership-rows.surql'
 import namespaceInfo from '../__fixtures__/namespace-info.surql'
+import { readFailingAfter, specRetell } from '../__fixtures__/retell'
 import tenantInterrupt from '../__fixtures__/tenant-interrupt.surql'
 import tenantRows from '../__fixtures__/tenant-rows.surql'
 import tenantSweep from '../__fixtures__/tenant-sweep.surql'
@@ -43,7 +44,7 @@ import memberAddStatement from '../surql/member-add.surql'
 import memberRemoveStatement from '../surql/member-remove.surql'
 import membershipRemoveStatement from '../surql/membership-remove.surql'
 import membershipSetRoleStatement from '../surql/membership-set-role.surql'
-import membershipsOfStatement from '../surql/memberships-of.surql'
+import tenantReadyStatement from '../surql/tenant-ready.surql'
 import { TenantDatabases } from '../tenant-databases'
 import { TenantMembers } from '../tenant-members'
 
@@ -102,7 +103,8 @@ interface Held {
 
 /**
  * Organisations over an embedded directory, with each organisation's database on an embedded
- * engine of its own, and three identities: ann, bob and cat. A test can make one statement fail
+ * engine of its own, three identities: ann, bob and cat, and the re-tells on a clock the test
+ * moves. A test can make one statement fail
  * on the organisations' databases, as a broken database would, or hold one there; it can watch
  * and fail the directory's statements. The connections of the identities are a record of the
  * regions taken from them and the roles given again; `steps` lists those revocations and
@@ -112,6 +114,7 @@ async function harness() {
   const directory = (
     await openTestDb({ namespace: NAMESPACE, database: DIRECTORY, schema: readSchema('directory') })
   )._unsafeUnwrap()
+  const clock = manualClock()
   const opened: string[] = []
   /** The statement the organisations' databases refuse, if any. */
   let refusedStatement: string | undefined
@@ -175,12 +178,14 @@ async function harness() {
     // No device subscribes to a region here: the hub has none to let go of.
     hub: { retire: () => okAsync(undefined) },
     invitations: specInvitations(directory),
+    retell: specRetell({ clock }),
   })
   const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
 
   organisations.onChange(async (identity, memberships) => {
     heard.push([identity, memberships])
   })
+  cleanups.push(() => organisations.close())
 
   const ann = await signUp(directory, 'ann@example.test')
   const bob = await signUp(directory, 'bob@example.test')
@@ -295,6 +300,23 @@ async function harness() {
   }
 
   /**
+   * Moves the re-tells' clock past the first delay, and waits until the harness's listener heard
+   * `times` more changes: the re-tells due, once their turn came and they read the directory.
+   */
+  const retold = async (times = 1) => {
+    const before = heard.length
+
+    await clock.advance(1_200)
+    await vi.waitFor(
+      () => {
+        expect(heard.length).toBe(before + times)
+      },
+      { timeout: 5_000, interval: 1 },
+    )
+    await flush()
+  }
+
+  /**
    * Watches the queues of the organisations' turns (`ofTenants`, the default) or of the
    * identities' (`ofIdentity`). `untilQueued()` answers a promise that resolves once a change asks
    * for such a turn after that call, holding it or waiting behind the change that holds it: the
@@ -325,6 +347,7 @@ async function harness() {
     opened,
     directory,
     databases,
+    clock,
     heard,
     steps,
     ann,
@@ -341,8 +364,50 @@ async function harness() {
     holdInTenants,
     onDirectoryQuery,
     letRerole,
+    retold,
     watchQueue,
   }
+}
+
+/** Lets every promise callback queued so far, and those they queue, run. */
+const flush = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
+
+/** Ann founded acme, and bob joined it as a member; nobody has been told of it yet. */
+async function withBob() {
+  const setup = await harness()
+  const acme = await setup.founded()
+
+  await setup.invited('bob@example.test')
+  setup.heard.splice(0)
+
+  return { ...setup, acme }
+}
+
+/**
+ * A listener of `organisations` that keeps every list it is given in `heard` and fails to hear
+ * the first one, rejecting or throwing as `how` says; it hears every later one.
+ */
+function deafOnce(organisations: Organisations, how: 'rejects' | 'throws') {
+  const heard: Array<readonly [IdentityId, readonly Membership[]]> = []
+  let deaf = true
+
+  organisations.onChange((identity, memberships) => {
+    heard.push([identity, memberships])
+
+    if (!deaf) {
+      return Promise.resolve()
+    }
+
+    deaf = false
+
+    if (how === 'throws') {
+      throw new Error('the registry is down')
+    }
+
+    return Promise.reject(new Error('the registry is down'))
+  })
+
+  return heard
 }
 
 describe('Organisations', () => {
@@ -432,31 +497,37 @@ describe('Organisations', () => {
     expect(heard).toEqual([[ann.id, [created]]])
   })
 
-  it('completes a creation whose listeners failed to hear it when its creator asks again, answering the stored name', async () => {
-    const { organisations, ann, bob, directory, heard, membersIn } = await harness()
-    let deaf = true
-
-    organisations.onChange(async () => {
-      if (deaf) {
-        deaf = false
-        throw new Error('the registry is down')
-      }
-    })
-
-    expect(
-      (
-        await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
-      )._unsafeUnwrapErr(),
-    ).toMatchObject({ code: 'data:WRITE_FAILED' })
-    heard.splice(0)
+  it('a creation whose listeners failed to hear it answers the membership, and they hear it after the delay; asking again answers the stored name', async () => {
+    const { organisations, ann, bob, directory, heard, membersIn, retold } = await harness()
+    const deaf = deafOnce(organisations, 'rejects')
 
     const created = (
-      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme again' })
+      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' })
     )._unsafeUnwrap()
 
     expect(created).toMatchObject({ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' })
-    expect(heard).toEqual([[ann.id, [created]]])
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+    // The listener that heard it keeps the list; the one that did not is told again after the delay.
+    expect(heard).toEqual([[ann.id, [created]]])
+    expect(deaf).toEqual([[ann.id, [created]]])
+
+    await retold()
+
+    expect(heard).toEqual([
+      [ann.id, [created]],
+      [ann.id, [created]],
+    ])
+    expect(deaf).toEqual([
+      [ann.id, [created]],
+      [ann.id, [created]],
+    ])
+    heard.splice(0)
+
+    // The creator asking again gets the organisation as it was made, whatever name it sends.
+    expect(
+      await organisations.create({ identity: ann.id, key: 'acme', name: 'Acme again' }),
+    ).toEqual(ok(created))
+    expect(heard).toEqual([[ann.id, [created]]])
     expect(
       (
         await organisations.create({ identity: bob.id, key: 'acme', name: 'Acme' })
@@ -543,42 +614,40 @@ describe('Organisations', () => {
     expect(heard).toEqual([[bob.id, []]])
   })
 
-  it('a removal whose memberships reread fails still revokes the region on the live connection', async () => {
-    const { organisations, ann, bob, heard, steps, membersIn, founded, invited, onDirectoryQuery } =
-      await harness()
+  it('a removal whose memberships reread fails still revokes the region, answers ok, and tells the removed device after the delay', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      heard,
+      steps,
+      membersIn,
+      founded,
+      invited,
+      onDirectoryQuery,
+      retold,
+    } = await harness()
 
     await founded()
     await invited('bob@example.test')
     heard.splice(0)
 
-    let removed = false
-
     // The directory goes away for a moment once the membership is deleted.
-    onDirectoryQuery((text) => {
-      if (text === membershipRemoveStatement) {
-        removed = true
-      } else if (removed && text === membershipsOfStatement) {
-        throw new Error('the directory went away for a moment')
-      }
-    })
+    onDirectoryQuery(readFailingAfter(membershipRemoveStatement))
 
-    const failed = await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
-
-    expect(failed._unsafeUnwrapErr()).toEqual(
-      expect.objectContaining({
-        code: 'data:QUERY_FAILED',
-        message: `could not read the memberships of ${bob.id}`,
-      }),
+    expect(await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })).toEqual(
+      ok(undefined),
     )
     // Bob's connections lost the region before the member row went, though nobody could be
-    // told the memberships.
+    // told the memberships yet.
     expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
     expect(heard).toEqual([])
-
-    onDirectoryQuery(undefined)
-
     expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
     expect(await membersIn('acme')).toEqual([{ identity: ann.id, role: 'admin' }])
+
+    await retold()
+
+    expect(heard).toEqual([[bob.id, []]])
   })
 
   it('a removal paused before its tenant step and a concurrent acceptance by the same identity end in a consistent state', async () => {
@@ -801,17 +870,6 @@ describe('Organisations', () => {
 })
 
 describe('Organisations.setRole', () => {
-  /** Ann founded acme, and bob joined it as a member; nobody has been told of it yet. */
-  const withBob = async () => {
-    const setup = await harness()
-    const acme = await setup.founded()
-
-    await setup.invited('bob@example.test')
-    setup.heard.splice(0)
-
-    return { ...setup, acme }
-  }
-
   /** Bob is an admin of acme too, as ann made him. */
   const withTwoAdmins = async () => {
     const setup = await withBob()
@@ -1137,36 +1195,31 @@ describe('Organisations.setRole', () => {
     expect(heard).toEqual([])
   })
 
-  it("another admin's demotion whose listeners fail to hear it is completed by asking again", async () => {
-    const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf } = await withTwoAdmins()
-    let deaf = true
-
-    organisations.onChange(async () => {
-      if (deaf) {
-        deaf = false
-        throw new Error('the registry is down')
-      }
-    })
-
-    expect(
-      (
-        await organisations.setRole({
-          actor: ann.id,
-          key: 'acme',
-          identity: bob.id,
-          role: 'member',
-        })
-      )._unsafeUnwrapErr(),
-    ).toMatchObject({ code: 'data:WRITE_FAILED' })
-    // Both rows were written before the telling.
-    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
-    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
-    heard.splice(0)
+  it("another admin's demotion whose listeners fail to hear it answers ok, and they hear it after the delay", async () => {
+    const { organisations, ann, bob, acme, heard, memberRolesIn, rolesOf, retold } =
+      await withTwoAdmins()
+    const deaf = deafOnce(organisations, 'rejects')
+    const demoted: Membership = { tenant: acme.tenant, role: 'member' }
 
     expect(
       await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'member' }),
     ).toEqual(ok(undefined))
-    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'member' }]]])
+    // Both rows were written before the telling.
+    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(heard).toEqual([[bob.id, [demoted]]])
+    expect(deaf).toEqual([[bob.id, [demoted]]])
+
+    await retold()
+
+    expect(heard).toEqual([
+      [bob.id, [demoted]],
+      [bob.id, [demoted]],
+    ])
+    expect(deaf).toEqual([
+      [bob.id, [demoted]],
+      [bob.id, [demoted]],
+    ])
   })
 
   it('two admins demoting each other at once: one succeeds, the other is no admin by its turn and is refused `not-admin`, one admin stays', async () => {
@@ -1270,6 +1323,338 @@ describe('Organisations.setRole', () => {
     expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
     expect(await rolesOf('acme', bob.id)).toEqual([])
     expect(heard).toEqual([])
+  })
+})
+
+describe('Organisations, a failed tell', () => {
+  type Joined = Awaited<ReturnType<typeof withBob>>
+
+  /** What a change left: whose memberships, the list the directory holds, the member rows. */
+  interface Left {
+    readonly identity: IdentityId
+    readonly memberships: readonly Membership[]
+    readonly rows: Readonly<Record<string, Readonly<Record<string, string>>>>
+  }
+
+  /** The changes, each from acme founded by ann with bob a member, with its directory statement. */
+  const changes: ReadonlyArray<readonly [string, string, (setup: Joined) => Promise<Left>]> = [
+    [
+      'a creation',
+      tenantReadyStatement,
+      async ({ organisations, ann, bob, acme }) => {
+        const zeta = (
+          await organisations.create({ identity: ann.id, key: 'zeta', name: 'Zeta' })
+        )._unsafeUnwrap()
+
+        expect(zeta).toMatchObject({ tenant: { key: 'zeta', name: 'Zeta' }, role: 'admin' })
+
+        return {
+          identity: ann.id,
+          memberships: [acme, zeta],
+          rows: { acme: { [ann.id]: 'admin', [bob.id]: 'member' }, zeta: { [ann.id]: 'admin' } },
+        }
+      },
+    ],
+    [
+      'a role change',
+      membershipSetRoleStatement,
+      async ({ organisations, ann, bob, acme }) => {
+        expect(
+          await organisations.setRole({
+            actor: ann.id,
+            key: 'acme',
+            identity: bob.id,
+            role: 'admin',
+          }),
+        ).toEqual(ok(undefined))
+
+        return {
+          identity: bob.id,
+          memberships: [{ tenant: acme.tenant, role: 'admin' }],
+          rows: { acme: { [ann.id]: 'admin', [bob.id]: 'admin' } },
+        }
+      },
+    ],
+    [
+      'a removal',
+      membershipRemoveStatement,
+      async ({ organisations, ann, bob }) => {
+        expect(
+          await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id }),
+        ).toEqual(ok(undefined))
+
+        return { identity: bob.id, memberships: [], rows: { acme: { [ann.id]: 'admin' } } }
+      },
+    ],
+  ]
+
+  /** The member rows of each organisation `left` names hold the directory's roles. */
+  const rowsAsLeft = async ({ memberRolesIn, organisations }: Joined, left: Left) => {
+    for (const [key, roles] of Object.entries(left.rows)) {
+      expect(await memberRolesIn(key)).toEqual(roles)
+    }
+
+    expect(await organisations.membershipsOf(left.identity)).toEqual(ok(left.memberships))
+  }
+
+  describe.each(changes)('%s', (_, statement, change) => {
+    it('whose memberships read fails once after the commit succeeds, and the listeners hear the list after the delay', async () => {
+      const setup = await withBob()
+      const { heard, onDirectoryQuery, retold } = setup
+
+      onDirectoryQuery(readFailingAfter(statement))
+
+      const left = await change(setup)
+
+      await rowsAsLeft(setup, left)
+      expect(heard).toEqual([])
+
+      await retold()
+
+      expect(heard).toEqual([[left.identity, left.memberships]])
+    })
+
+    it.each(['rejects', 'throws'] as const)(
+      'whose listener %s once succeeds: the others hear the list at once, and every one after the delay',
+      async (how) => {
+        const setup = await withBob()
+        const { organisations, heard, retold } = setup
+        const deaf = deafOnce(organisations, how)
+
+        const left = await change(setup)
+        const told = [left.identity, left.memberships] as const
+
+        await rowsAsLeft(setup, left)
+        // Waiting for every listener undoes no delivery: the one that heard keeps the list.
+        expect(heard).toEqual([told])
+        expect(deaf).toEqual([told])
+
+        await retold()
+
+        expect(heard).toEqual([told, told])
+        expect(deaf).toEqual([told, told])
+      },
+    )
+  })
+
+  it('a removal whose member-row delete and tell both fail answers the delete failure, and is retold', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      heard,
+      steps,
+      membersIn,
+      refuseInTenants,
+      onDirectoryQuery,
+      retold,
+    } = await withBob()
+
+    refuseInTenants(memberRemoveStatement)
+    onDirectoryQuery(readFailingAfter(membershipRemoveStatement))
+
+    const failed = await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+
+    expect(failed._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(steps).toEqual([`revoke ${bob.id} tenant:acme`, 'member-remove'])
+    expect(await organisations.membershipsOf(bob.id)).toEqual(ok([]))
+    expect(await membersIn('acme')).toHaveLength(2)
+    expect(heard).toEqual([])
+
+    await retold()
+
+    expect(heard).toEqual([[bob.id, []]])
+  })
+
+  it('a slow listener holds the turn: the next change of the identity runs after it and its list reaches the listener after the older one', async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      acme,
+      heard,
+      clock,
+      rolesOf,
+      memberRolesIn,
+      onDirectoryQuery,
+      watchQueue,
+    } = await withBob()
+    const slow: Array<readonly [IdentityId, readonly Membership[]]> = []
+    const written: string[] = []
+    let release = (): void => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let held = true
+
+    organisations.onChange(async (identity, memberships) => {
+      slow.push([identity, memberships])
+
+      if (held) {
+        held = false
+        await gate
+      }
+    })
+    deafOnce(organisations, 'rejects')
+    onDirectoryQuery((text) => {
+      if (text === membershipSetRoleStatement) {
+        written.push(text)
+      }
+    })
+
+    const promoted: Membership = { tenant: acme.tenant, role: 'admin' }
+    const demoted: Membership = { tenant: acme.tenant, role: 'member' }
+    const queue = watchQueue('ofIdentity')
+    const first = organisations.setRole({
+      actor: ann.id,
+      key: 'acme',
+      identity: bob.id,
+      role: 'admin',
+    })
+
+    await vi.waitFor(() => expect(slow).toEqual([[bob.id, [promoted]]]))
+
+    // The second change asked for bob's turn, which the first holds while its slow listener
+    // has not settled: it writes nothing meanwhile, though another listener failed at once.
+    const queued = queue.untilQueued()
+    const second = organisations.setRole({
+      actor: ann.id,
+      key: 'acme',
+      identity: bob.id,
+      role: 'member',
+    })
+
+    await queued
+    await flush()
+    expect(written).toHaveLength(1)
+    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+
+    release()
+
+    expect(await first).toEqual(ok(undefined))
+    expect(await second).toEqual(ok(undefined))
+    expect(written).toHaveLength(2)
+    expect(slow).toEqual([
+      [bob.id, [promoted]],
+      [bob.id, [demoted]],
+    ])
+    expect(heard).toEqual([
+      [bob.id, [promoted]],
+      [bob.id, [demoted]],
+    ])
+    // The second change's tell succeeded: nothing is left to retell.
+    expect(clock.pending()).toBe(0)
+  })
+
+  it('a retell due before a change of the identity runs first, and the listeners hear the lists in turn order', async () => {
+    const { organisations, ann, bob, acme, heard, clock, onDirectoryQuery } = await withBob()
+
+    onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+    expect(heard).toEqual([])
+    onDirectoryQuery(undefined)
+
+    // The re-tell took bob's turn; the removal asks for it right after and waits.
+    await clock.advance(1_200)
+
+    expect(await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })).toEqual(
+      ok(undefined),
+    )
+    expect(heard).toEqual([
+      [bob.id, [{ tenant: acme.tenant, role: 'admin' }]],
+      [bob.id, []],
+    ])
+    expect(clock.pending()).toBe(0)
+  })
+
+  it('a change of the identity holding its turn when a retell is due runs first, and the retell then does nothing', async () => {
+    const { organisations, ann, bob, heard, clock, holdInTenants, onDirectoryQuery } =
+      await withBob()
+
+    onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+    expect(heard).toEqual([])
+    onDirectoryQuery(undefined)
+
+    const held = holdInTenants(memberRemoveStatement)
+    const removal = organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+
+    await held.waiting
+    // The re-tell is due while the removal holds bob's turn: it queues behind it.
+    await clock.advance(1_200)
+    expect(heard).toEqual([])
+
+    held.release()
+
+    expect(await removal).toEqual(ok(undefined))
+    await flush()
+
+    // The removal's tell succeeded, so the re-tell found its entry gone: no older list last.
+    expect(heard).toEqual([[bob.id, []]])
+    expect(clock.pending()).toBe(0)
+
+    await clock.advance(60_000)
+    await flush()
+    expect(heard).toEqual([[bob.id, []]])
+  })
+
+  it('a retell after a completed departure tells an empty list', async () => {
+    const { organisations, ann, bob, heard, onDirectoryQuery, retold } = await withBob()
+
+    onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+    onDirectoryQuery(undefined)
+
+    expect(await organisations.leaveAll(bob.id)).toEqual(ok(undefined))
+    expect(heard).toEqual([])
+
+    await retold()
+
+    expect(heard).toEqual([[bob.id, []]])
+  })
+
+  it("a retell after a departure that failed between its deletes tells the directory's list", async () => {
+    const {
+      organisations,
+      ann,
+      bob,
+      acme,
+      heard,
+      memberRolesIn,
+      rolesOf,
+      onDirectoryQuery,
+      retold,
+    } = await withBob()
+
+    onDirectoryQuery(readFailingAfter(membershipSetRoleStatement))
+    expect(
+      await organisations.setRole({ actor: ann.id, key: 'acme', identity: bob.id, role: 'admin' }),
+    ).toEqual(ok(undefined))
+
+    // The member row goes, then the directory refuses to delete the membership.
+    onDirectoryQuery((text) => {
+      if (text === membershipRemoveStatement) {
+        throw new Error('the directory refused the delete')
+      }
+    })
+    expect((await organisations.leaveAll(bob.id))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
+    expect(heard).toEqual([])
+    onDirectoryQuery(undefined)
+
+    await retold()
+
+    expect(heard).toEqual([[bob.id, [{ tenant: acme.tenant, role: 'admin' }]]])
   })
 })
 

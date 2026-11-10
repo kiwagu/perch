@@ -29,8 +29,9 @@ const MAX_NAME = 80
  * organisation and every membership; each organisation's own database holds its members, the
  * word its data is checked against. A command that fails with a `DataError` after some of its
  * rows were written leaves those rows in place, and asking again completes it: a creation by its
- * creator, a role change, a removal. Each change of memberships but a departure resolves once the
- * listeners heard the identity's new memberships.
+ * creator, a role change, a removal. Each change of memberships but a departure resolves once
+ * its tell settled: the listeners heard the identity's new memberships, or the telling failed
+ * and is retold later (`MembershipListeners`); no change fails for the telling.
  *
  * The changes of one identity's memberships (its creations, its acceptances of invitations, its
  * role changes, its removals and its departure) run one after the other, each once the one before
@@ -64,7 +65,7 @@ export class Organisations {
     const { directory, databases, revoke, rerole, hub } = options
     const lookup = new OrganisationLookup(directory)
     const members = new TenantMembers(databases)
-    const listeners = new MembershipListeners(lookup)
+    const listeners = new MembershipListeners(lookup, this.#turns, options.retell)
     const admission = new OrganisationAdmission({ directory, lookup, members })
 
     this.#adminTurn = new AdminTurn(this.#turns, lookup)
@@ -130,7 +131,7 @@ export class Organisations {
    * (the second is no admin by its turn and is refused `not-admin`), and a demotion races a
    * departure without leaving the organisation none (`last-admin`, which first writes the member
    * row of the only admin again as the directory has it). Asking again completes a change that
-   * failed, but the telling of a self-demotion: its actor is no admin any more.
+   * failed; a failure of the telling alone fails nothing and is retold.
    */
   setRole(input: {
     actor: IdentityId
@@ -231,5 +232,14 @@ export class Organisations {
   /** Hears that an identity's memberships changed, with the new list. */
   onChange(listener: MembershipListener): () => void {
     return this.#listeners.add(listener)
+  }
+
+  /**
+   * Stops the re-tells of failed tells for good, and resolves once the one running, if any,
+   * settled; the changes under way are not waited for. Closed before what the re-tells read and
+   * tell.
+   */
+  close(): Promise<void> {
+    return this.#listeners.close()
   }
 }

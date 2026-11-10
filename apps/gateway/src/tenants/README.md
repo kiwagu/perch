@@ -14,24 +14,33 @@ Organisations live in the same namespace, each in a strict database `t_<key>` of
 the gateway defines; the directory holds each organisation (`tenant`) and who belongs to it
 (`membership`), and the organisation's database holds its `member` rows. Two services of this
 module, built by the composition root over the directory, serve them; on shutdown the
-organisations' databases close after the region hub and before the directory. `TenantDatabases`
+organisations close first (their re-tells stop, the one running awaited), then the region hub,
+then the organisations' databases, then the directory. `TenantDatabases`
 keeps one connection per organisation database in use, shared by every holder and closed once
 nobody has held it for five minutes; once closed at shutdown it hands out none. `Organisations` creates an organisation (its directory
 rows, its database, its creator as admin member there, then ready; a creation its creator left
-unfinished, or whose listeners failed to hear it, is completed when the creator asks again), lists an identity's memberships in ready
+unfinished is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin change a member's role and remove a member other than itself
 (an account joins by accepting an invitation, `invitations`), lists the members with their emails to an admin (leaving out the rows of
 identities that are gone), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
-and tells its listeners an identity's new memberships whenever they change, answering once they
-heard them: the composition root has the registry tell the identity's devices. A removal takes
+and tells its listeners an identity's new memberships whenever they change: the composition root
+has the registry tell the identity's devices. A tell reads the memberships and runs every
+listener, waiting for all of them to settle before the change resolves; one that fails, at the
+read or at a listener, fails no change: it is logged (its code and the attempt) and the identity
+is retold later. The re-tells are kept in memory, one per identity at most: after a delay of 1,
+2, 4, 8, 16 then 30 s (the last repeating), each times a factor drawn from 0.8 to 1.2, the re-tell
+takes the identity's turn, reads the memberships afresh and tells them; a failure arms the next
+delay, and any successful tell of the identity drops its re-tell. Nothing of it is durable: a
+crash closes every socket, and every device's welcome reads the directory. A removal takes
 the organisation's region from the removed identity's open connections as soon as the
 directory's membership is gone, before the member row is deleted and before the memberships are
-read again to be told, so a removal that fails after the directory (500) has revoked the region
-all the same; asking again completes it. Until the revoke reaches the removed identity's
+read again to be told, so a removal whose member row fails after the directory (500) has revoked
+the region all the same; asking again completes it. Until the revoke reaches the removed identity's
 connection, a batch its device pushes there may still be accepted: that window between the
 directory's commit and the revoke is inherent. The changes of one identity's memberships (its
-creations, its acceptances of invitations, its role changes, its removals, its departure) run one
+creations, its acceptances of invitations, its role changes, its removals, its departure, its
+re-tells) run one
 after the other, each once the one before it and its notification have settled, so the directory
 and the organisation's database end as the last change left them and its devices hear the lists
 in that order. An acceptance, a role change, a removal and a departure also run, inside the
@@ -79,8 +88,8 @@ organisation's region as the new role allows (the `rerole` option, with the role
 as a removal revokes the region: a failure of the telling leaves no old privilege alive), then
 tells the identity's listeners. The directory is the
 authority, so a failure before its write leaves it as it was and the same admin asking again redoes
-the change, a self-demotion included; a failure of the telling is completed by asking again, but
-for a self-demotion, whose actor is no admin any more. The role an identity already holds is
+the change, a self-demotion included; a failure of the telling alone fails nothing and is retold,
+so a self-demoted admin, no admin any more, has nothing to ask again. The role an identity already holds is
 written and told again. Two admins demoting each other at once leave one admin: the second, no
 admin any more in its turn, is refused `not-admin`; a self-demotion and the other admin's departure
 at once leave one admin, the second refused `last-admin`.
@@ -88,8 +97,9 @@ at once leave one admin, the second refused `last-admin`.
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 `OrganisationAdmission` (`admission.ts`), `OrganisationRoleChange` (`role-change.ts`),
 `OrganisationRemoval` (`removal.ts`), `AdminTurn` (`admin-turn.ts`, the organisation's turn held for
-a change one of its admins asked, once the admin is found still one), and
-`MembershipListeners` (`listeners.ts`), who hears the changes. They read the directory through
+a change one of its admins asked, once the admin is found still one),
+`MembershipListeners` (`listeners.ts`), who hears the changes, and `MembershipRetells`
+(`retells.ts`), the pending re-tells of the identities whose tell failed. They read the directory through
 `OrganisationLookup` and an organisation's `member` rows through `TenantMembers`;
 `MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a
 `KeyedTurns` (`src/keyed-turns.ts`), an identity's always taken first and several
@@ -153,8 +163,8 @@ invitation's role, then one directory transaction (`invitation-accept.surql`) wr
 membership and deletes the invitation, then the account's listeners hear it. The member row goes
 first: a failure before the transaction leaves the invitation live and asking again completes it,
 while a membership written before a member row that then failed would leave a member no list
-shows, with the invitation spent. A failure of the telling leaves the membership made, its member
-row right and the invitation spent. A spent link never readmits: once an admin removes the member,
+shows, with the invitation spent. A failure of the telling fails nothing: the membership is made,
+its member row right, the invitation spent, and the account is retold. A spent link never readmits: once an admin removes the member,
 the old link answers `invitation-gone`. `decline` runs in the organisation's turn and deletes the
 row for the invited account alone.
 

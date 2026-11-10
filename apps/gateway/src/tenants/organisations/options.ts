@@ -10,6 +10,7 @@ import type { TenantDatabases } from '../tenant-databases'
 import type { AdminTurn } from './admin-turn'
 import type { OrganisationAdmission } from './admission'
 import type { MembershipListeners } from './listeners'
+import type { RetellOptions } from './retells'
 import type { MembershipTurns } from './turns'
 
 /** What the invitations of organisations are made of beyond the organisations themselves. */
@@ -49,4 +50,6 @@ export interface OrganisationsOptions {
   readonly hub: Pick<RegionHub, 'retire'>
   /** The invitations to organisations: their store, their mail and the link the mail carries. */
   readonly invitations: InvitationsOptions
+  /** What the re-tells of a failed tell run on: their clock, their jitter and their log. */
+  readonly retell: RetellOptions
 }
