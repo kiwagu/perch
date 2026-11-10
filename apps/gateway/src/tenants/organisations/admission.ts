@@ -57,8 +57,8 @@ export class OrganisationAdmission {
    * invitation, then one directory transaction that writes its membership with that role and
    * spends the invitation. The member row goes first, so a failure after it leaves the invitation
    * live and asking again completes the admission; a membership written before a member row that
-   * then failed would leave a member no list shows and no reconnection repairs, the invitation
-   * being spent. An identity that is a member already is refused `already-member`, once its member
+   * then failed would leave a member without its row until an admin lists the members, the
+   * invitation being spent. An identity that is a member already is refused `already-member`, once its member
    * row is written again with the role the directory holds (not the invitation's), and the
    * invitation stays.
    */

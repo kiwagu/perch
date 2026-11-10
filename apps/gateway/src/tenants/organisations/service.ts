@@ -16,6 +16,7 @@ import { OrganisationAdmission } from './admission'
 import { OrganisationCreation } from './creation'
 import { OrganisationInvitations } from './invitations'
 import { type MembershipListener, MembershipListeners } from './listeners'
+import { MembersList } from './members-list'
 import type { OrganisationsOptions } from './options'
 import { OrganisationRemoval } from './removal'
 import { OrganisationRoleChange } from './role-change'
@@ -50,11 +51,11 @@ const MAX_NAME = 80
  */
 export class Organisations {
   readonly #lookup: OrganisationLookup
-  readonly #members: TenantMembers
   readonly #listeners: MembershipListeners
   readonly #creation: OrganisationCreation
   readonly #roleChange: OrganisationRoleChange
   readonly #removal: OrganisationRemoval
+  readonly #membersList: MembersList
   readonly #departure: AccountDeparture
   readonly #turns = new MembershipTurns()
   readonly #adminTurn: AdminTurn
@@ -70,7 +71,6 @@ export class Organisations {
 
     this.#adminTurn = new AdminTurn(this.#turns, lookup)
     this.#lookup = lookup
-    this.#members = members
     this.#listeners = listeners
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
     this.invitations = new OrganisationInvitations({
@@ -83,6 +83,7 @@ export class Organisations {
     })
     this.#roleChange = new OrganisationRoleChange({ directory, lookup, members, rerole })
     this.#removal = new OrganisationRemoval({ directory, members, listeners, revoke })
+    this.#membersList = new MembersList({ lookup, members })
     this.#departure = new AccountDeparture({ directory, databases, hub })
   }
 
@@ -215,7 +216,12 @@ export class Organisations {
     )
   }
 
-  /** The members of the organisation with their emails, for its admins, the earliest first. */
+  /**
+   * The members of the organisation with their emails, for its admins, the earliest membership
+   * first: the directory's, once the organisation's member rows are settled to them
+   * (`MembersList`), in the organisation's turn, where no change of its memberships is between
+   * its two writes.
+   */
   membersOf(input: {
     actor: IdentityId
     key: string
@@ -225,8 +231,9 @@ export class Organisations {
     return this.#lookup
       .tenantOf(key)
       .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
-      .andThen(() => this.#members.list(key))
-      .andThen((rows) => this.#lookup.withEmails(key, rows))
+      .andThen((tenant) =>
+        this.#adminTurn.run(actor, tenant, (current) => this.#membersList.list(current)),
+      )
   }
 
   /** Hears that an identity's memberships changed, with the new list. */

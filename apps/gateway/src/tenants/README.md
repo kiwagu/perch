@@ -21,8 +21,12 @@ nobody has held it for five minutes; once closed at shutdown it hands out none. 
 rows, its database, its creator as admin member there, then ready; a creation its creator left
 unfinished is completed when the creator asks again), lists an identity's memberships in ready
 organisations by key, lets an admin change a member's role and remove a member other than itself
-(an account joins by accepting an invitation, `invitations`), lists the members with their emails to an admin (leaving out the rows of
-identities that are gone), answers what it refuses
+(an account joins by accepting an invitation, `invitations`), lists the members with their emails to an admin (the directory's
+members, the earliest membership first, in the organisation's turn, once the organisation's
+`member` rows are settled to them: a missing or wrong row is written and a row no membership
+wants is deleted, one at a time, the first failure answering `data:WRITE_FAILED` and the next
+read settling the rest; the row of a membership whose identity is gone is kept and the identity
+is not listed), answers what it refuses
 with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change: the composition root
 has the registry tell the identity's devices. A tell reads the memberships and runs every
@@ -82,7 +86,7 @@ one admin (`membership-admins.surql`) `last-admin`, once that admin's member row
 with the role the directory holds (as the admission does for `already-member`: a self-demotion that
 failed at the directory, followed by the other admin's, would otherwise leave the only admin shown
 as a member); a failure of that write answers instead, and nobody is told. Otherwise it writes the
-organisation's member row first (the members list reads the roles there), then the directory's
+organisation's member row first (the directory holds the authority, so it is written last, and the members list settles a row left with another role), then the directory's
 membership (`membership-set-role.surql`), then has the identity's open connections push into the
 organisation's region as the new role allows (the `rerole` option, with the role known and no read,
 as a removal revokes the region: a failure of the telling leaves no old privilege alive), then
@@ -97,8 +101,9 @@ at once leave one admin, the second refused `last-admin`.
 change is a part of its own beside it: `OrganisationCreation` (`creation.ts`),
 `OrganisationAdmission` (`admission.ts`), `OrganisationRoleChange` (`role-change.ts`),
 `OrganisationRemoval` (`removal.ts`), `AdminTurn` (`admin-turn.ts`, the organisation's turn held for
-a change one of its admins asked, once the admin is found still one),
-`MembershipListeners` (`listeners.ts`), who hears the changes, and `MembershipRetells`
+a change one of its admins asked, once the admin is found still one), `MembersList`
+(`members-list.ts`, the members as the directory has them, read by organisation, with the
+organisation's member rows settled to them), `MembershipListeners` (`listeners.ts`), who hears the changes, and `MembershipRetells`
 (`retells.ts`), the pending re-tells of the identities whose tell failed. They read the directory through
 `OrganisationLookup` and an organisation's `member` rows through `TenantMembers`;
 `MembershipTurns` (`turns.ts`) holds the identities' and the organisations' turns, each a
@@ -162,8 +167,8 @@ invitation kept. Otherwise `OrganisationAdmission.accept` writes the member row 
 invitation's role, then one directory transaction (`invitation-accept.surql`) writes the
 membership and deletes the invitation, then the account's listeners hear it. The member row goes
 first: a failure before the transaction leaves the invitation live and asking again completes it,
-while a membership written before a member row that then failed would leave a member no list
-shows, with the invitation spent. A failure of the telling fails nothing: the membership is made,
+while a membership written before a member row that then failed would leave a member without
+its row until an admin next lists the members, with the invitation spent. A failure of the telling fails nothing: the membership is made,
 its member row right, the invitation spent, and the account is retold. A spent link never readmits: once an admin removes the member,
 the old link answers `invitation-gone`. `decline` runs in the organisation's turn and deletes the
 row for the invited account alone.

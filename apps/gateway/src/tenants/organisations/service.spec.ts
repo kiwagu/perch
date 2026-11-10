@@ -12,7 +12,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { type IdentityId, idSchemas } from '@workspace/ids'
-import type { Membership } from '@workspace/replica/protocol'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
 import {
@@ -39,12 +39,15 @@ import tenantRows from '../__fixtures__/tenant-rows.surql'
 import tenantSweep from '../__fixtures__/tenant-sweep.surql'
 import { OrganisationLookup } from '../organisation-lookup'
 import type { OrganisationRefusalCode } from '../organisation-refusal'
+import { keyOf } from '../organisation-rows'
 import invitationAcceptStatement from '../surql/invitation-accept.surql'
 import memberAddStatement from '../surql/member-add.surql'
 import memberRemoveStatement from '../surql/member-remove.surql'
 import membershipRemoveStatement from '../surql/membership-remove.surql'
 import membershipSetRoleStatement from '../surql/membership-set-role.surql'
+import membershipsOfTenantStatement from '../surql/memberships-of-tenant.surql'
 import tenantReadyStatement from '../surql/tenant-ready.surql'
+import tenantRemoveStatement from '../surql/tenant-remove.surql'
 import { TenantDatabases } from '../tenant-databases'
 import { TenantMembers } from '../tenant-members'
 
@@ -120,8 +123,13 @@ async function harness() {
   let refusedStatement: string | undefined
   /** The statement the organisations' databases hold, if any. */
   let held: Held | undefined
-  /** Hears each statement sent to the directory; it may throw to make the statement fail. */
-  let directoryQueries: ((text: string) => void) | undefined
+  /** The statement the directory holds, if any. */
+  let directoryHeld: Held | undefined
+  /**
+   * Hears each statement sent to the directory; it may throw to make the statement fail, or
+   * answer a promise to hold it until that settles.
+   */
+  let directoryQueries: ((text: string) => void | Promise<void>) | undefined
   /** Whether the connections take a re-judging. */
   let rerolls = true
   const steps: string[] = []
@@ -163,7 +171,17 @@ async function harness() {
   )
 
   const organisations = new Organisations({
-    directory: interceptQueries(directory, (text) => directoryQueries?.(text)),
+    directory: interceptQueries(directory, (text) => {
+      const heard = directoryQueries?.(text)
+
+      if (text === directoryHeld?.text) {
+        directoryHeld.reached()
+
+        return directoryHeld.gate
+      }
+
+      return heard
+    }),
     databases,
     revoke: async (identity, region) => {
       steps.push(`revoke ${identity} ${region}`)
@@ -289,8 +307,33 @@ async function harness() {
     }
   }
 
+  /**
+   * The directory holds `statement` until `release` is called; `reached` resolves once one is
+   * held.
+   */
+  const holdDirectory = (statement: string) => {
+    let release = () => {}
+    let arrived = () => {}
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const reached = new Promise<void>((resolve) => {
+      arrived = resolve
+    })
+
+    directoryHeld = { text: statement, gate, reached: arrived }
+
+    return {
+      reached,
+      release: () => {
+        directoryHeld = undefined
+        release()
+      },
+    }
+  }
+
   /** Hears each statement sent to the directory from now on; `undefined` stops listening. */
-  const onDirectoryQuery = (listener: ((text: string) => void) | undefined) => {
+  const onDirectoryQuery = (listener: ((text: string) => void | Promise<void>) | undefined) => {
     directoryQueries = listener
   }
 
@@ -362,6 +405,7 @@ async function harness() {
     invited,
     refuseInTenants,
     holdInTenants,
+    holdDirectory,
     onDirectoryQuery,
     letRerole,
     retold,
@@ -682,7 +726,9 @@ describe('Organisations', () => {
 
     const directorySteps: string[] = []
 
-    onDirectoryQuery((text) => directorySteps.push(text))
+    onDirectoryQuery((text) => {
+      directorySteps.push(text)
+    })
 
     const asked = watchQueue('ofIdentity').untilQueued()
     const accepting = organisations.invitations.accept({
@@ -754,7 +800,9 @@ describe('Organisations', () => {
 
     const directorySteps: string[] = []
 
-    onDirectoryQuery((text) => directorySteps.push(text))
+    onDirectoryQuery((text) => {
+      directorySteps.push(text)
+    })
 
     const asked = watchQueue('ofIdentity').untilQueued()
     const accepting = organisations.invitations.accept({
@@ -824,37 +872,6 @@ describe('Organisations', () => {
       )._unsafeUnwrapErr(),
     ).toEqual(refused('not-admin'))
     expect(await membersIn('acme')).toHaveLength(2)
-  })
-
-  it('lists the members with their emails for an admin, not for a member nor an outsider', async () => {
-    const { organisations, ann, bob, cat, founded, invited } = await harness()
-
-    await founded()
-    await invited('bob@example.test')
-    const members = [
-      { identity: { id: ann.id, email: 'ann@example.test' }, role: 'admin' },
-      { identity: { id: bob.id, email: 'bob@example.test' }, role: 'member' },
-    ]
-
-    expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(ok(members))
-    expect(
-      (await organisations.membersOf({ actor: bob.id, key: 'acme' }))._unsafeUnwrapErr(),
-    ).toEqual(refused('not-admin'))
-    expect(
-      (await organisations.membersOf({ actor: cat.id, key: 'acme' }))._unsafeUnwrapErr(),
-    ).toEqual(refused('not-a-member'))
-  })
-
-  it('leaves out of the members the rows of identities that are gone', async () => {
-    const { organisations, ann, bob, directory, founded, invited } = await harness()
-
-    await founded()
-    await invited('bob@example.test')
-    await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
-
-    expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(
-      ok([{ identity: { id: ann.id, email: 'ann@example.test' }, role: 'admin' }]),
-    )
   })
 
   it('lists memberships ordered by key, only of ready tenants', async () => {
@@ -1694,5 +1711,379 @@ describe('OrganisationAdmission', () => {
     )
     expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
     expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+})
+
+describe('the members list', () => {
+  type Setup = Awaited<ReturnType<typeof harness>>
+
+  /** What ann, the admin of acme, is asked for its members. */
+  const listed = (setup: Pick<Setup, 'organisations' | 'ann'>) =>
+    setup.organisations.membersOf({ actor: setup.ann.id, key: 'acme' })
+
+  /** The members a list answers: each account with its email and its role. */
+  const members = (...entries: ReadonlyArray<readonly [AuthUser, TenantRole]>) =>
+    ok(
+      entries.map(([account, role]) => ({
+        identity: { id: account.id, email: account.email },
+        role,
+      })),
+    )
+
+  /** Writes the member row of `identity` as a change that was interrupted would leave it. */
+  const rowOf = async (setup: Setup, identity: IdentityId, role: TenantRole) =>
+    (await new TenantMembers(setup.databases).add('acme', identity, role))._unsafeUnwrap()
+
+  it('lists the members with their emails for an admin, not for a member nor an outsider', async () => {
+    const { organisations, ann, bob, cat, founded, invited } = await harness()
+
+    await founded()
+    await invited('bob@example.test')
+
+    expect(await organisations.membersOf({ actor: ann.id, key: 'acme' })).toEqual(
+      members([ann, 'admin'], [bob, 'member']),
+    )
+    expect(
+      (await organisations.membersOf({ actor: bob.id, key: 'acme' }))._unsafeUnwrapErr(),
+    ).toEqual(refused('not-admin'))
+    expect(
+      (await organisations.membersOf({ actor: cat.id, key: 'acme' }))._unsafeUnwrapErr(),
+    ).toEqual(refused('not-a-member'))
+  })
+
+  it('refuses an organisation still provisioning', async () => {
+    const setup = await harness()
+
+    await setup.founded()
+    await setup.directory.db.query(tenantInterrupt, { key: 'acme' })
+
+    expect((await listed(setup))._unsafeUnwrapErr()).toEqual(refused('no-such-tenant'))
+  })
+
+  it('deletes the member row of a removal whose member-row delete failed', async () => {
+    const setup = await withBob()
+    const { organisations, ann, bob, refuseInTenants, memberRolesIn, rolesOf } = setup
+
+    refuseInTenants(memberRemoveStatement)
+    expect(
+      (
+        await organisations.remove({ actor: ann.id, key: 'acme', identity: bob.id })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    refuseInTenants(undefined)
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual([])
+  })
+
+  it('deletes the member row of an accept whose directory transaction failed, and its invitation stays live', async () => {
+    const setup = await harness()
+    const { organisations, ann, bob, onDirectoryQuery, memberRolesIn, rolesOf } = setup
+
+    await setup.founded()
+
+    const invitation = (
+      await organisations.invitations.invite({
+        actor: ann.id,
+        key: 'acme',
+        email: 'bob@example.test',
+        role: 'member',
+      })
+    )._unsafeUnwrap()
+
+    onDirectoryQuery((text) => {
+      if (text === invitationAcceptStatement) {
+        throw new Error('the directory refused the transaction')
+      }
+    })
+    expect(
+      (
+        await organisations.invitations.accept({ identity: bob.id, invitation: invitation.id })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    onDirectoryQuery(undefined)
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual([])
+    expect(
+      (await organisations.invitations.pending({ actor: ann.id, key: 'acme' }))._unsafeUnwrap(),
+    ).toHaveLength(1)
+  })
+
+  it('writes the directory role back into the member row of a role change whose directory write failed', async () => {
+    const setup = await withBob()
+    const { organisations, ann, bob, onDirectoryQuery, memberRolesIn, rolesOf } = setup
+
+    onDirectoryQuery((text) => {
+      if (text === membershipSetRoleStatement) {
+        throw new Error('the directory refused the write')
+      }
+    })
+    expect(
+      (
+        await organisations.setRole({
+          actor: ann.id,
+          key: 'acme',
+          identity: bob.id,
+          role: 'admin',
+        })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:WRITE_FAILED' })
+    onDirectoryQuery(undefined)
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'admin' })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+  })
+
+  it('lists a member whose departure failed at the directory after its member row went, and writes its row again', async () => {
+    const setup = await withBob()
+    const { organisations, ann, bob, onDirectoryQuery, memberRolesIn, rolesOf } = setup
+
+    onDirectoryQuery((text) => {
+      if (text === membershipRemoveStatement) {
+        throw new Error('the directory refused the delete')
+      }
+    })
+    expect((await organisations.leaveAll(bob.id))._unsafeUnwrapErr()).toMatchObject({
+      code: 'data:WRITE_FAILED',
+    })
+    onDirectoryQuery(undefined)
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+  })
+
+  it('deletes a member row no membership wants', async () => {
+    const setup = await withBob()
+    const { ann, bob, cat, memberRolesIn, rolesOf } = setup
+
+    await rowOf(setup, cat.id, 'admin')
+    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: 'admin' })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', cat.id)).toEqual([])
+  })
+
+  it('keeps the row of a membership whose identity is gone and leaves it out', async () => {
+    const setup = await withBob()
+    const { ann, bob, directory, memberRolesIn, rolesOf } = setup
+
+    await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+  })
+
+  it('writes the missing row of a membership whose identity is gone too', async () => {
+    const setup = await withBob()
+    const { ann, bob, directory, forgetMember, memberRolesIn } = setup
+
+    await directory.db.query(identityForget, { identity: recordId('identity', bob.id) })
+    await forgetMember('acme', bob.id)
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+
+  it('lists in the order the memberships were made', async () => {
+    const setup = await harness()
+    const { databases, ann, bob, cat, clearMembers, founded, invited, memberRolesIn } = setup
+
+    await founded()
+    await invited('bob@example.test')
+    await invited('cat@example.test')
+    // The member rows are written in the reverse order: they would list cat first.
+    await clearMembers('acme')
+    await rowOf(setup, cat.id, 'member')
+    await rowOf(setup, bob.id, 'member')
+    await rowOf(setup, ann.id, 'admin')
+    expect(
+      (await new TenantMembers(databases).list('acme'))._unsafeUnwrap().map((row) => keyOf(row.id)),
+    ).toEqual([cat.id, bob.id, ann.id])
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member'], [cat, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: 'admin',
+      [bob.id]: 'member',
+      [cat.id]: 'member',
+    })
+  })
+
+  it('answers data:QUERY_FAILED when the directory read fails, writing nothing, and the next read settles', async () => {
+    const setup = await withBob()
+    const { ann, bob, cat, onDirectoryQuery, memberRolesIn } = setup
+
+    await rowOf(setup, cat.id, 'member')
+    onDirectoryQuery((text) => {
+      if (text === membershipsOfTenantStatement) {
+        throw new Error('the directory went away for a moment')
+      }
+    })
+
+    expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:QUERY_FAILED' })
+    expect(await memberRolesIn('acme')).toEqual({
+      [ann.id]: 'admin',
+      [bob.id]: 'member',
+      [cat.id]: 'member',
+    })
+
+    onDirectoryQuery(undefined)
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+
+  it('answers data:WRITE_FAILED when a row cannot be written, stops there, and the next read settles', async () => {
+    const setup = await withBob()
+    const { ann, bob, cat, forgetMember, refuseInTenants, memberRolesIn } = setup
+
+    await forgetMember('acme', bob.id)
+    await rowOf(setup, cat.id, 'member')
+    refuseInTenants(memberAddStatement)
+
+    expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:WRITE_FAILED' })
+    // The writes go one after the other, the first failure answering: the delete that follows
+    // the failed write was not tried.
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [cat.id]: 'member' })
+
+    refuseInTenants(undefined)
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+
+  it('answers data:WRITE_FAILED when a row cannot be deleted, and the next read settles', async () => {
+    const setup = await withBob()
+    const { ann, bob, cat, refuseInTenants, memberRolesIn } = setup
+
+    await rowOf(setup, cat.id, 'member')
+    refuseInTenants(memberRemoveStatement)
+
+    expect((await listed(setup))._unsafeUnwrapErr()).toMatchObject({ code: 'data:WRITE_FAILED' })
+    expect(await memberRolesIn('acme')).toMatchObject({ [cat.id]: 'member' })
+
+    refuseInTenants(undefined)
+
+    expect(await listed(setup)).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+  })
+
+  it('waits for an accept paused between its member row and its directory transaction', async () => {
+    const setup = await harness()
+    const { organisations, ann, bob, holdDirectory, watchQueue, memberRolesIn, rolesOf } = setup
+
+    await setup.founded()
+
+    const invitation = (
+      await organisations.invitations.invite({
+        actor: ann.id,
+        key: 'acme',
+        email: 'bob@example.test',
+        role: 'member',
+      })
+    )._unsafeUnwrap()
+    const held = holdDirectory(invitationAcceptStatement)
+    const accepting = organisations.invitations.accept({
+      identity: bob.id,
+      invitation: invitation.id,
+    })
+
+    await held.reached
+
+    const queued = watchQueue().untilQueued()
+    const listing = listed(setup)
+
+    // The list passed its checks and waits for the organisation's turn, which the accept holds:
+    // the member row the accept wrote is not deleted meanwhile.
+    await queued
+    await flush()
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+
+    held.release()
+
+    expect((await accepting).isOk()).toBe(true)
+    expect(await listing).toEqual(members([ann, 'admin'], [bob, 'member']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin', [bob.id]: 'member' })
+    expect(await rolesOf('acme', bob.id)).toEqual(['member'])
+  })
+
+  it('waits for a departure paused between its member-row delete and its membership delete', async () => {
+    const setup = await withBob()
+    const { organisations, ann, bob, holdDirectory, watchQueue, memberRolesIn, rolesOf } = setup
+    const held = holdDirectory(membershipRemoveStatement)
+    const departure = organisations.leaveAll(bob.id)
+
+    await held.reached
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+
+    const queued = watchQueue().untilQueued()
+    const listing = listed(setup)
+
+    // The list waits for the departure's turn: it does not write bob's row again between the
+    // two deletes, which would leave a row no membership wants.
+    await queued
+    await flush()
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+
+    held.release()
+
+    expect(await departure).toEqual(ok(undefined))
+    expect(await listing).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await rolesOf('acme', bob.id)).toEqual([])
+  })
+
+  it('waits for an organisation removed whole, and finds it gone', async () => {
+    const setup = await harness()
+    const { organisations, ann, directory, holdDirectory, watchQueue } = setup
+
+    await setup.founded()
+
+    const held = holdDirectory(tenantRemoveStatement)
+    const departure = organisations.leaveAll(ann.id)
+
+    await held.reached
+
+    const queued = watchQueue().untilQueued()
+    const listing = listed(setup)
+
+    await queued
+    held.release()
+
+    expect(await departure).toEqual(ok(undefined))
+    expect((await listing)._unsafeUnwrapErr()).toEqual(refused('no-such-tenant'))
+
+    const [tenants, memberships] = await directory.db.query<[unknown[], unknown[]]>(directoryRows)
+
+    expect(tenants).toEqual([])
+    expect(memberships).toEqual([])
+  })
+
+  it('a repeated creation of a ready organisation beside a list read leaves the rows equal to the directory', async () => {
+    const setup = await harness()
+    const { organisations, ann, forgetMember, memberRolesIn, rolesOf } = setup
+    const acme = await setup.founded()
+
+    await forgetMember('acme', ann.id)
+
+    const [created, listing] = await Promise.all([
+      organisations.create({ identity: ann.id, key: 'acme', name: 'Acme' }),
+      listed(setup),
+    ])
+
+    expect(created).toEqual(ok(acme))
+    expect(listing).toEqual(members([ann, 'admin']))
+    expect(await memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+    expect(await rolesOf('acme', ann.id)).toEqual(['admin'])
   })
 })

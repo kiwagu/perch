@@ -9,8 +9,10 @@ import membershipIds from './__fixtures__/membership-ids.surql'
 import membershipSweep from './__fixtures__/membership-sweep.surql'
 import membershipsById from './__fixtures__/memberships-by-id.surql'
 import organisationMemberships from './__fixtures__/organisation-memberships.surql'
+import { OrganisationLookup } from './organisation-lookup'
 import membershipAdminsStatement from './surql/membership-admins.surql'
 import membershipOfEmailStatement from './surql/membership-of-email.surql'
+import membershipsOfTenantStatement from './surql/memberships-of-tenant.surql'
 import tenantRemoveStatement from './surql/tenant-remove.surql'
 
 let directory: LocalDb | undefined
@@ -67,6 +69,16 @@ describe('the membership_tenant index', () => {
     expect(plan).toContain('index: membership_tenant')
   })
 
+  it("reads an organisation's memberships through the membership_tenant index", async () => {
+    const local = await opened()
+    const plan = await planOf(local, membershipsOfTenantStatement, {
+      tenant: recordId('tenant', 'acme'),
+    })
+
+    expect(plan).toContain('IndexScan')
+    expect(plan).toContain('index: membership_tenant')
+  })
+
   it("still answers the organisation's admins and its member's role through the index", async () => {
     const local = await opened()
     const acme = recordId('tenant', 'acme')
@@ -107,5 +119,19 @@ describe('the membership_tenant index', () => {
     expect(left).toEqual([])
     expect(rest).toEqual([])
     expect(others).toHaveLength(1)
+  })
+})
+
+describe('OrganisationLookup.membershipsOfTenant', () => {
+  it('answers data:QUERY_FAILED for a membership whose identity is no identity id', async () => {
+    const local = await opened()
+    const lookup = new OrganisationLookup(local)
+
+    // The fixture's identities are named by words, not by the ids the gateway gives them.
+    expect(
+      (
+        await lookup.membershipsOfTenant({ id: 'acme', key: 'acme', name: 'Acme' })
+      )._unsafeUnwrapErr(),
+    ).toMatchObject({ code: 'data:QUERY_FAILED' })
   })
 })
