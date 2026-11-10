@@ -112,7 +112,7 @@ export function OrganisationContainer() {
   }, [organisations, notes, session, clipboard])
   const { state, send, submit, renders, actor } = useScreenMachine('organisation', machine)
   // An administrator sees the members and the invitations sent, and the account the invitations
-  // for it: each is read when it starts to show and after each change made here.
+  // for it: each is read when it starts to show and again each time the flow reads it (`read`).
   const members = useListed(
     (organisation) => organisations.members(organisation),
     admin,

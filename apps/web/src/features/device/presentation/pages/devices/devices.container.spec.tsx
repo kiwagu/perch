@@ -154,6 +154,26 @@ describe('DevicesContainer', () => {
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']])
   })
 
+  it('reads the devices again when a sign-out went through but its answer could not list them', async () => {
+    devices = new FakeDevices()
+
+    await openPage()
+
+    const revoke = devices.revoke.bind(devices)
+
+    // The read the sign-out makes after it fails; the page's own read after it does not.
+    devices.revoke = (id) =>
+      revoke(id).andTee(() => {
+        devices.refusal = offline()
+      })
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+    expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list'], ['list']])
+  })
+
   it('says so when the gateway refuses a sign-out, and reads the list again', async () => {
     devices = new FakeDevices()
 

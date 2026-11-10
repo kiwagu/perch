@@ -14,6 +14,9 @@ export function DevicesContainer() {
   const notify = useNotify()
   const [list, setList] = useState<readonly DeviceView[] | undefined>(undefined)
   const [reads, setReads] = useState(0)
+  // Set when another device's sign-out came back with the devices: the read the flow asks for
+  // after it takes them from that answer.
+  const answered = useRef(false)
   // The shell's `notify` changes when it clears the notice, as the account signs out: the read
   // must not run again for that, and raises through the one taken when it started, which a
   // reply after the sign-out finds spent.
@@ -21,8 +24,7 @@ export function DevicesContainer() {
 
   latestNotify.current = notify
 
-  // The devices are read when the page opens, and again after a sign-out that did not come back
-  // with them.
+  // The devices are read when the page opens, and again each time the flow reads the list.
   useEffect(() => {
     let live = true
     const raise = latestNotify.current
@@ -45,33 +47,40 @@ export function DevicesContainer() {
     }
   }, [devices, reads])
 
-  // Another device's sign-out comes back with the list read again (this device signs out from the
-  // profile). A sign-out that failed reads the list again, unless the gateway is out of reach: a
-  // read would fail too, and its notice would replace the one that says the sign-out failed. Once
-  // the gateway signed every device out, the session has signed this one out too.
+  // Another device's sign-out comes back with the devices when the gateway could read them (this
+  // device signs out from the profile). Once the gateway signed every device out, the session has
+  // signed this one out too.
   const machine = useMemo(
     () =>
       createDevicesMachine({
         revoke: (device) =>
-          devices
-            .revoke({ id: device })
-            .andTee((outcome) => {
-              if (outcome.kind === 'listed') {
-                setList(outcome.devices)
-              } else {
-                setReads((count) => count + 1)
-              }
-            })
-            .orTee((error) => {
-              if (error.code !== 'data:OFFLINE') {
-                setReads((count) => count + 1)
-              }
-            }),
+          devices.revoke({ id: device }).andTee((outcome) => {
+            if (outcome.kind === 'listed') {
+              answered.current = true
+              setList(outcome.devices)
+            }
+          }),
         signOutEverywhere: () => devices.signOutEverywhere(),
       }),
     [devices],
   )
-  const { state, send, renders } = useScreenMachine('device', machine)
+  const { state, send, renders, actor } = useScreenMachine('device', machine)
+
+  // The flow reads the list after a sign-out (none after one that could not reach the gateway):
+  // from the sign-out's answer when it came with the devices, else by reading them again.
+  useEffect(() => {
+    const read = actor.on('read', () => {
+      if (answered.current) {
+        answered.current = false
+
+        return
+      }
+
+      setReads((count) => count + 1)
+    })
+
+    return () => read.unsubscribe()
+  }, [actor])
 
   return (
     <DevicesView
