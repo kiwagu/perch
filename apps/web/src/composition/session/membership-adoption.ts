@@ -31,7 +31,8 @@ export class MembershipAdoption {
 
   /**
    * An adopter for the request made now: bound to the open space, else to the space the start's
-   * open under way produces, once it ended; with neither, no space asked and nothing is adopted.
+   * open under way produces, once it ended, while that space is the asking account's; with
+   * neither, no space asked and nothing is adopted.
    */
   adopter(): MembershipAdopter {
     const host = this.#options.host
@@ -48,7 +49,12 @@ export class MembershipAdoption {
         opening.settled.then(() => {
           const produced = opening.produced()
 
-          return produced ? this.#into(produced, joined) : undefined
+          // The restore's own turn reads the saved identity again: another tab may have signed
+          // another account in meanwhile, whose space it opened instead. Nothing was asked in
+          // that account's name.
+          return produced && produced.space.identity.id === opening.user.id
+            ? this.#into(produced, joined)
+            : undefined
         })
     }
 

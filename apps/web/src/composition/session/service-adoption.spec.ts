@@ -244,6 +244,42 @@ describe('the adopter of a membership the gateway answers', () => {
     expect(session.memberships()).toEqual([acme])
   })
 
+  it("an opening queued behind an earlier transition adopts nothing into another account's space its restore opened", async () => {
+    const { session, storage, open, opened, tenantsOpened } = await annOpeningHeld()
+
+    // Another tab's sign-in reached this tab first: its follow opens Ann's space before the restore does.
+    storage.changeElsewhere(IDENTITY_KEY, storage.get(IDENTITY_KEY))
+    // The follow's turn began: it read Ann and is opening her space, held.
+    await settle()
+
+    const restoring = session.restore()
+    const adopt = session.membershipAdopter()
+
+    expect(session.current()?.id).toBe(ann.identity.id)
+
+    // Another tab signs Bob in while the follow holds the restore's turn; its events are not handled here yet.
+    saveDevice(storage, bob)
+    open()
+
+    expect((await restoring).isOk()).toBe(true)
+    // The follow opened Ann's space; the restore's own turn found Bob saved and opened his instead.
+    expect(opened()).toEqual([ann.identity.id, bob.identity.id])
+    expect(session.space()?.identity.id).toBe(bob.identity.id)
+
+    const replacement = session.space() ?? expect.unreachable("Bob's space is open")
+    const lists = followed(replacement)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(session.memberships()).toEqual([])
+    expect(tenantsOpened()).toEqual([])
+  })
+
   it('an opening whose space did not open adopts nothing and resolves', async () => {
     const storage = kept(ann)
     const { session } = await world({
