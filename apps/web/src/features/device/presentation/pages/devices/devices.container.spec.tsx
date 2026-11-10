@@ -5,9 +5,15 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
-import { identityIdFactory } from '@workspace/ids'
+import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 
-import { FakeDevices, offline, phone, rejected } from '../../../../../platform/__fixtures__/devices'
+import {
+  FakeDevices,
+  laptop,
+  offline,
+  phone,
+  rejected,
+} from '../../../../../platform/__fixtures__/devices'
 import { memoryInstall } from '../../../../../platform/__fixtures__/install'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { memoryTheme } from '../../../../../platform/__fixtures__/theme'
@@ -172,6 +178,56 @@ describe('DevicesContainer', () => {
       await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
     ).toBeTruthy()
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list'], ['list']])
+  })
+
+  it('reads the devices again after a sign-out answered without them, though the one before came with them', async () => {
+    const tablet = {
+      id: device_sessionIdFactory.create(),
+      label: 'Chrome on Android',
+      createdAt: new Date('2026-10-03T12:00:00.000Z'),
+      lastSeenAt: new Date('2026-10-16T18:00:00.000Z'),
+      current: false,
+    }
+
+    devices = new FakeDevices()
+    devices.rows = [laptop, phone, tablet]
+
+    await openPage()
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+
+    const revoke = devices.revoke.bind(devices)
+
+    // The second sign-out goes through, but the read it makes after it fails.
+    devices.revoke = (id) =>
+      revoke(id).andTee(() => {
+        devices.refusal = offline()
+      })
+    await waitFor(async () =>
+      expect(
+        (
+          within(await row(tablet.label)).getByTestId(
+            'device.list.revoke-button',
+          ) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    )
+    fireEvent.click(within(await row(tablet.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(tablet.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+    expect(devices.calls).toEqual([
+      ['list'],
+      ['revoke', phone.id],
+      ['list'],
+      ['revoke', tablet.id],
+      ['list'],
+      ['list'],
+    ])
   })
 
   it('says so when the gateway refuses a sign-out, and reads the list again', async () => {
