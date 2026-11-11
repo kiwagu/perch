@@ -27,6 +27,7 @@ Where: [/console/users] on device A, an operator; device B, another browser, mak
 7. On device A, click [console.users.list.previous-link]
 8. On device A, in [console.users.list.size-select] choose [value:25]
 9. On device A, clear [console.users.search-input] and click [console.users.search-button]
+10. On device A, enter the operator email into [console.users.search-input] and click [console.users.search-button]
 
 ### Expected result
 - After step 1 [app-shell.nav] on device A shows [app-shell.nav.console-link]
@@ -36,4 +37,5 @@ Where: [/console/users] on device A, an operator; device B, another browser, mak
 - After step 6 the page is the same: one [console.users.list.account-item], user 1's, [console.users.list.range] saying 11-11 of 11, and [console.users.search-input] holding the email prefix
 - After step 7 the URL carries the size 10 and no page, and [console.users.list] holds ten [console.users.list.account-item] again
 - After step 8 the URL carries the size 25 and no page, and [console.users.list] holds eleven [console.users.list.account-item] with [console.users.list.range] saying 1-11 of 11
-- After step 9 the URL carries neither the search nor the page, keeps the size 25, and [console.users.list] holds the eleven accounts and the others of the platform, device A's own account among them with its [console.users.list.operator-badge]
+- After step 9 the URL carries neither the search nor the page and keeps the size 25; [console.users.list] holds the platform's newest accounts, at least twelve and at most 25, since the stand's other tests sign accounts up too, and [console.users.list.range] counts from 1 to the number it holds
+- After step 10 [console.users.list] holds one [console.users.list.account-item], device A's own, with its [console.users.list.operator-badge] and its [console.users.list.verified-badge]
