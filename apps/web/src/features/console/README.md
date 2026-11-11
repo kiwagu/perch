@@ -22,6 +22,9 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
   stays out of the address, and `size` is retained across a new search.
 - Route: `/console/account` (roles `operator`, likewise) renders `AccountPage`. Its search: `id`
   (1 to 64 characters), the identity id of the account.
+- Both pages are lazy pages (`LazyPage`): their code (containers, views, machines) loads apart
+  from the first frame, when an operator first opens one of them, never for any other device; the
+  routes, their search schemas (`domain/`) and the service stay in the first frame.
 - No shapes or commands: the rows come from `GET /console/accounts?q&page&size` (each account's
   identity id, name, email, verified, banned, operator and when it was made, with how many the
   search finds in all), an account from `GET /console/accounts/:id`, and the actions are
@@ -75,5 +78,6 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
 - `bun run test` in `apps/web` runs this module's specs (`account-search.entity.spec.ts`,
   `account-card.entity.spec.ts`, `accounts.service.spec.ts`, `users.machine.spec.ts`,
   `account-machine/machine.spec.ts`, `users.view.spec.tsx`, `users.container.spec.tsx`,
-  `account.view.spec.tsx`, `account.container.spec.tsx`, `console.module.spec.ts`).
+  `account.view.spec.tsx`, `account.container.spec.tsx`, `console.module.spec.ts`,
+  `console-pages.spec.ts`).
 - `bun run i18n:check` checks its keys against the catalogs.

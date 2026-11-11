@@ -5,6 +5,8 @@
  * whichever applies. After its guard, a page opens only for a device that holds one of its
  * `roles` (`admits`, the roles read by `heldBy`); any other device gets the not-found page (the
  * page of the module route at `/$`) in its place, at the same address, its search never read.
+ * A lazy page's code (`LazyPage`) loads once its route admits the device, never before, the frame
+ * shown meanwhile with the page's place empty.
  * A page left open when the account changes is checked again: a
  * protected one sends a visitor who signed out (here or in another tab) to sign-in, a
  * guest one sends a user another tab signed in to the profile. A sign-in of this tab's
@@ -34,6 +36,7 @@ import { admits } from '@workspace/ui-contract/anchors'
 import { z } from '@workspace/zod'
 
 import { heldBy } from './held-roles'
+import { lazyComponent } from './lazy-page'
 import { type ModuleDef, ModuleScope, type RouteDef } from './module'
 import { NOT_FOUND_PATH, resolvedRoute } from './resolved-route'
 import type { SessionPort } from './session.port'
@@ -77,12 +80,44 @@ export interface AppRouterOptions {
 }
 
 /** A page that resolves services from its own module before the application's. */
-function scopedPage(module: ModuleDef, route: RouteDef): FunctionComponent {
-  const Page = module.declarations[route.page]
-
+function inScope(module: ModuleDef, Page: FunctionComponent | undefined): FunctionComponent {
   return function ScopedPage() {
     return <ModuleScope module={module}>{Page ? <Page /> : null}</ModuleScope>
   }
+}
+
+/** What a lazy page's place shows while its code loads: nothing, the frame around it staying. */
+const NOTHING_YET: FunctionComponent = () => null
+
+/**
+ * The route options of a module's page: its component, and for a lazy page the load of its code,
+ * which the router runs once the route admits the device and before it renders the page. Until
+ * the code is in, the frame shows at once with the page's place empty: without a pending page the
+ * router shows nothing, the frame included, where the page opens afresh.
+ */
+function pageOptions(
+  module: ModuleDef,
+  route: RouteDef,
+): {
+  readonly component: FunctionComponent
+  readonly pendingComponent?: FunctionComponent
+  readonly pendingMs?: number
+  readonly pendingMinMs?: number
+} {
+  const declared = module.declarations[route.page]
+
+  if (declared !== undefined && typeof declared !== 'function') {
+    const Page = lazyComponent(declared)
+
+    return {
+      component: Object.assign(inScope(module, Page), { preload: Page.preload }),
+      pendingComponent: NOTHING_YET,
+      pendingMs: 0,
+      pendingMinMs: 0,
+    }
+  }
+
+  return { component: inScope(module, declared) }
 }
 
 /** The page of the module route at `/$`, which a page shows in its place for a device it refuses. */
@@ -91,7 +126,7 @@ function notFoundPage(modules: readonly ModuleDef[]): FunctionComponent | undefi
     const route = module.routes.find(({ path }) => path === NOT_FOUND_PATH)
 
     if (route !== undefined) {
-      return scopedPage(module, route)
+      return pageOptions(module, route).component
     }
   }
 
@@ -174,7 +209,7 @@ export function createAppRouter(options: AppRouterOptions) {
       createRoute({
         getParentRoute: () => root,
         path: route.path,
-        component: scopedPage(module, route),
+        ...pageOptions(module, route),
         beforeLoad: admission(route),
         ...(lost ? { notFoundComponent: lost } : {}),
         ...(options.crash ? { errorComponent: options.crash } : {}),

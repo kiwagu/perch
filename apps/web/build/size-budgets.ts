@@ -31,7 +31,7 @@ export interface SizeBudgets {
 }
 
 export const SIZE_BUDGETS: SizeBudgets = {
-  firstFrame: 315 * KB,
+  firstFrame: 310 * KB,
   lazyScript: 100 * KB,
   wasm: [
     { engine: 'SurrealDB', file: /^index_bg-[\w-]+\.wasm$/, budget: 5.2 * MB },

@@ -300,8 +300,11 @@ modeling stage.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
-  from module routes (each page inside its module's scope; after its guard a page opens only for
-  a device holding one of its `roles`, its binding's, read by `held-roles.ts` as the UI contract's
+  from module routes (each page inside its module's scope; a page declared as a `LazyPage` has
+  its code loaded, once, when its route first admits the device, never for one it refuses, the
+  frame shown meanwhile with the page's place empty, `lazy-page.tsx`; after its guard a page
+  opens only for a device holding one of its `roles`, its binding's, read by `held-roles.ts` as
+  the UI contract's
   `heldRoles`: `guest`, or `identity` with the role in the organisation current and the account's
   platform roles; any other device gets the page of the module route at `/$` in its place at the
   same address, its search never read, which the frame names and marks as the not-found screen,
@@ -470,9 +473,11 @@ gateway does, which leaves a stand that already has it alone. `openStandTenant()
   contract check passes, with its schema and the model's beside it, which the stands serve at
   `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper. A production
   build fails over its size budgets (`build/size-budgets.ts`, gzipped): the first frame (the
-  page, the scripts and styles it names, its Basic Latin font) 315 kB, each lazy script 100 kB,
+  page, the scripts and styles it names, its Basic Latin font) 310 kB, each lazy script 100 kB,
   the SurrealDB WASM 5.2 MB and the Loro WASM 1.2 MB, and a WASM module without a budget fails
-  it too; otherwise it prints how close it came.
+  it too; otherwise it prints how close it came. Every module the start loads statically goes
+  into one chunk (`first-frame`, `vite.config.ts`), so a lazy script that shares modules with the
+  start never splits them into common chunks loaded with it.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.
