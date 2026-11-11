@@ -86,7 +86,10 @@ const askPastTheLimit = {
   params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
 } as const
 
-/** A refused sign-in: one of an email not verified yet offers the resend, any other goes back. */
+/**
+ * A refused sign-in: one of an email not verified yet offers the resend, any other goes back with
+ * its code, a banned account's (`account-banned`) among them: no resend is offered for it.
+ */
 const refusedSignIn = [
   {
     target: 'unverified',
@@ -95,7 +98,9 @@ const refusedSignIn = [
   },
   {
     target: 'sign-in',
-    actions: [showError('invalid-credentials', 'rate-limited', 'other-account', 'failed')],
+    actions: [
+      showError('invalid-credentials', 'account-banned', 'rate-limited', 'other-account', 'failed'),
+    ],
   },
 ] as const
 

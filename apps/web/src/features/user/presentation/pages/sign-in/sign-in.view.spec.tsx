@@ -487,6 +487,24 @@ describe('SignInView', () => {
     )
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, offering no resend',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const error = screen.getByTestId('user.sign-in.error')
+
+      expect(error.getAttribute('data-code')).toBe('account-banned')
+      expect(error.textContent).toBe(texts['user.sign-in.error.account-banned'])
+      expect(error.textContent).not.toBe(texts['user.sign-in.error.email-not-verified'])
+      expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+      expect(screen.queryByTestId('user.sign-in.notice-message')).toBeNull()
+    },
+  )
+
   it('asks to open the link of the mail sent to the address it went to, whatever the field holds', () => {
     renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' })
     type('user.sign-in.email-input', 'bob@example.test')

@@ -91,6 +91,8 @@ export interface SessionPort {
    * Signs this device in to the account of `input`. A sign-in that finds the account signed in on
    * as many devices as it may be at once signs nothing in and fails as `data:DEVICE_LIMIT`, unless
    * `input.signOutOldest` confirms it, which signs out the account's device seen least recently.
+   * An account an operator banned fails as `data:ACCOUNT_BANNED` once its password is right,
+   * nothing signed in.
    */
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
@@ -98,8 +100,9 @@ export interface SessionPort {
    * and signs this device in, as a sign-in does (one at a time with the browser's other sign-ins,
    * refused as `data:OTHER_ACCOUNT` when another account is signed in on this browser by the time
    * the gateway answered, whose new session is then signed out); a link verified before signs
-   * nothing in and changes nothing. A link the gateway refuses fails as `data:LINK_EXPIRED` (past
-   * its lifetime) or `data:LINK_INVALID`.
+   * nothing in and changes nothing. The link of an account an operator banned verifies its email,
+   * signs nothing in and fails as `data:ACCOUNT_BANNED`. A link the gateway refuses fails as
+   * `data:LINK_EXPIRED` (past its lifetime) or `data:LINK_INVALID`.
    */
   verifyEmail(token: string): ResultAsync<EmailVerified, DataError>
   /**

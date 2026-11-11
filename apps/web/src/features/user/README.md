@@ -186,6 +186,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   (`user.sign-in.resend-button`), the message naming the address the last sign-up or resend
   mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
+  a sign-in of an account an operator banned, once its password is right, says so
+  (`data:ACCOUNT_BANNED`, `user.sign-in.error` with the code `account-banned`, the gateway's 403
+  that names it), signs nothing in, keeps the form in the mode sign-in with the email typed and
+  offers no resend;
   a sign-in that finds the account signed in on as many devices as it may be at once
   (`data:DEVICE_LIMIT`, which `SignInService` answers as the outcome `device-limit`) signs nothing
   in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
@@ -194,7 +198,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to
-  sign in (`user.verify-email.message`, code `verified-before`), and for a link that does not
+  sign in (`user.verify-email.message`, code `verified-before`), says the link of an account an
+  operator banned verified its email and signed nothing in (`data:ACCOUNT_BANNED`,
+  `user.verify-email.error` with the code `account-banned`, the machine's final state `banned`:
+  no form, no new link, no move), and for a link that does not
   verify says why (`user.verify-email.error`: `link-invalid`, `link-expired`, `other-account`,
   `rate-limited`, `failed`) and sends a new one to the email typed (`user.verify-email.form`),
   saying it is on its way to the address it went to (code `check-your-mail`), which typing in the

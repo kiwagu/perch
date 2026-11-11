@@ -223,6 +223,23 @@ describe('VerifyEmailContainer', () => {
     )
   })
 
+  it('says the link of a banned account verified the email and signed nothing in: no form, no welcome, no move', async () => {
+    const { service, started } = verifying([
+      () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    ])
+    const { router } = renderPage(service)
+
+    expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
+      'account-banned',
+    )
+    expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    expect(router.state.location.pathname).toBe('/verify-email')
+    expect(noticeCode()).toBeUndefined()
+    expect(started).toEqual([])
+  })
+
   it('exchanges an empty token when the address carries none', async () => {
     const { service, exchange } = verifying([
       () => errAsync({ code: 'data:LINK_INVALID', message: 'the link carries no token' }),

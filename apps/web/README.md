@@ -35,7 +35,8 @@ modeling stage.
   client over `POST /backend/auth/sign-in/email` on the page's own origin, the device in
   `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
   answer's body, never the signed one of its `set-auth-token` header; a 401 is
-  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
+  `data:INVALID_CREDENTIALS`, a 403 `data:ACCOUNT_BANNED` when its body names `account-banned` and
+  else `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
   account is signed in on as many devices as it may be: nothing is signed in, and the sign-in page
   asks before it signs in all the same with `signOutOldest`, which signs out the account's device
   seen least recently), a 429 `data:RATE_LIMITED`, and the
@@ -47,8 +48,9 @@ modeling stage.
   kept and opened as a sign-in, and answered with the account's name and its sign-up language; as a link
   names no email, another account saved on the browser refuses it (`data:OTHER_ACCOUNT`) only
   once the gateway answered, and its new token is left to sign out. A link verified before signs
-  nothing in (`verified-before`), and a refused one fails as `data:LINK_EXPIRED` or
-  `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
+  nothing in (`verified-before`), the link of an account an operator banned verifies its email,
+  signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`), and a
+  refused one fails as `data:LINK_EXPIRED` or `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
   this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
   start is kept in `perch.session.account-start` (the identity, the name and the sign-up
   language) until its settings (in that language and the theme the device shows as it creates

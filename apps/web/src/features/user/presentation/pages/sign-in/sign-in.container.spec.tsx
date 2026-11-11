@@ -393,6 +393,29 @@ describe('SignInContainer', () => {
     expect(router.state.location.pathname).toBe('/sign-in')
   })
 
+  it('tells a banned account it cannot sign in, offering no resend, keeping the email typed', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'Pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('account-banned')
+    expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+    expect(screen.getByTestId('user.sign-in.email-input').getAttribute('value')).toBe(ann.email)
+    expect(router.state.location.pathname).toBe('/sign-in')
+  })
+
   it('keeps the mode sign-up while the sign-up runs and once it is refused, and goes back to sign-in on the toggle', async () => {
     let refuse: () => void = () => {}
     const session: SessionPort = {
