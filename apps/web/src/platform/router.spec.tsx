@@ -34,6 +34,8 @@ const TestModule = defineModule({
   declarations: { Page },
   routes: [
     { path: '/sign-in', page: 'Page', guard: 'guest', roles: ['guest'] },
+    { path: '/verify-email', page: 'Page', guard: 'guest', roles: ['guest'] },
+    { path: '/forgot-password', page: 'Page', guard: 'guest', roles: ['guest'] },
     { path: '/me', page: 'Page', guard: 'authenticated', roles: ['identity'] },
   ],
 })
@@ -273,6 +275,25 @@ describe('createAppRouter', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
 
     expect(router.state.location.pathname).toBe('/sign-in')
+  })
+
+  it("leaves a verification link's page where it is too while its exchange signs this tab in", async () => {
+    const { session, signIn } = switching(undefined)
+    const router = await loaded('/verify-email', session)
+
+    signIn(me, true, { roles: ['operator'], tenant: 'admin' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(router.state.location.pathname).toBe('/verify-email')
+  })
+
+  it('sends any other guest page open meanwhile to the profile: only the page that signs in has a flow to follow', async () => {
+    const { session, signIn } = switching(undefined)
+    const router = await loaded('/forgot-password', session)
+
+    signIn(me, true)
+
+    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/me'))
   })
 
   it('opens the right start page', async () => {
@@ -534,6 +555,26 @@ describe('a page for some roles alone', () => {
 
     act(() => join(undefined))
     await showing(router, '/members', 'no page here')
+  })
+
+  it("checks it again when a sign-in of this tab's own brings its roles, no other page's flow to follow", async () => {
+    const { session, signIn } = switching(undefined)
+    const router = limitedAt('/limited?page=2', session)
+
+    await showing(router, '/limited?page=2', 'no page here')
+
+    act(() => signIn(me, true, { roles: ['operator'] }))
+    await showing(router, '/limited?page=2', "the operator's page")
+  })
+
+  it("checks it again at a search it refuses when a sign-in of this tab's own brings its roles: the search error", async () => {
+    const { session, signIn } = switching(undefined)
+    const router = limitedAt('/limited?page=0', session)
+
+    await showing(router, '/limited?page=0', 'no page here')
+
+    act(() => signIn(me, true, { roles: ['operator'] }))
+    await showing(router, '/limited?page=0', 'the page failed')
   })
 
   it('shows the not-found page at the address once the account signs out', async () => {

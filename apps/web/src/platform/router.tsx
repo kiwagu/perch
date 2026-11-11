@@ -8,7 +8,8 @@
  * A page left open when the account changes is checked again: a
  * protected one sends a visitor who signed out (here or in another tab) to sign-in, a
  * guest one sends a user another tab signed in to the profile. A sign-in of this tab's
- * own is left to the page that started it, which goes on by its flow (its welcome). It is
+ * own leaves a page that signs in (the sign-in page, a verification link's) to its flow (its
+ * welcome); any other page open meanwhile is checked at once. It is
  * checked again as well when the roles the device holds change (the platform roles read anew,
  * another organisation or another role in it): it opens, or turns into the not-found page, where
  * it is. A route's `search` schema validates the URL's search, for a device the page serves (a
@@ -34,12 +35,18 @@ import { z } from '@workspace/zod'
 
 import { heldBy } from './held-roles'
 import { type ModuleDef, ModuleScope, type RouteDef } from './module'
-import { NOT_FOUND_PATH } from './resolved-route'
+import { NOT_FOUND_PATH, resolvedRoute } from './resolved-route'
 import type { SessionPort } from './session.port'
 
 export const SIGN_IN_PATH = '/sign-in'
 
 export const HOME_PATH = '/me'
+
+/**
+ * The pages whose own flow signs this tab in, the sign-in page and the one a verification link
+ * opens: each moves on by itself once its sign-in went through, after its welcome.
+ */
+const SIGNING_IN_PAGES: ReadonlySet<string> = new Set([SIGN_IN_PATH, '/verify-email'])
 
 /**
  * What of the session the router reads: who is signed in, whether this tab signs one in itself
@@ -184,19 +191,27 @@ export function createAppRouter(options: AppRouterOptions) {
   const heldNow = () => [...heldBy(options.session)].sort().join(' ')
   let held = heldNow()
 
+  // Whether the open page is left to its flow: one of the pages that sign in, while this tab signs
+  // an account in itself. Any other page open meanwhile has no flow to follow it.
+  const leftToItsFlow = () => {
+    const open = resolvedRoute(router.state)
+
+    return open !== undefined && SIGNING_IN_PAGES.has(open) && options.session.signingInHere()
+  }
+
   // The router lives as long as the page, so it never stops listening. Every change of the account
-  // checks the open page again, but the appearance of one this tab is signing in itself: the page
-  // that signs it in moves on by its flow, after its welcome.
+  // checks the open page again, but the appearance of one this tab is signing in itself on a page
+  // that signs in: that page moves on by its flow, after its welcome.
   options.session.subscribe((user) => {
     held = heldNow()
 
-    if (user === undefined || !options.session.signingInHere()) {
+    if (user === undefined || !leftToItsFlow()) {
       void router.invalidate()
     }
   })
 
-  // So does every change of the roles the device holds, but one read while this tab signs an
-  // account in itself, which that page's flow follows as well.
+  // So does every change of the roles the device holds, but one read while such a page signs an
+  // account in, which its flow follows as well.
   const recheck = () => {
     const now = heldNow()
 
@@ -206,7 +221,7 @@ export function createAppRouter(options: AppRouterOptions) {
 
     held = now
 
-    if (!options.session.signingInHere()) {
+    if (!leftToItsFlow()) {
       void router.invalidate()
     }
   }

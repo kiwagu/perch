@@ -300,8 +300,9 @@ modeling stage.
   `resolved-route.ts`; a page left open is checked again
   whenever the account changes: a protected page sends one signed out to sign-in, a guest page
   one another tab signed in to the profile, while a sign-in of this tab's own,
-  `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
-  welcome; and whenever the roles the device holds change, outside such a sign-in), the ports for the session (with the memberships, the current organisation and the
+  `SessionPort.signingInHere()`, leaves a page that signs in (the sign-in page, a verification
+  link's) to its flow, which goes on to its welcome, any other page open meanwhile checked at
+  once; and whenever the roles the device holds change, outside such a sign-in on such a page), the ports for the session (with the memberships, the current organisation and the
   account's platform roles), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
