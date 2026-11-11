@@ -41,6 +41,8 @@ one long-lived connection to the directory there), `GATEWAY_SURREAL_USER`,
 variable stops the gateway with an issue that names it, never its value. `scripts/smoke/cli.ts`
 is the entry point of the smoke test against a stand (the folder `scripts/smoke/`: the run, one
 module per path of steps, the HTTP helpers the load test reuses).
+`scripts/operator/cli.ts` is the host command that appoints operators
+(`bun run operator -- grant <email>`, `revoke <email>`; [its README](scripts/operator/README.md)).
 
 Auth secret and public origin: `GATEWAY_AUTH_SECRET` is the secret Better Auth signs and
 encrypts with, required, with no default and at least 32 characters: generate one with
