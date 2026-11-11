@@ -12,7 +12,8 @@
  * its route, so only the bindings the app has a route for are walked, each as the contract says
  * it now, or as it had it at the branch's merge base with `main` (`CONTRACT_AHEAD_BASE`) while
  * the route still equals that one (`heldTo` of `__fixtures__/route-bindings.ts`); `bun run
- * check` and `main` walk every binding as it is now.
+ * check` and `main` walk every binding as it is now. Each binding is walked on a router over a
+ * device that holds the roles it serves: a device it refuses never has its search read.
  */
 
 import { join } from 'node:path'
@@ -262,7 +263,12 @@ const bindings: readonly (readonly [string, Binding])[] = heldBindings(
   allModules(modules).flatMap((module) => module.routes),
   'bindings' in AT_BASE ? AT_BASE.bindings : [],
 ).map(({ binding }) => [binding.path, binding] as const)
-const router = routerOf(modules)
+/**
+ * The application's router over a device that holds the roles a binding serves, which its route
+ * admits: a refused device's search is never read (`router.tsx`), so each binding is walked as
+ * a device it serves.
+ */
+const routerFor = (binding: Binding): AppRouter => routerOf(modules, binding.roles)
 
 const Page = () => null
 
@@ -596,14 +602,14 @@ describe('the bindings of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s matches its route again with its parameters',
     ([, binding], { skip }) => {
-      roundTrip(router, binding, skip)
+      roundTrip(routerFor(binding), binding, skip)
     },
   )
 
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s declares the path parameters the router reports',
     ([path, binding], { skip }) => {
-      const names = parameterNames(router, binding)
+      const names = parameterNames(routerFor(binding), binding)
 
       // A splat is declared by its `$` alone: a `params` property cannot be named `_splat`.
       expect(names.declared, `the params ${path} declares`).toEqual(
@@ -621,7 +627,7 @@ describe('the bindings of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s builds its search and reads it back with the defaults',
     ([, binding], { skip }) => {
-      searchCase(router, binding, skip)
+      searchCase(routerFor(binding), binding, skip)
     },
   )
 })

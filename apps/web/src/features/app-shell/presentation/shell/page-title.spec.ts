@@ -17,6 +17,11 @@ describe('pageTitle', () => {
     expect(pageTitle('/$', english)).toBe('Page not found · Perch')
   })
 
+  it("names the operator's page of the platform's accounts", () => {
+    expect(pageTitle('/console/users', english)).toBe('Accounts · Perch')
+    expect(pageTitle('/console/users', spanish)).toBe('Cuentas · Perch')
+  })
+
   it('names only the app where no screen is open', () => {
     expect(pageTitle(undefined, english)).toBe('Perch')
     expect(pageTitle('/', english)).toBe('Perch')

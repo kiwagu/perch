@@ -350,6 +350,14 @@ export class SessionService implements SessionPort {
   }
 
   /**
+   * The gateway refused `identity` a request for want of `role` (a console call's `not-operator`):
+   * the role goes from that identity's record, whichever identity is shown now.
+   */
+  dropRole(identity: IdentityId, role: PlatformRole): void {
+    this.#roles.drop(identity, role)
+  }
+
+  /**
    * An adopter for a membership the gateway is about to answer (an organisation created, an
    * invitation accepted), taken before the request: it adopts only into the space open now, or
    * into the one the start's open under way produces; see `MembershipAdoption`.

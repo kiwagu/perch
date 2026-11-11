@@ -17,6 +17,7 @@ import { lockName, syncHints } from '@workspace/replica/sync'
 
 import type { Theme } from '../platform/theme'
 
+import { accountsApi } from './accounts-api'
 import { browserClipboard } from './browser-clipboard'
 import { openOneAtATime } from './database-open-lock'
 import { deviceLabel } from './device-label'
@@ -164,6 +165,7 @@ export function bootBrowser(
       organisationsApi: (deps) => organisationsApi(`${origin}/backend`, deps),
       devicesApi: (deps) => devicesApi(`${origin}/backend`, deps),
       invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
+      accountsApi: (deps) => accountsApi(`${origin}/backend`, deps),
       // Undefined in a page that is not a secure context: a copy then fails and says so.
       clipboard: browserClipboard(navigator.clipboard),
       transport: syncTransport({

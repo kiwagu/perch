@@ -28,6 +28,7 @@ import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell-machine'
+import { createUsersMachine } from '../features/console/application/users.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createInvitationMachine } from '../features/organisation/application/invitation.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation-machine'
@@ -78,6 +79,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
     }),
+  'console.users': () => createUsersMachine(),
   device: () =>
     createDevicesMachine({
       revoke: () => okAsync(undefined),

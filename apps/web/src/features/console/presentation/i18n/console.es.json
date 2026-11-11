@@ -1,0 +1,19 @@
+{
+  "console.users.heading": "Cuentas",
+  "console.users.search": "Buscar",
+  "console.users.search-button": "Buscar",
+  "console.users.list.loading": "Leyendo las cuentas…",
+  "console.users.list.empty": "Ninguna cuenta coincide con la búsqueda.",
+  "console.users.list.range": "{from}-{to} de {total}",
+  "console.users.list.range-none": "0 de {total}",
+  "console.users.list.size": "Filas por página",
+  "console.users.list.previous": "Anterior",
+  "console.users.list.next": "Siguiente",
+  "console.users.list.created": "Creada {when}",
+  "console.users.list.verified": "Verificada",
+  "console.users.list.banned": "Bloqueada",
+  "console.users.list.operator": "Operador",
+  "console.users.list.open": "Abrir",
+  "console.users.error.not-operator": "Solo un operador de la plataforma ve sus cuentas.",
+  "console.users.error.failed": "No se pudieron leer las cuentas. Comprueba tu conexión e inténtalo de nuevo."
+}

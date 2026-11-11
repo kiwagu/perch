@@ -242,6 +242,35 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     await settle()
   })
 
+  it('drops a role from the record of the identity a refusal names, and every tab hears it', async () => {
+    const { a, b, storageA } = await annInTwoTabs()
+
+    welcomed(a, ['operator'])
+    await vi.waitFor(() => expect([...b.session.roles()]).toEqual(['operator']))
+
+    const heardA = rolesHeard(a.session)
+    const heardB = rolesHeard(b.session)
+
+    b.session.dropRole(ann.identity.id, 'operator')
+
+    expect(savedRoles(storageA, ann.identity.id)).toEqual([])
+    expect(b.session.roles().size).toBe(0)
+    expect(heardB).toEqual([[]])
+    await vi.waitFor(() => expect(heardA).toEqual([[]]))
+    expect(a.session.roles().size).toBe(0)
+  })
+
+  it('drops nothing of the identity shown for a refusal of another identity, and creates no record', async () => {
+    const { a, storageA } = await annInTwoTabs()
+
+    welcomed(a, ['operator'])
+    a.session.dropRole(bob.identity.id, 'operator')
+
+    expect(savedRoles(storageA, ann.identity.id)).toEqual(['operator'])
+    expect([...a.session.roles()]).toEqual(['operator'])
+    expect(storageA.get(rolesKeyOf(bob.identity.id))).toBeUndefined()
+  })
+
   it("never reads another identity's record as the signed-in identity's", async () => {
     const { b, storageB } = await annInTwoTabs()
     const heard = rolesHeard(b.session)

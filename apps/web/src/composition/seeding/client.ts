@@ -29,6 +29,7 @@ import {
 } from '../../features/user/application/settings/settings.service'
 import { UserModule } from '../../features/user/user.module'
 import { INVITATIONS } from '../../platform/invitations.port'
+import { accountsApi } from '../accounts-api'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
@@ -199,6 +200,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
+    accountsApi: (deps) => accountsApi(options.gatewayUrl, { ...deps, fetcher }),
     transport: syncTransport({ url: gatewaySyncUrl(options.gatewayUrl), clock: systemClock }),
     locks: soleDevice,
     hints: () => syncHints(undefined),

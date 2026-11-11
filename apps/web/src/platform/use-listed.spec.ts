@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { renderHook, waitFor } from '@testing-library/react'
-import { errAsync, okAsync } from 'neverthrow'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { useListed } from './use-listed'
@@ -97,5 +97,98 @@ describe('useListed', () => {
     rerender({ scope: undefined })
 
     expect(result.current).toEqual({ list: undefined, failure: undefined })
+  })
+})
+
+/** A paged list's source as a screen writes it: `q` from the search, the page and its size. */
+const PAGED = { params: { q: { search: 'q' } }, paged: true }
+
+/** A read of `search` that settles when the test says, with the search it was read for. */
+function deferredReads() {
+  const pending: Array<{
+    readonly search: Readonly<Record<string, unknown>>
+    readonly settle: () => void
+  }> = []
+  const read = (search: Readonly<Record<string, unknown>>) =>
+    ResultAsync.fromSafePromise(
+      new Promise<string>((resolve) => {
+        pending.push({ search, settle: () => resolve(JSON.stringify(search)) })
+      }),
+    )
+
+  return { pending, read }
+}
+
+describe('useListed scoped by the search', () => {
+  it("reads again for each new value of a search key its source reads, and for no other key's", async () => {
+    const read = vi.fn((search: Readonly<Record<string, unknown>>) =>
+      okAsync(`${String(search['q'])}-${String(search['page'])}`),
+    )
+    const { result, rerender } = renderHook(
+      ({ search }: { search: Readonly<Record<string, unknown>> }) =>
+        useListed(() => read(search), 'ann', 0, { source: PAGED, search }),
+      { initialProps: { search: { q: 'ann', page: 1, size: 25 } as Record<string, unknown> } },
+    )
+
+    await waitFor(() => expect(result.current.list).toBe('ann-1'))
+
+    rerender({ search: { q: 'ann', page: 2, size: 25 } })
+
+    await waitFor(() => expect(result.current.list).toBe('ann-2'))
+
+    rerender({ search: { q: 'ann', page: 2, size: 25, view: 'compact' } })
+
+    expect(read).toHaveBeenCalledTimes(2)
+    expect(result.current.list).toBe('ann-2')
+  })
+
+  it('shows nothing of the earlier search until the new one is read', async () => {
+    const { pending, read } = deferredReads()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: Readonly<Record<string, unknown>> }) =>
+        useListed(() => read(search), 'ann', 0, { source: PAGED, search }),
+      { initialProps: { search: { q: 'ann', page: 1, size: 25 } as Record<string, unknown> } },
+    )
+
+    act(() => pending[0]?.settle())
+    await waitFor(() => expect(result.current.list).toBeDefined())
+
+    rerender({ search: { q: 'bob', page: 1, size: 25 } })
+
+    expect(result.current).toEqual({ list: undefined, failure: undefined })
+
+    act(() => pending[1]?.settle())
+
+    await waitFor(() =>
+      expect(result.current.list).toBe(JSON.stringify({ q: 'bob', page: 1, size: 25 })),
+    )
+  })
+
+  it('drops a read whose search changed before it settled: its answer is shown nowhere', async () => {
+    const { pending, read } = deferredReads()
+    const { result, rerender } = renderHook(
+      ({ search }: { search: Readonly<Record<string, unknown>> }) =>
+        useListed(() => read(search), 'ann', 0, { source: PAGED, search }),
+      { initialProps: { search: { q: 'ann', page: 1, size: 25 } as Record<string, unknown> } },
+    )
+
+    rerender({ search: { q: 'ann', page: 1, size: 10 } })
+
+    const [first, second] = pending
+
+    await act(async () => {
+      second?.settle()
+      await Promise.resolve()
+    })
+    await waitFor(() =>
+      expect(result.current.list).toBe(JSON.stringify({ q: 'ann', page: 1, size: 10 })),
+    )
+
+    await act(async () => {
+      first?.settle()
+      await Promise.resolve()
+    })
+
+    expect(result.current.list).toBe(JSON.stringify({ q: 'ann', page: 1, size: 10 }))
   })
 })

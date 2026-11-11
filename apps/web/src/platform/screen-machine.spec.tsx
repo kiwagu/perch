@@ -18,6 +18,7 @@ type Event =
   | { readonly type: 'x.nothing-button' }
   | { readonly type: 'x.leave-button' }
   | { readonly type: 'x.carry-link'; readonly fields: { readonly 'x.y.email-input': string } }
+  | { readonly type: 'x.list.open-link'; readonly items: { readonly 'x.list.thing-item': string } }
   | { readonly type: 'user.profile.sign-out-button' }
   | { readonly type: 'organisation.notes.delete-button' }
   | { readonly type: 'x.finish-button' }
@@ -38,6 +39,7 @@ const machine = setup({
       to: string
       search?: Readonly<Record<string, unknown>>
       fields?: Readonly<Record<string, string>>
+      items?: Readonly<Record<string, string>>
     },
   },
   actors: {
@@ -63,6 +65,14 @@ const machine = setup({
             to: '/there',
             search: { email: { anchor: 'x.y.email-input' }, view: 'read' },
             fields: event.type === 'x.carry-link' ? event.fields : {},
+          })),
+        },
+        'x.list.open-link': {
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { id: { item: 'x.list.thing-item' }, view: 'read' },
+            items: event.type === 'x.list.open-link' ? event.items : {},
           })),
         },
         'user.profile.sign-out-button': 'out',
@@ -410,6 +420,15 @@ describe('useScreenMachine', () => {
 
     await screen.findByText('there')
     expect(router.state.location.search).toEqual({ email: 'ann@example.test', view: 'read' })
+  })
+
+  it('moves with the id of the entry the moving event acted in, never the anchor of its item', async () => {
+    const { router, running } = await open(passing())
+
+    act(() => running.send({ type: 'x.list.open-link', items: { 'x.list.thing-item': 'thg_1' } }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ id: 'thg_1', view: 'read' })
   })
 
   it("brings a platform event to the machine, which moves with what the screen's field holds", async () => {

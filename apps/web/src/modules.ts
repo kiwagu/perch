@@ -1,3 +1,4 @@
+import { ConsoleModule } from './features/console/console.module'
 import { DeviceModule } from './features/device/device.module'
 import { NotFoundModule } from './features/not-found/not-found.module'
 import { OrganisationModule } from './features/organisation/organisation.module'
@@ -9,5 +10,6 @@ export const modules: readonly ModuleDef[] = [
   UserModule,
   OrganisationModule,
   DeviceModule,
+  ConsoleModule,
   NotFoundModule,
 ]

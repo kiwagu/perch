@@ -179,7 +179,13 @@ modeling stage.
   adopted, so the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
-  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. One tab per browser leads the
+  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. `accountsApi` is the `ACCOUNTS`
+  port over the console routes `GET /console/accounts?q&page&size` and
+  `GET /console/accounts/:id`, for an operator: each request reads the tab's credentials once as
+  it starts (the identity it shows and the token saved for it), each answer is parsed and each
+  refusal is a code of its action (`failed` for any other), and a `not-operator` takes
+  `operator` off the roles saved for that identity (`SessionService.dropRole`), whichever
+  identity is shown by then. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`, its hello presenting the session token) for the private region and every
   organisation's; the tabs hint each other over a BroadcastChannel, so each reads what the others
@@ -364,7 +370,8 @@ modeling stage.
   (`useScreenMachine(screen, machine)`, `screen` the id of the contract's screen whose flow
   it runs: the flow's `navigate` effects pass the guard, their search
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
-  field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
+  field left out, and each `{ item: <item> }` from its `items`, the id of the entry acted in
+  (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
@@ -391,7 +398,15 @@ modeling stage.
   (`SessionPort.dropNotice`), however late it is heard, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
-  opened, read once, so the field then holds what is typed).
+  opened, read once, so the field then holds what is typed), and `search-value.ts` one that
+  follows the address (`useSearchValue(name)`: the value again each time the route's search
+  changes, what was typed meanwhile dropped); `use-listed.ts` is a list read from the platform
+  (`useListed(read, scope, changed, { source, search })`: read when it shows, when the flow
+  reads it, and when its scope or a search key its source reads changes, a read for an earlier
+  one dropped), and `page-moves.ts` the moves of a paged list's parts (`usePageMoves(search,
+  defaultSize)`: the address of a page and the move there, the search and the size kept, and the
+  move to the first page of a size chosen, which writes that size as it is, the default included,
+  so the router's strip takes a default out and its `retain` never gives an earlier size back).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
@@ -400,6 +415,8 @@ modeling stage.
     shared notes of the tenant region.
   - [device](src/features/device/README.md): My devices, signing one device or every one
     out.
+  - [console](src/features/console/README.md): the operator's console of the platform's
+    accounts.
 
 ## Key exports
 

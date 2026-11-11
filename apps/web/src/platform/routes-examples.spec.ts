@@ -12,6 +12,7 @@
  * contract says it now, or as it had it at the branch's merge base with `main`
  * (`CONTRACT_AHEAD_BASE`) while the route still equals that one (`heldTo` of
  * `__fixtures__/route-bindings.ts`); `bun run check` and `main` hold every binding as it is now.
+ * Each example is read on a router over a device that holds the roles its binding serves.
  */
 
 import { join } from 'node:path'
@@ -194,6 +195,12 @@ const bindings: readonly (readonly [string, Binding])[] = heldBindings(
 ).map(({ binding }) => [binding.path, binding] as const)
 const router = routerOf(modules)
 
+/**
+ * The application's router over a device that holds the roles a binding serves, which its route
+ * admits: a refused device's search is never read (`router.tsx`).
+ */
+const routerFor = (binding: Binding): AppRouter => routerOf(modules, binding.roles)
+
 describe('the example links of the contract on the router', () => {
   it('read a contract without problems', () => {
     expect(problems.map(formatProblem)).toEqual([])
@@ -208,7 +215,7 @@ describe('the example links of the contract on the router', () => {
   it.skipIf('problem' in AT_BASE).each(bindings)(
     '%s is written and read as its example says',
     (_path, binding) => {
-      exampleCase(router, binding)
+      exampleCase(routerFor(binding), binding)
     },
   )
 })
