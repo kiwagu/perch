@@ -48,7 +48,10 @@ export interface UsersViewProps {
 const isPlainClick = (event: MouseEvent<HTMLAnchorElement>): boolean =>
   event.button === 0 && !event.metaKey && !event.ctrlKey && !event.shiftKey && !event.altKey
 
-/** A link the app follows itself on a plain click, the browser on any other. */
+/**
+ * A link the app follows itself on a plain click, the browser on any other: a touch target of 44
+ * by 44 CSS px at least.
+ */
 function MovingLink(props: {
   readonly href: string
   readonly testId: string
@@ -58,7 +61,7 @@ function MovingLink(props: {
   return (
     <a
       href={props.href}
-      className="text-sm underline"
+      className="inline-flex min-h-11 min-w-11 items-center text-sm underline"
       data-testid={props.testId}
       onClick={(event) => {
         if (isPlainClick(event)) {

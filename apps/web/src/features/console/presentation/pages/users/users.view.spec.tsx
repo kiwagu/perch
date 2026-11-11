@@ -253,6 +253,29 @@ describe('UsersView', () => {
     expect(onOpen).toHaveBeenCalledWith(una.id)
   })
 
+  it('makes every link of the list a touch target, 8 px from its neighbours', () => {
+    const page: AccountPage = { accounts: accountsNamed('User', 10), total: 25 }
+
+    renderView({ page, at: { page: 2, size: 10 } })
+
+    const links = [
+      ...screen.getAllByTestId(`${LIST}.open-link`),
+      screen.getByTestId(`${LIST}.previous-link`),
+      screen.getByTestId(`${LIST}.next-link`),
+    ]
+
+    expect(links).toHaveLength(12)
+
+    for (const link of links) {
+      const what = `${link.dataset['testid']}: ${link.className}`
+
+      expect(link.className, what).toMatch(/\binline-flex\b/)
+      expect(link.className, what).toMatch(/\bmin-h-11\b/)
+      expect(link.className, what).toMatch(/\bmin-w-11\b/)
+      expect(link.parentElement?.className, what).toMatch(/\bgap-2\b/)
+    }
+  })
+
   it('has every text in Spanish too', () => {
     expect(Object.keys(es).sort()).toEqual(Object.keys(en).sort())
   })

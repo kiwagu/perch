@@ -47,9 +47,9 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
   size select starts at page 1 with the size chosen written into the address, the default
   included, so a default leaves the address and a size retained before never comes back (the
   platform's `usePageMoves`). Every link has its real address, and only a plain click is
-  followed by the page itself. A read that failed shows `console.users.error` in the place of the
-  list: `not-operator` (the gateway took the role away, and the device's record of it with it)
-  or `failed`.
+  followed by the page itself; each is a touch target of 44 by 44 CSS px at least. A read that
+  failed shows `console.users.error` in the place of the list: `not-operator` (the gateway took
+  the role away, and the device's record of it with it) or `failed`.
 - Behaviour of the card: the page runs its screen's flow as its machine
   (`application/account-machine/`, held to the flow by `platform/machines.spec.ts`): `viewing`
   runs the areas in parallel, the name, the email, the ban (ban or unban), the sessions, the
