@@ -1,7 +1,7 @@
 // scenario: console/base/remove-account
 import { expectAddress, openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
-import { expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
+import { appReady, expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
 import { mailbox } from '../../support/mailbox'
 import { nextDeclaredNotice } from '../../support/notice-contract'
 import {
@@ -153,7 +153,9 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await expect(page.getByTestId('app-shell.nav')).toBeVisible()
     })
 
-    await test.step("9. On device B, click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+    await test.step("9. On device B, reload [/org], click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
+      await deviceB.reload()
+      await appReady(deviceB)
       await memberItem(deviceB, data.otherEmail)
         .getByTestId('organisation.members.remove-button')
         .click()
