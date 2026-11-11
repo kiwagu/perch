@@ -2,11 +2,12 @@
 /**
  * A page whose code loads on demand (`LazyPage`): the router loads it once the page's route
  * admits the device, after its guard and roles, never for a device it refuses; the frame stays
- * while it loads, the page's place empty; and the code loads once.
+ * while it loads, the page's place empty; the code loads once; and code that did not arrive loads
+ * again when the page opens anew or the crash in its place renders it again.
  */
 
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { type FunctionComponent, useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -91,7 +92,12 @@ function openAt(path: string, session: RouterSession) {
       </main>
     ),
     history: createMemoryHistory({ initialEntries: [path] }),
-    crash: () => <p>the page failed</p>,
+    // The frame's crash, whose button renders the page again.
+    crash: ({ reset }) => (
+      <button type="button" onClick={reset}>
+        the page failed
+      </button>
+    ),
   })
 
   render(
@@ -227,6 +233,21 @@ describe('a page whose code loads on demand', () => {
     await act(() => router.navigate({ to: '/console' }))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
+    expect(load).toHaveBeenCalledTimes(2)
+    quiet.mockRestore()
+  })
+
+  it('loads its code again and renders when the crash its failed code left asks to render it again', async () => {
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    load.mockImplementationOnce(() => Promise.reject(new Error('the code did not arrive')))
+    openAt('/console', holding([IDENTITY, 'operator']))
+
+    fireEvent.click(await screen.findByText('the page failed'))
+
+    expect(await screen.findByText("the operator's page")).toBeTruthy()
+    expect(screen.queryByText('the page failed')).toBeNull()
+    expect(screen.getByText('the frame')).toBeTruthy()
     expect(load).toHaveBeenCalledTimes(2)
     quiet.mockRestore()
   })

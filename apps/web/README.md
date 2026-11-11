@@ -302,7 +302,9 @@ modeling stage.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
   from module routes (each page inside its module's scope; a page declared as a `LazyPage` has
   its code loaded, once, when its route first admits the device, never for one it refuses, the
-  frame shown meanwhile with the page's place empty, `lazy-page.tsx`; after its guard a page
+  frame shown meanwhile with the page's place empty, `lazy-page.tsx`; the crash in a failed
+  page's place renders it again, loading its route again when its load failed, a lazy page's code
+  that did not arrive included, `page-crash.tsx`; after its guard a page
   opens only for a device holding one of its `roles`, its binding's, read by `held-roles.ts` as
   the UI contract's
   `heldRoles`: `guest`, or `identity` with the role in the organisation current and the account's

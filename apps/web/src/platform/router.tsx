@@ -23,7 +23,6 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  type ErrorComponentProps,
   notFound,
   type RouterHistory,
   redirect,
@@ -38,6 +37,7 @@ import { z } from '@workspace/zod'
 import { heldBy } from './held-roles'
 import { lazyComponent } from './lazy-page'
 import { type ModuleDef, ModuleScope, type RouteDef } from './module'
+import { type PageCrash, pageCrash } from './page-crash'
 import { NOT_FOUND_PATH, resolvedRoute } from './resolved-route'
 import type { SessionPort } from './session.port'
 
@@ -74,9 +74,10 @@ export interface AppRouterOptions {
   readonly history?: RouterHistory
   /**
    * Put in the place of a page that failed to render, its search refused included, inside the
-   * layout, which stays; its `reset` renders the page again.
+   * layout, which stays; its `reset` renders the page again, loading the page's route again when
+   * its load failed, such as a lazy page's code that did not arrive (`pageCrash`).
    */
-  readonly crash?: FunctionComponent<ErrorComponentProps>
+  readonly crash?: PageCrash
 }
 
 /** A page that resolves services from its own module before the application's. */
@@ -196,6 +197,7 @@ export function createAppRouter(options: AppRouterOptions) {
   }
   const modules = allModules(options.modules)
   const lost = notFoundPage(modules)
+  const crash = options.crash ? pageCrash(options.crash) : undefined
   const root = createRootRoute({ component: options.layout })
   const start = createRoute({
     getParentRoute: () => root,
@@ -212,7 +214,7 @@ export function createAppRouter(options: AppRouterOptions) {
         ...pageOptions(module, route),
         beforeLoad: admission(route),
         ...(lost ? { notFoundComponent: lost } : {}),
-        ...(options.crash ? { errorComponent: options.crash } : {}),
+        ...(crash ? { errorComponent: crash } : {}),
         ...searchOptions(route, refuses(route)),
       }),
     ),

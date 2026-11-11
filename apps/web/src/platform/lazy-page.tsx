@@ -9,7 +9,8 @@ export type LoadedOnDemand = FunctionComponent & { readonly preload: () => Promi
  * The component of a lazy page. The router runs its `preload` as it loads the page's route,
  * which comes after the route's guard and roles, and renders it once the code is in: a device the
  * route refuses never loads it. The code loads once; a load that failed fails the route's load
- * (the frame's crash in the page's place), and the route's next opening loads it again.
+ * (the frame's crash in the page's place), and the route's next load loads it again: its next
+ * opening, or the crash's render again (`pageCrash`).
  */
 export function lazyComponent(page: LazyPage): LoadedOnDemand {
   let Page: FunctionComponent | undefined
