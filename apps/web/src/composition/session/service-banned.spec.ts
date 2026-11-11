@@ -9,7 +9,7 @@ import { FakeLocks } from '@workspace/replica/testing'
 
 import { createProfile } from '../__fixtures__/profile'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
-import { type KeptDevice, memoryStorage, saveDevice, savedNotice } from '../storage'
+import { type KeptDevice, memoryStorage, rolesKeyOf, saveDevice, savedNotice } from '../storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -98,6 +98,24 @@ describe("an operator's ban of the account", () => {
     expect(session.notice()).toBe('account-banned')
     // The ban ended the session on the gateway: nothing waits to be signed out.
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
+  })
+
+  it("takes the account's platform roles off the device with the session", async () => {
+    const { session, stub, storage, contexts } = await annSyncing()
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+    const heard: Array<readonly string[]> = []
+
+    // A welcome had carried the operator's role.
+    contexts().at(-1)?.onRoles(['operator'])
+    expect([...session.roles()]).toEqual(['operator'])
+    session.onRoles((roles) => heard.push([...roles]))
+
+    stub.closeChannels(ann.identity.id, id, CLOSE.banned)
+
+    await vi.waitFor(() => expect(session.current()).toBeUndefined())
+    expect(storage.get(rolesKeyOf(ann.identity.id))).toBeUndefined()
+    expect(session.roles().size).toBe(0)
+    expect(heard.at(-1)).toEqual([])
   })
 
   it('keeps a device signed in while a ban closes the channel of another one', async () => {

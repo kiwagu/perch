@@ -144,7 +144,15 @@ modeling stage.
   the databases, or one that failed to open. The memberships are saved before their databases
   are counted, and a tab deletes none whose organisation the memberships saved for the identity
   still hold, so a tab following an older list leaves alone a database another tab counted and
-  opened for a newer one. A region space can replace its document (`replace`: `reset` drops the
+  opened for a newer one. The account's platform roles (`operator`, `SessionRoles`) are kept
+  per identity, a record each (`perch.session.roles.<identity>`), written only from the welcome
+  the leading tab's channel hears (the browser's and the seed's transport, `syncTransport`, hand
+  the session's context the welcome's memberships and roles and the channel's end) while that
+  identity is still the one signed in on the browser, a welcome without a role taking it away;
+  the other tabs follow a record through the storage, reading it and writing nothing; a sign-in
+  or a verification brings none; the sign-out removes the signed-out identity's record, and a
+  record of another identity is never read as the signed-in one's. A region space can replace
+  its document (`replace`: `reset` drops the
   region's local copy, `reopen` opens it again from the database), refusing writes meanwhile;
   the projector then re-reads the new document. The leading tab's engine has the region space
   reset a region whose batch the gateway refused again after its rollback, and then loads it
@@ -288,8 +296,8 @@ modeling stage.
   whenever the account changes: a protected page sends one signed out to sign-in, a guest page
   one another tab signed in to the profile, while a sign-in of this tab's own,
   `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
-  welcome), the ports for the session (with the memberships
-  and the current organisation), for commands, for the app's events (`events.port.ts`:
+  welcome), the ports for the session (with the memberships, the current organisation and the
+  account's platform roles), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
   platform's events that reach the screens and the frame (`platform-events.port.ts`, sent to a

@@ -15,6 +15,7 @@ function contextHearing() {
   }
   const events: SessionChannelEvents = {
     memberships: hear('memberships'),
+    roles: hear('roles'),
     refused: hear('refused'),
     revoked: hear('revoked'),
     passwordChanged: hear('passwordChanged'),
@@ -45,5 +46,13 @@ describe('sessionTransportContext', () => {
     context.onEnded(reason)
 
     expect(heard).toEqual(event === undefined ? [] : [event])
+  })
+
+  it("hands a welcome's platform roles to the session", () => {
+    const { heard, context } = contextHearing()
+
+    context.onRoles(['operator'])
+
+    expect(heard).toEqual(['roles'])
   })
 })

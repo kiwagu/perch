@@ -25,6 +25,7 @@ export {
   type PendingToken,
   pendingRevokes,
 } from './pending-revokes'
+export { dropRole, forgetRoles, isRolesKey, rolesKeyOf, savedRoles, saveRoles } from './roles'
 export {
   forgetDevice,
   IDENTITY_KEY,

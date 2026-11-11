@@ -2,6 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import type { Membership } from '@workspace/replica/protocol'
 import type {
@@ -19,7 +20,8 @@ import type { KeyValueStorage } from '../storage'
 
 /**
  * What the channel of one identity needs: the device it names in its hello, the session token
- * it presents, where memberships go, its end.
+ * it presents, where memberships go, where the account's platform roles each welcome carries go,
+ * its end.
  */
 export interface TransportContext {
   readonly identity: IdentityId
@@ -27,6 +29,8 @@ export interface TransportContext {
   readonly device: string
   readonly credentials: () => DeviceCredentials | undefined
   readonly onMemberships: (memberships: readonly Membership[]) => void
+  /** The account's platform roles, as each welcome carries them. */
+  readonly onRoles: (roles: readonly PlatformRole[]) => void
   readonly onEnded: (reason: EndReason) => void
 }
 

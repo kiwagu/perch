@@ -13,7 +13,7 @@ import { wasmEngines } from '@workspace/data/engines/wasm'
 import { createLogger } from '@workspace/logger/client'
 import { systemClock } from '@workspace/replica'
 import type { DeviceNetwork } from '@workspace/replica/sync'
-import { lockName, syncHints, WebSocketTransport } from '@workspace/replica/sync'
+import { lockName, syncHints } from '@workspace/replica/sync'
 
 import type { Theme } from '../platform/theme'
 
@@ -32,6 +32,7 @@ import type { VisibilitySource } from './session'
 import { siteStorage } from './site-storage'
 import { spaceCode } from './space-code'
 import { browserStorage } from './storage'
+import { syncTransport } from './sync-transport'
 import build from 'virtual:perch-build'
 
 const commonFiles = import.meta.glob<string>('../../../../database/schema/common/*.surql', {
@@ -165,16 +166,11 @@ export function bootBrowser(
       invitationsApi: (deps) => invitationsApi(`${origin}/backend`, deps),
       // Undefined in a page that is not a secure context: a copy then fails and says so.
       clipboard: browserClipboard(navigator.clipboard),
-      transport: (context) =>
-        new WebSocketTransport({
-          url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
-          device: context.device,
-          credentials: context.credentials,
-          onMemberships: context.onMemberships,
-          onEnded: context.onEnded,
-          clock: systemClock,
-          network,
-        }),
+      transport: syncTransport({
+        url: `${origin.replace(/^http/, 'ws')}/backend/sync`,
+        clock: systemClock,
+        network,
+      }),
       locks,
       hints: (identity) => syncHints(new BroadcastChannel(lockName(identity))),
       clock: systemClock,

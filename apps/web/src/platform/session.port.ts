@@ -4,6 +4,7 @@ import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/d
 import { token } from '@workspace/di'
 import type { Locale } from '@workspace/i18n'
 import type { IdentityId } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 export interface SignOutOptions {
@@ -226,6 +227,15 @@ export interface SessionPort {
   currentTenant(): Membership | undefined
   /** Makes the organisation `key` current and keeps the choice on this browser; a key of no membership changes nothing. */
   selectTenant(key: string): void
+  /**
+   * The platform roles of the account signed in here (`operator`), as the latest welcome of its
+   * channel on this browser carried them, kept on the device for its tabs and its next start;
+   * none while nobody is signed in. A sign-in brings none: the first welcome of its channel does.
+   * The same set while they stay the same.
+   */
+  roles(): ReadonlySet<PlatformRole>
+  /** Hears the platform roles read anew: a welcome, another tab's, a sign-in or sign-out included. */
+  onRoles(listener: (roles: ReadonlySet<PlatformRole>) => void): () => void
 }
 
 export const SESSION = token<SessionPort>('Session')

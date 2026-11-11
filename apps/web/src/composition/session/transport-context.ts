@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern'
 
 import type { IdentityId } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 
@@ -11,6 +12,8 @@ import type { TransportContext } from './options'
 /** What the session does with what the channel of one identity hears from the gateway. */
 export interface SessionChannelEvents {
   readonly memberships: (memberships: readonly Membership[]) => void
+  /** The account's platform roles a welcome carried. */
+  readonly roles: (roles: readonly PlatformRole[]) => void
   /** The gateway refused the session token: it will not work again. */
   readonly refused: () => void
   /** The device was signed out from another device (4001). */
@@ -45,6 +48,7 @@ export function sessionTransportContext(
     device: deviceIdFrom(storage),
     credentials: () => credentialsOf(savedTokenOf(storage, identity)),
     onMemberships: events.memberships,
+    onRoles: events.roles,
     onEnded: (reason) =>
       match(reason)
         .with('unauthorized', events.refused)
