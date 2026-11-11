@@ -45,6 +45,8 @@ export interface ConsoleAnswer {
 export interface ConsoleMountOptions extends RealMountOptions {
   /** Stands between the console and the account's rows, given what the mount removes them with. */
   readonly teardown?: (real: AuthMountDeps['teardown']) => ConsoleRoutesOptions['teardown']
+  /** Stands between the console and Better Auth's reset mails, given the mount's own. */
+  readonly passwords?: (real: AuthMountDeps['passwords']) => ConsoleRoutesOptions['passwords']
 }
 
 async function answered(response: Response | undefined): Promise<ConsoleAnswer> {
@@ -75,7 +77,7 @@ export function signedInAs(account: SignedInAccount, email: string, device: stri
  * through `hub`.
  */
 export async function consoleOnMount(options: ConsoleMountOptions = {}) {
-  const { teardown, ...mountOptions } = options
+  const { teardown, passwords, ...mountOptions } = options
   const mounted = await mountedOnRealAuth(mountOptions)
   const { deps } = mounted
   const consoleFailures: DataError[] = []
@@ -86,7 +88,7 @@ export async function consoleOnMount(options: ConsoleMountOptions = {}) {
     bans: new AccountBans({ directory: mounted.local, clock: mounted.clock }),
     names: new ProfileNames({ directory: mounted.local, hub }),
     emailChanges: deps.emailChanges,
-    passwords: deps.passwords,
+    passwords: passwords?.(deps.passwords) ?? deps.passwords,
     auth: deps.auth,
     mails: deps.mails,
     limits: deps.limits,

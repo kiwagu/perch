@@ -1,3 +1,4 @@
+import { okAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
@@ -165,6 +166,20 @@ describe('consoleRoutes: POST /console/accounts/:id/reset', () => {
     expect((await resetting).status).toBe(204)
     await mounted.outbox.next(BOB, 1)
   })
+
+  it('answers 500 internal to a reset mail Better Auth refused, which onFailure hears once', async () => {
+    const mounted = await consoleOnMount({
+      passwords: () => ({ requestReset: () => okAsync('refused' as const) }),
+    })
+    const bob = await signedInOn(mounted, BOB, ['desk'])
+
+    expect(await mounted.act(bob.identity, 'reset')).toEqual({
+      status: 500,
+      body: { code: 'internal' },
+      retryAfter: null,
+    })
+    expect(mounted.consoleFailures).toHaveLength(1)
+  })
 })
 
 describe('consoleRoutes: POST /console/accounts/:id/verification', () => {
@@ -258,6 +273,35 @@ describe('consoleRoutes: POST /console/accounts/:id/verification', () => {
     })
     expect(mailsTitled(mounted, BOB, VERIFY_SUBJECT)).toHaveLength(4)
   }, 15_000)
+
+  it.each([
+    {
+      what: 'answers another status than 200',
+      answer: () => Promise.resolve(Response.json({ code: 'FAILED' }, { status: 400 })),
+    },
+    {
+      what: 'rejects instead of answering',
+      answer: () => Promise.reject(new Error('Better Auth failed')),
+    },
+  ])(
+    'answers 500 internal, which onFailure hears once, when Better Auth $what',
+    async ({ answer }) => {
+      const mounted = await consoleOnMount({
+        handler: (handle) => (request) =>
+          new URL(request.url).pathname.endsWith('/send-verification-email')
+            ? answer()
+            : handle(request),
+      })
+      const bob = await unverifiedBob(mounted)
+
+      expect(await mounted.act(bob, 'verification')).toEqual({
+        status: 500,
+        body: { code: 'internal' },
+        retryAfter: null,
+      })
+      expect(mounted.consoleFailures).toHaveLength(1)
+    },
+  )
 })
 
 describe("consoleRoutes: an operator's reset and verification mails", () => {
