@@ -35,7 +35,8 @@ modeling stage.
   client over `POST /backend/auth/sign-in/email` on the page's own origin, the device in
   `X-Perch-Device` and `X-Perch-Device-Label`; the device keeps the raw session token of the
   answer's body, never the signed one of its `set-auth-token` header; a 401 is
-  `data:INVALID_CREDENTIALS`, a 403 `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
+  `data:INVALID_CREDENTIALS`, a 403 `data:ACCOUNT_BANNED` when its body names `account-banned` and
+  else `data:EMAIL_NOT_VERIFIED`, a 409 `data:DEVICE_LIMIT` (the
   account is signed in on as many devices as it may be: nothing is signed in, and the sign-in page
   asks before it signs in all the same with `signOutOldest`, which signs out the account's device
   seen least recently), a 429 `data:RATE_LIMITED`, and the
@@ -47,8 +48,9 @@ modeling stage.
   kept and opened as a sign-in, and answered with the account's name and its sign-up language; as a link
   names no email, another account saved on the browser refuses it (`data:OTHER_ACCOUNT`) only
   once the gateway answered, and its new token is left to sign out. A link verified before signs
-  nothing in (`verified-before`), and a refused one fails as `data:LINK_EXPIRED` or
-  `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
+  nothing in (`verified-before`), the link of an account an operator banned verifies its email,
+  signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`), and a
+  refused one fails as `data:LINK_EXPIRED` or `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
   this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
   start is kept in `perch.session.account-start` (the identity, the name and the sign-up
   language) until its settings (in that language and the theme the device shows as it creates
@@ -142,7 +144,15 @@ modeling stage.
   the databases, or one that failed to open. The memberships are saved before their databases
   are counted, and a tab deletes none whose organisation the memberships saved for the identity
   still hold, so a tab following an older list leaves alone a database another tab counted and
-  opened for a newer one. A region space can replace its document (`replace`: `reset` drops the
+  opened for a newer one. The account's platform roles (`operator`, `SessionRoles`) are kept
+  per identity, a record each (`perch.session.roles.<identity>`), written only from the welcome
+  the leading tab's channel hears (the browser's and the seed's transport, `syncTransport`, hand
+  the session's context the welcome's memberships and roles and the channel's end) while that
+  identity is still the one signed in on the browser, a welcome without a role taking it away;
+  the other tabs follow a record through the storage, reading it and writing nothing; a sign-in
+  or a verification brings none; the sign-out removes the signed-out identity's record, and a
+  record of another identity is never read as the signed-in one's. A region space can replace
+  its document (`replace`: `reset` drops the
   region's local copy, `reopen` opens it again from the database), refusing writes meanwhile;
   the projector then re-reads the new document. The leading tab's engine has the region space
   reset a region whose batch the gateway refused again after its rollback, and then loads it
@@ -169,7 +179,15 @@ modeling stage.
   adopted, so the service selects the organisation then; a 410 is read as a refusal code like a 409). `devicesApi` is the `DEVICES` port over
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
-  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. One tab per browser leads the
+  `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. `accountsApi` is the `ACCOUNTS`
+  port over the console routes `GET /console/accounts?q&page&size`,
+  `GET /console/accounts/:id` and the actions on an account,
+  `POST /console/accounts/:id/{rename,email,ban,unban,sign-out,reset,verification,removal}`
+  (each answered 204), for an operator: each request reads the tab's credentials once as
+  it starts (the identity it shows and the token saved for it), each answer is parsed and each
+  refusal is a code of its action (`failed` for any other), and a `not-operator` takes
+  `operator` off the roles saved for that identity (`SessionService.dropRole`), whichever
+  identity is shown by then. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`, its hello presenting the session token) for the private region and every
   organisation's; the tabs hint each other over a BroadcastChannel, so each reads what the others
@@ -282,12 +300,23 @@ modeling stage.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
-  from module routes (each page inside its module's scope; a page left open is checked again
+  from module routes (each page inside its module's scope; a page declared as a `LazyPage` has
+  its code loaded, once, when its route first admits the device, never for one it refuses, the
+  frame shown meanwhile with the page's place empty, `lazy-page.tsx`; the crash in a failed
+  page's place renders it again, loading its route again when its load failed, a lazy page's code
+  that did not arrive included, `page-crash.tsx`; after its guard a page
+  opens only for a device holding one of its `roles`, its binding's, read by `held-roles.ts` as
+  the UI contract's
+  `heldRoles`: `guest`, or `identity` with the role in the organisation current and the account's
+  platform roles; any other device gets the page of the module route at `/$` in its place at the
+  same address, its search never read, which the frame names and marks as the not-found screen,
+  `resolved-route.ts`; a page left open is checked again
   whenever the account changes: a protected page sends one signed out to sign-in, a guest page
   one another tab signed in to the profile, while a sign-in of this tab's own,
-  `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
-  welcome), the ports for the session (with the memberships
-  and the current organisation), for commands, for the app's events (`events.port.ts`:
+  `SessionPort.signingInHere()`, leaves a page that signs in (the sign-in page, a verification
+  link's) to its flow, which goes on to its welcome, any other page open meanwhile checked at
+  once; and whenever the roles the device holds change, outside such a sign-in on such a page), the ports for the session (with the memberships, the current organisation and the
+  account's platform roles), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
   platform's events that reach the screens and the frame (`platform-events.port.ts`, sent to a
@@ -317,9 +346,11 @@ modeling stage.
   (`perch.install.later`) or ended once installed (`perch.install.installed`, `appinstalled`, the
   app running standalone); the start makes it before the first frame and gives it through
   `InstallContext`. `routes-contract.spec.ts` proves every module
-  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
-  retained parameters, and the input view of the search schema as JSON Schema, without its
-  prose);
+  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, roles
+  as a set, history, retained parameters, and the input view of the search schema as JSON
+  Schema, without its prose); `routes-roles.spec.ts` opens every routed binding for a guest, an
+  account, a member, an admin and an operator, at its example and at a search it refuses, and
+  holds what each sees to the binding's roles and guard;
   `routes-router.spec.ts` builds every binding on the real router (the contract's sample of
   each parameter of its path, `parameterSample`, and the least search its schema accepts),
   matches it back to the same route, parameters and search with the defaults applied, and
@@ -346,7 +377,8 @@ modeling stage.
   (`useScreenMachine(screen, machine)`, `screen` the id of the contract's screen whose flow
   it runs: the flow's `navigate` effects pass the guard, their search
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
-  field left out (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
+  field left out, and each `{ item: <item> }` from its `items`, the id of the entry acted in
+  (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
   control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
@@ -373,7 +405,15 @@ modeling stage.
   (`SessionPort.dropNotice`), however late it is heard, while
   a screen's own anchors stay its container's to read); `search-start.ts` is a field's binding
   `{ search: <name> }` (`useSearchStart(name)`: the value of that search parameter when the screen
-  opened, read once, so the field then holds what is typed).
+  opened, read once, so the field then holds what is typed), and `search-value.ts` one that
+  follows the address (`useSearchValue(name)`: the value again each time the route's search
+  changes, what was typed meanwhile dropped); `use-listed.ts` is a list read from the platform
+  (`useListed(read, scope, changed, { source, search })`: read when it shows, when the flow
+  reads it, and when its scope or a search key its source reads changes, a read for an earlier
+  one dropped), and `page-moves.ts` the moves of a paged list's parts (`usePageMoves(search,
+  defaultSize)`: the address of a page and the move there, the search and the size kept, and the
+  move to the first page of a size chosen, which writes that size as it is, the default included,
+  so the router's strip takes a default out and its `retain` never gives an earlier size back).
 - `src/features/<feature>/`: one module per folder, each with its own README for its role,
   surface (routes, shapes, commands, providers) and commands; details live there, not here:
   - [app-shell](src/features/app-shell/README.md): the page frame, navigation and notices.
@@ -382,6 +422,8 @@ modeling stage.
     shared notes of the tenant region.
   - [device](src/features/device/README.md): My devices, signing one device or every one
     out.
+  - [console](src/features/console/README.md): the operator's console of the platform's
+    accounts, and the card of one account with the actions an operator takes on it.
 
 ## Key exports
 
@@ -435,7 +477,9 @@ gateway does, which leaves a stand that already has it alone. `openStandTenant()
   build fails over its size budgets (`build/size-budgets.ts`, gzipped): the first frame (the
   page, the scripts and styles it names, its Basic Latin font) 310 kB, each lazy script 100 kB,
   the SurrealDB WASM 5.2 MB and the Loro WASM 1.2 MB, and a WASM module without a budget fails
-  it too; otherwise it prints how close it came.
+  it too; otherwise it prints how close it came. Every module the start loads statically goes
+  into one chunk (`first-frame`, `vite.config.ts`), so a lazy script that shares modules with the
+  start never splits them into common chunks loaded with it.
 - `bun run test`: composition, platform and component tests.
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.

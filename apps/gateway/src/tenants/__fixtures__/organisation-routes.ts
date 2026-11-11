@@ -130,7 +130,7 @@ async function openRoot(outbox: Outbox, clock: ManualClock): Promise<GatewayRoot
     })
   )._unsafeUnwrap()
 
-  mailsOf(root.auth, outbox)
+  mailsOf(root.auth, outbox, root.sessions)
   cleanups.push(() => root.close())
 
   return root

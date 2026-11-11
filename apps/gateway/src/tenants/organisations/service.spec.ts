@@ -23,6 +23,7 @@ import {
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
 import { createAuthInstance } from '../../auth/auth-instance'
+import { AuthSessions } from '../../auth/auth-sessions'
 import { DIRECTORY, NAMESPACE } from '../../config'
 import { Outbox } from '../../mail/__fixtures__/outbox'
 import directoryRows from '../__fixtures__/directory-rows.surql'
@@ -79,18 +80,19 @@ function refused(code: OrganisationRefusalCode) {
  */
 async function signUp(directory: LocalDb, email: string): Promise<AuthUser> {
   const outbox = new Outbox()
+  const clock = manualClock()
   const auth = createAuthInstance({
     local: directory,
     secret: AUTH_SECRET,
     baseURL: AUTH_URL,
     trustedOrigins: [new URL(AUTH_URL).origin],
-    clock: manualClock(),
+    clock,
     publicUrl: new URL(AUTH_URL).origin,
     mail: outbox,
     log: { error: () => {}, warn: () => {} },
   })
 
-  mailsOf(auth, outbox)
+  mailsOf(auth, outbox, new AuthSessions({ auth, directory, clock, secret: AUTH_SECRET }))
 
   const { user } = await signUpOn(auth, email, deviceHeaders(`device-${email}`))
 

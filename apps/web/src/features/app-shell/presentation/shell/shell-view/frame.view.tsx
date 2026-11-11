@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode } from 'react'
 
 import { type Locale, useT } from '@workspace/i18n'
 import { AppShell } from '@workspace/ui/components/platform/app-shell'
+import { IDENTITY } from '@workspace/ui-contract/anchors'
 
 import type { SyncStatus } from '../../../../../platform/sync-status.port'
 import type { Theme } from '../../../../../platform/theme'
@@ -30,8 +31,13 @@ export interface ShellViewProps {
    * account, the reload around a crash, the sign-out here when the account's data did not open.
    */
   readonly renders: (anchor: ShellListed) => boolean
-  readonly signedIn: boolean
-  readonly activePath: string
+  /**
+   * The roles this device holds (`heldRoles`): `guest` alone while nobody is signed in, else
+   * `identity` and the others the account holds, which say the links of its navigation.
+   */
+  readonly held: ReadonlySet<string>
+  /** The path of the screen open, as the router resolved it (`/$` for a page refused). */
+  readonly activePath: string | undefined
   /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
   readonly canChooseLocale: boolean
   readonly onLocaleChange: (locale: Locale) => void
@@ -79,12 +85,13 @@ export interface ShellViewProps {
  */
 export function ShellView(props: ShellViewProps) {
   const t = useT()
+  const signedIn = props.held.has(IDENTITY)
   // No message of the platform shows before a signed-in account's data is open.
   const ready = props.status === 'ready'
   // A signed-in account's navigation; a guest sees none, and the page takes the frame's width.
   const navigation =
-    props.signedIn && props.renders('app-shell.nav') ? (
-      <NavigationLinks link={props.link} activePath={props.activePath} />
+    signedIn && props.renders('app-shell.nav') ? (
+      <NavigationLinks link={props.link} activePath={props.activePath} held={props.held} />
     ) : undefined
   const reload = props.renders('app-shell.reload-button')
 
@@ -95,7 +102,7 @@ export function ShellView(props: ShellViewProps) {
       navigationTestId="app-shell.nav"
       actions={
         <HeaderActions
-          signedIn={props.signedIn}
+          signedIn={signedIn}
           sync={ready ? props.sync : undefined}
           theme={props.theme}
           canChooseTheme={props.canChooseTheme}

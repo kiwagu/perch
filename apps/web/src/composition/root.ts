@@ -30,6 +30,7 @@ import {
   SETTINGS_SERVICE,
   SettingsService,
 } from '../features/user/application/settings/settings.service'
+import { ACCOUNTS, type AccountsPort } from '../platform/accounts.port'
 import { CLIPBOARD, type ClipboardPort } from '../platform/clipboard.port'
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
@@ -43,6 +44,7 @@ import { SYNC_STATUS } from '../platform/sync-status.port'
 import type { Theme } from '../platform/theme'
 
 import { accountStarts } from './account-starts'
+import type { AccountsDeps, Credentials } from './accounts-api'
 import { appEvents } from './app-events'
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
@@ -82,6 +84,8 @@ export interface AppRootOptions {
   /** The gateway's device and invitation routes, called the same way. */
   readonly devicesApi: (deps: BearerDeps) => DevicesPort
   readonly invitationsApi: (deps: BearerDeps) => InvitationsPort
+  /** The gateway's console routes, asked with the credentials a request starts with. */
+  readonly accountsApi: (deps: AccountsDeps) => AccountsPort
   /** The clipboard of the device, which an invitation's link is copied to. */
   readonly clipboard: ClipboardPort
   /** The channel to the gateway for the tab that leads an identity's sync. */
@@ -156,12 +160,15 @@ export function createAppRoot(options: AppRootOptions): AppStart {
 
   // The routes that act for the signed-in device present the token saved on this browser, only
   // while it is the session of the account this tab shows: never one another tab saved since.
-  const bearer: BearerDeps = {
-    token: () => {
-      const here = session.current()
+  // The account and its token are read in one step.
+  const credentials = (): Credentials | undefined => {
+    const here = session.current()
+    const token = here === undefined ? undefined : savedTokenOf(options.storage, here.id)
 
-      return here === undefined ? undefined : savedTokenOf(options.storage, here.id)
-    },
+    return here === undefined || token === undefined ? undefined : { identity: here.id, token }
+  }
+  const bearer: BearerDeps = {
+    token: () => credentials()?.token,
     device: () => deviceIdFrom(options.storage),
   }
   const organisationsApi = options.organisationsApi(bearer)
@@ -220,6 +227,12 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   })
   const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
+  // A console request refused as no operator's takes the role off the account that asked.
+  const accounts = options.accountsApi({
+    credentials,
+    device: bearer.device,
+    dropRole: (identity, role) => session.dropRole(identity, role),
+  })
   // The account's settings, which the frame reads and stores as well as the account's pages.
   const settings = new SettingsService(session.runner, commands, {
     shape: settingsShape,
@@ -251,6 +264,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(INVITATIONS, () => createInvitations(options.invitationsApi(bearer), session))
     .singleton(CLIPBOARD, () => options.clipboard)
     .singleton(DEVICES, () => devices)
+    .singleton(ACCOUNTS, () => accounts)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)
     // The facts another tab of the browser sets, which the screens' flows hear.

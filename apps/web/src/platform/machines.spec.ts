@@ -23,11 +23,15 @@ import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
+import { identityIdFactory } from '@workspace/ids'
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell-machine'
+import { createAccountMachine } from '../features/console/application/account-machine/machine'
+import { AccountsService } from '../features/console/application/accounts.service'
+import { createUsersMachine } from '../features/console/application/users.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
 import { createInvitationMachine } from '../features/organisation/application/invitation.machine'
 import { createOrganisationMachine } from '../features/organisation/application/organisation-machine'
@@ -41,6 +45,7 @@ import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
 import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
 
+import { FakeAccounts } from './__fixtures__/accounts'
 import { AHEAD, flowsAt, heldFlow } from './__fixtures__/machine-flows'
 import { fakeSession } from './__fixtures__/session'
 
@@ -77,6 +82,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       followTheme: () => {},
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
+    }),
+  'console.users': () => createUsersMachine(),
+  'console.account': () =>
+    createAccountMachine({
+      id: identityIdFactory.create(),
+      accounts: new AccountsService(new FakeAccounts()),
     }),
   device: () =>
     createDevicesMachine({

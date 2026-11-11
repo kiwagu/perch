@@ -13,6 +13,7 @@ const ENDINGS: ReadonlyMap<number, EndReason> = new Map([
   [CLOSE.revoked, 'revoked'],
   [CLOSE.passwordChanged, 'password-changed'],
   [CLOSE.deviceLimit, 'device-limit'],
+  [CLOSE.banned, 'banned'],
 ])
 
 /** Why a close with `code` ends the channel for good; `undefined` for a close a reconnect follows. */

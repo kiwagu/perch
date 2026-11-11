@@ -56,6 +56,7 @@ const welcome: ServerMessage = {
   identity: 'idn_a',
   regions: [],
   memberships: [],
+  roles: [],
   time: 0,
 }
 
@@ -360,6 +361,45 @@ describe('WebSocket transport', () => {
     expect(received).toEqual([{ ...welcome, memberships: [acme] }, update])
   })
 
+  it("hands the welcome's roles to onRoles beside its memberships, before any listener hears the welcome", () => {
+    const heard: string[] = []
+    const sockets: FakeSocket[] = []
+    const transport = new WebSocketTransport({
+      url: 'wss://gateway.example.test/sync',
+      credentials: () => keys,
+      onMemberships: (list) => heard.push(`memberships: ${list.length}`),
+      onRoles: (roles) => heard.push(`roles: ${roles.join(',')}`),
+      onEnded: () => {},
+      clock: manualClock(),
+      device: 'device-1',
+      socket: (url) => {
+        const opened = new FakeSocket(url)
+
+        sockets.push(opened)
+
+        return opened
+      },
+    })
+
+    transport.onMessage((message) => heard.push(`message: ${message.type}`))
+    transport.start()
+
+    const socket = sockets[0] ?? expect.unreachable('a socket')
+
+    socket.open()
+    socket.receive({ ...welcome, memberships: [acme], roles: ['operator'] })
+    // A memberships message changes no roles: only a welcome carries them.
+    socket.receive({ type: 'memberships', memberships: [] })
+
+    expect(heard).toEqual([
+      'memberships: 1',
+      'roles: operator',
+      'message: welcome',
+      'memberships: 0',
+      'message: memberships',
+    ])
+  })
+
   it('stops on 4401 and reports unauthorized', async () => {
     const { clock, sockets, connect, transport, events } = harness()
     const ended: string[] = []
@@ -422,6 +462,19 @@ describe('WebSocket transport', () => {
 
     expect(events).toEqual(['up', 'ended: device-limit', 'down'])
     expect(ended).toEqual(['device-limit'])
+    expect(sockets.length).toBe(1)
+  })
+
+  it('stops on 4004 and reports banned: an operator banned the account', async () => {
+    const { clock, sockets, connect, transport, events } = harness()
+    const ended: string[] = []
+
+    transport.onEnded((reason) => ended.push(reason))
+    connect().drop(4004)
+    await clock.advance(60_000)
+
+    expect(events).toEqual(['up', 'ended: banned', 'down'])
+    expect(ended).toEqual(['banned'])
     expect(sockets.length).toBe(1)
   })
 

@@ -2,23 +2,30 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
+import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import { ban, sessionStates } from '../__fixtures__/account-ban'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
+import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
 
 import {
   ANN,
   ARGON2_WAIT,
+  annsLink,
   heldQueries,
   holdTurn,
   isAccountLookup,
+  isAdmission,
   isSessionInsert,
+  mountedOnFakeAuth,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
   postTo,
+  STAND_IN_ACCOUNT,
   signedInOn,
   signInRequest,
   turnsAsked,
@@ -53,6 +60,9 @@ async function moved(mounted: Mounted, identity: IdentityId, from: string, to: s
 
   expect((await mounted.route(postTo('/auth/confirm-email', { token }), FROM))?.status).toBe(200)
 }
+
+/** The session token a sign-in answered with: a raw token, which no test can know beforehand. */
+const tokenOf = (body: unknown): string => z.object({ token: z.string().min(1) }).parse(body).token
 
 /** Asks for a reset mail to `email` and answers the token of its link. */
 async function resetLink(mounted: Mounted, email: string): Promise<string> {
@@ -249,7 +259,7 @@ describe('authHandler, a sign-in and what runs beside it', () => {
 })
 
 describe('authHandler, the start of an account at its sign-in', () => {
-  it("carries no start for an account whose profile and settings exist, and the account's own answer as Better Auth gave it", async () => {
+  it("carries no start for an account whose profile and settings exist, and the account's answer by the allowlist", async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
@@ -265,7 +275,235 @@ describe('authHandler, the start of an account at its sign-in', () => {
     const body: unknown = await answer?.json()
 
     expect(answer?.status).toBe(200)
-    expect(body).toMatchObject({ user: { id: ann.identity, email: ANN } })
-    expect(body).not.toHaveProperty('start')
+    expect(body).toEqual({
+      token: tokenOf(body),
+      user: { id: ann.identity, email: ANN, name: 'Ann', emailVerified: true },
+    })
   })
+})
+
+describe('authHandler, the answer of a sign-in', () => {
+  it('forwards no field outside the allowlist: the token, and the id, email, name and verified email of the account', async () => {
+    const { route } = mountedOnFakeAuth(() =>
+      Response.json({
+        redirect: false,
+        token: 'raw-token',
+        url: null,
+        user: {
+          id: STAND_IN_ACCOUNT,
+          email: ANN,
+          name: 'Ann',
+          emailVerified: true,
+          image: 'https://example.test/MARKER-image.png',
+          locale: 'en',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          role: 'operator',
+          banned: false,
+          banReason: 'MARKER reason',
+          banExpires: '2026-12-01T00:00:00.000Z',
+        },
+      }),
+    )
+    const answer = await route(signInRequest(ANN, PASSWORD, 'laptop'), FROM)
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({
+      token: 'raw-token',
+      user: { id: STAND_IN_ACCOUNT, email: ANN, name: 'Ann', emailVerified: true },
+    })
+  })
+
+  it("answers a sign-in with the allowlist and the start alone, whatever role and ban reason the account's row holds", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await mounted.local.db.query(identityRoleSetStatement, {
+      identity: ann.identity,
+      role: 'operator',
+      reason: 'MARKER reason',
+    })
+
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+    const body: unknown = await answer?.json()
+
+    expect(answer?.status).toBe(200)
+    expect(body).toEqual({
+      token: tokenOf(body),
+      user: { id: ann.identity, email: ANN, name: 'Ann', emailVerified: true },
+      start: { name: 'Ann', locale: 'en' },
+    })
+  })
+})
+
+describe('authHandler, the sign-in of a banned account', () => {
+  /** Ann signed up and verified on her laptop, then banned a minute later: her account. */
+  async function bannedAnn(mounted: Mounted) {
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await mounted.clock.advance(60_000)
+    await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+
+    return ann
+  }
+
+  it("answers Better Auth's refusal of a banned account 403 account-banned, its code alone", async () => {
+    const { route } = mountedOnFakeAuth(() =>
+      Response.json(
+        { code: 'BANNED_USER', message: 'MARKER You have been banned from this application' },
+        { status: 403 },
+      ),
+    )
+    const answer = await route(signInRequest(ANN, PASSWORD, 'laptop'), FROM)
+
+    expect(answer?.status).toBe(403)
+    expect(await answer?.json()).toEqual({ code: 'account-banned' })
+  })
+
+  it("refuses a banned account's right password 403 account-banned, before its device is looked at, and its wrong one 401 as any account's", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await bannedAnn(mounted)
+    const right = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+    // Better Auth's ban gate runs before the gateway's session hook, which refuses a sign-in that
+    // names no device 400.
+    const deviceless = await mounted.route(
+      postTo('/auth/sign-in/email', { email: ANN, password: PASSWORD }),
+      FROM,
+    )
+    const wrong = await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'phone'), FROM)
+
+    expect([right?.status, await right?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect([deviceless?.status, await deviceless?.json()]).toEqual([
+      403,
+      { code: 'account-banned' },
+    ])
+    expect([wrong?.status, await wrong?.json()]).toEqual([
+      401,
+      { code: 'INVALID_EMAIL_OR_PASSWORD' },
+    ])
+    // No session was written for any of them: the laptop's, ended by the ban, is the only one.
+    expect(
+      (await sessionStates(mounted.local, ann.identity)).map((row) => [
+        row.device,
+        row.ended_reason,
+      ]),
+    ).toEqual([['laptop', 'banned']])
+    expect(mounted.closes).toEqual([])
+  }, 30_000)
+
+  it("answers an unverified banned account's right password as an unverified account's, 403 EMAIL_NOT_VERIFIED", async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await annsLink(mounted.outbox)
+    await ban(mounted.local, await mounted.annsId(), new Date(mounted.clock.now()))
+
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+
+    expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'EMAIL_NOT_VERIFIED' }])
+  })
+
+  it("forgets the email's failed sign-ins at a banned account's right password, as at an accepted one", async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await bannedAnn(mounted)
+
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'phone'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(403)
+    expect((await wrong())?.status).toBe(401)
+    // Ten failures, had the refusal of the banned account not forgotten the nine before it.
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(403)
+  }, 60_000)
+
+  it('answers 403 account-banned with no token to a sign-in whose account is banned while its session waits for its admission, its session ended by the ban', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const admission = queries.hold(isAdmission)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+
+    // Better Auth read the account unbanned and wrote the session, which waits for its admission;
+    // the ban commits meanwhile, ending every session of the account, the waiting one included.
+    await vi.waitFor(() => expect(admission.paused()).toBe(true), ARGON2_WAIT)
+    await mounted.clock.advance(60_000)
+
+    const bannedAt = new Date(mounted.clock.now())
+
+    await ban(mounted.local, ann.identity, bannedAt)
+    await mounted.clock.advance(60_000)
+    admission.release()
+
+    const answer = await signingIn
+
+    expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect(await liveSessions(mounted, ann.identity)).toEqual([])
+    expect(
+      (await sessionStates(mounted.local, ann.identity)).map(
+        ({ device, pending, ended_at, ended_reason }) => [device, pending, ended_at, ended_reason],
+      ),
+    ).toEqual([
+      ['laptop', false, bannedAt, 'banned'],
+      ['phone', true, bannedAt, 'banned'],
+    ])
+    expect(mounted.closes).toEqual([])
+  }, 30_000)
+
+  it('answers 403 account-banned with no token to a sign-in whose account is banned after Better Auth read it and before it wrote the session, which the admission ends banned', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const insert = queries.hold(isSessionInsert)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+
+    // Better Auth's ban gate read the account unbanned; the ban commits before the session is
+    // written, so it ends the laptop's session only.
+    await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+
+    const bannedAt = new Date(mounted.clock.now())
+
+    await ban(mounted.local, ann.identity, bannedAt)
+    await mounted.clock.advance(60_000)
+
+    const admittedAt = new Date(mounted.clock.now())
+
+    insert.release()
+
+    const answer = await signingIn
+
+    expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect(await liveSessions(mounted, ann.identity)).toEqual([])
+    expect(
+      (await sessionStates(mounted.local, ann.identity)).map(
+        ({ device, pending, ended_at, ended_reason }) => [device, pending, ended_at, ended_reason],
+      ),
+    ).toEqual([
+      ['laptop', false, bannedAt, 'banned'],
+      ['phone', true, admittedAt, 'banned'],
+    ])
+  }, 30_000)
+
+  it('leaves to the ban a sign-in admitted before it: 200 with its token, then its session ended banned', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+    const token = tokenOf(await answer?.json())
+
+    expect(answer?.status).toBe(200)
+    await mounted.clock.advance(60_000)
+
+    const bannedAt = new Date(mounted.clock.now())
+
+    await ban(mounted.local, ann.identity, bannedAt)
+
+    expect(
+      (await sessionStates(mounted.local, ann.identity))
+        .filter((row) => row.token === token)
+        .map(({ pending, ended_at, ended_reason }) => [pending, ended_at, ended_reason]),
+    ).toEqual([[false, bannedAt, 'banned']])
+    expect((await mounted.sessions.read(token)).kind).toBe('none')
+  }, 30_000)
 })

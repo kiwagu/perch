@@ -22,6 +22,19 @@ invitation's id, and each member then signs in and accepts it by that id (a memb
 organisation already, as on a second run, answers none and accepts nothing). The gateway smoke test leaves an organisation `smoke_<time>`
 behind, created by an `@example.test` identity, so the sweep removes it too.
 
+One demo account, `ann@example.test`, is an operator of the platform (the catalog marks it
+`operator: true`). Once every account exists, before the organisations, the seed appoints it by
+running the host's operator command (`apps/gateway/scripts/operator/cli.ts … grant <email>`) as a
+child process from the repository root, found from the seed's own file: the command is spawned,
+never imported. It is given the seed's own target, `--url`, `--namespace`, `--database`, `--user`
+and `--pass`, so it writes the role in the directory database the seed's accounts are in, not in
+an organisation's. The command writes the same role again without failing, so a second run leaves
+the account an operator. The command is run through an injected `CommandRunner`, so the specs
+record the arguments it would run; one that exits with anything but 0 fails the seed, with a
+message that names the exit code and the email and never the password. The password travels as
+an argument (the stand's default is its public dev root), which the host's process list shows
+while the command runs.
+
 ## Key exports
 
 - `catalog`, `accountFor(preset, mode)`, `organisationFor(preset, mode)`, `validateCatalog()`,
@@ -31,6 +44,7 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   of the catalog (`validateCatalog(candidate, mode?)`: each account's password must keep the rules
   of a new password, and the organisation keys must be tenant keys as given and as the run's mode
   suffixes them); `./catalog` exports them alone, without the gateway client, for the e2e tests.
+  A preset marked `operator: true` is appointed an operator by `runSeed`.
 - `runSeed(options)`: seeds every preset through the gateway at `gatewayUrl` and returns
   the manifest (`accounts`: ref to account id, email and profile id; `organisations`: ref to
   organisation id, key and name); `demo` is idempotent, and `reset` sweeps the stand first. The
@@ -38,7 +52,13 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   long is refused). An organisation whose key exists is found only when its administrator seeds
   it; a key taken by an organisation the account only belongs to is an error.
   `fetcher` replaces the global `fetch` for the gateway's HTTP routes (the CLI passes none);
-  `inbox` is where the verification mails are read (the CLI passes a `Mailbox`).
+  `inbox` is where the verification mails are read (the CLI passes a `Mailbox`); `runCommand`
+  is the `CommandRunner` that runs the operator command for the accounts the catalog marks, once
+  they exist (required: the CLI passes `spawnCommand`, the specs a recording runner).
+- `CommandRunner`, `spawnCommand`: a runner takes a command's arguments (`argv[0]` the program)
+  and answers its exit code, rejecting, without the arguments, when the command cannot run;
+  `spawnCommand` starts it from the repository's root with the seed's output streams, under Bun
+  and under Node alike.
 - `sweep(target, { emails? })`: removes the seeded accounts (or only those at `emails`)
   with the organisations they created (their databases `t_<key>`, memberships, pending
   invitations and directory rows), the pending invitations to their addresses, their
@@ -64,7 +84,7 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   stand's mailbox, where each new account's verification mail is read (the command fails naming
   both when neither is given).
   Flags: `--fresh`, `--reset` (sweep first), `--manifest=<file>`. The stand behind the
-  gateway is reached only by the sweep: `--url=` (else `SURREAL_DEV_URL`),
+  gateway is reached by the sweep and by the operator command: `--url=` (else `SURREAL_DEV_URL`),
   `--namespace=` and `--database=` (default `app` and `directory`, the gateway's
   database), `--user=` and `--pass=` (default the stand's root). Demo
   accounts sign in with the password `Seed-<ref>-password-1` (`Seed-ann-password-1`), which keeps
@@ -73,14 +93,15 @@ behind, created by an `@example.test` identity, so the sweep removes it too.
   run over such a stand fails at their sign-in as invalid credentials, so seed it with `--reset`
   (which sweeps the seed data first) to recreate them with the new password.
 - `bun run seed:sweep`: removes the seed data from the stand (same stand flags).
-- `bun run test`: the offline catalog check, that `runSeed` calls the gateway through the `fetcher` it is given, and that each organisation's members join by accepting the invitation their own invite answered, none on a second run.
+- `bun run test`: the offline catalog check (one account marked an operator), that `runSeed` calls the gateway through the `fetcher` it is given, that the operator command is run with the stand's own settings and that a non-zero exit fails the seed, that `spawnCommand` runs from the repository's root, and that each organisation's members join by accepting the invitation their own invite answered, none on a second run.
 - `bun run test:db`: seeding through the gateway, a second device reading what was
   seeded (the member's view of the organisation included), and the sweep, against the e2e stand (`mcproc start e2e` first): the gateway at
   `GATEWAY_URL`, its SurrealDB at `SURREAL_URL` and its mailbox at `MAILBOX_URL`, where the seed
   verifies each new account, with the origin of the stand's front in `GATEWAY_PUBLIC_URL`, all set
   by `bun run test:db` through `mcproc exec` from the mcproc manifest (`http://127.0.0.1:5191`,
   `http://127.0.0.1:8010`, `http://127.0.0.1:1090` and `https://localhost:5493` in the main
-  checkout). First, a session the gateway opened at an email's first verification stays live
+  checkout). The operator command runs for real (`bun` on the `PATH`), and the suite finds the
+  marked account's `role` set to `operator` on the stand after a seed, and after a second one. First, a session the gateway opened at an email's first verification stays live
   after the stand was opened as its operator. Each test
   plays the front for a simulated client of its own (`__fixtures__/simulated-front.ts`): its
   calls carry `X-Forwarded-For: 198.18.<a>.<b>` from a hash of the test's name, so the gateway's

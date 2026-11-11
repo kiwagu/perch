@@ -14,7 +14,13 @@ const SESSION = device_sessionIdFactory.create()
 /** A live session of the laptop. */
 const LAPTOP: SessionRead = {
   kind: 'session',
-  caller: { identity: IDENTITY, email: 'ann@example.test', device: 'laptop', session: SESSION },
+  caller: {
+    identity: IDENTITY,
+    email: 'ann@example.test',
+    device: 'laptop',
+    session: SESSION,
+    roles: ['operator'],
+  },
 }
 
 /** Sessions whose every read answers `answer`, and the tokens they were asked to read. */
@@ -109,7 +115,7 @@ describe('bearerCaller', () => {
     ).toEqual({ kind: 'unauthorized' })
   })
 
-  it('answers the identity, its email, the device, the session and the token of a session of the device', async () => {
+  it('answers the identity, its email, the device, the session, its platform roles and the token of a session of the device', async () => {
     const { sessions } = sessionsAnswering(LAPTOP)
 
     expect(
@@ -123,6 +129,7 @@ describe('bearerCaller', () => {
       email: 'ann@example.test',
       device: 'laptop',
       session: SESSION,
+      roles: ['operator'],
       token: 'token-1',
     })
   })

@@ -55,7 +55,7 @@ function open(
   const TestModule = defineModule({
     id: 'test',
     declarations: { Settings: SettingsContainer },
-    routes: [{ path: '/settings', page: 'Settings', guard: 'authenticated' }],
+    routes: [{ path: '/settings', page: 'Settings', guard: 'authenticated', roles: ['identity'] }],
   })
   const router = createAppRouter({
     modules: [TestModule],

@@ -10,6 +10,7 @@ import { useService, useShape } from '../../../../../platform/module'
 import type { InvitationView } from '../../../../../platform/organisations.port'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
+import { useListed } from '../../../../../platform/use-listed'
 import { NOTES_SERVICE } from '../../../application/notes.service'
 import { ORGANISATION_SERVICE } from '../../../application/organisation.service'
 import { createOrganisationMachine } from '../../../application/organisation-machine'
@@ -18,7 +19,6 @@ import { organisationShape } from './organisation.model.gen'
 import { type OrganisationChoice, OrganisationView } from './organisation.view'
 import { roleShown } from './role-shown'
 import { useInviteDraft } from './use-invite-draft'
-import { useListed } from './use-listed'
 
 const choice = (membership: {
   readonly tenant: { readonly key: string; readonly name: string }

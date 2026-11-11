@@ -101,10 +101,25 @@ describe('OrganisationModule', () => {
 
   it('routes signed-in users to the organisation page, and anyone to the invitation page', () => {
     expect(
-      OrganisationModule.routes.map(({ path, page, guard }) => ({ path, page, guard })),
+      OrganisationModule.routes.map(({ path, page, guard, roles }) => ({
+        path,
+        page,
+        guard,
+        roles,
+      })),
     ).toEqual([
-      { path: '/org', page: 'OrganisationPage', guard: 'authenticated' },
-      { path: '/invitation', page: 'InvitationPage', guard: undefined },
+      {
+        path: '/org',
+        page: 'OrganisationPage',
+        guard: 'authenticated',
+        roles: ['identity', 'member', 'admin'],
+      },
+      {
+        path: '/invitation',
+        page: 'InvitationPage',
+        guard: undefined,
+        roles: ['guest', 'identity'],
+      },
     ])
     expect(Object.keys(OrganisationModule.declarations)).toEqual([
       'OrganisationPage',

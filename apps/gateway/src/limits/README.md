@@ -19,7 +19,8 @@ Better Auth's own limiter is off (`src/auth/auth-instance.ts`): it restarts its 
 a pause as long as its window, so it would refuse an address's 21st request however slowly the
 20 before it came. Failed sign-ins (answered 401) are limited to 10 per email in 15
 minutes, cleared by a successful sign-in, or one Better Auth answers 403 (the password was
-right, the email is not verified yet), by the same mount. An email counts in lower case, as
+right, but the email is not verified yet or the account is banned), by the same mount. An
+email counts in lower case, as
 the directory keeps and matches an account's: an address in any case is one account, and its
 failures in any case share one limit. A sign-in holds one of its
 email's 10 places from the moment it is let through until Better Auth answers, so parallel

@@ -507,7 +507,9 @@ for Bun.
   list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
   sections it belongs to: those it is declared under, the nearest first, then those beside it
   in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
-  entry, never the entry itself). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
+  entry, never the entry itself); `itemIdOf(control, item)`, the `data-id` of the entry of
+  `item` a control is in, which a navigate's `{ item }` search takes (it throws outside such an
+  entry or for one without an id). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
   search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
   `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
   `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to

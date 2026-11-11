@@ -80,10 +80,11 @@ function renderPage(service: VerifyEmailService, path = '/verify-email?token=the
         path: '/verify-email',
         page: 'VerifyEmail',
         guard: 'guest',
+        roles: ['guest'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/me', page: 'Me' },
-      { path: '/sign-in', page: 'SignIn' },
+      { path: '/me', page: 'Me', roles: ['guest', 'identity'] },
+      { path: '/sign-in', page: 'SignIn', roles: ['guest', 'identity'] },
     ],
   })
   const { session } = fakeSession()
@@ -221,6 +222,23 @@ describe('VerifyEmailContainer', () => {
     expect(screen.getByTestId('user.verify-email.message').textContent).not.toContain(
       'someone-else@example.test',
     )
+  })
+
+  it('says the link of a banned account verified the email and signed nothing in: no form, no welcome, no move', async () => {
+    const { service, started } = verifying([
+      () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    ])
+    const { router } = renderPage(service)
+
+    expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
+      'account-banned',
+    )
+    expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    expect(router.state.location.pathname).toBe('/verify-email')
+    expect(noticeCode()).toBeUndefined()
+    expect(started).toEqual([])
   })
 
   it('exchanges an empty token when the address carries none', async () => {
