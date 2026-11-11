@@ -7,7 +7,8 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
 sign accounts up and verify their emails, sign devices in and out, list and sign out an
 identity's devices, serve organisations and their members, and invite emails to organisations by
-a mailed link that the invited account accepts or declines; devices sync over a WebSocket at
+a mailed link that the invited account accepts or declines, and serve the platform's operators its
+accounts under `/console`; devices sync over a WebSocket at
 `/sync`; `GET /health` answers `ok`.
 
 The source is one module per mechanism of the platform under `src/`, each with its own README
@@ -25,6 +26,8 @@ changes). The modules that predate the index rule have no
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
   their invitations and roles, and their routes.
+- [console](src/console/README.md): the operators' console: the platform's accounts found a page at
+  a time, and one account's card, for operators alone.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
 - [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
   written by `@workspace/email`.

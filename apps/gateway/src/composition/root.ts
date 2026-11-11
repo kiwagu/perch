@@ -28,6 +28,7 @@ import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { ProfileEmails } from '../auth/profile-emails'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { AccountDirectory } from '../console'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
@@ -69,6 +70,8 @@ export interface GatewayRoot {
   readonly mails: AccountMails
   /** The profile's email, which follows the account's into its private region through the hub. */
   readonly profiles: ProfileEmails
+  /** The platform's accounts as the operators' console reads them: a page found, one account. */
+  readonly accountDirectory: AccountDirectory
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -254,6 +257,7 @@ export function createGatewayRoot(
         log: authLog,
       }),
       profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
+      accountDirectory: new AccountDirectory(local),
       organisations,
       databases,
       hub,
