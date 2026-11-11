@@ -277,7 +277,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `test-device`, by default), a `StubTransport` that behaves like the gateway's connection
   without a network (welcomed with the identity's private region, where it is the owner, and,
   for each of the `memberships`, none by default, the organisation's region, where its batches
-  are checked with the abilities of the membership's role), can go
+  are checked with the abilities of the membership's role, and with no platform role), can go
   offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
   `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves

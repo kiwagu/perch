@@ -38,8 +38,8 @@ function endReason(code: EndCode): string {
  * One device's WebSocket to the gateway. The device says hello with its session token first,
  * within the hello time; once its session is read it is welcomed with its identity's private
  * region, the region of each organisation the identity belongs to (one whose database cannot be
- * read is left out until the next hello) and those memberships, and may subscribe, pull, push,
- * probe and compact in those regions only, each handed to the region
+ * read is left out until the next hello), those memberships and the account's platform roles,
+ * and may subscribe, pull, push, probe and compact in those regions only, each handed to the region
  * hub, which answers the device itself and checks its batches against the identity. Messages
  * are handled one at a time, in the order they came. A change of the identity's memberships
  * does not wait for them: the device leaves the regions it may no longer name at once, so a
