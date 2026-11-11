@@ -46,7 +46,8 @@ Each test carries the tag of its scenario's `tags`, written by hand in its `test
 `mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) and `organisation/base/` but the tests named below,
-`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
+`not-found/base/`, `console/flows/not-operator` (an account and a guest at the console's
+addresses), `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
 `open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
@@ -59,8 +60,10 @@ tests of an invitation (`invite-new-account`, `accept-by-link`, `decline-invitat
 a new version, offline, an outdated protocol, the sync status, a sign-out in another tab while
 the data opens or once it did not open), `app-shell/flows/` (a guest
 across the tabs of one browser), `organisation/flows/` (two accounts, each in a browser of
-its own) and `console/base/` (an operator and the accounts it acts on, each in a browser of its
-own). `bun run test:e2e --grep @smoke` runs the first set
+its own), `console/base/` (an operator and the accounts it acts on, each in a browser of its
+own) and the other `console/flows/` tests (an account banned or given a new email before it
+verified its email, an operator whose role is taken away while its console is open). `bun run
+test:e2e --grep @smoke` runs the first set
 on both projects.
 
 Every browser of the suite reaches the front from 127.0.0.1, and the gateway counts its
