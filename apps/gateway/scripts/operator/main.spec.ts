@@ -138,7 +138,7 @@ describe('main', () => {
     expect(await roleOf(local)).toBeUndefined()
   })
 
-  it('exits 1, saying what failed, when the stand cannot be opened', async () => {
+  it('exits 1, saying what failed and never the password, when the stand cannot be opened', async () => {
     const command = run()
     const refused = () =>
       errAsync(
@@ -149,6 +149,8 @@ describe('main', () => {
     expect(command.printedErrors()).toContain(
       'data:OPEN_FAILED could not open ws://127.0.0.1:9/rpc',
     )
+    // The failure's cause carries the password here: nothing written names it.
+    expect(command.printed()).not.toContain('s3cret')
   })
 
   it('never prints the password it was given', async () => {
