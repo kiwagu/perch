@@ -27,6 +27,7 @@ import { MADE_AT, writeAccount, writeSession } from './__fixtures__/accounts'
 import { banOf, sessionEndingsOf } from './__fixtures__/ban-rows'
 import identityUpdateRefuseStatement from './__fixtures__/identity-update-refuse.surql'
 import sessionUpdateRefuseStatement from './__fixtures__/session-update-refuse.surql'
+import { unaskedActions } from './__fixtures__/unasked-actions'
 import { AccountBans } from './account-bans'
 import { AccountDirectory } from './account-directory'
 import { consoleRoutes } from './console-routes'
@@ -268,6 +269,7 @@ async function consoleOver(mounted: Mounted) {
     sessions: mounted.sessions,
     accounts: new AccountDirectory(mounted.local),
     bans: new AccountBans({ directory: mounted.local, clock: mounted.clock }),
+    ...unaskedActions,
     connections: {
       close: (identity, device, code) => {
         closes.push([identity, device, code])

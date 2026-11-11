@@ -421,11 +421,14 @@ the account and then of the new email (so no sign-up of the new email runs meanw
 is judged again on the clock as it is then (401 `link-expired` when it expired while the
 confirmation waited), the pending change the token names is spent (`EmailChanges.claim`, once),
 and the account's email
-becomes the new one only while it is still the email the change was asked from, every reset link
-of the account ending with it in one transaction, since they went to the old email
+becomes the new one, verified, only while it is still the email the change was asked from, every
+reset link of the account ending with it in one transaction, since they went to the old email
 (`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
 by a newer one, or ended by a change of the password), when the account's email changed since, or
-when the new email has got an account meanwhile. Once it changed, the notice of a changed email
+when the new email has got an account meanwhile. The new email is verified because its link was
+opened from its mailbox: an account whose own email never was (a change an operator asked for,
+`src/console/README.md`) signs in with the new one from then on, and its first sign-in starts it.
+Once it changed, the notice of a changed email
 starts to the old email, written from the old email, the account's name and language alone
 (`AccountMails.emailChanged`), and it answers 200 `{ identity, email }`, the account whose email
 changed and its new email. Sessions stay: a session's caller reads the account's email afresh,

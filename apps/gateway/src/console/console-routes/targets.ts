@@ -1,5 +1,14 @@
 /** What an operator does to one account, each at its own path under the account's. */
-export const ACCOUNT_ACTIONS = ['ban', 'unban', 'sign-out'] as const
+export const ACCOUNT_ACTIONS = [
+  'rename',
+  'email',
+  'ban',
+  'unban',
+  'sign-out',
+  'reset',
+  'verification',
+  'removal',
+] as const
 
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number]
 

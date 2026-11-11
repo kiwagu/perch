@@ -1,6 +1,6 @@
 /**
  * The platform operators' console: the accounts of the platform as operators read them, their
- * bans, and the routes.
+ * bans, the names operators give their profiles, and the routes.
  */
 
 export {
@@ -18,3 +18,4 @@ export {
   type ListedAccount,
 } from './account-directory'
 export { type ConsoleRoutesOptions, consoleRoutes } from './console-routes'
+export { ProfileNames, type ProfileNamesOptions, type Renaming } from './profile-names'

@@ -126,9 +126,11 @@ export class EmailChanges {
   }
 
   /**
-   * Makes `to` the email of `identity` when its email is still `from`, and ends every reset link
-   * of the identity with it, in one transaction: the links went to the old email. True once it
-   * is, false, nothing changed, when the identity is gone or its email changed meanwhile.
+   * Makes `to` the email of `identity` when its email is still `from`, marks it verified (its
+   * confirmation link was opened from its mailbox, so an account whose own email never was signs
+   * in with the new one), and ends every reset link of the identity with it, in one transaction:
+   * the links went to the old email. True once it is, false, nothing changed, when the identity is
+   * gone or its email changed meanwhile.
    */
   move(identity: IdentityId, from: string, to: string): ResultAsync<boolean, DataError> {
     return writing(

@@ -3,10 +3,12 @@ import { describe, expect, it, vi } from 'vitest'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
+import identityVerifiedStatement from '../__fixtures__/identity-verified.surql'
 
 import {
   ANN,
   ARGON2_WAIT,
+  annsLink,
   holdTurn,
   mountedOnRealAuth,
   PASSWORD,
@@ -62,6 +64,16 @@ async function confirmationLink(mounted: Mounted, ann: SignedInAccount, email = 
   expect((await asked(mounted, ann, email))?.status).toBe(202)
 
   return linkToken(await mounted.outbox.next(email, seen))
+}
+
+/** Whether the account whose email is `email` has it verified; none when no account has it. */
+async function verifiedOf(mounted: Mounted, email: string): Promise<boolean | undefined> {
+  const [rows] =
+    await mounted.local.db.query<
+      [Array<{ readonly email: string; readonly email_verified: boolean }>]
+    >(identityVerifiedStatement)
+
+  return rows.find((row) => row.email === email)?.email_verified
 }
 
 /** An answer as a client sees it: its status, the names of its headers and its body. */
@@ -235,10 +247,36 @@ describe('authHandler, the confirmation of a new email', () => {
     }
 
     expect(mounted.closes).toEqual([])
+    // The account's own change: its email was verified, and the new one is too.
+    expect(await verifiedOf(mounted, NEW_EMAIL)).toBe(true)
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(401)
     expect((await mounted.route(signInRequest(NEW_EMAIL, PASSWORD, 'desk'), FROM))?.status).toBe(
       200,
     )
+  })
+
+  it('verifies the new email of an account that never verified its own, which starts at its first sign-in with it', async () => {
+    const mounted = await mountedOnRealAuth()
+
+    // Ann signs up and never opens her link: an operator asks for the change on her account.
+    await annsLink(mounted.outbox)
+
+    const identity = await mounted.annsId()
+    const token = (await mounted.emailChanges.ask(identity, ANN, NEW_EMAIL))._unsafeUnwrap()
+
+    expect(await verifiedOf(mounted, ANN)).toBe(false)
+    expect((await mounted.route(confirm(token, { device: 'kiosk' }), FROM))?.status).toBe(200)
+    expect(await verifiedOf(mounted, NEW_EMAIL)).toBe(true)
+    // The old email gets its notice all the same.
+    expect((await mounted.outbox.next(ANN, 1)).subject).toBe('Your Perch account has a new email')
+
+    const signedIn = await mounted.route(signInRequest(NEW_EMAIL, PASSWORD, 'desk'), FROM)
+
+    expect(signedIn?.status).toBe(200)
+    expect(await signedIn?.json()).toMatchObject({
+      user: { id: identity, email: NEW_EMAIL, emailVerified: true },
+      start: { name: 'Ann', locale: 'en' },
+    })
   })
 
   it("tells the old address in the account's language, naming no part of the new email and carrying no link", async () => {

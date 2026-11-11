@@ -1,11 +1,11 @@
-import { type IdentityId, idSchemas } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { readBody } from '../../read-body'
 import { errorAnswer, refusalAnswer } from '../console-refusal'
 
-import type { Handler, Operator } from './operator-caller'
+import { accountOf, actionDone, isOwnAccount } from './account-action'
+import type { Handler } from './operator-caller'
 import type { ConsoleRoutesOptions } from './options'
 
 /**
@@ -16,20 +16,6 @@ const MAX_BAN_REASON = 500
 
 /** What an operator sends to ban an account: why, for operators alone, or nothing. */
 const banBody = z.object({ reason: z.string().trim().max(MAX_BAN_REASON).optional() })
-
-/** The answer to an action done: nothing more to say, the card reads the account again. */
-const done = (): Response => new Response(null, { status: 204 })
-
-/** The account a path's id names, or `undefined` for an id of another form, which names none. */
-function accountOf(id: string): IdentityId | undefined {
-  const identity = idSchemas.identity.schema.safeParse(id)
-
-  return identity.success ? identity.data : undefined
-}
-
-/** Whether `identity` is the operator's own account, which a ban and a sign-out refuse. */
-const ownAccount = (operator: Operator, identity: IdentityId): boolean =>
-  operator.identity === identity
 
 /**
  * The console's actions on an account's standing, each for an operator, on the account the path's
@@ -68,7 +54,7 @@ export function banHandlers(options: ConsoleRoutesOptions) {
         return refusalAnswer('bad-request')
       }
 
-      if (ownAccount(operator, identity)) {
+      if (isOwnAccount(operator, identity)) {
         return refusalAnswer('own-account')
       }
 
@@ -85,7 +71,7 @@ export function banHandlers(options: ConsoleRoutesOptions) {
 
         await options.connections.close(identity, undefined, CLOSE.banned)
 
-        return done()
+        return actionDone()
       })
     }
 
@@ -100,7 +86,7 @@ export function banHandlers(options: ConsoleRoutesOptions) {
 
       return options.turns.run(identity, async () =>
         (await options.bans.unban(identity)).match(
-          (outcome) => (outcome === 'gone' ? refusalAnswer('account-gone') : done()),
+          (outcome) => (outcome === 'gone' ? refusalAnswer('account-gone') : actionDone()),
           failed,
         ),
       )
@@ -115,7 +101,7 @@ export function banHandlers(options: ConsoleRoutesOptions) {
         return refusalAnswer('account-gone')
       }
 
-      if (ownAccount(operator, identity)) {
+      if (isOwnAccount(operator, identity)) {
         return refusalAnswer('own-account')
       }
 
@@ -138,7 +124,7 @@ export function banHandlers(options: ConsoleRoutesOptions) {
 
         await options.connections.close(identity, undefined, CLOSE.revoked)
 
-        return done()
+        return actionDone()
       })
     }
 

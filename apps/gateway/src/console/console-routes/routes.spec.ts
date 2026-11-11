@@ -21,6 +21,7 @@ import {
   setRole,
   signedUp,
 } from '../__fixtures__/operators'
+import { unaskedActions } from '../__fixtures__/unasked-actions'
 import { AccountBans } from '../account-bans'
 import { AccountDirectory } from '../account-directory'
 
@@ -71,6 +72,7 @@ async function served(
     sessions: {
       read: (token) => sessions.read(token),
       revokeAll: (identity) => auth.sessions.revokeAll(identity),
+      identityOf: (email) => auth.sessions.identityOf(email),
     },
     accounts: {
       list: (search) => {
@@ -85,6 +87,7 @@ async function served(
       },
     },
     bans: new AccountBans({ directory: auth.local, clock: auth.clock }),
+    ...unaskedActions,
     // No read closes a socket.
     connections: { close: async () => {} },
     turns: new KeyedTurns<string>(),

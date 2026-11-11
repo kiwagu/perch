@@ -27,8 +27,9 @@ changes). The modules that predate the index rule have no
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
   their invitations and roles, and their routes.
 - [console](src/console/README.md): the operators' console: the platform's accounts found a page at
-  a time, one account's card, and its ban, the lift of the ban and its sign-out everywhere, for
-  operators alone.
+  a time, one account's card, and what an operator does to an account: its name, its email, its
+  ban and the lift of it, its sign-out everywhere, its reset and verification mails, and its
+  removal, for operators alone.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
 - [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
   written by `@workspace/email`.

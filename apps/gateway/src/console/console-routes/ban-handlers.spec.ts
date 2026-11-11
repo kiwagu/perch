@@ -20,6 +20,7 @@ import {
   type SignedIn,
   signedUp,
 } from '../__fixtures__/operators'
+import { unaskedActions } from '../__fixtures__/unasked-actions'
 import { AccountBans } from '../account-bans'
 import { AccountDirectory } from '../account-directory'
 
@@ -77,7 +78,9 @@ async function liveDevices(auth: ConsoleAuth, identity: IdentityId): Promise<unk
 async function served(
   options: {
     readonly bans?: (real: AccountBans) => Pick<AccountBans, 'ban' | 'unban'>
-    readonly sessions?: (auth: ConsoleAuth) => Pick<ConsoleAuth['sessions'], 'read' | 'revokeAll'>
+    readonly sessions?: (
+      auth: ConsoleAuth,
+    ) => Pick<ConsoleAuth['sessions'], 'read' | 'revokeAll' | 'identityOf'>
   } = {},
 ) {
   const auth = await openConsoleAuth()
@@ -111,6 +114,7 @@ async function served(
         })
       },
     },
+    ...unaskedActions,
     connections: {
       close: async (identity, device, code) => {
         steps.push(`closed ${code}`)
@@ -273,6 +277,7 @@ describe('consoleRoutes: POST /console/accounts/:id/sign-out', () => {
       sessions: (auth) => ({
         read: (token) => auth.sessions.read(token),
         revokeAll: () => errAsync(error),
+        identityOf: (email) => auth.sessions.identityOf(email),
       }),
     })
 

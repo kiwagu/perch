@@ -28,7 +28,7 @@ import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { ProfileEmails } from '../auth/profile-emails'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
-import { AccountBans, AccountDirectory } from '../console'
+import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
@@ -74,6 +74,8 @@ export interface GatewayRoot {
   readonly accountDirectory: AccountDirectory
   /** The bans the operators' console sets, ending the account's sessions, and lifts. */
   readonly accountBans: AccountBans
+  /** The name the operators' console gives an account's profile, through its private region. */
+  readonly profileNames: ProfileNames
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -263,6 +265,7 @@ export function createGatewayRoot(
       profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
       accountDirectory: new AccountDirectory(local),
       accountBans: new AccountBans({ directory: local, clock: options.clock }),
+      profileNames: new ProfileNames({ directory: local, hub }),
       organisations,
       databases,
       hub,

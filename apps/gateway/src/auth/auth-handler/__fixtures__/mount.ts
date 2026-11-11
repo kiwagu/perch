@@ -300,7 +300,8 @@ function organisationsOver(directory: LocalDb, onError: (code: string) => void) 
  * clock, the accounts' turns (`turns`), which a test may hold to make work wait, and the
  * organisations (`organisations`) an account's deletion leaves. What a deletion does to the
  * account is kept in order (`steps`): its departure from the organisations asked, its sessions
- * ended, its sockets closed, its rows removed.
+ * ended, its sockets closed, its rows removed. What the mount answers with (`deps`) is kept too, so
+ * another route of a spec answers over the very same services, turns and limits.
  */
 export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const opened = await openAuth(
@@ -331,7 +332,8 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     (code) => failures.push(code),
   )
   const teardown = new AccountTeardown(opened.local)
-  const route = authHandler({
+  /** What the mount answers with; the console's routes of a spec answer over the same. */
+  const deps: AuthMountDeps = {
     auth:
       options.handler === undefined
         ? opened.auth
@@ -394,7 +396,8 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     },
     clock: opened.clock,
     accounts: turns,
-  })
+  }
+  const route = authHandler(deps)
   /** Ann's identity, once she signed up. */
   const annsId = async (): Promise<IdentityId> => {
     const identity = (await sessions.identityOf(ANN))._unsafeUnwrap()
@@ -414,6 +417,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     failures,
     closes,
     route,
+    deps,
     annsId,
     turns,
     followed,
