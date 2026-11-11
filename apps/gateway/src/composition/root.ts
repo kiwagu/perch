@@ -28,6 +28,7 @@ import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { ProfileEmails } from '../auth/profile-emails'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
@@ -69,6 +70,12 @@ export interface GatewayRoot {
   readonly mails: AccountMails
   /** The profile's email, which follows the account's into its private region through the hub. */
   readonly profiles: ProfileEmails
+  /** The platform's accounts as the operators' console reads them: a page found, one account. */
+  readonly accountDirectory: AccountDirectory
+  /** The bans the operators' console sets, ending the account's sessions, and lifts. */
+  readonly accountBans: AccountBans
+  /** The name the operators' console gives an account's profile, through its private region. */
+  readonly profileNames: ProfileNames
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -94,7 +101,8 @@ export interface GatewayRoot {
   readonly limits: RequestLimits
   /**
    * One account's work runs one turn at a time in this process: its sign-ups, verifications and
-   * reset requests by its email in lower case, its resets and changes by its identity's key.
+   * reset requests by its email in lower case, its resets and changes, and the operators' actions
+   * on it, by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
   readonly clock: Clock
@@ -205,7 +213,8 @@ export function createGatewayRoot(
 
     const departure = new AccountDeparture({ directory: local, databases, hub })
 
-    // One account's work, one turn at a time: the auth mount's and the profile's email's.
+    // One account's work, one turn at a time: the auth mount's, the profile's email's and the
+    // operators' console's.
     const accountTurns = new KeyedTurns<string>()
 
     // Better Auth serves its routes under the path of its public URL only, so the server hands it
@@ -254,6 +263,9 @@ export function createGatewayRoot(
         log: authLog,
       }),
       profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
+      accountDirectory: new AccountDirectory(local),
+      accountBans: new AccountBans({ directory: local, clock: options.clock }),
+      profileNames: new ProfileNames({ directory: local, hub }),
       organisations,
       databases,
       hub,

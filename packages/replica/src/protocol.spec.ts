@@ -46,13 +46,13 @@ describe('sync protocol', () => {
     expect(decodeMessage(clientMessage, text).isErr()).toBe(true)
   })
 
-  it('takes a hello of protocol 8 only', () => {
+  it('takes a hello of protocol 9 only', () => {
     const hello = (protocol: number) =>
       JSON.stringify({ type: 'hello', protocol, token: 't', device: 'd' })
 
-    expect(PROTOCOL_VERSION).toBe(8)
-    expect(decodeMessage(clientMessage, hello(8)).isOk()).toBe(true)
-    expect(decodeMessage(clientMessage, hello(7)).isErr()).toBe(true)
+    expect(PROTOCOL_VERSION).toBe(9)
+    expect(decodeMessage(clientMessage, hello(9)).isOk()).toBe(true)
+    expect(decodeMessage(clientMessage, hello(8)).isErr()).toBe(true)
   })
 
   it('takes a hello that carries the session token, and no access or refresh key', () => {
@@ -127,6 +127,10 @@ describe('sync protocol', () => {
     expect(CLOSE.deviceLimit).toBe(4003)
   })
 
+  it('closes a device whose account an operator banned with 4004', () => {
+    expect(CLOSE.banned).toBe(4004)
+  })
+
   it('refuses text that is not JSON', () => {
     expect(decodeMessage(serverMessage, 'not json').isErr()).toBe(true)
   })
@@ -142,6 +146,15 @@ describe('sync protocol', () => {
           { region: 'tenant:acme', head: 2 },
         ],
         memberships: [acme],
+        roles: ['operator'],
+        time: 1,
+      },
+      {
+        type: 'welcome',
+        identity: 'idn_b',
+        regions: [{ region: 'identity:idn_b', head: 0 }],
+        memberships: [],
+        roles: [],
         time: 1,
       },
       { type: 'memberships', memberships: [acme] },
@@ -165,6 +178,22 @@ describe('sync protocol', () => {
         decodeMessage(serverMessage, encodeMessage(serverMessage, message))._unsafeUnwrap(),
       ).toEqual(message)
     }
+  })
+
+  it("refuses a welcome without the account's platform roles, or with a role it does not know", () => {
+    const welcome = (fields: object) =>
+      JSON.stringify({
+        type: 'welcome',
+        identity: 'idn_a',
+        regions: [],
+        memberships: [],
+        time: 1,
+        ...fields,
+      })
+
+    expect(decodeMessage(serverMessage, welcome({ roles: [] })).isOk()).toBe(true)
+    expect(decodeMessage(serverMessage, welcome({})).isErr()).toBe(true)
+    expect(decodeMessage(serverMessage, welcome({ roles: ['admin'] })).isErr()).toBe(true)
   })
 
   it('parses a membership and refuses a role it does not know', () => {

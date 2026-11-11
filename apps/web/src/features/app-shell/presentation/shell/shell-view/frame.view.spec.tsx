@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
+import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
 import es from '../../../../../platform/i18n/app.es.json'
@@ -19,12 +20,16 @@ const rendering =
 /** The frame ready, as most of its states: the navigation of a signed-in account. */
 const READY = rendering('app-shell.nav')
 
+/** The roles of a guest's device, and of a signed-in account's with no other role. */
+const GUEST = heldRoles(false)
+const ACCOUNT = heldRoles(true)
+
 /** A guest's frame, ready, around a page, with `props` over it. */
 const shell = (props: Partial<ShellViewProps> = {}) => (
   <ShellView
     status="ready"
     renders={READY}
-    signedIn={false}
+    held={GUEST}
     activePath="/sign-in"
     canChooseLocale={true}
     onLocaleChange={() => {}}
@@ -64,7 +69,7 @@ describe('ShellView', () => {
   it("shows a signed-in account's navigation and screen while its data opens, but no message of the platform", () => {
     renderShell({
       status: 'opening-data',
-      signedIn: true,
+      held: ACCOUNT,
       sync: 'synced',
       update: 'new-version',
       install: 'install-available',
@@ -84,7 +89,7 @@ describe('ShellView', () => {
 
   it('shows the messages of the platform once ready, the update and the install above the page', () => {
     renderShell({
-      signedIn: true,
+      held: ACCOUNT,
       activePath: '/me',
       sync: 'synced',
       update: 'new-version',
@@ -122,7 +127,7 @@ describe('ShellView', () => {
   })
 
   it('shows a guest no navigation, only the banner and the page', () => {
-    renderShell({ signedIn: false, activePath: '/sign-in' })
+    renderShell({ held: GUEST, activePath: '/sign-in' })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('navigation')).toBeNull()
@@ -134,14 +139,14 @@ describe('ShellView', () => {
   })
 
   it("shows a signed-in account no navigation where the frame's state renders none", () => {
-    renderShell({ signedIn: true, activePath: '/me', renders: rendering() })
+    renderShell({ held: ACCOUNT, activePath: '/me', renders: rendering() })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('link')).toBeNull()
   })
 
   it("marks a signed-in account's navigation, its four links in it, with no language select", () => {
-    renderShell({ signedIn: true, activePath: '/me' })
+    renderShell({ held: ACCOUNT, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -162,8 +167,26 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.theme-select')).toBeNull()
   })
 
+  it("adds the console's link to an operator's navigation, and to nobody else's", () => {
+    renderShell({ held: heldRoles(true, ['admin', 'operator']), activePath: '/me' })
+
+    const navigation = screen.getByTestId('app-shell.nav')
+
+    expect(
+      within(navigation)
+        .getAllByRole('link')
+        .map((link) => link.getAttribute('data-testid')),
+    ).toEqual([
+      'app-shell.nav.profile-link',
+      'app-shell.nav.organisation-link',
+      'app-shell.nav.devices-link',
+      'app-shell.nav.settings-link',
+      'app-shell.nav.console-link',
+    ])
+  })
+
   it('speaks Spanish when the Spanish catalog is chosen', () => {
-    renderShell({ locale: 'es', signedIn: true, activePath: '/me' })
+    renderShell({ locale: 'es', held: ACCOUNT, activePath: '/me' })
 
     const navigation = screen.getByTestId('app-shell.nav')
 

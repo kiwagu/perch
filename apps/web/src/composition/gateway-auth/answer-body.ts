@@ -1,6 +1,6 @@
 /**
  * The body of a gateway answer, read once and never quoted: the code a refusal names, what a link
- * the gateway refused means, and what a conflict means.
+ * the gateway refused means, what a conflict means, and what a banned account's refusal means.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -17,6 +17,13 @@ const refusal = z.object({ code: z.string() })
 /** The code a refusal's body names, `undefined` when it names none. */
 export const refusalCode = (response: Response): ResultAsync<string | undefined, never> =>
   answerBody(response).map((body) => refusal.safeParse(body).data?.code)
+
+/** The code a 403 names for an account an operator banned. */
+export const ACCOUNT_BANNED_CODE = 'account-banned'
+
+/** What a 403 that names `account-banned` means: nothing is signed in, the account is banned. */
+export const accountBanned = (): DataError =>
+  dataError('data:ACCOUNT_BANNED', 'the account is banned')
 
 /**
  * What a 401 to a link's token means: `link-expired` a link past its lifetime, any other a link

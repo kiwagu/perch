@@ -14,9 +14,9 @@ run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
-The contract declares 13 screens, 181 anchors and 76 codes.
+The contract declares 15 screens, 232 anchors and 92 codes.
 
-Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 73/74, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 89/90, ignored 2.
 
 ## Model
 
@@ -69,12 +69,13 @@ Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
 | app-shell | 10 | 10 | 0 | 100% |
+| console | 16 | 16 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
 | organisation | 23 | 23 | 0 | 100% |
 | user | 32 | 32 | 0 | 100% |
 | ui kit | 4 | 3 | 2 | 75% |
-| all | 74 | 73 | 2 | 99% |
+| all | 90 | 89 | 2 | 99% |
 
 ### Unmarked
 
@@ -93,19 +94,21 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| not-found | 3 | 1 |
-| app-shell | 21 | 80 |
-| user.confirm-email | 5 | 4 |
+| not-found | 3 | 3 |
+| app-shell | 22 | 89 |
+| user.confirm-email | 5 | 6 |
+| console.account | 36 | 8 |
+| console.users | 14 | 9 |
 | user.delete-account | 4 | 6 |
 | device | 10 | 6 |
 | user.forgot-password | 6 | 11 |
 | organisation.invitation | 8 | 7 |
-| user.profile | 10 | 67 |
-| organisation | 45 | 21 |
-| user.reset-password | 15 | 9 |
+| user.profile | 10 | 76 |
+| organisation | 45 | 22 |
+| user.reset-password | 15 | 10 |
 | user.settings | 27 | 24 |
-| user.sign-in | 20 | 51 |
-| user.verify-email | 7 | 6 |
+| user.sign-in | 20 | 57 |
+| user.verify-email | 7 | 7 |
 
 <!-- coverage:end -->
 

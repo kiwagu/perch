@@ -1,0 +1,121 @@
+# yaml-language-server: $schema=../../../schemas/screen.schema.json
+id: console.users
+title: Accounts
+description: "The accounts of the platform, for an operator: a page at a time, found by a part of their name or email; the search, the page and its size are in the address."
+flag: null
+bindings:
+  - path: /console/users
+    roles: [ operator ]
+    history: push
+    retain: [ size ]
+    search:
+      type: object
+      properties:
+        q:
+          type: string
+          maxLength: 254
+          description: A part of the email or of the name the accounts are found by; absent, every account.
+          examples: [ ann ]
+        page:
+          type: integer
+          minimum: 1
+          default: 1
+          description: The page of the accounts shown.
+          examples: [ 2 ]
+        size:
+          type: integer
+          enum: [ 10, 25, 50 ]
+          default: 25
+          description: The accounts a page holds.
+      additionalProperties: false
+entry: [ console.users.heading, console.users.search-form, console.users.list, console.users.error ]
+anchors:
+  console.users.heading:
+    kind: heading
+  console.users.search-form:
+    kind: form
+    description: Finds accounts by a part of their email or name.
+  console.users.search-input:
+    kind: input
+    description: The part of the email or of the name to find, as the address has it.
+    binding: { search: q }
+  console.users.search-button:
+    kind: button
+    description: Moves to the first page of the accounts the text typed finds.
+  console.users.list:
+    kind: list
+    description: "The accounts the search finds, the newest first, one page of them: each with its name, email, marks and when it was made."
+    source:
+      platform: accounts.list
+      params: { q: { search: q } }
+      paged: true
+    states: [ loading, ready, empty ]
+  console.users.list.account-item:
+    kind: item
+    description: One account of the page.
+    dataId: identity
+  console.users.list.name-cell:
+    kind: cell
+    description: The name of the account's profile, or the name it signed up with while it has no profile.
+  console.users.list.email-cell:
+    kind: cell
+    description: The email of the account.
+  console.users.list.created-cell:
+    kind: cell
+    description: When the account was made.
+  console.users.list.verified-badge:
+    kind: badge
+    description: Marks an account whose email is verified.
+  console.users.list.banned-badge:
+    kind: badge
+    description: Marks a banned account.
+  console.users.list.operator-badge:
+    kind: badge
+    description: Marks an operator of the platform.
+  console.users.list.open-link:
+    kind: link
+    description: Opens the account's card, with the account in the address.
+  console.users.error:
+    kind: error
+    description: Why the accounts could not be read, in the place of the list.
+    codes: [ not-operator, failed ]
+states:
+  loading: "console.users.list in loading: the page of accounts is being read."
+  ready: "console.users.list with an item per account of the page, its range, its page size select and the links to the pages before and after where there are any; a page past the last holds no item."
+  empty: "console.users.list in empty: the search found no account."
+  error: "console.users.error in the place of the list: the accounts could not be read."
+flow:
+  initial: viewing
+  states:
+    viewing:
+      description: The page of accounts the address names, with the search box holding the address's text.
+      on:
+        console.users.search-button:
+          description: A new search starts at page 1 with the page size kept.
+          actions:
+            - navigate: { to: /console/users, search: { q: { anchor: console.users.search-input }, page: 1 } }
+        console.users.list.open-link:
+          target: opened
+          actions:
+            - navigate: { to: /console/account, search: { id: { item: console.users.list.account-item } } }
+    opened:
+      description: The app has moved to the account's card.
+      type: final
+wireframe: |-
+  - heading "Accounts" [level=1]
+  - textbox "Search"
+  - button "Search"
+  - text: /\d+-\d+ of \d+/
+  - combobox "Rows per page": "25"
+  - list:
+    - listitem:
+      - text: /.+/
+      - text: /.+@.+/
+      - text: Verified
+      - text: /Created .+/
+    - listitem:
+      - text: /.+/
+      - text: /.+@.+/
+      - text: Banned
+      - text: /Created .+/
+  - link "Next"

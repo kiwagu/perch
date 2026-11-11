@@ -18,7 +18,14 @@ function Page() {
 const PageModule = defineModule({
   id: 'page',
   declarations: { Page },
-  routes: [{ path: '/ask', page: 'Page', search: z.object({ email: z.string().optional() }) }],
+  routes: [
+    {
+      path: '/ask',
+      page: 'Page',
+      roles: ['guest', 'identity'],
+      search: z.object({ email: z.string().optional() }),
+    },
+  ],
 })
 
 function open(at: string) {

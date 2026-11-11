@@ -1,4 +1,4 @@
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { dataError } from '@workspace/data'
 import {
@@ -21,6 +21,7 @@ import {
 } from '../catalog'
 
 import { closing } from './closing'
+import { type CommandRunner, OPERATOR_CLI } from './command-runner'
 import { sweep } from './sweep'
 
 /** Where a seed goes: the gateway that creates the accounts, and the stand behind it for a reset. */
@@ -33,6 +34,8 @@ export interface SeedOptions extends StandTarget, Pick<ClientOptions, 'fetcher' 
   readonly mode: SeedMode
   /** Sweep the stand's seed data first. */
   readonly reset?: boolean
+  /** Runs the host's operator command, which appoints the catalog's operators on the stand. */
+  readonly runCommand: CommandRunner
 }
 
 export interface SeededEntry {
@@ -70,6 +73,60 @@ function seedAccounts(
       }),
     okAsync({}),
   )
+}
+
+/** One run of the operator command for `email`: it fails the seed on an exit other than 0. */
+function grantOperator(
+  runCommand: CommandRunner,
+  stand: StandOptions,
+  email: string,
+): ResultAsync<void, SeedError> {
+  const argv = [
+    'bun',
+    OPERATOR_CLI,
+    `--url=${stand.url}`,
+    `--namespace=${stand.namespace}`,
+    `--database=${stand.database}`,
+    `--user=${stand.credentials.username}`,
+    `--pass=${stand.credentials.password}`,
+    'grant',
+    email,
+  ]
+
+  // What fails the seed says the email and the exit code, never the arguments: one holds a password.
+  return ResultAsync.fromPromise(runCommand(argv), (reason) =>
+    dataError(
+      'data:COMMAND_FAILED',
+      `the operator command could not run for ${email}: ${reason instanceof Error ? reason.message : String(reason)}`,
+    ),
+  ).andThen((exit) =>
+    exit === 0
+      ? okAsync(undefined)
+      : errAsync(
+          dataError('data:COMMAND_FAILED', `the operator command exited with ${exit} for ${email}`),
+        ),
+  )
+}
+
+/**
+ * Appoints the accounts the catalog marks operators, one after the other, once they exist: the
+ * host's operator command grants each the role in the directory of `stand` (the directory's own
+ * namespace, database and system user, not an organisation's). Granting again changes nothing, so
+ * a second run leaves them operators. The first command to fail stops the seed.
+ */
+export function grantOperators(
+  runCommand: CommandRunner,
+  stand: StandOptions,
+  presets: Catalog,
+  mode: SeedMode,
+): ResultAsync<void, SeedError> {
+  return presets.accounts
+    .filter((preset) => preset.operator === true)
+    .map((preset) => accountFor(preset, mode).email)
+    .reduce<ResultAsync<void, SeedError>>(
+      (done, email) => done.andThen(() => grantOperator(runCommand, stand, email)),
+      okAsync(undefined),
+    )
 }
 
 /** A member and the invitation its invite answered. */
@@ -165,13 +222,14 @@ export function seedOrganisations(
 
 /**
  * Seeds the catalog's accounts through the gateway as a device would, one account at a time,
- * each new one verified through the mail `inbox` reads, then its organisations, whose
- * administrators invite the members, who join by accepting (so every account exists first). With `reset`, the stand's
- * seed data is swept first. A catalog the run would not hold (an organisation key the run's
+ * each new one verified through the mail `inbox` reads, then the operators of the platform among
+ * them are appointed through `runCommand` (the host's operator command, on the stand's directory),
+ * then its organisations, whose administrators invite the members, who join by accepting (so
+ * every account exists first). With `reset`, the stand's seed data is swept first. A catalog the run would not hold (an organisation key the run's
  * suffix makes too long, among others) is refused before anything.
  */
 export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedError> {
-  const { mode, reset, gatewayUrl, fetcher, inbox, ...stand } = options
+  const { mode, reset, gatewayUrl, fetcher, inbox, runCommand, ...stand } = options
   const checked = validateCatalog(catalog, mode)
 
   if (checked.isErr()) {
@@ -188,10 +246,9 @@ export function runSeed(options: SeedOptions): ResultAsync<SeedManifest, SeedErr
       closing(
         client,
         seedAccounts(client, presets, mode).andThen((accounts) =>
-          seedOrganisations(client, presets, mode).map((organisations) => ({
-            accounts,
-            organisations,
-          })),
+          grantOperators(runCommand, stand, presets, mode)
+            .andThen(() => seedOrganisations(client, presets, mode))
+            .map((organisations) => ({ accounts, organisations })),
         ),
       ),
     )

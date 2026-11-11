@@ -13,9 +13,9 @@ import {
   signInAndRead,
 } from './__fixtures__/device'
 import { simulatedFront } from './__fixtures__/simulated-front'
-import { leftOnStand, membersIn, writeMemberIn } from './__fixtures__/stand'
+import { leftOnStand, membersIn, operatorsAmong, writeMemberIn } from './__fixtures__/stand'
 import { accountFor, catalog, type SeedMode } from './catalog'
-import { openStand, runSeed, type StandTarget, sweep } from './seed'
+import { openStand, runSeed, type StandTarget, spawnCommand, sweep } from './seed'
 
 // The e2e stand: its gateway creates the accounts, its mailbox receives their verification
 // mails, and its SurrealDB, reached as root, is where the sweep runs. The spec sweeps only the
@@ -60,6 +60,12 @@ const demo: SeedMode = { kind: 'demo' }
 const mailbox = new Mailbox(stand.MAILBOX_URL)
 
 const emails = catalog.accounts.map((preset) => accountFor(preset, demo).email)
+
+// The accounts the catalog marks, which the seed makes operators through the host's command (the
+// real one: it runs `bun`, from the repository root, against this stand).
+const operators = catalog.accounts
+  .filter((preset) => preset.operator === true)
+  .map((preset) => accountFor(preset, demo).email)
 
 // An account that is no seed account of the demo, and the organisation it creates: swept at the end.
 const run = Date.now().toString(36)
@@ -153,7 +159,9 @@ describe('seeding through the gateway', () => {
   it('seeds the accounts through the gateway, and a second device sees them', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
 
     for (const preset of catalog.accounts) {
       const account = accountFor(preset, mode)
@@ -168,12 +176,18 @@ describe('seeding through the gateway', () => {
       expect(profile).toMatchObject({ name: preset.name, email: account.email, bio: preset.bio })
       expect(seen.settings).toMatchObject({ locale: preset.locale })
     }
+
+    // The accounts the catalog marks are operators on the stand now, and no other account is.
+    expect(operators).toHaveLength(1)
+    expect(await operatorsAmong(target, emails)).toEqual(operators)
   })
 
   it('seeds acme with its administrator and member, and a second device of the member sees it', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const manifest = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
     const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
     const [ann, beto] = ['ann', 'beto'].map((ref) => {
       const preset = catalog.accounts.find((account) => account.ref === ref)
@@ -204,11 +218,17 @@ describe('seeding through the gateway', () => {
   it('runs twice without duplicating anything', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
     const mode = demo
-    const first = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
+    const first = (
+      await runSeed({ ...target, mode, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
     const before = await leftOnStand(target, first)
-    const second = (await runSeed({ ...target, mode, ...client }))._unsafeUnwrap()
+    const second = (
+      await runSeed({ ...target, mode, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
 
     expect(second).toEqual(first)
+    // Appointing again leaves the operator an operator: the command does not fail a second time.
+    expect(await operatorsAmong(target, emails)).toEqual(operators)
     expect(before).toMatchObject({
       identities: 2,
       profiles: 2,
@@ -226,7 +246,9 @@ describe('seeding through the gateway', () => {
 
   it('finds an organisation of its key only as its administrator', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    expect((await runSeed({ ...target, mode: demo, ...client })).isOk()).toBe(true)
+    expect(
+      (await runSeed({ ...target, mode: demo, ...client, runCommand: spawnCommand })).isOk(),
+    ).toBe(true)
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
     const account = accountFor(ann ?? expect.unreachable('a preset ann'), demo)
     const organisation = { key: `mbr_${outsider.run}`, name: 'Outside member' }
@@ -240,7 +262,9 @@ describe('seeding through the gateway', () => {
 
   it('sweeps seeded identities with their profiles, settings, region rows, memberships and organisation databases', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode: demo, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
     const ann = catalog.accounts.find((preset) => preset.ref === 'ann')
     const annId = manifest.accounts['ann']?.id ?? expect.unreachable('the account ann')
     const outside = `out_${outsider.run}`
@@ -295,7 +319,9 @@ describe('seeding through the gateway', () => {
 
   it('sweeps an organisation whose database holds a member row with no membership', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode: demo, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
     const ann = accountFor(
       catalog.accounts.find((preset) => preset.ref === 'ann') ?? expect.unreachable('a preset ann'),
       demo,
@@ -345,7 +371,9 @@ describe('seeding through the gateway', () => {
 
   it('sweeps the pending invitations of the organisations it removes, to any address, and those to the accounts it removes', async () => {
     expect((await sweep(target, { emails })).isOk()).toBe(true)
-    const manifest = (await runSeed({ ...target, mode: demo, ...client }))._unsafeUnwrap()
+    const manifest = (
+      await runSeed({ ...target, mode: demo, ...client, runCommand: spawnCommand })
+    )._unsafeUnwrap()
     const acme = manifest.organisations['acme'] ?? expect.unreachable('the organisation acme')
     const ann = accountFor(
       catalog.accounts.find((preset) => preset.ref === 'ann') ?? expect.unreachable('a preset ann'),

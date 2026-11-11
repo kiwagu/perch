@@ -60,12 +60,14 @@ export const UserModule = defineModule({
       path: '/sign-in',
       page: 'SignInPage',
       guard: 'guest',
+      roles: ['guest'],
       search: z.object({ email: z.string().max(254).optional() }),
     },
     {
       path: '/verify-email',
       page: 'VerifyEmailPage',
       guard: 'guest',
+      roles: ['guest'],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // A guest's: a signed-in account changes its password in its settings.
@@ -73,27 +75,31 @@ export const UserModule = defineModule({
       path: '/forgot-password',
       page: 'ForgotPasswordPage',
       guard: 'guest',
+      roles: ['guest'],
       search: z.object({ email: z.string().max(254).optional() }),
     },
     // Open to anyone: a reset of the account signed in here signs this device out.
     {
       path: '/reset-password',
       page: 'ResetPasswordPage',
+      roles: ['guest', 'identity'],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // Open to anyone: the link changes the email whoever is signed in here.
     {
       path: '/confirm-email',
       page: 'ConfirmEmailPage',
+      roles: ['guest', 'identity'],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
     // Open to anyone: the link deletes the account its mail was sent to, whoever is signed in here.
     {
       path: '/delete-account',
       page: 'DeleteAccountPage',
+      roles: ['guest', 'identity'],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
-    { path: '/me', page: 'ProfilePage', guard: 'authenticated' },
-    { path: '/settings', page: 'SettingsPage', guard: 'authenticated' },
+    { path: '/me', page: 'ProfilePage', guard: 'authenticated', roles: ['identity'] },
+    { path: '/settings', page: 'SettingsPage', guard: 'authenticated', roles: ['identity'] },
   ],
 })

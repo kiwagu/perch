@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern'
+
 import type { IdentityId } from '@workspace/ids'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
@@ -6,7 +8,7 @@ import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { type SignInCredential, signInStands } from '../account-passwords'
-import type { MailedVerification } from '../auth-sessions'
+import type { MailedVerification, SignedInAccount } from '../auth-sessions'
 import { DEVICE_HEADER } from '../session-hooks'
 
 import type { AuthMountDeps } from './mount'
@@ -25,25 +27,77 @@ const resendBody = z.object({ email: z.string().min(1).max(320) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**
+ * What a verification that hands out no session answers, by the email's account as the last read
+ * found it (`credential`): 401 `link-invalid` once the email is no longer the account's the link
+ * was mailed to (`identity`); 403 `account-banned` while that account is banned, a ban having
+ * ended the session or refused it; `{ token: null }` otherwise (it is verified: Better Auth
+ * verified it, or a reset did).
+ */
+function withoutSession(credential: SignInCredential | undefined, identity: IdentityId): Response {
+  if (credential?.identity !== identity) {
+    return refused(401, 'link-invalid')
+  }
+
+  return credential.banned ? refused(403, 'account-banned') : Response.json({ token: null })
+}
+
+/**
+ * Admits the session that stands (`AuthSessions.admitVerified`): its token leaves the gateway only
+ * once the admission answers `admitted`, which ended the device's earlier session, so the
+ * identity's sockets on the device close then (1000), as at a sign-in, and the answer carries the
+ * token and the account. An account banned before the admission committed answers 403
+ * `account-banned`, the session ended `banned`; a session a reset ended meanwhile answers as one
+ * that no longer reads (`withoutSession`). An admission that failed answers 500 `internal` and
+ * ends the session by its token; should that ending fail too, the session keeps waiting, never
+ * handed out, read by no caller.
+ */
+async function admitted(
+  deps: AuthMountDeps,
+  session: SignedInAccount,
+  identity: IdentityId,
+  device: string,
+  credential: SignInCredential | undefined,
+): Promise<Response> {
+  const admission = await deps.sessions.admitVerified(identity, session.token)
+
+  if (admission.isErr()) {
+    return (await deps.sessions.signOut(session.token)).match(internal, internal)
+  }
+
+  return match(admission.value)
+    .with({ kind: 'admitted' }, async () => {
+      await deps.connections.close(identity, device, SUPERSEDED)
+
+      return Response.json({ token: session.token, user: session.user })
+    })
+    .with({ kind: 'banned' }, () => refused(403, 'account-banned'))
+    .with({ kind: 'gone' }, () => withoutSession(credential, identity))
+    .exhaustive()
+}
+
+/**
  * Holds the session a first verification signed in to the account its link was mailed to, as a
- * sign-in is held (`signInStands`): the email's account and the hash of its password, read before
- * Better Auth was asked (`before`), are read again now that it wrote the session, and the session
- * stands only when both reads found that very account, with the same password, and Better Auth
- * signed that account in. A verification holds the email's turn, not the account's, so a reset of
- * the account runs beside it: one that commits while Better Auth verifies the email, before the
- * session is written, ends every session it finds, the new one not yet among them. So when the
- * password changed, or the email left the account, the session is ended at once by its token, and
- * the answer carries none: `{ token: null }` while the email is still the account's (it is
- * verified: the reset verified it, if Better Auth had not), 401 `link-invalid` once it is not. A
- * session that no longer reads (a reset ended it after it was written) has nothing left to end.
- * A readback or a second read that fails answers 500 `internal`, a session that was read back
- * ended first.
+ * sign-in is held (`signInStands`): the session is read back by the signed token of Better Auth's
+ * answer (the one read of a session waiting for its admission but the admissions', which gives its
+ * raw token), the email's account and the hash of its password, read before Better Auth was asked
+ * (`before`), are read again now that it wrote the session, and the session stands only when both
+ * reads found that very account, with the same password, and Better Auth signed that account in.
+ * A session that stands is then admitted (`admitted`). A verification holds the email's turn, not
+ * the account's, so a reset of the account runs beside it: one that commits while Better Auth
+ * verifies the email, before the session is written, ends every session it finds, the new one not
+ * yet among them. So when the password changed, or the email left the account, the session is
+ * ended at once by its token, and the answer carries none (`withoutSession`). A session that no
+ * longer reads (a reset or a ban ended it after it was written) has nothing left to end, and is
+ * answered alike, a ban as 403 `account-banned`. A readback or a second read that fails answers
+ * 500 `internal`, a session that was read back ended first. Until its admission the device's
+ * earlier session, and the sockets it opened, are left as they were.
  */
 async function standing(
   deps: AuthMountDeps,
   signed: string,
   email: string,
   identity: IdentityId,
+  device: string,
   before: SignInCredential | undefined,
 ): Promise<Response> {
   const account = await deps.sessions.signedIn(signed)
@@ -56,7 +110,7 @@ async function standing(
     session.user.id === identity &&
     signInStands(before, after.value, identity)
   ) {
-    return Response.json({ token: session.token, user: session.user })
+    return admitted(deps, session, identity, device, after.value)
   }
 
   const ended = session === undefined || (await deps.sessions.signOut(session.token)).isOk()
@@ -65,9 +119,27 @@ async function standing(
     return internal()
   }
 
-  return after.value?.identity === identity
-    ? Response.json({ token: null })
-    : refused(401, 'link-invalid')
+  return withoutSession(after.value, identity)
+}
+
+/**
+ * What a verification answers when Better Auth failed it: a 5xx its router answered, or a promise
+ * that rejected (a failure Better Auth rethrows outside its router, as of a database hook it runs
+ * once the router answered). The email's account is read again: the link's account banned answers
+ * 403 `account-banned` (Better Auth may have failed for a ban that ended its session), anything
+ * else 500 `internal`, a failed read included. Never a token: a session Better Auth may have
+ * written waits for an admission nobody asks for, never handed out.
+ */
+async function failedExchange(
+  deps: AuthMountDeps,
+  email: string,
+  identity: IdentityId,
+): Promise<Response> {
+  const credential = await deps.passwords.credentialOf(email)
+
+  return credential.isOk() && credential.value?.identity === identity && credential.value.banned
+    ? refused(403, 'account-banned')
+    : internal()
 }
 
 /**
@@ -78,10 +150,13 @@ async function standing(
  * the link is dead (401 `link-invalid`) and Better Auth is not asked: its token names the email
  * alone, and would verify, and sign in, whichever account holds it now. Otherwise Better Auth
  * verifies with its token alone (no `callbackURL`: it never redirects) and without the request's
- * credentials. A first verification signs the device in: the identity's sockets on the device are
- * closed with 1000 at once, as at a sign-in, before the session is read back and held to the
- * account (`standing`), so a readback that fails, or a session that cannot stand, still leaves no
- * socket of the ended session open.
+ * credentials. Its refusal reaches the client as its status and code alone (`refusalOf`), its own
+ * gate's refusal of a banned account as 403 `account-banned`; its failure, a 5xx or a promise
+ * that rejected, as `failedExchange` answers it. A first verification signs the device in: Better
+ * Auth writes the session waiting for its admission, which `standing` holds to the account and
+ * admits before the token leaves, and the identity's sockets on the device close only once it is
+ * admitted, so a readback that fails, or a session that cannot stand, leaves the device's earlier
+ * session and its sockets as they were.
  */
 async function exchange(
   deps: AuthMountDeps,
@@ -104,13 +179,23 @@ async function exchange(
 
   url.search = new URLSearchParams({ token: verification.token }).toString()
 
-  const answer = await deps.auth.handler(
-    new Request(url.href, {
-      method: 'GET',
-      headers: withoutCredentials(request.headers),
-      signal: request.signal,
-    }),
-  )
+  let answer: Response
+
+  try {
+    answer = await deps.auth.handler(
+      new Request(url.href, {
+        method: 'GET',
+        headers: withoutCredentials(request.headers),
+        signal: request.signal,
+      }),
+    )
+  } catch {
+    return failedExchange(deps, email, verification.identity)
+  }
+
+  if (answer.status >= 500) {
+    return failedExchange(deps, email, verification.identity)
+  }
 
   if (answer.status === 401) {
     const refusal = linkRefusal.safeParse(await answer.json().catch(() => undefined))
@@ -131,9 +216,7 @@ async function exchange(
     return Response.json({ token: null })
   }
 
-  await deps.connections.close(verification.identity, device, SUPERSEDED)
-
-  return standing(deps, signed, email, verification.identity, holder.value)
+  return standing(deps, signed, email, verification.identity, device, holder.value)
 }
 
 /**

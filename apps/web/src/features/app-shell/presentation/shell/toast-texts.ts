@@ -30,4 +30,12 @@ export const TOAST_TEXTS: ToastWords = {
   'profile-saved': { tone: 'success', text: (t) => t('app.shell.toast.profile-saved') },
   'device-signed-out': { tone: 'success', text: (t) => t('app.shell.toast.device-signed-out') },
   'password-changed': { tone: 'success', text: (t) => t('app.shell.toast.password-changed') },
+  'name-saved': { tone: 'success', text: (t) => t('app.shell.toast.name-saved') },
+  'email-change-sent': { tone: 'success', text: (t) => t('app.shell.toast.email-change-sent') },
+  'ban-set': { tone: 'success', text: (t) => t('app.shell.toast.ban-set') },
+  'ban-lifted': { tone: 'success', text: (t) => t('app.shell.toast.ban-lifted') },
+  'sessions-revoked': { tone: 'success', text: (t) => t('app.shell.toast.sessions-revoked') },
+  'reset-sent': { tone: 'success', text: (t) => t('app.shell.toast.reset-sent') },
+  'verification-sent': { tone: 'success', text: (t) => t('app.shell.toast.verification-sent') },
+  'account-removed': { tone: 'success', text: (t) => t('app.shell.toast.account-removed') },
 }
