@@ -18,6 +18,25 @@ routes of `src/tenants` share its Bearer caller. It has no domain rules of its o
 `domain/` or `application/` folders, and no `index.ts` yet: it predates the index rule and is
 imported file by file.
 
+Better Auth runs with its admin plugin as a hybrid (`adminPlugin`, `admin-plugin.ts`): the
+gateway takes its fields, its refusal of a banned account's session and its role on the session
+read, and none of its endpoints. An account keeps one platform role and a ban in the plugin's
+fields, stored in the directory's columns: `role` (`user`, which the plugin writes when Better Auth
+creates an account, or `operator`; the directory refuses any other), `banned` (false until a ban),
+`ban_reason` and `ban_expires` (which the gateway never sets) on `identity`, and `impersonated_by`
+on `device_session`, which stays empty. Only `operator` is a platform role (`PLATFORM_ROLES` of
+`@workspace/kernel`): `rolesOf` (`platform-roles.ts`) is the one mapping of the stored role to
+the account's platform roles, `user`, an empty role and any other value being none. The plugin's
+hook refuses a new session to a banned account with 403 `BANNED_USER`, after the password and
+the email's verification were checked, and before the gateway's own session hook: Better Auth
+runs a plugin's database hooks before the application's. Every path of the plugin's endpoints
+(`ADMIN_PATHS`, `admin-paths.ts`, read from the configured plugin's own table, so one a later
+version adds is among them) is switched off in the instance's HTTP handler (`disabledPaths`), and
+the mount serves none of them (404 `not-found`), so no request sets a role, bans, lists or
+impersonates an account through the plugin; the gateway never calls them on the server either.
+Neither of the plugin's roles is granted any of its permissions, which would guard only those
+endpoints.
+
 A session is a `device_session` row, and its token is the device's one credential: a random
 value Better Auth mints at a sign-in and at the first verification of an email, sent as `Authorization: Bearer <token>` on every
 route and in the hello of the sync channel. Only the raw token, as the sign-in's body answers it
@@ -86,8 +105,8 @@ so it would drop `ended_at`, which is the gateway's column. A delete
 of several rows at once would stop at the first refusal, so Better Auth's bulk endings
 (`/revoke-sessions`, `/revoke-other-sessions`) and `/change-password`, which ends the other
 sessions that way when asked to, are switched off in the instance's HTTP handler
-(`auth-instance.ts`); the gateway changes a password itself, ending the other sessions in the
-same transaction (below). Rows whose session ended 30 days ago or more are forgotten when the
+(`auth-instance.ts`), as is every endpoint of the admin plugin (above); the gateway changes a
+password itself, ending the other sessions in the same transaction (below). Rows whose session ended 30 days ago or more are forgotten when the
 identity's devices are listed next.
 
 Better Auth's handler is mounted behind an allowlist (`auth-handler/`). Of the paths under
@@ -144,8 +163,12 @@ which it checks on a new password only: a sign-in checks no rule, so an account 
 set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
 email, a language the gateway does not speak) pass as their status and code alone; they do not
 depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
-answers 200 with the raw session token (`token`) and the account (`user`, its `id` the
-identity's). While the account has not started, the answer also carries `start`:
+answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
+identity's, its `email`, its `name` and `emailVerified`). The answer is built by that allowlist
+from Better Auth's, parsed (`auth-handler/sign-in.ts`), never forwarded: nothing else of it
+reaches the device, neither the account's role nor its ban (`role`, `banned`, `banReason`,
+`banExpires`) nor any field a later version of Better Auth or a plugin adds, and an answer that
+names less is answered 500 `internal`. While the account has not started, the answer also carries `start`:
 `{ "start": { "name": "<the name it signed up with>", "locale": "en" | "es" } }`, the language it
 signed up in. The account has not started while its profile or its settings have not reached the
 directory: the region hub projects the rows of the identity's private region there, so a row a
@@ -539,6 +562,9 @@ error carries one.
   (`account-locale.ts`), `accountAddressee` and `addresseeFailure` (`account-addressee.ts`: whom a
   mail about an account goes to, and the code logged when it could not be read), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
   `DeletedAccount`),
+  `adminPlugin` (`admin-plugin.ts`: Better Auth's admin plugin as the gateway runs it),
+  `ADMIN_PATHS` (`admin-paths.ts`: the path of every endpoint of that plugin), `rolesOf`
+  (`platform-roles.ts`: the platform roles of an account's stored role),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, `admit` a sign-in against the limit of devices
@@ -561,7 +587,9 @@ error carries one.
   row, an email's account, its hash and its start as a sign-in reads them, the two
   transactions of a
   new password: a reset's and a change's, and the removal of a deleted account's rows).
-- Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
+- Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`
+  among its columns), `account`, `device_session` (the plugin's `impersonated_by` among its
+  columns) and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
   these options; a deleted account's rows of `profile`, `settings` and the `_replica_*` tables of
   its private region are removed here too.
@@ -576,8 +604,13 @@ error carries one.
   the account its mail went to (an email freed by a confirmation and taken by a new sign-up
   included), that a verification whose account a reset recovered, or whose email left the
   account, while Better Auth wrote the session leaves no session and answers none, that a device's
-  sockets close before a readback that fails, and that every resend answers no sooner than
-  Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
+  sockets close before a readback that fails, that every resend answers no sooner than
+  Better Auth's floor, and that every endpoint of the admin plugin answers 404 `not-found`, by
+  GET and by POST; `auth-instance.spec.ts`, which also holds that every one of them is switched
+  off in Better Auth's handler, read from the configured plugin's table, and answers 404 there,
+  an operator's request included, changing nothing; `auth-handler/sign-in.spec.ts`, which also
+  holds that a sign-in answers its allowlist alone, whatever else Better Auth's answer carries;
+  `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
   takes one of its address's verification mails; `auth-handler/sign-in.spec.ts`,
   `auth-handler/password-reset.spec.ts`,
@@ -613,6 +646,7 @@ error carries one.
   another's, a second removal changing nothing, a membership refusing it, the addressee),
   `reset-mail.spec.ts`, `profile-emails.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
+  `platform-roles.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
 - `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up and the

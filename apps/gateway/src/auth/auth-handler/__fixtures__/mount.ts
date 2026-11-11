@@ -95,9 +95,17 @@ export function fakeConnections(closing: Promise<void> = Promise.resolve()) {
  */
 export const STAND_IN_ACCOUNT = identityIdFactory.create()
 
+/**
+ * An accepted sign-in of `identity` (the stand-in's account unless named), as Better Auth answers
+ * one and the device gets it: the raw session token and the account.
+ */
+export const acceptedSignIn = (identity: IdentityId = STAND_IN_ACCOUNT) => ({
+  token: 'raw-token',
+  user: { id: identity, email: ANN, name: 'Ann', emailVerified: true },
+})
+
 /** An accepted sign-in of the stand-in's account, as Better Auth answers one. */
-export const signedInAnswer = (): Response =>
-  Response.json({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
+export const signedInAnswer = (): Response => Response.json(acceptedSignIn())
 
 /** What a stand-in that is not meant to be asked fails with. */
 const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read here'))

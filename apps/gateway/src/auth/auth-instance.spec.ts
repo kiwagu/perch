@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from 'better-auth'
 import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -25,8 +26,11 @@ import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiri
 import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
 import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import identityEmailsStatement from './__fixtures__/identity-emails.surql'
+import identityRoleSetStatement from './__fixtures__/identity-role-set.surql'
+import identityStandingStatement from './__fixtures__/identity-standing.surql'
 import identityVerifiedStatement from './__fixtures__/identity-verified.surql'
-import { VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
+import { ADMIN_PATHS } from './admin-paths'
+import { type AuthInstance, VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
 import { sessionHooks } from './session-hooks'
 
 const closers: Array<() => Promise<void>> = []
@@ -41,6 +45,14 @@ async function instance(options: OpenAuthOptions = {}) {
   closers.push(opened.close)
 
   return opened
+}
+
+/** The path of every endpoint of the admin plugin `auth` runs with, read from the plugin itself. */
+function adminPathsOf(auth: AuthInstance): string[] {
+  const plugins: readonly BetterAuthPlugin[] = auth.options.plugins
+  const endpoints = plugins.find((plugin) => plugin.id === 'admin')?.endpoints ?? {}
+
+  return Object.values(endpoints).map((endpoint) => endpoint.path)
 }
 
 const bearer = (token: string) => new Headers({ authorization: `Bearer ${token}` })
@@ -484,6 +496,64 @@ describe('createAuthInstance', () => {
       ).status,
       'a disabled path answers 404',
     ).toBe(404)
+    expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
+  })
+
+  it("switches off every endpoint of Better Auth's admin plugin, as the plugin's own table names them", async () => {
+    const { auth } = await instance()
+    const paths = adminPathsOf(auth)
+
+    expect(paths, 'the plugin is installed and names its endpoints').not.toEqual([])
+    expect(auth.options.disabledPaths).toEqual(expect.arrayContaining(paths))
+    expect(ADMIN_PATHS, "the list the gateway reads is the configured plugin's").toEqual(paths)
+  })
+
+  it("answers every endpoint of the admin plugin 404 at its handler, an operator's request too, and changes nothing", async () => {
+    const { auth, local } = await instance()
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await local.db.query(identityRoleSetStatement, {
+      identity: user.id,
+      role: 'operator',
+      reason: 'MARKER kept',
+    })
+
+    const ask = (method: string, url: string) =>
+      auth.handler(
+        new Request(url, {
+          method,
+          headers: {
+            authorization: `Bearer ${token}`,
+            origin: 'http://localhost',
+            'content-type': 'application/json',
+          },
+          ...(method === 'POST'
+            ? { body: JSON.stringify({ userId: user.id, role: 'user', banReason: 'changed' }) }
+            : {}),
+        }),
+      )
+    const served: string[] = []
+
+    for (const path of adminPathsOf(auth)) {
+      // The path as the table names it, with a trailing slash, and with a query.
+      for (const asked of [path, `${path}/`, `${path}?userId=${user.id}`]) {
+        for (const method of ['GET', 'POST']) {
+          const { status } = await ask(method, `${AUTH_URL}${asked}`)
+
+          if (status !== 404) {
+            served.push(`${method} ${asked} ${status}`)
+          }
+        }
+      }
+    }
+
+    expect(served).toEqual([])
+
+    const [standing] = await local.db.query<[unknown]>(identityStandingStatement, {
+      identity: user.id,
+    })
+
+    expect(standing).toEqual({ role: 'operator', banned: false, ban_reason: 'MARKER kept' })
     expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
   })
 

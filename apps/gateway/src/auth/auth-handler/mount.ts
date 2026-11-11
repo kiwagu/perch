@@ -116,8 +116,9 @@ export interface AuthMountDeps {
 /**
  * The paths the mount answers, each by `POST` only; every other path under `/auth/` answers 404
  * here. Handing everything over would expose each endpoint Better Auth and its plugins add, such
- * as the list of an account's sessions with every session's token, or an ending of a session
- * that leaves its device's sockets open; a later feature allows its endpoint here on purpose. The
+ * as the list of an account's sessions with every session's token, an ending of a session that
+ * leaves its device's sockets open, or the admin plugin's ban and role of an account; a later
+ * feature allows its endpoint here on purpose. The
  * verification is taken by POST with its token in the body and handed to Better Auth's GET, so a
  * token never sits in a URL the gateway serves. The reset, the changes of password and email and
  * the confirmation reach no Better Auth route over HTTP: the mount calls Better Auth on the
@@ -170,7 +171,8 @@ function credentialChecked(
  *   `SIGN_UP_FLOOR_MS` after the request began; 400 `bad-request` for a body that names no email
  *   or no password; 400 `weak-password` at once for a password that breaks the rules of a new
  *   password, before its email's turn and Better Auth; it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
- *   the account, as Better Auth answers it without its cookies. It must first find a place among
+ *   the account, its id, email, name and whether its email is verified, built from Better Auth's
+ *   answer by that allowlist, without its cookies (`signIn`). It must first find a place among
  *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
  *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a
  *   failure, 200 and 403 (the password was right, the email is not verified) clear the email's,

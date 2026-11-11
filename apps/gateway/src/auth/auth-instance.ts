@@ -12,6 +12,8 @@ import type { MailPort } from '../mail'
 
 import { ResetLinks } from './account-links'
 import { AccountMails } from './account-mails'
+import { ADMIN_PATHS } from './admin-paths'
+import { adminPlugin } from './admin-plugin'
 import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
 import { hashPassword, verifyPassword } from './password-hash'
@@ -62,7 +64,9 @@ export function authOptions(options: AuthInstanceOptions) {
     secret: options.secret,
     trustedOrigins: [...options.trustedOrigins],
     database: surrealAuthAdapter(options.local),
-    plugins: [bearer()],
+    // The admin plugin keeps an account's role and ban and refuses a banned account a session;
+    // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below).
+    plugins: [bearer(), adminPlugin()],
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
@@ -155,12 +159,17 @@ export function authOptions(options: AuthInstanceOptions) {
     // to, and sets the password apart from them: the gateway changes a password itself, the new
     // password and every ending in one transaction (`AccountPasswords`). `/change-email` signs a
     // device in at its confirmation and mails through the verification mail: the gateway asks for
-    // and confirms a change itself (`EmailChanges`).
+    // and confirms a change itself (`EmailChanges`). Every endpoint of the admin plugin is switched
+    // off too, read from the plugin's own table (`ADMIN_PATHS`): the gateway keeps the plugin for
+    // its fields and its refusal of a banned account's session only. Its endpoints would set a
+    // role, ban, list, impersonate or remove an account outside the account's turns, and end
+    // sessions by deleting their rows, their sockets left open.
     disabledPaths: [
       '/revoke-sessions',
       '/revoke-other-sessions',
       '/change-password',
       '/change-email',
+      ...ADMIN_PATHS,
     ],
     // Better Auth's limiter restarts its count only after a pause as long as its window, so it
     // refuses an address's 21st request however slowly the 20 before it came; the auth mount

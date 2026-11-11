@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
+import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
+import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
 
@@ -15,10 +17,12 @@ import {
   holdTurn,
   isAccountLookup,
   isSessionInsert,
+  mountedOnFakeAuth,
   mountedOnRealAuth,
   PASSWORD,
   pastFloor,
   postTo,
+  STAND_IN_ACCOUNT,
   signedInOn,
   signInRequest,
   turnsAsked,
@@ -53,6 +57,9 @@ async function moved(mounted: Mounted, identity: IdentityId, from: string, to: s
 
   expect((await mounted.route(postTo('/auth/confirm-email', { token }), FROM))?.status).toBe(200)
 }
+
+/** The session token a sign-in answered with: a raw token, which no test can know beforehand. */
+const tokenOf = (body: unknown): string => z.object({ token: z.string().min(1) }).parse(body).token
 
 /** Asks for a reset mail to `email` and answers the token of its link. */
 async function resetLink(mounted: Mounted, email: string): Promise<string> {
@@ -249,7 +256,7 @@ describe('authHandler, a sign-in and what runs beside it', () => {
 })
 
 describe('authHandler, the start of an account at its sign-in', () => {
-  it("carries no start for an account whose profile and settings exist, and the account's own answer as Better Auth gave it", async () => {
+  it("carries no start for an account whose profile and settings exist, and the account's answer by the allowlist", async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
@@ -265,7 +272,63 @@ describe('authHandler, the start of an account at its sign-in', () => {
     const body: unknown = await answer?.json()
 
     expect(answer?.status).toBe(200)
-    expect(body).toMatchObject({ user: { id: ann.identity, email: ANN } })
-    expect(body).not.toHaveProperty('start')
+    expect(body).toEqual({
+      token: tokenOf(body),
+      user: { id: ann.identity, email: ANN, name: 'Ann', emailVerified: true },
+    })
+  })
+})
+
+describe('authHandler, the answer of a sign-in', () => {
+  it('forwards no field outside the allowlist: the token, and the id, email, name and verified email of the account', async () => {
+    const { route } = mountedOnFakeAuth(() =>
+      Response.json({
+        redirect: false,
+        token: 'raw-token',
+        url: null,
+        user: {
+          id: STAND_IN_ACCOUNT,
+          email: ANN,
+          name: 'Ann',
+          emailVerified: true,
+          image: 'https://example.test/MARKER-image.png',
+          locale: 'en',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          updatedAt: '2026-10-01T00:00:00.000Z',
+          role: 'operator',
+          banned: false,
+          banReason: 'MARKER reason',
+          banExpires: '2026-12-01T00:00:00.000Z',
+        },
+      }),
+    )
+    const answer = await route(signInRequest(ANN, PASSWORD, 'laptop'), FROM)
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({
+      token: 'raw-token',
+      user: { id: STAND_IN_ACCOUNT, email: ANN, name: 'Ann', emailVerified: true },
+    })
+  })
+
+  it("answers a sign-in with the allowlist and the start alone, whatever role and ban reason the account's row holds", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await mounted.local.db.query(identityRoleSetStatement, {
+      identity: ann.identity,
+      role: 'operator',
+      reason: 'MARKER reason',
+    })
+
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM)
+    const body: unknown = await answer?.json()
+
+    expect(answer?.status).toBe(200)
+    expect(body).toEqual({
+      token: tokenOf(body),
+      user: { id: ann.identity, email: ANN, name: 'Ann', emailVerified: true },
+      start: { name: 'Ann', locale: 'en' },
+    })
   })
 })

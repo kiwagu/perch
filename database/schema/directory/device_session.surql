@@ -44,13 +44,14 @@ DEFINE FIELD OVERWRITE ended_at ON device_session TYPE option<datetime>;
 -- ending that found the session live and never changed afterwards: `revoked` (signed out from
 -- another device, or every device at once), `password-changed` (the account's password changed,
 -- on another device or through a reset link), `device-limit` (a sign-in on another device went
--- past the account's limit of devices, this one seen least recently). The device hears it at its
--- next hello, also after it was offline when its session ended. NONE while the session is live,
--- for an ending of the device's own (its sign-out, a new sign-in of the device) and for one that
--- merely expired.
+-- past the account's limit of devices, this one seen least recently), `banned` (an operator
+-- banned the account, which ends every session it has). The device hears it at its next hello,
+-- also after it was offline when its session ended. NONE while the session is live, for an
+-- ending of the device's own (its sign-out, a new sign-in of the device) and for one that merely
+-- expired.
 DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
   ASSERT $value = NONE
-  OR $value IN ['revoked', 'password-changed', 'device-limit'];
+  OR $value IN ['revoked', 'password-changed', 'device-limit', 'banned'];
 -- Whether the session waits for its admission against the account's limit of devices: true from
 -- the moment a sign-in by email and password writes it until the gateway admits it, and the
 -- session is handed to its device only then; a sign-in asked about the limit deletes it. While it
@@ -58,6 +59,9 @@ DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
 -- earlier session stays live; one whose admission failed stays so, never handed out. Every other
 -- session is admitted as it is written.
 DEFINE FIELD OVERWRITE pending ON device_session TYPE bool DEFAULT false;
+-- Who acted as the account in this session, as Better Auth's admin plugin keeps it: the plugin's
+-- impersonation is out of reach (its endpoints are switched off), so it stays NONE.
+DEFINE FIELD OVERWRITE impersonated_by ON device_session TYPE option<string>;
 
 DEFINE INDEX OVERWRITE device_session_token ON device_session FIELDS token
   UNIQUE;

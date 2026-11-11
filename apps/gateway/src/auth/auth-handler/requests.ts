@@ -43,23 +43,6 @@ export function withJsonBody(
   })
 }
 
-/**
- * Better Auth's answer without its `Set-Cookie` headers, its status, body and other headers kept.
- * The web signs in by bearer token alone, so a session cookie would serve nothing and outlive a
- * sign-out in the browser.
- */
-export function withoutCookies(response: Response): Response {
-  const headers = new Headers(response.headers)
-
-  headers.delete('set-cookie')
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  })
-}
-
 /** The headers of a request without the credentials it carried: Better Auth must see no session. */
 export function withoutCredentials(headers: Headers): Headers {
   const kept = new Headers(headers)

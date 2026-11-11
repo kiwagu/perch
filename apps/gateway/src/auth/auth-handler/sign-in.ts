@@ -10,7 +10,7 @@ import { ADMISSION_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
-import { refusalOf, withJsonBody, withoutCookies } from './requests'
+import { refusalOf, withJsonBody } from './requests'
 
 /** The sign-in each email's failed sign-ins are counted on. */
 export const SIGN_IN_PATH = '/auth/sign-in/email'
@@ -28,14 +28,24 @@ const signInBody = z.looseObject({
   signOutOldest: z.boolean().optional(),
 })
 
-/** As much of an accepted sign-in's answer as holding it to its account needs. */
+/**
+ * An accepted sign-in's answer as far as the gateway reads it and the device gets it: the raw
+ * session token, and the account's id, email, name and whether its email is verified. Nothing else
+ * of Better Auth's answer is kept: the account's role and ban (`role`, `banned`, `banReason`,
+ * `banExpires`, which the admin plugin adds), its `image`, its language, its timestamps, and
+ * `redirect` and `url`, or any field a later version adds.
+ */
 const acceptedSession = z.object({
   token: z.string().min(1),
-  user: z.object({ id: idSchemas.identity.schema }),
+  user: z.object({
+    id: idSchemas.identity.schema,
+    email: z.string(),
+    name: z.string(),
+    emailVerified: z.boolean(),
+  }),
 })
 
-/** An accepted sign-in's answer, every field Better Auth gave kept. */
-const acceptedAnswer = z.looseObject({ token: z.string().min(1), user: z.looseObject({}) })
+type AcceptedSession = z.infer<typeof acceptedSession>
 
 /** What Better Auth answers wrong credentials: the refusal a sign-in that could not stand gets. */
 const notSignedIn = (): Response =>
@@ -95,11 +105,13 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * (`pending`), counted by no other admission and listed nowhere: an
  * admission that failed answers 500 `internal` and ends the new session by its token, and should
  * that ending fail too, the session keeps waiting, never handed out. Any other
- * answer reaches the client as its status and code alone (`refusalOf`); an
- * accepted one, without its cookies, and with `start` (`{ name, locale }`, what the account signed
+ * answer reaches the client as its status and code alone (`refusalOf`); an accepted one by its
+ * allowlist alone (`signedIn`): the token and the account's id, email, name and whether its email
+ * is verified, without its cookies, and with `start` (`{ name, locale }`, what the account signed
  * in to signed up with) while that account has not started: its profile or its settings have not reached the
  * directory, so the device that signs in creates them, as the device that verifies the email by
- * the sign-up mail's link does.
+ * the sign-up mail's link does. An accepted answer that names less of them is one that names no
+ * session (500 `internal`).
  */
 async function handedOver(
   deps: AuthMountDeps,
@@ -156,31 +168,36 @@ async function handedOver(
   }
 
   // The account the sign-in stands for is the one the second read found.
-  const start = after.value?.start
-
-  return start === undefined ? withoutCookies(response) : withStart(response, start)
+  return signedIn(response, accepted.data, after.value?.start)
 }
 
 /**
- * An accepted sign-in's answer, without its cookies, that also tells the device to start the
- * account: `start`, the name and the language it signed up with, beside Better Auth's `token` and
- * `user`.
+ * An accepted sign-in's answer as the device gets it, built from `session`, the parsed answer,
+ * never forwarded: `{ token, user: { id, email, name, emailVerified } }`, and `start` (the name and
+ * the language the account signed up with) when the account has not started, which tells the
+ * device to start it. Better Auth's other headers are kept, but not its cookies: the web signs in
+ * by bearer token alone, so a session cookie would serve nothing and outlive a sign-out in the
+ * browser.
  */
-async function withStart(response: Response, start: AccountStart): Promise<Response> {
-  const answer = acceptedAnswer.safeParse(await response.json().catch(() => undefined))
-
-  if (!answer.success) {
-    return Response.json({ code: 'internal' }, { status: 500 })
-  }
-
+function signedIn(
+  response: Response,
+  session: AcceptedSession,
+  start: AccountStart | undefined,
+): Response {
   const headers = new Headers(response.headers)
 
   for (const name of ['set-cookie', 'content-length', 'content-type']) {
     headers.delete(name)
   }
 
+  const { token, user } = session
+  const answer = {
+    token,
+    user: { id: user.id, email: user.email, name: user.name, emailVerified: user.emailVerified },
+  }
+
   return Response.json(
-    { ...answer.data, start: { name: start.name, locale: start.locale } },
+    start === undefined ? answer : { ...answer, start: { name: start.name, locale: start.locale } },
     { status: 200, headers },
   )
 }
