@@ -39,7 +39,7 @@ actions:
       signOutOldest:
         type: boolean
         description: "Optional: sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many."
-    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email a password reset verified also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in
+    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email was verified without a device signing in (by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed) also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in
     codes:
       - invalid-credentials
       - email-not-verified
@@ -53,7 +53,7 @@ actions:
       token:
         type: string
         description: The token the link of the verification mail carries in the address of /verify-email.
-    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired; a link of an account an operator banned verifies the email, signs nothing in and answers account-banned"
+    result: "the first time, the email is verified, this device is signed in, the account's settings (its language as it signed up) and profile (its name as it signed up) are created, and the app moves to /me with code welcome; a link opened once the email is verified, by an earlier opening or by a password reset, answers verified-before, signs nothing in and creates nothing; a link older than a day answers link-expired; a link of an account an operator banned verifies the email, signs nothing in, creates nothing, and answers account-banned; the account's first sign-in once the ban is lifted creates its settings and profile"
     codes:
       - link-invalid
       - link-expired
@@ -467,7 +467,7 @@ actions:
       email:
         type: string
         description: The new email.
-    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, by the account or by an operator, and the account keeps its email until that link is opened, which also marks the new email verified; a new email that has an account answers email-taken and sends nothing, and one that is not an email email-invalid; the mails count toward the operator's network address's budget of mails"
+    result: "the mail below is on its way to the new email, its link replacing the link of an earlier request, by the account or by an operator, and the account keeps its email until that link is opened, which also marks the new email verified, so an account that never signed in starts at its first sign-in with the new email; a new email that has an account answers email-taken and sends nothing, and one that is not an email email-invalid; the mails count toward the operator's network address's budget of mails"
     codes:
       - email-invalid
       - email-taken
