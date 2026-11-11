@@ -375,7 +375,7 @@ flow:
                   - target: idle
                     guard: ownDemotion
                     read: false
-                    description: The account is a member now, so the members list goes and nothing reads it.
+                    description: The account is a member now, so the members list goes.
                   - target: idle
                     description: The member's devices show the new role without a reload.
                     actions:
