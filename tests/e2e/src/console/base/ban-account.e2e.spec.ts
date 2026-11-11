@@ -1,6 +1,4 @@
 // scenario: console/base/ban-account
-import type { Page } from '@playwright/test'
-
 import { openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -13,17 +11,6 @@ import {
   toast,
 } from '../../support/fixtures'
 import { databases, identityDatabase } from '../../support/storage'
-
-/**
- * What the reason inputs of the card hold. The card shows one only while the account is not banned
- * (its anchor's description), so a banned account's card holds none.
- */
-const reasonsHeld = (page: Page): Promise<string[]> =>
-  page
-    .getByTestId('console.account.ban.reason-input')
-    .evaluateAll((inputs) =>
-      inputs.map((input) => (input instanceof HTMLInputElement ? input.value : '')),
-    )
 
 test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
   test("A ban signs the account's device out and tells it plainly, its sign-in is refused, and once the ban is lifted it signs in again", async ({
@@ -94,12 +81,10 @@ test.describe('Ban an account and lift the ban', { tag: '@full' }, () => {
           await expect(toast(page, 'ban-set')).toBeVisible()
           await expect(page.getByTestId('console.account.banned-badge')).toBeVisible()
           await expect(page.getByTestId('console.account.reason-cell')).toContainText(data.reason)
-          // Empty, shown or not: the reason typed is held nowhere (step 6 sees the input again).
-          await expect
-            .poll(async () => (await reasonsHeld(page)).every((reason) => reason === ''), {
-              message: 'a reason input of the card holds the reason typed',
-            })
-            .toBe(true)
+          // "is empty": the reason input shows only while the account is not banned (its anchor's
+          // description), so a banned account's card has none and holds no reason; step 6 sees it
+          // again, empty.
+          await expect(page.getByTestId('console.account.ban.reason-input')).toHaveCount(0)
           await expect(page.getByTestId('console.account.ban.unban-button')).toBeVisible()
           await expect(page.getByTestId('console.account.ban.ban-button')).toHaveCount(0)
         })(),

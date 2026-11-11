@@ -169,8 +169,15 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
 
     const resent =
       await test.step('10. On device A, click [console.account.verification.resend-button]', async () => {
-        // The other email's mails before the request: the sign-up's.
+        // The sign-up's mail, which device C left unopened, has to be in the mailbox before the
+        // baseline is taken: the gateway sends it after it answered, so a count taken at once
+        // could read zero, and the sign-up's mail would then pass for the resend's.
+        await mailbox.next(data.otherEmail, 0)
+
+        // The other email's mails before the request: the sign-up's alone.
         const seen = await mailbox.count(data.otherEmail)
+
+        expect(seen, "the other email's mails before the request").toBe(1)
 
         await page.getByTestId('console.account.verification.resend-button').click()
         // Expected: After step 10 [app-shell.toast] carries [code:verification-sent] on device A,
