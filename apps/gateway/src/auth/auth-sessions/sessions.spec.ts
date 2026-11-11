@@ -20,6 +20,7 @@ import {
 } from '../__fixtures__/auth-instance'
 import deviceSessionExpiriesStatement from '../__fixtures__/device-session-expiries.surql'
 import deviceSessionRowStatement from '../__fixtures__/device-session-row.surql'
+import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import { signVerificationToken, verificationKey } from '../account-links'
 import { ADMISSION_HEADER } from '../session-hooks'
 
@@ -84,7 +85,7 @@ async function expiries(local: LocalDb): Promise<Map<string, unknown>> {
 }
 
 describe('AuthSessions', () => {
-  it('reads the caller of a live session: its identity, email, device and row', async () => {
+  it('reads the caller of a live session: its identity, email, device, row and platform roles', async () => {
     const { auth, sessions } = await harness()
     const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
 
@@ -99,8 +100,26 @@ describe('AuthSessions', () => {
         email: 'ann@example.test',
         device: 'laptop',
         session: caller.session,
+        roles: [],
       },
     })
+  })
+
+  it("reads the account's platform roles with the session at every read, never kept from an earlier one", async () => {
+    const { auth, local, sessions } = await harness()
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const roleOf = async (role: string) => {
+      await local.db.query(identityRoleSetStatement, { identity: user.id, role })
+    }
+
+    await roleOf('operator')
+    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
+
+    await roleOf('user')
+    expect(callerOf(await sessions.read(token)).roles).toEqual([])
+
+    await roleOf('operator')
+    expect(callerOf(await sessions.read(token)).roles).toEqual(['operator'])
   })
 
   it('reads no session for a token nobody holds, or one no header can carry', async () => {

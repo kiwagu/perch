@@ -26,6 +26,7 @@ export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
 
 /** Why the gateway signed the device out, as the sign-in page says it. */
 export type ElsewhereNotice =
+  | 'account-banned'
   | 'signed-out-elsewhere'
   | 'password-changed-elsewhere'
   | 'device-limit-elsewhere'
@@ -123,7 +124,8 @@ export class SessionSignOut {
 
   /**
    * The gateway refused the identity's token, which will not work again, or signed the device
-   * out from another one or because the account's password changed: the device signs out here,
+   * out from another one, because the account's password changed, past the account's limit of
+   * devices or because an operator banned the account: the device signs out here,
    * without the gateway, behind the same write
    * barrier as a sign-out, and leaves nothing to sign out. Its data for the identity goes with the
    * token only when nothing in it waits to be sent, and the sign-in page then says `notice`, if

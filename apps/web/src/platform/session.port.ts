@@ -13,8 +13,10 @@ export interface SignOutOptions {
 
 /**
  * The words left for the sign-in page (`user.sign-in.notice-message`), in the rank the contract
- * gives them: of the words it holds, the page says the first. `resend-after-sign-in` when the
- * device was signed out (its keys refused, signed out from another device, or a write landing
+ * gives them: of the words it holds, the page says the first. `account-banned` when an operator
+ * banned the account, which signed this device out, and nothing waited to be sent; the ban's
+ * reason is never said. `resend-after-sign-in` when the device was signed out (its keys refused,
+ * signed out from another device, or a write landing
  * during its sign-out) while it held changes it had not sent; they are kept on the device, and
  * signing in again as the same identity sends them. `delete-pending` when the device signed out
  * but another tab still held its databases open: they go once that tab closes them.
@@ -27,6 +29,7 @@ export interface SignOutOptions {
  * devices and signed out this one, the device seen least recently, and nothing waited to be sent.
  */
 export const SESSION_NOTICES = [
+  'account-banned',
   'resend-after-sign-in',
   'delete-pending',
   'password-reset-elsewhere',

@@ -207,7 +207,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   account's password signed it out, through a reset link or on another device (the code
   `password-changed-elsewhere`, when the channel closed with 4002), that a sign-in on another
   device went past the account's limit of devices and signed out this one, used least recently
-  (the code `device-limit-elsewhere`, when the channel closed with 4003), that a new password was set
+  (the code `device-limit-elsewhere`, when the channel closed with 4003), that an operator banned
+  the account, which signed it out (the code `account-banned`, when the channel closed with 4004,
+  first of the words the page may hold, and never with the ban's reason), that a new password was set
   in another tab through a reset link (the code `password-reset-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);

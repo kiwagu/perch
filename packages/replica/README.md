@@ -64,23 +64,25 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (8), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (9), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
   `hello` carries the device's session token (`token`, the raw token its sign-in answered) and
   names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
   `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
-  the regions the device may name with their heads and the identity's memberships, and a
-  `memberships` message tells each later change of them. `CLOSE` names the gateway's close
+  the regions the device may name with their heads, the identity's memberships and the
+  account's platform roles (`roles`, of `PLATFORM_ROLES`: `operator`, read with the session at
+  that hello), and a `memberships` message tells each later change of the memberships. `CLOSE` names the gateway's close
   codes: `protocol` 4400, `unauthorized` 4401 (a token that holds no live session, or a session
   opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
   `signedOut` 4000 (the device's own sign-out), `revoked` 4001 (the device's session was
   signed out from another device, alone or with every device of its identity, also while its
   hello is under way), `passwordChanged` 4002 (the device's session ended because the
   account's password changed: through a reset link, every device; on another device, every
-  device but that one) and `deviceLimit` 4003 (a sign-in on another device went past the
-  account's limit of devices and signed out this one, seen least recently). A device that was
+  device but that one), `deviceLimit` 4003 (a sign-in on another device went past the
+  account's limit of devices and signed out this one, seen least recently) and `banned` 4004
+  (an operator banned the account, which ended every session it had). A device that was
   offline when its session ended hears the same code at its next hello. And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
@@ -221,14 +223,15 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   network), heard from `start` until a stop or an ending, the network coming back starts the
   delays over and connects a reconnect waiting for its delay at once, leaving a socket open or
   opening to its welcome or its close; the memberships of the
-  welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
+  welcome and of each `memberships` message to `onMemberships`, the platform roles of each
+  welcome to `onRoles` after them, both before any listener hears the message, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
   (`signed-out`), signed out from another device (`revoked`, 4001), by a change of the
-  account's password (`password-changed`, 4002) or by a sign-in past the account's limit of
-  devices (`device-limit`, 4003), none followed by a
+  account's password (`password-changed`, 4002), by a sign-in past the account's limit of
+  devices (`device-limit`, 4003) or by a ban of the account (`banned`, 4004), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
-  report on `revoked`, `password-changed` and `device-limit`) behind the `SyncTransport` port;
+  report on `revoked`, `password-changed`, `device-limit` and `banned`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and

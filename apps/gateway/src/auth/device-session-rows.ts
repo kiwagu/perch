@@ -7,9 +7,10 @@ import { z } from '@workspace/zod'
 /**
  * Why a device was signed out from elsewhere, as its session row keeps it for the device's next
  * hello: from another device (`revoked`), by a change of the account's password
- * (`password-changed`), or by a sign-in past the account's limit of devices (`device-limit`).
+ * (`password-changed`), by a sign-in past the account's limit of devices (`device-limit`), or by
+ * an operator's ban of the account, which ends every session it has (`banned`).
  */
-export const ENDED_REASONS = ['revoked', 'password-changed', 'device-limit'] as const
+export const ENDED_REASONS = ['revoked', 'password-changed', 'device-limit', 'banned'] as const
 
 /** One of `ENDED_REASONS`. */
 export type EndedReason = (typeof ENDED_REASONS)[number]
@@ -37,8 +38,9 @@ export interface DeviceSessionRow {
    */
   readonly endedAt?: Date
   /**
-   * Why the session was ended from elsewhere, when it was live then (`ENDED_REASONS`); absent for
-   * an ending of the device's own, an expiry, and a session that is live.
+   * Why the session was ended from elsewhere, when it was live then (`ENDED_REASONS`), a ban of
+   * the account among them; absent for an ending of the device's own, an expiry, and a session
+   * that is live.
    */
   readonly endedReason?: EndedReason
 }

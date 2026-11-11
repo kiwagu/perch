@@ -129,6 +129,8 @@ function noticeText(
   notice: NonNullable<SignInViewProps['notice']>,
 ): string {
   switch (notice) {
+    case 'account-banned':
+      return t('user.sign-in.notice.account-banned')
     case 'resend-after-sign-in':
       return t('user.sign-in.notice.resend-after-sign-in')
     case 'signed-out-elsewhere':

@@ -2,12 +2,17 @@ import { isAPIError } from 'better-auth/api'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { AuthInstance } from '../auth-instance'
+import { rolesOf } from '../platform-roles'
 
-/** Who a live session belongs to: the identity, its email, the device and the session's row. */
+/**
+ * Who a live session belongs to: the identity, its email, the device, the session's row and the
+ * account's platform roles.
+ */
 export interface SessionCaller {
   readonly identity: IdentityId
   readonly email: string
@@ -15,6 +20,11 @@ export interface SessionCaller {
   readonly device: string
   /** The session's `device_session` row. */
   readonly session: DeviceSessionId
+  /**
+   * The account's platform roles as this read found its role: read with the session every time,
+   * never kept, so a role granted or taken back counts from the next read.
+   */
+  readonly roles: readonly PlatformRole[]
 }
 
 /**
@@ -28,7 +38,8 @@ export type SessionRead =
 
 /**
  * What Better Auth answers for a live session, as far as the caller is read from it: `pending`, the
- * gateway's own field of the session, which Better Auth answers with the rest of its row.
+ * gateway's own field of the session, which Better Auth answers with the rest of its row, and the
+ * account's `role`, the admin plugin's field of the user (none on a row written without it).
  */
 const sessionAnswer = z.object({
   session: z.object({
@@ -36,7 +47,7 @@ const sessionAnswer = z.object({
     device: deviceId,
     pending: z.boolean(),
   }),
-  user: z.object({ id: idSchemas.identity.schema, email: z.string() }),
+  user: z.object({ id: idSchemas.identity.schema, email: z.string(), role: z.string().nullish() }),
 })
 
 const NONE: SessionRead = { kind: 'none' }
@@ -119,6 +130,12 @@ export async function readSession(auth: AuthInstance, token: string): Promise<Se
 
   return {
     kind: 'session',
-    caller: { identity: user.id, email: user.email, device: session.device, session: session.id },
+    caller: {
+      identity: user.id,
+      email: user.email,
+      device: session.device,
+      session: session.id,
+      roles: rolesOf(user.role),
+    },
   }
 }

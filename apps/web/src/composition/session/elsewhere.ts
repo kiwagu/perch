@@ -1,7 +1,7 @@
 /**
  * What reaches the session from elsewhere: the channel of its space (memberships, a session token
- * the gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
- * browser (a sign-in or a sign-out made there).
+ * the gateway refuses, a sign-out from another device or everywhere, or by a ban of the account)
+ * and the other tabs of the browser (a sign-in or a sign-out made there).
  */
 
 import { okAsync, ResultAsync } from 'neverthrow'
@@ -100,6 +100,7 @@ export class SessionElsewhere {
       passwordChanged: () =>
         void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
       deviceLimit: () => void this.#outElsewhere(identity, undefined, 'device-limit-elsewhere'),
+      banned: () => void this.#outElsewhere(identity, undefined, 'account-banned'),
       // The build is what the gateway refuses, whichever account's channel heard it, and while
       // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
@@ -149,8 +150,9 @@ export class SessionElsewhere {
 
   /**
    * Signed out from another device (4001), everywhere at this device's request, by a change of
-   * the account's password (4002), or by a sign-in past the account's limit of devices (4003),
-   * whose `notice` says so: as a refused token, and the sign-in page says why. Whichever of two
+   * the account's password (4002), by a sign-in past the account's limit of devices (4003), or by
+   * an operator's ban of the account (4004), whose `notice` says so: as a refused token, and the
+   * sign-in page says why. Whichever of two
    * runs second changes nothing, and so does one whose session is no longer open (`still`) when
    * its turn comes.
    */

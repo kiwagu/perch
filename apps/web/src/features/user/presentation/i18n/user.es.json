@@ -19,6 +19,7 @@
   "user.password-rule.not-met": "(sin cumplir)",
   "user.sign-in.name": "Nombre",
   "user.sign-in.welcome": "Bienvenido",
+  "user.sign-in.notice.account-banned": "Tu cuenta ha sido bloqueada, así que se cerró tu sesión. Podrás iniciar sesión de nuevo cuando se desbloquee.",
   "user.sign-in.notice.resend-after-sign-in": "Algunos cambios hechos en este dispositivo no habían llegado al servidor cuando se cerró tu sesión. Inicia sesión de nuevo para enviarlos.",
   "user.sign-in.notice.signed-out-elsewhere": "Se cerró tu sesión desde otro dispositivo.",
   "user.sign-in.notice.password-changed-elsewhere": "Tu contraseña ha cambiado, así que se cerró tu sesión. Inicia sesión con la contraseña nueva.",

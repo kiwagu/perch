@@ -566,6 +566,21 @@ describe('SignInView', () => {
     )
   })
 
+  it('says an operator banned the account, naming no reason', () => {
+    renderView({ notice: 'account-banned' })
+
+    expect(noticeWith('account-banned').textContent).toBe(
+      'Your account was banned, so you were signed out. You can sign in again once the ban is lifted.',
+    )
+  })
+
+  it('says the account was banned in Spanish', () => {
+    renderView({ notice: 'account-banned' }, 'es')
+
+    expect(noticeWith('account-banned').textContent).toBe(es['user.sign-in.notice.account-banned'])
+    expect(es['user.sign-in.notice.account-banned']).toBeTruthy()
+  })
+
   it('says the device was signed out from another device', () => {
     renderView({ notice: 'signed-out-elsewhere' })
 

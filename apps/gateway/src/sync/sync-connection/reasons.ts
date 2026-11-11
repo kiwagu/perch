@@ -19,6 +19,7 @@ export const REASON = {
   revoked: 'signed out from another device',
   passwordChanged: 'signed out because the password changed',
   deviceLimit: 'signed out by a sign-in past the limit of devices',
+  banned: 'signed out because the account was banned',
   revokeFailed: 'revoke failed',
   failed: 'the gateway failed to handle the message',
   superseded: 'another connection of this device took over',

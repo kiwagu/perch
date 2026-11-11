@@ -10,7 +10,7 @@ connection is the folder `sync-connection/`, entered through its `index.ts`; the
 has no `index.ts` yet: it predates the index rule and is imported file by file.
 
 Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
-device id at protocol 8; the gateway reads the session, checks the device, marks it seen and
+device id at protocol 9; the gateway reads the session, checks the device, marks it seen and
 welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
 profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
 auth module), without holding the hello. The session is read through Better Auth
@@ -32,7 +32,9 @@ belongs to and those memberships, the only regions it may name (an organisation 
 cannot be read is left out of the welcome and logged, its membership kept: the device syncs only
 the regions its welcome names, so it leaves that one alone until its next hello, though the
 connection would still serve it; the private region failing fails the hello,
-`sync-connection/welcome-heads.ts`), and subscribes, pulls, pushes,
+`sync-connection/welcome-heads.ts`), and with the account's platform roles as the read of its
+session found them at this hello (`roles`: `operator` or none, never kept from an earlier read),
+and subscribes, pulls, pushes,
 probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database, and names them so
@@ -82,12 +84,14 @@ A device whose session a change of the account's password ended (a reset link, w
 session of the account, or a change on another device, which ends every other one) is closed the
 same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
 tell its person why; a hello whose registration such a close refuses, while it is under way, is
-closed with the code its session's row names when the close ended the session (4002, 4003), and
+closed with the code its session's row names when the close ended the session (4002, 4003, 4004), and
 with 4001 otherwise, as for any other close. A device whose session a sign-in on another device ended
 at the account's limit of devices is closed the same way with 4003 (`CLOSE.deviceLimit`,
-`signed out by a sign-in past the limit of devices`). A device offline when one of these ended its
+`signed out by a sign-in past the limit of devices`), and one whose session an operator's ban of
+the account ended with 4004 (`CLOSE.banned`, `signed out because the account was banned`). A
+device offline when one of these ended its
 session hears the same close at its next hello: a hello whose token reads no live session is
-closed with the code its row's `ended_reason` names (4001, 4002, 4003) when the row is the
+closed with the code its row's `ended_reason` names (4001, 4002, 4003, 4004) when the row is the
 hello's device's, and with 4401 otherwise; a row that cannot be read closes it with 1011.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
 of an email opened on it, once the gateway admitted the session either wrote, closes the
@@ -107,7 +111,7 @@ reaches its logs.
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
   closes them, tells them their identity's memberships, takes regions from them and re-judges the
   role they push as in a region.
-- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 8.
+- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 9.
 
 ## Commands
 

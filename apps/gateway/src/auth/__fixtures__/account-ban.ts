@@ -1,7 +1,8 @@
 /**
  * An account's ban written straight into the directory, as an operator's ban leaves it, and the
- * session rows of an account read straight from it: the specs of the ban's boundary read a row
- * ended `banned` here, which the gateway's own row parser does not take.
+ * session rows of an account read straight from it: the specs of the ban's boundary read here
+ * whether a row waits (`pending`, which the gateway's own row parser does not carry) and its
+ * `ended_reason` as stored.
  */
 
 import { fromDriverValue, type LocalDb } from '@workspace/data'

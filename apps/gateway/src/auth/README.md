@@ -26,7 +26,11 @@ creates an account, or `operator`; the directory refuses any other), `banned` (f
 `ban_reason` and `ban_expires` (which the gateway never sets) on `identity`, and `impersonated_by`
 on `device_session`, which stays empty. Only `operator` is a platform role (`PLATFORM_ROLES` of
 `@workspace/kernel`): `rolesOf` (`platform-roles.ts`) is the one mapping of the stored role to
-the account's platform roles, `user`, an empty role and any other value being none. The plugin's
+the account's platform roles, `user`, an empty role and any other value being none. The caller
+read (`AuthSessions.read`) gives every caller those roles (`SessionCaller.roles`, and the Bearer
+caller's `roles`), mapped from the role Better Auth's session answer carries, at every read and
+never kept: a role granted or taken back counts from the next call and the next hello, whose
+welcome carries them to the device (`sync/README.md`). The plugin's
 hook refuses a new session to a banned account with 403 `BANNED_USER`, after the password and
 the email's verification were checked, and before the gateway's own session hook: Better Auth
 runs a plugin's database hooks before the application's. The mount forwards that refusal as 403
@@ -581,7 +585,8 @@ error carries one.
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
   a change of the password ended, so the device can tell its person why it was signed out; 4003
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
-  devices signed out; 4001 stays a sign-out from another device.
+  devices signed out; 4001 stays a sign-out from another device. 4004 (`CLOSE.banned`) is what a
+  hello hears for a session an operator's ban ended (`ended_reason` `banned`).
 - Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
   and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
@@ -704,9 +709,10 @@ error carries one.
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts` (the admissions
   of a sign-in and of a verification against a ban, by a session written live after it or ended by
   it, `admitted` keeping the device's newest session, `gone` for a session ended meanwhile, and a
-  waiting session read as none until its admission), `platform-roles.spec.ts`,
+  waiting session read as none until its admission, the account's platform roles read afresh at
+  every read), `platform-roles.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts` (a waiting session's token 401 until its
-  admission), `device-sessions.spec.ts`,
+  admission), `device-sessions.spec.ts` (a session a ban ended read with `banned` as why),
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
 - `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up and the
   verification through the mail in the stand's mailbox, sign-in, the credential limits, the
