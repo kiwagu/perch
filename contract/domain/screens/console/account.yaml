@@ -74,7 +74,7 @@ anchors:
     codes: [ not-operator, account-gone, failed ]
   console.account.name.form:
     kind: form
-    description: Renames the account's profile; shown while the account has a profile.
+    description: Renames the account's profile; shown while the account has one, as its read says.
   console.account.name.name-input:
     kind: input
     description: The name, as read or as typed.

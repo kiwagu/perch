@@ -433,7 +433,7 @@ actions:
       id:
         type: string
         description: The identity id of the account.
-    result: "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made, when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given, and its organisations, each with its key, its name and the account's role in it; an id with no account answers account-gone"
+    result: "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made, whether it has a profile (none until its first sign-in, so its name is the one it signed up with), when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given, and its organisations, each with its key, its name and the account's role in it; an id with no account answers account-gone"
     codes:
       - not-operator
       - account-gone
