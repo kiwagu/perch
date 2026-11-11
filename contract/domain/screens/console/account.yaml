@@ -28,7 +28,7 @@ anchors:
     binding: { route: /console/users }
   console.account.section:
     kind: section
-    description: "The account as read: its email, its dates, its marks, its ban and its organisations, with the areas that act on it; read again after each action."
+    description: "The account as read: its email, its dates, its marks, its ban and its organisations, with the areas that act on it."
     source:
       platform: accounts.read
       params: { id: { search: id } }
@@ -188,13 +188,12 @@ flow:
   states:
     viewing:
       type: parallel
-      description: The account as read, with the areas that act on it; each reads the account again once its action ends.
+      description: The account as read, with the areas that act on it.
       states:
         name:
           description: Renaming the account's profile.
           by: console.account.name.save-button
           onDone:
-            description: The heading shows the new name once the account is read again.
             actions:
               - read: console.account.section
           onError:
@@ -227,7 +226,7 @@ flow:
                 input: { id: { search: id }, reason: console.account.ban.reason-input }
                 onDone:
                   target: idle
-                  description: The account is banned and its devices are signed out; the account read again shows the ban with its reason.
+                  description: The account is banned and its devices are signed out.
                   actions:
                     - clear: console.account.ban.reason-input
                     - read: console.account.section
