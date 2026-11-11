@@ -37,6 +37,8 @@ import {
 import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
+import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
+import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import { type AuthMountDeps, authHandler } from '../mount'
 
 /** The account most specs sign up and verify. */
@@ -118,7 +120,7 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
  * account, no session is read back, no token holds a session, nothing is signed out, and every
- * sign-in is admitted within the limit of devices.
+ * sign-in and verification is admitted.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -132,6 +134,7 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signOut: notHere,
   revokeAll: notHere,
   admit: () => okAsync({ kind: 'admitted' }),
+  admitVerified: () => okAsync({ kind: 'admitted' }),
 }
 
 /**
@@ -159,7 +162,12 @@ export const noAccounts: Pick<
     // Every email reads alike before and after Better Auth's answer: the stand-in's account, its
     // one password, nothing a confirmation moved or a reset changed.
     credentialOf: () =>
-      okAsync({ identity: STAND_IN_ACCOUNT, hash: 'stand-in-hash', start: undefined }),
+      okAsync({
+        identity: STAND_IN_ACCOUNT,
+        hash: 'stand-in-hash',
+        banned: false,
+        start: undefined,
+      }),
   },
   resets: { read: notHere },
   emailChanges: {
@@ -230,6 +238,12 @@ export interface RealMountOptions extends OpenAuthOptions {
   ) => ReturnType<AuthSessions['admit']>
   /** Every ending of a session by its token fails, as on a directory that takes no writes. */
   readonly signOutFails?: boolean
+  /**
+   * Stands between the mount and Better Auth's handler, given the handler: a test makes its
+   * promise reject once the handler did its work, as a failure Better Auth rethrows outside its
+   * router does.
+   */
+  readonly handler?: (handle: AuthInstance['handler']) => AuthInstance['handler']
 }
 
 /** The instance each outbox the fixture opened belongs to. */
@@ -296,9 +310,11 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   onTestFinished(opened.close)
   INSTANCES.set(opened.outbox, opened.auth)
 
+  // The gateway's sessions reach the directory as the instance does: a test holds or fails their
+  // statements by the same hook.
   const sessions = new AuthSessions({
     auth: opened.auth,
-    directory: opened.local,
+    directory: opened.directory,
     clock: opened.clock,
     secret: AUTH_SECRET,
   })
@@ -316,7 +332,10 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   )
   const teardown = new AccountTeardown(opened.local)
   const route = authHandler({
-    auth: opened.auth,
+    auth:
+      options.handler === undefined
+        ? opened.auth
+        : { handler: options.handler(opened.auth.handler) },
     sessions: {
       verificationOf: (token) => sessions.verificationOf(token),
       identityOf: (email) => sessions.identityOf(email),
@@ -339,6 +358,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
 
         return options.admission === undefined ? admit() : options.admission(admit)
       },
+      admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
     deletions: accounts.accountDeletions,
@@ -453,6 +473,22 @@ export function signInRequest(
     body: JSON.stringify(
       signOutOldest === undefined ? { email, password } : { email, password, signOutOldest },
     ),
+  })
+}
+
+/**
+ * A verification of a link's `token` from `device` (none names no device), as the web sends it from
+ * the front's origin.
+ */
+export function verifyRequest(token: string, device: string | null): Request {
+  const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
+
+  headers.set('content-type', 'application/json')
+
+  return new Request('http://gateway.test/auth/verify-email', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token }),
   })
 }
 
@@ -695,6 +731,17 @@ export interface HeldQuery {
 /** Better Auth's adapter writes a session with an insert into its table. */
 export const isSessionInsert = (text: string): boolean =>
   text.startsWith('INSERT') && text.includes('`device_session`')
+
+/** The admission of a sign-in against the account's limit of devices, and its re-check of a ban. */
+export const isAdmission = (text: string): boolean => text === sessionsAdmitStatement
+
+/** The admission of a verification's session, and its re-check of a ban. */
+export const isVerifiedAdmission = (text: string): boolean =>
+  text === sessionsAdmitVerifiedStatement
+
+/** Better Auth's adapter reads a session by its token from its table, as at a session's read. */
+export const isSessionLookup = (text: string): boolean =>
+  text.startsWith('SELECT') && text.includes('FROM `device_session`')
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

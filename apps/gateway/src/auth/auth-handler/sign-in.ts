@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern'
+
 import { idSchemas } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
@@ -56,8 +58,9 @@ type AllowedAttempt = Extract<SignInAttempt, { readonly allowed: true }>
 
 /**
  * What Better Auth's answer to a sign-in means for its email's limit: 200 signed in and 403 (the
- * password was right, the email is not verified yet) both judged the password right, and so did
- * 409, a sign-in asked about the account's limit of devices once Better Auth accepted it.
+ * password was right, but the email is not verified yet or the account is banned) both judged the
+ * password right, and so did 409, a sign-in asked about the account's limit of devices once Better
+ * Auth accepted it.
  */
 function outcomeOf(status: number): SignInOutcome {
   if (status === 200 || status === 403 || status === 409) {
@@ -101,11 +104,15 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * it unconfirmed has its session deleted and answers 409 `device-limit`, nothing signed in, the
  * device's earlier session left as it was; a confirmed one signs out the device seen least
  * recently, whose sockets close with 4003. An admitted session ends the device's earlier one, so
- * the device's sockets close then (`closeDevice`). Until its admission the session waits
- * (`pending`), counted by no other admission and listed nowhere: an
- * admission that failed answers 500 `internal` and ends the new session by its token, and should
- * that ending fail too, the session keeps waiting, never handed out. Any other
- * answer reaches the client as its status and code alone (`refusalOf`); an accepted one by its
+ * the device's sockets close then (`closeDevice`). The admission reads the account's ban in its
+ * transaction: a ban that committed after Better Auth's own gate read the account unbanned answers
+ * 403 `account-banned`, no token, the new session ended `banned` (by the ban, or by the admission
+ * when it was written after the ban), the device's earlier session left to the ban. Until its
+ * admission the session waits (`pending`), counted by no other admission, listed nowhere and read
+ * by no caller: an admission that failed answers 500 `internal` and ends the new session by its
+ * token, and should that ending fail too, the session keeps waiting, never handed out. Any other
+ * answer reaches the client as its status and code alone (`refusalOf`: Better Auth's own refusal
+ * of a banned account, after the password, as 403 `account-banned`); an accepted one by its
  * allowlist alone (`signedIn`): the token and the account's id, email, name and whether its email
  * is verified, without its cookies, and with `start` (`{ name, locale }`, what the account signed
  * in to signed up with) while that account has not started: its profile or its settings have not reached the
@@ -156,19 +163,21 @@ async function handedOver(
     return (await deps.sessions.signOut(token)).match(internal, internal)
   }
 
-  if (admission.value.kind === 'asked') {
-    return Response.json({ code: 'device-limit' }, { status: 409 })
-  }
+  return match(admission.value)
+    .with({ kind: 'asked' }, () => Response.json({ code: 'device-limit' }, { status: 409 }))
+    .with({ kind: 'banned' }, () => Response.json({ code: 'account-banned' }, { status: 403 }))
+    .with({ kind: 'admitted' }, { kind: 'signed-out' }, async (admitted) => {
+      // The admission ended the device's earlier session: the sockets it opened with it close.
+      await closeDevice(request, response, deps.connections)
 
-  // The admission ended the device's earlier session: the sockets it opened with it close.
-  await closeDevice(request, response, deps.connections)
+      if (admitted.kind === 'signed-out') {
+        await deps.connections.close(user.id, admitted.device, CLOSE.deviceLimit)
+      }
 
-  if (admission.value.kind === 'signed-out') {
-    await deps.connections.close(user.id, admission.value.device, CLOSE.deviceLimit)
-  }
-
-  // The account the sign-in stands for is the one the second read found.
-  return signedIn(response, accepted.data, after.value?.start)
+      // The account the sign-in stands for is the one the second read found.
+      return signedIn(response, accepted.data, after.value?.start)
+    })
+    .exhaustive()
 }
 
 /**

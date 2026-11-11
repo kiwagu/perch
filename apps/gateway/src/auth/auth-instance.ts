@@ -128,7 +128,8 @@ export function authOptions(options: AuthInstanceOptions) {
       additionalFields: {
         device: { type: 'string', required: true, input: false },
         label: { type: 'string', required: true, input: false },
-        // A sign-in's session until the gateway admits it against the limit of devices.
+        // A sign-in's session until the gateway admits it against the limit of devices, and a
+        // verification's until the gateway admits it: no caller reads a session that waits.
         pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,

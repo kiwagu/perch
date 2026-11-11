@@ -32,6 +32,7 @@ import { manualClock } from '@workspace/replica/testing'
 import {
   AUTH_SECRET,
   accountServicesOf,
+  betterAuthToken,
   deviceHeaders,
   openAuth,
   signUpOn,
@@ -45,6 +46,7 @@ import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { linkToken } from '../../mail/__fixtures__/outbox'
 import { admitted, specInvitations } from '../../tenants/__fixtures__/invitations'
 import { specRetell } from '../../tenants/__fixtures__/retell'
 import { Organisations } from '../../tenants/organisations'
@@ -292,6 +294,28 @@ async function openGateway(options: GatewayOptions = {}) {
       )
 
       return response?.status
+    },
+    /**
+     * Signs `email` up and verifies it on `device` as Better Auth does, before the gateway admits
+     * the session it wrote: the identity, and the raw token of that waiting session.
+     */
+    verifying: async ({ email }: { readonly email: string }, device: string = DEVICE) => {
+      await opened.auth.api.signUpEmail({
+        body: { name: 'Cleo', email, password: 'Pass-word-1' },
+        headers: deviceHeaders(device),
+      })
+
+      const { headers } = await opened.auth.api.verifyEmail({
+        query: { token: betterAuthToken(linkToken(await opened.outbox.next(email))) },
+        headers: deviceHeaders(device),
+        returnHeaders: true,
+      })
+      const read =
+        (
+          await sessions.signedIn(headers.get('set-auth-token') ?? expect.unreachable('a token'))
+        )._unsafeUnwrap() ?? expect.unreachable('a session')
+
+      return { identity: read.user.id, token: read.token }
     },
     /**
      * Signs `email` up and verifies it on `device`: the identity, and the raw token of the session
@@ -624,6 +648,29 @@ describe('SyncConnection', () => {
     expect(fixture.socket.sent).toEqual([])
     expect(fixture.connections.forIdentity(fixture.ann.identity.id)).toEqual([])
     expect(fixture.seen).toEqual([])
+  })
+
+  it('closes 4401 a hello with the token of a session a verification wrote, as a token nobody holds, until the gateway admits it, and welcomes it then', async () => {
+    const gateway = await openGateway()
+    const cleo = await gateway.verifying({ email: 'cleo@example.test' })
+    const waiting = open(gateway)
+
+    await hello(waiting.connection, cleo.token)
+
+    expect(waiting.socket.closes).toEqual([[CLOSE.unauthorized, 'the session was not accepted']])
+    expect(waiting.socket.sent).toEqual([])
+    expect(gateway.connections.forIdentity(cleo.identity)).toEqual([])
+    expect(waiting.seen).toEqual([])
+    expect(
+      (await gateway.sessions.admitVerified(cleo.identity, cleo.token))._unsafeUnwrap(),
+    ).toEqual({ kind: 'admitted' })
+
+    const admitted = open(gateway)
+
+    await hello(admitted.connection, cleo.token)
+
+    expect(admitted.socket.closes).toEqual([])
+    expect(admitted.socket.sent.map((message) => message.type)).toEqual(['welcome'])
   })
 
   it("closes 4401 a hello under another device than its session's, and registers nothing", async () => {

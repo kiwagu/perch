@@ -41,12 +41,15 @@ export interface AccountStart {
 /**
  * The account an email signs in to, and the hash on its credential row (none when it has no
  * credential row): a new password always gets a hash of its own, so the hash tells whether the
- * password changed. `start` is there while the account has not started: its profile or its
- * settings have not reached the directory through its private region yet.
+ * password changed. `banned` tells whether an operator banned the account; a sign-in never reads
+ * it before the password was checked, so nobody without the password learns of a ban. `start` is
+ * there while the account has not started: its profile or its settings have not reached the
+ * directory through its private region yet.
  */
 export interface SignInCredential {
   readonly identity: IdentityId
   readonly hash: string | undefined
+  readonly banned: boolean
   readonly start: AccountStart | undefined
 }
 
@@ -78,6 +81,7 @@ export function signInStands(
 const credentialRow = z.object({
   identity: idSchemas.identity.schema,
   hash: z.string().min(1).nullish(),
+  banned: z.boolean(),
   name: z.string(),
   locale: z.enum(SUPPORTED_LOCALES),
   started: z.boolean(),
@@ -214,10 +218,11 @@ export class AccountPasswords {
   }
 
   /**
-   * The account `email` signs in to, in any case, the hash on its credential row and, while the
-   * account has not started, what it starts from; none when no account has the email. A sign-in
-   * reads it before Better Auth checks the password and again once Better Auth wrote the session
-   * (`signInStands`).
+   * The account `email` signs in to, in any case, the hash on its credential row, whether it is
+   * banned and, while the account has not started, what it starts from; none when no account has
+   * the email. A sign-in reads it before Better Auth checks the password and again once Better Auth
+   * wrote the session (`signInStands`), and a verification likewise, whose second read, or its
+   * read after Better Auth failed, tells a banned account's refusal from a failure.
    */
   credentialOf(email: string): ResultAsync<SignInCredential | undefined, DataError> {
     return reading(
@@ -236,11 +241,12 @@ export class AccountPasswords {
         )
       }
 
-      const { identity, hash, name, locale, started } = row.data
+      const { identity, hash, banned, name, locale, started } = row.data
 
       return ok({
         identity,
         hash: hash ?? undefined,
+        banned,
         start: started ? undefined : { name, locale },
       })
     })

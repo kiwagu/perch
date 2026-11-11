@@ -14,7 +14,9 @@ device id at protocol 8; the gateway reads the session, checks the device, marks
 welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
 profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
 auth module), without holding the hello. The session is read through Better Auth
-(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once. A token that reads no live session closes
+(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once,
+and so does one still waiting for the gateway's admission (a sign-in's or a verification's never
+handed out). A token that reads no live session closes
 the socket with 4401 (`the session was not accepted`), and a session opened on another device
 than the one the hello names with 4401 too (`no session for this device`): a session is bound to
 the device it was opened on. A read the directory could not make closes the socket as a failed
@@ -88,7 +90,8 @@ session hears the same close at its next hello: a hello whose token reads no liv
 closed with the code its row's `ended_reason` names (4001, 4002, 4003) when the row is the
 hello's device's, and with 4401 otherwise; a row that cannot be read closes it with 1011.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
-of an email opened on it, closes the identity's sockets on that device the same way, with 1000
+of an email opened on it, once the gateway admitted the session either wrote, closes the
+identity's sockets on that device the same way, with 1000
 (`another connection of this device took over`): its session ended the earlier one, and the
 device connects again with the new token. A
 connection that fails to close is reported and the others are closed all the same. No token

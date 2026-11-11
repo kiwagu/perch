@@ -10,6 +10,7 @@ import {
 } from '@workspace/ids'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
+import { ban, sessionState, setBanned } from '../__fixtures__/account-ban'
 import {
   AUTH_SECRET,
   betterAuthToken,
@@ -20,6 +21,7 @@ import {
 import deviceSessionExpiriesStatement from '../__fixtures__/device-session-expiries.surql'
 import deviceSessionRowStatement from '../__fixtures__/device-session-row.surql'
 import { signVerificationToken, verificationKey } from '../account-links'
+import { ADMISSION_HEADER } from '../session-hooks'
 
 import type { SessionCaller, SessionRead } from './read'
 import { AuthSessions } from './sessions'
@@ -261,6 +263,255 @@ describe('AuthSessions', () => {
   })
 })
 
+/**
+ * Signs Ann up and verified on her laptop, then in on her phone as the gateway's sign-in route
+ * asks Better Auth to (`X-Perch-Admission: pending`): her identity and the raw token of the phone's
+ * session, which waits for its admission.
+ */
+async function annWaitingOnPhone(opened: Awaited<ReturnType<typeof harness>>) {
+  const laptop = await signUpOn(opened.auth, 'ann@example.test', deviceHeaders('laptop'))
+  const headers = deviceHeaders('phone')
+
+  headers.set(ADMISSION_HEADER, 'pending')
+
+  const phone = await opened.auth.api.signInEmail({
+    body: { email: 'ann@example.test', password: 'Pass-word-1' },
+    headers,
+  })
+
+  return { identity: identityOf(laptop.user.id), laptop: laptop.token, phone: phone.token }
+}
+
+describe("AuthSessions, a sign-in's admission and the ban", () => {
+  it('reads a sign-in waiting for its admission as no session, and as its caller once admitted', async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+
+    expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+    expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
+      kind: 'admitted',
+    })
+    expect(callerOf(await opened.sessions.read(ann.phone))).toMatchObject({
+      identity: ann.identity,
+      device: 'phone',
+    })
+  })
+
+  it('answers banned for a sign-in of an account banned once its session was written, and ends that session banned', async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+
+    // The ban committed between Better Auth's read of the account and the session's insert: the
+    // flag is set and the waiting session, written after it, is still live.
+    await setBanned(opened.local, ann.identity, true)
+    await opened.clock.advance(MINUTE_MS)
+
+    const admittedAt = new Date(opened.clock.now())
+
+    expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
+      kind: 'banned',
+    })
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: true,
+      ended_at: admittedAt,
+      ended_reason: 'banned',
+    })
+    expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+  })
+
+  it('answers banned for a sign-in whose waiting session the ban ended, leaving the session as the ban left it', async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+
+    await opened.clock.advance(MINUTE_MS)
+
+    const bannedAt = new Date(opened.clock.now())
+
+    await ban(opened.local, ann.identity, bannedAt)
+    await opened.clock.advance(MINUTE_MS)
+
+    expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
+      kind: 'banned',
+    })
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: true,
+      ended_at: bannedAt,
+      ended_reason: 'banned',
+    })
+  })
+
+  it('leaves to the ban a sign-in admitted before it: the ban ends the admitted session banned', async () => {
+    const opened = await harness()
+    const ann = await annWaitingOnPhone(opened)
+
+    expect((await opened.sessions.admit(ann.identity, ann.phone, false))._unsafeUnwrap()).toEqual({
+      kind: 'admitted',
+    })
+    await opened.clock.advance(MINUTE_MS)
+
+    const bannedAt = new Date(opened.clock.now())
+
+    await ban(opened.local, ann.identity, bannedAt)
+
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: false,
+      ended_at: bannedAt,
+      ended_reason: 'banned',
+    })
+    expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+  })
+})
+
+/**
+ * Signs Ann up on her laptop and verifies her email on her phone, as Better Auth's verification
+ * does before the gateway admits its session: her identity and the raw token of the phone's
+ * session, read back by the signed token of Better Auth's answer.
+ */
+async function annVerifyingOnPhone(opened: Awaited<ReturnType<typeof harness>>) {
+  const token = await annsLinkToken(opened)
+  const { headers } = await opened.auth.api.verifyEmail({
+    query: { token: betterAuthToken(token) },
+    headers: deviceHeaders('phone'),
+    returnHeaders: true,
+  })
+  const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
+  const read =
+    (await opened.sessions.signedIn(signed))._unsafeUnwrap() ?? expect.unreachable('a session')
+
+  return { identity: identityOf(read.user.id), phone: read.token }
+}
+
+describe("AuthSessions, a verification's admission and the ban", () => {
+  it('admits the waiting session of a verification, which then reads as its caller and is the newest its device keeps', async () => {
+    const opened = await harness()
+    const token = await annsLinkToken(opened)
+    const ann = (await opened.sessions.identityOf('ann@example.test'))._unsafeUnwrap()
+    const identity = ann ?? expect.unreachable('an account')
+
+    // The phone holds an earlier admitted session of the account.
+    await opened.local.db.query(deviceSessionRowStatement, {
+      identity,
+      device: 'phone',
+      key: device_sessionIdFactory.create(),
+      session_token: 'earlier-token',
+      created_at: new Date(Date.now() - MINUTE_MS),
+    })
+
+    const { headers } = await opened.auth.api.verifyEmail({
+      query: { token: betterAuthToken(token) },
+      headers: deviceHeaders('phone'),
+      returnHeaders: true,
+    })
+    const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
+    const raw =
+      (await opened.sessions.signedIn(signed))._unsafeUnwrap()?.token ??
+      expect.unreachable('a session')
+
+    // Until its admission the new session ends nothing, and no caller reads it.
+    expect(await sessionState(opened.local, identity, 'earlier-token')).toMatchObject({
+      pending: false,
+    })
+    expect((await sessionState(opened.local, identity, 'earlier-token')).ended_at).toBeUndefined()
+    expect(await sessionState(opened.local, identity, raw)).toMatchObject({ pending: true })
+    expect(await opened.sessions.read(raw)).toEqual(NONE)
+
+    await opened.clock.advance(MINUTE_MS)
+
+    const admittedAt = new Date(opened.clock.now())
+
+    expect((await opened.sessions.admitVerified(identity, raw))._unsafeUnwrap()).toEqual({
+      kind: 'admitted',
+    })
+    expect(await sessionState(opened.local, identity, 'earlier-token')).toEqual({
+      device: 'phone',
+      token: 'earlier-token',
+      pending: false,
+      ended_at: admittedAt,
+    })
+    expect(await sessionState(opened.local, identity, raw)).toEqual({
+      device: 'phone',
+      token: raw,
+      pending: false,
+    })
+    expect(callerOf(await opened.sessions.read(raw))).toMatchObject({ identity, device: 'phone' })
+  })
+
+  it('answers banned for a verification of an account banned once its session was written, and ends that session banned', async () => {
+    const opened = await harness()
+    const ann = await annVerifyingOnPhone(opened)
+
+    await setBanned(opened.local, ann.identity, true)
+    await opened.clock.advance(MINUTE_MS)
+
+    const admittedAt = new Date(opened.clock.now())
+
+    expect((await opened.sessions.admitVerified(ann.identity, ann.phone))._unsafeUnwrap()).toEqual({
+      kind: 'banned',
+    })
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: true,
+      ended_at: admittedAt,
+      ended_reason: 'banned',
+    })
+    expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+  })
+
+  it('answers banned for a verification whose waiting session the ban ended, leaving the session as the ban left it', async () => {
+    const opened = await harness()
+    const ann = await annVerifyingOnPhone(opened)
+
+    await opened.clock.advance(MINUTE_MS)
+
+    const bannedAt = new Date(opened.clock.now())
+
+    await ban(opened.local, ann.identity, bannedAt)
+    await opened.clock.advance(MINUTE_MS)
+
+    expect((await opened.sessions.admitVerified(ann.identity, ann.phone))._unsafeUnwrap()).toEqual({
+      kind: 'banned',
+    })
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: true,
+      ended_at: bannedAt,
+      ended_reason: 'banned',
+    })
+  })
+
+  it('answers gone for a verification whose waiting session an ending of every session ended, as a reset does, admitting nothing', async () => {
+    const opened = await harness()
+    const ann = await annVerifyingOnPhone(opened)
+
+    await opened.clock.advance(MINUTE_MS)
+
+    const endedAt = new Date(opened.clock.now())
+
+    ;(await opened.sessions.revokeAll(ann.identity))._unsafeUnwrap()
+    await opened.clock.advance(MINUTE_MS)
+
+    expect((await opened.sessions.admitVerified(ann.identity, ann.phone))._unsafeUnwrap()).toEqual({
+      kind: 'gone',
+    })
+    expect(await sessionState(opened.local, ann.identity, ann.phone)).toEqual({
+      device: 'phone',
+      token: ann.phone,
+      pending: true,
+      ended_at: endedAt,
+      ended_reason: 'revoked',
+    })
+    expect(await opened.sessions.read(ann.phone)).toEqual(NONE)
+  })
+})
+
 describe('AuthSessions, the reads of a verification', () => {
   it('reads the session a verification signed in by the signed token of its answer: the raw token and the account', async () => {
     const opened = await harness()
@@ -271,8 +522,9 @@ describe('AuthSessions, the reads of a verification', () => {
       returnHeaders: true,
     })
     const signed = headers.get('set-auth-token') ?? expect.unreachable('a signed token')
-    const read = (await opened.sessions.signedIn(signed))._unsafeUnwrap()
-    const raw = read?.token ?? expect.unreachable('a session')
+    const read =
+      (await opened.sessions.signedIn(signed))._unsafeUnwrap() ?? expect.unreachable('a session')
+    const raw = read.token
 
     expect(raw).not.toContain('.')
     expect(signed.startsWith(`${raw}.`)).toBe(true)
@@ -285,6 +537,11 @@ describe('AuthSessions, the reads of a verification', () => {
         locale: 'en',
       },
     })
+    // The session waits for the gateway's admission: no caller reads it until then.
+    expect(await opened.sessions.read(raw)).toEqual(NONE)
+    expect(
+      (await opened.sessions.admitVerified(identityOf(read.user.id), raw))._unsafeUnwrap(),
+    ).toEqual({ kind: 'admitted' })
     expect(callerOf(await opened.sessions.read(raw)).device).toBe('phone')
     expect((await opened.sessions.signedIn('made.up'))._unsafeUnwrap()).toBeUndefined()
   })

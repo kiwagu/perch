@@ -313,7 +313,7 @@ describe('authHandler, the limit of devices an account keeps signed in at once',
   )
 
   it(
-    'lets no other way in write a session that waits: a verification naming the admission header is listed and counted',
+    "honours the admission header on the sign-in alone: a verification naming it waits for the verification's own admission, then is listed",
     async () => {
       const mounted = await mountedOnRealAuth()
       const headers = deviceHeaders('a')

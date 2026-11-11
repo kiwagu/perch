@@ -52,12 +52,14 @@ DEFINE FIELD OVERWRITE ended_at ON device_session TYPE option<datetime>;
 DEFINE FIELD OVERWRITE ended_reason ON device_session TYPE option<string>
   ASSERT $value = NONE
   OR $value IN ['revoked', 'password-changed', 'device-limit', 'banned'];
--- Whether the session waits for its admission against the account's limit of devices: true from
--- the moment a sign-in by email and password writes it until the gateway admits it, and the
--- session is handed to its device only then; a sign-in asked about the limit deletes it. While it
--- waits, no admission of another sign-in counts it, no list of devices shows it and the device's
--- earlier session stays live; one whose admission failed stays so, never handed out. Every other
--- session is admitted as it is written.
+-- Whether the session waits for its admission: true from the moment a sign-in by email and
+-- password, or the first verification of an email, writes it until the gateway admits it (a
+-- sign-in's against the account's limit of devices, each against the account's ban), and the
+-- session is handed to its device only then; a sign-in asked about the limit deletes it, and an
+-- account found banned ends it. While it waits, no admission of another sign-in counts it, no list
+-- of devices shows it, no caller reads it as a session and the device's earlier session stays
+-- live; one whose admission failed stays so, never handed out. Every other session is admitted as
+-- it is written.
 DEFINE FIELD OVERWRITE pending ON device_session TYPE bool DEFAULT false;
 -- Who acted as the account in this session, as Better Auth's admin plugin keeps it: the plugin's
 -- impersonation is out of reach (its endpoints are switched off), so it stays NONE.

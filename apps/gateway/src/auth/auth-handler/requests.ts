@@ -63,12 +63,21 @@ export function withoutCredentials(headers: Headers): Headers {
 const refusalCode = z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]*$/) })
 
 /**
- * Better Auth's refusal as the client gets it: its status and its code, nothing of its message,
- * its cookies or any other part of its body, which can carry what was sent or what failed.
+ * The code a client reads for Better Auth's refusal coded `code`: the contract's name where it has
+ * one of its own, its refusal of a banned account's session (`BANNED_USER`, the admin plugin's) being
+ * `account-banned`; Better Auth's code otherwise.
+ */
+const clientCode = (code: string): string => (code === 'BANNED_USER' ? 'account-banned' : code)
+
+/**
+ * Better Auth's refusal as the client gets it: its status and its code (`clientCode`), nothing of
+ * its message, its cookies or any other part of its body, which can carry what was sent or what
+ * failed.
  */
 export async function refusalOf(answer: Response): Promise<Response> {
   const body = refusalCode.safeParse(await answer.json().catch(() => undefined))
-  const code = answer.status >= 500 ? 'internal' : body.success ? body.data.code : 'bad-request'
+  const code =
+    answer.status >= 500 ? 'internal' : body.success ? clientCode(body.data.code) : 'bad-request'
 
   return Response.json({ code }, { status: answer.status })
 }

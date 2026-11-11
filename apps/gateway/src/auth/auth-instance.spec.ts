@@ -8,6 +8,7 @@ import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 
 import { linkToken } from '../mail/__fixtures__/outbox'
 
+import { sessionStates } from './__fixtures__/account-ban'
 import accountCredentialsStatement from './__fixtures__/account-credentials.surql'
 import accountRefuseStatement from './__fixtures__/account-refuse.surql'
 import {
@@ -31,7 +32,7 @@ import identityStandingStatement from './__fixtures__/identity-standing.surql'
 import identityVerifiedStatement from './__fixtures__/identity-verified.surql'
 import { ADMIN_PATHS } from './admin-paths'
 import { type AuthInstance, VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
-import { sessionHooks } from './session-hooks'
+import { ADMISSION_HEADER, sessionHooks } from './session-hooks'
 
 const closers: Array<() => Promise<void>> = []
 
@@ -797,6 +798,48 @@ describe('createAuthInstance, the verification of an email', () => {
     expect(again.headers.get('set-auth-token')).toBeNull()
     // The sign-up on the laptop signed nothing in: the one session is the phone's.
     expect(devices.map(({ device }) => device)).toEqual(['phone'])
+  })
+
+  it("writes a verification's session waiting for the gateway's admission, whatever its request names, and a sign-in's waiting only when the gateway's sign-in asks", async () => {
+    const { auth, outbox, local } = await instance()
+    const ann = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await auth.api.signUpEmail({
+      body: { name: 'Bob', email: 'bob@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('desk'),
+    })
+
+    const token = betterAuthToken(linkToken(await outbox.next('bob@example.test')))
+    const { headers } = await auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('desk'),
+      returnHeaders: true,
+    })
+    const bob = await auth.api.getSession({
+      headers: bearer(headers.get('set-auth-token') ?? expect.unreachable('a signed token')),
+    })
+    const asked = deviceHeaders('phone')
+
+    asked.set(ADMISSION_HEADER, 'pending')
+    await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: asked,
+    })
+    await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('tablet'),
+    })
+
+    const waiting = async (identity: string) =>
+      (await sessionStates(local, identity)).map(({ device, pending }) => [device, pending])
+
+    expect(await waiting(bob?.user.id ?? expect.unreachable('a session'))).toEqual([['desk', true]])
+    // The laptop's verification was admitted by the fixture, as the mount admits one.
+    expect(await waiting(ann.user.id)).toEqual([
+      ['laptop', false],
+      ['phone', true],
+      ['tablet', false],
+    ])
   })
 
   it('refuses a link past its lifetime with TOKEN_EXPIRED', async () => {

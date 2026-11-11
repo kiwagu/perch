@@ -60,7 +60,14 @@ export interface AuthMountDeps {
   readonly auth: Pick<AuthInstance, 'handler'>
   readonly sessions: Pick<
     AuthSessions,
-    'signedIn' | 'identityOf' | 'verificationOf' | 'read' | 'signOut' | 'revokeAll' | 'admit'
+    | 'signedIn'
+    | 'identityOf'
+    | 'verificationOf'
+    | 'read'
+    | 'signOut'
+    | 'revokeAll'
+    | 'admit'
+    | 'admitVerified'
   >
   /** The reset mail, the reset, the change and the check of a password, an email's credential. */
   readonly passwords: Pick<
