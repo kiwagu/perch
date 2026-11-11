@@ -19,10 +19,18 @@ import {
   type AccountCard,
   type AccountSearch,
   type AccountsPort,
+  BAN_CODES,
+  CHANGE_EMAIL_CODES,
   type ConsoleFailure,
   LIST_CODES,
   type ListedAccount,
   READ_CODES,
+  REMOVE_CODES,
+  RENAME_CODES,
+  RESEND_VERIFICATION_CODES,
+  REVOKE_SESSIONS_CODES,
+  SEND_RESET_CODES,
+  UNBAN_CODES,
 } from '../platform/accounts.port'
 
 import type { Fetcher } from './gateway-auth'
@@ -115,8 +123,9 @@ const queryOf = (search: AccountSearch): string =>
   }).toString()
 
 /**
- * `GET <baseUrl>/console/accounts?q&page&size` and `GET <baseUrl>/console/accounts/:id`, each
- * answer parsed, each failure one of its action's codes.
+ * `GET <baseUrl>/console/accounts?q&page&size`, `GET <baseUrl>/console/accounts/:id` and the
+ * actions on an account, `POST <baseUrl>/console/accounts/:id/<action>` answered 204: each answer
+ * parsed, each failure one of its action's codes.
  */
 export function accountsApi(baseUrl: string, deps: AccountsDeps): AccountsPort {
   /** One call with the credentials of its start; a `not-operator` drops that identity's role. */
@@ -142,14 +151,36 @@ export function accountsApi(baseUrl: string, deps: AccountsDeps): AccountsPort {
     })
   }
 
+  /** The path of the account `id` names, under the console's routes. */
+  const accountPath = (id: IdentityId): string => `/console/accounts/${encodeURIComponent(id)}`
+
+  /** `POST` of an action on the account `id`, with `body` when it takes one, done on a 204. */
+  const acting =
+    <Code extends string>(codes: readonly [Code, ...Code[]], action: string) =>
+    (id: IdentityId, body?: object) =>
+      asking(codes, (calls) => calls.empty(`${accountPath(id)}/${action}`, 'POST', body))
+
+  const rename = acting(RENAME_CODES, 'rename')
+  const changeEmail = acting(CHANGE_EMAIL_CODES, 'email')
+  const ban = acting(BAN_CODES, 'ban')
+
   return {
     list: (search) =>
       asking(LIST_CODES, (calls) =>
         calls.json(`/console/accounts?${queryOf(search)}`, 'GET', listed),
       ).map((answer) => ({ accounts: answer.accounts.map(listedView), total: answer.total })),
     read: (id) =>
-      asking(READ_CODES, (calls) =>
-        calls.json(`/console/accounts/${encodeURIComponent(id)}`, 'GET', card),
-      ).map((answer) => cardView(answer.account)),
+      asking(READ_CODES, (calls) => calls.json(accountPath(id), 'GET', card)).map((answer) =>
+        cardView(answer.account),
+      ),
+    rename: (id, name) => rename(id, { name }),
+    changeEmail: (id, email) => changeEmail(id, { email }),
+    // The gateway takes a body for every ban, and trims the reason: an empty one is none.
+    ban: (id, reason) => ban(id, { reason }),
+    unban: acting(UNBAN_CODES, 'unban'),
+    revokeSessions: acting(REVOKE_SESSIONS_CODES, 'sign-out'),
+    sendReset: acting(SEND_RESET_CODES, 'reset'),
+    resendVerification: acting(RESEND_VERIFICATION_CODES, 'verification'),
+    remove: acting(REMOVE_CODES, 'removal'),
   }
 }

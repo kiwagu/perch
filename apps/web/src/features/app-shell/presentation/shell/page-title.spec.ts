@@ -22,6 +22,11 @@ describe('pageTitle', () => {
     expect(pageTitle('/console/users', spanish)).toBe('Cuentas · Perch')
   })
 
+  it("names the operator's card of one account", () => {
+    expect(pageTitle('/console/account', english)).toBe('Account · Perch')
+    expect(pageTitle('/console/account', spanish)).toBe('Cuenta · Perch')
+  })
+
   it('names only the app where no screen is open', () => {
     expect(pageTitle(undefined, english)).toBe('Perch')
     expect(pageTitle('/', english)).toBe('Perch')

@@ -44,4 +44,47 @@ describe('AccountsService', () => {
       'account-gone',
     )
   })
+
+  it('acts on an account through the port, each action with what it takes', async () => {
+    const accounts = new FakeAccounts()
+    const service = new AccountsService(accounts)
+
+    for (const acted of [
+      service.rename(una.id, 'Una Smith'),
+      service.changeEmail(una.id, 'una@example.org'),
+      service.ban(una.id, 'spam'),
+      service.unban(una.id),
+      service.revokeSessions(una.id),
+      service.sendReset(una.id),
+      service.resendVerification(una.id),
+      service.remove(una.id),
+    ]) {
+      expect((await acted).isOk()).toBe(true)
+    }
+
+    expect(accounts.calls).toEqual([
+      ['rename', una.id, 'Una Smith'],
+      ['changeEmail', una.id, 'una@example.org'],
+      ['ban', una.id, 'spam'],
+      ['unban', una.id],
+      ['revokeSessions', una.id],
+      ['sendReset', una.id],
+      ['resendVerification', una.id],
+      ['remove', una.id],
+    ])
+  })
+
+  it("fails with an action's own code", async () => {
+    const accounts = new FakeAccounts()
+    const service = new AccountsService(accounts)
+
+    accounts.refuse('remove', 'last-admin')
+    accounts.refuse('changeEmail', 'email-taken')
+
+    expect((await service.remove(bart.id))._unsafeUnwrapErr().code).toBe('last-admin')
+    expect((await service.changeEmail(bart.id, 'una@example.test'))._unsafeUnwrapErr().code).toBe(
+      'email-taken',
+    )
+    expect((await service.remove(bart.id)).isOk()).toBe(true)
+  })
 })

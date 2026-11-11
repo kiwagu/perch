@@ -13,6 +13,7 @@ import { itemIdOf, type Pager, pagerOf, testIdFor } from '@workspace/ui-contract
 import type { AccountPage, ListCode, ListedAccount } from '../../../../../platform/accounts.port'
 import { ACCOUNT_ITEM, type UsersEvent } from '../../../application/users.machine'
 import { ACCOUNT_PAGE_SIZES, type AccountPageSize } from '../../../domain/account-search.entity'
+import { MarkBadge } from '../../components/mark-badge/mark-badge.view'
 
 export interface UsersViewProps {
   /** What the search box holds: the address's text, or what was typed since the address changed. */
@@ -71,18 +72,6 @@ function MovingLink(props: {
   )
 }
 
-/** A mark of an account's row. */
-function Badge(props: { readonly testId: string; readonly children: string }) {
-  return (
-    <span
-      className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground"
-      data-testid={props.testId}
-    >
-      {props.children}
-    </span>
-  )
-}
-
 function AccountRow(props: {
   readonly account: ListedAccount
   readonly href: string
@@ -110,17 +99,19 @@ function AccountRow(props: {
         </span>
         <span className="flex flex-wrap gap-2">
           {account.emailVerified ? (
-            <Badge testId="console.users.list.verified-badge">
+            <MarkBadge testId="console.users.list.verified-badge">
               {t('console.users.list.verified')}
-            </Badge>
+            </MarkBadge>
           ) : null}
           {account.banned ? (
-            <Badge testId="console.users.list.banned-badge">{t('console.users.list.banned')}</Badge>
+            <MarkBadge testId="console.users.list.banned-badge">
+              {t('console.users.list.banned')}
+            </MarkBadge>
           ) : null}
           {account.operator ? (
-            <Badge testId="console.users.list.operator-badge">
+            <MarkBadge testId="console.users.list.operator-badge">
               {t('console.users.list.operator')}
-            </Badge>
+            </MarkBadge>
           ) : null}
         </span>
         <span

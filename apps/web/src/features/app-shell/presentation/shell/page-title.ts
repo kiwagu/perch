@@ -16,6 +16,7 @@ export const PAGE_TITLES: Readonly<Record<string, (t: Translate) => string>> = {
   '/invitation': (t) => t('app.title.organisation.invitation'),
   '/devices': (t) => t('app.title.device'),
   '/console/users': (t) => t('app.title.console.users'),
+  '/console/account': (t) => t('app.title.console.account'),
   '/settings': (t) => t('app.title.user.settings'),
   '/$': (t) => t('app.title.not-found'),
 }

@@ -180,8 +180,10 @@ modeling stage.
   `GET /devices` (each device's session row id, label, times as dates, `revokedAt` when signed
   out, `current` for this device; the browser's own id is never sent back),
   `DELETE /devices/:id` and `POST /auth/sign-out-everywhere`. `accountsApi` is the `ACCOUNTS`
-  port over the console routes `GET /console/accounts?q&page&size` and
-  `GET /console/accounts/:id`, for an operator: each request reads the tab's credentials once as
+  port over the console routes `GET /console/accounts?q&page&size`,
+  `GET /console/accounts/:id` and the actions on an account,
+  `POST /console/accounts/:id/{rename,email,ban,unban,sign-out,reset,verification,removal}`
+  (each answered 204), for an operator: each request reads the tab's credentials once as
   it starts (the identity it shows and the token saved for it), each answer is parsed and each
   refusal is a code of its action (`failed` for any other), and a `not-operator` takes
   `operator` off the roles saved for that identity (`SessionService.dropRole`), whichever
@@ -416,7 +418,7 @@ modeling stage.
   - [device](src/features/device/README.md): My devices, signing one device or every one
     out.
   - [console](src/features/console/README.md): the operator's console of the platform's
-    accounts.
+    accounts, and the card of one account with the actions an operator takes on it.
 
 ## Key exports
 
@@ -468,7 +470,7 @@ gateway does, which leaves a stand that already has it alone. `openStandTenant()
   contract check passes, with its schema and the model's beside it, which the stands serve at
   `/ui-manifest/`. With `PERCH_UI_HOOKS=1` the build installs the page helper. A production
   build fails over its size budgets (`build/size-budgets.ts`, gzipped): the first frame (the
-  page, the scripts and styles it names, its Basic Latin font) 310 kB, each lazy script 100 kB,
+  page, the scripts and styles it names, its Basic Latin font) 315 kB, each lazy script 100 kB,
   the SurrealDB WASM 5.2 MB and the Loro WASM 1.2 MB, and a WASM module without a budget fails
   it too; otherwise it prints how close it came.
 - `bun run test`: composition, platform and component tests.
