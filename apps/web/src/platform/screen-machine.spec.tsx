@@ -205,9 +205,9 @@ const PageModule = defineModule({
   id: 'page',
   declarations: { Page, WatchedPage, There: () => <p>there</p> },
   routes: [
-    { path: '/here', page: 'Page' },
-    { path: '/watched', page: 'WatchedPage' },
-    { path: '/there', page: 'There' },
+    { path: '/here', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/watched', page: 'WatchedPage', roles: ['guest', 'identity'] },
+    { path: '/there', page: 'There', roles: ['guest', 'identity'] },
   ],
 })
 

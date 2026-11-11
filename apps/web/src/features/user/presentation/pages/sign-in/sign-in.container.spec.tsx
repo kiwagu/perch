@@ -108,10 +108,11 @@ function renderSignIn(session: SessionPort, at = '/sign-in') {
         path: '/sign-in',
         page: 'SignIn',
         guard: 'guest',
+        roles: ['guest'],
         search: z.object({ email: z.string().max(254).optional() }),
       },
-      { path: '/me', page: 'Me', guard: 'authenticated' },
-      { path: '/forgot-password', page: 'Forgot' },
+      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
+      { path: '/forgot-password', page: 'Forgot', roles: ['guest', 'identity'] },
     ],
   })
   const router = createAppRouter({

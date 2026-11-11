@@ -5,7 +5,8 @@
 The page frame every module renders into. It runs the frame's flow (`contract/domain/screens/__root.yaml`)
 as its machine from the start of the page, before the local database finishes opening, and
 carries a signed-in account's navigation (the profile, the organisation page, My devices and
-the settings; a guest sees none, only the banner and the page), the theme and language switches
+the settings, and the console for an operator alone, each link shown to the roles of its anchor,
+`navigation-links-contract.spec.ts`; a guest sees none, only the banner and the page), the theme and language switches
 for a guest (a signed-in account chooses its theme and its language on the settings screen;
 a guest's other tabs follow a theme it chooses, `platform.theme-set`, which the start sends the
 frame's machine from the moment the services exist, as every screen's machine hears the
@@ -100,7 +101,10 @@ modules' routes.
   `postponing`: three days on this device) that clears it. Its buttons take nothing around a
   crash or a page loading again (the guard `screenReady`), and no quiet reload starts while the
   browser's window is open.
-- Page titles: the shell sets the browser tab's title from the route matched, "<screen> · Perch"
+- Page titles: the shell sets the browser tab's title from the screen the router resolved
+  (`platform/resolved-route.ts`: the not-found screen's for a page whose roles the device does
+  not hold, as for an unknown address, so the title never names a screen refused; the
+  navigation marks the same screen current), "<screen> · Perch"
   in the language the app speaks (`presentation/shell/page-title.ts`: `PAGE_TITLES`, one literal
   key per screen, `app.title.<screen id>`, by the path of its route; the app's name alone where no
   screen is open), held to every binding of the contract by `page-titles-contract.spec.ts`.

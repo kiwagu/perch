@@ -80,10 +80,11 @@ function renderPage(service: VerifyEmailService, path = '/verify-email?token=the
         path: '/verify-email',
         page: 'VerifyEmail',
         guard: 'guest',
+        roles: ['guest'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/me', page: 'Me' },
-      { path: '/sign-in', page: 'SignIn' },
+      { path: '/me', page: 'Me', roles: ['guest', 'identity'] },
+      { path: '/sign-in', page: 'SignIn', roles: ['guest', 'identity'] },
     ],
   })
   const { session } = fakeSession()

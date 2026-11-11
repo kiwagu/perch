@@ -292,11 +292,16 @@ modeling stage.
   `<html data-boot-step>` shows the boot step; `data-sync-leader`
   and `data-sync-channel` show the tab's sync role and channel.
 - `src/platform/`: `defineModule`, `ModuleScope`, `useService`, `useShape`, the router built
-  from module routes (each page inside its module's scope; a page left open is checked again
+  from module routes (each page inside its module's scope; after its guard a page opens only for
+  a device holding one of its `roles`, its binding's, read by `held-roles.ts` as the UI contract's
+  `heldRoles`: `guest`, or `identity` with the role in the organisation current and the account's
+  platform roles; any other device gets the page of the module route at `/$` in its place at the
+  same address, its search never read, which the frame names and marks as the not-found screen,
+  `resolved-route.ts`; a page left open is checked again
   whenever the account changes: a protected page sends one signed out to sign-in, a guest page
   one another tab signed in to the profile, while a sign-in of this tab's own,
   `SessionPort.signingInHere()`, is left to the page that started it, which goes on to its
-  welcome), the ports for the session (with the memberships, the current organisation and the
+  welcome; and whenever the roles the device holds change, outside such a sign-in), the ports for the session (with the memberships, the current organisation and the
   account's platform roles), for commands, for the app's events (`events.port.ts`:
   subscribe, once, onAny), for organisations, for devices, for the build the server serves
   (`served-build.port.ts`), for the state of the sync (`sync-status.port.ts`) and for the
@@ -327,9 +332,11 @@ modeling stage.
   (`perch.install.later`) or ended once installed (`perch.install.installed`, `appinstalled`, the
   app running standalone); the start makes it before the first frame and gives it through
   `InstallContext`. `routes-contract.spec.ts` proves every module
-  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, history,
-  retained parameters, and the input view of the search schema as JSON Schema, without its
-  prose);
+  route equals its binding in the screen files of `contract/domain/screens/` (path, guard, roles
+  as a set, history, retained parameters, and the input view of the search schema as JSON
+  Schema, without its prose); `routes-roles.spec.ts` opens every routed binding for a guest, an
+  account, a member, an admin and an operator, at its example and at a search it refuses, and
+  holds what each sees to the binding's roles and guard;
   `routes-router.spec.ts` builds every binding on the real router (the contract's sample of
   each parameter of its path, `parameterSample`, and the least search its schema accepts),
   matches it back to the same route, parameters and search with the defaults applied, and

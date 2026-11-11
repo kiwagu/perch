@@ -84,12 +84,13 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/things/$key', page: 'Page' },
-    { path: '/notes/{-$tab}', page: 'Page' },
-    { path: '/files/$', page: 'Page' },
+    { path: '/things/$key', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/notes/{-$tab}', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/files/$', page: 'Page', roles: ['guest', 'identity'] },
     {
       path: '/list',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({
         view: z.enum(['read', 'edit']).default('read'),
         pageSize: z.int().default(10),

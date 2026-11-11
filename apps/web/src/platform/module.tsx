@@ -32,6 +32,12 @@ export interface RouteDef {
   readonly page: string
   /** Pages behind `authenticated` redirect to sign-in when nobody is signed in. */
   readonly guard?: 'authenticated' | 'guest'
+  /**
+   * The roles the page serves, its binding's in the contract: it opens for a device that holds
+   * one of them (`admits`), after its guard and before its search is read; any other device gets
+   * the not-found page at the same address.
+   */
+  readonly roles: readonly string[]
   /** The search parameters the page reads; one equal to its default leaves the URL. */
   readonly search?: z.ZodObject<z.ZodRawShape>
   /** The search parameters carried across navigations. */

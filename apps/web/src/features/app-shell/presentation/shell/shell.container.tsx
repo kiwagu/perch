@@ -15,10 +15,12 @@ import { useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 import { EVENTS } from '../../../../platform/events.port'
 import { useFrameEffects } from '../../../../platform/frame-effects'
+import { useHeldRoles } from '../../../../platform/held-roles'
 import { type InstallOffer, useDeviceInstall } from '../../../../platform/install'
 import { useLeaveGuard } from '../../../../platform/leave-guard.port'
 import { useService, useShape } from '../../../../platform/module'
 import { useNotice } from '../../../../platform/notices'
+import { resolvedRoute } from '../../../../platform/resolved-route'
 import { rendersIn } from '../../../../platform/screen-renders'
 import { SERVED_BUILD } from '../../../../platform/served-build.port'
 import { SESSION } from '../../../../platform/session.port'
@@ -103,15 +105,10 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   const { actor, live } = frame
   const row = useShape(settingsShape, user ? { identity: user.id } : null).tree?.[0]
   const account = useRef<string | undefined>(undefined)
-  const pathname = useRouterState({ select: (state) => state.location.pathname })
-  // The path of the route matched, as it is declared (`/$` for an unknown address).
-  const route = useRouterState({
-    select: (state): string | undefined => {
-      const declared: unknown = state.matches.at(-1)?.fullPath
-
-      return typeof declared === 'string' ? declared : undefined
-    },
-  })
+  // The screen the router resolved, as its route is declared: `/$` for an unknown address and
+  // for a page whose roles this device does not hold, so neither names a screen it was refused.
+  const route = useRouterState({ select: resolvedRoute })
+  const held = useHeldRoles()
   const notice = useNotice()
   const toasts = useToasts()
   const dismissToast = useDismissToast()
@@ -295,8 +292,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
     <ShellView
       status={dataOpening ? 'opening-data' : 'ready'}
       renders={rendersIn(frameSnapshot.machine.config, frameState)}
-      signedIn={user !== undefined}
-      activePath={pathname}
+      held={held}
+      activePath={route}
       canChooseLocale={canChoose}
       onLocaleChange={(locale) => {
         // A change of language is a leave the frame asks about while a field holds unsaved input.

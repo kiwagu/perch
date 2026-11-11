@@ -271,17 +271,19 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/org/$key', page: 'Page' },
-    { path: '/notes/{-$tab}', page: 'Page' },
-    { path: '/files/$', page: 'Page' },
+    { path: '/org/$key', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/notes/{-$tab}', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/files/$', page: 'Page', roles: ['guest', 'identity'] },
     {
       path: '/list',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({ tab: z.enum(['a', 'b']).default('a'), page: z.int().min(1) }),
     },
     {
       path: '/range',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({
         below: z.number().max(-2),
         between: z.int().min(-5).max(-1),
@@ -292,6 +294,7 @@ const SampleModule = defineModule({
     {
       path: '/find',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({
         q: z.string().max(5),
         name: z.string().min(3),
