@@ -41,10 +41,12 @@ export interface AccountStart {
 /**
  * The account an email signs in to, and the hash on its credential row (none when it has no
  * credential row): a new password always gets a hash of its own, so the hash tells whether the
- * password changed. `banned` tells whether an operator banned the account; a sign-in never reads
- * it before the password was checked, so nobody without the password learns of a ban. `start` is
- * there while the account has not started: its profile or its settings have not reached the
- * directory through its private region yet.
+ * password changed. `banned` tells whether an operator banned the account. The read a sign-in
+ * makes before the password was checked carries it, but nothing refuses on it then: a ban is
+ * refused only after the password was checked (by Better Auth's gate, then by the admission), so
+ * nobody without the password learns of a ban. `start` is there while the account has not
+ * started: its profile or its settings have not reached the directory through its private region
+ * yet.
  */
 export interface SignInCredential {
   readonly identity: IdentityId
