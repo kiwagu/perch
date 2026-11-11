@@ -242,6 +242,29 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     await settle()
   })
 
+  it('has a following tab show the saved roles of the identity another tab signed in, telling its listeners and writing no record', async () => {
+    const { browser, a, b, storageB } = await annInTwoTabs()
+
+    // Ann's welcome carried no role; Bob's record, kept on the browser, holds the operator's.
+    welcomed(a, [])
+    saveRoles(browser.tab(), bob.identity.id, ['operator'])
+    await settle()
+
+    const heardB = rolesHeard(b.session)
+    const writesB = roleWrites(storageB)
+
+    expect(b.session.roles().size).toBe(0)
+
+    // Another tab signs Ann out and Bob in.
+    saveDevice(browser.tab(), bob)
+
+    await vi.waitFor(() => expect(b.session.current()?.id).toBe(bob.identity.id))
+    expect([...b.session.roles()]).toEqual(['operator'])
+    await vi.waitFor(() => expect(heardB.at(-1)).toEqual(['operator']))
+    expect(writesB()).toEqual([])
+    await vi.waitFor(() => expect(a.session.current()?.id).toBe(bob.identity.id))
+  })
+
   it('drops a role from the record of the identity a refusal names, and every tab hears it', async () => {
     const { a, b, storageA } = await annInTwoTabs()
 
