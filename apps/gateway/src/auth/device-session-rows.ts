@@ -38,9 +38,9 @@ export interface DeviceSessionRow {
    */
   readonly endedAt?: Date
   /**
-   * Why the session was ended from elsewhere, when it was live then (`ENDED_REASONS`), a ban of
-   * the account among them; absent for an ending of the device's own, an expiry, and a session
-   * that is live.
+   * Why the session was ended from elsewhere (`ENDED_REASONS`), when it was live then or when a
+   * ban of the account ended it, which gives every session it ends its reason, an expired one
+   * too; absent for an ending of the device's own, an expiry, and a session that is live.
    */
   readonly endedReason?: EndedReason
 }

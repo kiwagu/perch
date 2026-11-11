@@ -99,8 +99,9 @@ the session is live or has expired with nothing having ended it. An ending that 
 live and comes from elsewhere also sets `ended_reason`, in the same update and as fixed: `revoked`
 (signed out from another device, or every device at once), `password-changed` (the account's
 password changed, on another device or through a reset link), `device-limit` (a sign-in past
-the account's limit of devices) or `banned` (an operator banned the account; an admission that
-finds the account banned ends its waiting session so too); the device's own sign-out, a new sign-in of the same device and
+the account's limit of devices) or `banned` (an operator banned the account, which gives it to
+every session the ban ends, an expired one too; an admission that finds the account banned ends
+its waiting session so too); the device's own sign-out, a new sign-in of the same device and
 an expiry leave it empty. A hello whose token reads no live session is closed with the code of
 that reason, so a device offline when its session ended still learns why while the row is kept
 (`sync/README.md`). Every ending is the gateway's
