@@ -129,10 +129,12 @@ export class SessionSignOut {
    * without the gateway, behind the same write
    * barrier as a sign-out, and leaves nothing to sign out. Its data for the identity goes with the
    * token only when nothing in it waits to be sent, and the sign-in page then says `notice`, if
-   * any; otherwise (or when that cannot be read) the database stays, and the sign-in page says
-   * that signing in again as the identity sends the changes. A token another tab saves while it
-   * waits for the writes or reads the outbox is a sign-in made since, which keeps the data and the
-   * keys (`signed-in-since`): this tab only leaves its space, for its caller to follow it.
+   * any; otherwise (or when that cannot be read, or the write lock never comes) the database
+   * stays, and the sign-in page says that signing in again as the identity sends the changes,
+   * unless `notice` ranks above that word (`SESSION_NOTICES`): both are left, and it says the
+   * first. A token another tab saves while it waits for the writes or reads the outbox is a
+   * sign-in made since, which keeps the data and the keys (`signed-in-since`): this tab only
+   * leaves its space, for its caller to follow it.
    */
   refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
     const open = this.#host.open()
@@ -155,7 +157,7 @@ export class SessionSignOut {
     const signedInSince = () => this.#signedInSince(open, ended)
 
     // As in a sign-out, every tab's writes are held back, and what is unsent is read and the
-    // database deleted once no tab writes any more. A database kept says so in place of `notice`.
+    // database deleted once no tab writes any more. A database kept says so beside `notice`.
     this.#barrier.hold(open.hints)
 
     const release = () => this.#barrier.release(open.hints)
@@ -164,7 +166,7 @@ export class SessionSignOut {
         return 'signed-in-since'
       }
 
-      this.#ending.keep(open, 'dead', raised)
+      this.#ending.keep(open, 'dead', raised, notice)
 
       return 'signed-out'
     }

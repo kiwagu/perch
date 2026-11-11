@@ -14,7 +14,8 @@ export interface SignOutOptions {
 /**
  * The words left for the sign-in page (`user.sign-in.notice-message`), in the rank the contract
  * gives them: of the words it holds, the page says the first. `account-banned` when an operator
- * banned the account, which signed this device out, and nothing waited to be sent; the ban's
+ * banned the account, which signed this device out, whether or not changes waited to be sent
+ * (when they did, they are kept, and it still comes before `resend-after-sign-in`); the ban's
  * reason is never said. `resend-after-sign-in` when the device was signed out (its keys refused,
  * signed out from another device, or a write landing
  * during its sign-out) while it held changes it had not sent; they are kept on the device, and
