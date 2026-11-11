@@ -539,12 +539,19 @@ as it holds its router to the bindings.
   whose `source` is a platform action (see "Reading a screen file", `source`): it reads that
   action again and shows its entries once the read is in, and the app may take them from the
   answer of the action that just ran, when that action returns them (the devices page's
-  sign-out of another device answers with the list). A `read` never names an anchor of
+  sign-out of another device answers with the account's devices when they could be read
+  after it, else without them). A `read` never names an anchor of
   another screen, one with no `source`, nor one whose source is an entity of the model, which
   follows the stored data as it changes and is never read. A read after an action is written
   on the outcome of its invoke (`onDone`, or an `onError` after which the list may have
   changed); an action that changes nothing a list of the screen shows says so on its invoke,
-  `read: false`, and an invoke that says it and reads in one of its outcomes is refused. Each value of a navigate's `search` is a search key of the binding it moves to,
+  `read: false`, and an invoke that says it and reads in one of its outcomes is refused. An
+  action after which one outcome reads and another does not says it on that branch of its
+  `onDone` or `onError`, `read: false` beside the branch's `guard` (the role change that
+  demotes the account itself, after which the members list goes): only a branch of an
+  invoke's outcome may say it, never the transition of an event; a branch that says it and
+  reads itself is refused, once per read, and so is one under an invoke that says `read:
+  false` already. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
@@ -569,7 +576,9 @@ as it holds its router to the bindings.
   success and its failure. Every `input` key is a parameter of the action; a parameter left
   out is the implementation's to compute (a minted `$id`, the `author`). An invoke may say
   `read: false`: its action changes nothing a list of the screen shows, so nothing reads after
-  it (the copy of an invitation link); XState ignores the key, the checks and `contract:diff`
+  it (the copy of an invitation link); one branch of its `onDone` or `onError` may say
+  `read: false` instead, where another branch reads: nothing reads after that outcome. XState
+  ignores the key in both places, the checks and `contract:diff`
   read it, and the machine comparison leaves it out. An event that runs
   an action is a transition into such a state, named for what it does (`signing-in`,
   `saving-name`, `deleting`), or `running` in the region of a button.
@@ -659,7 +668,7 @@ run contract:flow <screen>` prints it. The shorter forms are four:
 - A region written by its button, `by: <button>`: the region of a button bound to one action
   (below) with what the screen decides of it, its `description`, `onDone` and `onError`, and
   the `toast: false` or `read: false` it says of its action, which the loader puts on the
-  region's invoke. An
+  region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An
   outcome left out is the derived one; a transition without a target goes back to `idle`.
 
 The states of a pattern and of a button's region are the machine's, named by the loader
@@ -681,8 +690,8 @@ every transition and every guarded branch to its target with its effects. An app
 builds its own machine for a screen holds it to the flow with the engine's comparison
 (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
 the machine has the config of its flow, what each state renders included (on a branch, the
-flow less what it added and the machine has not built yet), an invoke's `read: false` aside,
-which is a promise the checks read and nothing a machine runs.
+flow less what it added and the machine has not built yet), an invoke's or a branch's
+`read: false` aside, which is a promise the checks read and nothing a machine runs.
 
 ### What a screen leaves out
 
@@ -818,7 +827,8 @@ out, and the loader derives it, the same way every time:
   the invoke, or on a region written `by` its button (the language select's store: the change
   is visible by itself); a notice or an error written on the outcome says nothing about the
   toast. `read: false` sits beside it on the same invoke or region, a different statement:
-  the action changes nothing a list of the screen shows, so nothing reads after it (see
+  the action changes nothing a list of the screen shows, so nothing reads after it; on one
+  branch of the `onDone`, nothing reads after that outcome, and the branch keeps its toast (see
   the effects of a flow, `read`). A failure never toasts: it shows on the part's error. The toast anchor carries every
   code a flow shows on it; the vocabulary documents the derived ones by one rule row,
   `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a
@@ -1310,8 +1320,9 @@ gap is fixed in the contract files first, never worked around in a test.
   actions, anchors with their codes and bindings that exist (a clear's anchor one that carries
   codes, else a field of the flow's own screen, never a `visibility-button`, a read's anchor a
   list, section or table of the flow's own screen whose `source` is a platform action, never
-  one with an entity source or none, and an invoke that says `read: false` reading in none of
-  its outcomes, a navigate's
+  one with an entity source or none, an invoke that says `read: false` reading in none of
+  its outcomes, and a branch that says `read: false` an outcome of an invoke, never the
+  transition of an event, reading nothing itself, under no invoke that says it already, a navigate's
   search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
   that holds no secret, each `{ item }` an entry with a `dataId` of a list, a table or a
   section of the flow's own screen, taken on the event of a control in its part into a key
@@ -1627,7 +1638,8 @@ email-not-verified`; a guard's sentence is prose and has no line), each state's 
 each anchor a state renders (`check-mail renders user.sign-in.resend-button`, a state of a
 region by its path, `viewing.create-form.open`), each `entry` and `exit` effect, each
 transition on an event with its target, guard and effects, each invoke with its input as
-JSON, its `read: false` when it says one, and its outcomes, each final state. Where order runs the machine (the guarded
+JSON, its `read: false` when it says one, and its outcomes, a branch's `read: false` after its
+guard (`viewing.member-roles.changing onDone #1 -> idle [ownDemotion] read: false`), each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
 sequence of more than one carries its position, `#<n>`. Descriptions are left out of a flow's
 lines, as they change nothing that runs, so a screen file written shorter that loads to the same

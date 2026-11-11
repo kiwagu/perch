@@ -78,6 +78,24 @@ describe('withDerivedToasts', () => {
     ])
   })
 
+  it('keeps read: false on the branch that takes the toast, the toast appended after its effects', () => {
+    const reread = { type: 'read', params: { anchor: 'sample.list' } }
+    const states = derived(
+      saving('note.updateNote', {
+        onDone: [
+          { target: 'idle', guard: 'left', read: false },
+          { target: 'idle', actions: [reread] },
+        ],
+      }),
+      expansionWith(TOAST),
+    )
+
+    expect(invokeOf(states)['onDone']).toEqual([
+      { target: 'idle', guard: 'left', read: false, actions: [shown('note-updated')] },
+      { target: 'idle', actions: [reread, shown('note-updated')] },
+    ])
+  })
+
   it('keeps a message a branch writes on the toast, and gives the other branches the standard one', () => {
     const unique = shown('name-kept')
     const expansion = expansionWith(TOAST)

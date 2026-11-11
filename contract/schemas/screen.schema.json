@@ -2020,6 +2020,11 @@
               "pattern": "^[a-z][a-zA-Z0-9]*$",
               "description": "A guard: a camelCase name of the flow `meta.guards`."
             },
+            "read": {
+              "type": "boolean",
+              "const": false,
+              "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+            },
             "actions": {
               "minItems": 1,
               "type": "array",

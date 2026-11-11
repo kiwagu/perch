@@ -218,6 +218,34 @@ describe('the projection of a read', () => {
     expect(beyondTheSubset(machine.config)).toEqual([])
     expect(projected(machine.config)).toEqual(projected(flow))
   })
+
+  it("leaves a branch's read: false out too: an app machine without the key equals the flow with it", () => {
+    const branched = (branch: Record<string, unknown>) => ({
+      initial: 'viewing',
+      meta: { guards: { ownDemotion: 'the account changed its own role to member' } },
+      states: {
+        viewing: { on: { 'sample.role-select': { target: 'changing' } } },
+        changing: {
+          invoke: {
+            src: 'platform.organisations.set-role',
+            onDone: [
+              { target: 'viewing', guard: 'ownDemotion', ...branch },
+              { target: 'viewing', actions: [read] },
+            ],
+            onError: { target: 'viewing', ...branch },
+          },
+        },
+      },
+    })
+    const flow = flowSchema.parse(branched({ read: false }))
+    const machine = createMachine(branched({}))
+
+    expect(beyondTheSubset(machine.config)).toEqual([])
+    expect(projected(machine.config)).toEqual(projected(flow))
+    expect(projected(createMachine(branched({ actions: [read] })).config)).not.toEqual(
+      projected(flow),
+    )
+  })
 })
 
 describe('the projection of a clear', () => {
