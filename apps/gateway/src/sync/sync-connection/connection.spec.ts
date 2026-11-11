@@ -65,6 +65,7 @@ import { ConnectionRegistry } from '../connections'
 
 import { SyncConnection } from './connection'
 import type { SocketLike, SyncConnectionDeps } from './deps'
+import { SUPERSEDED } from './reasons'
 
 const ann = { email: 'ann@example.test' }
 
@@ -1003,6 +1004,28 @@ describe('SyncConnection', () => {
     ])
     expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
   })
+
+  it.each([
+    [CLOSE.signedOut, 'signed out'],
+    [CLOSE.revoked, 'signed out from another device'],
+    [CLOSE.passwordChanged, 'signed out because the password changed'],
+    [CLOSE.deviceLimit, 'signed out by a sign-in past the limit of devices'],
+    [CLOSE.banned, 'signed out because the account was banned'],
+    [SUPERSEDED, 'another connection of this device took over'],
+  ] as const)(
+    'closes a welcomed connection the registry ends with %i, saying why as its hello does',
+    async (code, reason) => {
+      const gateway = await openGateway()
+      const signedUp = await gateway.signUp(ann)
+      const { socket, connection } = openHolding(gateway, holding())
+
+      await hello(connection, signedUp.token)
+      await gateway.connections.close(signedUp.identity.id, undefined, code)
+
+      expect(socket.closes).toEqual([[code, reason]])
+      expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
+    },
+  )
 
   it('closes with 4001 a device signed out while its hello is under way, before its welcome', async () => {
     const gateway = await openGateway()

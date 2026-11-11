@@ -1,3 +1,5 @@
+import { match } from 'ts-pattern'
+
 import type { DataError } from '@workspace/data'
 import {
   CLOSE,
@@ -15,26 +17,21 @@ import type { SocketLike, SyncConnectionDeps } from './deps'
 import { DeviceSeen } from './device-seen'
 import { ConnectionHello } from './hello'
 import type { ConnectionHost } from './host'
-import { answerFailed, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
+import { answerFailed, type EndCode, REASON, SERVER_ERROR, SUPERSEDED } from './reasons'
 import { RegionChanges } from './region-changes'
 import { RegionSubscriptions } from './region-subscriptions'
 import { DeviceRequests } from './requests'
 
-/** The reason a socket closed by the registry with `code` is given. */
-function endReason(code: number): string {
-  if (code === CLOSE.signedOut) {
-    return REASON.signedOut
-  }
-
-  if (code === CLOSE.passwordChanged) {
-    return REASON.passwordChanged
-  }
-
-  if (code === CLOSE.deviceLimit) {
-    return REASON.deviceLimit
-  }
-
-  return code === SUPERSEDED ? REASON.superseded : REASON.revoked
+/** The reason a socket closed by the registry with `code` is given: every code says its own. */
+function endReason(code: EndCode): string {
+  return match(code)
+    .with(CLOSE.signedOut, () => REASON.signedOut)
+    .with(CLOSE.revoked, () => REASON.revoked)
+    .with(CLOSE.passwordChanged, () => REASON.passwordChanged)
+    .with(CLOSE.deviceLimit, () => REASON.deviceLimit)
+    .with(CLOSE.banned, () => REASON.banned)
+    .with(SUPERSEDED, () => REASON.superseded)
+    .exhaustive()
 }
 
 /**
@@ -156,7 +153,7 @@ export class SyncConnection {
    * once, whatever message is being handled and also while the hello is under way, before its
    * welcome. Resolves once it closed. Never rejects.
    */
-  end(code: number): Promise<void> {
+  end(code: EndCode): Promise<void> {
     this.#close(code, endReason(code))
 
     return Promise.resolve()

@@ -2,6 +2,8 @@ import { type DataError, dataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
+import type { EndCode } from './sync-connection'
+
 /** A device's open connection, as far as its identity's memberships and sessions go. */
 export interface MembershipsListener {
   /**
@@ -25,7 +27,7 @@ export interface MembershipsListener {
    * again into a new session: its socket closes with `code` at once, whatever it is doing.
    * Resolves once it closed.
    */
-  end(code: number): Promise<void>
+  end(code: EndCode): Promise<void>
   /**
    * Another connection of the device took over: the socket closes at once, without signing the
    * device out; the device connects again after such a close.
@@ -154,7 +156,7 @@ export class ConnectionRegistry {
    * resolves once each closed. A connection that fails to close is reported and the others are
    * closed all the same. Never rejects.
    */
-  async close(identity: IdentityId, device: string | undefined, code: number): Promise<void> {
+  async close(identity: IdentityId, device: string | undefined, code: EndCode): Promise<void> {
     this.#epoch += 1
 
     if (device === undefined) {
@@ -170,7 +172,7 @@ export class ConnectionRegistry {
     )
   }
 
-  async #end(entry: Entry, code: number): Promise<void> {
+  async #end(entry: Entry, code: EndCode): Promise<void> {
     try {
       await entry.connection.end(code)
     } catch (cause) {
