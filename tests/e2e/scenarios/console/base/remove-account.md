@@ -31,7 +31,7 @@ Where: [/console/account] on device A, an operator; [/org] on device B, the acco
 6. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the account's [console.users.list.account-item]
 7. On device A, click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]
 8. On device A, open [/console/users], enter the operator email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on its own [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]
-9. On device B, click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]
+9. On device B, reload [/org], click [organisation.members.remove-button] on the other account's [organisation.members.item] and confirm with [app-shell.confirmation.confirm-button]
 10. On device A, open [/console/users], enter the email into [console.users.search-input], click [console.users.search-button], click [console.users.list.open-link] on the account's [console.users.list.account-item], click [console.account.removal.remove-button] and confirm with [app-shell.confirmation.confirm-button]
 
 ### Expected result
