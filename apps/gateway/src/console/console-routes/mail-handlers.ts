@@ -43,7 +43,10 @@ function resendRequest(request: Request, email: string): Request {
  * - verification: an account whose email is verified answers 409 `verified-before`, nothing
  *   sent; otherwise one of the email's verification mails is taken
  *   (`RequestLimits.verificationMail`, 429 `rate-limited`) and Better Auth is asked to send the
- *   mail again with the email alone, as a visitor asks it (`resendRequest`).
+ *   mail again with the email alone, as a visitor asks it (`resendRequest`). No turn of the email
+ *   is taken: a verification of the email, which takes that turn alone, can verify the account
+ *   after the account was read unverified and before the resend, which then mails nothing while
+ *   this still answers 204, a residue accepted.
  */
 export function mailHandlers(options: ConsoleRoutesOptions) {
   const failed = errorAnswer(options.onFailure)

@@ -54,9 +54,12 @@ Every action on an account (`console-routes/`) runs in the account's turn
 (`GatewayRoot.accountTurns`, by its identity's key, `inAccountTurn`), the turn the auth mount's
 changes of an account take, so two operators' actions on one account run one after the other and
 never beside the account's own change of its password or email or its deletion; the account is
-read again in its turn, and one removed meanwhile answers `account-gone`. An action that needs the
-account's email takes the email's turn inside the identity's, as the mount's confirmation of a new
-email does, never the other way round, so the two never wait on each other in a circle.
+read again in its turn, and one removed meanwhile answers `account-gone`. Only the reset mail takes
+the email's turn as well, inside the identity's, for its call to Better Auth. A verification mail
+and the request of a change of the email take the identity's turn alone; the confirmation of that
+change, in the auth mount, takes the identity's turn and then the new email's. Wherever both are
+taken the identity's comes first and the email's inside it, never the other way round, so the two
+never wait on each other in a circle.
 
 - A rename (`edit-handlers.ts`) holds the name to the profile page's rule (trimmed, 1 to 80
   characters) and writes it through `ProfileNames`; an account without a profile answers 409
@@ -78,7 +81,10 @@ email does, never the other way round, so the two never wait on each other in a 
   (`AccountPasswords.requestReset`). An account whose email is verified gets no verification
   mail (409 `verified-before`); otherwise Better Auth is asked to send it again with the email
   alone and no header of the operator's request, so it sees no session and runs its path for a
-  visitor, as the auth mount's resend asks it.
+  visitor, as the auth mount's resend asks it, and with no turn of the email: a verification of
+  the email, which takes that turn alone, can verify the account after the console read it
+  unverified and before Better Auth's resend, which then mails nothing while the console still
+  answers 204, a residue accepted.
 - A removal (`removal-handler.ts`) is the account's own deletion without the mailed link: it
   leaves its organisations in their turns (`Organisations.leaveAll`, through the departure),
   whose check refuses the only admin of an organisation with other members (409 `last-admin`,
