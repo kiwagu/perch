@@ -126,6 +126,8 @@ export interface Ask {
   readonly token?: string
   /** The `X-Perch-Device` header instead of the account's device; `null` leaves it out. */
   readonly device?: string | null
+  /** The body, sent as it is when it is text, as JSON otherwise; none when left out. */
+  readonly body?: unknown
 }
 
 /** A console request of `method` to `path` (with its query). */
@@ -142,5 +144,15 @@ export function consoleRequest(method: string, path: string, ask: Ask = {}): Req
     headers.set(DEVICE_HEADER, device)
   }
 
-  return new Request(`http://gateway.test${path}`, { method, headers })
+  if (ask.body === undefined) {
+    return new Request(`http://gateway.test${path}`, { method, headers })
+  }
+
+  headers.set('Content-Type', 'application/json')
+
+  return new Request(`http://gateway.test${path}`, {
+    method,
+    headers,
+    body: typeof ask.body === 'string' ? ask.body : JSON.stringify(ask.body),
+  })
 }

@@ -97,7 +97,14 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       clock: root.clock,
     }),
     invitationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
-    consoleRoutes({ sessions: root.sessions, accounts: root.accountDirectory, onFailure }),
+    consoleRoutes({
+      sessions: root.sessions,
+      accounts: root.accountDirectory,
+      bans: root.accountBans,
+      connections: root.connections,
+      turns: root.accountTurns,
+      onFailure,
+    }),
     authHandler({
       auth: root.auth,
       sessions: root.sessions,

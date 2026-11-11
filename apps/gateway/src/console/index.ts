@@ -1,5 +1,14 @@
-/** The platform operators' console: the accounts of the platform as operators read them, and the routes. */
+/**
+ * The platform operators' console: the accounts of the platform as operators read them, their
+ * bans, and the routes.
+ */
 
+export {
+  AccountBans,
+  type AccountBansOptions,
+  type BanOutcome,
+  type UnbanOutcome,
+} from './account-bans'
 export {
   type AccountCard,
   AccountDirectory,

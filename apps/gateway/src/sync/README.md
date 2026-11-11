@@ -106,8 +106,9 @@ reaches its logs.
 - Route: `GET /sync`, upgraded to a WebSocket by `src/server.ts`.
 - `SyncConnection` (`sync-connection/`): one device's socket: the hello, the welcome, subscribe,
   pull, push, probe and compact through the region hub, and sign-out over the channel; its index
-  also exports `SocketLike`, `SyncConnectionDeps` and `SUPERSEDED` (1000, the close of a socket
-  another connection or a new session of the device took over).
+  also exports `SocketLike`, `SyncConnectionDeps`, `SUPERSEDED` (1000, the close of a socket
+  another connection or a new session of the device took over) and `REASON` (the fixed text each
+  close gives as its reason, which the smoke checks).
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
   closes them, tells them their identity's memberships, takes regions from them and re-judges the
   role they push as in a region.

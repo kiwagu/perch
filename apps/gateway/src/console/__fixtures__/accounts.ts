@@ -28,6 +28,8 @@ export interface AccountRow {
   readonly emailVerified?: boolean
   readonly banned?: boolean
   readonly banReason?: string
+  /** When its ban would lift by itself, as the admin plugin keeps it; none when left out. */
+  readonly banExpires?: Date
   /** Its platform role as the directory keeps it; none when left out. */
   readonly role?: 'user' | 'operator'
 }
@@ -47,6 +49,7 @@ export async function writeAccount(local: LocalDb, row: AccountRow): Promise<Ide
     email_verified: row.emailVerified ?? false,
     banned: row.banned ?? false,
     ban_reason: row.banReason,
+    ban_expires: row.banExpires,
     role: row.role,
   })
 
@@ -76,24 +79,27 @@ export interface SessionRow {
   readonly pending?: boolean
 }
 
-/** Writes a session row of `identity` on a device of its own. */
+/** Writes a session row of `identity` on a device of its own, and answers that device. */
 export async function writeSession(
   local: LocalDb,
   identity: IdentityId,
   row: SessionRow,
-): Promise<void> {
+): Promise<string> {
   const key = device_sessionIdFactory.create()
+  const device = `device-${key}`
 
   await local.db.query(sessionRowStatement, {
     key,
     identity,
     session_token: `token-${key}`,
-    device: `device-${key}`,
+    device,
     last_seen_at: row.lastSeenAt,
     expires_at: row.endedAt ?? new Date(row.lastSeenAt.getTime() + 24 * 60 * 60 * 1000),
     ended_at: row.endedAt,
     pending: row.pending ?? false,
   })
+
+  return device
 }
 
 /** An organisation an account belongs to, with its role there. */

@@ -27,7 +27,8 @@ changes). The modules that predate the index rule have no
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
   their invitations and roles, and their routes.
 - [console](src/console/README.md): the operators' console: the platform's accounts found a page at
-  a time, and one account's card, for operators alone.
+  a time, one account's card, and its ban, the lift of the ban and its sign-out everywhere, for
+  operators alone.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
 - [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
   written by `@workspace/email`.
@@ -136,7 +137,7 @@ the update; each device's next hello is then refused with 4401.
   the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
   refused), a sign-in right after it answered 200 with a working token, the laptop's old token's
   hello closed with 4001, and a device signing itself out with `POST /auth/sign-out` (204 with
-  its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
+  its socket closed with 4001, 204 again, 401 for a made-up token); then, on the first
   identity, the organisation path (an organisation `smoke_<time>` created, a second identity
   invited by email and accepting the invitation by the id the invite answered, each device
   welcomed with its membership and role, the invited device writing a note
@@ -147,7 +148,13 @@ the update; each device's next hello is then refused with 4401.
   `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
   owner's next note still acknowledged and delivered, the member list refused to it with 403,
   the removal that closes the region with 4403, and the removed identity's sign-out, after
-  which its token is refused at hello with 4401); one line per step.
+  which its token is refused at hello with 4401); and last the console path (the first identity
+  appointed an operator through the host command's `setPlatformRole`, a fresh identity with an
+  open socket banned through `POST /console/accounts/:id/ban`, 204, its socket closed with 4004
+  and the ban's reason, its token's hello closed with 4004 and its right password answered 403
+  `account-banned`; the ban lifted, 204, and a sign-in working again; then every device of it
+  signed out through `POST /console/accounts/:id/sign-out`, 204, the new session's socket closed
+  with 4001); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.

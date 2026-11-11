@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { type DataError, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
 
+import { KeyedTurns } from '../../keyed-turns'
 import {
   MADE_AT,
   writeAccount,
@@ -20,6 +21,7 @@ import {
   setRole,
   signedUp,
 } from '../__fixtures__/operators'
+import { AccountBans } from '../account-bans'
 import { AccountDirectory } from '../account-directory'
 
 import { consoleRoutes } from './routes'
@@ -64,8 +66,12 @@ async function served(
   const reads: string[] = []
   const real = new AccountDirectory(auth.local)
   const directory = options.accounts?.(real) ?? real
+  const sessions = options.sessions?.(auth) ?? auth.sessions
   const routes = consoleRoutes({
-    sessions: options.sessions?.(auth) ?? auth.sessions,
+    sessions: {
+      read: (token) => sessions.read(token),
+      revokeAll: (identity) => auth.sessions.revokeAll(identity),
+    },
     accounts: {
       list: (search) => {
         reads.push('list')
@@ -78,6 +84,10 @@ async function served(
         return directory.read(identity)
       },
     },
+    bans: new AccountBans({ directory: auth.local, clock: auth.clock }),
+    // No read closes a socket.
+    connections: { close: async () => {} },
+    turns: new KeyedTurns<string>(),
     onFailure: (error) => failures.push(error),
   })
   const ann = await signedUp(auth, 'ann@example.test', { role: 'operator', name: 'Ann' })
@@ -370,7 +380,9 @@ describe('consoleRoutes: paths and methods', () => {
     for (const path of [
       '/console',
       '/console/accounts/',
-      `/console/accounts/${ann.identity}/ban`,
+      `/console/accounts/${ann.identity}/nonsense`,
+      `/console/accounts/${ann.identity}/ban/again`,
+      '/console/accounts//ban',
       '/console/accountsx',
       '/console/users',
     ]) {
