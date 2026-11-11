@@ -3,7 +3,7 @@ tags:
   - full
 devices:
   A: operator
-  B: guest
+  B: identity
 data:
   Operator email: generate
   Operator name: generate
