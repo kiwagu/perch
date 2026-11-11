@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
+import { inspect } from 'node:util'
 
 import { describe, expect, it } from 'vitest'
 
@@ -12,6 +13,22 @@ describe('OPERATOR_CLI', () => {
     expect(existsSync(OPERATOR_CLI)).toBe(true)
   })
 })
+
+const secret = 'Seed-secret-9'
+
+/** Everything an error shows of itself: its text, its own properties (hidden or not), its cause. */
+function disclosed(failure: unknown): string {
+  if (!(failure instanceof Error)) {
+    return String(failure)
+  }
+
+  return [
+    String(failure),
+    JSON.stringify(failure),
+    JSON.stringify(failure, Object.getOwnPropertyNames(failure)),
+    inspect(failure, { depth: null, showHidden: true }),
+  ].join('\n')
+}
 
 describe('spawnCommand', () => {
   it('answers the exit code of the command it runs, zero or not', async () => {
@@ -30,18 +47,31 @@ describe('spawnCommand', () => {
     expect(await spawnCommand(fromRoot)).toBe(0)
   })
 
-  it('rejects, without the arguments it was given, when the command cannot be started', async () => {
-    const secret = 'Seed-secret-9'
-    const failure = await spawnCommand(['perch-no-such-command', `--pass=${secret}`]).then(
-      () => expect.unreachable('a command that does not exist cannot exit'),
-      (reason: unknown) => reason,
-    )
+  it.each([
+    {
+      case: 'the system cannot find it (the child reports it)',
+      program: 'perch-no-such-command',
+      suffix: '',
+    },
+    {
+      case: 'Node refuses an argument before any child exists (the call throws)',
+      program: 'perch-no-such-command',
+      suffix: '\0',
+    },
+  ])(
+    'rejects, without the arguments it was given, when the command cannot be started: $case',
+    async ({ program, suffix }) => {
+      const failure = await spawnCommand([program, `--pass=${secret}${suffix}`]).then(
+        () => expect.unreachable('a command that cannot be started cannot exit'),
+        (reason: unknown) => reason,
+      )
 
-    expect(failure).toBeInstanceOf(Error)
-    expect(String(failure)).toContain('perch-no-such-command')
-    expect(String(failure)).not.toContain(secret)
-    expect(JSON.stringify(failure, Object.getOwnPropertyNames(failure))).not.toContain(secret)
-  })
+      expect(failure).toBeInstanceOf(Error)
+      expect(disclosed(failure)).not.toContain(secret)
+      expect(String(failure)).toContain(program)
+      expect((failure as Error).cause).toBeUndefined()
+    },
+  )
 
   it('rejects when the command ends by a signal, which is no exit code', async () => {
     const failure = await spawnCommand([

@@ -12,7 +12,7 @@ import type {
 
 import { type Catalog, catalog } from '../catalog'
 
-import { type CommandRunner, OPERATOR_CLI } from './command-runner'
+import { type CommandRunner, OPERATOR_CLI, spawnCommand } from './command-runner'
 import { grantOperators, runSeed, seedOrganisations } from './run'
 
 /** A mailbox that records each look: a run the gateway refuses at once never looks. */
@@ -340,5 +340,23 @@ describe('grantOperators', () => {
       'the operator command could not run for ann@example.test: bun could not be started: ENOENT',
     )
     expect(JSON.stringify(failure)).not.toContain('Seed-secret-9')
+  })
+
+  it("never carries the password out of the real runner's failure to start, which Node words with the arguments", async () => {
+    // The NUL makes Node refuse the argument at once, and its message quotes that argument.
+    const outcome = await grantOperators(
+      spawnCommand,
+      { ...stand, credentials: { username: 'operator', password: 'Seed-secret-9\0' } },
+      catalog,
+      { kind: 'demo' },
+    )
+    const failure = outcome._unsafeUnwrapErr()
+
+    expect(failure.code).toBe('data:COMMAND_FAILED')
+    expect(failure.message).toContain('ann@example.test')
+    expect(JSON.stringify(failure, Object.getOwnPropertyNames(failure))).not.toContain(
+      'Seed-secret-9',
+    )
+    expect(String(failure)).not.toContain('Seed-secret-9')
   })
 })

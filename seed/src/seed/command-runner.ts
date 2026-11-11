@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process'
+import { type ChildProcess, spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
 /**
@@ -19,6 +19,22 @@ export const OPERATOR_CLI = fileURLToPath(
 )
 
 /**
+ * Why `program` could not be started: its name and the error's code, nothing more. Node's own
+ * errors carry the arguments, in their message, in `spawnargs` and, when they are wrapped, in
+ * their `cause`, and one argument may be a password.
+ */
+function notStarted(program: string, error: unknown): Error {
+  const reason =
+    error instanceof Error
+      ? 'code' in error && typeof error.code === 'string'
+        ? error.code
+        : error.name
+      : 'an unknown error'
+
+  return new Error(`${program} could not be started: ${reason}`)
+}
+
+/**
  * The host's own runner: starts the command from the repository's root, as the operator command
  * and the seed are written to run, with the seed's output streams, and answers its exit code. It
  * runs under Bun (the seed's command) and under Node (the database suite), so it is no `Bun.spawn`.
@@ -33,11 +49,19 @@ export const spawnCommand: CommandRunner = (argv) =>
       return
     }
 
-    const child = spawn(program, args, { cwd: REPOSITORY_ROOT, stdio: 'inherit' })
+    // `spawn` throws, too, before any child exists: an argument holding a NUL, for one.
+    let child: ChildProcess
 
-    // The program's name and the reason only: Node's own error carries the arguments too.
-    child.once('error', (error: NodeJS.ErrnoException) => {
-      reject(new Error(`${program} could not be started: ${error.code ?? error.name}`))
+    try {
+      child = spawn(program, args, { cwd: REPOSITORY_ROOT, stdio: 'inherit' })
+    } catch (error) {
+      reject(notStarted(program, error))
+
+      return
+    }
+
+    child.once('error', (error) => {
+      reject(notStarted(program, error))
     })
     child.once('close', (code, signal) => {
       if (code === null) {
