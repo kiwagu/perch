@@ -74,7 +74,7 @@ describe('the saved session, written by tabs that hear each other late', () => {
     browser.deliver()
 
     forgetDevice(signingOut)
-    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', savedSession(confirming))
     browser.deliver()
 
     expect(savedIdentity(confirming)).toBeUndefined()
@@ -87,7 +87,7 @@ describe('the email a confirmation keeps', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
-    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
 
     expect(savedIdentity(storage)).toEqual({ id: ann.identity.id, email: 'ann@new.example.test' })
     expect(savedTokenOf(storage, ann.identity.id)).toBe(ann.token)
@@ -97,7 +97,7 @@ describe('the email a confirmation keeps', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, bob)
-    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
 
     expect(savedIdentity(storage)).toEqual(bob.identity)
   })
@@ -106,7 +106,7 @@ describe('the email a confirmation keeps', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
-    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
     forgetDevice(storage)
 
     expect(savedIdentity(storage)).toBeUndefined()
@@ -114,6 +114,15 @@ describe('the email a confirmation keeps', () => {
     saveDevice(storage, annAgain)
 
     expect(savedIdentity(storage)?.email).toBe('ann@third.example.test')
+  })
+  it('writes nothing for a confirmation asked while no session was kept, whatever session its answer finds', () => {
+    const storage = memoryStorage()
+
+    saveDevice(storage, ann)
+    saveIdentityEmail(storage, ann.identity.id, 'ann@fourth.example.test', savedSession(storage))
+    saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', undefined)
+
+    expect(savedIdentity(storage)?.email).toBe('ann@fourth.example.test')
   })
 })
 
@@ -126,7 +135,7 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     saveDevice(confirming, ann)
     browser.deliver()
     forgetDevice(other)
-    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', savedSession(confirming))
     browser.deliver()
 
     expect(savedIdentity(confirming)).toBeUndefined()
@@ -169,7 +178,7 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     markSignIn(other)
     browser.deliver((key) => key !== SIGN_INS_KEY)
 
-    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test')
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', savedSession(confirming))
     browser.deliver()
 
     expect(savedIdentity(confirming)?.email).toBe('ann@new.example.test')
@@ -192,7 +201,12 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     saveDevice(other, annAgain)
     markSignIn(other)
     browser.deliver()
-    saveIdentityEmail(confirming, ann.identity.id, 'ann@fourth.example.test')
+    saveIdentityEmail(
+      confirming,
+      ann.identity.id,
+      'ann@fourth.example.test',
+      savedSession(confirming),
+    )
     browser.deliver()
     // The first one's answer comes now.
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', first)

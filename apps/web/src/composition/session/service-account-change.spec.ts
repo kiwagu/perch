@@ -244,6 +244,32 @@ describe('the confirmation of a new email', () => {
     expect(savedIdentity(storage)?.email).toBe(annSignUp.email)
   })
 
+  it('changes nothing of a session signed in after a confirmation asked while signed out', async () => {
+    const { session, auth, storage, driveClock } = await signedIn()
+
+    expect((await session.changeEmail('Ann.New@example.test', annSignUp.password)).isOk()).toBe(
+      true,
+    )
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+
+    // The link is opened while nobody is signed in here; the gateway takes it once Ann signed in.
+    let answer = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const confirm = auth.confirmEmail.bind(auth)
+
+    auth.confirmEmail = (link) => ResultAsync.fromSafePromise(answered).andThen(() => confirm(link))
+
+    const confirming = session.confirmEmail(auth.confirmationLinkFor(annSignUp.email))
+
+    expect((await session.signIn(annSignUp)).isOk()).toBe(true)
+    answer()
+
+    expect((await confirming).isOk()).toBe(true)
+    expect(savedIdentity(storage)?.email).toBe(annSignUp.email)
+  })
+
   it('keeps the refusal of a link that does not work', async () => {
     const { session } = await signedIn()
 

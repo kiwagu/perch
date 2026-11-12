@@ -102,14 +102,15 @@ export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
 
 /**
  * Keeps the new email of `identity`, as its email's confirmation answered, for the session the
- * confirmation was asked in (`asked`, the session this browser kept then; now by default), when
- * that session is the identity's: never in the identity's record.
+ * confirmation was asked in (`asked`, the session this browser kept then, none when it kept
+ * none), when that session is the identity's: never in the identity's record, and never for a
+ * session kept only by the time of the answer.
  */
 export function saveIdentityEmail(
   storage: KeyValueStorage,
   identity: AuthUser['id'],
   email: string,
-  asked: KeptSession | undefined = savedSession(storage),
+  asked: KeptSession | undefined,
 ): void {
   if (asked?.identity === identity) {
     storage.set(emailKeyOf(asked.token), JSON.stringify({ identity, email }))
