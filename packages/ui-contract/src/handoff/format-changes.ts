@@ -19,6 +19,7 @@ const LISTS = [
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
+  ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
