@@ -52,7 +52,7 @@ function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
   for (const key of [
     'perch.session.token',
     'perch.session.identity',
-    'perch.session.memberships',
+    `perch.session.memberships.${device.identity.id}`,
   ]) {
     storage.changeElsewhere(key, other.get(key))
   }

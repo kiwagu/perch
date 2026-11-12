@@ -87,10 +87,11 @@ describe('the signed-in device', () => {
     saveDevice(watched, ann)
 
     expect(written).not.toContain('perch.session.refresh')
-    // The identity last: a tab that follows it finds the memberships and the token saved already.
+    // The token first, naming the identity should a later write break; the identity last: a tab
+    // that follows it finds the token and the memberships saved already.
     expect(written).toEqual([
-      'perch.session.memberships',
       'perch.session.token',
+      `perch.session.memberships.${ann.identity.id}`,
       'perch.session.identity',
     ])
   })

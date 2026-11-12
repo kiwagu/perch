@@ -10,7 +10,8 @@ export {
   type StorageEvents,
 } from './key-value'
 export {
-  MEMBERSHIPS_KEY,
+  isMembershipsKey,
+  membershipsKeyOf,
   savedMemberships,
   savedTenant,
   saveMemberships,
