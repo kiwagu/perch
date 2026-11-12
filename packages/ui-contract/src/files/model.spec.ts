@@ -67,8 +67,12 @@ describe('loadModel', () => {
       index: [],
     })
     expect(thing?.actions).toEqual({
-      createThing: { description: 'Adds a thing.', params: { id: '$id', title: 'title' } },
-      updateThing: { params: { id: '$id', title: 'title' } },
+      createThing: {
+        description: 'Adds a thing.',
+        params: { id: '$id', title: 'title' },
+        changes: [],
+      },
+      updateThing: { params: { id: '$id', title: 'title' }, changes: [] },
     })
     expect(thing?.fields).toEqual({
       id: { type: 'string', readonly: true },

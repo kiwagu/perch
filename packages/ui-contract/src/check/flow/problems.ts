@@ -7,7 +7,8 @@
  * (`references.ts`; a read a list of its own screen with a platform source, an invoke that
  * says `read: false` reads in no outcome, and a branch that says it is an outcome of an
  * invoke, reads nothing itself and sits under no invoke that says it already, `reads.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
- * by that action's parameters; every guard is declared in `meta.guards` and every declared
+ * by that action's parameters, and every branch of its `onDone` reads each list of its screen
+ * with a platform source that its action may change, or says `read: false` (`held-reads.ts`); every guard is declared in `meta.guards` and every declared
  * one is used, across the whole tree; every state is reachable and every plain state that is
  * not final has a way out (`reach.ts`); within a parallel state an event belongs to one area
  * (`areas.ts`); what a state renders names the screen's anchors, and a state renders the
@@ -24,6 +25,7 @@ import { actionProblems, lookupsOf, searchOf } from '../lookups'
 
 import { areaProblems } from './areas'
 import { codeGuardProblems } from './code-guards'
+import { heldReadProblems } from './held-reads'
 import type { At, InFlow } from './in-flow'
 import { itemProblems } from './items'
 import { stuckProblems, unreachableProblems } from './reach'
@@ -66,6 +68,7 @@ function stateProblems(
             ? []
             : transitionsProblems(inFlow, invoke.onError, [...at, 'invoke', 'onError'], within)),
           ...readOptOutProblems(inFlow, invoke, [...at, 'invoke']),
+          ...heldReadProblems(inFlow, invoke, [...at, 'invoke']),
         ]),
     ...branchReadOptOutProblems(inFlow, state, at),
   ]

@@ -23,16 +23,21 @@ const navigate = (search: Record<string, unknown>): Effect =>
 
 /**
  * The sample with a link in the item's part (`sample.open-link`), one in another part
- * (`sample.form.go-link`), and the search keys `id` (a string) and `page` (an integer).
+ * (`sample.form.go-link`), and the search keys `id` (a string) and `page` (an integer). The
+ * item is an entry of the sample's one list, which follows its things: the list of devices the
+ * sample declares beside it in the same part goes, as an invoke that takes an entry of a list
+ * with a platform source holds a read of it.
  */
 function sample(): Contract {
   const contract = sampleContract()
   const screen = screenIn(contract, 'sample')
+  const { 'sample.devices-list': _beside, ...anchors } = screen.anchors
 
-  Object.assign(screen.anchors, {
+  screen.anchors = {
+    ...anchors,
     'sample.open-link': { kind: 'link' },
     'sample.form.go-link': { kind: 'link' },
-  })
+  }
   Object.assign(screen.bindings[0]?.search?.properties ?? {}, {
     id: { type: 'string' },
     page: { type: 'integer' },

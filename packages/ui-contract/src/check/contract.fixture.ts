@@ -193,6 +193,7 @@ export function sampleContract(): Contract {
             params: { forgetUnsent: { type: 'boolean', description: 'Drop the unsent changes.' } },
             result: 'this device signs out',
             codes: ['failed'],
+            changes: [],
           },
           'devices.list': {
             description: 'Lists the devices.',
@@ -200,6 +201,7 @@ export function sampleContract(): Contract {
             result: 'the devices',
             codes: ['devices-read-failed'],
             roles: ['member'],
+            changes: [],
           },
         },
         reserved: ['app-shell.status'],
@@ -236,8 +238,8 @@ export function sampleContract(): Contract {
           region: 'tenant',
           id: 'thg',
           actions: {
-            createThing: { params: { id: '$id', title: 'title' } },
-            updateThing: { params: { id: '$id', title: 'title' } },
+            createThing: { params: { id: '$id', title: 'title' }, changes: [] },
+            updateThing: { params: { id: '$id', title: 'title' }, changes: [] },
           },
           unique: [],
           index: [],

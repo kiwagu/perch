@@ -56,11 +56,12 @@ code and the tests follow; the checks hold them to the contract.
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
    `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
    mail declares it under `mail`, and one that sends a mail that only tells, with no token,
-   lists it under `notices` (`references/patterns.md`, "A notice mail"). A platform action
-   declares the reads it changes under `changes`: the platform actions a list, a section or a
-   table takes as its `source` whose answer, for the organisation, the account and the params
-   it ran with, differs once it succeeds (`organisations.invite` changes
-   `organisations.invitations`; `[]` for none); an action of the model says it the same way.
+   lists it under `notices` (`references/patterns.md`, "A notice mail"). Every platform action
+   declares the reads it changes under `changes`, which its schema wants as it wants `codes`:
+   the platform actions a list, a section or a table takes as its `source` whose answer, for
+   the organisation, the account and the params it ran with, differs once it succeeds
+   (`organisations.invite` changes `organisations.invitations`; `[]` for none); every action of
+   the model writes it the same way.
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,
@@ -102,7 +103,13 @@ code and the tests follow; the checks hold them to the contract.
    list of the flow's own screen with a platform source, never an entity source, which follows
    the stored data), and an invoke after which nothing reads says `read: false`, on it or on a
    region `by` its button, while one branch of its `onDone` or `onError` after which nothing
-   reads, another branch reading, says `read: false` on that branch; a description never says a read. A button may leave out the params the fields of its
+   reads, another branch reading, says `read: false` on that branch; a description never says a read.
+   The read after a success is mandatory: an invoke, or a region `by` its button, holds each
+   list of its screen with a platform source one of whose entries its `input` takes, whose
+   source's `params` take a value its `input` takes (`{ search: id }`), or whose source its
+   action's `changes` names, and every branch of its `onDone` reads each list it holds or says
+   `read: false`, which `contract:check` holds; a failure holds no read, so an `onError` reads
+   only where the list may have changed. A button may leave out the params the fields of its
    part pass to its action in their own bindings; a param it writes wins over theirs, key by key
    (`user.sign-in.submit-button` binds `platform.sign-in` alone, and `platform.sign-up` with
    `locale: app-shell.locale-select`, which no field passes). A request leaves out its failure:

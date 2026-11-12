@@ -156,7 +156,7 @@ The authored files, edited by hand or by a model in the modeling thread:
 
   ```yaml
   reset-password:
-    # description, params, result, codes
+    # description, params, result, codes, changes
     notices:
       - name: password-changed
         to: account
@@ -171,22 +171,25 @@ The authored files, edited by hand or by a model in the modeling thread:
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
   names a notice by its action and its name, `[notice:reset-password.password-changed]`.
 
-  An action says under `changes` the reads it changes: the platform actions whose answer, for
-  the organisation, the account and the params it ran with, differs once it succeeds, each one
-  that a list, a section or a table of some screen takes as its `source`. `organisations.invite`
-  changes `organisations.invitations`, and `sign-out-everywhere` changes `devices.list` and
-  `accounts.read`. A switch of the organisation or the account (a select, a create, an accept)
-  is the first read's (see "Reading a screen file", `source`), so it is never named, and
-  neither is what another account reads for itself: an invitation does not change the
-  inviter's `invitations.mine`. `changes: []` says the action changes none; an action that writes no
-  `changes` says nothing of it. The check refuses a name that is not a platform action, an
-  action that names itself, as it changes what other reads answer, a name that no list, section
-  or table takes as its source, and a name written twice in one `changes`.
+  Every action says under `changes` the reads it changes: the platform actions whose answer,
+  for the organisation, the account and the params it ran with, differs once it succeeds, each
+  one that a list, a section or a table of some screen takes as its `source`.
+  `organisations.invite` changes `organisations.invitations`, and `sign-out-everywhere` changes
+  `devices.list` and `accounts.read`. A switch of the organisation or the account (a select, a
+  create, an accept) is the first read's (see "Reading a screen file", `source`), so it is never
+  named, and neither is what another account reads for itself: an invitation does not change
+  the inviter's `invitations.mine`. `changes: []` says the action changes none; the schema
+  refuses an action that does not write `changes`, as it refuses one without `codes`. The check
+  refuses a name that is not a platform action, an action that names itself, as it changes what
+  other reads answer, a name that no list, section or table takes as its source, and a name
+  written twice in one `changes`. A flow that runs the action reads, after its success, each
+  list of its screen whose source the action changes (see the effects of a flow, `read`).
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
-  actions, how each field merges). An action of `x-perch.actions` says the reads of the
-  platform it changes under `changes`, as a platform action does, held by the same check:
-  `profile.updateName` changes `accounts.list` and `accounts.read`, where the name shows.
+  actions, how each field merges). Every action of `x-perch.actions` says the reads of the
+  platform it changes under `changes`, as a platform action does, `[]` for none, held by the
+  same schema and check: `profile.updateName` changes `accounts.list` and `accounts.read`,
+  where the name shows.
 - `domain/activities/<id>.yaml`: one activity across screens per file, named by its `id`
   (`domain/activities/session.yaml`); the folder is optional (see "Activities").
 
@@ -445,7 +448,8 @@ in every state, is read only at those moments. Every other read is said by the f
 effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed
 what the list shows, never prose in a description. The `changes` of an action (see "The
 folder") names the sources whose answer it changes, so it tells which lists of a screen that
-runs it show something else once it succeeds.
+runs it show something else once it succeeds, and the flow holds a read of each of them after
+that success (the effects of a flow, `read`).
 `{ entity: <entity>, order, direction }`:
 the entries are the stored entries of that entity of the model, which the anchor follows as
 they change, here or on another device; such a list is never read.
@@ -568,7 +572,19 @@ as it holds its router to the bindings.
   demotes the account itself, after which the members list goes): only a branch of an
   invoke's outcome may say it, never the transition of an event; a branch that says it and
   reads itself is refused, once per read, and so is one under an invoke that says `read:
-  false` already. Each value of a navigate's `search` is a search key of the binding it moves to,
+  false` already. The read after a success is mandatory where the action may change what a
+  list shows. An invoke holds each list, section or table of its own screen whose `source` is
+  a platform action when its `input` takes an entry of it (an `item` or a `row` it contains,
+  as the organisation's role change takes `organisation.members.item`), when a value of its
+  `input` equals one its source's `params` take (the console's removal of an account takes `{
+  search: id }`, which `console.account.section` reads `accounts.read` with), or when its
+  action's `changes` names that source (`organisations.invite` changes
+  `organisations.invitations`, which `organisation.sent.list` reads); a region written `by`
+  its button is held as its invoke. Every branch of its `onDone`, a single transition being
+  one, then reads each list it holds, `read: <list>`, or says `read: false`: the check refuses
+  each list a branch leaves unread, at that branch, saying why the invoke holds it. A failure
+  holds no read, so an `onError` reads where it says, and an invoke that says `read: false`
+  holds nothing. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
@@ -1339,7 +1355,11 @@ gap is fixed in the contract files first, never worked around in a test.
   list, section or table of the flow's own screen whose `source` is a platform action, never
   one with an entity source or none, an invoke that says `read: false` reading in none of
   its outcomes, and a branch that says `read: false` an outcome of an invoke, never the
-  transition of an event, reading nothing itself, under no invoke that says it already, a navigate's
+  transition of an event, reading nothing itself, under no invoke that says it already, every
+  branch of an invoke's `onDone`, unless the invoke says `read: false`, reading each list,
+  section or table of its own screen with a platform source that the invoke holds, one whose
+  entry its `input` takes, whose source's `params` take a value its `input` takes, or whose
+  source its action's `changes` names, or saying `read: false` itself, a navigate's
   search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
   that holds no secret, each `{ item }` an entry with a `dataId` of a list, a table or a
   section of the flow's own screen, taken on the event of a control in its part into a key
@@ -1364,9 +1384,9 @@ gap is fixed in the contract files first, never worked around in a test.
   screen whose every route declares the search parameter that
   carries its token; every notice it declares has a name no other notice of the action has,
   goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose
-  every route needs no parameter; every name of an action's `changes`, a platform action's or
-  one of the model's, is a platform action, never the action itself, that a list, a section or
-  a table of some screen takes as its `source`, written once; no binding's `guard` sends away an account its `roles` name
+  every route needs no parameter; every action, of the platform or of the model, writes its
+  `changes`, each name of which is a platform action, never the action itself, that a list, a
+  section or a table of some screen takes as its `source`, written once; no binding's `guard` sends away an account its `roles` name
   (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among
   those its screen's bindings serve (the frame aside), a link to a route whose roles name
   neither `guest` nor `identity` is shown to no device the route refuses: every restriction

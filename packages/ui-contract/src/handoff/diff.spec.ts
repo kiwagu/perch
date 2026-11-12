@@ -953,6 +953,7 @@ describe('diffContracts and the platform actions', () => {
       params: { email: { type: 'string', description: 'The email of the account.' } },
       result: 'the mail is on its way',
       codes: ['failed'],
+      changes: [],
       mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'token' } },
     }
 
