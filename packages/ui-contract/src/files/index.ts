@@ -35,7 +35,13 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
-export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
+export {
+  loadModel,
+  type Model,
+  type ModelAction,
+  type ModelEntity,
+  type ModelField,
+} from './model'
 export { englishErrors } from './parse-file'
 export {
   ACTIVITIES_DIR,

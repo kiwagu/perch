@@ -9,6 +9,7 @@ import { z } from '@workspace/zod'
 import { roleSchema } from '../names.schema'
 
 import { DESCRIPTION_PURPOSES } from './description-purposes'
+import { platformActionNameSchema } from './screens-schema'
 
 const fieldNameSchema = z.string().regex(/^[a-z][a-z0-9_]*$/)
 
@@ -39,6 +40,12 @@ const actionSchema = z
     params: z
       .record(z.string(), z.string())
       .describe('Per parameter, the field it sets (`$id` for a new id).'),
+    changes: z
+      .array(platformActionNameSchema)
+      .optional()
+      .describe(
+        'The reads of the platform whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`. What another account reads for itself is never named. `[]`: it changes none.',
+      ),
   })
   .describe('One action on the entity.')
 
