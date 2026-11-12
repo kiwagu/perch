@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { type Effect, formatProblem } from '../../files'
+import { PAGING_PARTS } from '../../anchors'
+import { type AnchorDef, type Effect, formatProblem } from '../../files'
 import { regionStateIn, withAreas } from '../areas.fixture'
 import type { Contract } from '../contract'
 import { flowStateIn, sampleContract, screenIn } from '../contract.fixture'
@@ -49,6 +50,27 @@ function sample(): Contract {
     [LINK]: { kind: 'link' },
     [TITLE]: { ...screen.anchors[TITLE], kind: 'input', holdsInput: true },
   }
+
+  return contract
+}
+
+/** `contract` whose sample pages a list of devices by the route's `page` and `size`. */
+function paged(contract: Contract): Contract {
+  const screen = screenIn(contract, 'sample')
+  const action = contract.screens.platform.actions['devices.list']
+
+  Object.assign(screen.bindings[0]?.search?.properties ?? {}, {
+    page: { type: 'integer', minimum: 1, default: 1 },
+    size: { type: 'integer', enum: [10, 25], default: 25 },
+  })
+  if (action !== undefined) {
+    action.paged = { sizes: [10, 25], default: 25 }
+  }
+  screen.anchors['sample.accounts-list'] = {
+    kind: 'list',
+    source: { platform: 'devices.list', paged: true },
+    derived: [...PAGING_PARTS],
+  } as AnchorDef
 
   return contract
 }
@@ -156,6 +178,37 @@ describe('a navigate is a leave its trigger names', () => {
 
     expect(printed(contract)).toContain(
       `${AT}.states.editing.on["help.close-dialog.confirm-button"].actions[0]: a navigate on the event of "help.close-dialog.confirm-button", which this screen does not declare: a control's leave asks for the fields of its own screen`,
+    )
+  })
+
+  it("passes a move within its screen on a paged list's size option, refuses one to another screen", () => {
+    const contract = paged(sample())
+    const OPTION = 'sample.accounts-list.size-select.option'
+
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      [OPTION]: { actions: [navigate('/sample/$key', { size: 10, page: 1 })] },
+    })
+
+    expect(printed(contract)).toEqual([])
+
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      [OPTION]: { actions: [navigate('/help')] },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["${OPTION}"].actions[0]: a navigate to another screen on "${OPTION}", a part of an anchor of this screen: a derived part has no declaration to carry the question before its leave, so it moves within its screen only`,
+    ])
+  })
+
+  it("refuses a navigate on the size option of another screen's paged list", () => {
+    const contract = sample()
+
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'help.accounts-list.size-select.option': { actions: [navigate('/sample/$key')] },
+    })
+
+    expect(printed(contract)).toContain(
+      `${AT}.states.editing.on["help.accounts-list.size-select.option"].actions[0]: a navigate on the event of "help.accounts-list.size-select.option", which this screen does not declare: a control's leave asks for the fields of its own screen`,
     )
   })
 

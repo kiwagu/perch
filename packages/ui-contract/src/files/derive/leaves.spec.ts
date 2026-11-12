@@ -94,6 +94,15 @@ describe('withDerivedLeaves', () => {
     expect(leavesOf(withDerivedLeaves(screen, POLICY), LINK)).toBeUndefined()
   })
 
+  it("counts the size options of a paged list's size select as a control of its screen", () => {
+    const OPTION = 'sample.accounts-list.size-select.option'
+    const screen = screenWith(onEvent(OPTION, [navigate('/elsewhere')]), {
+      'sample.accounts-list': { kind: 'list', derived: ['size-select'] },
+    })
+
+    expect(controlMovesOf(screen).map(({ control }) => control)).toEqual([OPTION])
+  })
+
   it('counts a part an anchor of the screen derives as its control, which carries no mark', () => {
     const DIALOG_CONFIRM = 'sample.help-dialog.confirm-button'
     const screen = screenWith(onEvent(DIALOG_CONFIRM, [navigate('/help')]), {

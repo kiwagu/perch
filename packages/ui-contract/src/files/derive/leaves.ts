@@ -7,13 +7,13 @@
  * after an action (an invoke's outcome) or on a platform or data event asks nothing: the action
  * took the input, or nobody started it here. The control carries `leaves: { dialog, loses }`,
  * which a screen file never writes (`withoutWrittenLeaves`). A control of the screen is an anchor
- * it declares or a part one of them derives (`<anchor>.<suffix>`, a paged list's `next-link`); a
- * derived part has no declaration to carry the question, so the check refuses its leave. The
- * frame has no path and leaves nothing; what a flow may not do with its moves is the check's
- * (`check/flow/leaves.ts`).
+ * it declares or a part one of them derives (`<anchor>.<suffix>`, a paged list's `next-link` and
+ * its size select's options); a derived part has no declaration to carry the question, so the
+ * check refuses its leave. The frame has no path and leaves nothing; what a flow may not do with
+ * its moves is the check's (`check/flow/leaves.ts`).
  */
 
-import { testIdFor } from '../../anchors'
+import { SIZE_SELECT, sizeOptionOf, testIdFor } from '../../anchors'
 import { entriesOf, isRecord } from '../../records'
 import { flowNodes } from '../flow-nodes'
 import { jsonPath, type Problem } from '../problems'
@@ -35,13 +35,21 @@ export interface ControlMove {
 
 const isNavigate = (effect: Effect): effect is Navigate => effect.type === 'navigate'
 
-/** The controls of `screen`: the anchors it declares and the parts each derives. */
+/**
+ * The controls of `screen`: the anchors it declares, the parts each derives, and the options of a
+ * paged list's size select, which name the sizes it pages by.
+ */
 export const ownControlsOf = (screen: Screen): Set<string> =>
   new Set(
-    Object.entries(screen.anchors).flatMap(([anchor, def]) => [
-      anchor,
-      ...(def.derived ?? []).map((suffix) => testIdFor(anchor, suffix)),
-    ]),
+    Object.entries(screen.anchors).flatMap(([anchor, def]) => {
+      const derived = def.derived ?? []
+
+      return [
+        anchor,
+        ...derived.map((suffix) => testIdFor(anchor, suffix)),
+        ...(derived.includes(SIZE_SELECT) ? [sizeOptionOf(anchor)] : []),
+      ]
+    }),
   )
 
 /** The anchors of fields a move carries in its search. */
