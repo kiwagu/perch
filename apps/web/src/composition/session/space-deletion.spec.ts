@@ -5,8 +5,9 @@ import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
+import { signedIn } from '../__fixtures__/signed-in'
 import type { TenantDatabaseInventory } from '../retained-tenant-databases'
-import { addLeftoverIdentity, leftoverIdentities, memoryStorage, saveDevice } from '../storage'
+import { addLeftoverIdentity, leftoverIdentities, memoryStorage } from '../storage'
 
 import { DELETE_GRACE_MS, SpaceDeletion } from './space-deletion'
 
@@ -202,7 +203,7 @@ describe('SpaceDeletion', () => {
     const { storage, deletion } = harness()
     let destroyed = false
 
-    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
+    signedIn(storage, { identity: ann, token: 't' })
 
     const answer = await deletion.destroy(
       {
@@ -226,7 +227,7 @@ describe('SpaceDeletion', () => {
   it('keeps listed an identity whose delete it skipped for a sign-in whose open then failed', async () => {
     const { storage, deletion } = harness()
 
-    saveDevice(storage, { identity: ann, token: 't', memberships: [] })
+    signedIn(storage, { identity: ann, token: 't' })
 
     expect((await deletion.deleteUnopened(ann.id, ENDED))._unsafeUnwrap()).toBe('in-use')
 
@@ -295,7 +296,7 @@ describe('SpaceDeletion', () => {
     addLeftoverIdentity(storage, ann.id)
     addLeftoverIdentity(storage, bob.id)
     inventory(ann.id).add(['acme', 'globex'])
-    saveDevice(storage, { identity: bob, token: 't', memberships: [] })
+    signedIn(storage, { identity: bob, token: 't' })
 
     await deletion.deleteLeftovers()
 

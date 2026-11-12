@@ -10,19 +10,23 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import {
+  signedInElsewhere,
+  signedIn as signedInOn,
+  signedOutElsewhere,
+} from '../__fixtures__/signed-in'
 import type { IdentitySpace } from '../identity-space'
 import {
-  IDENTITY_KEY,
+  CURRENT_KEY,
   isMembershipsKey,
   type KeptDevice,
+  type KeptSession,
   type MemoryStorage,
   membershipsKeyOf,
   memoryStorage,
-  saveDevice,
   savedMemberships,
   saveMemberships,
   saveSigningOut,
-  TOKEN_KEY,
 } from '../storage'
 
 const ann: KeptDevice = {
@@ -87,18 +91,20 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
-/** A browser that keeps `device` signed in from an earlier sign-in. */
-function kept(device: KeptDevice): MemoryStorage {
+/** A browser that keeps `device` signed in from an earlier sign-in, and that sign-in (`saved`). */
+function kept(device: KeptDevice): {
+  readonly storage: MemoryStorage
+  readonly saved: KeptSession
+} {
   const storage = memoryStorage()
+  const saved = signedInOn(storage, device)
 
-  saveDevice(storage, device)
-
-  return storage
+  return { storage, saved }
 }
 
 /** A tab of a browser that keeps `device`, offline, its space open and leading. */
 async function signedIn(device: KeptDevice = ann, options: TestWorldOptions = {}) {
-  const storage = kept(device)
+  const { storage, saved } = kept(device)
   const tab = await world({ storage, online: false, ...options })
 
   expect((await tab.session.restore()).isOk()).toBe(true)
@@ -106,14 +112,14 @@ async function signedIn(device: KeptDevice = ann, options: TestWorldOptions = {}
 
   const space = tab.session.space() ?? expect.unreachable('the space is open')
 
-  return { ...tab, storage, space }
+  return { ...tab, storage, saved, space }
 }
 
 /** A tab of a browser that keeps Ann, offline, whose database opens once the test lets it. */
 async function annOpeningHeld() {
   const held = deferred()
   const shared = browserDatabases()
-  const storage = kept(ann)
+  const { storage, saved } = kept(ann)
   const tab = await world({
     storage,
     online: false,
@@ -123,24 +129,7 @@ async function annOpeningHeld() {
     },
   })
 
-  return { ...tab, storage, open: held.resolve }
-}
-
-/** Another tab of the browser signs the account out: the token goes, then the identity. */
-function signedOutElsewhere(storage: MemoryStorage): void {
-  storage.changeElsewhere(TOKEN_KEY, undefined)
-  storage.changeElsewhere(IDENTITY_KEY, undefined)
-}
-
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signedInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, membershipsKeyOf(device.identity.id)]) {
-    storage.changeElsewhere(key, other.get(key))
-  }
+  return { ...tab, storage, saved, open: held.resolve }
 }
 
 /** Counts the writes of the saved memberships this tab makes from now on. */
@@ -162,7 +151,8 @@ describe('the adopter of a membership the gateway answers', () => {
     const { session, storage, tenantsOpened } = await signedIn()
     const adopt = session.membershipAdopter()
 
-    signedInElsewhere(storage, bob)
+    const bobs = signedInElsewhere(storage, bob)
+
     await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
 
     const replacement = session.space() ?? expect.unreachable("Bob's space is open")
@@ -173,24 +163,29 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect(writes()).toBe(0)
     expect(lists()).toEqual([])
-    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(savedMemberships(storage, bobs)).toEqual([])
     expect(session.memberships()).toEqual([])
     expect(tenantsOpened()).toEqual([])
   })
 
-  it('the same account signed in again on another tab keeps this space, and adoption goes on', async () => {
+  it("the same account signed in again on another tab: this space gives way to the later sign-in's, and the adopter of the earlier one adopts nothing", async () => {
     const { session, storage, space } = await signedIn()
     const adopt = session.membershipAdopter()
 
-    signedInElsewhere(storage, { ...ann, token: 'token-ann-again' })
-    await settle()
-    expect(session.space()).toBe(space)
+    const again = signedInElsewhere(storage, { ...ann, token: 'token-ann-again' })
+
+    // This tab follows the later sign-in: its space ends whatever ends this tab's from now on.
+    await vi.waitFor(() => {
+      expect(session.space()).toBeDefined()
+      expect(session.space()).not.toBe(space)
+    })
+    expect(session.current()?.id).toBe(ann.identity.id)
 
     await adopt(acme)
 
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
-    expect(session.space()).toBe(space)
-    expect(session.memberships()).toEqual([acme])
+    // The gateway tells the membership over the later sign-in's channel; nothing is written here.
+    expect(savedMemberships(storage, again)).toEqual([])
+    expect(session.memberships()).toEqual([])
   })
 
   it('an adopter taken while the space opens adopts into the space that opening produced, not a later one of the same account', async () => {
@@ -206,7 +201,9 @@ describe('the adopter of a membership the gateway answers', () => {
     // Another tab signed Ann out and in again before the answer: her space here is a new one.
     signedOutElsewhere(storage)
     await vi.waitFor(() => expect(session.space()).toBeUndefined())
-    signedInElsewhere(storage, ann)
+
+    const again = signedInElsewhere(storage, ann)
+
     await vi.waitFor(() => expect(session.space()?.identity.id).toBe(ann.identity.id))
 
     const later = session.space() ?? expect.unreachable("Ann's new space is open")
@@ -220,16 +217,16 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect(writes()).toBe(0)
     expect(lists()).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, again)).toEqual([])
     expect(session.memberships()).toEqual([])
   })
 
   it("an opening queued behind an earlier transition binds to its own restore's space", async () => {
-    const storage = kept(ann)
+    const { storage, saved } = kept(ann)
     const { session, opened } = await world({ storage, online: false })
 
     // Another tab's sign-in reached this tab first: its follow opens Ann's space before the restore does.
-    storage.changeElsewhere(IDENTITY_KEY, storage.get(IDENTITY_KEY))
+    storage.changeElsewhere(CURRENT_KEY, storage.get(CURRENT_KEY))
 
     const restoring = session.restore()
     const adopt = session.membershipAdopter()
@@ -241,15 +238,15 @@ describe('the adopter of a membership the gateway answers', () => {
 
     await adopt(acme)
 
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(savedMemberships(storage, saved)).toEqual([acme])
     expect(session.memberships()).toEqual([acme])
   })
 
   it("an opening queued behind an earlier transition adopts nothing into another account's space its restore opened", async () => {
-    const { session, storage, open, opened, tenantsOpened } = await annOpeningHeld()
+    const { session, storage, saved, open, opened, tenantsOpened } = await annOpeningHeld()
 
     // Another tab's sign-in reached this tab first: its follow opens Ann's space before the restore does.
-    storage.changeElsewhere(IDENTITY_KEY, storage.get(IDENTITY_KEY))
+    storage.changeElsewhere(CURRENT_KEY, storage.get(CURRENT_KEY))
     // The follow's turn began: it read Ann and is opening her space, held.
     await settle()
 
@@ -259,7 +256,8 @@ describe('the adopter of a membership the gateway answers', () => {
     expect(session.current()?.id).toBe(ann.identity.id)
 
     // Another tab signs Bob in while the follow holds the restore's turn; its events are not handled here yet.
-    saveDevice(storage, bob)
+    const bobs = signedInOn(storage, bob)
+
     open()
 
     expect((await restoring).isOk()).toBe(true)
@@ -275,14 +273,14 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect(writes()).toBe(0)
     expect(lists()).toEqual([])
-    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, bobs)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
     expect(session.memberships()).toEqual([])
     expect(tenantsOpened()).toEqual([])
   })
 
   it('an opening whose space did not open adopts nothing and resolves', async () => {
-    const storage = kept(ann)
+    const { storage, saved } = kept(ann)
     const { session } = await world({
       storage,
       online: false,
@@ -293,13 +291,13 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect((await restoring)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
     expect(await settledWithin(adopt(acme))).toBe('settled')
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
     expect(session.space()).toBeUndefined()
   })
 
   it('adopts nothing while this browser signs out, its space still open', async () => {
     // The gateway is out of reach on a network: the sign-out waits for the channel, its barrier up.
-    const { session, storage, space, driveClock } = await signedIn(ann, { network: true })
+    const { session, storage, saved, space, driveClock } = await signedIn(ann, { network: true })
     const adopt = session.membershipAdopter()
     const signingOut = session.signOut()
 
@@ -313,13 +311,13 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect(writes()).toBe(0)
     expect(lists()).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
 
     expect((await driveClock(signingOut)).isOk()).toBe(true)
   })
 
   it('adopts nothing while another tab signs out, its space still open', async () => {
-    const { session, storage, space, clock } = await signedIn()
+    const { session, storage, saved, space, clock } = await signedIn()
     const adopt = session.membershipAdopter()
 
     // Another tab began a sign-out; this tab's space stays open until that sign-out ends it.
@@ -332,12 +330,12 @@ describe('the adopter of a membership the gateway answers', () => {
 
     expect(writes()).toBe(0)
     expect(lists()).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
     expect(session.space()).toBe(space)
   })
 
   it('adopts nothing after the session closed', async () => {
-    const { session, storage } = await signedIn()
+    const { session, storage, saved } = await signedIn()
     const adopt = session.membershipAdopter()
     const writes = membershipWrites(storage)
 
@@ -345,16 +343,16 @@ describe('the adopter of a membership the gateway answers', () => {
     await adopt(acme)
 
     expect(writes()).toBe(0)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
   })
 
   it('writes nothing when the saved list names the organisation, also with another role saved by another tab whose event is not handled yet', async () => {
-    const { session, storage, space } = await signedIn()
+    const { session, storage, saved, space } = await signedIn()
     const adopt = session.membershipAdopter()
     const asMember: Membership = { ...acme, role: 'member' }
 
     // Another tab kept a list naming Acme with another role; its storage event is not handled yet.
-    saveMemberships(storage, ann.identity.id, [asMember])
+    saveMemberships(storage, saved, [asMember])
 
     const lists = followed(space)
     const writes = membershipWrites(storage)
@@ -362,14 +360,14 @@ describe('the adopter of a membership the gateway answers', () => {
     await adopt(acme)
 
     expect(writes()).toBe(0)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([asMember])
+    expect(savedMemberships(storage, saved)).toEqual([asMember])
     expect(lists()).toEqual([[asMember]])
     expect(session.memberships()).toEqual([asMember])
 
     // The other tab's event comes now, with what the storage holds: nothing changes.
     storage.changeElsewhere(
-      membershipsKeyOf(ann.identity.id),
-      storage.get(membershipsKeyOf(ann.identity.id)),
+      membershipsKeyOf(saved.signIn),
+      storage.get(membershipsKeyOf(saved.signIn)),
     )
     await settle()
 
@@ -378,14 +376,14 @@ describe('the adopter of a membership the gateway answers', () => {
   })
 
   it('appends the membership to a saved list without it', async () => {
-    const { session, storage } = await signedIn()
+    const { session, storage, saved } = await signedIn()
     const adopt = session.membershipAdopter()
 
-    saveMemberships(storage, ann.identity.id, [globex])
+    saveMemberships(storage, saved, [globex])
 
     await adopt(acme)
 
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, saved)).toEqual([globex, acme])
     expect(
       session
         .memberships()
@@ -426,7 +424,7 @@ describe('the adopter of a membership the gateway answers', () => {
   })
 
   it('a newer list dropping the organisation before the answer leaves it appended, and the next list removes it', async () => {
-    const { session, storage, contexts } = await signedIn({ ...ann, memberships: [acme] })
+    const { session, storage, saved, contexts } = await signedIn({ ...ann, memberships: [acme] })
     const adopt = session.membershipAdopter()
     const channel = contexts()[0] ?? expect.unreachable("the channel of Ann's space")
 
@@ -435,20 +433,20 @@ describe('the adopter of a membership the gateway answers', () => {
     // The gateway's list without Acme (a removal right after the request) comes before the answer.
     channel.onMemberships([])
     await vi.waitFor(() => expect(session.memberships()).toEqual([]))
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
 
     await adopt(acme)
 
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(savedMemberships(storage, saved)).toEqual([acme])
     expect(session.memberships()).toEqual([acme])
 
     channel.onMemberships([])
     await vi.waitFor(() => expect(session.memberships()).toEqual([]))
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
   })
 
   it('resolves once this tab followed the list it read or wrote, not later lists, and not hanging on an organisation database that fails to open', async () => {
-    const { session, storage, space, failures, tenantsOpened } = await signedIn(ann, {
+    const { session, storage, saved, space, failures, tenantsOpened } = await signedIn(ann, {
       refusedTenants: ['acme'],
     })
     const adopt = session.membershipAdopter()
@@ -466,7 +464,7 @@ describe('the adopter of a membership the gateway answers', () => {
 
     // Another tab kept a later list meanwhile.
     storage.changeElsewhere(
-      membershipsKeyOf(ann.identity.id),
+      membershipsKeyOf(saved.signIn),
       JSON.stringify({ identity: ann.identity.id, memberships: [acme, globex] }),
     )
 
@@ -478,7 +476,7 @@ describe('the adopter of a membership the gateway answers', () => {
   })
 
   it('treats a list adopted here and one heard over the channel alike', async () => {
-    const { session, storage, contexts } = await signedIn()
+    const { session, storage, saved, contexts } = await signedIn()
     const channel = contexts()[0] ?? expect.unreachable("the channel of Ann's space")
     const adoptAcme = session.membershipAdopter()
     const adoptAcmeAgain = session.membershipAdopter()
@@ -499,6 +497,6 @@ describe('the adopter of a membership the gateway answers', () => {
 
     await adoptGlobex(globex)
     expect(writes()).toBe(2)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme, globex])
+    expect(savedMemberships(storage, saved)).toEqual([acme, globex])
   })
 })

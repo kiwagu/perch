@@ -36,13 +36,13 @@ describe('changes made in other tabs', () => {
     const heard: Array<string | undefined> = []
     const stop = storage.onChangeElsewhere((key) => heard.push(key))
 
-    window.dispatch({ key: 'perch.session.identity', storageArea: area })
+    window.dispatch({ key: 'theirs', storageArea: area })
     window.dispatch({ key: null, storageArea: area })
-    window.dispatch({ key: 'perch.session.identity', storageArea: null })
+    window.dispatch({ key: 'theirs', storageArea: null })
     stop()
-    window.dispatch({ key: 'perch.session.token', storageArea: area })
+    window.dispatch({ key: 'later', storageArea: area })
 
-    expect(heard).toEqual(['perch.session.identity', undefined])
+    expect(heard).toEqual(['theirs', undefined])
   })
 
   it('lets a test change the memory storage as another tab would', () => {

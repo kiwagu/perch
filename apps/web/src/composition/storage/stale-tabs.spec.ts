@@ -4,19 +4,19 @@ import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { laggingStorage } from '../__fixtures__/lagging-storage'
+import { signedIn, signedOut } from '../__fixtures__/signed-in'
 
 import { memoryStorage } from './key-value'
-import { savedMemberships, saveMemberships } from './memberships'
+import { membershipsKeyOf, savedMemberships, saveMemberships } from './memberships'
 import { markSignIn } from './notice'
+import { newSignInId } from './sign-in'
 import {
-  forgetDevice,
-  saveDevice,
+  forgetSignIn,
   savedIdentity,
   savedSession,
   savedTokenOf,
   saveIdentityEmail,
-  TOKEN_KEY,
-  tokenRecord,
+  signedInKeyOf,
 } from './signed-in'
 
 /** The counter each sign-in moves (`markSignIn`), as the browser keeps it. */
@@ -52,17 +52,20 @@ describe('the saved session, written by tabs that hear each other late', () => {
     const signingIn = browser.tab()
     const stale = browser.tab()
 
-    saveDevice(signingIn, ann)
+    const annSession = signedIn(signingIn, ann)
+
     browser.deliver()
 
     // One tab signs Ann out and Bob in; the other, still showing Ann, hears her list meanwhile.
-    forgetDevice(signingIn)
-    saveDevice(signingIn, bob)
-    saveMemberships(stale, ann.identity.id, [membership('ann-co'), membership('ann-new')])
+    signedOut(signingIn)
+
+    const bobSession = signedIn(signingIn, bob)
+
+    saveMemberships(stale, annSession, [membership('ann-co'), membership('ann-new')])
     browser.deliver()
 
-    expect(savedMemberships(signingIn, bob.identity.id)).toEqual(bob.memberships)
-    expect(savedMemberships(stale, bob.identity.id)).toEqual(bob.memberships)
+    expect(savedMemberships(signingIn, bobSession)).toEqual(bob.memberships)
+    expect(savedMemberships(stale, bobSession)).toEqual(bob.memberships)
   })
 
   it('brings back no identity whose email a tab confirms after another tab signed it out', () => {
@@ -70,10 +73,10 @@ describe('the saved session, written by tabs that hear each other late', () => {
     const confirming = browser.tab()
     const signingOut = browser.tab()
 
-    saveDevice(confirming, ann)
+    signedIn(confirming, ann)
     browser.deliver()
 
-    forgetDevice(signingOut)
+    signedOut(signingOut)
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', savedSession(confirming))
     browser.deliver()
 
@@ -86,7 +89,7 @@ describe('the email a confirmation keeps', () => {
   it('is read over the email the identity signed in with, while the session it was asked in lasts', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
     saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
 
     expect(savedIdentity(storage)).toEqual({ id: ann.identity.id, email: 'ann@new.example.test' })
@@ -96,7 +99,7 @@ describe('the email a confirmation keeps', () => {
   it("is not kept for an identity that is not the one signed in, nor read for another's", () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, bob)
+    signedIn(storage, bob)
     saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
 
     expect(savedIdentity(storage)).toEqual(bob.identity)
@@ -105,20 +108,20 @@ describe('the email a confirmation keeps', () => {
   it('goes with a sign-out, and a later sign-in of the identity reads the email it signed in with', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
     saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', savedSession(storage))
-    forgetDevice(storage)
+    signedOut(storage)
 
     expect(savedIdentity(storage)).toBeUndefined()
 
-    saveDevice(storage, annAgain)
+    signedIn(storage, annAgain)
 
     expect(savedIdentity(storage)?.email).toBe('ann@third.example.test')
   })
   it('writes nothing for a confirmation asked while no session was kept, whatever session its answer finds', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
     saveIdentityEmail(storage, ann.identity.id, 'ann@fourth.example.test', savedSession(storage))
     saveIdentityEmail(storage, ann.identity.id, 'ann@new.example.test', undefined)
 
@@ -132,15 +135,15 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     const confirming = browser.tab()
     const other = browser.tab()
 
-    saveDevice(confirming, ann)
+    signedIn(confirming, ann)
     browser.deliver()
-    forgetDevice(other)
+    signedOut(other)
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', savedSession(confirming))
     browser.deliver()
 
     expect(savedIdentity(confirming)).toBeUndefined()
 
-    saveDevice(other, annAgain)
+    signedIn(other, annAgain)
     browser.deliver()
 
     expect(savedIdentity(confirming)?.email).toBe('ann@third.example.test')
@@ -151,7 +154,7 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     const confirming = browser.tab()
     const other = browser.tab()
 
-    saveDevice(other, ann)
+    signedIn(other, ann)
     markSignIn(other)
     browser.deliver()
 
@@ -159,8 +162,8 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     // with the email she has now; its answer comes to a tab that has not heard of that.
     const asked = savedSession(confirming)
 
-    forgetDevice(other)
-    saveDevice(other, annAgain)
+    signedOut(other)
+    signedIn(other, annAgain)
     markSignIn(other)
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', asked)
     browser.deliver()
@@ -174,7 +177,7 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     const confirming = browser.tab()
     const other = browser.tab()
 
-    saveDevice(other, ann)
+    signedIn(other, ann)
     markSignIn(other)
     browser.deliver((key) => key !== SIGN_INS_KEY)
 
@@ -190,15 +193,15 @@ describe('a confirmation answered in a tab that hears the others late', () => {
     const confirming = browser.tab()
     const other = browser.tab()
 
-    saveDevice(other, ann)
+    signedIn(other, ann)
     markSignIn(other)
     browser.deliver()
 
     // A confirmation asked in Ann's first sign-in waits for its answer.
     const first = savedSession(confirming)
 
-    forgetDevice(other)
-    saveDevice(other, annAgain)
+    signedOut(other)
+    signedIn(other, annAgain)
     markSignIn(other)
     browser.deliver()
     saveIdentityEmail(
@@ -217,16 +220,21 @@ describe('a confirmation answered in a tab that hears the others late', () => {
   })
 })
 
-describe("a sign-in's save that broke before the identity", () => {
-  it('leaves nothing of the identity once the device is forgotten: the token names whose it was', () => {
+describe("a sign-in's save that broke before the pointer", () => {
+  it('leaves nothing of the sign-in once its own id is forgotten', () => {
     const storage = memoryStorage()
+    const signIn = newSignInId()
 
-    // The token and the memberships landed; the identity's write did not.
-    storage.set(TOKEN_KEY, tokenRecord(ann.identity.id, ann.token))
-    saveMemberships(storage, ann.identity.id, ann.memberships)
-    forgetDevice(storage)
+    // The record and the memberships landed; the pointer's write did not.
+    storage.set(
+      signedInKeyOf(signIn),
+      JSON.stringify({ identity: ann.identity.id, email: ann.identity.email, token: ann.token }),
+    )
+    saveMemberships(storage, { signIn, identity: ann.identity.id }, ann.memberships)
+    forgetSignIn(storage, signIn)
 
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(storage.get(signedInKeyOf(signIn))).toBeUndefined()
+    expect(storage.get(membershipsKeyOf(signIn))).toBeUndefined()
     expect(savedTokenOf(storage, ann.identity.id)).toBeUndefined()
   })
 })

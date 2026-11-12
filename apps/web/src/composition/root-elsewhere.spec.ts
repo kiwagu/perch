@@ -7,18 +7,12 @@ import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { SYNC_STATUS } from '../platform/sync-status.port'
 
 import { bootRoot } from './__fixtures__/root'
+import { signedIn } from './__fixtures__/signed-in'
 import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { organisationsApi } from './organisations-api'
 import type { AppRootOptions, AppServices } from './root'
-import {
-  memoryStorage,
-  saveDevice,
-  savedIdentity,
-  savedToken,
-  TOKEN_KEY,
-  tokenRecord,
-} from './storage'
+import { memoryStorage, newSignInId, savedIdentity, savedToken, signedInKeyOf } from './storage'
 
 let services: AppServices | undefined
 const cleanups: Array<() => Promise<void>> = []
@@ -77,7 +71,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     const storage = memoryStorage()
     const { overrides, tokens } = routes()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result } = await bootRoot(cleanups, storage, [], [], overrides)
 
@@ -86,7 +80,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     expect(tokens()).toEqual([ann.token, ann.token])
 
     // Another tab signed Ann out and Bob in; this tab, still Ann's, has not followed yet.
-    saveDevice(storage, bob)
+    signedIn(storage, bob)
 
     expect(services.session.current()?.id).toBe(ann.identity.id)
     expect(tokens()).toEqual([undefined, undefined])
@@ -96,17 +90,20 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     const storage = memoryStorage()
     const { overrides, tokens } = routes()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result } = await bootRoot(cleanups, storage, [], [], overrides)
 
     services = result._unsafeUnwrap()
 
-    // Another tab's sign-in of Bob wrote his token; it has not written his identity yet.
-    storage.set(TOKEN_KEY, tokenRecord(bob.identity.id, bob.token))
+    // Another tab's sign-in of Bob wrote his record; it has not moved the pointer to it yet.
+    storage.set(
+      signedInKeyOf(newSignInId()),
+      JSON.stringify({ identity: bob.identity.id, email: bob.identity.email, token: bob.token }),
+    )
 
     expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
-    expect(tokens()).toEqual([undefined, undefined])
+    expect(tokens()).toEqual([ann.token, ann.token])
   })
 
   it('presents no token while the space opens once another tab saved another account, and offers no sign-out of that account when it does not open', async () => {
@@ -115,14 +112,14 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     const { overrides, tokens } = routes()
     let opening: Array<string | undefined> = []
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result, root } = await bootRoot(cleanups, storage, [], [], {
       ...overrides,
       // Another tab signs Ann out and Bob in while her space opens; this tab hears nothing yet.
       openLocal: () =>
         ResultAsync.fromSafePromise(Promise.resolve()).andThen(() => {
-          saveDevice(storage, bob)
+          signedIn(storage, bob)
           opening = tokens()
 
           return openFailed()
@@ -150,7 +147,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     const storage = memoryStorage()
     const deleted: IdentityId[] = []
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result, root } = await bootRoot(cleanups, storage, [], [], {
       openLocal: openFailed,
@@ -167,7 +164,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
     const signOutHere = failure.kind === 'open-failed' ? failure.signOutHere : undefined
 
     // Another tab signs Ann out and Bob in; the click comes before this tab hears of it.
-    saveDevice(storage, bob)
+    signedIn(storage, bob)
 
     expect((await (signOutHere ?? expect.unreachable('offered'))()).isOk()).toBe(true)
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
@@ -178,7 +175,7 @@ describe('createAppRoot while another tab of the browser changes who is signed i
   it("goes on hearing the device's sync once the space did not open: the tab may go on as a guest's and sign in again", async () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result, root } = await bootRoot(cleanups, storage, [], [], { openLocal: openFailed })
 

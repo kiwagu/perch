@@ -12,12 +12,13 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import { signedIn } from '../__fixtures__/signed-in'
 import {
   deviceIdFrom,
   type KeptDevice,
   pendingRevokes,
-  saveDevice,
   savedIdentity,
+  savedSession,
   savedToken,
 } from '../storage'
 
@@ -83,7 +84,9 @@ describe('verifying an email', () => {
       user: ann,
     })
     // The account has not started: its start is kept, from the name and language it signed up with.
-    expect(tab.startsKept).toEqual([[ann, { name: 'Ann', locale: 'en' }]])
+    expect(tab.startsKept).toEqual([
+      [savedSession(tab.storage)?.signIn, ann, { name: 'Ann', locale: 'en' }],
+    ])
 
     const device = deviceIdFrom(tab.storage)
 
@@ -136,7 +139,7 @@ describe('verifying an email', () => {
 
     expect((await tab.session.restore()).isOk()).toBe(true)
     // Another tab signed Carol in; this one has not heard of it yet.
-    saveDevice(tab.storage, carol)
+    signedIn(tab.storage, carol)
 
     const refused = await tab.session.verifyEmail(auth.linkFor(bobSignUp.email))
 
@@ -228,7 +231,9 @@ describe('signing up', () => {
     expect((await tab.session.verifyEmail(link))._unsafeUnwrap()).toMatchObject({
       kind: 'signed-in',
     })
-    expect(tab.startsKept).toMatchObject([[{ email: annSignUp.email }, { name: 'Ann' }]])
+    expect(tab.startsKept).toMatchObject([
+      [savedSession(tab.storage)?.signIn, { email: annSignUp.email }, { name: 'Ann' }],
+    ])
     expect((await tab.session.signOut()).isOk()).toBe(true)
     expect((await tab.session.signIn(again))._unsafeUnwrapErr().code).toBe(
       'data:INVALID_CREDENTIALS',

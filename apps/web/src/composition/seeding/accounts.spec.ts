@@ -1,6 +1,7 @@
+import { err } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { AuthUser } from '@workspace/data'
+import { type AuthUser, dataError } from '@workspace/data'
 
 import { AccountStartService } from '../../features/user/application/account-start.service'
 import { ProfileService } from '../../features/user/application/profile.service'
@@ -19,10 +20,10 @@ import {
   verifiedElsewhere,
 } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
-import { keptAccountStart } from '../storage'
+import { keptAccountStart, savedSession } from '../storage'
 
 import { ensureAccount } from './accounts'
-import type { AccountInput, Inbox, SeedDevice } from './types'
+import type { AccountInput, Inbox, SeedDevice, SeedStarts } from './types'
 
 const ann: AccountInput = {
   email: 'ann@example.test',
@@ -91,7 +92,7 @@ async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<bool
   const world = await openTestWorld({
     auth,
     online: false,
-    keepAccountStart: (user, from) => tab.starts?.keepAfterPull(user, from),
+    keepAccountStart: (signIn, user, from) => tab.starts?.keepAfterPull(signIn, user, from),
   })
 
   worlds.push(world)
@@ -115,6 +116,18 @@ async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<bool
 
   tab.starts = starts
 
+  // The seed keeps a start under the sign-in current on the device, as the seed client does.
+  const seedStarts: SeedStarts = {
+    keepAfterPull: (user, from) => {
+      const signIn = savedSession(world.storage)?.signIn
+
+      return signIn === undefined
+        ? err(dataError('data:AUTH_FAILED', 'nobody is signed in on the seed device'))
+        : starts.keepAfterPull(signIn, user, from)
+    },
+    resumeAfterPull: (user) => starts.resumeAfterPull(user),
+  }
+
   if (beside) {
     world.session.subscribe((user) => {
       if (user !== undefined) {
@@ -132,7 +145,7 @@ async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<bool
     session,
     profiles,
     settings,
-    starts,
+    starts: seedStarts,
     inbox,
     enter: (signIn) => signIn(),
     settle: () => session.flush(),
@@ -210,7 +223,7 @@ describe("the seed client's account", () => {
     expect(seeded.profileId).toBe(`prf_${body}`)
     expect((await seed.settings.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
     expect((await seed.profiles.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
-    expect(keptAccountStart(world.storage).kept()).toBeUndefined()
+    expect(keptAccountStart(world.storage).kept(seeded.user.id)).toBeUndefined()
   })
 
   it('has the mail of an account not verified yet sent again, and opens the new link', async () => {

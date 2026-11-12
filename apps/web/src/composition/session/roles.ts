@@ -1,17 +1,25 @@
 /**
  * The session's side of the account's platform roles (`operator`) on this device: the roles of
- * the identity this tab shows, read from that identity's own record in the browser's storage.
- * Only a welcome writes a record (`apply`), heard by the tab that leads the browser's sync while
- * the identity it welcomed is still the one signed in on the browser; the other tabs follow it
- * through the storage (`followSaved`), reading and writing nothing. A console request the gateway
- * refused as `not-operator` drops the role from the record of the identity that asked (`drop`),
- * whichever identity is shown by then. The sign-out removes the record (`forgetDevice`).
+ * the identity this tab shows, read from the record of the sign-in current on the browser while
+ * it is that identity's. Only a welcome writes a record (`apply`), heard by the tab that leads the
+ * browser's sync while the sign-in it welcomed is still the one saved on the browser; the other
+ * tabs follow it through the storage (`followSaved`), reading and writing nothing. A console
+ * request the gateway refused as `not-operator` drops the role from the current sign-in's record
+ * while it is of the identity that asked (`drop`), whichever identity is shown by then. The ending
+ * of a sign-in removes its record (`forgetSignIn`).
  */
 
 import type { IdentityId } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
 
-import { dropRole, type KeyValueStorage, savedIdentity, savedRoles, saveRoles } from '../storage'
+import {
+  dropRole,
+  type KeptSession,
+  type KeyValueStorage,
+  savedRoles,
+  savedSession,
+  saveRoles,
+} from '../storage'
 
 export interface SessionRolesOptions {
   readonly storage: KeyValueStorage
@@ -30,12 +38,17 @@ export class SessionRoles {
   }
 
   /**
-   * The roles of the identity shown, read from its own record (another identity's is never
-   * read): none while nobody is shown. The same set while they stay the same.
+   * The roles of the identity shown, read from the record of the sign-in current on the browser
+   * while it is that identity's (another identity's is never read): none while nobody is shown.
+   * The same set while they stay the same.
    */
   current(): ReadonlySet<PlatformRole> {
     const shown = this.#options.shown()
-    const read = shown === undefined ? [] : savedRoles(this.#options.storage, shown)
+    const current = savedSession(this.#options.storage)
+    const read =
+      shown !== undefined && current?.identity === shown
+        ? savedRoles(this.#options.storage, current)
+        : []
     const held = this.#held
 
     if (read.length !== held.size || read.some((role) => !held.has(role))) {
@@ -53,25 +66,31 @@ export class SessionRoles {
   }
 
   /**
-   * A welcome of `identity` carried `roles`: they are kept in its record, in place of those kept
-   * before, while it is still the identity signed in on the browser, and the subscribers told.
-   * A welcome landing after a sign-out or another account's sign-in writes nothing.
+   * A welcome of the sign-in `session` carried `roles`: they are kept in its record, in place of
+   * those kept before, while it is still the sign-in saved on the browser, and the subscribers
+   * told. A welcome landing after its sign-out, or after another sign-in, writes nothing.
    */
-  apply(identity: IdentityId, roles: readonly PlatformRole[]): void {
-    if (savedIdentity(this.#options.storage)?.id !== identity) {
+  apply(session: KeptSession, roles: readonly PlatformRole[]): void {
+    if (savedSession(this.#options.storage)?.signIn !== session.signIn) {
       return
     }
 
-    saveRoles(this.#options.storage, identity, roles)
+    saveRoles(this.#options.storage, session, roles)
     this.tell()
   }
 
   /**
-   * The gateway refused `identity` a request for want of `role`: the role goes from that
-   * identity's record, whichever identity is shown now; an identity without a record gets none.
+   * The gateway refused `identity` a request for want of `role`: the role goes from the record of
+   * the sign-in current on the browser while it is that identity's, whichever identity is shown
+   * now; a sign-in without a record gets none.
    */
   drop(identity: IdentityId, role: PlatformRole): void {
-    dropRole(this.#options.storage, identity, role)
+    const current = savedSession(this.#options.storage)
+
+    if (current?.identity === identity) {
+      dropRole(this.#options.storage, current, role)
+    }
+
     this.tell()
   }
 

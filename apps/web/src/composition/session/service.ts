@@ -14,7 +14,13 @@ import type {
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace } from '../identity-space'
-import { IDENTITY_KEY, isMembershipsKey, isRolesKey, savedIdentity } from '../storage'
+import {
+  isMembershipsKey,
+  isRolesKey,
+  isSessionKey,
+  type KeptSession,
+  savedIdentity,
+} from '../storage'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
@@ -152,7 +158,7 @@ export class SessionService implements SessionPort {
     this.writePath = new CurrentSpaceWritePath(spaces)
     this.#unlisten = [
       options.storage.onChangeElsewhere((key) => {
-        if (key === undefined || key === IDENTITY_KEY) {
+        if (key === undefined || isSessionKey(key)) {
           this.#elsewhere.follow()
         } else if (isMembershipsKey(key)) {
           this.#organisations.followSaved()
@@ -280,13 +286,14 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * The saved identity's space did not open: signs `identity` out on this device without it, while
-   * it is still the saved one. Its token is left to sign out (sent at once online) and its
-   * databases deleted, its own and every organisation one counted for it, with whatever they held
-   * that was not sent. Changes nothing while a space is open or another identity is saved.
+   * The saved sign-in's space did not open: signs `ended`, the sign-in the start tried to open,
+   * out on this device without it, while it is still the saved one. Its token is left to sign out
+   * (sent at once online) and its databases deleted, its own and every organisation one counted
+   * for it, with whatever they held that was not sent. Changes nothing while a space is open or
+   * another sign-in is saved, of the same account or not.
    */
-  signOutUnopened(identity: IdentityId): ResultAsync<void, DataError> {
-    return this.#transitions.serially(() => this.#signingOut.unopened(identity))
+  signOutUnopened(ended: KeptSession): ResultAsync<void, DataError> {
+    return this.#transitions.serially(() => this.#signingOut.unopened(ended))
   }
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */

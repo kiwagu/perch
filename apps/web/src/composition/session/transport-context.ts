@@ -1,11 +1,10 @@
 import { match } from 'ts-pattern'
 
-import type { IdentityId } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import type { DeviceCredentials } from '@workspace/replica/sync'
 
-import { deviceIdFrom, type KeyValueStorage, savedTokenOf } from '../storage'
+import { deviceIdFrom, type KeptSession, type KeyValueStorage, sessionKept } from '../storage'
 
 import type { TransportContext } from './options'
 
@@ -28,25 +27,21 @@ export interface SessionChannelEvents {
   readonly protocolRefused: () => void
 }
 
-/** The token the channel presents in its hello, if the device keeps one. */
-function credentialsOf(token: string | undefined): DeviceCredentials | undefined {
-  return token === undefined ? undefined : { token }
-}
-
 /**
- * The context of the channel of `identity`: the device it names, and the session token saved on
- * this browser while it is the identity's own (a token saved for another identity is not this
- * channel's to present).
+ * The context of the channel of the sign-in `session`: the device it names, and that sign-in's
+ * token while the browser still keeps its record (a sign-in ended since, or another one saved
+ * meanwhile, is not this channel's to present: it presents none, and hears itself refused).
  */
 export function sessionTransportContext(
-  identity: IdentityId,
+  session: KeptSession,
   storage: KeyValueStorage,
   events: SessionChannelEvents,
 ): TransportContext {
   return {
-    identity,
+    identity: session.identity,
     device: deviceIdFrom(storage),
-    credentials: () => credentialsOf(savedTokenOf(storage, identity)),
+    credentials: (): DeviceCredentials | undefined =>
+      sessionKept(storage, session) ? { token: session.token } : undefined,
     onMemberships: events.memberships,
     onRoles: events.roles,
     onEnded: (reason) =>

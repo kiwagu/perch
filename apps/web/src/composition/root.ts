@@ -55,7 +55,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedTokenOf } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedSession, savedTokenOf } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -197,7 +197,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       starts.syncState(state)
     },
     // The start of an account a sign-in or a first verification learnt of waits for the first pull.
-    keepAccountStart: (user, from) => starts.keepAfterPull(user, from),
+    keepAccountStart: (signIn, user, from) => starts.keepAfterPull(signIn, user, from),
     onError: options.onError,
     publish: (event) => {
       void events.publish([event]).match(
@@ -272,18 +272,18 @@ export function createAppRoot(options: AppRootOptions): AppStart {
 
   step('restore-session')
 
-  // The identity whose space the start opens: a sign-out offered when it does not open is of it.
-  const restoring = savedIdentity(options.storage)
+  // The sign-in whose space the start opens: a sign-out offered when it does not open is of it.
+  const restoring = savedSession(options.storage)
   // The sync's state is heard on after a start whose space did not open: once another tab signs
   // that identity out, this tab goes on as a guest's, who may sign in again.
   const opened = session
     .restore()
     .mapErr(
       (error): BootFailure =>
-        // Offered only while that identity is still the saved one: another tab may have signed it
-        // out, and another account in, before this tab heard of it (it follows once it does).
-        restoring !== undefined && savedIdentity(options.storage)?.id === restoring.id
-          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(restoring.id) }
+        // Offered only while that sign-in is still the saved one: another tab may have signed it
+        // out, and another in, before this tab heard of it (it follows once it does).
+        restoring !== undefined && savedSession(options.storage)?.signIn === restoring.signIn
+          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(restoring) }
           : { kind: 'open-failed', error },
     )
     .map(() => step('ready'))

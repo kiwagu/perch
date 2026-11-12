@@ -5,12 +5,13 @@ import type { PlatformRole } from '@workspace/kernel'
 
 import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
 import { sharedStorage } from './__fixtures__/shared-storage'
+import { signedIn } from './__fixtures__/signed-in'
 import { type AccountsDeps, accountsApi } from './accounts-api'
 import { SessionRoles } from './session'
 import {
   type KeptDevice,
   type MemoryStorage,
-  saveDevice,
+  rolesKeyOf,
   savedRoles,
   savedTokenOf,
   saveRoles,
@@ -240,8 +241,9 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const other = browser.tab()
     let shown: IdentityId | undefined = ann.identity.id
 
-    saveDevice(here, ann)
-    saveRoles(here, ann.identity.id, ['operator'])
+    const annSession = signedIn(here, ann)
+
+    saveRoles(here, annSession, ['operator'])
 
     const roles = new SessionRoles({ storage: here, shown: () => shown })
     const told = vi.fn()
@@ -258,17 +260,18 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const asked = client.list(search)
 
     // Another tab signs Ann out and Bob in, an operator; this tab follows and shows Bob.
-    saveDevice(other, bob)
-    saveRoles(other, bob.identity.id, ['operator'])
+    const bobSession = signedIn(other, bob)
+
+    saveRoles(other, bobSession, ['operator'])
     shown = bob.identity.id
 
     held.release()
 
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
     expect(held.sent.map(({ authorization }) => authorization)).toEqual(['Bearer token-ann'])
-    expect(savedRoles(here, ann.identity.id)).toEqual([])
-    expect(savedRoles(here, bob.identity.id)).toEqual(['operator'])
-    expect(savedRoles(other, bob.identity.id)).toEqual(['operator'])
+    expect(savedRoles(here, annSession)).toEqual([])
+    expect(savedRoles(here, bobSession)).toEqual(['operator'])
+    expect(savedRoles(other, bobSession)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
     expect(told).toHaveBeenCalled()
   })
@@ -277,7 +280,7 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const browser = sharedStorage()
     const here = browser.tab()
 
-    saveDevice(here, ann)
+    const session = signedIn(here, ann)
 
     const roles = new SessionRoles({ storage: here, shown: () => ann.identity.id })
     const client = accountsApi('/backend', {
@@ -288,6 +291,6 @@ describe('a not-operator answered after the browser changed accounts', () => {
     })
 
     expect((await client.read(cara))._unsafeUnwrapErr().code).toBe('not-operator')
-    expect(here.get(`perch.session.roles.${ann.identity.id}`)).toBeUndefined()
+    expect(here.get(rolesKeyOf(session.signIn))).toBeUndefined()
   })
 })
