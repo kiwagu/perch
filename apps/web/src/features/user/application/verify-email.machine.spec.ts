@@ -12,7 +12,7 @@ import { createVerifyEmailMachine } from './verify-email.machine'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
-const signedIn: EmailVerified = { kind: 'signed-in', user: ann, name: 'Ann', locale: 'en' }
+const signedIn: EmailVerified = { kind: 'signed-in', user: ann }
 
 const verifiedBefore: EmailVerified = { kind: 'verified-before' }
 

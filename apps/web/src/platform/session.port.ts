@@ -2,7 +2,6 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
-import type { Locale } from '@workspace/i18n'
 import type { IdentityId } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
@@ -63,16 +62,10 @@ export interface PushRejection {
 
 /**
  * What a verification link did on this device: signed it in to the account the first time
- * (`signed-in`), with the name and the language the account signed up with, which its profile and
- * its settings start from; nothing after (`verified-before`).
+ * (`signed-in`), nothing after (`verified-before`).
  */
 export type EmailVerified =
-  | {
-      readonly kind: 'signed-in'
-      readonly user: AuthUser
-      readonly name: string
-      readonly locale: Locale
-    }
+  | { readonly kind: 'signed-in'; readonly user: AuthUser }
   | { readonly kind: 'verified-before' }
 
 /** What an email confirmation's link did: the account whose email changed, and its new email. */
@@ -98,7 +91,9 @@ export interface SessionPort {
   signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email
-   * and signs this device in, as a sign-in does (one at a time with the browser's other sign-ins,
+   * and signs this device in, as a sign-in does, keeping the start of the account, which has none
+   * of its settings or profile yet, for after this device's first pull (one at a time with the
+   * browser's other sign-ins,
    * refused as `data:OTHER_ACCOUNT` when another account is signed in on this browser by the time
    * the gateway answered, whose new session is then signed out); a link verified before signs
    * nothing in and changes nothing. The link of an account an operator banned verifies its email,
