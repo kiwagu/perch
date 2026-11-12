@@ -125,8 +125,8 @@ modeling stage.
   storage but hear each other's writes late (a browser hands another tab's write to this tab some
   time after it was made, and no lock makes it sooner), so what a tab writes for an account goes
   under that account's own key: its memberships, the email an email confirmation gave it
-  (`perch.session.email.<identity>`, with the sign-in the confirmation was asked in, read over
-  the email of that sign-in alone) and its platform roles. A tab that still shows an account another tab
+  (`perch.session.email.<session>`, under a tag of the token of the session the confirmation was
+  asked in, read over the identity's email while that session lasts) and its platform roles. A tab that still shows an account another tab
   signed out may write its list or confirm its email meanwhile: the next account's records stay
   as they are, and no identity comes back without its token. A sign-out forgets the records of the
   identity saved, or of the one the token names when a sign-in's save broke before the identity.

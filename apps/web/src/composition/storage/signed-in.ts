@@ -10,7 +10,6 @@ import type { SignedInDevice } from '../gateway-auth'
 import { ACCOUNT_START_KEY } from './account-start'
 import type { KeyValueStorage } from './key-value'
 import { forgetMemberships, saveMemberships, TENANT_KEY } from './memberships'
-import { signInMark } from './notice'
 import { forgetRoles } from './roles'
 
 /** Who is signed in on this browser; the tabs follow it. */
@@ -27,26 +26,48 @@ export const TOKEN_KEY = 'perch.session.token'
 const OLD_REFRESH_KEY = 'perch.session.refresh'
 
 /**
- * The email an email confirmation gave the signed-in identity, kept under a key of the identity's
- * own (`perch.session.email.<identity>`) with the sign-in it was asked in (`signInMark`), and read
- * over the identity's record during that sign-in alone: a tab hears another tab's writes late, so a
- * confirmation answered after another tab signed the identity out writes here, beside nothing,
- * never bringing the identity back without its token, and one answered after the identity signed
- * in again names an earlier sign-in, so the email of the later one stands.
+ * The email an email confirmation gave the signed-in identity, kept under a key of the session the
+ * confirmation was asked in (`perch.session.email.<tag of its token>`) and read over the
+ * identity's record while that session lasts: a tab hears another tab's writes late, so a
+ * confirmation answered after another tab signed the identity out, or signed it in again, writes
+ * under the ended session's key, beside nothing the current session reads. It never brings the
+ * identity back without its token, nor stands over, or replaces, what a later session has. A
+ * sign-in in the tab that asked writes its token before its identity, so a tab that has the
+ * identity has its token too.
  */
 const EMAIL_KEY_PREFIX = 'perch.session.email.'
 
-const emailKeyOf = (identity: AuthUser['id']): string => `${EMAIL_KEY_PREFIX}${identity}`
+/**
+ * A short tag of `token` (the 53-bit cyrb53 hash), naming its session in a key without spelling
+ * out the token itself.
+ */
+function tagOf(token: string): string {
+  let h1 = 0xdeadbeef
+  let h2 = 0x41c6ce57
+
+  for (let i = 0; i < token.length; i++) {
+    const code = token.charCodeAt(i)
+
+    h1 = Math.imul(h1 ^ code, 2654435761)
+    h2 = Math.imul(h2 ^ code, 1597334677)
+  }
+
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909)
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909)
+
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36)
+}
+
+const emailKeyOf = (token: string): string => `${EMAIL_KEY_PREFIX}${tagOf(token)}`
 
 const savedIdentitySchema = z.object({ id: idSchemas.identity.schema, email: z.string() })
 
-const confirmedEmailSchema = z.object({
-  identity: idSchemas.identity.schema,
-  email: z.string(),
-  signIn: z.string(),
-})
+const confirmedEmailSchema = z.object({ identity: idSchemas.identity.schema, email: z.string() })
 
 const savedTokenSchema = z.object({ identity: idSchemas.identity.schema, token: z.string() })
+
+/** The session this browser keeps: its token and the identity it was issued to. */
+export type KeptSession = z.output<typeof savedTokenSchema>
 
 /** A device whose sign-in is whole: who it is, its session token and the memberships it read. */
 export interface KeptDevice extends SignedInDevice {
@@ -62,12 +83,17 @@ export function tokenRecord(identity: AuthUser['id'], token: string): string {
  * Keeps the device a sign-in made whole, in one step: the token first, which names the identity
  * should a later write break (`forgetDevice` then knows whose records to forget), then the
  * memberships, the identity last, so a tab that follows the identity finds the rest saved
- * already. The email it signed in with replaces any an earlier confirmation left for the identity.
+ * already. The email a confirmation kept for the session it replaces goes.
  */
 export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
+  const replaced = savedSession(storage)
+
+  if (replaced) {
+    storage.remove(emailKeyOf(replaced.token))
+  }
+
   storage.set(TOKEN_KEY, tokenRecord(device.identity.id, device.token))
   saveMemberships(storage, device.identity.id, device.memberships)
-  storage.remove(emailKeyOf(device.identity.id))
   storage.set(
     IDENTITY_KEY,
     JSON.stringify({ id: device.identity.id, email: device.identity.email }),
@@ -75,38 +101,44 @@ export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
 }
 
 /**
- * Keeps the new email of `identity` while it is the one signed in on this browser, as its email's
- * confirmation answered, under the identity's own key, never in the identity's record, with the
- * sign-in the confirmation was asked in (`asked`, the `signInMark` then; now by default).
+ * Keeps the new email of `identity`, as its email's confirmation answered, for the session the
+ * confirmation was asked in (`asked`, the session this browser kept then; now by default), when
+ * that session is the identity's: never in the identity's record.
  */
 export function saveIdentityEmail(
   storage: KeyValueStorage,
   identity: AuthUser['id'],
   email: string,
-  asked: string = signInMark(storage),
+  asked: KeptSession | undefined = savedSession(storage),
 ): void {
-  if (savedIdentity(storage)?.id === identity) {
-    storage.set(emailKeyOf(identity), JSON.stringify({ identity, email, signIn: asked }))
+  if (asked?.identity === identity) {
+    storage.set(emailKeyOf(asked.token), JSON.stringify({ identity, email }))
   }
 }
 
 /**
- * The identity signed in on this browser, with the email a confirmation asked during its current
- * sign-in gave it, when there is one; a kept value that does not describe one is none.
+ * The identity signed in on this browser, with the email a confirmation asked in its current
+ * session gave it, when there is one; a kept value that does not describe one is none.
  */
 export function savedIdentity(storage: KeyValueStorage): AuthUser | undefined {
   const saved = read(storage, IDENTITY_KEY, savedIdentitySchema)
+  const session = savedSession(storage)
   const confirmed =
-    saved === undefined ? undefined : read(storage, emailKeyOf(saved.id), confirmedEmailSchema)
+    saved !== undefined && session?.identity === saved.id
+      ? read(storage, emailKeyOf(session.token), confirmedEmailSchema)
+      : undefined
 
-  return saved && confirmed?.identity === saved.id && confirmed.signIn === signInMark(storage)
-    ? { ...saved, email: confirmed.email }
-    : saved
+  return saved && confirmed?.identity === saved.id ? { ...saved, email: confirmed.email } : saved
+}
+
+/** The session this browser keeps, if it keeps one, whoever it is of. */
+export function savedSession(storage: KeyValueStorage): KeptSession | undefined {
+  return read(storage, TOKEN_KEY, savedTokenSchema)
 }
 
 /** The session token the device presents to the gateway, if it keeps one, whoever it is of. */
 export function savedToken(storage: KeyValueStorage): string | undefined {
-  return read(storage, TOKEN_KEY, savedTokenSchema)?.token
+  return savedSession(storage)?.token
 }
 
 /**
@@ -149,8 +181,8 @@ function read<T>(storage: KeyValueStorage, key: string, schema: z.ZodType<T>): T
  * has.
  */
 export function forgetDevice(storage: KeyValueStorage): void {
-  const signedOut =
-    savedIdentity(storage)?.id ?? read(storage, TOKEN_KEY, savedTokenSchema)?.identity
+  const session = savedSession(storage)
+  const signedOut = savedIdentity(storage)?.id ?? session?.identity
 
   storage.remove(ACCOUNT_START_KEY)
   storage.remove(TOKEN_KEY)
@@ -158,8 +190,11 @@ export function forgetDevice(storage: KeyValueStorage): void {
   storage.remove(IDENTITY_KEY)
   storage.remove(TENANT_KEY)
 
+  if (session) {
+    storage.remove(emailKeyOf(session.token))
+  }
+
   if (signedOut) {
-    storage.remove(emailKeyOf(signedOut))
     forgetMemberships(storage, signedOut)
     forgetRoles(storage, signedOut)
   }

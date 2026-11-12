@@ -7,16 +7,20 @@ import { laggingStorage } from '../__fixtures__/lagging-storage'
 
 import { memoryStorage } from './key-value'
 import { savedMemberships, saveMemberships } from './memberships'
-import { markSignIn, signInMark } from './notice'
+import { markSignIn } from './notice'
 import {
   forgetDevice,
   saveDevice,
   savedIdentity,
+  savedSession,
   savedTokenOf,
   saveIdentityEmail,
   TOKEN_KEY,
   tokenRecord,
 } from './signed-in'
+
+/** The counter each sign-in moves (`markSignIn`), as the browser keeps it. */
+const SIGN_INS_KEY = 'perch.session.sign-ins'
 
 const membership = (key: string): Membership => ({
   tenant: { id: tenantIdFactory.create(), key, name: key },
@@ -27,6 +31,13 @@ const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   token: 'token-ann',
   memberships: [membership('ann-co')],
+}
+
+/** Ann signed in again: a new session, with the email she has by then. */
+const annAgain = {
+  identity: { ...ann.identity, email: 'ann@third.example.test' },
+  token: 'token-ann-2',
+  memberships: ann.memberships,
 }
 
 const bob = {
@@ -72,7 +83,7 @@ describe('the saved session, written by tabs that hear each other late', () => {
 })
 
 describe('the email a confirmation keeps', () => {
-  it('is read over the email the identity signed in with, while that identity is signed in', () => {
+  it('is read over the email the identity signed in with, while the session it was asked in lasts', () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
@@ -100,12 +111,14 @@ describe('the email a confirmation keeps', () => {
 
     expect(savedIdentity(storage)).toBeUndefined()
 
-    saveDevice(storage, { ...ann, identity: { ...ann.identity, email: 'ann@third.example.test' } })
+    saveDevice(storage, annAgain)
 
     expect(savedIdentity(storage)?.email).toBe('ann@third.example.test')
   })
+})
 
-  it('left behind by a confirmation a sign-out overtook, gives way to the email of a later sign-in', () => {
+describe('a confirmation answered in a tab that hears the others late', () => {
+  it('brings back nothing a sign-out overtook, and gives way to the email of a later sign-in', () => {
     const browser = laggingStorage()
     const confirming = browser.tab()
     const other = browser.tab()
@@ -116,14 +129,14 @@ describe('the email a confirmation keeps', () => {
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test')
     browser.deliver()
 
-    saveDevice(other, { ...ann, identity: { ...ann.identity, email: 'ann@third.example.test' } })
+    expect(savedIdentity(confirming)).toBeUndefined()
+
+    saveDevice(other, annAgain)
     browser.deliver()
 
     expect(savedIdentity(confirming)?.email).toBe('ann@third.example.test')
   })
-})
 
-describe('the email a confirmation of an ended session keeps', () => {
   it("does not stand over the email of the identity's next sign-in, landed before it", () => {
     const browser = laggingStorage()
     const confirming = browser.tab()
@@ -135,16 +148,58 @@ describe('the email a confirmation of an ended session keeps', () => {
 
     // The confirmation is asked in Ann's session, which another tab ends and signs her in again,
     // with the email she has now; its answer comes to a tab that has not heard of that.
-    const asked = signInMark(confirming)
+    const asked = savedSession(confirming)
 
     forgetDevice(other)
-    saveDevice(other, { ...ann, identity: { ...ann.identity, email: 'ann@third.example.test' } })
+    saveDevice(other, annAgain)
     markSignIn(other)
     saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', asked)
     browser.deliver()
 
     expect(savedIdentity(confirming)?.email).toBe('ann@third.example.test')
     expect(savedIdentity(other)?.email).toBe('ann@third.example.test')
+  })
+
+  it('keeps the email a tab confirms once it heard the sign-in, before it heard the sign-in moved its mark', () => {
+    const browser = laggingStorage()
+    const confirming = browser.tab()
+    const other = browser.tab()
+
+    saveDevice(other, ann)
+    markSignIn(other)
+    browser.deliver((key) => key !== SIGN_INS_KEY)
+
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test')
+    browser.deliver()
+
+    expect(savedIdentity(confirming)?.email).toBe('ann@new.example.test')
+    expect(savedIdentity(other)?.email).toBe('ann@new.example.test')
+  })
+
+  it("keeps the current sign-in's confirmation when an earlier one's answer comes late", () => {
+    const browser = laggingStorage()
+    const confirming = browser.tab()
+    const other = browser.tab()
+
+    saveDevice(other, ann)
+    markSignIn(other)
+    browser.deliver()
+
+    // A confirmation asked in Ann's first sign-in waits for its answer.
+    const first = savedSession(confirming)
+
+    forgetDevice(other)
+    saveDevice(other, annAgain)
+    markSignIn(other)
+    browser.deliver()
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@fourth.example.test')
+    browser.deliver()
+    // The first one's answer comes now.
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', first)
+    browser.deliver()
+
+    expect(savedIdentity(confirming)?.email).toBe('ann@fourth.example.test')
+    expect(savedIdentity(other)?.email).toBe('ann@fourth.example.test')
   })
 })
 

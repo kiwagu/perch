@@ -8,10 +8,10 @@ import type { AccountSession, GatewayAuth } from '../gateway-auth'
 import {
   deviceIdFrom,
   type KeyValueStorage,
+  savedSession,
   savedTokenOf,
   saveIdentityEmail,
   savePasswordReset,
-  signInMark,
 } from '../storage'
 
 /** What the calls about an account need: the gateway, the browser's storage, who is signed in. */
@@ -97,8 +97,8 @@ export class SessionAccount {
    * account's.
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
-    // The sign-in the confirmation is asked in: its answer changes the email of that one alone.
-    const asked = signInMark(this.#deps.storage)
+    // The session the confirmation is asked in: its answer changes the email of that one alone.
+    const asked = savedSession(this.#deps.storage)
 
     return this.#deps.auth
       .confirmEmail(token)

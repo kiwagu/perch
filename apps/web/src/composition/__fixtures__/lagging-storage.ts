@@ -5,10 +5,11 @@ export interface LaggingStorage {
   /** The storage of one more tab of the browser, starting from what the browser holds now. */
   tab(): MemoryStorage
   /**
-   * Delivers every change held back so far, oldest first: the copy of each tab that did not make
-   * it takes the key as the browser holds it now, then that tab's listeners hear the key.
+   * Delivers the changes held back so far, oldest first, those of the keys `only` takes (every one
+   * by default): the copy of each tab that did not make one takes its key as the browser holds it
+   * now, then that tab's listeners hear the key. The others stay held.
    */
-  deliver(): void
+  deliver(only?: (key: string) => boolean): void
 }
 
 interface Tab {
@@ -86,8 +87,12 @@ export function laggingStorage(): LaggingStorage {
         },
       }
     },
-    deliver: () => {
-      for (const { tab, key } of held.splice(0)) {
+    deliver: (only = () => true) => {
+      const now = held.filter(({ key }) => only(key))
+
+      held.splice(0, held.length, ...held.filter(({ key }) => !only(key)))
+
+      for (const { tab, key } of now) {
         keep(tab.copy, key, store.get(key))
 
         for (const listener of [...tab.listeners]) {
