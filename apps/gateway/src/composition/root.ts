@@ -28,11 +28,13 @@ import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { ProfileEmails } from '../auth/profile-emails'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
+import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
 import { RequestLimits } from '../limits/request-limits'
 import type { MailPort } from '../mail'
 import { ConnectionRegistry } from '../sync/connections'
 import { AccountDeparture } from '../tenants/account-departure'
+import { InvitationMails, invitationLink, PendingInvitations } from '../tenants/invitations'
 import { Organisations } from '../tenants/organisations'
 import { regionDatabases } from '../tenants/region-databases'
 import { TenantDatabases } from '../tenants/tenant-databases'
@@ -68,6 +70,12 @@ export interface GatewayRoot {
   readonly mails: AccountMails
   /** The profile's email, which follows the account's into its private region through the hub. */
   readonly profiles: ProfileEmails
+  /** The platform's accounts as the operators' console reads them: a page found, one account. */
+  readonly accountDirectory: AccountDirectory
+  /** The bans the operators' console sets, ending the account's sessions, and lifts. */
+  readonly accountBans: AccountBans
+  /** The name the operators' console gives an account's profile, through its private region. */
+  readonly profileNames: ProfileNames
   readonly organisations: Organisations
   /** The organisations' databases, each opened on first use. */
   readonly databases: TenantDatabases
@@ -93,7 +101,8 @@ export interface GatewayRoot {
   readonly limits: RequestLimits
   /**
    * One account's work runs one turn at a time in this process: its sign-ups, verifications and
-   * reset requests by its email in lower case, its resets and changes by its identity's key.
+   * reset requests by its email in lower case, its resets and changes, and the operators' actions
+   * on it, by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
   readonly clock: Clock
@@ -133,6 +142,7 @@ export function createGatewayRoot(
   const tenantsLog = createLogger('tenant-databases')
   const connectionsLog = createLogger('connections')
   const authLog = createLogger('auth')
+  const organisationsLog = createLogger('organisations')
   const credentials = options.credentials
     ? { credentials: { ...options.credentials, namespace: NAMESPACE } }
     : {}
@@ -170,19 +180,41 @@ export function createGatewayRoot(
       onFailure: (error) => connectionsLog.error({ code: error.code }, error.message),
     })
     // A removal takes the organisation's region from the removed identity's connections before
-    // anything else can fail; every change of memberships resolves once its devices were told.
+    // anything else can fail, and a role change has them push as the new role right after the
+    // directory's write; every change of memberships resolves once its devices were told, or
+    // once a telling that failed is left to the re-tells (on the gateway's clock, logged as the
+    // organisations' own). An invitation's link and its mail carry the same address of the front.
+    const invitationLinkTo = (token: string) => invitationLink(options.publicUrl, token)
+    const invitationMails = new InvitationMails({
+      mail: options.mail,
+      directory: local,
+      link: invitationLinkTo,
+      log: organisationsLog,
+    })
     const organisations = new Organisations({
       directory: local,
       databases,
       revoke: (identity, region) => connections.revoke(identity, region),
+      rerole: (identity, region, role) => connections.rerole(identity, region, role),
       hub,
+      invitations: {
+        pending: new PendingInvitations({
+          directory: local,
+          secret: options.authSecret,
+          clock: options.clock,
+        }),
+        mailer: invitationMails,
+        link: invitationLinkTo,
+      },
+      retell: { clock: options.clock, random: Math.random, log: organisationsLog },
     })
 
     organisations.onChange((identity, memberships) => connections.tell(identity, memberships))
 
     const departure = new AccountDeparture({ directory: local, databases, hub })
 
-    // One account's work, one turn at a time: the auth mount's and the profile's email's.
+    // One account's work, one turn at a time: the auth mount's, the profile's email's and the
+    // operators' console's.
     const accountTurns = new KeyedTurns<string>()
 
     // Better Auth serves its routes under the path of its public URL only, so the server hands it
@@ -231,6 +263,9 @@ export function createGatewayRoot(
         log: authLog,
       }),
       profiles: new ProfileEmails({ directory: local, hub, log: authLog, turns: accountTurns }),
+      accountDirectory: new AccountDirectory(local),
+      accountBans: new AccountBans({ directory: local, clock: options.clock }),
+      profileNames: new ProfileNames({ directory: local, hub }),
       organisations,
       databases,
       hub,
@@ -241,6 +276,11 @@ export function createGatewayRoot(
       accountTurns,
       clock: options.clock,
       close: async () => {
+        // The re-tells stop first, the one running awaited, before anything they read or tell
+        // through closes; then an invitation mail reads its recipient's language from the
+        // directory before it closes.
+        await organisations.close()
+        await invitationMails.languagesRead()
         await hub.close()
         await databases.close()
         await local.close()

@@ -25,6 +25,12 @@ export interface AddresseeUnread {
   readonly error: DataError
 }
 
+/** A mail that could not be read, written or sent: logged by its code alone. */
+export interface MailFailure {
+  readonly code: string
+  readonly message: string
+}
+
 /** The account a mail is about, as the directory keeps it. */
 const identityRow = z.object({
   email: z.string(),
@@ -70,4 +76,15 @@ export function accountAddressee(
           }),
         ),
     )
+}
+
+/**
+ * A mail whose account could not be read, as a failure to log: `mail:SEND_FAILED` for the account
+ * itself (gone too), `mail:LOCALE_UNREADABLE` for the language its settings name. It names nothing
+ * of the account.
+ */
+export function addresseeFailure({ part }: AddresseeUnread): MailFailure {
+  return part === 'account'
+    ? { code: 'mail:SEND_FAILED', message: 'the account of a mail could not be read' }
+    : { code: 'mail:LOCALE_UNREADABLE', message: 'the language of a mail could not be read' }
 }

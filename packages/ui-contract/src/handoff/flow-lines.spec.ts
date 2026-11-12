@@ -88,6 +88,58 @@ describe('flowLines', () => {
 
     expect(flowLines(flow)).toContain('saving invoke thing.updateThing')
   })
+  it('writes a read as an effect, and read: false on the line of its invoke', () => {
+    const flow = flowIn(sampleContract())
+    const saving = flow.states['saving']
+
+    if (saving === undefined || saving.type === 'parallel' || saving.invoke === undefined) {
+      throw new Error('the sample flow lost its saving state')
+    }
+
+    saving.invoke.onDone = {
+      target: 'editing',
+      actions: [{ type: 'read', params: { anchor: 'sample.devices-list' } }],
+    }
+
+    expect(flowLines(flow)).toContain('saving onDone -> editing read sample.devices-list')
+    expect(flowLines(flow)).toContain(
+      'saving invoke thing.updateThing {"title":"sample.title-input"}',
+    )
+
+    saving.invoke.read = false
+
+    expect(flowLines(flow)).toContain(
+      'saving invoke thing.updateThing {"title":"sample.title-input"} read: false',
+    )
+  })
+  it('writes read: false of a branch after its guard and before its effects', () => {
+    const flow = flowIn(sampleContract())
+    const saving = flow.states['saving']
+
+    if (saving === undefined || saving.type === 'parallel' || saving.invoke === undefined) {
+      throw new Error('the sample flow lost its saving state')
+    }
+
+    saving.invoke.onDone = [
+      {
+        target: 'editing',
+        guard: 'titleGiven',
+        read: false,
+        actions: [{ type: 'show', params: { anchor: 'sample.save-button', codes: ['saved'] } }],
+      },
+      {
+        target: 'editing',
+        actions: [{ type: 'read', params: { anchor: 'sample.devices-list' } }],
+      },
+    ]
+    saving.invoke.onError = { target: 'editing', read: false }
+
+    expect(flowLines(flow)).toContain(
+      'saving onDone #1 -> editing [titleGiven] read: false show sample.save-button: saved',
+    )
+    expect(flowLines(flow)).toContain('saving onDone #2 -> editing read sample.devices-list')
+    expect(flowLines(flow)).toContain('saving onError -> editing read: false')
+  })
   it('walks a parallel state into its regions, naming states by their path', () => {
     expect(flowLines(PARALLEL)).toEqual([
       'initial viewing',
@@ -186,6 +238,33 @@ describe('flowLines', () => {
       'guard limited takes rate-limited',
     ])
     expect(lines.filter((line) => line.startsWith('guard '))).toHaveLength(2)
+  })
+  it("writes a navigate that takes an entry's data-id with the item it names", () => {
+    const flow: Flow = {
+      initial: 'viewing',
+      states: {
+        viewing: {
+          on: {
+            'sample.list.open-link': {
+              target: 'opened',
+              actions: [
+                {
+                  type: 'navigate',
+                  params: { to: '/thing', search: { id: { item: 'sample.list.thing-item' } } },
+                },
+              ],
+            },
+          },
+        },
+        opened: { type: 'final' },
+      },
+    }
+
+    expect(flowLines(flow)).toEqual([
+      'initial viewing',
+      'viewing on sample.list.open-link -> opened navigate /thing {"id":{"item":"sample.list.thing-item"}}',
+      'opened final',
+    ])
   })
   it('writes an exit, and a transition without a target, guard or effect as its event alone', () => {
     const flow = flowIn(sampleContract())

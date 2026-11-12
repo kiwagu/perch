@@ -28,6 +28,7 @@ describe('readDescriptions', () => {
   it('reads every description the domain files write, each with its file and line', () => {
     expect(readDescriptions(root).problems).toEqual([])
     expect(listed()).toEqual([
+      'contract/domain/screens/$.yaml:4 not-found',
       'contract/domain/screens/__root.yaml:4 app-shell',
       'contract/domain/screens/__root.yaml:12 app-shell.status',
       'contract/domain/screens/__root.yaml:16 app-shell.notice-message',
@@ -43,11 +44,11 @@ describe('readDescriptions', () => {
       'contract/domain/activities/thing.yaml:22 activity thing state saved',
       'contract/domain/model.schema.json:7 model entity thing',
       'contract/domain/model.schema.json:16 model action thing.createThing',
-      'contract/domain/model.schema.json:26 model field thing.id',
+      'contract/domain/model.schema.json:27 model field thing.id',
     ])
   })
   it('gives each its text as written and the kind of the field it is', () => {
-    expect(readDescriptions(root).descriptions[14]).toEqual({
+    expect(readDescriptions(root).descriptions[15]).toEqual({
       file: MODEL_FILE,
       line: 16,
       at: ['$defs', 'thing', 'x-perch', 'actions', 'createThing', 'description'],

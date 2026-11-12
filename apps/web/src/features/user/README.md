@@ -11,19 +11,19 @@ its theme), never read by anyone else. Layers:
 (`profile-name.rule.ts`, `profile-bio.rule.ts`, and `password-confirmation.rule.ts`: how the
 password typed again at sign-up stands to the password, the same, following while it is how the
 password begins, or strayed); `application/` the `SignInService` over the
-session port, the `VerifyEmailService` over the session port and the account's start (it
-exchanges a verification link's token; the first verification, which signs this device in,
-starts the account there, and a link verified before starts nothing), the `AccountStartService`
+session port, the `VerifyEmailService` over the session port (it exchanges a verification
+link's token: the first verification signs this device in and the session keeps the account's
+start, a link verified before changes nothing), the `AccountStartService`
 over the profile and settings services (the account's settings in the language it signed up in
 and the theme the device shows as it creates them, then its profile with the name it signed up with, each created only where the device holds none,
-under an id derived from the identity, so the account never has two; the start is kept on the
-browser until both exist and finished when the account's space opens there again, the browser's
-tabs taking their turns so that one tab never creates what another created; the composition
-root provides the service app-wide and runs that finish; a sign-out forgets an unfinished start;
-a start a sign-in learnt of, the account having no settings or profile at the gateway yet, is
-kept by `keepAfterPull` and finished by `resumeAfterPull` once the device has pulled what the
-account has, `resume` leaving it alone; until then the profile page shows its empty state when
-the profile is missing), the `ProfileService`
+under an id derived from the identity, so the account never has two; a start the first
+verification or a sign-in learnt of, the account having no settings or profile at the gateway
+yet, is kept on the browser by `keepAfterPull` until both exist and finished by
+`resumeAfterPull` once the device has pulled what the account has, since another device may have
+started it meanwhile; the browser's tabs take their turns so that one tab never creates what
+another created; the composition root provides the service app-wide and runs that finish; a sign-out forgets
+an unfinished start; until then the profile page shows its empty state when the profile is
+missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
 and commands beside it), the sign-in
@@ -142,7 +142,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   (`PasswordRuleList`, the rules of a new password under it, its screen giving the anchors).
 - Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
-  and so is `ACCOUNT_START_SERVICE`, since the root finishes a start as a space opens.
+  and so is `ACCOUNT_START_SERVICE`, since the root runs the starts and the seed client finishes one
+  through it.
 - i18n namespace `user.*` (`presentation/i18n/user.en.json`, `user.es.json`).
 - Anchors: screens `user.sign-in`, `user.verify-email`, `user.forgot-password`,
   `user.reset-password`, `user.confirm-email`, `user.delete-account`, `user.profile` and
@@ -186,6 +187,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   (`user.sign-in.resend-button`), the message naming the address the last sign-up or resend
   mailed, which typing in the field afterwards does not change; a sign-in of an account whose email is not verified yet says so
   (`data:EMAIL_NOT_VERIFIED`, `user.sign-in.error.email-not-verified`) and offers the resend too;
+  a sign-in of an account an operator banned, once its password is right, says so
+  (`data:ACCOUNT_BANNED`, `user.sign-in.error` with the code `account-banned`, the gateway's 403
+  that names it), signs nothing in, keeps the form in the mode sign-in with the email typed and
+  offers no resend;
   a sign-in that finds the account signed in on as many devices as it may be at once
   (`data:DEVICE_LIMIT`, which `SignInService` answers as the outcome `device-limit`) signs nothing
   in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
@@ -194,7 +199,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to
-  sign in (`user.verify-email.message`, code `verified-before`), and for a link that does not
+  sign in (`user.verify-email.message`, code `verified-before`), says the link of an account an
+  operator banned verified its email and signed nothing in (`data:ACCOUNT_BANNED`,
+  `user.verify-email.error` with the code `account-banned`, the machine's final state `banned`:
+  no form, no new link, no move), and for a link that does not
   verify says why (`user.verify-email.error`: `link-invalid`, `link-expired`, `other-account`,
   `rate-limited`, `failed`) and sends a new one to the email typed (`user.verify-email.form`),
   saying it is on its way to the address it went to (code `check-your-mail`), which typing in the
@@ -207,7 +215,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   account's password signed it out, through a reset link or on another device (the code
   `password-changed-elsewhere`, when the channel closed with 4002), that a sign-in on another
   device went past the account's limit of devices and signed out this one, used least recently
-  (the code `device-limit-elsewhere`, when the channel closed with 4003), that a new password was set
+  (the code `device-limit-elsewhere`, when the channel closed with 4003), that an operator banned
+  the account, which signed it out (the code `account-banned`, when the channel closed with 4004,
+  first of the words the page may hold, and never with the ban's reason), that a new password was set
   in another tab through a reset link (the code `password-reset-elsewhere`), and that the data
   leaves this device once the other tabs are closed when one of them held its delete up (the
   code `delete-pending`);

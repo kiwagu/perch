@@ -28,6 +28,7 @@ import {
   asksSchema,
   bindingSchema,
   derivedFromSchema,
+  leavesSchema,
   platformSchema,
   screenSchema,
 } from './screens-schema'
@@ -163,9 +164,13 @@ const idSchema = z
       .array(kebabNameSchema)
       .optional()
       .describe('The derived suffixes the element renders.'),
-    roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
+    roles: z
+      .array(roleSchema)
+      .optional()
+      .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(

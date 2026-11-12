@@ -18,6 +18,7 @@ describe('readSchema', () => {
         'directory/account.surql',
         'directory/device_session.surql',
         'directory/identity.surql',
+        'directory/invitation.surql',
         'directory/membership.surql',
         'directory/profile.surql',
         'directory/settings.surql',

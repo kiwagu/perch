@@ -1,4 +1,4 @@
-import { Result, ResultAsync } from 'neverthrow'
+import { type Result, ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError, type LocalDb, recordId, tenantRegionId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
@@ -25,9 +25,10 @@ export interface OrganisationRemovalOptions {
  * The removal of a member by an admin. Once the directory's membership is gone the
  * organisation's region is taken from the identity's open connections, before anything else can
  * fail; then its member row leaves the organisation's database and its listeners hear its
- * memberships, both tried whatever the other's outcome, the first failure answering. It happens
- * at every removal, also of an identity that was no member: asking again after a failure revokes
- * and tells again, and completes the removal.
+ * memberships, the telling whatever the delete's outcome, and the delete's outcome answering: a
+ * telling that fails is retold later and fails nothing. It happens at every removal, also of an
+ * identity that was no member: asking again after a failed delete revokes and tells again, and
+ * completes the removal.
  */
 export class OrganisationRemoval {
   readonly #directory: LocalDb
@@ -68,15 +69,17 @@ export class OrganisationRemoval {
   }
 
   /**
-   * The member row of `identity` leaves the organisation's database, and its listeners hear its
-   * memberships; each runs whatever the other's outcome, and the first failure answers.
+   * The member row of `identity` leaves the organisation's database, then its listeners hear its
+   * memberships whatever the delete's outcome, and the delete's outcome answers: the telling
+   * never fails.
    */
   #leaveTenant(key: string, identity: IdentityId): ResultAsync<void, DataError> {
     const run = async (): Promise<Result<void, DataError>> => {
       const deleted = await this.#members.remove(key, identity)
       const told = await this.#listeners.tell(identity)
 
-      return Result.combine([deleted, told]).map(() => undefined)
+      // The telling never fails, so the delete's outcome is the answer.
+      return told.andThen(() => deleted)
     }
 
     return new ResultAsync(run())

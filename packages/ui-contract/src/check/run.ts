@@ -20,8 +20,10 @@ import {
   VOCABULARY_FILE,
 } from '../files'
 
+import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
 import { bindingsProblems } from './bindings'
+import { changesProblems } from './changes'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
@@ -29,6 +31,7 @@ import { flowProblems } from './flow'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
 import { noticesProblems } from './notices'
+import { pagingProblems } from './paging'
 import { routesProblems } from './routes'
 import { runsProblems } from './runs'
 import { scenariosProblems } from './scenarios'
@@ -111,6 +114,9 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   searchProblems,
   mailsProblems,
   noticesProblems,
+  changesProblems,
+  accessProblems,
+  pagingProblems,
   scenariosProblems,
   descriptionsProblems,
 ]

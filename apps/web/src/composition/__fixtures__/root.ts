@@ -1,13 +1,15 @@
-import { okAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import type { IdentityId } from '@workspace/ids'
 import { syncHints } from '@workspace/replica/sync'
-import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
+import { FakeLocks, gatewayStub, manualClock, type StubTransport } from '@workspace/replica/testing'
 
+import { accountsApi } from '../accounts-api'
 import { devicesApi } from '../devices-api'
+import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppRootOptions, type BootStep, createAppRoot } from '../root'
 import type { MemoryStorage } from '../storage'
@@ -18,8 +20,9 @@ import { fakeGatewayAuth } from './gateway-auth'
  * Boots the app root on test databases and an offline gateway stub, the gateway routes never
  * reached: `steps` and `failures` collect what the start reports, `overrides` replace any option.
  * What the boot opened is closed by the function it pushes to `cleanups`. Gives the start's
- * outcome with its services, the identities whose databases opened, and the services themselves,
- * which exist whether the start succeeded or not.
+ * outcome with its services, the identities whose databases opened, the services themselves,
+ * which exist whether the start succeeded or not, and the channels to the stub, offline until a
+ * test brings one up.
  */
 export async function bootRoot(
   cleanups: Array<() => Promise<void>>,
@@ -32,6 +35,7 @@ export async function bootRoot(
   const clock = manualClock()
   const stub = gatewayStub({ local: server, schema: replicaSchema, clock })
   const opened: IdentityId[] = []
+  const transports: StubTransport[] = []
 
   cleanups.push(async () => {
     await stub.close()
@@ -62,10 +66,21 @@ export async function bootRoot(
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),
+    invitationsApi: (deps) =>
+      invitationsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
+    accountsApi: (deps) =>
+      accountsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
     transport: (context) => {
       const transport = stub.transport(context.identity)
 
       transport.goOffline()
+      transports.push(transport)
 
       return transport
     },
@@ -75,6 +90,10 @@ export async function bootRoot(
     storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     servedBuild: { watch: () => () => {} },
+    clipboard: {
+      write: () =>
+        errAsync({ code: 'clipboard:UNAVAILABLE', message: 'a test root has no clipboard' }),
+    },
     logger: { info: () => {}, warn: () => {} },
     onStep: (step) => steps.push(step),
     onError: (error) => failures.push(error),
@@ -83,5 +102,5 @@ export async function bootRoot(
   })
   const result = (await start.opened).map(() => start.services)
 
-  return { result, opened, root: start.services }
+  return { result, opened, root: start.services, transports }
 }

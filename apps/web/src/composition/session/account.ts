@@ -8,6 +8,7 @@ import type { AccountSession, GatewayAuth } from '../gateway-auth'
 import {
   deviceIdFrom,
   type KeyValueStorage,
+  savedSession,
   savedTokenOf,
   saveIdentityEmail,
   savePasswordReset,
@@ -96,9 +97,14 @@ export class SessionAccount {
    * account's.
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
+    // The session the confirmation is asked in: its answer changes the email of that one alone.
+    const asked = savedSession(this.#deps.storage)
+
     return this.#deps.auth
       .confirmEmail(token)
-      .andTee(({ identity, email }) => saveIdentityEmail(this.#deps.storage, identity, email))
+      .andTee(({ identity, email }) =>
+        saveIdentityEmail(this.#deps.storage, identity, email, asked),
+      )
   }
 
   /** Asks the gateway with this device's session; the account stays as it is until the link is used. */

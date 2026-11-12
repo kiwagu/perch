@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
-import { savedIdentity, savedToken } from '../storage'
+import { savedIdentity, savedSession, savedToken } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
 
@@ -99,7 +99,7 @@ describe("the deletion of an account by its mailed link's", () => {
     // As the channel's 4001 would have left it: nobody here, the token forgotten, the word set.
     expect(session.current()).toBeUndefined()
     expect(savedIdentity(storage)).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
   })
 

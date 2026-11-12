@@ -37,24 +37,33 @@ shifts the port), which `bun run test:e2e` sets from the mcproc manifest through
 serves the web app's production build (`apps/web/dist`, written by the launcher before each
 run; no dev server) and, under `/backend/`, the gateway on one origin. They read the mails the
 gateway sent from the stand's MailDev at `MAILBOX_URL` (http://127.0.0.1:1090 in the main
-checkout), which `mcproc exec` sets too.
+checkout), which `mcproc exec` sets too. A test of the operator console appoints its operator as
+the host does, with the operator command against the stand's database at `SURREAL_URL`, which
+`mcproc exec` sets as well (`src/support/operators.ts`).
 
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
 (`{ tag: '@smoke' }`); nothing compares the two yet. The tag decides where a test runs: the
 `mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
-`user/base/` (one account on its own) but the tests named below, `organisation/base/`,
-`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
+`user/base/` (one account on its own) and `organisation/base/` but the tests named below,
+`not-found/base/`, `console/flows/not-operator` (an account and a guest at the console's
+addresses), `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
 `open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
-`change-email-refused`, `delete-account-refused`, `delete-link-used`) and `theme-from-the-frame`, the other `app-shell/base/` tests (install,
+`change-email-refused`, `delete-account-refused`, `delete-link-used`), the `organisation/base/`
+tests of an invitation (`invite-new-account`, `accept-by-link`, `decline-invitation`,
+`revoke-invitation`, `copy-invitation-link`: two accounts and their mails) and
+`theme-from-the-frame`, the other `app-shell/base/` tests (install,
 a new version, offline, an outdated protocol, the sync status, a sign-out in another tab while
 the data opens or once it did not open), `app-shell/flows/` (a guest
-across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
-its own). `bun run test:e2e --grep @smoke` runs the first set
+across the tabs of one browser), `organisation/flows/` (two accounts, each in a browser of
+its own), `console/base/` (an operator and the accounts it acts on, each in a browser of its
+own) and the other `console/flows/` tests (an account banned or given a new email before it
+verified its email, an operator whose role is taken away while its console is open). `bun run
+test:e2e --grep @smoke` runs the first set
 on both projects.
 
 Every browser of the suite reaches the front from 127.0.0.1, and the gateway counts its
@@ -65,10 +74,13 @@ afresh by restarting the gateway, as one client running them one after another w
 workers share an address, so the limits do not bind their number. Per worker, with two, a run
 spent when it was measured: at most 12 credential checks (sign-ups, sign-ins, verifications,
 changes of a password or an email and requests to delete an account) in any ten seconds, of 20;
-under 80 of 200 mails per quarter hour (sign-ups, resends, reset requests, email changes and
-deletion requests: about 150 in the whole run); at most 7 of 20 attempts at a reset link per ten
-minutes, 4 of 20 at a confirmation link and 4 of 20 at a deletion link; 11 of 30 organisations
-created an hour and at most 6 of 60 invitations per ten minutes. The limits a test runs into on
+at most 103 of 200 mails per quarter hour (sign-ups, resends, reset requests, email changes,
+deletion requests and invitations: about 200 in the whole run); at most 8 of 20 attempts at a
+reset link per ten minutes, 5 of 20 at a confirmation link, 4 of 20 at a deletion link and 8 of
+20 reads of an invitation's link; 15 of 30 organisations created an hour; at most 13 of 60
+invitations per ten minutes, and 2 of an administrator's 30. An invitation's own work, from the
+request's start to its wait for the floor, took 3 to 10 ms in the run (19 invitations), well
+under the 300 ms floor that makes every invitation answer in the same time. The limits a test runs into on
 purpose (`resend-limit`, `forgot-password-limit`) are an email's, and every test uses fresh
 emails. A test uses as few emails, sign-ins and links as its scenario needs; a new one that signs
 up, mails, opens a link or creates an organisation counts against these.
@@ -136,24 +148,43 @@ up, mails, opens a link or creates an organisation counts against these.
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
-- `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B sees
-  it and A's note without a reload, B's note reaches A within 5 seconds, and B sees neither
-  the members nor A's profile.
+- `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B
+  accepts the invitation on its organisation page and sees the organisation and A's note
+  without a reload, B's note reaches A within 5 seconds, and B sees neither the members nor
+  A's profile.
 - `organisation/flows/outsider`: an account that was not invited sees no organisation and no
   notes, and its own organisation shows none of the other's.
-- `organisation/flows/membership-change`: an invitation reaches B's open page within 5
-  seconds; a removal takes the organisation away within 5 seconds, and its IndexedDB database
-  is gone from B's browser within 5 seconds; after a reload B still shows no organisation.
-- `organisation/flows/edit-own-admin-any`: a member edits and deletes only its own notes while
-  an administrator edits and deletes any; B's edit reaches A, A's edit of B's note reaches B,
-  and each deletion reaches the other device, all within 5 seconds and without a reload.
+- `organisation/flows/membership-change`: user B accepts the invitation on a third browser,
+  signed in and through the link of the invitation mail, and the organisation reaches B's open
+  page within 5 seconds; a removal takes the organisation away within 5 seconds, and its
+  IndexedDB database is gone from B's browser within 5 seconds; after a reload B still shows no
+  organisation.
+- `organisation/flows/edit-own-admin-any`: a member (who accepted its invitation on its
+  organisation page) edits and deletes only its own notes while an administrator edits and
+  deletes any; B's edit reaches A, A's edit of B's note reaches B, and each deletion reaches the
+  other device, all within 5 seconds and without a reload.
+- `organisation/flows/invitation-elsewhere`: the link of an invitation to an email with no
+  account, opened by another account, shows the organisation and the role with `other-account`
+  and no buttons; opened by a guest, it asks to sign in to the invited account and links to
+  `/sign-in`.
+- `organisation/flows/invitation-replaced`: a second invitation of the same email, as an
+  administrator, replaces the first: one item in the invitations sent, the first link
+  `link-invalid`, the second makes B an administrator.
+- `organisation/flows/role-change`: A makes B an administrator; within 5 seconds and without a
+  reload B shows the administrator's page and may delete A's note, which leaves A's page; B makes
+  A a member, A's page drops the administrator's regions within 5 seconds; B, the last
+  administrator, cannot make itself a member (`last-admin`, its select still `admin`).
+- `user/flows/delete-account-after-handover`: the only administrator makes B an administrator and
+  itself a member, then deletes its account; B keeps the organisation, alone among its members,
+  with A's note.
 
-Five specs write measurements into the test's annotations, shown in the HTML report:
+Six specs write measurements into the test's annotations, shown in the HTML report:
 `sync-latency-ms` (from the click on device B to the new name on device A),
 `idle-frames-per-minute`, `note-sync-latency-ms` (from the click on "Add note" on device B to
 the note on device A), `note-edit-sync-latency-ms` (from the click on "Save" on device B to the
-edited note on device A) and `membership-change-ms` (from the click on "Invite" on device A to
-the organisation and its note on device B).
+edited note on device A), `membership-change-ms` (from the click on "Accept" on device C to
+the organisation and its note on device B) and `role-change-ms` (from the choice of the
+administrator role in B's role select on device A to the administrator's page on device B).
 
 ## Key exports
 
@@ -181,9 +212,10 @@ devices of such an account as the test opens, each a browser context of its own)
 profile's sign-out button and waits for `/sign-in`), `startSignUp` (submits
 the sign-up form and waits until the page asks to check the mail, reading the page every 50 ms:
 the gateway answers a sign-up no sooner than 800 ms, by when an assertion would look only every
-500 ms), `signUp` (`startSignUp`, then
-opens the link of the declared `sign-up` mail in the same page, which signs the account in, on
-`/me`), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
+500 ms), `signUp` (counts the email's mails, `startSignUp`, then
+opens the link of the declared `sign-up` mail, the first after those counted, in the same page,
+which signs the account in, on `/me`: an email invited before it signs up holds the invitation
+first), `expectPathname` (waits for a page's path, reading the path alone, so a page opened
 from a mail's link never prints its token), `pageLoads` (counts a page's full loads, for
 "without a reload"), and `notice`,
 `signInNotice` and `checkYourMail`, which locate `app-shell.notice-message`,
@@ -223,8 +255,15 @@ Of the anchors a screen renders only where its flow lists them, one the state do
 is not visible, and one it renders is on the page and visible; a test fails at its end with
 every problem a state it passed through showed, though no line of the test asks for it.
 `src/support/organisation.ts`: the organisation flows the tests share, from an open "/org"
-page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteMember`
-and `expectInvited` (the toast `invited` and the account in the members list).
+page: `createOrganisation` (its creator's role badge then carries `admin`), `inviteEmail` (an
+email with an account or without one, a role when given: the toast `invited` and the email in
+the invitations sent), `acceptOnOrg` (opens "/org" by the navigation, accepts the invitation of
+the organisation of that name among those received, and waits for the toast
+`invitation-accepted` and the heading), `expectMembers` (the members list holds exactly these
+emails: an item shows its email beside its role select), `expectInvitationMail` and
+`openInvitationMail` (the mail of `organisations.invite` after the mails of the address counted
+before the invitation, held to its declaration, the second one also opening its link), and the
+locators `memberItems`, `sentItems`, `receivedItem` and `noteItem`.
 `src/support/password-reset.ts`: the reset of a password the tests share: `askForReset` (opens
 `/forgot-password`, asks for the mail and waits for its message), `sendResetRequest` (clicks
 its send button and waits for the gateway's answer), `resetRequested` (its message),
@@ -247,8 +286,9 @@ sign-in form without waiting for its answer), `deviceLimitDialog` (the dialog as
 sign in past the limit, by its anchor and its code) and `expectDeviceCSignedOut` (the list of
 devices once the sign-in past the limit went through: device C's alone `revoked`, by the order
 the devices signed in).
-`src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
-names, bios, organisation keys and names, note texts).
+`src/support/data.ts`: the generators (accounts, emails, a group of emails sharing a prefix,
+another, a new and a wrong password, names, bios, the reason of a ban, organisation keys and
+names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
 at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for; and
 `expectBoundedNonArrival`, a bounded non-arrival: an address's mail count stays put from the
@@ -257,7 +297,9 @@ moment a test saw the answer to an action that must send none until `MAIL_DELIVE
 `src/support/mail-contract.ts`: every mail a test reads is held to its declaration in
 `platform.yaml`: `expectDeclaredMail` (its one recipient, the path of the screen its link opens
 with the declared search parameter set, and the `lang` of its HTML's root element as parse5
-reads it, from the action's parameters or the account; each check asserts a comparison's outcome
+reads it, from the action's parameters, the account, or, for an invitation to an email that has
+an account, that account's language (`recipient`; an email with none is mailed in the inviter's
+language); each check asserts a comparison's outcome
 under a fixed message), `openMailLink` (opens a mail's link; its failure names no link) and
 `openDeclaredMail` (waits for the action's mail to its declared recipient after the ones a test
 has seen, holds it to its declaration and opens its link).
@@ -270,6 +312,22 @@ or no link when it declares none; and, given `hides`, that its subject, text and
 recipient's address taken out, name neither that email nor its local part nor its domain) and
 `nextDeclaredNotice` (waits for the notice to its declared recipient after the mails a test has
 seen there and holds it to its declaration). A failure prints no address, link or HTML.
+`src/support/operators.ts`: `grantOperator` and `revokeOperator`, which set the platform role
+of the account of an email as the host does, with the operator command
+(`apps/gateway/scripts/operator/cli.ts`) run under Bun from the repository root against the
+stand's database (`SURREAL_URL`) as its root user: Playwright's workers run in Node, which cannot
+load the `.surql` files the command's code imports. A command that does not exit 0 fails the
+test with its exit code and its own words, never its arguments or the password. A device learns
+a role at its next hello, so a test reloads the operator's page after the grant.
+`src/support/console.ts`: the operator console the tests share: `signUpOperator` (signs up
+through the mail, grants the role, reloads, and waits for the navigation's console link),
+`openUsers` (opens `/console/users` through that link and waits for its search box: the console's
+pages load on their own after the frame), `searchAccounts`, `chooseSize`, `openAccount` (searches
+an email and follows the open link of its entry once the address carries the search, then waits
+for the card, read; answers the account's id), `expectAddress` (the path and exactly the search
+parameters expected), `expectRange` (the list's range by its `data-from`, `data-to` and
+`data-total`), and the locators `consoleLink`, `accountItems`, `accountItem` and
+`listedEmails`.
 
 ## Commands
 
@@ -277,7 +335,7 @@ seen there and holds it to its declaration). A failure prints no address, link o
   memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
   group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
   checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
-  `E2E_BASE_URL` and `MAILBOX_URL` set; the launcher builds the dependencies and the web app's production
+  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
@@ -291,7 +349,8 @@ seen there and holds it to its declaration). A failure prints no address, link o
   a stand of another checkout or another project's alike. So the launcher runs Playwright under
   pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into a network namespace
   once, so the browser sees a network that stays the same, and forwards the loopback ports of
-  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
+  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` (the stand's database, which the operator
+  command a test runs writes to) to the host, and no other port either way (its gateway
   address does not lead to the host's loopback either). IPv4 only: inside,
   `localhost` resolves to ::1 first, where the front does not listen. IPv6 is also switched off
   inside before Playwright starts: the kernel gives the namespace's interface an IPv6 link-local
@@ -312,6 +371,6 @@ seen there and holds it to its declaration). A failure prints no address, link o
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
-- `bun run test` (here): the unit tests of the reporter and of the browser's network
-  (`bun test ./scripts`).
+- `bun run test` (here): the unit tests of the reporter, of the browser's network and of the
+  support's operator command (`bun test ./scripts ./src/support`).
 - `bun run typecheck`, `bun run lint`.

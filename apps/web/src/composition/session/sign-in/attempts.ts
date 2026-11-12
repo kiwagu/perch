@@ -11,11 +11,12 @@ import { type AuthUser, type DataError, dataError, type SignInInput } from '@wor
 import type { NamedDevice, SignedInDevice } from '../../gateway-auth'
 import {
   deviceIdFrom,
-  forgetDevice,
-  IDENTITY_KEY,
+  dropUnreadableSignIn,
   markSignIn,
+  newSignInId,
+  type SavedSignIn,
   saveDevice,
-  savedIdentity,
+  savedSignIn,
 } from '../../storage'
 import type { SessionHost } from '../host'
 import { otherAccountSaved, otherAccountSignedIn, otherIdentitySaved } from '../one-account'
@@ -64,37 +65,37 @@ export class SessionSignIn {
     ).andThen(signedInUser)
   }
 
-  /** Opens the saved identity's space, if any; see `SessionService.restore`. */
+  /** Opens the space of the sign-in saved now, if any; see `SessionService.restore`. */
   restore(generation: number): ResultAsync<AuthUser | undefined, DataError> {
     const storage = this.#host.options.storage
-    const identity = savedIdentity(storage)
+    const saved = savedSignIn(storage)
 
     if (this.#host.options.online()) {
       void this.#pendingRevoke.send()
     }
 
-    // What sign-outs left behind goes meanwhile: the databases of anyone but `identity`.
+    // What sign-outs left behind goes meanwhile: the databases of anyone but the saved identity.
     void this.#deletion.deleteLeftovers()
 
-    if (identity) {
-      return this.openSpace(identity, generation)
+    if (saved) {
+      return this.openSpace(saved, generation)
     }
 
-    // A kept value that names nobody is not a session.
-    if (storage.get(IDENTITY_KEY) !== undefined) {
-      forgetDevice(storage)
-    }
+    // A record that names nobody is not a session.
+    dropUnreadableSignIn(storage)
 
     return okAsync(undefined)
   }
 
-  openSpace(identity: AuthUser, generation: number): ResultAsync<AuthUser, DataError> {
+  openSpace(signedIn: SavedSignIn, generation: number): ResultAsync<AuthUser, DataError> {
     // The previous identity leaves with its space: nobody is current until the new one is open.
     this.#host.leaveAndTell()
     this.#host.options.onStep?.('open-db')
 
     // A delete of the identity's databases under way in any tab ends first; none starts meanwhile.
-    return this.#deletion.open(identity.id, () => openSpaceOf(this.#spaces, identity, generation))
+    return this.#deletion.open(signedIn.user.id, () =>
+      openSpaceOf(this.#spaces, signedIn, generation),
+    )
   }
 
   /** This browser as a sign-in or a verification names it. */
@@ -144,22 +145,27 @@ export class SessionSignIn {
 
   /**
    * Makes the sign-in whole: until then its token lives here only, and nothing reaches the
-   * browser's storage, which the other tabs follow. The memberships are read with the token and
-   * the device it names; then, while the session is still open and no other account was saved
-   * meanwhile, the start of an account that has not started is kept (`keepAccountStart`), and the
-   * identity, the token and the memberships are saved in one step. Every way out
-   * that does not keep this attempt's token leaves it to be signed out (at once while the browser
-   * is online, else kept for later), never another tab's. A throw while it holds the token (the
-   * read, the save) lets go of it (`cleanUpSignIn`, a save it broke off midway undone) and fails
-   * as `brokenSignIn`, naming nothing of the throw.
+   * browser's storage, which the other tabs follow. The attempt names itself first, by an id of
+   * its own (`newSignInId`), which every record it writes is kept under and its cleanup removes.
+   * The memberships are read with the token and the device it names; then, while the session is
+   * still open and no other account was saved meanwhile, the start of an account that has not
+   * started is kept (`keepAccountStart`), and the identity, the token and the memberships are
+   * saved in one step. Every way out that does not keep this attempt's token leaves it to be
+   * signed out (at once while the browser is online, else kept for later), never another tab's.
+   * A throw while it holds the token (the read, the save) lets go of it and of every record it
+   * wrote (`cleanUpSignIn`) and fails as `brokenSignIn`, naming nothing of the throw.
    */
   #keep(
     device: SignedInDevice,
     named: string,
     generation: number,
-  ): ResultAsync<SignedInDevice, DataError> {
+  ): ResultAsync<SavedSignIn, DataError> {
+    const signedIn: SavedSignIn = {
+      session: { signIn: newSignInId(), identity: device.identity.id, token: device.token },
+      user: device.identity,
+    }
     const whole = () => this.#stillWhole(device, generation)
-    const kept = async (): Promise<Result<SignedInDevice, DataError>> => {
+    const kept = async (): Promise<Result<SavedSignIn, DataError>> => {
       try {
         return await whole()
           .andThen(() => this.#host.options.listMemberships(device.token, named))
@@ -168,18 +174,25 @@ export class SessionSignIn {
             // The start of an account that has none is kept before the device: a tab that follows
             // the saved identity finds it there.
             if (device.start !== undefined) {
-              this.#host.options.keepAccountStart(device.identity, device.start)
+              this.#host.options.keepAccountStart(
+                signedIn.session.signIn,
+                device.identity,
+                device.start,
+              )
             }
 
-            saveDevice(this.#host.options.storage, { ...device, memberships })
+            saveDevice(this.#host.options.storage, signedIn.session.signIn, {
+              ...device,
+              memberships,
+            })
             // The words left for the sign-in page so far end with this sign-in, in every tab.
             markSignIn(this.#host.options.storage)
 
-            return device
+            return signedIn
           })
-          .orElse((error) => this.#abandon<SignedInDevice>(device.token, error))
+          .orElse((error) => this.#abandon<SavedSignIn>(device.token, error))
       } catch {
-        cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, device.token)
+        cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, signedIn.session)
 
         return err(brokenSignIn())
       }
@@ -189,18 +202,19 @@ export class SessionSignIn {
   }
 
   /**
-   * Opens the space of the device a sign-in saved. One that does not open lets go of this
-   * attempt's token (`cleanUpSignIn`: left to sign out first, then the device forgotten while the
-   * saved token is still this attempt's) and fails with the open's error; an open or a cleanup
-   * that threw fails as `brokenSignIn`, naming nothing of the throw. Closed meanwhile, or open
-   * before a throw, the device stays saved, whole, for the next start.
+   * Opens the space of the sign-in an attempt saved. One that does not open lets go of this
+   * attempt's token and records (`cleanUpSignIn`: the token left to sign out first, then what
+   * the attempt kept under its id forgotten, whatever another tab saved since) and fails with the
+   * open's error; an open or a cleanup that threw fails as `brokenSignIn`, naming nothing of the
+   * throw. Closed meanwhile, or open before a throw, the device stays saved, whole, for the next
+   * start.
    */
-  #open(device: SignedInDevice, generation: number): ResultAsync<AuthUser, DataError> {
+  #open(signedIn: SavedSignIn, generation: number): ResultAsync<AuthUser, DataError> {
     const opened = async (): Promise<Result<AuthUser, DataError>> => {
       let failure: DataError
 
       try {
-        const result = await this.openSpace(device.identity, generation)
+        const result = await this.openSpace(signedIn, generation)
 
         if (result.isOk()) {
           return result
@@ -215,7 +229,7 @@ export class SessionSignIn {
         return err(failure)
       }
 
-      return cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, device.token)
+      return cleanUpSignIn(this.#host.options.storage, this.#pendingRevoke, signedIn.session)
         ? err(failure)
         : err(brokenSignIn())
     }

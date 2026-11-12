@@ -516,6 +516,128 @@ describe('loadScreens', () => {
       expect(screens?.toasts).toEqual([])
       expect(frame?.anchors['app-shell.toast']?.codes).toBeUndefined()
     })
+
+    it('keeps read: false of a region by its button on the loaded invoke, the toast opt-out taken away', () => {
+      writeToastScreens({ add: { by: 'sample.form.add-button', toast: false, read: false } })
+
+      const { screens, problems: found } = loadScreens(root)
+      const sample = screens?.screens.find((screen) => screen.id === 'sample')
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(sample?.flow?.states['viewing']).toMatchObject({
+        states: {
+          add: { states: { running: { invoke: { src: 'thing.createThing', read: false } } } },
+        },
+      })
+      expect(sample?.flow?.states['viewing']).not.toMatchObject({
+        states: { add: { states: { running: { invoke: { toast: false } } } } },
+      })
+    })
+
+    it('keeps read: false on a branch of an outcome, under a region by its button and under a plain invoke, the toast appended', () => {
+      writeToastScreens({
+        add: {
+          by: 'sample.form.add-button',
+          onDone: [{ guard: 'ownChange', read: false }, {}],
+        },
+        rename: {
+          initial: 'idle',
+          states: {
+            idle: { on: { 'sample.form.rename-button': 'running' } },
+            running: {
+              invoke: {
+                src: 'thing.updateThing',
+                input: { title: 'sample.form.title-input' },
+                onDone: [{ target: 'idle', guard: 'ownChange', read: false }, { target: 'idle' }],
+                onError: { target: 'idle', read: false, actions: [{ show: 'sample.form.error' }] },
+              },
+            },
+          },
+        },
+      })
+      writeSample((screen) => {
+        const anchors = screen['anchors'] as Record<string, unknown>
+        const flow = screen['flow'] as Record<string, unknown>
+
+        anchors['sample.form.rename-button'] = {
+          kind: 'button',
+          binding: { action: 'thing.updateThing', params: { title: 'sample.form.title-input' } },
+        }
+        flow['meta'] = { guards: { ownChange: 'the account changed its own entry' } }
+      })
+
+      const { screens, problems: found } = loadScreens(root)
+      const sample = screens?.screens.find((screen) => screen.id === 'sample')
+      const toastOf = (code: string) => ({
+        type: 'show',
+        params: { anchor: 'app-shell.toast', codes: [code] },
+      })
+
+      expect(found.map(formatProblem)).toEqual([])
+      expect(sample?.flow?.states['viewing']).toMatchObject({
+        states: {
+          add: {
+            states: {
+              running: {
+                invoke: {
+                  src: 'thing.createThing',
+                  onDone: [
+                    {
+                      target: 'idle',
+                      guard: 'ownChange',
+                      read: false,
+                      actions: [toastOf('thing-created')],
+                    },
+                    { target: 'idle', actions: [toastOf('thing-created')] },
+                  ],
+                },
+              },
+            },
+          },
+          rename: {
+            states: {
+              running: {
+                invoke: {
+                  src: 'thing.updateThing',
+                  onDone: [
+                    {
+                      target: 'idle',
+                      guard: 'ownChange',
+                      read: false,
+                      actions: [toastOf('thing-updated')],
+                    },
+                    { target: 'idle', actions: [toastOf('thing-updated')] },
+                  ],
+                  onError: {
+                    target: 'idle',
+                    read: false,
+                    actions: [
+                      {
+                        type: 'show',
+                        params: {
+                          anchor: 'sample.form.error',
+                          codes: [
+                            'forbidden',
+                            'title-required',
+                            'title-too-long',
+                            'title-taken',
+                            'failed',
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+      })
+      expect(screens?.toasts).toEqual([
+        { anchor: 'app-shell.toast', code: 'thing-created', action: 'thing.createThing' },
+        { anchor: 'app-shell.toast', code: 'thing-updated', action: 'thing.updateThing' },
+      ])
+    })
   })
 
   describe('a composite of the platform', () => {
@@ -604,6 +726,36 @@ describe('loadScreens', () => {
     ])
   })
 
+  it('derives the parts of a paged list, and refuses one the file writes', () => {
+    writeSample((screen) => {
+      const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+      anchors['sample.page-list'] = {
+        kind: 'list',
+        source: { platform: 'sign-out', paged: true },
+      }
+    })
+
+    const { screens, problems: found } = loadScreens(root)
+
+    expect(found.map(formatProblem)).toEqual([])
+    expect(screens?.screens[0]?.anchors['sample.page-list']?.derived).toEqual([
+      'range',
+      'previous-link',
+      'next-link',
+      'size-select',
+    ])
+
+    writeSample((screen) => {
+      const anchors = screen['anchors'] as Record<string, Record<string, unknown>>
+
+      anchors['sample.page-list'] = { ...anchors['sample.page-list'], derived: ['next-link'] }
+    })
+
+    expect(problems().map(formatProblem)).toEqual([
+      `${SAMPLE_FILE}:1: anchors["sample.page-list"].derived[0]: "next-link" is derived by the paged source of the list: a screen file never writes it`,
+    ])
+  })
   it('says a field whose own change runs its action holds no input, and keeps a written value', () => {
     writeSample((screen) => {
       screen['anchors'] = {

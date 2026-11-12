@@ -5,7 +5,9 @@ export {
   asksSchema,
   bindingRefSchema,
   derivedFromSchema,
+  leavesSchema,
   modelFieldPathSchema,
+  platformActionNameSchema,
   sourceSchema,
 } from './anchor'
 export { bindingSchema, routePathSchema } from './binding'

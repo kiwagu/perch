@@ -27,6 +27,15 @@ export interface ModelField {
   ref?: string
 }
 
+/** An action of an entity, under `x-perch.actions`. */
+export interface ModelAction {
+  description?: string
+  /** Per parameter, the field it sets (`$id` for a new id). */
+  params: Record<string, string>
+  /** The platform actions whose answer differs once it succeeds, written on every action; `[]`: none. */
+  changes: string[]
+}
+
 export interface ModelEntity {
   name: string
   table: string
@@ -34,7 +43,7 @@ export interface ModelEntity {
   id: string
   owner?: string
   can?: Record<string, Record<string, 'any' | 'own'>>
-  actions: Record<string, { description?: string; params: Record<string, string> }>
+  actions: Record<string, ModelAction>
   unique: readonly (readonly string[])[]
   index: readonly (readonly string[])[]
   fields: Record<string, ModelField>
@@ -91,9 +100,13 @@ function entityOf(name: string, entity: z.output<typeof entityDefinitionSchema>)
     ...(owner === undefined ? {} : { owner }),
     ...(can === undefined ? {} : { can }),
     actions: Object.fromEntries(
-      Object.entries(perch.actions).map(([action, { description, params }]) => [
+      Object.entries(perch.actions).map(([action, { description, params, changes }]) => [
         action,
-        { ...(description === undefined ? {} : { description }), params },
+        {
+          ...(description === undefined ? {} : { description }),
+          params,
+          changes,
+        },
       ]),
     ),
     unique: perch.unique,

@@ -167,3 +167,110 @@ actor = "root"
 sql = "CREATE identity SET email = 'ALICE@Example.test', name = 'x';"
 allow = false
 error_contains = "identity_email"
+
+# The account's platform role and its ban: a signed-in identity reads them on its own record only,
+# and no record user writes them; the gateway alone does, as the namespace user (root here).
+
+[[cases]]
+name = "a signed-up identity holds no platform role and no ban"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT VALUE role = NONE AND banned = false AND ban_reason = NONE AND ban_expires = NONE FROM identity;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
+
+[[cases.assertions]]
+path = "1"
+exists = false
+
+[[cases]]
+name = "root makes bob an operator and bans him with a reason"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE identity SET role = 'operator', banned = true, ban_reason = 'spam' WHERE email = 'bob@example.test' RETURN VALUE role;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "operator"
+
+[[cases]]
+name = "bob reads his own role and ban"
+kind = "sql_expect"
+actor = "bob"
+sql = "SELECT VALUE role = 'operator' AND banned = true AND ban_reason = 'spam' FROM identity;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
+
+[[cases]]
+name = "alice cannot read bob's role or ban"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT role, banned, ban_reason FROM identity WHERE email = 'bob@example.test';"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot give herself a platform role"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE $auth.id SET role = 'operator' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "bob cannot lift his own ban"
+kind = "sql_expect"
+actor = "bob"
+sql = "UPDATE $auth.id SET banned = false, ban_reason = NONE, ban_expires = time::now() RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot ban bob"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE identity SET banned = true, ban_reason = 'by alice' WHERE email = 'bob@example.test' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "the roles and bans are as root left them"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE (email = 'alice@example.test' AND role = NONE AND banned = false AND ban_reason = NONE) OR (email = 'bob@example.test' AND role = 'operator' AND banned = true AND ban_reason = 'spam' AND ban_expires = NONE) FROM identity WHERE email IN ['alice@example.test', 'bob@example.test'];"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = true
+
+[[cases.assertions]]
+path = "1"
+equals = true
+
+[[cases]]
+name = "a role outside user and operator is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "UPDATE identity SET role = 'admin' WHERE email = 'alice@example.test';"
+allow = false
+error_contains = "role"

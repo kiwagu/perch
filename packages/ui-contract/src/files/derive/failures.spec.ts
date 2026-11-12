@@ -22,8 +22,11 @@ const MODEL: Model = {
     thing: entity({
       can: { member: { create: 'any' } },
       actions: {
-        createThing: { params: { id: '$id', author: 'author', title: 'title', key: 'key' } },
-        renameThing: { params: { id: '$id', title: 'title' } },
+        createThing: {
+          params: { id: '$id', author: 'author', title: 'title', key: 'key' },
+          changes: [],
+        },
+        renameThing: { params: { id: '$id', title: 'title' }, changes: [] },
       },
       unique: [['key'], ['title', 'author']],
       fields: {
@@ -35,7 +38,7 @@ const MODEL: Model = {
     }),
     own_note: entity({
       name: 'own_note',
-      actions: { writeNote: { params: { id: '$id', body_text: 'body_text' } } },
+      actions: { writeNote: { params: { id: '$id', body_text: 'body_text' }, changes: [] } },
       fields: { body_text: { type: 'string', format: 'email', readonly: false } },
     }),
   },

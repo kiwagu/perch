@@ -6,12 +6,15 @@ export {
 } from './activities'
 export {
   CONFIRM_RULE_ROW,
+  type ControlMove,
+  controlMovesOf,
   type DerivedQuestion,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
   failuresOf,
   isBare,
+  ownControlsOf,
   type Request,
   requestsOf,
   TOAST_RULE_ROW,
@@ -35,7 +38,13 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
-export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
+export {
+  loadModel,
+  type Model,
+  type ModelAction,
+  type ModelEntity,
+  type ModelField,
+} from './model'
 export { englishErrors } from './parse-file'
 export {
   ACTIVITIES_DIR,

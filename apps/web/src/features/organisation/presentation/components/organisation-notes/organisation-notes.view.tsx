@@ -8,7 +8,7 @@ import { Field } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
-import type { OrganisationEvent } from '../../../application/organisation.machine'
+import type { OrganisationEvent } from '../../../application/organisation-machine'
 import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 

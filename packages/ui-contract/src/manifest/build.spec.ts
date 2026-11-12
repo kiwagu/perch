@@ -265,6 +265,23 @@ describe('the questions before destructive actions', () => {
   })
 })
 
+describe('the question before a leave a control makes', () => {
+  it('is carried on its control, with the fields the leave loses', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+    const leaves = { dialog: 'app-shell.leave-dialog', loses: ['sample.title-input'] }
+
+    if (sample?.anchors['sample.save-button'] !== undefined) {
+      sample.anchors['sample.save-button'].leaves = leaves
+    }
+
+    const derived = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(derived.ids['sample.save-button']?.leaves).toEqual(leaves)
+    expect(manifestSchema.safeParse(derived).success).toBe(true)
+  })
+})
+
 describe('the visibility-button of a password input', () => {
   it('lists each derived part with its kind, the visibility-button with its values too', () => {
     const base = fixtureContract()

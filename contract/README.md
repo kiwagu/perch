@@ -156,7 +156,7 @@ The authored files, edited by hand or by a model in the modeling thread:
 
   ```yaml
   reset-password:
-    # description, params, result, codes
+    # description, params, result, codes, changes
     notices:
       - name: password-changed
         to: account
@@ -170,9 +170,26 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen with a route, every route of which needs no parameter, as the link carries none (no
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
   names a notice by its action and its name, `[notice:reset-password.password-changed]`.
+
+  Every action says under `changes` the reads it changes: the platform actions whose answer,
+  for the organisation, the account and the params it ran with, differs once it succeeds, each
+  one that a list, a section or a table of some screen takes as its `source`.
+  `organisations.invite` changes `organisations.invitations`, and `sign-out-everywhere` changes
+  `devices.list` and `accounts.read`. A switch of the organisation or the account (a select, a
+  create, an accept) is the first read's (see "Reading a screen file", `source`), so it is never
+  named, and neither is what another account reads for itself: an invitation does not change
+  the inviter's `invitations.mine`. `changes: []` says the action changes none; the schema
+  refuses an action that does not write `changes`, as it refuses one without `codes`. The check
+  refuses a name that is not a platform action, an action that names itself, as it changes what
+  other reads answer, a name that no list, section or table takes as its source, and a name
+  written twice in one `changes`. A flow that runs the action reads, after its success, each
+  list of its screen whose source the action changes (see the effects of a flow, `read`).
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
-  actions, how each field merges).
+  actions, how each field merges). Every action of `x-perch.actions` says the reads of the
+  platform it changes under `changes`, as a platform action does, `[]` for none, held by the
+  same schema and check: `profile.updateName` changes `accounts.list` and `accounts.read`,
+  where the name shows.
 - `domain/activities/<id>.yaml`: one activity across screens per file, named by its `id`
   (`domain/activities/session.yaml`); the folder is optional (see "Activities").
 
@@ -296,6 +313,36 @@ search reaches the same state after a reload. The application's router builds an
 every binding (`apps/web/src/platform/routes-router.spec.ts`, a parameter's first example
 its sample), and the module routes equal the bindings (`routes-contract.spec.ts` beside it).
 
+**Roles.** A role is a row of the vocabulary's Roles table. A device holds a set of roles:
+`guest` when nobody is signed in on it, else `identity` and, beside it, every other role that
+applies to the signed-in account (its role in the current organisation, `member` or `admin`;
+a role of the platform; any role a later row adds). `guest` and `identity` are the two roles
+of which a device holds exactly one; every other role is held beside `identity`, never alone.
+The contract names the roles; how a device learns the ones beside `identity` is the app's.
+`GUEST`, `IDENTITY`, `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read them
+for the app and the checks alike.
+
+A binding's `roles` are the roles it serves: the router serves it only to an account that
+holds at least one of them. An account that holds none gets the screen of the binding at `/$`
+(the not-found screen) at the same address, as an address no route takes does: the URL and the
+history entry stay as they are, and nothing on the page, the tab's title included, says there
+is a route there. The router decides in this order: the binding's `guard` (`authenticated`
+sends a guest to `/sign-in`, `guest` sends a signed-in account to `/me`), then its `roles`,
+and only then reads the search, so a search the screen would refuse shows an account its roles
+miss the not-found screen, never the screen's refusal. A route that must not show itself to a
+guest leaves its `guard` out and names no `guest`: a guest gets not-found, as any account the
+roles miss does. The binding at `/$` serves every account: its `roles` name `guest` and
+`identity`.
+
+The roles of a device change while a screen is open: an account signs in or out, another
+organisation becomes the current one, a role is granted or taken back. The router decides
+again when the app learns of it. A screen whose binding no longer serves the account is
+replaced by the not-found screen and its state is dropped, as when another screen opens (a
+read of its in flight is dropped with it); a not-found screen at an address whose binding now
+serves the account is replaced by that screen, which opens as a screen opens (a list with a
+platform source reads it, see `source`). An app that learns of a change late decides again
+when it learns; no check sees the interval.
+
 A parameter of `params` or `search` may carry `examples`: fake values it accepts, of its
 type (`key: { type: string, examples: [ thg_01hzx9k2 ] }`); `contract:check` holds each one
 to the parameter's schema. `bun run contract:routes` (`ui-contract routes [--json]`) prints
@@ -350,10 +397,18 @@ An anchor's `binding` says what the element does or shows:
   parameter names the anchor whose value it takes, a constant `{ value: true }`, or
   `{ search: <name> }`: the value of that search parameter of the route the screen was opened
   at, which every binding of the screen declares under `search` (the token a link carries).
+  An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control
+  acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the
+  item's part (`<part>.<name>`, like the item), rendered in each entry
+  (`device.list.revoke-button` passes `device: device.list.session-item`, the device of its
+  own row). The item is an entry of a list, a table or a section of its own screen, declared
+  under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one
+  the same way, in a state that only the events of such controls enter.
 - `{ route: /path }`: the path of a binding of some screen.
 - `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a
   switch): the field starts with the value of that search parameter of the route the screen
-  was opened at, and the user may change it; every binding of the screen declares it under
+  was opened at, takes it again each time that parameter becomes another, and the user may
+  change it; every binding of the screen declares it under
   `search`. It sits in a list beside the action the field gives its value to: the email a
   link carried into `/forgot-password?email=...` fills the email input the request is sent
   with, `[ { search: email }, { action: platform.request-password-reset, params: { email:
@@ -369,15 +424,72 @@ concerns: the error shows under that field and marks it invalid; a code left out
 form; an error may leave both out, see "What a screen leaves out"), `dataId` (what its `data-id` holds), `dataValue` (it, or its
 derived options, carry a `data-value` from the choice values), `states` (its `data-state`
 values), `derived` (the suffixes it renders; a secret `input` alone may render
-`visibility-button`, see "Anchors"), `roles` (who sees it; absent: every role of the
-screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
+`visibility-button`, see "Anchors"), `roles` (who sees it, among the roles its screen's
+bindings serve; absent: every role of the screen), `own` (a member sees it only on its own entries), `holdsInput` (whether a field keeps
 what is typed; derived, see "What a screen leaves out"), `secret` (`true` on a field that
 holds a secret: a password, its confirmation, a current password, anything that never leaves
 the page but in the request of the action that takes it; only a field has it, no navigate
 carries it into a search and no search parameter starts it), `composite` (on a secret input:
 the composite of the platform it opts into, see "What a screen leaves out"), `source` (where a
-list's entries come from). An anchor's `description` says what it is for; where the engine can
+list's entries come from, below). An anchor's `description` says what it is for; where the engine can
 say it, the file leaves it out.
+
+A `source` says where the entries of a list, a section or a table come from, and with it when
+they are read; no other kind carries one. `{ platform: <action> }`: the entries are the answer
+of that platform action, which the anchor reads each time it starts to render after it did
+not: the screen opening, a state entered that renders it (`meta.renders`) after one that did
+not, the account's role becoming one its `roles` admit; and, while it renders, each time the
+organisation or account it reads for becomes another, or a search parameter its source takes
+does (a `{ search: <name> }` of its `params`, and `page` and `size` when it is paged). The list
+shows none of the entries of the earlier search once the search is another, and a read still in
+flight when what it reads for becomes another is dropped: its answer is shown nowhere. A state
+entered after another that rendered it too reads nothing, so an anchor no state lists, rendered
+in every state, is read only at those moments. Every other read is said by the flow, with the
+effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed
+what the list shows, never prose in a description. The `changes` of an action (see "The
+folder") names the sources whose answer it changes, so it tells which lists of a screen that
+runs it show something else once it succeeds, and the flow holds a read of each of them after
+that success (the effects of a flow, `read`).
+`{ entity: <entity>, order, direction }`:
+the entries are the stored entries of that entity of the model, which the anchor follows as
+they change, here or on another device; such a list is never read.
+
+A platform source's `params` give the action's parameters their values: each a search parameter
+of the route, `{ search: <name> }`, one every route of the screen declares, or a constant,
+`{ value: ... }`; never a field, since what a list shows is a state of the address and what is
+typed is not, so a search box moves the route with a navigate and the list reads the new
+search. A parameter left out is the implementation's to compute, as in a binding.
+
+`paged: true` makes the list a page of the action's entries. The action says it pages and
+which page sizes it answers, `paged: { sizes: [ 10, 25, 50 ], default: 25 }` in `platform.yaml`
+(each size once, the smallest first, the default one of them): it takes the number parameters
+`page`, from 1, and `size`, one of the sizes, and answers the entries of that page, in the
+order its `result` says, with the number of entries the other parameters find in all. The page
+and the size are the route's search parameters `page`, an integer with a minimum of 1 and a
+default of 1, and `size`, an integer whose `enum` is the action's sizes and whose default is
+its default, which every route of the screen declares; the source takes them from there, so no
+`params` names them, and a screen pages one list. A new search starts at page 1: a navigate
+that sets a search parameter the list reads, or `size`, says `page: 1`.
+
+A paged list derives four parts, which its `derived` lists and a screen file never writes.
+Its name has at most 3 segments (`console.users.list`, never `a.b.c.list`): its size options
+add two (`<list>.size-select.option`), and an anchor has 5 at most, so the check refuses a
+longer paged list. `<list>.range`, once the read is in: the numbers of the first and the last entry of the page and
+the number of entries in all (`51-100 of 312`), carried as `data-from`, `data-to` and
+`data-total`, with `0` and `0` where the page holds no entry (`0 of 312`: a page past the last).
+`<list>.previous-link`: a link to the same route, the same search and `page` one less, on every
+page but the first. `<list>.next-link`: the same with `page` one more, on every page that does
+not hold the last entry. `<list>.size-select`: a select of the page size, shown wherever the
+list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value`
+and are the controls of `size`, which therefore writes no `x-perch` (the check derives them and
+refuses one written); choosing one moves to the same route and search with that `size` and
+page 1. A part leaves out
+of the address a value equal to its default (page 1, the action's default size), as every link
+of the app does. A range or a link that does not apply is absent from the page, never
+disabled, so a state that lists the list in `meta.renders` does not require them; the size
+select it does. `pagerOf`, `searchKeysOf` and `pageSearchOf` of `@workspace/ui-contract/anchors`
+compute what a page shows, which search keys a list reads for and the search a part moves to,
+for the app and the tests alike.
 
 A screen's `states` say what is visible in each container state. The `wireframe` is the
 default state in Playwright's aria snapshot grammar.
@@ -431,30 +543,76 @@ as it holds its router to the bindings.
   `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no
   flag of its own. A password input's `visibility-button` is never an event of a flow, so
   the machine does not enable it: it is always enabled.
-- The effects, in `actions`, `entry` and `exit`, are three: `{ type: show, params: { anchor,
+- The effects, in `actions`, `entry` and `exit`, are four: `{ type: show, params: { anchor,
   codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor
   } }`, an anchor that carries codes shows none until one is shown again; a field is emptied;
-  and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app
-  implements all three. The codes come first: a `clear` of an anchor that carries codes,
+  `{ type: read, params: { anchor } }`, a list of the flow's own screen whose `source` is a
+  platform action reads that action again; and `{ type: navigate, params: { to, search } }`,
+  the app moves to that binding. The app
+  implements all four. The codes come first: a `clear` of an anchor that carries codes,
   whatever its kind and its screen, a field included, means it shows none until one is shown
   again. A field that carries none (an input, a textarea, a select, a checkbox, a radio or a
   switch, a `secret` one included) is emptied, and only on the flow's own screen: it returns
   to its empty or initial value and holds no input any more, as if nothing was typed; a form
   empties its passwords this way once the action that took them succeeds. A `clear` never
   names a `visibility-button`, nor a button, a list, a link or any other anchor unless it
-  carries codes. Each value of a navigate's `search` is a search key of the binding it moves to,
+  carries codes. A `read` names a list, a section or a table the flow's own screen declares
+  whose `source` is a platform action (see "Reading a screen file", `source`): it reads that
+  action again and shows its entries once the read is in, and the app may take them from the
+  answer of the action that just ran, when that action returns them (the devices page's
+  sign-out of another device answers with the account's devices when they could be read
+  after it, else without them). A `read` never names an anchor of
+  another screen, one with no `source`, nor one whose source is an entity of the model, which
+  follows the stored data as it changes and is never read. A read after an action is written
+  on the outcome of its invoke (`onDone`, or an `onError` after which the list may have
+  changed); an action that changes nothing a list of the screen shows says so on its invoke,
+  `read: false`, and an invoke that says it and reads in one of its outcomes is refused. An
+  action after which one outcome reads and another does not says it on that branch of its
+  `onDone` or `onError`, `read: false` beside the branch's `guard` (the role change that
+  demotes the account itself, after which the members list goes): only a branch of an
+  invoke's outcome may say it, never the transition of an event; a branch that says it and
+  reads itself is refused, once per read, and so is one under an invoke that says `read:
+  false` already. The read after a success is mandatory where the action may change what a
+  list shows. An invoke holds each list, section or table of its own screen whose `source` is
+  a platform action when its `input` takes an entry of it (an `item` or a `row` it contains,
+  as the organisation's role change takes `organisation.members.item`), when a value of its
+  `input` equals one its source's `params` take (the console's removal of an account takes `{
+  search: id }`, which `console.account.section` reads `accounts.read` with), or when its
+  action's `changes` names that source (`organisations.invite` changes
+  `organisations.invitations`, which `organisation.sent.list` reads); a region written `by`
+  its button is held as its invoke. Every branch of its `onDone`, a single transition being
+  one, then reads each list it holds, `read: <list>`, or says `read: false`: the check refuses
+  each list a branch leaves unread, at that branch, saying why the invoke holds it. A failure
+  holds no read, so an `onError` reads where it says, and an invoke that says `read: false`
+  holds nothing. Each value of a navigate's `search` is a search key of the binding it moves to,
   given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the
   flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a
   radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose
   value would stay in the address, the browser's history and the logs). A link that carries
   the email typed so far to the page that asks for a password reset:
   `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
+  A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item` or `row`
+  whose control the user acted on, so that the selection is in the address and a reload or a
+  copied link reaches the same entry. Only the event of a control (a button, a link, a tab or
+  a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the
+  item), rendered in each entry, carries it, so the navigate sits
+  in the actions of that event's transition, never in an `entry`, an `exit` or the outcome of
+  an invoke, where no entry was acted on. The item is an entry of a list, a table or a section
+  of the flow's own screen, declared under it or beside it in its part, and declares its
+  `dataId`; the search key it fills takes a string. A row that opens the entity it shows:
+  `navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }` on
+  `<screen>.list.open-link`.
 - An `invoke` runs a model or a platform action while the machine is in its state: `src`
   names it as a binding does, `input` maps each parameter as a binding's `params` do: to the
   anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route
   `{ search: <name> }`, and `onDone` and `onError` say what follows its
   success and its failure. Every `input` key is a parameter of the action; a parameter left
-  out is the implementation's to compute (a minted `$id`, the `author`). An event that runs
+  out is the implementation's to compute (a minted `$id`, the `author`). An invoke may say
+  `read: false`: its action changes nothing a list of the screen shows, so nothing reads after
+  it (the copy of an invitation link); one branch of its `onDone` or `onError` may say
+  `read: false` instead, where another branch reads: nothing reads after that outcome. XState
+  ignores the key in both places, the checks and `contract:diff`
+  read it, and the machine comparison leaves it out. An event that runs
   an action is a transition into such a state, named for what it does (`signing-in`,
   `saving-name`, `deleting`), or `running` in the region of a button.
 - A state that a route reaches says so in `meta.address`: its `path`, a binding of the
@@ -531,8 +689,8 @@ run contract:flow <screen>` prints it. The shorter forms are four:
 - An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it
   carries, in its order (in the `onError` of an invoke, one of the codes the failure of its
   action shows, narrowed by a guard by failure code; see "What a screen leaves out"); `show:
-  { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `navigate: <path>` or `navigate:
-  { to, search }`.
+  { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `read: <anchor>`; `navigate:
+  <path>` or `navigate: { to, search }`.
 - A region written by its pattern, a shape that two regions or more of the screens share,
   named by what the area does. A shape that one region has is written in full until a
   second one shares it.
@@ -541,7 +699,9 @@ run contract:flow <screen>` prints it. The shorter forms are four:
     typing moves it to `edited`, which goes back to `following` when what was typed is the
     stored value again, by typing it back or by the data event `stored`, both under `guard`.
 - A region written by its button, `by: <button>`: the region of a button bound to one action
-  (below) with what the screen decides of it, its `description`, `onDone` and `onError`. An
+  (below) with what the screen decides of it, its `description`, `onDone` and `onError`, and
+  the `toast: false` or `read: false` it says of its action, which the loader puts on the
+  region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An
   outcome left out is the derived one; a transition without a target goes back to `idle`.
 
 The states of a pattern and of a button's region are the machine's, named by the loader
@@ -563,7 +723,8 @@ every transition and every guarded branch to its target with its effects. An app
 builds its own machine for a screen holds it to the flow with the engine's comparison
 (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`):
 the machine has the config of its flow, what each state renders included (on a branch, the
-flow less what it added and the machine has not built yet).
+flow less what it added and the machine has not built yet), an invoke's or a branch's
+`read: false` aside, which is a promise the checks read and nothing a machine runs.
 
 ### What a screen leaves out
 
@@ -622,6 +783,20 @@ out, and the loader derives it, the same way every time:
   the input) is always `never`, and `elsewhere` (another tab or device, a database that will
   not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
   it.
+  A flow's `navigate` is one of these leaves by what moves it: after an invoke's outcome it is
+  `flow`; on a platform or data event, `elsewhere`; on a control's event, to the path of the
+  screen's one binding, `state`; on a control's event, to any other path, `screen`, a leave the
+  user starts as with a link. Such a control asks the frame's question before its event while
+  a change of screen asks, as long as a field it loses holds unsaved input: the fields of its
+  screen that hold input, but those the move carries in its search and the control itself. The
+  loader derives it on the control, `leaves: { dialog, loses }`, which a screen file never
+  writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`. For that
+  question to hold wherever the control is acted on, a navigate sits on a transition, never in
+  an entry or an exit; one transition moves once; a control's navigate names a control of the
+  flow's own screen, outside the frame, an anchor it declares or a part one derives, which has
+  no declaration to carry the question and so moves within its screen only; a move to a path
+  of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state
+  that handles it, losing the same fields, since its question comes before its event.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows. In an `onError` list with a branch guarded
   by failure code, a bare `show` on that branch shows the guard's codes, and one on a later
@@ -698,7 +873,10 @@ out, and the loader derives it, the same way every time:
   other branches still get the standard one), and the one ban is `toast: false` on
   the invoke, or on a region written `by` its button (the language select's store: the change
   is visible by itself); a notice or an error written on the outcome says nothing about the
-  toast. A failure never toasts: it shows on the part's error. The toast anchor carries every
+  toast. `read: false` sits beside it on the same invoke or region, a different statement:
+  the action changes nothing a list of the screen shows, so nothing reads after it; on one
+  branch of the `onDone`, nothing reads after that outcome, and the branch keeps its toast (see
+  the effects of a flow, `read`). A failure never toasts: it shows on the part's error. The toast anchor carries every
   code a flow shows on it; the vocabulary documents the derived ones by one rule row,
   `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a
   new one. A code a flow writes on the toast
@@ -708,7 +886,7 @@ out, and the loader derives it, the same way every time:
   kind `confirmation`, `app-shell.confirmation`), every control whose binding names a
   destructive action asks it before the action runs: an action of the model whose verb is
   `delete`, an action of the platform whose verb (the first word of its last segment) is
-  `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
+  `ban`, `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog,
   code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or
   the platform action's name with `.` as `-` (`organisations.remove` gives
   `organisations-remove`); the confirmation carries every code asked with, which the
@@ -906,6 +1084,13 @@ enables, it is always enabled, and it holds no input, so no binding's `params` a
 locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest
 lists it in `contract.derivedParts` with its kind and its values.
 
+Four derived parts belong to a paged list (see "Reading a screen file", `source`): `range`,
+`previous-link`, `next-link` and `size-select`. The loader lists them in the `derived` of the
+list whose source says `paged: true`, and a screen file never writes them. The options of the
+size select, `<list>.size-select.option`, carry the action's page sizes as `data-value`, the
+values of the action and never rows of "Choice values", and choose the route's `size`: the
+check knows them, so the binding writes no `x-perch` on `size`.
+
 One literal per rendered name:
 
 - every anchor is declared once, in one screen file, and written once in the sources;
@@ -953,7 +1138,11 @@ literals, pass a prop, or derive the part.
 - `data-value` on an `option`, a `badge` or a `button` that switches a mode: the stable key
   of a choice that is not an entity, the key the code already uses and never its label. Each
   fixed value is a row of "Choice values" with its meaning. On a `visibility-button` it is
-  `show` or `hide`, the values of its suffix.
+  `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the
+  page size it chooses.
+- `data-from`, `data-to` and `data-total` on the `range` of a paged list: the first and the
+  last entry the page shows, from 1 (`0` and `0` when it shows none), and how many the search
+  finds in all.
 - `data-state` on a `status`, `list`, `section` or `item`: an app, container or row state.
 - `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says.
 
@@ -1151,7 +1340,8 @@ gap is fixed in the contract files first, never worked around in a test.
 - `bun run contract:check`: the files on their own and against each other. Each file parses
   and holds its shape, and each screen file is named by its first binding; every anchor
   follows the grammar, starts with its screen's id and is declared once; every kind,
-  suffix, state, code, role and choice value is in the vocabulary, and every code of the
+  suffix, state, code, role and choice value is in the vocabulary, every derived suffix ends
+  with a kind of it (the kind of the part it marks), and every code of the
   vocabulary is used; every binding points at a field, an action or a route that exists, or at a search parameter
   every route of the screen declares, which only a field that holds no secret starts with;
   `secret` is on a field alone, and a `visibility-button` on a secret input alone;
@@ -1161,15 +1351,33 @@ gap is fixed in the contract files first, never worked around in a test.
   file writes `derivedFrom`; the platform's composites and the rows of the vocabulary's
   "Composites" name each other, each item state a row state;
   each parameter of an action taking a declared anchor (never a `visibility-button`), a
-  constant or a search parameter, and a parameter two fields of a button's part pass with
-  different values written by the button,
+  constant or a search parameter, an item or a row of its own screen with a `dataId`, of a
+  list, a table or a section, from a control (a button, a link, a tab or a field) in its part
+  (in an invoke's `input`, a state only such controls enter), and a parameter two fields of a
+  button's part pass with
+  different values written by the button, each param of a platform source a parameter of its
+  action taking a constant or a search parameter every route of the screen declares,
+  never `page` or `size`; a paged source's action pages with its sizes each once, the smallest
+  first, its default one of them, and takes the number parameters `page` and `size`, every route
+  of its screen declares `page` and `size` as it reads them, a screen pages one list, and a
+  paged list has at most 3 segments, as its size options add two to its name,
   every path parses in the router's syntax, every example of a route parameter matches
   that parameter, and a `$param` without one has a value its schema accepts; every flow names states, events (never a
   `visibility-button`), guards,
   actions, anchors with their codes and bindings that exist (a clear's anchor one that carries
-  codes, else a field of the flow's own screen, never a `visibility-button`, a navigate's
+  codes, else a field of the flow's own screen, never a `visibility-button`, a read's anchor a
+  list, section or table of the flow's own screen whose `source` is a platform action, never
+  one with an entity source or none, an invoke that says `read: false` reading in none of
+  its outcomes, and a branch that says `read: false` an outcome of an invoke, never the
+  transition of an event, reading nothing itself, under no invoke that says it already, every
+  branch of an invoke's `onDone`, unless the invoke says `read: false`, reading each list,
+  section or table of its own screen with a platform source that the invoke holds, one whose
+  entry its `input` takes, whose source's `params` take a value its `input` takes, or whose
+  source its action's `changes` names, or saying `read: false` itself, a navigate's
   search keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen
-  that holds no secret),
+  that holds no secret, each `{ item }` an entry with a `dataId` of a list, a table or a
+  section of the flow's own screen, taken on the event of a control in its part into a key
+  that takes a string, and `page: 1` beside any key a paged list of its screen reads),
   reaches each of its states
   and leaves each one that is not final, lists in a state's `meta.renders` anchors its own
   screen declares (a derived part's base, never the part), each once and never beside an
@@ -1190,7 +1398,16 @@ gap is fixed in the contract files first, never worked around in a test.
   screen whose every route declares the search parameter that
   carries its token; every notice it declares has a name no other notice of the action has,
   goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose
-  every route needs no parameter; the versions agree; the generated schemas
+  every route needs no parameter; every action, of the platform or of the model, writes its
+  `changes`, each name of which is a platform action, never the action itself, that a list, a
+  section or a table of some screen takes as its `source`, written once; no binding's `guard` sends away an account its `roles` name
+  (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among
+  those its screen's bindings serve (the frame aside), a link to a route whose roles name
+  neither `guest` nor `identity` is shown to no device the route refuses: every restriction
+  above it (its own `roles`, those of each anchor it is declared under, and its screen's, the
+  frame aside) admits a device by the roles it holds together, so one restriction naming only
+  roles the route serves is enough, wherever it sits on the chain, and the binding at `/$` names
+  `guest` and `identity` (see "Roles"); the versions agree; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
@@ -1222,7 +1439,9 @@ gap is fixed in the contract files first, never worked around in a test.
   `main` compares the app it brings with the flows it brings) or at the commit the branch is at
   (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
   taken onto a branch whose app already follows its first, changes a flow the base may not have
-  at all), so a business commit may change a transition the app has not changed yet. The app's
+  at all; during a merge, the tip before it, unless the engine the merge brings cannot load that
+  tip's contract for any reason, a key it now requires among them, and then that tip gives no
+  flows to match), so a business commit may change a transition the app has not changed yet. The app's
   routes likewise: a binding may wait for its route, and a route that still reads as its
   binding did at the merge base (the same screen, the same path) is held to that binding as it
   was there. The hook names both commits, and the cache of the unit tests keys on them, so a
@@ -1293,6 +1512,38 @@ that notices `lefthook.yml` changed (an edit in the same second as the last inst
 unnoticed), unless told not to (`--no-auto-install`), but a hook whose file went while
 `lefthook.yml` stayed the same stays missing.
 
+On `main` the same hook judges every commit as a landing (`scripts/contract-take.ts`), the squash
+of one branch, against its parent: `main`'s HEAD, or, for an amend, the commit under the one it
+replaces. A merge into `main` is refused, as `main` takes only squashes; any other commit
+carries exactly one `Squashed-from: <branch> (<tip>) [<cards>]` trailer as its last paragraph,
+the cards optional for the hook (the landing procedure still names the card). The branch must
+exist by its exact ref, `refs/heads/<branch>`, so a revision such as `feat/me~0` names none; the
+tip, 7 to 40 hex digits, must be that branch's tip or one of its ancestors, and a short id git
+cannot tell from another commit is refused. The parent must lie under the tip, and the committed
+tree must equal the tip's tree and differ from the parent's, so a landing is
+`git merge --squash <branch>` and nothing more or less. Then the branch's round is judged: the
+commits of the tip that are neither on the parent nor under the tip of an earlier landing's
+trailer, merges left out, each against the take rules above as git recorded it, its message and
+the files it changes. A recorded commit of the round that breaks the take rules stops the squash
+even when its own hook was skipped (a plain cherry-pick, a `--no-verify` commit). The refusal
+names each commit that fails and how to rewrite it; the check grants no waiver. `contract/trunk`
+and an experiment never land, an experiment being split into area branches first. The engine's
+branch, `feat/contract-first-pass`, is bound by the trailer like any other branch, but its round
+is not judged, as its meta commits carry the `contract` scope with the engine's own files.
+`bun run scripts/contract-take.ts --round [<branch>]` prints that verdict for a branch (the
+checked-out one by default) without writing anything, so it runs before the gates; it ends with
+`contract take: every commit of <branch> since its last landing (<n>) is in its form` when every
+commit of the round is. The check has limits. It sees a commit only where git runs the
+commit-msg hook for it: a change of `main` that runs none is not seen, a fast-forward, a plain
+cherry-pick or revert, a rebase, or a commit made with `--no-verify`, the squash's own included.
+`main` changes only by a squash commit, by procedure, and the check cannot force it. A merge's own
+resolution is not judged, as a merge of the round is left out. Without `/proc` (another system)
+an amend is not detected, so the commit is judged against HEAD, and an amend that adds no change
+to `main` is refused as not changing it. An earlier landing's tip that the clone lacks cannot
+bound the round: its commits are judged again, and a refusal names those tips, so that the
+branch which landed them can be fetched. An amend of a landing is made before its merge back
+into the branch: after it, the replaced landing falls into the round and is judged there.
+
 ## The manifest
 
 `bun run contract:manifest` builds `ui-manifest/manifest.json` from the contract files and
@@ -1333,7 +1584,8 @@ where listed, with their derived parts, one the state does not render is not vis
 it renders is on the page and visible, unless data decides whether it shows: an anchor with
 `roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these, which
 only the first holds, as are the parts a page shows on demand (a select's `option`, a
-composite's `item`, a field's `error-message`). The anchors every state renders are not held:
+composite's `item`, a field's `error-message`, a paged list's `range`, `previous-link` and
+`next-link`, which its read decides; its `size-select` shows wherever the list does). The anchors every state renders are not held:
 a message shows when it carries a code, and an error when there is one.
 
 ## Coverage
@@ -1387,12 +1639,14 @@ inside it, holds none) makes the command fail and write nothing.
 This is the delivery of a finished change; the review before the code is described in "The
 order of work". A change to the contract goes with the output of `bun run contract:diff main` in its
 description (the screens, anchors, codes, entities, fields and activities added, removed or
-renamed, the composites added or removed, the derived parts, the codes, the states and the
-error fields the anchors both sides hold gain or lose, the messages among them that rank their
-codes, with their order, the platform actions added or removed
+renamed, the composites added or removed, the derived parts, the codes, the states, the roles
+and the error fields the anchors both sides hold gain or lose, the messages among them that
+rank their codes, with their order, who each route serves, the platform action each list reads
+with its params and its paging, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
 hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
-lines of each platform action added, removed or changed, and each written description added,
+lines of each platform action added, removed or changed, the reads each action of the model
+comes to change or stops changing, and each written description added,
 removed or changed with its length before and after), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
@@ -1423,6 +1677,12 @@ screen and kind. The derived parts of an anchor are listed by name,
 error fields of an anchor are those the loader gives it,
 written or derived, as `<anchor> <code>` and `<error> <code> -> <field>`, and its states as
 `<anchor> <state>`, so a change of a composite's item state shows on each item it derives. A
+route's `guard` and each role it serves are listed as `<path> guard <guard>` and `<path>
+serves <role>`, a route added whole with every line, and each role an anchor both sides hold
+is shown to as `<anchor> <role>`. A list that reads a platform action is listed as `<anchor>
+reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged`
+when it pages: a list moved to another search or to paging shows as its old line removed and
+its new one added, and a list added whole shows its line. A
 ranked message is listed with its order, `<anchor> ranks <code> > <code>`: a new order shows
 as its old line removed and its new one added, which its codes, compared as a set, do not
 show. A
@@ -1434,7 +1694,8 @@ email-not-verified`; a guard's sentence is prose and has no line), each state's 
 each anchor a state renders (`check-mail renders user.sign-in.resend-button`, a state of a
 region by its path, `viewing.create-form.open`), each `entry` and `exit` effect, each
 transition on an event with its target, guard and effects, each invoke with its input as
-JSON and its outcomes, each final state. Where order runs the machine (the guarded
+JSON, its `read: false` when it says one, and its outcomes, a branch's `read: false` after its
+guard (`viewing.member-roles.changing onDone #1 -> idle [ownDemotion] read: false`), each final state. Where order runs the machine (the guarded
 alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a
 sequence of more than one carries its position, `#<n>`. Descriptions are left out of a flow's
 lines, as they change nothing that runs, so a screen file written shorter that loads to the same
@@ -1442,11 +1703,16 @@ flow shows no flow line. A platform action is listed by its name, and its lines 
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
-shows (`code rate-limited`), each role that may run it, its mail (`mail to email language
+shows (`code rate-limited`), each role that may run it, its page sizes when it pages (`paged by
+10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. Last, `descriptions
+removed whole shows every line, as nothing else in the summary says its mail. The reads an
+action of the model changes are listed by the entity and the action, as `model action lines
+added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
+in the same form (`model action lines added in profile.updateName: changes accounts.list,
+changes accounts.read`); an action added or removed whole shows each read it changes. Last, `descriptions
 changed:` lists, sorted by place, each description a domain file writes (see "Descriptions")
 that the change adds, removes or changes, with its length in characters before and after:
 `app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added,

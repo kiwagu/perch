@@ -12,11 +12,12 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import { signedIn, signedInElsewhere, signedOutElsewhere } from '../__fixtures__/signed-in'
 import {
   type MemoryStorage,
   memoryStorage,
-  saveDevice,
   savedIdentity,
+  savedSession,
   savedToken,
 } from '../storage'
 
@@ -71,7 +72,7 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
 function annSaved(): MemoryStorage {
   const storage = memoryStorage()
 
-  saveDevice(storage, ann)
+  signedIn(storage, ann)
 
   return storage
 }
@@ -91,18 +92,6 @@ async function annOpeningHeld() {
   })
 
   return { ...tab, storage, open: held.resolve }
-}
-
-/** Another tab of the browser signs the account out: the token goes, then the identity. */
-function signedOutElsewhere(storage: MemoryStorage): void {
-  storage.changeElsewhere('perch.session.token', undefined)
-  storage.changeElsewhere('perch.session.identity', undefined)
-}
-
-/** Another tab of the browser signs `device` in: kept in one step, the identity heard last. */
-function signedInElsewhere(storage: MemoryStorage, device: typeof bob): void {
-  saveDevice(storage, device)
-  storage.changeElsewhere('perch.session.identity', storage.get('perch.session.identity'))
 }
 
 describe("the start's open of the saved identity's space", () => {
@@ -171,7 +160,9 @@ describe("the start's open of the saved identity's space", () => {
   it('adopts an organisation created while the space opens, once it is open', async () => {
     const { session, open } = await annOpeningHeld()
     const restoring = session.restore()
-    const adopted = session.adoptMembership(acme)
+    // The adopter is taken before the request, while the space opens; the answer comes before it is open.
+    const adopt = session.membershipAdopter()
+    const adopted = adopt(acme)
 
     open()
 
@@ -190,7 +181,7 @@ describe("the start's open of the saved identity's space", () => {
     expect((await restoring).isOk()).toBe(true)
     expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
   })
 
@@ -268,6 +259,7 @@ describe('another tab signing out the account whose space this tab has not opene
 
   it('signs out on this device only the account whose space did not open, never one saved since', async () => {
     const storage = annSaved()
+    const annSession = savedSession(storage) ?? expect.unreachable('Ann saved')
     const tab = await world({
       storage,
       online: false,
@@ -277,9 +269,9 @@ describe('another tab signing out the account whose space this tab has not opene
     expect((await tab.session.restore()).isErr()).toBe(true)
 
     // Another tab signed Ann out and Bob in; this tab has not heard of it yet.
-    saveDevice(storage, bob)
+    signedIn(storage, bob)
 
-    expect((await tab.session.signOutUnopened(ann.identity.id)).isOk()).toBe(true)
+    expect((await tab.session.signOutUnopened(annSession)).isOk()).toBe(true)
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
     expect(savedToken(storage)).toBe(bob.token)
     expect(tab.localsDeleted()).toEqual([])

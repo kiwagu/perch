@@ -2,7 +2,7 @@
  * An effect and a transition as a screen file may author them, expanded into the forms XState
  * runs: `show: <anchor>` (one of the codes the anchor carries, in its order; in the `onError`
  * of an invoke, one of the codes the failure of its action shows), `show: { <anchor>: [codes]
- * }`, `clear: <anchor>`, `navigate: <path>` or `navigate: { to, search }` into `{ type, params
+ * }`, `clear: <anchor>`, `read: <anchor>`, `navigate: <path>` or `navigate: { to, search }` into `{ type, params
  * }`; a transition that is its target alone into `{ target }`. What is not one of these forms
  * is left as it is, for the canonical schema to judge. `failing` is the action whose failure
  * the transitions follow, in an `onError`. There the guards by failure code split the failure
@@ -144,6 +144,10 @@ export function effectOf(
 
   if (name === 'clear' && typeof value === 'string') {
     return { type: 'clear', params: { anchor: value } }
+  }
+
+  if (name === 'read' && typeof value === 'string') {
+    return { type: 'read', params: { anchor: value } }
   }
 
   if (name === 'navigate') {

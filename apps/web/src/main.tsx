@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { serviceWorkerReload } from './composition/service-worker'
@@ -252,7 +253,7 @@ function App(props: { readonly reload: () => void }) {
       <ShellView
         status={unrouted ?? 'opening'}
         renders={rendersIn(made.machine.config, state.value)}
-        signedIn={false}
+        held={heldRoles(false)}
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}

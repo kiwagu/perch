@@ -72,7 +72,11 @@ describe('DeletionFormView', () => {
   })
 
   it.each([
-    ['data:LAST_ADMIN', 'last-admin', 'Remove them first.'],
+    [
+      'data:LAST_ADMIN',
+      'last-admin',
+      'Make another member an administrator, or remove the others.',
+    ],
     ['data:RATE_LIMITED', 'rate-limited', 'Too many attempts.'],
     ['data:OFFLINE', 'failed', 'The mail was not sent.'],
   ])('says %s above the form, under no field', (failure, code, text) => {

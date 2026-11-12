@@ -232,7 +232,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
-    keepAccountStart: options.keepAccountStart ?? ((user, from) => startsKept.push([user, from])),
+    keepAccountStart:
+      options.keepAccountStart ?? ((signIn, user, from) => startsKept.push([signIn, user, from])),
     listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
     openLocal: (identity) =>
       (options.refusedIdentities?.includes(identity)
@@ -287,11 +288,15 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
 
       contexts.push(context)
       transports.push(transport)
-      // The browser's WebSocket transport hands memberships to the context and calls `onEnded`
-      // itself; the stub tells its listeners.
+      // The browser's WebSocket transport hands memberships, and a welcome's platform roles, to
+      // the context and calls `onEnded` itself; the stub tells its listeners.
       transport.onMessage((message) => {
         if (message.type === 'welcome' || message.type === 'memberships') {
           context.onMemberships(message.memberships)
+        }
+
+        if (message.type === 'welcome') {
+          context.onRoles(message.roles)
         }
       })
       transport.onEnded(context.onEnded)

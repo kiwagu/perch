@@ -131,6 +131,27 @@ await expect(deviceBRow).toHaveAttribute('data-state', 'revoked')
 await expect(deviceBRow.getByTestId('device.list.revoked-cell')).toBeVisible()
 ```
 
+A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`;
+a button, a link, a tab or a field, never a cell or a sibling entry)
+is rendered in each entry and acts on the entry it is in: an action's parameter that names the
+item takes that entry's `data-id` (`params: { device: device.list.session-item }`). A row that
+opens the entity it shows does it the same way, with a link in the row whose transition puts
+the id into the address, so a reload or a copied link reaches the same entry:
+
+```yaml
+<screen>.list.open-link:
+  kind: link
+# flow, on the state that shows the list:
+<screen>.list.open-link:
+  target: opened
+  actions:
+    - navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }
+```
+
+The item declares its `dataId`, the target binding's `id` takes a string, and the navigate sits
+on the link's event, never in an `entry`, an `exit` or an invoke's outcome, where no entry was
+acted on (`contract:check` refuses each).
+
 ## 6. A choice with `data-value`
 
 A choice that is not an entity carries the key the code already uses, never its label, and
@@ -550,7 +571,7 @@ address. This example is illustrative, not a file of the app:
 
 ```yaml
 confirm-email-change:
-  # description, params (token), result, codes
+  # description, params (token), result, codes, changes
   notices:
     - name: email-changed
       to: account
@@ -645,3 +666,69 @@ each code is one the action fails with, listed once; a guard that says anything 
 sentence. The app implements it as any guard, by the failure the actor rejected with (pattern
 12's `emailNotVerified`). `contract:diff main` shows `guard emailNotVerified takes
 email-not-verified`.
+
+## 17. A paged list
+
+A list of many entries shows one page at a time, the page and the size the route names. The
+action pages, in `platform.yaml`:
+
+```yaml
+actions:
+  accounts.list:
+    description: Reads the accounts of the platform.
+    params:
+      q: { type: string, description: The text an account's name or email contains. }
+      page: { type: number, description: The page, from 1. }
+      size: { type: number, description: The entries a page holds. }
+    paged: { sizes: [ 10, 25, 50 ], default: 25 }
+    result: the page of accounts, the newest first, and how many the search finds
+    codes: [ failed ]
+    changes: []
+```
+
+A read changes no other read (`changes: []`); an action whose success changes the page this
+one answers names `accounts.list` under its own `changes`.
+
+Every route of the screen declares `page` and `size` as the list reads them, and the list
+takes its search from the route, never from a field:
+
+```yaml
+bindings:
+  - path: /console/users
+    search:
+      type: object
+      properties:
+        q: { type: string, maxLength: 254 }
+        page: { type: integer, minimum: 1, default: 1 }
+        size: { type: integer, enum: [ 10, 25, 50 ], default: 25 }
+      additionalProperties: false
+anchors:
+  console.users.list:
+    kind: list
+    source: { platform: accounts.list, params: { q: { search: q } }, paged: true }
+```
+
+The search form moves the route, and a new search starts at page 1:
+
+```yaml
+on:
+  console.users.search-button:
+    actions:
+      - navigate:
+          to: /console/users
+          search: { q: { anchor: console.users.search-input }, page: 1 }
+```
+
+The loader derives `console.users.list.range`, `.previous-link`, `.next-link` and
+`.size-select` (its options `.size-select.option`, one per size with `data-value`, the controls
+of `size`, which writes no `x-perch`: the check derives them and refuses one written); the file
+never writes them. The option is two segments past the list, and an anchor has five at most,
+so a paged list has at most three (`console.users.list`, never `a.b.c.list`: the check refuses
+it). The view renders the range with `data-from`, `data-to` and `data-total` once
+the read is in, each link only where there is such a page, and the select wherever the list is,
+each built with `testIdFor` and each moving with `pageSearchOf(search, { page, size },
+defaultSize)` of `@workspace/ui-contract/anchors`; `pagerOf({ page, size, shown, total })` says
+what the page shows. The wireframe sketches page 1 (`text: /\d+-\d+ of \d+/`, `link "Next"`);
+no check reads it. `contract:diff main` shows `console.users.list reads platform.accounts.list
+q=search:q paged`.
+

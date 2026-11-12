@@ -85,6 +85,25 @@ describe('VerifyEmailView', () => {
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, with no form, no status and no way to sign in',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const shown = screen.getByTestId('user.verify-email.error')
+
+      expect(shown.getAttribute('data-code')).toBe('account-banned')
+      expect(shown.textContent).toBe(texts['user.verify-email.error.account-banned'])
+      expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.message')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    },
+  )
+
   it('sends a new link to the email typed', () => {
     const { onResend } = renderView({
       error: 'data:LINK_INVALID',

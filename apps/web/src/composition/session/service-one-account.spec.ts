@@ -4,15 +4,9 @@ import { identityIdFactory } from '@workspace/ids'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
+import { signedIn, signedInElsewhere } from '../__fixtures__/signed-in'
 import type { GatewayAuth } from '../gateway-auth'
-import {
-  type KeptDevice,
-  type MemoryStorage,
-  memoryStorage,
-  pendingRevokes,
-  saveDevice,
-  savedIdentity,
-} from '../storage'
+import { type KeptDevice, memoryStorage, pendingRevokes, savedIdentity } from '../storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -43,21 +37,6 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of [
-    'perch.session.token',
-    'perch.session.identity',
-    'perch.session.memberships',
-  ]) {
-    storage.changeElsewhere(key, other.get(key))
-  }
-}
-
 describe('one account per browser', () => {
   it('has a tab with nobody signed in follow a sign-in another tab made', async () => {
     const tab = await world({ online: false })
@@ -66,7 +45,7 @@ describe('one account per browser', () => {
     expect((await tab.session.restore()).isOk()).toBe(true)
     tab.session.subscribe((user) => heard.push(user?.email ?? 'nobody'))
 
-    signInElsewhere(tab.storage, ann)
+    signedInElsewhere(tab.storage, ann)
 
     await vi.waitFor(() => expect(tab.session.current()?.id).toBe(ann.identity.id))
     expect(heard).toEqual([ann.identity.email])
@@ -83,7 +62,7 @@ describe('one account per browser', () => {
 
     expect((await tab.session.restore()).isOk()).toBe(true)
     // Another tab signed Ann in; this one has not heard of it yet.
-    saveDevice(tab.storage, ann)
+    signedIn(tab.storage, ann)
 
     const refused = await tab.session.signIn(bobSignUp)
 
@@ -105,7 +84,7 @@ describe('one account per browser', () => {
       ...auth,
       signIn: (input, device) =>
         auth.signIn(input, device).map((answer) => {
-          saveDevice(storage, ann)
+          signedIn(storage, ann)
 
           return answer
         }),
@@ -137,7 +116,7 @@ describe('one account per browser', () => {
       ...auth,
       signIn: (input, device) =>
         auth.signIn(input, device).map((answer) => {
-          saveDevice(storage, ann)
+          signedIn(storage, ann)
 
           return answer
         }),
@@ -154,7 +133,7 @@ describe('one account per browser', () => {
     const tab = await world({ online: false, auth })
     const annAtGateway = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
-    saveDevice(tab.storage, { identity: annAtGateway, token: 'token-ann', memberships: [] })
+    signedIn(tab.storage, { identity: annAtGateway, token: 'token-ann' })
 
     expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
     expect(tab.session.current()?.id).toBe(annAtGateway.id)

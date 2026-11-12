@@ -13,14 +13,20 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'name-too-long', text: t('organisation.error.name-too-long') }
     case 'key-taken':
       return { code: 'key-taken', text: t('organisation.error.key-taken') }
-    case 'no-such-identity':
-      return { code: 'no-such-identity', text: t('organisation.error.no-such-identity') }
     case 'already-member':
       return { code: 'already-member', text: t('organisation.error.already-member') }
+    case 'email-invalid':
+      return { code: 'email-invalid', text: t('organisation.error.email-invalid') }
+    case 'invitation-gone':
+      return { code: 'invitation-gone', text: t('organisation.error.invitation-gone') }
+    case 'other-account':
+      return { code: 'other-account', text: t('organisation.error.other-account') }
     case 'rate-limited':
       return { code: 'rate-limited', text: t('organisation.error.rate-limited') }
     case 'not-admin':
       return { code: 'not-admin', text: t('organisation.error.not-admin') }
+    case 'last-admin':
+      return { code: 'last-admin', text: t('organisation.error.last-admin') }
     case 'note:FORBIDDEN':
       return { code: 'forbidden', text: t('organisation.error.forbidden') }
     case 'note:TEXT_REQUIRED':

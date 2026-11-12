@@ -68,7 +68,7 @@ describe('checkContract', () => {
       'contract/domain/platform.yaml:1: version: Invalid input: expected 1',
       'contract/vocabulary.md:1: missing section "Kinds"',
       'contract/vocabulary.md:9: unknown section "Kind list"',
-      'contract/vocabulary.md:75: section "Roles" appears twice',
+      'contract/vocabulary.md:77: section "Roles" appears twice',
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.a: Invalid key in record',
     ])
   })
@@ -118,6 +118,20 @@ describe('checkContract', () => {
 
     expect(printed()).toEqual([
       'contract/domain/platform.yaml:1: actions["sign-out"].notices[0].link: Unrecognized key: "search"',
+    ])
+  })
+  it('holds the reads an action changes to the platform actions the lists read', () => {
+    edit(PLATFORM_FILE, (text) => text.replace('    changes: []\n', '    changes: [ sign-out ]\n'))
+    edit(MODEL_FILE, (text) =>
+      text.replace(
+        '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": [] }',
+        '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": ["sign-out"] }',
+      ),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/model.schema.json:1: $defs.thing["x-perch"].actions.updateThing.changes[0]: "sign-out" is the source of no list, section or table: changes names the reads whose answer differs once the action succeeds: other platform actions, each once, that a list, a section or a table takes as its source',
+      'contract/domain/platform.yaml:1: actions["sign-out"].changes[0]: "sign-out" is the action itself: changes names the reads whose answer differs once the action succeeds: other platform actions, each once, that a list, a section or a table takes as its source',
     ])
   })
   it('refuses a permission role of the model that the vocabulary does not list', () => {

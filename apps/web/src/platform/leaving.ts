@@ -24,7 +24,9 @@ export const LEAVING_CONTROLS: ReadonlySet<string> = new Set([
   'app-shell.reload-button',
   'app-shell.sign-out-here-button',
   'app-shell.update-button',
+  'organisation.invitation.accept-button',
   'organisation.page.current-select',
+  'organisation.received.accept-button',
   'user.profile.sign-out-button',
   'user.settings.locale-select',
 ])

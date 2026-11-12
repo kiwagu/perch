@@ -55,6 +55,14 @@ describe('instructionsOf', () => {
     )
     expect(instructions.session).toContain("never assume it from the action's name")
   })
+  it('says which reads an action of the platform or of the model changes, written on every action', () => {
+    expect(instructions.session).toContain(
+      'its `changes` (written on every action, `[]` where it changes none: the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds, platform actions a list, a section or a table takes as its `source`)',
+    )
+    expect(instructions.model).toContain(
+      'its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it)',
+    )
+  })
   it('says a binding is a route of the router and a route a state address', () => {
     expect(instructions.screenMap).toContain('a TanStack Router path')
     expect(instructions.screenMap).toContain(
@@ -88,8 +96,38 @@ describe('instructionsOf', () => {
     expect(instructions.screenMap).toContain('`contract.derivedParts`')
     expect(instructions.gaps).toContain('whether a password input shows what it holds')
   })
+  it('says what a paged list reads and derives, and that a new search starts at page 1', () => {
+    expect(instructions.bindings).toContain(
+      'gives it that value again each time the parameter becomes another',
+    )
+    expect(instructions.screenMap).toContain(
+      'each time the organisation or account it reads for becomes another or a search parameter it reads does',
+    )
+    expect(instructions.screenMap).toContain(
+      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes` and choose the route\'s `size`, which writes no `x-perch`; a paged list has at most 3 segments, as its options add two to its name)',
+    )
+    expect(instructions.screenMap).toContain(
+      'a navigate that sets a search parameter a paged list reads says `page: 1`',
+    )
+  })
+  it('says who a route serves, in which order the router decides, and who sees an anchor', () => {
+    expect(instructions.screenMap).toContain(
+      '`roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other)',
+    )
+    expect(instructions.screenMap).toContain(
+      "`roles` (who sees it, among the roles its screen's bindings serve; absent: every role of the screen)",
+    )
+  })
   it('says a navigate may carry into a search what a field of the screen holds', () => {
     expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
+  })
+  it('says a navigate may carry into a search the data-id of the entry whose control acted', () => {
+    expect(instructions.screenMap).toContain(
+      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control (a button, a link, a tab or a field) in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
+    )
+    expect(instructions.screenMap).toContain(
+      'an item or a row as a value of `params` or `input` gives the `data-id` of the entry whose control acts, likewise',
+    )
   })
   it('says what a clear does to a field and to an anchor that carries codes', () => {
     expect(instructions.screenMap).toContain(
@@ -97,6 +135,28 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain(
       'and makes an anchor that carries codes show none until one is shown again',
+    )
+  })
+  it('says when a list with a platform source reads it, what a read does, and what read: false says', () => {
+    expect(instructions.screenMap).toContain('effects `show`, `clear`, `read` and `navigate`')
+    expect(instructions.screenMap).toContain(
+      '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
+    )
+    expect(instructions.screenMap).toContain(
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on an invoke says nothing reads after its action',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on one branch of its `onDone` or `onError` says nothing reads after that outcome, where another branch reads',
+    )
+    expect(instructions.screenMap).toContain(
+      "after an invoke that does not say `read: false`, every branch of its `onDone` reads each list of the screen with a platform source that its action may change, or says `read: false`: a list one of whose entries its `input` takes, one whose source's `params` take a value its `input` takes, and one whose source its action's `changes` names; a failure holds no read, so an `onError` reads where it says",
+    )
+    expect(instructions.screenMap).toContain('the four effects')
+    expect(instructions.screenMap).toContain(
+      "an invoke's `read: false`, or a branch's, is a statement of the contract, nothing the machine runs",
     )
   })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {

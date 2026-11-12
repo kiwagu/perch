@@ -23,6 +23,7 @@ const PLATFORM_ADDITIONS = `  sign-in:
       password: { type: string, description: The password. }
     result: the device is signed in
     codes: [ invalid-credentials, failed ]
+    changes: []
 composites:
   password-rules:
     description: The rules a new password keeps.

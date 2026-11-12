@@ -11,7 +11,7 @@ import {
 } from '../../names.schema'
 import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
-import { actionParamsSchema } from './params'
+import { actionParamsSchema, sourceParamsSchema } from './params'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -60,7 +60,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'The field starts with the value of that search parameter of the route the screen was opened at, and the user may change it: `{ search: email }`.',
+        'The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`.',
       ),
   ])
   .describe(
@@ -90,16 +90,27 @@ export const sourceSchema = z
         order: z.string().optional().describe('The field the entries are ordered by.'),
         direction: z.enum(['asc', 'desc']).optional().describe('The order direction.'),
       })
-      .describe('The entries come from an entity of the model.'),
+      .describe(
+        'The entries come from an entity of the model: the anchor follows the stored data as it changes, here or on another device, and is never read.',
+      ),
     z
       .strictObject({
         platform: platformActionNameSchema.describe(
           'The platform action whose result the anchor lists.',
         ),
+        params: sourceParamsSchema.optional(),
+        paged: z
+          .literal(true)
+          .optional()
+          .describe(
+            "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+          ),
       })
-      .describe('The entries come from a platform action.'),
+      .describe(
+        "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`.",
+      ),
   ])
-  .describe('Where the entries of a list, a section or a table come from.')
+  .describe('Where the entries of a list, a section or a table come from; no other kind has one.')
 
 /** The question a control asks before its destructive action runs, derived by the loader. */
 export const asksSchema = z
@@ -108,7 +119,24 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
+  )
+
+/** The question a control asks before its flow moves to another screen, derived by the loader. */
+export const leavesSchema = z
+  .strictObject({
+    dialog: z
+      .string()
+      .describe("The frame's dialog that asks whether to leave and lose what was typed."),
+    loses: z
+      .array(baseAnchorSchema)
+      .min(1)
+      .describe(
+        'The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input.',
+      ),
+  })
+  .describe(
+    "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does.",
   )
 
 /** Where a derived anchor of a composite comes from, written by the loader only. */
@@ -131,7 +159,9 @@ export const anchorDefSchema = z
     roles: z
       .array(roleSchema)
       .optional()
-      .describe('The roles that see the element; absent: every role of the screen.'),
+      .describe(
+        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+      ),
     own: z.boolean().optional().describe('Shown to a member only on the entries the member owns.'),
     holdsInput: z
       .boolean()
@@ -175,6 +205,7 @@ export const anchorDefSchema = z
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(
@@ -218,5 +249,5 @@ export const authoredAnchorDefSchema = anchorDefSchema
         "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
       ),
   })
-  .omit({ asks: true, derivedFrom: true })
+  .omit({ asks: true, leaves: true, derivedFrom: true })
   .describe('One declared anchor, as a screen file writes it.')

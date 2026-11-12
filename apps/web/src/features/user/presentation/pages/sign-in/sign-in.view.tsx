@@ -101,6 +101,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
     case 'data:EMAIL_NOT_VERIFIED':
       return { code: 'email-not-verified', text: t('user.sign-in.error.email-not-verified') }
+    case 'data:ACCOUNT_BANNED':
+      return { code: 'account-banned', text: t('user.sign-in.error.account-banned') }
     case 'data:SIGN_UP_REJECTED':
       return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
     case 'data:RATE_LIMITED':
@@ -129,6 +131,8 @@ function noticeText(
   notice: NonNullable<SignInViewProps['notice']>,
 ): string {
   switch (notice) {
+    case 'account-banned':
+      return t('user.sign-in.notice.account-banned')
     case 'resend-after-sign-in':
       return t('user.sign-in.notice.resend-after-sign-in')
     case 'signed-out-elsewhere':

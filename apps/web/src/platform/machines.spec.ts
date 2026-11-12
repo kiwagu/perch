@@ -5,7 +5,8 @@
  * engine's comparison (`@workspace/ui-contract/machines`): the same initial state, states,
  * final states, parallel states with the same regions and initial states, events with their
  * targets and guard names, invoke sources, the contract's effects on the same transitions, and
- * what each state renders (`meta.renders`).
+ * what each state renders (`meta.renders`); an invoke's `read: false`, or a branch's, is a
+ * statement the contract check reads, not held here.
  * The app adds actions of its own (an `assign`), and its `input` is the app's, but no
  * mechanism the flow has no counterpart for. On a branch the pre-commit hook sets
  * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a
@@ -22,13 +23,18 @@ import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
+import { identityIdFactory } from '@workspace/ids'
 import { formatProblem, loadScreens } from '@workspace/ui-contract'
 import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell-machine'
+import { createAccountMachine } from '../features/console/application/account-machine/machine'
+import { AccountsService } from '../features/console/application/accounts.service'
+import { createUsersMachine } from '../features/console/application/users.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
-import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
+import { createInvitationMachine } from '../features/organisation/application/invitation.machine'
+import { createOrganisationMachine } from '../features/organisation/application/organisation-machine'
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
 import { createDeleteAccountMachine } from '../features/user/application/delete-account.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
@@ -39,6 +45,7 @@ import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
 import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
 
+import { FakeAccounts } from './__fixtures__/accounts'
 import { AHEAD, flowsAt, heldFlow } from './__fixtures__/machine-flows'
 import { fakeSession } from './__fixtures__/session'
 
@@ -76,6 +83,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
     }),
+  'console.users': () => createUsersMachine(),
+  'console.account': () =>
+    createAccountMachine({
+      id: identityIdFactory.create(),
+      accounts: new AccountsService(new FakeAccounts()),
+    }),
   device: () =>
     createDevicesMachine({
       revoke: () => okAsync(undefined),
@@ -89,7 +102,21 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       editNote: () => okAsync(undefined),
       deleteNote: () => okAsync(undefined),
       invite: () => okAsync(undefined),
+      setRole: () => okAsync(undefined),
       remove: () => okAsync(undefined),
+      revoke: () => okAsync(undefined),
+      copy: () => okAsync(undefined),
+      accept: () => okAsync(undefined),
+      decline: () => okAsync(undefined),
+      account: () => undefined,
+      current: () => undefined,
+    }),
+  'organisation.invitation': () =>
+    createInvitationMachine({
+      token: 't',
+      read: () => errAsync({ code: 'not-in-this-spec', message: 'not in this spec' }),
+      accept: () => okAsync(undefined),
+      decline: () => okAsync(undefined),
       current: () => undefined,
     }),
   'user.sign-in': () => createSignInMachine(new SignInService(fakeSession().session)),

@@ -4,13 +4,20 @@
  * every anchor under it (`<anchor>.<rest>`) declares, so "every item of [list] carries
  * [state:met]" holds through the composite's items: codes from the loaded `codes` (the codes the
  * loader derives included), states from `states`, values from the choice-value rows of the
- * anchor and of its options, and `show` or `hide` for a visibility-button, the values its suffix
- * defines.
+ * anchor and of its options, `show` or `hide` for a visibility-button, the values its suffix
+ * defines, and the page sizes of its action for the options of a paged list's size select.
  */
 
 import { isUnder, VISIBILITY_VALUES } from '../anchors'
 
-import { type Contract, declaredAnchors, has, isValueOf, visibilityButtonsOf } from './contract'
+import {
+  type Contract,
+  declaredAnchors,
+  has,
+  isValueOf,
+  pageSizeOptionsOf,
+  visibilityButtonsOf,
+} from './contract'
 
 /** What an anchor carries a value of: its `data-code`, its `data-state` or its `data-value`. */
 export type Carried = 'code' | 'state' | 'value'
@@ -26,6 +33,7 @@ export function anchorCarries(
   const declared = declaredAnchors(contract.screens)
   const choices = Object.entries(contract.vocabulary.choiceValues)
   const visibilityButtons = [...visibilityButtonsOf(contract.screens)]
+  const sizeOptions = [...pageSizeOptionsOf(contract.screens)]
   const declares = (anchor: string, value: string, of: 'codes' | 'states'): boolean =>
     declared.some(
       ({ anchor: other, def }) => isUnder(anchor, other) && (def[of] ?? []).includes(value),
@@ -41,7 +49,8 @@ export function anchorCarries(
         return (
           choices.some(([other, rows]) => isUnder(anchor, other) && isValueOf(rows, value)) ||
           (has(VISIBILITY_VALUES, value) &&
-            visibilityButtons.some((button) => isUnder(anchor, button)))
+            visibilityButtons.some((button) => isUnder(anchor, button))) ||
+          sizeOptions.some(([option, sizes]) => isUnder(anchor, option) && sizes.includes(value))
         )
     }
   }
