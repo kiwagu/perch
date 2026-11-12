@@ -3,8 +3,9 @@
  * control asks before one (`files/derive/leaves.ts`) holds wherever the control is acted on. A
  * navigate sits on a transition, never in an entry or an exit, where no control could ask before
  * it, and one transition moves the app once. A navigate on the event of an anchor names a control
- * of the flow's own screen, outside the frame, which has no path: a control's leave loses the
- * fields of its own screen. A control's move to a path of its own screen needs a screen of one
+ * of the flow's own screen (an anchor it declares or a part one of them derives), outside the
+ * frame, which has no path: a control's leave loses the fields of its own screen. A derived part
+ * moves within its screen only, having no declaration to carry the question. A control's move to a path of its own screen needs a screen of one
  * path: with several, whether it leaves depends on the one the screen is at. And a control whose
  * event leaves its screen leaves it in every branch of every state that handles it, losing the
  * same fields: its question is asked before its event, so it cannot depend on the state or a guard.
@@ -17,6 +18,7 @@ import {
   type FlowTransition,
   flowNodes,
   jsonPath,
+  ownControlsOf,
   type Problem,
 } from '../../files'
 
@@ -95,6 +97,7 @@ function placeProblems(inFlow: InFlow): Problem[] {
 function branchProblems(inFlow: InFlow): Problem[] {
   const { screen, inScreens } = inFlow
   const paths = screen.bindings.map(({ path }) => path)
+  const controls = ownControlsOf(screen)
 
   return branchesOfFlow(inFlow).flatMap(({ transition, at, event }) =>
     navigatesIn(transition.actions).flatMap(({ effect, index }, nth) => {
@@ -119,11 +122,20 @@ function branchProblems(inFlow: InFlow): Problem[] {
         ]
       }
 
-      if (!Object.hasOwn(screen.anchors, event)) {
+      if (!controls.has(event)) {
         return [
           inScreens(
             here,
             `a navigate on the event of "${event}", which this screen does not declare: a control's leave asks for the fields of its own screen`,
+          ),
+        ]
+      }
+
+      if (!Object.hasOwn(screen.anchors, event) && !paths.includes(effect.params.to)) {
+        return [
+          inScreens(
+            here,
+            `a navigate to another screen on "${event}", a part of an anchor of this screen: a derived part has no declaration to carry the question before its leave, so it moves within its screen only`,
           ),
         ]
       }

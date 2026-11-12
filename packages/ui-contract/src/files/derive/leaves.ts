@@ -6,10 +6,14 @@
  * screen that hold input, but those the move carries in its search and the control itself. A move
  * after an action (an invoke's outcome) or on a platform or data event asks nothing: the action
  * took the input, or nobody started it here. The control carries `leaves: { dialog, loses }`,
- * which a screen file never writes (`withoutWrittenLeaves`). The frame has no path and leaves
- * nothing; what a flow may not do with its moves is the check's (`check/flow/leaves.ts`).
+ * which a screen file never writes (`withoutWrittenLeaves`). A control of the screen is an anchor
+ * it declares or a part one of them derives (`<anchor>.<suffix>`, a paged list's `next-link`); a
+ * derived part has no declaration to carry the question, so the check refuses its leave. The
+ * frame has no path and leaves nothing; what a flow may not do with its moves is the check's
+ * (`check/flow/leaves.ts`).
  */
 
+import { testIdFor } from '../../anchors'
 import { entriesOf, isRecord } from '../../records'
 import { flowNodes } from '../flow-nodes'
 import { jsonPath, type Problem } from '../problems'
@@ -30,6 +34,15 @@ export interface ControlMove {
 }
 
 const isNavigate = (effect: Effect): effect is Navigate => effect.type === 'navigate'
+
+/** The controls of `screen`: the anchors it declares and the parts each derives. */
+export const ownControlsOf = (screen: Screen): Set<string> =>
+  new Set(
+    Object.entries(screen.anchors).flatMap(([anchor, def]) => [
+      anchor,
+      ...(def.derived ?? []).map((suffix) => testIdFor(anchor, suffix)),
+    ]),
+  )
 
 /** The anchors of fields a move carries in its search. */
 const carriedBy = (move: Navigate): string[] =>
@@ -58,6 +71,7 @@ export function controlMovesOf(screen: Screen): ControlMove[] {
   }
 
   const paths = new Set(bindings.map(({ path }) => path))
+  const controls = ownControlsOf(screen)
   const fields = Object.entries(anchors)
     .filter(([, def]) => def.holdsInput === true)
     .map(([anchor]) => anchor)
@@ -68,7 +82,7 @@ export function controlMovesOf(screen: Screen): ControlMove[] {
     }
 
     return Object.entries(node.state.on ?? {})
-      .filter(([event]) => Object.hasOwn(anchors, event))
+      .filter(([event]) => controls.has(event))
       .flatMap(([control, transitions]) =>
         branchesOf(transitions, [...node.at, 'on', control]).map(({ transition, at }) => {
           const navigates = (transition.actions ?? []).filter(isNavigate)

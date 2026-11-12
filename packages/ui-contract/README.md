@@ -221,7 +221,8 @@ for Bun.
     and an invoke's input that takes an entry run in a state only such controls enter
     (`flow/items.ts`), `page: 1` beside any key a paged list of the screen it moves to
     reads (`flow/pages.ts`), and each navigate on a transition, one to a transition, a control's
-    on a control of its own screen outside the frame, to its own path only on a screen of one
+    on a control of its own screen outside the frame (a derived part within its screen only),
+    to its own path only on a screen of one
     binding, and leaving its screen, losing the same fields, everywhere its control is handled
     or nowhere (`flow/leaves.ts`),
     resolves every target as XState does (a state of the root or a deep target

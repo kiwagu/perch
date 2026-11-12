@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { screenFileSchema } from '../../schemas'
 import type { Platform, Screen } from '../screens'
 
-import { withDerivedLeaves, withoutWrittenLeaves } from './leaves'
+import { controlMovesOf, withDerivedLeaves, withoutWrittenLeaves } from './leaves'
 
 type Policy = NonNullable<Platform['unsavedInput']>
 
@@ -76,13 +76,34 @@ describe('withDerivedLeaves', () => {
     expect(leavesOf(withDerivedLeaves(screen, POLICY), LINK)?.loses).toEqual([EMAIL, PASSWORD])
   })
 
-  it('asks nothing when the move carries every field that holds input', () => {
+  it('asks nothing when no field of its screen holds input', () => {
     const screen = screenWith(onEvent(LINK, [navigate('/elsewhere')]), {
       [PASSWORD]: { kind: 'input', holdsInput: false },
       [EMAIL]: { kind: 'input', holdsInput: false },
     })
 
     expect(leavesOf(withDerivedLeaves(screen, POLICY), LINK)).toBeUndefined()
+  })
+
+  it('asks nothing when the move carries every field that holds input', () => {
+    const screen = screenWith(
+      onEvent(LINK, [navigate('/forgot-password', { email: { anchor: EMAIL } })]),
+      { [PASSWORD]: { kind: 'input', secret: true, holdsInput: false } },
+    )
+
+    expect(leavesOf(withDerivedLeaves(screen, POLICY), LINK)).toBeUndefined()
+  })
+
+  it('counts a part an anchor of the screen derives as its control, which carries no mark', () => {
+    const DIALOG_CONFIRM = 'sample.help-dialog.confirm-button'
+    const screen = screenWith(onEvent(DIALOG_CONFIRM, [navigate('/help')]), {
+      'sample.help-dialog': { kind: 'dialog', derived: ['confirm-button'] },
+    })
+
+    expect(controlMovesOf(screen).map(({ control, loses }) => ({ control, loses }))).toEqual([
+      { control: DIALOG_CONFIRM, loses: [EMAIL, PASSWORD] },
+    ])
+    expect(withDerivedLeaves(screen, POLICY)).toEqual(screen)
   })
 
   it('asks nothing for a move to the path of its own screen: a change of state inside it', () => {

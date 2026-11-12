@@ -793,8 +793,9 @@ out, and the loader derives it, the same way every time:
   writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`. For that
   question to hold wherever the control is acted on, a navigate sits on a transition, never in
   an entry or an exit; one transition moves once; a control's navigate names a control of the
-  flow's own screen, outside the frame; a move to a path of its own screen needs a screen of
-  one binding; and a control that leaves its screen leaves it in every branch of every state
+  flow's own screen, outside the frame, an anchor it declares or a part one derives, which has
+  no declaration to carry the question and so moves within its screen only; a move to a path
+  of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state
   that handles it, losing the same fields, since its question comes before its event.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows. In an `onError` list with a branch guarded

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { type Effect, formatProblem } from '../../files'
+import { regionStateIn, withAreas } from '../areas.fixture'
 import type { Contract } from '../contract'
 import { flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
@@ -88,6 +89,74 @@ describe('a navigate is a leave its trigger names', () => {
     expect(printed(contract)).toEqual([
       `${ON_LINK}.actions[1]: a transition moves the app once: a second navigate on it is refused`,
     ])
+  })
+
+  it('refuses a second navigate after an action, and in a region of a parallel state', () => {
+    const contract = sample()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    invoke.onError = { target: 'editing', actions: [navigate('/help'), navigate('/help')] }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.onError.actions[1]: a transition moves the app once: a second navigate on it is refused`,
+    ])
+
+    const areas = withAreas()
+
+    regionStateIn(areas, 'side', 'idle').on = {
+      'platform.opened': { actions: [navigate('/sample/$key'), navigate('/sample/$key')] },
+    }
+    areas.screens.platform.events = { opened: 'The page opened.' }
+
+    expect(printed(areas)).toContain(
+      `${AT}.states.editing.states.side.states.idle.on["platform.opened"].actions[1]: a transition moves the app once: a second navigate on it is refused`,
+    )
+  })
+
+  it('passes a move within its screen on a part an anchor of the screen derives', () => {
+    const contract = handling(sample(), 'editing', { actions: [navigate('/help')] })
+
+    screenIn(contract, 'sample').anchors['sample.help-dialog'] = {
+      kind: 'dialog',
+      derived: ['confirm-button'],
+    }
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'sample.help-dialog.confirm-button': { actions: [navigate('/sample/$key')] },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
+
+  it('refuses a move to another screen on a derived part, which carries no question', () => {
+    const contract = sample()
+
+    screenIn(contract, 'sample').anchors['sample.help-dialog'] = {
+      kind: 'dialog',
+      derived: ['confirm-button'],
+    }
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'sample.help-dialog.confirm-button': { actions: [navigate('/help')] },
+    })
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.help-dialog.confirm-button"].actions[0]: a navigate to another screen on "sample.help-dialog.confirm-button", a part of an anchor of this screen: a derived part has no declaration to carry the question before its leave, so it moves within its screen only`,
+    ])
+  })
+
+  it('refuses a navigate on a part another screen derives', () => {
+    const contract = sample()
+
+    screenIn(contract, 'help').anchors['help.close-dialog'] = {
+      kind: 'dialog',
+      derived: ['confirm-button'],
+    }
+    Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
+      'help.close-dialog.confirm-button': { actions: [navigate('/sample/$key')] },
+    })
+
+    expect(printed(contract)).toContain(
+      `${AT}.states.editing.on["help.close-dialog.confirm-button"].actions[0]: a navigate on the event of "help.close-dialog.confirm-button", which this screen does not declare: a control's leave asks for the fields of its own screen`,
+    )
   })
 
   it('refuses a control that leaves its screen in one branch and stays in another', () => {
