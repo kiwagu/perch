@@ -55,6 +55,14 @@ describe('instructionsOf', () => {
     )
     expect(instructions.session).toContain("never assume it from the action's name")
   })
+  it('says which reads an action of the platform or of the model changes', () => {
+    expect(instructions.session).toContain(
+      'its `changes` (the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds: platform actions a list, a section or a table takes as its `source`)',
+    )
+    expect(instructions.model).toContain(
+      'its `actions` with their parameters and their `changes` (as a platform action says it)',
+    )
+  })
   it('says a binding is a route of the router and a route a state address', () => {
     expect(instructions.screenMap).toContain('a TanStack Router path')
     expect(instructions.screenMap).toContain(

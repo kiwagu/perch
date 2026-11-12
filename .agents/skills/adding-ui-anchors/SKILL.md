@@ -56,7 +56,11 @@ code and the tests follow; the checks hold them to the contract.
    `contract/domain/model.schema.json` (`properties`, `x-perch.actions`), or into the `actions` of
    `contract/domain/platform.yaml` when the platform runs it; a platform action that sends a
    mail declares it under `mail`, and one that sends a mail that only tells, with no token,
-   lists it under `notices` (`references/patterns.md`, "A notice mail").
+   lists it under `notices` (`references/patterns.md`, "A notice mail"). A platform action
+   declares the reads it changes under `changes`: the platform actions a list, a section or a
+   table takes as its `source` whose answer, for the organisation, the account and the params
+   it ran with, differs once it succeeds (`organisations.invite` changes
+   `organisations.invitations`; `[]` for none); an action of the model says it the same way.
 3. **The name.** Follow the grammar of `contract/vocabulary.md`: the screen name, an optional
    segment for the part of the screen, then `<object>-<kind>` with a kind of "Kinds"
    (`organisation.invite.email-input`). The name is free when no screen file declares it,

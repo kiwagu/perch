@@ -182,6 +182,10 @@ describe('diffContracts', () => {
       flows: { sample: { added: [], removed: [] } },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
+      modelActionLines: {
+        'thing.createThing': { added: [], removed: [] },
+        'thing.updateThing': { added: [], removed: [] },
+      },
       descriptions: [],
     })
   })
@@ -1016,6 +1020,70 @@ describe('diffContracts and the platform actions', () => {
       `platform action lines added in resend: ${RESEND_LINES.join(', ')}`,
       'platform action lines added in sign-out: result: this device signs out and its data goes',
       'platform action lines removed in sign-out: result: this device signs out',
+    ])
+  })
+})
+
+describe('diffContracts and the reads an action changes', () => {
+  const before = fixtureContract()
+
+  /**
+   * The fixture contract with `sign-out` saying it changes `devices.list`, `thing.updateThing`
+   * saying it changes `things.list` and `things.read`, `thing.createThing` saying it changes
+   * none, and `thing.renameThing` added, which changes `things.read`.
+   */
+  const changing = (): Contract => {
+    const contract = structuredClone(before)
+    const signOut = contract.screens.platform.actions['sign-out']
+    const thing = contract.model.entities['thing']
+    const updateThing = thing?.actions['updateThing']
+    const createThing = thing?.actions['createThing']
+
+    if (
+      signOut === undefined ||
+      thing === undefined ||
+      updateThing === undefined ||
+      createThing === undefined
+    ) {
+      throw new Error('the fixture lost sign-out or the actions of thing')
+    }
+
+    signOut.changes = ['devices.list']
+    updateThing.changes = ['things.list', 'things.read']
+    createThing.changes = []
+    thing.actions['renameThing'] = { params: { id: '$id' }, changes: ['things.read'] }
+
+    return contract
+  }
+
+  it('lists a read a platform action comes to change, or stops changing, as an action line', () => {
+    expect(diffContracts(before, changing()).actionLines['sign-out']).toEqual({
+      added: ['changes devices.list'],
+      removed: [],
+    })
+    expect(diffContracts(changing(), before).actionLines['sign-out']).toEqual({
+      added: [],
+      removed: ['changes devices.list'],
+    })
+  })
+  it('lists the reads each model action comes to change or stops changing, by entity and action', () => {
+    expect(diffContracts(before, changing()).modelActionLines).toEqual({
+      'thing.createThing': { added: [], removed: [] },
+      'thing.renameThing': { added: ['changes things.read'], removed: [] },
+      'thing.updateThing': { added: ['changes things.list', 'changes things.read'], removed: [] },
+    })
+    expect(diffContracts(changing(), before).modelActionLines).toEqual({
+      'thing.createThing': { added: [], removed: [] },
+      'thing.renameThing': { added: [], removed: ['changes things.read'] },
+      'thing.updateThing': { added: [], removed: ['changes things.list', 'changes things.read'] },
+    })
+  })
+  it('prints the lines changed in each model action after those of the platform actions', () => {
+    expect(formatChanges(diffContracts(before, changing())).split('\n')).toEqual([
+      'contract changes: 1 platform action line added in sign-out, 1 model action line added in thing.renameThing, 2 model action lines added in thing.updateThing',
+      'platform action lines added in sign-out: changes devices.list',
+      'model action lines added in thing.renameThing: changes things.read',
+      'model action lines added in thing.updateThing: changes things.list, changes things.read',
     ])
   })
 })

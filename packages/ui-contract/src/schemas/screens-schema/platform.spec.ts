@@ -164,3 +164,22 @@ describe('platformSchema paged', () => {
     }
   })
 })
+
+describe('platformSchema changes', () => {
+  const changing = (value: unknown) =>
+    platformSchema.safeParse({
+      ...PLATFORM,
+      actions: { 'organisations.invite': { ...ACTION, changes: value } },
+    }).success
+
+  it('accepts the platform actions an action changes the answer of, and none', () => {
+    expect(changing(['organisations.invitations'])).toBe(true)
+    expect(changing(['devices.list', 'accounts.read'])).toBe(true)
+    expect(changing([])).toBe(true)
+  })
+  it('refuses a name no platform action could have, and anything but a list', () => {
+    for (const value of [['Devices.list'], ['devices list'], ['devices.'], 'devices.list', true]) {
+      expect(changing(value), JSON.stringify(value)).toBe(false)
+    }
+  })
+})

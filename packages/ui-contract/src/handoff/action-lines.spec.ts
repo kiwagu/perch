@@ -69,6 +69,23 @@ describe('actionLines', () => {
       'paged by 10, 25, 50, 25 by default',
     ])
   })
+  it('says each read the action changes, and none where it changes none', () => {
+    const invite = {
+      description: 'Invites an email.',
+      params: {},
+      result: 'an invitation is pending',
+      codes: [],
+    }
+
+    expect(
+      actionLines({ ...invite, changes: ['organisations.invitations', 'accounts.read'] }),
+    ).toEqual([
+      'result: an invitation is pending',
+      'changes organisations.invitations',
+      'changes accounts.read',
+    ])
+    expect(actionLines({ ...invite, changes: [] })).toEqual(['result: an invitation is pending'])
+  })
   it('has no line for an action one side lacks', () => {
     expect(actionLines(undefined)).toEqual([])
   })
