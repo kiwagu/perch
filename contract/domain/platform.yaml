@@ -164,7 +164,7 @@ actions:
         type: string
         description: The token the link of the confirmation mail carries in the address of /confirm-email.
     result: "the account's email is the new one, which signs it in from now on, and every device of the account shows it; every reset link of the account stops working, since it went to the old email; the old email gets the notice below, which names neither the new email nor any part of it; the device that opens the link is not signed in by it. A link unknown, used before or replaced by a newer one, one whose account changed its email or its password since the mail was sent, or one whose new email has got an account meanwhile, answers link-invalid; one older than a day link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
-    changes: [ accounts.list, accounts.read, organisations.members ]
+    changes: [ accounts.list, accounts.read, organisations.members, invitations.mine ]
     codes:
       - link-invalid
       - link-expired
