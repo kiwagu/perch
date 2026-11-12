@@ -13,9 +13,10 @@ import {
 import type { IdentitySpace } from '../identity-space'
 import {
   IDENTITY_KEY,
+  isMembershipsKey,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
   type MemoryStorage,
+  membershipsKeyOf,
   memoryStorage,
   saveDevice,
   savedMemberships,
@@ -137,7 +138,7 @@ function signedInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
 
   saveDevice(other, device)
 
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
+  for (const key of [TOKEN_KEY, IDENTITY_KEY, membershipsKeyOf(device.identity.id)]) {
     storage.changeElsewhere(key, other.get(key))
   }
 }
@@ -146,7 +147,7 @@ function signedInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
 function membershipWrites(storage: MemoryStorage): () => number {
   const set = vi.spyOn(storage, 'set')
 
-  return () => set.mock.calls.filter(([key]) => key === MEMBERSHIPS_KEY).length
+  return () => set.mock.calls.filter(([key]) => isMembershipsKey(key)).length
 }
 
 /** The lists `space` is told to follow from now on. */
@@ -366,7 +367,10 @@ describe('the adopter of a membership the gateway answers', () => {
     expect(session.memberships()).toEqual([asMember])
 
     // The other tab's event comes now, with what the storage holds: nothing changes.
-    storage.changeElsewhere(MEMBERSHIPS_KEY, storage.get(MEMBERSHIPS_KEY))
+    storage.changeElsewhere(
+      membershipsKeyOf(ann.identity.id),
+      storage.get(membershipsKeyOf(ann.identity.id)),
+    )
     await settle()
 
     expect(writes()).toBe(0)
@@ -398,7 +402,7 @@ describe('the adopter of a membership the gateway answers', () => {
     const follow = space.setMemberships.bind(space)
 
     vi.spyOn(storage, 'set').mockImplementation((key, value) => {
-      if (key === MEMBERSHIPS_KEY) {
+      if (isMembershipsKey(key)) {
         order.push('write')
       }
 
@@ -462,7 +466,7 @@ describe('the adopter of a membership the gateway answers', () => {
 
     // Another tab kept a later list meanwhile.
     storage.changeElsewhere(
-      MEMBERSHIPS_KEY,
+      membershipsKeyOf(ann.identity.id),
       JSON.stringify({ identity: ann.identity.id, memberships: [acme, globex] }),
     )
 

@@ -11,6 +11,8 @@ import {
   type TestWorldOptions,
 } from '../__fixtures__/session'
 import {
+  addLeftoverIdentity,
+  leftoverIdentities,
   type MemoryStorage,
   memoryStorage,
   pendingRevokes,
@@ -19,7 +21,6 @@ import {
   signingOutSince,
 } from '../storage'
 
-import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { spaceLockName } from './space-deletion'
 
 const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }

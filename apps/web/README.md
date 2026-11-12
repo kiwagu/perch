@@ -114,14 +114,33 @@ modeling stage.
   identity it was issued to, `{ identity, token }`: the calls made for an identity, its own, the
   organisation and device routes' and its channel's, read the token through its owner in one
   step, never another account's that another tab saved since)
-  and its memberships (`perch.session.memberships`, the current tenant in
+  and its memberships (`perch.session.memberships.<identity>`, the current tenant in
   `perch.session.tenant`) are kept in local storage, and the identity's space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
   projector, write path), with a database of its own for each organisation the identity
   belongs to (`openTenantSpace`: `indxdb://app-identity-<id>-t_<key>`, region `tenant:<key>`;
   `TenantSpaces` keeps them in step with the memberships). The tabs of a browser open a database
   one at a time, under the Web Lock `perch-open:<database>` (`openOneAtATime`): two engines
-  setting up the same new database at once conflict and one open fails. Reads and writes are routed by
+  setting up the same new database at once conflict and one open fails. The tabs share that
+  storage but hear each other's writes late (a browser hands another tab's write to this tab some
+  time after it was made, and no lock makes it sooner), so what a tab writes for an account goes
+  under that account's own key: its memberships, the email an email confirmation gave it
+  (`perch.session.email.<session>`, under a tag of the token of the session the confirmation was
+  asked in, read over the identity's email while that session lasts) and its platform roles. A tab that still shows an account another tab
+  signed out may write its list or confirm its email meanwhile: the next account's records stay
+  as they are, and no identity comes back without its token. A sign-out forgets the records of the
+  identity saved, or of the one the token names when a sign-in's save broke before the identity.
+  Known limits: two tabs of the SAME account can still write its memberships in the wrong order
+  (a demotion or a removal one tab heard, overwritten by another tab's older list); the next list
+  or welcome sets them right. And the identity and its token are one record each for the browser:
+  a tab that has not yet heard another tab sign the next account in can, with a sign-out or the
+  cleanup of a failed sign-in, remove that account's records, which signs it out on this browser
+  (it signs in again) and leaves its new session at the gateway until it expires; keeping them by
+  sign-in, as the sign-in page's words are kept, is the next step. Every write through the storage port the session uses
+  (`KeyValueStorage`) is made in `composition/storage/`, which the lint holds
+  (`eslint.config.js`); the device's own facts that adapters of their own write straight to
+  `localStorage` (a guest's theme, the install prompt, the probe that checks site storage works)
+  are outside it. Reads and writes are routed by
   region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
   and a command into the tenant region go to the current organisation (the one selected on
   this browser, otherwise the first by key; none refuses with `no organisation is selected`),
