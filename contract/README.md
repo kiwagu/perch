@@ -443,9 +443,9 @@ flight when what it reads for becomes another is dropped: its answer is shown no
 entered after another that rendered it too reads nothing, so an anchor no state lists, rendered
 in every state, is read only at those moments. Every other read is said by the flow, with the
 effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed
-what the list shows, never prose in a description. An action whose `changes` names the list's
-source (see "The folder") changes what the list shows: where a flow of the list's screen
-invokes it, the list reads again by a `read` on the outcome of that invoke.
+what the list shows, never prose in a description. The `changes` of an action (see "The
+folder") names the sources whose answer it changes, so it tells which lists of a screen that
+runs it show something else once it succeeds.
 `{ entity: <entity>, order, direction }`:
 the entries are the stored entries of that entity of the model, which the anchor follows as
 they change, here or on another device; such a list is never read.
