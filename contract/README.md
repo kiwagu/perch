@@ -1439,7 +1439,9 @@ gap is fixed in the contract files first, never worked around in a test.
   `main` compares the app it brings with the flows it brings) or at the commit the branch is at
   (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
   taken onto a branch whose app already follows its first, changes a flow the base may not have
-  at all), so a business commit may change a transition the app has not changed yet. The app's
+  at all; during a merge, the tip before it, unless the engine the merge brings cannot load that
+  tip's contract for any reason, a key it now requires among them, and then that tip gives no
+  flows to match), so a business commit may change a transition the app has not changed yet. The app's
   routes likewise: a binding may wait for its route, and a route that still reads as its
   binding did at the merge base (the same screen, the same path) is held to that binding as it
   was there. The hook names both commits, and the cache of the unit tests keys on them, so a
