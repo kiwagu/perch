@@ -28,6 +28,7 @@ import {
   asksSchema,
   bindingSchema,
   derivedFromSchema,
+  leavesSchema,
   platformSchema,
   screenSchema,
 } from './screens-schema'
@@ -169,6 +170,7 @@ const idSchema = z
       .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(

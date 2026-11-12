@@ -5,6 +5,7 @@ export {
   asksSchema,
   bindingRefSchema,
   derivedFromSchema,
+  leavesSchema,
   modelFieldPathSchema,
   platformActionNameSchema,
   sourceSchema,

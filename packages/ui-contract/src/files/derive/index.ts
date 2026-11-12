@@ -18,6 +18,7 @@ export {
 export { type FlowSources, flowSourcesOf } from './flow-errors'
 export { withDerivedParams } from './form-params'
 export { withDerivedInputs } from './inputs'
+export { type ControlMove, controlMovesOf, withDerivedLeaves, withoutWrittenLeaves } from './leaves'
 export { withDerivedPaging } from './paging'
 export { type DerivedQuestion, withDerivedQuestions, withQuestionCodes } from './questions'
 export { isBare, type Request, requestsOf } from './requests'
