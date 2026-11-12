@@ -11,6 +11,7 @@ describe('actionLines', () => {
         result: 'this device signs out',
         codes: ['failed', 'rate-limited'],
         roles: ['admin'],
+        changes: [],
       }),
     ).toEqual([
       'param forgetUnsent: boolean',
@@ -27,6 +28,7 @@ describe('actionLines', () => {
         params: {},
         result: 'the password is the new one',
         codes: [],
+        changes: [],
         mail: {
           to: 'email',
           language: 'locale',
@@ -60,6 +62,7 @@ describe('actionLines', () => {
         paged: { sizes: [10, 25, 50], default: 25 },
         result: 'a page of accounts',
         codes: ['failed'],
+        changes: [],
       }),
     ).toEqual([
       'param page: number',

@@ -50,9 +50,8 @@ const platformActionSchema = z
       ),
     changes: z
       .array(platformActionNameSchema)
-      .optional()
       .describe(
-        "The reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+        "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
       ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z

@@ -44,7 +44,7 @@ describe('readDescriptions', () => {
       'contract/domain/activities/thing.yaml:22 activity thing state saved',
       'contract/domain/model.schema.json:7 model entity thing',
       'contract/domain/model.schema.json:16 model action thing.createThing',
-      'contract/domain/model.schema.json:26 model field thing.id',
+      'contract/domain/model.schema.json:27 model field thing.id',
     ])
   })
   it('gives each its text as written and the kind of the field it is', () => {

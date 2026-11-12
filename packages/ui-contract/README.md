@@ -72,8 +72,8 @@ for Bun.
     screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
-    `entityDefinitionSchema`, each action of an entity a `ModelAction`: its `params` and, when it
-    says them, the reads it `changes`), `loadActivities(root)` (every `.yaml` file under
+    `entityDefinitionSchema`, each action of an entity a `ModelAction`: its `params` and the
+    reads it `changes`, which every action writes), `loadActivities(root)` (every `.yaml` file under
     `contract/domain/activities`, sorted by path, one activity each through `activitySchema`, its
     file named by its id; the folder is optional, so none is no problem) and
     `loadScenarios(root)` (every `.md` file under
@@ -124,7 +124,8 @@ for Bun.
     `contract/schemas/screen.schema.json`), `platformFileSchema` (an action's `paged`, the page
     sizes it answers each once, the smallest first, with its `default`, and its `changes`, the
     platform actions whose answer, for the organisation, the account and the params it ran
-    with, differs once it succeeds, a key an action of the model has too)
+    with, differs once it succeeds, written on every action, `[]` for none, a key every action
+    of the model writes too)
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
     on (the signed-in account for an action on its own account, else the one its parameters
@@ -205,8 +206,13 @@ for Bun.
     whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`),
     an invoke that says `read: false` reading in none of its outcomes, a branch that says
     `read: false` an outcome of an invoke (never the transition of an event) that reads nothing
-    itself, under no invoke that says it already, a navigate's search keys of the binding it
-    moves to, each value a literal, `{ anchor }`, a field its own screen declares (never a
+    itself, under no invoke that says it already, every branch of an invoke's `onDone` reading
+    each list, section or table of its own screen with a platform source that the invoke
+    holds, or saying `read: false`: one whose entry its `input` takes (`containersOf`), whose
+    source's `params` take a value its `input` takes, or whose source its action's `changes`
+    names, a failure holding none and an invoke that says `read: false` holding nothing, a
+    region written `by` its button held as its invoke (`flow/held-reads.ts`), a navigate's
+    search keys of the binding it moves to, each value a literal, `{ anchor }`, a field its own screen declares (never a
     `visibility-button` nor a secret field), or `{ item }`, an entry of its own screen with a
     `dataId`, of a list, a table or a section, into a key that takes a string, taken on the
     event of a control (`CONTROL_KINDS`) in the entry's part, never in an entry, an exit or an
@@ -259,8 +265,9 @@ for Bun.
     names unique within it, go to a parameter of the action or the account, take their
     language from one or the account, never the recipient, and link, when they do, to a screen with a route, every route of which needs no
     parameter: no `$param`, no splat, no required search key), `changesProblems` (rule 19, the
-    reads an action changes: each name of the `changes` of a platform action or of an action of
-    the model is a platform action, never the action itself, that a list, a section or a table
+    reads an action changes, which every action writes, the schema refusing one without them:
+    each name of the `changes` of a platform action or of an action of the model is a platform
+    action, never the action itself, that a list, a section or a table
     of some screen takes as its `source`, written once; a problem per name, at its place in the
     platform file or the model), `accessProblems` (rule 17, who a
     route serves: no binding's `guard` sends away an account its `roles` name, an anchor's

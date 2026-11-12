@@ -571,7 +571,7 @@ address. This example is illustrative, not a file of the app:
 
 ```yaml
 confirm-email-change:
-  # description, params (token), result, codes
+  # description, params (token), result, codes, changes
   notices:
     - name: email-changed
       to: account

@@ -39,6 +39,7 @@ function sample(): Contract {
     paged: { sizes: [10, 25, 50], default: 25 },
     result: 'the page of accounts, the newest first, and how many accounts the search finds',
     codes: ['failed'],
+    changes: [],
   }
   Object.assign(screen.bindings[0]?.search?.properties ?? {}, {
     q: { type: 'string' },
