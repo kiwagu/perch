@@ -7,6 +7,8 @@ import { useTracksInput } from '@workspace/ui/unsaved-input'
 export interface InputProps extends React.ComponentProps<'input'> {
   /** The field keeps what is typed until an action takes it (the default); false for a field whose own change runs its action. */
   readonly holdsInput?: boolean | undefined
+  /** The anchor the field renders, which it also reports while it holds unsaved input. */
+  readonly 'data-testid'?: string | undefined
 }
 
 /** A value as the input shows it. */
@@ -16,6 +18,7 @@ const text = (value: React.ComponentProps<'input'>['value']): string | undefined
 function Input({ className, type, holdsInput = true, onChange, ...props }: InputProps) {
   const { typed } = useTracksInput({
     holdsInput,
+    anchor: props['data-testid'],
     value: text(props.value),
     defaultValue: text(props.defaultValue) ?? '',
   })
