@@ -13,8 +13,8 @@ import type { OrganisationsApi } from './organisations-api'
 import {
   IDENTITY_KEY,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
   type MemoryStorage,
+  membershipsKeyOf,
   memoryStorage,
   saveDevice,
   savedMemberships,
@@ -116,7 +116,7 @@ function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
 
   saveDevice(other, device)
 
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
+  for (const key of [TOKEN_KEY, IDENTITY_KEY, membershipsKeyOf(device.identity.id)]) {
     storage.changeElsewhere(key, other.get(key))
   }
 }
@@ -171,7 +171,7 @@ describe('createOrganisations', () => {
 
     // Meanwhile another tab keeps the identity's memberships: it joined Globex.
     storage.changeElsewhere(
-      MEMBERSHIPS_KEY,
+      membershipsKeyOf(ann.identity.id),
       JSON.stringify({ identity: ann.identity.id, memberships: [globex] }),
     )
     answer()

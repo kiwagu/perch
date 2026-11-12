@@ -14,7 +14,7 @@ import type {
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace } from '../identity-space'
-import { IDENTITY_KEY, isRolesKey, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
+import { IDENTITY_KEY, isMembershipsKey, isRolesKey, savedIdentity } from '../storage'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
@@ -154,7 +154,7 @@ export class SessionService implements SessionPort {
       options.storage.onChangeElsewhere((key) => {
         if (key === undefined || key === IDENTITY_KEY) {
           this.#elsewhere.follow()
-        } else if (key === MEMBERSHIPS_KEY) {
+        } else if (isMembershipsKey(key)) {
           this.#organisations.followSaved()
         } else if (isRolesKey(key)) {
           this.#roles.followSaved()

@@ -504,7 +504,8 @@ describe('a sign-in that throws while it holds its token', () => {
     const { storage } = brokenStorage({ set: ['perch.session.identity'] })
     const auth = fakeGatewayAuth()
 
-    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+    const annId = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap().id
+
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -513,7 +514,7 @@ describe('a sign-in that throws while it holds its token', () => {
 
     expect(failed.code).toBe('data:AUTH_FAILED')
     expectNobodySaved(storage)
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
+    expect(storage.get(`perch.session.memberships.${annId}`)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
     expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
   })
@@ -582,7 +583,8 @@ describe('a sign-in that throws while it holds its token', () => {
     })
     const auth = fakeGatewayAuth()
 
-    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+    const annId = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap().id
+
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -601,7 +603,7 @@ describe('a sign-in that throws while it holds its token', () => {
       'remove perch.session.token',
     ])
     expectNobodySaved(storage)
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
+    expect(storage.get(`perch.session.memberships.${annId}`)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([])
     expect(tab.failures).toContainEqual(unkept)
     // The lock was let go: the next sign-in is not held back, and sends the held token first.

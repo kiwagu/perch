@@ -8,7 +8,7 @@
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
-import type { KeyValueStorage } from '../storage'
+import type { KeyValueStorage } from './key-value'
 
 export const LEFTOVER_IDENTITIES_KEY = 'perch.session.leftover-identities'
 

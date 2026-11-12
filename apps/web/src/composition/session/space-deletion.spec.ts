@@ -6,9 +6,8 @@ import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { FakeLocks, manualClock } from '@workspace/replica/testing'
 
 import type { TenantDatabaseInventory } from '../retained-tenant-databases'
-import { memoryStorage, saveDevice } from '../storage'
+import { addLeftoverIdentity, leftoverIdentities, memoryStorage, saveDevice } from '../storage'
 
-import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { DELETE_GRACE_MS, SpaceDeletion } from './space-deletion'
 
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }

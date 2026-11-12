@@ -11,9 +11,9 @@ import {
   forgetDevice,
   IDENTITY_KEY,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
   type MemoryStorage,
   markSignIn,
+  membershipsKeyOf,
   memoryStorage,
   saveDevice,
   savedIdentity,
@@ -85,7 +85,7 @@ function signedInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
 
   saveDevice(theirs, device)
 
-  for (const key of [MEMBERSHIPS_KEY, TOKEN_KEY, IDENTITY_KEY]) {
+  for (const key of [membershipsKeyOf(device.identity.id), TOKEN_KEY, IDENTITY_KEY]) {
     if (storage.get(key) !== theirs.get(key)) {
       storage.changeElsewhere(key, theirs.get(key))
     }

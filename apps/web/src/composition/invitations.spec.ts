@@ -14,8 +14,8 @@ import { createInvitations } from './invitations'
 import {
   IDENTITY_KEY,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
   type MemoryStorage,
+  membershipsKeyOf,
   memoryStorage,
   saveDevice,
   savedMemberships,
@@ -106,7 +106,7 @@ function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
 
   saveDevice(other, device)
 
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
+  for (const key of [TOKEN_KEY, IDENTITY_KEY, membershipsKeyOf(device.identity.id)]) {
     storage.changeElsewhere(key, other.get(key))
   }
 }
@@ -149,7 +149,7 @@ describe('createInvitations', () => {
     const accepting = createInvitations(api, session).accept(received.id)
 
     storage.changeElsewhere(
-      MEMBERSHIPS_KEY,
+      membershipsKeyOf(ann.identity.id),
       JSON.stringify({ identity: ann.identity.id, memberships: [globex] }),
     )
     answer()

@@ -24,6 +24,7 @@ import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 import {
   addPendingRevoke,
   type KeptDevice,
+  membershipsKeyOf,
   memoryStorage,
   pendingRevokes,
   saveDevice,
@@ -1210,7 +1211,10 @@ describe('SessionService memberships', () => {
     const elsewhere = memoryStorage()
 
     saveMemberships(elsewhere, ann.identity.id, [acme])
-    storage.changeElsewhere('perch.session.memberships', elsewhere.get('perch.session.memberships'))
+    storage.changeElsewhere(
+      membershipsKeyOf(ann.identity.id),
+      elsewhere.get(membershipsKeyOf(ann.identity.id)),
+    )
 
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(session.memberships()).toEqual([acme])
@@ -1549,7 +1553,7 @@ describe('SessionService memberships', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(session.memberships()).toEqual([])
     expect(session.currentTenant()).toBeUndefined()
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
+    expect(storage.get(`perch.session.memberships.${ann.identity.id}`)).toBeUndefined()
     expect(storage.get('perch.session.tenant')).toBeUndefined()
     expect(heard).toBeGreaterThan(0)
   })

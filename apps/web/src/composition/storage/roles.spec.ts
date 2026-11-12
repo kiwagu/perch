@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { identityIdFactory } from '@workspace/ids'
 
 import { memoryStorage } from './key-value'
-import { MEMBERSHIPS_KEY } from './memberships'
+import { membershipsKeyOf } from './memberships'
 import { dropRole, forgetRoles, isRolesKey, rolesKeyOf, savedRoles, saveRoles } from './roles'
 import { forgetDevice, IDENTITY_KEY, saveDevice } from './signed-in'
 
@@ -19,7 +19,7 @@ describe("the account's platform roles on the device", () => {
   it('knows its keys from the session’s other keys', () => {
     expect(isRolesKey(rolesKeyOf(ann))).toBe(true)
 
-    for (const key of [IDENTITY_KEY, MEMBERSHIPS_KEY, 'perch.session.token', 'perch.theme']) {
+    for (const key of [IDENTITY_KEY, membershipsKeyOf(ann), 'perch.session.token', 'perch.theme']) {
       expect(isRolesKey(key)).toBe(false)
     }
   })
@@ -119,7 +119,7 @@ describe("the account's platform roles on the device", () => {
     forgetDevice(storage)
 
     expect(storage.get(rolesKeyOf(ann))).toBeUndefined()
-    expect(storage.get(MEMBERSHIPS_KEY)).toBeUndefined()
+    expect(storage.get(membershipsKeyOf(ann))).toBeUndefined()
     // A record of another identity is no part of this sign-out.
     expect(savedRoles(storage, bob)).toEqual(['operator'])
   })
