@@ -112,7 +112,7 @@ describe('flowProblems in a parallel state', () => {
     const busy = regionStateIn(contract, 'side', 'busy').invoke ?? expect.unreachable('an invoke')
 
     parallel.meta = { address: { path: '/sample' } }
-    parallel.exit = [{ type: 'navigate', params: { to: '/nowhere' } }]
+    parallel.exit = [show('sample.gone-message', ['saved'])]
     regionStateIn(contract, 'form', 'open').entry = [show('sample.save-button', ['gone'])]
     regionStateIn(contract, 'form', 'closed').on = {
       'sample.a-button': { guard: 'formOpen', target: 'open' },
@@ -125,7 +125,7 @@ describe('flowProblems in a parallel state', () => {
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.meta.address.path: "/sample" is the path of no binding of the screen`,
-      `${AT}.states.editing.exit[0].params.to: "/nowhere" is the path of no binding`,
+      `${AT}.states.editing.exit[0].params.anchor: "sample.gone-message" is not a declared anchor`,
       `${IN}.form.states.closed.on["sample.a-button"].guard: "formOpen" is not a guard of meta.guards`,
       `${IN}.form.states.open.entry[0].params.codes[0]: "sample.save-button" carries no code "gone"`,
       `${IN}.side.states.idle.on["sample.gone-button"]: "sample.gone-button" is not a declared anchor`,

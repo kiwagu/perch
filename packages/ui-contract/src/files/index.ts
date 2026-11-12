@@ -6,6 +6,8 @@ export {
 } from './activities'
 export {
   CONFIRM_RULE_ROW,
+  type ControlMove,
+  controlMovesOf,
   type DerivedQuestion,
   type DescriptionContext,
   derivedDescriptionOf,
