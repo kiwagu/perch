@@ -98,6 +98,119 @@ describe('the walk of a flow', () => {
 
     expect(shadowed).toMatchObject({ expected: { state: 'c' }, actual: { state: 'b' } })
   })
+  it('carries a navigate whose search takes what a field holds, as written', () => {
+    const navigate = {
+      type: 'navigate',
+      params: { to: '/forgot', search: { email: { anchor: 'sample.email-input' } } },
+    } as const
+    const flow = flowOf({
+      initial: 'form',
+      states: {
+        form: { on: { 'sample.forgot-link': { target: 'gone', actions: [navigate] } } },
+        gone: { type: 'final' },
+      },
+    })
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([[navigate]])
+  })
+  it('carries a read of a list, as written, and runs an invoke that says read: false', () => {
+    const read = { type: 'read', params: { anchor: 'sample.devices-list' } } as const
+    const flow = flowOf({
+      initial: 'viewing',
+      states: {
+        viewing: {
+          on: {
+            'sample.remove-button': { target: 'removing' },
+            'sample.copy-button': { target: 'copying' },
+          },
+        },
+        removing: {
+          invoke: {
+            src: 'platform.devices.revoke',
+            onDone: { target: 'viewing', actions: [read] },
+            onError: { target: 'viewing', actions: [show(['failed']), read] },
+          },
+        },
+        copying: {
+          invoke: { src: 'platform.invitations.copy', onDone: { target: 'viewing' }, read: false },
+        },
+      },
+    })
+
+    for (const { label, expected, actual } of walk(flow).cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([
+      [],
+      [],
+      [read],
+      [show(['failed']), read],
+      [],
+    ])
+  })
+  it('builds and walks a flow whose branch says read: false, each branch taken as usual', () => {
+    const read = { type: 'read', params: { anchor: 'sample.members-list' } } as const
+    const flow = flowOf({
+      initial: 'viewing',
+      meta: { guards: { ownDemotion: 'the account changed its own role to member' } },
+      states: {
+        viewing: { on: { 'sample.role-select': { target: 'changing' } } },
+        changing: {
+          invoke: {
+            src: 'platform.organisations.set-role',
+            onDone: [
+              { target: 'viewing', guard: 'ownDemotion', read: false },
+              { target: 'viewing', actions: [read] },
+            ],
+            onError: { target: 'viewing', read: false, actions: [show(['failed'])] },
+          },
+        },
+      },
+    })
+    const machine = machineOf(flow, new Set())
+
+    expect(machine.states['changing']?.invoke[0]?.src).toBe('platform.organisations.set-role')
+
+    for (const { label, expected, actual } of walk(flow).cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(
+      walk(flow).cases.map(({ label, actual }) => [label, actual.state, actual.effects]),
+    ).toEqual([
+      ['viewing sample.role-select[0]', 'changing', []],
+      ['changing onDone[0]', 'viewing', []],
+      ['changing onDone[1]', 'viewing', [read]],
+      ['changing onError[0]', 'viewing', [show(['failed'])]],
+    ])
+  })
+  it('carries a clear that empties a field, a secret one, as written', () => {
+    const emptied = { type: 'clear', params: { anchor: 'sample.password-input' } } as const
+    const flow = flowOf({
+      initial: 'form',
+      states: {
+        form: { on: { 'sample.save-button': { target: 'saving' } } },
+        saving: {
+          invoke: {
+            src: 'platform.change-password',
+            onDone: { target: 'form', actions: [emptied, show(['saved'])] },
+            onError: { target: 'form', actions: [show(['failed'])] },
+          },
+        },
+      },
+    })
+
+    for (const { label, expected, actual } of walk(flow).cases) {
+      expect(actual, label).toEqual(expected)
+    }
+
+    expect(walk(flow).cases.map(({ actual }) => actual.effects)).toEqual([
+      [],
+      [emptied, show(['saved'])],
+      [show(['failed'])],
+    ])
+  })
   it("expects the effects in XState's order: exit, the transition's, entry; none on staying, a clear among them", () => {
     const flow = flowOf({
       initial: 'a',

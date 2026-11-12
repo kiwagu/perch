@@ -1,7 +1,8 @@
 /**
  * Collects the anchors and codes one source file declares, as the contract check reads
  * them: `data-testid`, `testId` and `*TestId` attributes, `testId:` keys and
- * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`; the
+ * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`, each with
+ * its base when that is a literal; the
  * `data-code` attributes, `code:` keys and `<NAME>_CODES` maps. A name or a `testIdFor()`
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
  * problem, since no check can follow it. A key or a map value is a contract code only in
@@ -40,7 +41,8 @@ export const HOLDS_INPUT_VALUE =
 export interface Collected {
   file: string
   literals: Array<{ anchor: string; form: 'attribute' | 'prop' | 'key' | 'constant'; line: number }>
-  derived: Array<{ suffix: string; line: number }>
+  /** The suffix of each `testIdFor()`, with its base when the call writes it as a literal. */
+  derived: Array<{ suffix: string; base?: string; line: number }>
   codes: Array<{ code: string; form: 'attribute' | 'key' | 'map'; line: number }>
   /** `holdsInput` written as a literal on the element of a field's anchor. */
   inputs: Array<{ anchor: string; holdsInput: boolean; line: number }>
@@ -207,12 +209,17 @@ export function collectFromSource(text: string, file: string): Collected {
         return
       }
 
+      const base = staticText(node.arguments[0])
       const suffix = staticText(node.arguments[1])
 
       if (suffix === undefined) {
         collected.problems.push({ file, line: line(node.start), message: RUNTIME_SUFFIX })
       } else {
-        collected.derived.push({ suffix, line: line(node.start) })
+        collected.derived.push({
+          suffix,
+          ...(base === undefined ? {} : { base }),
+          line: line(node.start),
+        })
       }
     },
   }).visit(program)

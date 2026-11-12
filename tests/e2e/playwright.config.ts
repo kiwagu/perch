@@ -18,12 +18,16 @@ export const BASE_URL = z
 export default defineConfig({
   testDir: './src',
   testMatch: '**/*.e2e.spec.ts',
-  // Measured 2026-10-16 on the dev host, 4 tests (2 specs x 2 projects): 1 worker
-  // 28.3 s, 2 workers 18.4 s, both stable over repeated runs; every test signs up a
-  // fresh account in a fresh browser context, so specs share no state. CI keeps one
-  // worker so its log reads in spec order.
-  workers: process.env['CI'] ? 1 : 2,
-  reporter: [['list'], ['html', { open: 'never' }]],
+  // Every test signs up a fresh account in a fresh browser context, so specs share no state, and
+  // each worker's browsers claim a client address of their own at the front
+  // (`src/support/client-address.ts`), so the gateway's per-address limits do not bind the number
+  // of workers either. Two, measured 2026-11-06 on the dev host (14 cores, 20 threads) over the
+  // 107 tests: 237 s; three took 211 s, only 11% less, for 3.2 GB of memory at the peak instead
+  // of 2.2 GB, and each test ran about 40% longer: on a host other runs share, that once took
+  // `signed-out-before-data` past the default 30-second budget, with no tab found waiting on
+  // another. The reporter prints each spec file's tests together.
+  workers: 2,
+  reporter: [['./scripts/spec-reporter.ts'], ['html', { open: 'never' }]],
   // Screenshot baselines are not committed (images stay out of the repository): the
   // first run on a machine writes them, later runs compare against them.
   updateSnapshots: 'missing',
@@ -37,11 +41,12 @@ export default defineConfig({
     serviceWorkers: 'block',
     trace: 'retain-on-failure',
   },
-  // Mobile first: every spec runs on a phone, then on a desktop.
+  // Mobile first: every test runs on a phone, and the `@smoke` ones on a desktop too.
   projects: [
     { name: 'mobile', use: { ...devices['Pixel 7'] } },
     {
       name: 'desktop',
+      grep: /@smoke/,
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
     },
   ],

@@ -4,11 +4,18 @@
  * are the screen's independent areas (`files/flow-nodes.ts`). Its `initial` is a state of the flow and
  * a region's `initial` a state of that region; every `target` leads where XState resolves
  * it (`targets.ts`); every event, effect and address names what the contract declares
- * (`references.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
- * by that action's parameters; every guard is declared in `meta.guards` and every declared
+ * (`references.ts`; a read a list of its own screen with a platform source, an invoke that
+ * says `read: false` reads in no outcome, and a branch that says it is an outcome of an
+ * invoke, reads nothing itself and sits under no invoke that says it already, `reads.ts`); an `invoke` runs an action as a binding does (rule 3), its `input` keyed
+ * by that action's parameters, and every branch of its `onDone` reads each list of its screen
+ * with a platform source that its action may change, or says `read: false` (`held-reads.ts`); every guard is declared in `meta.guards` and every declared
  * one is used, across the whole tree; every state is reachable and every plain state that is
  * not final has a way out (`reach.ts`); within a parallel state an event belongs to one area
- * (`areas.ts`).
+ * (`areas.ts`); what a state renders names the screen's anchors, and a state renders the
+ * anchors it handles (`renders.ts`); a guard by failure code guards only a branch of an
+ * invoke's `onError`, naming codes its action fails with (`code-guards.ts`); the data-id of an
+ * entry, in a navigate's search or an invoke's input, comes on the event of a control in the
+ * entry's part (`items.ts`).
  */
 
 import type { FlowState, Problem } from '../../files'
@@ -17,9 +24,15 @@ import { type Contract, declaredAnchors, has } from '../contract'
 import { actionProblems, lookupsOf, searchOf } from '../lookups'
 
 import { areaProblems } from './areas'
+import { codeGuardProblems } from './code-guards'
+import { heldReadProblems } from './held-reads'
 import type { At, InFlow } from './in-flow'
+import { itemProblems } from './items'
+import { leaveProblems } from './leaves'
 import { stuckProblems, unreachableProblems } from './reach'
+import { branchReadOptOutProblems, readOptOutProblems } from './reads'
 import { addressProblems, effectProblems, eventProblems } from './references'
+import { rendersProblems } from './renders'
 import { transitionsProblems } from './targets'
 
 /** What a state of any kind may hold: a parallel state and a region state hold part of it. */
@@ -55,7 +68,10 @@ function stateProblems(
           ...(invoke.onError === undefined
             ? []
             : transitionsProblems(inFlow, invoke.onError, [...at, 'invoke', 'onError'], within)),
+          ...readOptOutProblems(inFlow, invoke, [...at, 'invoke']),
+          ...heldReadProblems(inFlow, invoke, [...at, 'invoke']),
         ]),
+    ...branchReadOptOutProblems(inFlow, state, at),
   ]
 }
 
@@ -132,6 +148,10 @@ export function flowProblems(contract: Contract): Problem[] {
           ]),
       ...flowNodes(flow).flatMap((node) => nodeProblems(inFlow, node)),
       ...areaProblems(inFlow),
+      ...rendersProblems(inFlow),
+      ...codeGuardProblems(inFlow),
+      ...itemProblems(inFlow),
+      ...leaveProblems(inFlow),
       ...unusedGuardProblems(inFlow),
       ...unreachableProblems(inFlow),
       ...stuckProblems(inFlow),

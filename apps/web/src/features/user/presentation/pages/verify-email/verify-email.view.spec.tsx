@@ -6,19 +6,20 @@ import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
-import { VerifyEmailView, type VerifyEmailViewProps } from './verify-email.view'
+import {
+  type VerifyEmailListed,
+  VerifyEmailView,
+  type VerifyEmailViewProps,
+} from './verify-email.view'
+
+/** What a state renders of the anchors only some render: `anchor` alone. */
+const only = (anchor: VerifyEmailListed) => (asked: VerifyEmailListed) => asked === anchor
 
 function renderView(props: Partial<VerifyEmailViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const onResend = vi.fn((_email: string) => Promise.resolve(true))
 
   renderWithProviders(
-    <VerifyEmailView
-      verifying={false}
-      showForm={false}
-      canResend={false}
-      onResend={onResend}
-      {...props}
-    />,
+    <VerifyEmailView renders={() => false} canResend={false} onResend={onResend} {...props} />,
     { locale, es },
   )
 
@@ -30,7 +31,7 @@ const type = (testId: string, value: string) =>
 
 describe('VerifyEmailView', () => {
   it('says the link is being checked, under its heading', () => {
-    renderView({ verifying: true })
+    renderView({ renders: only('user.verify-email.status') })
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       en['user.verify-email.title'],
@@ -47,7 +48,7 @@ describe('VerifyEmailView', () => {
   })
 
   it('says a link verified before is verified, beside the link to sign in', () => {
-    renderView({ message: 'verified-before' })
+    renderView({ message: 'verified-before', renders: only('user.verify-email.sign-in-link') })
 
     const message = screen.getByTestId('user.verify-email.message')
 
@@ -70,7 +71,7 @@ describe('VerifyEmailView', () => {
     ['data:OFFLINE', 'failed'],
     ['verify-email:UNKNOWN', 'failed'],
   ] as const)('shows %s as %s, with the form that sends a new link', (error, code) => {
-    renderView({ error, showForm: true, canResend: true })
+    renderView({ error, renders: only('user.verify-email.form'), canResend: true })
 
     const shown = screen.getByTestId('user.verify-email.error')
 
@@ -84,8 +85,31 @@ describe('VerifyEmailView', () => {
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, with no form, no status and no way to sign in',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const shown = screen.getByTestId('user.verify-email.error')
+
+      expect(shown.getAttribute('data-code')).toBe('account-banned')
+      expect(shown.textContent).toBe(texts['user.verify-email.error.account-banned'])
+      expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.message')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    },
+  )
+
   it('sends a new link to the email typed', () => {
-    const { onResend } = renderView({ error: 'data:LINK_INVALID', showForm: true, canResend: true })
+    const { onResend } = renderView({
+      error: 'data:LINK_INVALID',
+      renders: only('user.verify-email.form'),
+      canResend: true,
+    })
 
     type('user.verify-email.email-input', 'ann@example.test')
     fireEvent.click(screen.getByTestId('user.verify-email.resend-button'))
@@ -97,7 +121,11 @@ describe('VerifyEmailView', () => {
   })
 
   it('holds the button while it cannot send', () => {
-    renderView({ error: 'data:LINK_INVALID', showForm: true, canResend: false })
+    renderView({
+      error: 'data:LINK_INVALID',
+      renders: only('user.verify-email.form'),
+      canResend: false,
+    })
 
     expect(screen.getByTestId('user.verify-email.resend-button').hasAttribute('disabled')).toBe(
       true,
@@ -108,7 +136,7 @@ describe('VerifyEmailView', () => {
     renderView({
       message: 'check-your-mail',
       sentTo: 'ann@example.test',
-      showForm: true,
+      renders: only('user.verify-email.form'),
       canResend: true,
     })
 
@@ -124,7 +152,10 @@ describe('VerifyEmailView', () => {
   })
 
   it('speaks the language the app speaks', () => {
-    renderView({ error: 'data:LINK_EXPIRED', showForm: true, canResend: true }, 'es')
+    renderView(
+      { error: 'data:LINK_EXPIRED', renders: only('user.verify-email.form'), canResend: true },
+      'es',
+    )
 
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.verify-email.title'],

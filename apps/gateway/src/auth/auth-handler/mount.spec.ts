@@ -9,19 +9,26 @@ import { RequestLimits } from '../../limits/request-limits'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import {
+  accountServicesOf,
+  betterAuthToken,
   deviceHeaders,
   type OpenAuthOptions,
   openAuth,
   signUpOn,
 } from '../__fixtures__/auth-instance'
 import identityRefuseStatement from '../__fixtures__/identity-refuse.surql'
+import { ADMIN_PATHS } from '../admin-paths'
 
 import {
   ANN,
+  acceptedSignIn,
   fakeConnections,
   mountedOnFakeAuth,
+  noAccounts,
   noSessions,
   printedDuring,
+  STAND_IN_ACCOUNT,
+  signedInAnswer,
   signUpRequest,
 } from './__fixtures__/mount'
 import { authHandler } from './mount'
@@ -46,7 +53,11 @@ const UNSERVED = [
   '/get-session',
   '/sign-out',
   '/update-user',
-  '/change-password',
+  // Better Auth's own reset link, a GET that redirects with the token, and its server-only
+  // endpoints of a password: the gateway answers the reset and the change itself.
+  '/reset-password/reset-token-0123456789abcdef',
+  '/verify-password',
+  '/set-password',
   '/delete-user',
   '/token',
   '/jwks',
@@ -107,6 +118,11 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
   const route = authHandler({
     auth: opened.auth,
     sessions: noSessions,
+    ...accountServicesOf(opened),
+    deletions: noAccounts.deletions,
+    departure: noAccounts.departure,
+    teardown: noAccounts.teardown,
+    profiles: noAccounts.profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
     clock: opened.clock,
@@ -232,7 +248,7 @@ describe('authHandler', () => {
   })
 
   it('hands the sign-up and the sign-in to Better Auth at their public paths, and nothing else', async () => {
-    const { route, received, clock } = mountedOnFakeAuth(status(200))
+    const { route, received, clock } = mountedOnFakeAuth(signedInAnswer)
     const up = route(signUpRequest(ANN), FROM)
 
     await clock.advance(SIGN_UP_FLOOR_MS)
@@ -265,6 +281,33 @@ describe('authHandler', () => {
     expect(received).toHaveLength(0)
   })
 
+  it("answers 404 to every endpoint of Better Auth's admin plugin, by GET and by POST, without reaching it", async () => {
+    const { route, received } = mountedOnFakeAuth(signedInAnswer)
+    const answers: unknown[] = []
+
+    for (const path of ADMIN_PATHS) {
+      for (const method of ['GET', 'POST']) {
+        const response = await route(
+          new Request(`http://gateway.test/auth${path}`, {
+            method,
+            headers: { 'content-type': 'application/json', 'x-perch-device': 'laptop' },
+            ...(method === 'POST' ? { body: JSON.stringify({ userId: STAND_IN_ACCOUNT }) } : {}),
+          }),
+          FROM,
+        )
+
+        answers.push({ path, method, status: response?.status, body: await response?.json() })
+      }
+    }
+
+    expect(answers).toEqual(
+      ADMIN_PATHS.flatMap((path) =>
+        ['GET', 'POST'].map((method) => ({ path, method, ...notFound })),
+      ),
+    )
+    expect(received).toHaveLength(0)
+  })
+
   it('answers 405 with Allow to another method on the paths it serves', async () => {
     const { route, received } = mountedOnFakeAuth(status(200))
 
@@ -275,6 +318,11 @@ describe('authHandler', () => {
       // Better Auth's own verification is a GET with the token in its URL: never served so.
       ['GET', '/auth/verify-email?token=a.link.token'],
       ['GET', '/auth/send-verification-email'],
+      ['GET', '/auth/request-password-reset'],
+      ['GET', '/auth/reset-password?token=reset-token-0123456789abcdef'],
+      ['GET', '/auth/change-password'],
+      ['GET', '/auth/change-email'],
+      ['GET', '/auth/confirm-email?token=a.link.token'],
     ] as const) {
       const response = await route(new Request(`http://gateway.test${path}`, { method }), FROM)
 
@@ -371,7 +419,9 @@ describe('authHandler', () => {
 
   it("clears an email's failed sign-ins once one succeeds", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 200 ? signedInAnswer() : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 200
@@ -491,9 +541,12 @@ describe('authHandler', () => {
   })
 
   it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
-    const body = JSON.stringify({ token: 'raw-token' })
+    const body = JSON.stringify(acceptedSignIn())
     const { route, clock } = mountedOnFakeAuth(() => {
-      const headers = new Headers({ 'content-type': 'application/json' })
+      const headers = new Headers({
+        'content-type': 'application/json',
+        'set-auth-token': 'raw-token.signature',
+      })
 
       headers.append('Set-Cookie', 'better-auth.session_token=signed; Path=/; HttpOnly')
       headers.append('Set-Cookie', 'better-auth.session_data=cached; Path=/; HttpOnly')
@@ -505,7 +558,8 @@ describe('authHandler', () => {
     expect(response?.status).toBe(200)
     expect(response?.headers.getSetCookie()).toEqual([])
     expect(response?.headers.has('set-cookie')).toBe(false)
-    expect(response?.headers.get('content-type')).toBe('application/json')
+    expect(response?.headers.get('set-auth-token')).toBe('raw-token.signature')
+    expect(response?.headers.get('content-type')).toMatch(/^application\/json\b/)
     expect(await response?.text()).toBe(body)
 
     // A sign-up answers the mount's own 202: nothing of Better Auth's answer, its cookies included.
@@ -547,7 +601,7 @@ describe('authHandler', () => {
 
     // Verified through the mail the sign-up sent, the account signs in.
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 
@@ -634,15 +688,12 @@ describe('authHandler', () => {
   })
 
   it("closes the device's sockets of the identity signed in with 1000 before it answers the sign-in", async () => {
-    const ann = identityIdFactory.create()
+    const ann = STAND_IN_ACCOUNT
     let release = () => {}
     const closing = new Promise<void>((resolve) => {
       release = resolve
     })
-    const { route, closes } = mountedOnFakeAuth(
-      () => Response.json({ token: 'raw-token', user: { id: ann } }),
-      closing,
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)), closing)
     let answered = false
     const answer = route(signIn('ann@example.test'), FROM).then((response) => {
       answered = true
@@ -656,7 +707,7 @@ describe('authHandler', () => {
     release()
 
     expect((await answer)?.status).toBe(200)
-    expect(await (await answer)?.json()).toEqual({ token: 'raw-token', user: { id: ann } })
+    expect(await (await answer)?.json()).toEqual(acceptedSignIn(ann))
   })
 
   it('closes no socket for a sign-up Better Auth accepted: it signs nothing in', async () => {
@@ -676,28 +727,33 @@ describe('authHandler', () => {
   })
 
   it('closes nothing for a sign-in Better Auth refused, or an answer that names no identity or no device', async () => {
-    const ann = identityIdFactory.create()
-    const answers: Array<() => Response> = [
-      () => Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    const ann = STAND_IN_ACCOUNT
+    const refused = await mountedOnFakeAuth(() =>
+      Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    ).route(signIn('ann@example.test'), FROM)
+
+    expect(refused?.status).toBe(401)
+    expect(await refused?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
+
+    // An acceptance that names no session of an account cannot be held to one: it fails, and so
+    // does one that names the account without its email, its name or whether it is verified.
+    for (const answer of [
       () => new Response('not json', { status: 200 }),
       () => Response.json({ token: 'raw-token' }),
       () => Response.json({ token: 'raw-token', user: { id: 'not-an-identity' } }),
-    ]
-
-    for (const answer of answers) {
+      () => Response.json({ token: 'raw-token', user: { id: ann } }),
+    ]) {
       const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
 
-      expect(response?.status).toBe(answer().status)
-      expect(await response?.text()).toBe(await answer().text())
+      expect(response?.status).toBe(500)
+      expect(await response?.json()).toEqual({ code: 'internal' })
       expect(closes).toEqual([])
     }
 
     // A sign-in that names no device: Better Auth refuses it, and a stand-in that does not closes
     // nothing all the same.
-    const { route, closes } = mountedOnFakeAuth(() =>
-      Response.json({ token: 'raw-token', user: { id: ann } }),
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)))
     const unnamed = new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -719,7 +775,7 @@ describe('authHandler', () => {
     expect((await up).status).toBe(202)
     expect(closes).toEqual([])
     await auth.api.verifyEmail({
-      query: { token: linkToken(await outbox.next(ANN)) },
+      query: { token: betterAuthToken(linkToken(await outbox.next(ANN))) },
       headers: deviceHeaders('laptop'),
     })
 

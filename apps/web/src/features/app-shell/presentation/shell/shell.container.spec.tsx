@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import { Input } from '@workspace/ui/components/ui/input'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
@@ -22,6 +23,7 @@ import { ServicesProvider } from '../../../../platform/services'
 import type { SessionPort } from '../../../../platform/session.port'
 import { ThemeContext } from '../../../../platform/theme'
 import { settingsShape } from '../../../user/application/settings/settings.model.gen'
+import { FRAME_STATES } from '../../application/shell-machine'
 import { CrashSignal } from '../crash/crash-signal'
 import { LeaveGuard } from '../leave-guard/leave-guard.container'
 
@@ -30,16 +32,19 @@ import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
 
+/** The roles of a page anyone opens, a guest or any signed-in account. */
+const ANYONE = ['guest', 'identity']
+
 const HomeModule = defineModule({
   id: 'home',
   declarations: { Home: () => <p>home</p> },
-  routes: [{ path: '/home', page: 'Home' }],
+  routes: [{ path: '/home', page: 'Home', roles: ANYONE }],
 })
 
 const FormModule = defineModule({
   id: 'form',
   declarations: { Form: () => <Input aria-label="name" defaultValue="" /> },
-  routes: [{ path: '/form', page: 'Form' }],
+  routes: [{ path: '/form', page: 'Form', roles: ANYONE }],
 })
 
 const BrokenModule = defineModule({
@@ -49,7 +54,20 @@ const BrokenModule = defineModule({
       throw new Error('the page broke')
     },
   },
-  routes: [{ path: '/broken', page: 'Broken' }],
+  routes: [{ path: '/broken', page: 'Broken', roles: ANYONE }],
+})
+
+/**
+ * A page at the console's address for an operator alone, beside the not-found page every account
+ * opens: the frame names and marks the screen the router resolved, not the address.
+ */
+const OperatorsModule = defineModule({
+  id: 'operators',
+  declarations: { Console: () => <p>the operator's page</p>, Lost: () => <p>no page here</p> },
+  routes: [
+    { path: '/console/users', page: 'Console', roles: ['operator'] },
+    { path: '/$', page: 'Lost', roles: ['guest', 'identity', 'member', 'admin'] },
+  ],
 })
 
 describe('ShellContainer', () => {
@@ -89,8 +107,152 @@ describe('ShellContainer', () => {
 
     expect(message.getAttribute('data-code')).toBe('screen-crashed')
     expect(screen.getByTestId('app-shell.reload-button').hasAttribute('disabled')).toBe(false)
-    expect(screen.getByTestId('app-shell.nav')).toBeTruthy()
+    // The guest's frame stays around it, with no navigation.
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     quiet.mockRestore()
+  })
+
+  it('shows a guest no navigation, and an account its navigation from its sign-in to its sign-out', async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const listeners = new Set<(user: typeof ann | undefined) => void>()
+    let current: typeof ann | undefined
+    const { session: guest } = fakeSession()
+    const session: SessionPort = {
+      ...guest,
+      current: () => current,
+      subscribe: (listener) => {
+        listeners.add(listener)
+
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    }
+    const account = (user: typeof ann | undefined) => {
+      current = user
+      for (const listener of listeners) {
+        listener(user)
+      }
+    }
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={fakeServices(session)}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+    expect(screen.getByTestId('app-shell.locale-select')).toBeTruthy()
+
+    act(() => account(ann))
+
+    expect(screen.getByTestId('app-shell.nav.profile-link')).toBeTruthy()
+    expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
+
+    act(() => account(undefined))
+
+    expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+  })
+
+  it("names and marks a page its roles refuse as the not-found page, and follows the account's roles while open", async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    let roles: ReadonlySet<PlatformRole> = new Set()
+    const listeners = new Set<(next: ReadonlySet<PlatformRole>) => void>()
+    const session: SessionPort = {
+      ...guest,
+      current: () => ann,
+      roles: () => roles,
+      onRoles: (listener) => {
+        listeners.add(listener)
+
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    }
+    // The account's roles read anew, as a welcome or another tab brings them.
+    const grant = (next: readonly PlatformRole[]) => {
+      roles = new Set(next)
+
+      for (const listener of listeners) {
+        listener(roles)
+      }
+    }
+    const router = createAppRouter({
+      modules: [OperatorsModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/console/users'] }),
+    })
+    const notFoundTitle = en['app.title.page'].replace('{title}', en['app.title.not-found'])
+    // The links of the navigation marked current.
+    const current = () =>
+      screen
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .map((link) => link.getAttribute('data-testid'))
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={fakeServices(session)}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+
+    await screen.findByText('no page here')
+    await waitFor(() => expect(document.title).toBe(notFoundTitle))
+    expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
+    expect(current()).toEqual([])
+
+    act(() => grant(['operator']))
+
+    await screen.findByText("the operator's page")
+    await waitFor(() => expect(document.title).not.toBe(notFoundTitle))
+    expect(current()).toEqual(['app-shell.nav.console-link'])
+
+    act(() => grant([]))
+
+    await screen.findByText('no page here')
+    await waitFor(() => expect(document.title).toBe(notFoundTitle))
+    expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
+    expect(current()).toEqual([])
+    expect(router.state.location.href).toBe('/console/users')
   })
 
   it('tells the user of a change the gateway refused and this device undid', async () => {
@@ -219,7 +381,7 @@ describe('ShellContainer', () => {
     )
   })
 
-  it('shows a signed-in account no language select: its settings screen takes the choice', async () => {
+  it('shows a signed-in account no language or theme select: its settings screen takes the choice', async () => {
     const { session } = fakeSession()
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const signedIn: SessionPort = { ...session, current: () => ann }
@@ -252,22 +414,224 @@ describe('ShellContainer', () => {
     )
     await screen.findByText('home')
     act(() => {
-      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'en' }])
+      services.runner.set(settingsShape, [
+        { id: settingsIdFactory.create(), locale: 'en', theme: 'system' },
+      ])
     })
 
     expect(screen.getByTestId('app-shell.nav.settings-link')).toBeTruthy()
     expect(screen.queryByTestId('app-shell.locale-select')).toBeNull()
+    expect(screen.queryByTestId('app-shell.theme-select')).toBeNull()
   })
 
-  it("chooses the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
-    const { session } = fakeSession()
+  it("applies the account's stored language and theme once its data opened, and ones stored elsewhere at once", async () => {
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
-    const signedIn: SessionPort = { ...session, current: () => ann }
-    const services = fakeServices(signedIn)
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const theme = memoryTheme()
+    const frame = openingFrame(ann.id, { setTheme: theme.set })
+    const spoken: string[] = []
+    const id = settingsIdFactory.create()
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    frame.actor.on('speak', ({ locale }) => spoken.push(locale))
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    // The settings read while the data still opens: the frame takes them once it is open.
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'dark' }])
+    })
+
+    expect(theme.current()).toBe('system')
+    expect(spoken).toEqual([])
+
+    act(() => {
+      frame.actor.send({ type: 'platform.opened' })
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('dark'))
+    expect(spoken).toEqual(['es'])
+
+    // Another tab or device stores another theme: it shows at once, the language staying.
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'light' }])
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('light'))
+    expect(spoken).toEqual(['es'])
+  })
+
+  it('applies a language and a theme stored elsewhere while the install prompt is pending, at once', async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    const session: SessionPort = { ...guest, current: () => ann }
+    const services = fakeServices(session)
+    const theme = memoryTheme()
+    let endPrompt = () => {}
+    const frame = openedFrame({
+      setTheme: theme.set,
+      install: {
+        prompt: () =>
+          new Promise<void>((resolve) => {
+            endPrompt = resolve
+          }),
+        postpone: () => {},
+      },
+    })
+    const spoken: string[] = []
+    const id = settingsIdFactory.create()
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    frame.actor.on('speak', ({ locale }) => spoken.push(locale))
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={theme}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'en', theme: 'light' }])
+    })
+
+    await waitFor(() => expect(theme.current()).toBe('light'))
+    expect(spoken).toEqual(['en'])
+
+    // The browser's install prompt is up; another tab or device stores another language and theme.
+    act(() => {
+      frame.actor.send({ type: 'app-shell.install-button' })
+    })
+    act(() => {
+      services.runner.set(settingsShape, [{ id, locale: 'es', theme: 'dark' }])
+    })
+
+    // The frame hears them in the install window, before the prompt is answered.
+    await waitFor(() => expect(theme.current()).toBe('dark'))
+    expect(frame.actor.getSnapshot().matches(FRAME_STATES.installing)).toBe(true)
+    expect(spoken).toEqual(['en', 'es'])
+
+    await act(async () => {
+      endPrompt()
+    })
+
+    await waitFor(() => expect(frame.actor.getSnapshot().matches(FRAME_STATES.offering)).toBe(true))
+    expect(theme.current()).toBe('dark')
+    expect(spoken).toEqual(['en', 'es'])
+  })
+
+  it('shows the state of the sync while the install prompt is pending', async () => {
+    const { session } = fakeSession()
+    const services = fakeServices(session)
+    let endPrompt = () => {}
+    const frame = openedFrame({
+      install: {
+        prompt: () =>
+          new Promise<void>((resolve) => {
+            endPrompt = resolve
+          }),
+        postpone: () => {},
+      },
+    })
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+
+    act(() => services.sync('synced'))
+    await screen.findByTestId('app-shell.sync-message')
+
+    // The browser's install window is up; the sync goes offline while it stays open.
+    act(() => {
+      frame.actor.send({ type: 'app-shell.install-button' })
+    })
+    act(() => services.sync('offline'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('app-shell.sync-message').getAttribute('data-code')).toBe(
+        'offline',
+      ),
+    )
+    expect(frame.actor.getSnapshot().matches(FRAME_STATES.installing)).toBe(true)
+
+    await act(async () => {
+      endPrompt()
+    })
+  })
+
+  it("lets a guest choose the device's theme from the frame, and shows one chosen elsewhere at once", async () => {
+    const { session } = fakeSession()
+    const services = fakeServices(session)
     const theme = memoryTheme('dark')
     const router = createAppRouter({
       modules: [HomeModule],
-      session: signedIn,
+      session,
       layout: () => (
         <NoticeProvider texts={NOTICE_TEXTS}>
           <ShellContainer>
@@ -308,7 +672,7 @@ describe('ShellContainer', () => {
     expect(theme.current()).toBe('light')
     await waitFor(() => expect(select.getAttribute('data-value')).toBe('light'))
 
-    // The settings screen chooses the same device theme.
+    // Something else shows another theme on the device.
     act(() => theme.set('system'))
 
     expect(select.getAttribute('data-value')).toBe('system')
@@ -362,7 +726,9 @@ describe('ShellContainer', () => {
     await screen.findByText('home')
 
     act(() => {
-      services.runner.set(settingsShape, [{ id: settingsIdFactory.create(), locale: 'es' }])
+      services.runner.set(settingsShape, [
+        { id: settingsIdFactory.create(), locale: 'es', theme: 'system' },
+      ])
     })
 
     await waitFor(() => expect(spoken).toEqual(['es']))
@@ -395,6 +761,87 @@ describe('ShellContainer', () => {
     )
     expect(spoken).toEqual(['es'])
     expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+  })
+
+  it("takes an account's notice away when another account replaces it before a render", async () => {
+    const { session } = fakeSession()
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }
+    const changes = new Set<Parameters<SessionPort['subscribe']>[0]>()
+    let who: typeof ann | undefined = ann
+    const switching: SessionPort = {
+      ...session,
+      current: () => who,
+      subscribe: (onChange) => {
+        changes.add(onChange)
+
+        return () => changes.delete(onChange)
+      },
+    }
+    const services = fakeServices(switching)
+    const frame = openedFrame()
+    const sent = vi.spyOn(frame.actor, 'send')
+    const router = createAppRouter({
+      modules: [HomeModule],
+      session: switching,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/home'] }),
+    })
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={frame}>
+              <ServicesProvider services={services}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+    await screen.findByText('home')
+    await act(() =>
+      services.reject({
+        region: 'tenant:acme',
+        batch: 1,
+        reason: 'forbidden-action',
+        detail: 'note/nte_1:update',
+        reloaded: false,
+      }),
+    )
+    await screen.findByTestId('app-shell.notice-message')
+    act(() => services.sync('synced'))
+    await screen.findByTestId('app-shell.sync-message')
+
+    // Ann signs out and Bob signs in before the frame renders again: the session tells both, the
+    // render sees Bob alone, whose sync gives no state yet.
+    act(() => {
+      services.sync(undefined)
+
+      for (const next of [undefined, bob]) {
+        who = next
+
+        for (const onChange of changes) {
+          onChange(next)
+        }
+      }
+    })
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('app-shell.notice-message')).toBeNull()
+      expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+    })
+    expect(sent.mock.calls.filter(([event]) => event.type === 'platform.signed-out')).toHaveLength(
+      1,
+    )
   })
 
   /**
@@ -447,7 +894,7 @@ describe('ShellContainer', () => {
         </ThemeContext.Provider>
       </I18nProvider>,
     )
-    await screen.findByTestId('app-shell.nav')
+    await screen.findByTestId('app-shell.locale-select')
 
     return { services, frame, reload, install }
   }

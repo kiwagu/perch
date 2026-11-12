@@ -1,6 +1,7 @@
 import { type DataError, dataError } from '@workspace/data'
 
 import type { Clock } from '../clock'
+import { isHeldBack } from '../held-back'
 import type { RegionDoc } from '../region-doc'
 
 import { ANSWER_TIMEOUT_MS, NO_TIMEOUT } from './answer-timeout'
@@ -17,13 +18,19 @@ export interface RegionPullOptions {
   readonly onError: (error: DataError) => void
   /** A subscription went out on the current connection: a pull goes out only under one. */
   readonly subscribed: () => boolean
+  /**
+   * Subscribes again. The gateway may send other updates before it answers a pull, and nothing
+   * tells which answers it, so only a subscription's answer shows what a failed import lacked.
+   */
+  readonly resubscribe: () => void
 }
 
 /**
  * Brings what the server sends into one region document: imports each update, pulls whenever an
  * import leaves updates waiting for history until one completes, and after an import that failed
- * pulls at once, then again whenever a full pass or a reconnect asks, until an answer imports in
- * full. A pull not answered within 30 seconds is given up, reported, and the connection made again.
+ * subscribes again at once, then again whenever a full pass or a reconnect asks, until the answer
+ * to a subscription imports in full. A pull not answered within 30 seconds is given up, reported,
+ * and the connection made again.
  */
 export class RegionPull {
   readonly #region: RegionDoc
@@ -32,6 +39,7 @@ export class RegionPull {
   readonly #onSettled: () => void
   readonly #onError: (error: DataError) => void
   readonly #subscribed: () => boolean
+  readonly #resubscribe: () => void
   /** A pull went out and no updates arrived since. */
   #pulling = false
   /** Gives the pull up when its answer does not come in time. */
@@ -40,7 +48,7 @@ export class RegionPull {
   #incomplete = false
   /**
    * An import of what the server sent failed, so the document lacks it although the cursor may
-   * move past it: pulls repeat until the answer to a pull or a subscription imports in full.
+   * move past it: subscriptions repeat until the answer to one imports in full.
    */
   #lost = false
 
@@ -51,6 +59,7 @@ export class RegionPull {
     this.#onSettled = options.onSettled
     this.#onError = options.onError
     this.#subscribed = options.subscribed
+    this.#resubscribe = options.resubscribe
   }
 
   get id(): string {
@@ -62,31 +71,47 @@ export class RegionPull {
     return this.#pulling
   }
 
-  /** Repeats the pull an incomplete or failed import left outstanding. */
+  /**
+   * Nothing the server sent is missing: no import failed since the answer to a subscription last
+   * imported in full, none left updates waiting for their history, and no pull is out.
+   */
+  caughtUp(): boolean {
+    return !this.#lost && !this.#incomplete && !this.#pulling
+  }
+
+  /** Repeats the subscription a failed import left outstanding, or the pull an incomplete one did. */
   retry(): void {
-    if (this.#incomplete || this.#lost) {
+    if (this.#lost) {
+      this.#resubscribe()
+    } else if (this.#incomplete) {
       this.request()
     }
   }
 
   /**
-   * Imports what the server sent. `answering` tells that it answers the subscription or the pull of
-   * the current connection: only such an answer, imported in full, ends the repeats of a failed import.
+   * Imports what the server sent. `answering` tells that it answers the subscription of the current
+   * connection: only such an answer, imported in full, ends the repeats of a failed import.
    */
   async imported(bytes: Uint8Array, head: number, answering: boolean): Promise<void> {
     const outcome = await this.#region.importRemote(bytes, head)
 
     if (outcome.isErr()) {
-      // The region lacks what the server sent, whatever imports cleanly later: pull it now, once.
-      // While it stays lost, a persistent failure would pull at round-trip rate: the full pass
-      // and a reconnect repeat the pull instead.
+      // The region lacks what the server sent, whatever imports cleanly later: subscribe again
+      // now, once. While it stays lost, a persistent failure would subscribe at round-trip rate:
+      // the full pass and a reconnect repeat the subscription instead.
       const first = !this.#lost
 
       this.#lost = true
-      this.#onError(outcome.error)
+
+      // A local update that failed to persist held the server's back: its write heard of that
+      // failure and the engine reports it once while it lasts, so a report here would repeat it
+      // for every update the server sends meanwhile.
+      if (!isHeldBack(outcome.error)) {
+        this.#onError(outcome.error)
+      }
 
       if (first) {
-        this.request()
+        this.#resubscribe()
       }
 
       return

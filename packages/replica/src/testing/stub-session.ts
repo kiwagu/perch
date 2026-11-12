@@ -2,7 +2,7 @@ import type { Connection, Gateway } from './stub-state'
 
 /**
  * The gateway took the device's token: it welcomes the device with its regions and the stub's
- * memberships.
+ * memberships, and no platform role.
  */
 export function welcome(
   gateway: Gateway,
@@ -15,6 +15,7 @@ export function welcome(
     identity: identity,
     regions: [...regions],
     memberships: [...gateway.memberships],
+    roles: [],
     time: gateway.clock.now(),
   })
 }

@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { routeFrameEffect } from './frame-effects'
 
-const channels = () => ({ notify: vi.fn(), clear: vi.fn(), pushToast: vi.fn() })
+const channels = () => ({
+  notify: vi.fn(),
+  clear: vi.fn(),
+  pushToast: vi.fn(),
+  leaveSignInNotice: vi.fn(),
+  dropSignInNotice: vi.fn(),
+})
 
 describe('routeFrameEffect', () => {
   it('pushes a toast, sets the notice, and clears it', () => {
@@ -17,15 +23,42 @@ describe('routeFrameEffect', () => {
     expect(into.clear).toHaveBeenCalledTimes(1)
   })
 
+  it("leaves the sign-in page's notice for the next sign-in page", () => {
+    const into = channels()
+
+    routeFrameEffect(
+      { type: 'show', anchor: 'user.sign-in.notice-message', codes: ['password-reset-elsewhere'] },
+      into,
+    )
+
+    expect(into.leaveSignInNotice).toHaveBeenCalledWith('password-reset-elsewhere')
+    expect(into.notify).not.toHaveBeenCalled()
+  })
+
+  it('drops every word left for the sign-in page when a flow clears its notice', () => {
+    const into = channels()
+
+    routeFrameEffect({ type: 'clear', anchor: 'user.sign-in.notice-message' }, into)
+
+    expect(into.dropSignInNotice).toHaveBeenCalledTimes(1)
+    expect(into.clear).not.toHaveBeenCalled()
+    expect(into.leaveSignInNotice).not.toHaveBeenCalled()
+  })
+
+  it('refuses a code the sign-in page does not say', () => {
+    expect(() =>
+      routeFrameEffect(
+        { type: 'show', anchor: 'user.sign-in.notice-message', codes: ['welcome'] },
+        channels(),
+      ),
+    ).toThrow('the sign-in page says no welcome')
+  })
+
   it("leaves a screen's own anchors to its container", () => {
     const into = channels()
 
     routeFrameEffect(
       { type: 'show', anchor: 'organisation.notes.error', codes: ['forbidden', 'failed'] },
-      into,
-    )
-    routeFrameEffect(
-      { type: 'show', anchor: 'user.sign-in.notice-message', codes: ['signed-out-elsewhere'] },
       into,
     )
     routeFrameEffect({ type: 'clear', anchor: 'organisation.notes.error' }, into)
@@ -34,6 +67,8 @@ describe('routeFrameEffect', () => {
     expect(into.pushToast).not.toHaveBeenCalled()
     expect(into.notify).not.toHaveBeenCalled()
     expect(into.clear).not.toHaveBeenCalled()
+    expect(into.leaveSignInNotice).not.toHaveBeenCalled()
+    expect(into.dropSignInNotice).not.toHaveBeenCalled()
   })
 
   it('refuses a frame show of several codes: the machine narrows it first', () => {

@@ -72,7 +72,7 @@ When a part is not a derived piece of its composite but an element of the screen
 own name, the composite takes it as a named prop ending in `TestId`. `AppShell`
 (`packages/ui/src/components/platform/app-shell.tsx`) puts `navigationTestId` on its `<nav>`;
 the shell view passes the frame's anchor
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/frame.view.tsx`):
 
 ```tsx
 <AppShell
@@ -84,7 +84,8 @@ the shell view passes the frame's anchor
 ```
 
 The links of that navigation are static items, each with its literal under a `testId` key,
-which the view renders with `data-testid={item.testId}`:
+which `NavigationLinks` (`shell-view/navigation-links.view.tsx`) renders with
+`data-testid={item.testId}`:
 
 ```tsx
 { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
@@ -130,6 +131,27 @@ await expect(deviceBRow).toHaveAttribute('data-state', 'revoked')
 await expect(deviceBRow.getByTestId('device.list.revoked-cell')).toBeVisible()
 ```
 
+A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`;
+a button, a link, a tab or a field, never a cell or a sibling entry)
+is rendered in each entry and acts on the entry it is in: an action's parameter that names the
+item takes that entry's `data-id` (`params: { device: device.list.session-item }`). A row that
+opens the entity it shows does it the same way, with a link in the row whose transition puts
+the id into the address, so a reload or a copied link reaches the same entry:
+
+```yaml
+<screen>.list.open-link:
+  kind: link
+# flow, on the state that shows the list:
+<screen>.list.open-link:
+  target: opened
+  actions:
+    - navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }
+```
+
+The item declares its `dataId`, the target binding's `id` takes a string, and the navigate sits
+on the link's event, never in an `entry`, an `exit` or an invoke's outcome, where no entry was
+acted on (`contract:check` refuses each).
+
 ## 6. A choice with `data-value`
 
 A choice that is not an entity carries the key the code already uses, never its label, and
@@ -165,7 +187,7 @@ A button that switches a mode is one anchor whose value says the mode, never two
 ## 7. A notice with `data-code`
 
 The shell's notice carries the code of what it says
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/notice-line.view.tsx`):
 
 ```tsx
 <p
@@ -187,6 +209,19 @@ export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
 ```
 
+A message whose codes more than one source may raise before it shows (an effect of the app
+and a flow's `show` on its way there) is declared `ranked: true`, its `codes` in rank order:
+the app shows the first of those raised and drops the others, a `clear` of it in any flow drops
+every code raised before it, and a spec of the app holds its own order to the anchor's `codes`
+(`contract:diff` lists the order as `<anchor> ranks <code> > <code>`).
+
+```yaml
+<screen>.<object>-message:
+  kind: message
+  ranked: true
+  codes: [ <the code that says the most>, <the next>, <the last> ]
+```
+
 ## 8. A container with `data-state`
 
 A container whose data arrives after the page says its state, computed from the same value
@@ -204,7 +239,7 @@ const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? '
 ```
 
 The app's own readiness works the same way: `app-shell.status` carries
-`data-state={props.status}` in `shell.view.tsx`.
+`data-state={props.status}` in `shell-view/status-line.view.tsx`.
 
 ## 9. One element drawn by two render paths
 
@@ -264,12 +299,13 @@ inside. Among JSX children the marker is the only content of a comment container
 ## 12. A machine from the flow
 
 A screen's `flow` is an XState v5 machine config, and the app's machine for the screen is
-that config with the implementations added. From `contract/domain/screens/sign-in.yaml` (lines
-195-215, the descriptions left out), the state that signs in, written in the shorter forms (a
-transition as its target, an effect by its name with the codes it shows; `signing-up` writes
-only `show: user.sign-in.error` and leaves its codes to the platform's `sign-up`; `bun run
-contract:flow user.sign-in` prints the config they expand into, `{ type: show, params: {
-anchor, codes } }` and `{ target }`):
+that config with the implementations added. The state that signs in on the sign-in screen,
+`contract/domain/screens/sign-in.yaml`, in the shorter forms (the descriptions left out; a
+transition as its target, an effect by its name; `bun run contract:flow user.sign-in` prints
+the config they expand into, `{ type: show, params: { anchor, codes } }` and `{ target }`),
+with its guard `emailNotVerified: { codes: [ email-not-verified ] }` (pattern 16), so the
+first branch of its `onError` shows `email-not-verified` and the second `invalid-credentials`,
+`rate-limited`, `other-account` and `failed`, the rest of the failure of `platform.sign-in`:
 
 ```yaml
 signing-in:
@@ -287,11 +323,14 @@ signing-in:
       - target: unverified
         guard: emailNotVerified
         actions:
-          - show: { user.sign-in.error: [ email-not-verified ] }
+          - show: user.sign-in.error
       - target: sign-in
         actions:
-          - show: { user.sign-in.error: [ invalid-credentials, rate-limited, other-account, failed ] }
+          - show: user.sign-in.error
 ```
+
+`clear: user.sign-in.error` takes the code off the form's error; a `clear` that names a
+field of the screen empties it instead, a secret one included, so it holds no input any more.
 
 And the machine, in its folder `apps/web/src/features/user/application/sign-in-machine/`
 (`machine.ts` lines 65-252, its guards in `guards.ts` lines 43-50): an actor per
@@ -476,3 +515,220 @@ A control whose anchor is an event of the flow (a button, a select, a switch) is
 exactly while a state the machine is in handles that event: the view asks the machine (`snapshot.can({ type: anchor })`, passed to
 the view as `can`) and keeps no flag of its own, so Save is disabled while `saving-name` or
 `saving-bio` runs and the sign-out button while the sign-out does.
+
+## 13. A password input's eye
+
+A password input may render an eye beside itself that shows what it holds as typed, or hides
+it again: the derived `visibility-button`. It is presentation only. Whether the field shows
+its value is the one transient state a component keeps of its own, never a state of the flow:
+the eye is no event of the flow, the machine does not enable it, and it is always enabled. Its
+`data-value` says what a click does, `show` or `hide`, the suffix's own values, never rows of
+"Choice values". This example is illustrative, not a file of the app. The screen file lists
+the suffix on the input, which says it holds a secret, as only a secret input renders an eye:
+
+```yaml
+user.sign-in.password-input:
+  kind: input
+  secret: true
+  derived: [ visibility-button ]
+```
+
+A kit composite takes the input's `testId` and derives the eye, as `ConfirmDialog` derives its
+buttons:
+
+```tsx
+const [shown, setShown] = useState(false)
+const eyeTestId = testId === undefined ? undefined : testIdFor(testId, 'visibility-button')
+// ...
+<Input {...props} type={shown ? 'text' : 'password'} data-testid={testId} />
+<Button
+  type="button"
+  aria-label={shown ? props.hideLabel : props.showLabel}
+  aria-pressed={shown}
+  data-testid={eyeTestId}
+  data-value={shown ? 'hide' : 'show'}
+  onClick={() => setShown((value) => !value)}
+/>
+```
+
+A test clicks it and reads what the next click does:
+
+```ts
+const eye = page.getByTestId('user.sign-in.password-input.visibility-button')
+
+await eye.click()
+await expect(eye).toHaveAttribute('data-value', 'hide')
+```
+
+## 14. A notice mail
+
+A platform action that changes what protects an account tells its owner, by a mail that
+carries no token: a notice. A `mail` is something to act on (a link with a token); a notice
+only tells, and at most links plainly to a screen. The action lists its notices by name
+under `notices`, beside its `mail` when it has one. `to: account` is the account's email as
+it was before the action changed anything, so the confirmed change of an email tells the old
+address. This example is illustrative, not a file of the app:
+
+```yaml
+confirm-email-change:
+  # description, params (token), result, codes, changes
+  notices:
+    - name: email-changed
+      to: account
+      language: account
+      link: { screen: user.reset-password }
+```
+
+The link of a notice opens a screen whose every route needs no parameter, and never carries a
+`search`. A scenario names the notice by its action and its name:
+
+```markdown
+- [notice:confirm-email-change.email-changed] reaches the old address
+```
+
+## 15. What a state renders
+
+An anchor that only some states of a screen render is listed in `meta.renders` of each state
+that renders it; an anchor no state lists is rendered in every state. The state decides, never
+the code an anchor shows. For the mode sign-up of the sign-in screen,
+`contract/domain/screens/sign-in.yaml` (the descriptions and the other states left out):
+
+```yaml
+sign-up:
+  meta:
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  on:
+    user.sign-in.password-confirmation-input:
+      target: passwords-differ
+      guard: confirmationStrays
+    # the toggle, the password and the submit as before
+signing-up:
+  meta:
+    renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+  invoke:
+    src: platform.sign-up
+    # input and onDone as before
+```
+
+`sign-up` handles the confirmation's event, so it lists it, or `contract:check` says it is
+handled here but not rendered. `signing-up` handles none of their events and lists them all
+the same: the fields stay on the page, disabled, and the rule list with them, while the
+account is created. A derived part goes with its base (list `user.sign-in.password-input`,
+never its `visibility-button`), and the anchors declared under a listed one
+(`<anchor>.<rest>`) come with it: the rule list brings its six items, so a state lists the
+list alone, never the list and an item in one list; an item is rendered where its list is, or
+where a state lists it itself, and an event on it is held through its list. A state of a
+region renders what it lists and what its parallel state lists; a region written by its
+pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
+full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
+
+Rendered means visible to the user: in a state that does not render it, an anchor is absent
+from the page or kept in it hidden, as a closed form that keeps what was typed. So a form that
+stays in the DOM while it is closed is still listed only in the states where it is open. The
+view asks the machine, `isRendered(renderedAt(snapshot.machine.config, snapshot.value),
+anchor)`, never a flag of its own, and an e2e run holds every settled state of a test to the
+list.
+
+## 16. A guard by failure code
+
+A guard that tells the failures of an invoke apart names the codes it takes instead of a
+sentence, and the bare `show` of its branch shows them. For the state `signing-in` of the
+sign-in screen (pattern 12), its `onError` in the shortest form; a screen may write the codes
+of a `show` out instead, and what it writes wins:
+
+```yaml
+flow:
+  meta:
+    guards:
+      emailNotVerified: { codes: [ email-not-verified ] }
+  states:
+    signing-in:
+      invoke:
+        src: platform.sign-in
+        # input and onDone as before
+        onError:
+          - target: unverified
+            guard: emailNotVerified
+            actions:
+              - show: user.sign-in.error
+          - target: sign-in
+            actions:
+              - show: user.sign-in.error
+```
+
+The first branch shows `email-not-verified`; the second, after it, the failure of
+`platform.sign-in` less the codes the guard took: `invalid-credentials`, `rate-limited`,
+`other-account` and `failed` (`bun run contract:flow user.sign-in` prints both). The error
+still carries every code of the failure. A guard may take several codes
+(`linkUnusable: { codes: [ link-invalid, link-expired ] }` on the reset-password screen). It
+guards only branches of an invoke's `onError`, a region written `by` its button included, and
+each code is one the action fails with, listed once; a guard that says anything else stays a
+sentence. The app implements it as any guard, by the failure the actor rejected with (pattern
+12's `emailNotVerified`). `contract:diff main` shows `guard emailNotVerified takes
+email-not-verified`.
+
+## 17. A paged list
+
+A list of many entries shows one page at a time, the page and the size the route names. The
+action pages, in `platform.yaml`:
+
+```yaml
+actions:
+  accounts.list:
+    description: Reads the accounts of the platform.
+    params:
+      q: { type: string, description: The text an account's name or email contains. }
+      page: { type: number, description: The page, from 1. }
+      size: { type: number, description: The entries a page holds. }
+    paged: { sizes: [ 10, 25, 50 ], default: 25 }
+    result: the page of accounts, the newest first, and how many the search finds
+    codes: [ failed ]
+    changes: []
+```
+
+A read changes no other read (`changes: []`); an action whose success changes the page this
+one answers names `accounts.list` under its own `changes`.
+
+Every route of the screen declares `page` and `size` as the list reads them, and the list
+takes its search from the route, never from a field:
+
+```yaml
+bindings:
+  - path: /console/users
+    search:
+      type: object
+      properties:
+        q: { type: string, maxLength: 254 }
+        page: { type: integer, minimum: 1, default: 1 }
+        size: { type: integer, enum: [ 10, 25, 50 ], default: 25 }
+      additionalProperties: false
+anchors:
+  console.users.list:
+    kind: list
+    source: { platform: accounts.list, params: { q: { search: q } }, paged: true }
+```
+
+The search form moves the route, and a new search starts at page 1:
+
+```yaml
+on:
+  console.users.search-button:
+    actions:
+      - navigate:
+          to: /console/users
+          search: { q: { anchor: console.users.search-input }, page: 1 }
+```
+
+The loader derives `console.users.list.range`, `.previous-link`, `.next-link` and
+`.size-select` (its options `.size-select.option`, one per size with `data-value`, the controls
+of `size`, which writes no `x-perch`: the check derives them and refuses one written); the file
+never writes them. The option is two segments past the list, and an anchor has five at most,
+so a paged list has at most three (`console.users.list`, never `a.b.c.list`: the check refuses
+it). The view renders the range with `data-from`, `data-to` and `data-total` once
+the read is in, each link only where there is such a page, and the select wherever the list is,
+each built with `testIdFor` and each moving with `pageSearchOf(search, { page, size },
+defaultSize)` of `@workspace/ui-contract/anchors`; `pagerOf({ page, size, shown, total })` says
+what the page shows. The wireframe sketches page 1 (`text: /\d+-\d+ of \d+/`, `link "Next"`);
+no check reads it. `contract:diff main` shows `console.users.list reads platform.accounts.list
+q=search:q paged`.
+

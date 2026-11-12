@@ -64,8 +64,13 @@ const Pages = defineModule({
   id: 'pages',
   declarations: { One, Two: () => <p>two</p> },
   routes: [
-    { path: '/one', page: 'One', search: z.object({ tab: z.enum(['a', 'b']).default('a') }) },
-    { path: '/two', page: 'Two' },
+    {
+      path: '/one',
+      page: 'One',
+      roles: ['guest', 'identity'],
+      search: z.object({ tab: z.enum(['a', 'b']).default('a') }),
+    },
+    { path: '/two', page: 'Two', roles: ['guest', 'identity'] },
   ],
 })
 

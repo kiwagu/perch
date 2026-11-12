@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+
 import { describe, expect, it } from 'vitest'
 
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import type { Collected } from './collect'
+import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -20,7 +23,10 @@ const SCREENS: ScreensFile = {
       bindings: [],
       flag: null,
       entry: ['sample.page'],
-      anchors: { 'sample.page': { kind: 'page' }, 'sample.mode-select': { kind: 'select' } },
+      anchors: {
+        'sample.page': { kind: 'page' },
+        'sample.mode-select': { kind: 'select', derived: ['option'] },
+      },
     },
   ],
   files: ['contract/domain/screens/__root.yaml'],
@@ -217,6 +223,55 @@ describe('compareWithContract', () => {
 
     expect(printed(collected)).toEqual([
       'b.tsx:8: "thing" is not a derived suffix of contract/vocabulary.md',
+    ])
+  })
+  it('takes a derived part only where an anchor lists its suffix: a visibility-button on an input', () => {
+    const eye = (base?: string): Collected =>
+      source('eye.tsx', {
+        derived: [
+          { suffix: 'visibility-button', ...(base === undefined ? {} : { base }), line: 7 },
+        ],
+      })
+
+    expect(printed([...agreeing(), eye()])).toEqual([
+      'eye.tsx:7: "visibility-button": no anchor of contract/domain/screens lists it in its derived',
+    ])
+
+    const screens = structuredClone(WITH_FIELDS)
+
+    Object.assign(screens.screens[0]?.anchors['sample.form.name-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+
+    const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
+    const compared = (collected: readonly Collected[]): string[] =>
+      compareWithContract(collected, screens, vocabulary).map(formatProblem)
+
+    expect(compared([...rendered, eye()])).toEqual([])
+    expect(compared([...rendered, eye('sample.form.name-input')])).toEqual([])
+    expect(compared([...rendered, eye('sample.page')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.page", "visibility-button"): "sample.page" does not list "visibility-button" in its derived',
+    ])
+    expect(compared([...rendered, eye('sample.gone-input')])).toEqual([
+      'eye.tsx:7: testIdFor("sample.gone-input", "visibility-button"): "sample.gone-input" is not in contract/domain/screens',
+    ])
+  })
+  it('holds a literal base, quoted, a template or wrapped, to the anchor that lists its suffix', () => {
+    const screens = structuredClone(SCREENS)
+
+    Object.assign(screens.screens[0]?.anchors ?? {}, {
+      'sample.title-input': { kind: 'input', derived: ['visibility-button'] },
+      'sample.leave-dialog': { kind: 'dialog', derived: ['confirm-button'] },
+    })
+
+    const file = join(import.meta.dirname, '../__fixtures__/sources/derived.tsx')
+    const derived = collectFromSource(readFileSync(file, 'utf8'), 'sources/derived.tsx')
+
+    expect(
+      compareWithContract([derived], screens, vocabulary, { ahead: true }).map(formatProblem),
+    ).toEqual([
+      `sources/derived.tsx:9: ${RUNTIME_SUFFIX}`,
+      'sources/derived.tsx:21: testIdFor("sample.gone-dialog", "confirm-button"): "sample.gone-dialog" is not in contract/domain/screens',
     ])
   })
   it('reports a code that is not in the vocabulary', () => {

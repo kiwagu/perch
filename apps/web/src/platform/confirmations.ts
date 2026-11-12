@@ -8,9 +8,17 @@
 export const CONFIRMATION = 'app-shell.confirmation'
 
 export const ASKING_CONTROLS: Readonly<Record<string, string>> = {
+  'console.account.ban.ban-button': 'accounts-ban',
+  // The reason's field is bound to the ban too, so the contract derives the question on it; no
+  // event is named by it: its form's submit is the ban button's.
+  'console.account.ban.reason-input': 'accounts-ban',
+  'console.account.removal.remove-button': 'accounts-remove',
+  'console.account.sessions.revoke-button': 'accounts-revoke-sessions',
   'device.list.revoke-button': 'devices-revoke',
   'organisation.members.remove-button': 'organisations-remove',
   'organisation.notes.delete-button': 'note-delete',
+  'organisation.sent.revoke-button': 'organisations-revoke-invitation',
+  'user.delete-account.delete-button': 'delete-account',
 }
 
 /** The code `control` asks the confirmation with; none when it runs nothing destructive. */

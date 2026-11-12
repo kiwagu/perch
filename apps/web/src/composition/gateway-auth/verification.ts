@@ -4,13 +4,20 @@
  * it is read only through its schema and an error names the status alone.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import {
+  ACCOUNT_BANNED_CODE,
+  accountBanned,
+  answerBody,
+  linkRefusedBy,
+  refusalCode,
+} from './answer-body'
 import type { SignedInDevice } from './signed-in'
 
 /** The account a first verification signed this device in to, as its sign-up named it. */
@@ -47,14 +54,10 @@ const verifiedAnswer = z.union([
   z.object({ token: z.null() }),
 ])
 
-/** The codes the gateway refuses a verification link's token with. */
-const linkRefusal = z.object({ code: z.enum(['link-invalid', 'link-expired']) })
-
 const linkInvalid = () => dataError('data:LINK_INVALID', 'the gateway refused the link')
 
-/** The body of an answer as JSON, `undefined` when it has none. */
-const bodyOf = (response: Response): ResultAsync<unknown, never> =>
-  ResultAsync.fromSafePromise((response.json() as Promise<unknown>).catch(() => undefined))
+const couldNotVerify = (status: number) =>
+  dataError('data:AUTH_FAILED', `the gateway could not verify the link (${status})`)
 
 /** The outcome a verification's 200 carries. */
 function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
@@ -87,21 +90,18 @@ function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
 
 /**
  * What the gateway's answer to a verification means: its outcome (200); a link past its lifetime
- * (401 `link-expired`) or another it refused (any other 401, a 400); a request to wait (429); any
- * other answer fails naming its status.
+ * (401 `link-expired`) or another it refused (any other 401, a 400); the link of an account an
+ * operator banned, which verified its email and signed nothing in (403 `account-banned`); a
+ * request to wait (429); any other answer fails naming its status.
  */
 export function verificationOf(response: Response): ResultAsync<EmailVerification, DataError> {
   if (response.status === 200) {
-    return bodyOf(response).andThen(outcomeOf)
+    return answerBody(response).andThen(outcomeOf)
   }
 
   if (response.status === 401) {
-    return bodyOf(response).andThen((body) =>
-      errAsync(
-        linkRefusal.safeParse(body).data?.code === 'link-expired'
-          ? dataError('data:LINK_EXPIRED', 'the link is past its lifetime')
-          : linkInvalid(),
-      ),
+    return linkRefusedBy(response).andThen((refused) =>
+      errAsync<EmailVerification, DataError>(refused),
     )
   }
 
@@ -109,9 +109,17 @@ export function verificationOf(response: Response): ResultAsync<EmailVerificatio
     return errAsync(linkInvalid())
   }
 
+  if (response.status === 403) {
+    return refusalCode(response).andThen((code) =>
+      errAsync<EmailVerification, DataError>(
+        code === ACCOUNT_BANNED_CODE ? accountBanned() : couldNotVerify(response.status),
+      ),
+    )
+  }
+
   return errAsync(
     response.status === 429
       ? dataError('data:RATE_LIMITED', 'the gateway asks to wait before the verification')
-      : dataError('data:AUTH_FAILED', `the gateway could not verify the link (${response.status})`),
+      : couldNotVerify(response.status),
   )
 }

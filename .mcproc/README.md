@@ -6,31 +6,44 @@ folder's gitignored `mcproc.local.yaml`, every port shifted by 100 per slot, and
 slug (`perch-w1`) on its containers and pm2 names; `mcproc describe` prints the resolved values
 of the checkout it runs in.
 
-- `surrealdb-dev` (profile `dev`): in-memory SurrealDB on 127.0.0.1:8000 for development.
+The profiles:
+
+- `dev`: the whole development stand under pm2, the gateway and the web app's watcher included.
+- `services`: the development stand's dedicated services alone, `surrealdb-dev`, `maildev-dev`
+  and `caddy-dev`, for root `bun run dev`, which runs the gateway and the watcher in the
+  foreground through turbo with this checkout's stand (it reads it from `mcproc --json describe`).
+  None of the three depends on the gateway or the watcher, since a start brings an app's
+  dependencies up first. One or the other runs them: `bun run dev` stops when the pm2 `gateway`
+  or `web` runs (`mcproc stop gateway && mcproc stop web` hands them over).
+- `e2e`: the tests' stand.
+
+- `surrealdb-dev` (profiles `dev`, `services`): in-memory SurrealDB on 127.0.0.1:8000 for
+  development.
 - `surrealdb-e2e` (profile `e2e`): in-memory SurrealDB on 127.0.0.1:8010 for `bun run test:db`
   and the e2e launcher. Restart it to get an empty database, then restart `gateway-e2e`, which
   defines its namespace user on the stand when it starts.
 
-- `maildev-dev` (profile `dev`) and `maildev-e2e` (profile `e2e`): MailDev 2.2.1 in docker
-  (`infra/dev/`), each stand's mailbox. The dev stand's gateway sends to SMTP 127.0.0.1:1025 and
-  its web UI at http://127.0.0.1:1080 shows every mail (open a verification link from there);
-  the e2e stand's gateway sends to SMTP 127.0.0.1:1035, and the suites read the mails through
-  its REST API at http://127.0.0.1:1090. Both bind 127.0.0.1 only, keep the mails in the
-  container (a restart empties the mailbox) and are ready once `/healthz` answers. `maildev-dev`
-  is restarted on a change of the compose file. Each gateway waits for its stand's mailbox
-  (`depends_on`).
+- `maildev-dev` (profiles `dev`, `services`) and `maildev-e2e` (profile `e2e`): MailDev 2.2.1 in
+  docker (`infra/dev/`), each stand's mailbox. The dev stand's gateway sends to SMTP 127.0.0.1:1025
+  and its web UI at http://127.0.0.1:1080 shows every mail (open a verification link from there);
+  the e2e stand's gateway sends to SMTP 127.0.0.1:1035, and the suites read the mails through its
+  REST API at http://127.0.0.1:1090. Both bind 127.0.0.1 only, keep the mails in the container (a
+  restart empties the mailbox) and are ready once `/healthz` answers. `maildev-dev` is restarted on
+  a change of the compose file. Each gateway waits for its stand's mailbox (`depends_on`).
 
 - `gateway` (profile `dev`) and `gateway-e2e` (profile `e2e`): the gateway on 127.0.0.1:5181 and
-  127.0.0.1:5191. Each waits until its SurrealDB answers, runs `scripts/stand-operator.ts` (the
-  namespace `app`, the database `directory` and the user `gateway`), then serves. pm2 restarts
-  it (`watch:`) on a change of its sources or of a workspace package it imports, a fresh process
-  each time: a tree caught mid-edit fails one start, pm2 retries with a growing delay
-  (`exp_backoff_restart_delay`), and the next change brings it back. Both run Better Auth with
-  the manifest's stand-only secret, `stand_auth_secret` in `vars`, as `GATEWAY_AUTH_SECRET`, and
-  each with its own front's origin as `GATEWAY_PUBLIC_URL` (https://localhost:5443 and
-  https://localhost:5493), its own stand's MailDev as `GATEWAY_SMTP_URL`
-  (smtp://127.0.0.1:1025 and smtp://127.0.0.1:1035) and the manifest's `stand_mail_from` as
-  `GATEWAY_MAIL_FROM`.
+  127.0.0.1:5191. Each waits until its SurrealDB answers and starts through
+  `scripts/stand-gateway/cli.ts`, its stand's values from `vars` as flags: it runs
+  `scripts/stand-operator.ts` (the namespace `app`, the database `directory` and the user
+  `gateway`), then becomes the gateway with the settings `scripts/stand-gateway/settings.ts` derives
+  from those values, the one mapping root `bun run dev` starts its gateway with too. pm2 restarts it
+  (`watch:`) on a change of its sources or of a workspace package it imports, a fresh process each
+  time: a tree caught mid-edit fails one start, pm2 retries with a growing delay
+  (`exp_backoff_restart_delay`), and the next change brings it back. Both run Better Auth with the
+  manifest's stand-only secret, `stand_auth_secret` in `vars`, as `GATEWAY_AUTH_SECRET`, and each
+  with its own front's origin as `GATEWAY_PUBLIC_URL` (https://localhost:5443 and
+  https://localhost:5493), its own stand's MailDev as `GATEWAY_SMTP_URL` (smtp://127.0.0.1:1025 and
+  smtp://127.0.0.1:1035) and the manifest's `stand_mail_from` as `GATEWAY_MAIL_FROM`.
 
 - `web` (profile `dev`, kind `build`): the web application's build watcher, `vite build
   --watch` in development mode. It listens on no port: every source change rewrites
@@ -39,15 +52,18 @@ of the checkout it runs in.
   a change of `vite.config.ts` (and the surql plugin it imports), `package.json` or `bun.lock`. Each signed-in identity's database runs in the browser; signing up or in
   and syncing go through the gateway under `/backend/` of the same front.
 
-- `caddy-dev` (profile `dev`) and `caddy-e2e` (profile `e2e`): Caddy in docker on
-  https://localhost:5443 and https://localhost:5493, a web build and, under `/backend/`, the
-  gateway on one origin (`infra/dev/`). Open the stands there. `caddy-dev` serves the
-  watcher's `apps/web/dist-dev`, starts after `web` and `gateway` (start order only), answers
-  404 until the watcher's first build, and pm2 restarts it on a change of the Caddyfile or the
-  compose file. `caddy-e2e` serves `apps/web/dist`, which only the e2e launcher writes, so the
-  two stands never overwrite each other's build: the `e2e` profile has no web app of its own;
-  `bun run test:e2e` writes the production build, then starts the profile with `--reload` (apps
-  already online restart, so a run never meets a stale stand) and waits for it.
+- `caddy-dev` (profiles `dev`, `services`) and `caddy-e2e` (profile `e2e`): Caddy in docker on
+  https://localhost:5443 and https://localhost:5493, a web build and, under `/backend/`, the gateway
+  on one origin (`infra/dev/`). Open the stands there. `caddy-dev` serves the watcher's
+  `apps/web/dist-dev` and the gateway on 127.0.0.1:5181, whether pm2 runs them or `bun run dev`
+  does, so it depends on neither; it answers 404 until the watcher's first build and 502 under
+  `/backend/` while no gateway runs, and pm2 restarts it on a change of the Caddyfile or the compose
+  file. `caddy-e2e` serves `apps/web/dist`, which only the e2e launcher writes, so the two stands
+  never overwrite each other's build: the `e2e` profile has no web app of its own; `bun run
+  test:e2e` writes the production build, then starts the profile with `--reload` (apps already
+  online restart, so a run never meets a stale stand) and waits for it. `caddy-e2e` also names to
+  the gateway the client address each browser claims (`PERCH_CLIENT_ADDRESS=claimed`,
+  `infra/dev/`), so each Playwright worker spends request limits of its own.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
 no persistence. Apps in containers (SurrealDB, MailDev, Caddy) declare only a url: their ports
@@ -63,9 +79,10 @@ run a gateway of their own on that stand with the same secret, front origin and 
 its environment, with the mailboxes the suites, the smoke, the load test and the seed read the
 links from: `MAILBOX_URL`, the e2e stand's MailDev REST API, and `MAILBOX_DEV_URL`, the dev
 stand's (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
-seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section names
-what a new worktree copies from the main checkout (the certificates, the local hook file, the
-screenshot baselines) and how it installs.
+seed:sweep` go through it, the e2e run under a 4G lease of its own and, with `bun run
+perf:measure`, in the `e2e` group (`--exclusive e2e`): one of them at a time on the host. The
+`worktree` section names what a new worktree copies from the main checkout (the certificates,
+the local hook file, the screenshot baselines) and how it installs.
 
 `mcproc start <profile> --reload` restarts the apps already online (a restarted SurrealDB stand
 is empty). pm2 keeps the command and the environment an app started with, so after a change of
@@ -75,3 +92,21 @@ the dev database) alone. An app removed from the manifest is
 unknown to mcproc afterwards; the pm2 process it leaves (`<project>-<app>` in `pm2 ls`,
 `perch-<app>` in the main checkout) goes with `pm2 delete perch-<app>`, as `web-e2e`, the old
 e2e dev server, did.
+
+## Worktrees
+
+A branch gets a checkout of its own, with stands of its own, next to the repository:
+
+- `mcproc worktree add feat/x` (from the main checkout; `--from main` starts a new branch there)
+  makes `../perch.worktrees/feat/x`, claims the next free slot, copies the local certificates,
+  `lefthook-local.yml` and the screenshot baselines, runs `bun install` and writes
+  `.mcproc/mcproc.local.yaml` there with the slot and the project slug (`perch-w1`). In that
+  folder `mcproc start dev` brings the stand up on slot 1's ports (8100, 5281,
+  https://localhost:5543), its containers and pm2 names prefixed `perch-w1-`; there `bun run
+  seed` addresses that dev stand, `bun run test:db` and `CI=1 bun run test:e2e` that checkout's
+  e2e stand.
+- A start asks the host for memory first: every app declares what it takes and the manifest
+  keeps a reserve, so a stand that does not fit waits its turn (`mcproc ls` shows it as
+  `queued`, `mcproc leases` shows the queue) and comes up by itself once memory frees.
+- `mcproc worktree ls` lists the checkouts with their slots; `mcproc worktree remove feat/x`
+  stops that checkout's apps, deletes the worktree and frees the slot (the branch stays).

@@ -7,11 +7,13 @@ import type { Locale } from '@workspace/i18n'
 import type { IdentityId, SettingsId } from '@workspace/ids'
 
 import type { CommandsPort } from '../../../../platform/commands.port'
+import type { Theme } from '../../../../platform/theme'
 
 /** The account's settings as this device holds them. */
 export interface SettingsRow {
   readonly id: SettingsId
   readonly locale: string
+  readonly theme: string
 }
 
 export interface SettingsOwner {
@@ -22,6 +24,7 @@ export interface NewSettings {
   readonly id: SettingsId
   readonly identity: IdentityId
   readonly locale: Locale
+  readonly theme: Theme
 }
 
 /** The reads and writes the service needs; the module passes the ones the modeling stage generated. */
@@ -30,6 +33,7 @@ export interface SettingsModel {
   readonly commands: {
     readonly createSettings: Command<NewSettings>
     readonly updateLocale: Command<{ readonly id: SettingsId; readonly locale: Locale }>
+    readonly updateTheme: Command<{ readonly id: SettingsId; readonly theme: Theme }>
   }
 }
 
@@ -58,6 +62,13 @@ export class SettingsService {
     readonly locale: Locale
   }): ResultAsync<void, BusError> {
     return this.commands.execute(this.model.commands.updateLocale, input)
+  }
+
+  updateTheme(input: {
+    readonly id: SettingsId
+    readonly theme: Theme
+  }): ResultAsync<void, BusError> {
+    return this.commands.execute(this.model.commands.updateTheme, input)
   }
 }
 

@@ -1,22 +1,34 @@
 /**
  * A device's hello, from the read of its session to its welcome. The hello carries the device's
  * session token: a token that reads no live session closes the hello with 4401, as does a session
- * of another device than the one the hello names; a read the directory could not make closes it
- * as a failed server (1011), and the device comes back with the same token. A device signed out
- * from another one while its session is read is closed with 4001. The device is marked seen at
- * its hello and then at most every five minutes it talks. A device holds one live socket: the
- * hello that registers closes its older ones (1000), without signing it out. An organisation
- * whose database cannot be read is left out of the welcome (`welcome-heads.ts`); the identity's
- * own region failing fails the hello.
+ * of another device than the one the hello names, unless the session's row says another device
+ * or the account's own change ended it, which the hello hears as it would have live (4001
+ * signed out from another device, 4002 the password changed, 4003 a sign-in past the limit of
+ * devices, 4004 an operator banned the account): a device offline then learns why at its next
+ * hello. A read the directory could not make closes it as a failed server (1011), and the device
+ * comes back with the same token. A device signed out while its session is read is closed with
+ * the code its row's reason names (4001, 4002, 4003, 4004), else with 4001. The welcome carries
+ * the account's platform roles as the read of the session found them at this hello. The device is
+ * marked seen at its hello, before its welcome, and then at most every five minutes it talks. A device holds one live
+ * socket: the hello that registers closes its older ones (1000), without signing it out. An
+ * organisation whose database cannot be read is left out of the welcome (`welcome-heads.ts`); the
+ * identity's own region failing fails the hello. Once the device is welcomed, the account's email
+ * and its profile's are compared (`ProfileEmails.reconcile`), without holding the hello.
  */
 
+import { match } from 'ts-pattern'
+
 import type { AuthUser } from '@workspace/data'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Logger } from '@workspace/logger'
 import type { Clock, ReplicaSchema } from '@workspace/replica'
 import { CLOSE, type ClientMessage } from '@workspace/replica/protocol'
 import type { RegionHub } from '@workspace/replica/server'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
+import type { EndedReason } from '../../auth/device-session-rows'
+import type { DeviceSessions } from '../../auth/device-sessions'
+import type { ProfileEmails } from '../../auth/profile-emails'
 import type { Organisations } from '../../tenants/organisations'
 import type { ConnectionRegistry, MembershipsListener } from '../connections'
 
@@ -31,10 +43,30 @@ import { welcomeHeads } from './welcome-heads'
 /** The hello of a device. */
 export type Hello = Extract<ClientMessage, { readonly type: 'hello' }>
 
+/** Who a hello's session belongs to, and the account's platform roles read with it. */
+interface Entered {
+  readonly identity: AuthUser
+  readonly roles: readonly PlatformRole[]
+}
+
+/** The close a hello hears for a session that ended for `reason`, as the device would have live. */
+function endedClose(reason: EndedReason): readonly [code: number, text: string] {
+  return match(reason)
+    .with('revoked', () => [CLOSE.revoked, REASON.revoked] as const)
+    .with('password-changed', () => [CLOSE.passwordChanged, REASON.passwordChanged] as const)
+    .with('device-limit', () => [CLOSE.deviceLimit, REASON.deviceLimit] as const)
+    .with('banned', () => [CLOSE.banned, REASON.banned] as const)
+    .exhaustive()
+}
+
 export interface ConnectionHelloDeps {
   readonly sessions: Pick<AuthSessions, 'read'>
+  /** Tells a hello whose session ended why, from the session's row. */
+  readonly devices: Pick<DeviceSessions, 'byToken'>
   readonly hub: Pick<RegionHub, 'heads'>
   readonly organisations: Pick<Organisations, 'membershipsOf'>
+  /** Compares the account's email with its profile's once the device is welcomed. */
+  readonly profiles: Pick<ProfileEmails, 'reconcile'>
   readonly connections: Pick<ConnectionRegistry, 'epoch' | 'add' | 'supersede'>
   readonly clock: Clock
   /** Who may write what in each region: the abilities of a member are built from it. */
@@ -55,8 +87,10 @@ export interface ConnectionHelloOptions {
 
 export class ConnectionHello {
   readonly #sessions: ConnectionHelloDeps['sessions']
+  readonly #devices: ConnectionHelloDeps['devices']
   readonly #hub: ConnectionHelloDeps['hub']
   readonly #organisations: ConnectionHelloDeps['organisations']
+  readonly #profiles: ConnectionHelloDeps['profiles']
   readonly #connections: ConnectionHelloDeps['connections']
   readonly #clock: Clock
   readonly #schema: ReplicaSchema
@@ -69,8 +103,10 @@ export class ConnectionHello {
 
   constructor(deps: ConnectionHelloDeps, options: ConnectionHelloOptions) {
     this.#sessions = deps.sessions
+    this.#devices = deps.devices
     this.#hub = deps.hub
     this.#organisations = deps.organisations
+    this.#profiles = deps.profiles
     this.#connections = deps.connections
     this.#clock = deps.clock
     this.#schema = deps.schema
@@ -84,11 +120,13 @@ export class ConnectionHello {
 
   /** Says the hello: the session, the connection in the device's place, then the welcome. */
   async say(hello: Hello): Promise<void> {
-    const identity = await this.#enter(hello)
+    const entered = await this.#enter(hello)
 
-    if (identity === undefined) {
+    if (entered === undefined) {
       return
     }
+
+    const { identity, roles } = entered
 
     const memberships = await this.#organisations.membershipsOf(identity.id)
 
@@ -126,18 +164,24 @@ export class ConnectionHello {
       identity: identity.id,
       regions: heads.value.map(({ region, head }) => ({ region, head })),
       memberships: [...memberships.value],
+      roles: [...roles],
       time: this.#clock.now(),
     })
 
     // What changed since the memberships were read applies before any later message is handled.
     this.#changes.welcomed()
+    // The profile's email follows the account's: one read, after the welcome, and a write in the
+    // account's turn only when they differ (a gateway that stopped before a confirmed email
+    // reached the profile, or a profile a device created with an email the account left).
+    void this.#profiles.reconcile(identity.id)
   }
 
   /**
    * Reads the hello's session and registers the connection in place of the device's older ones,
-   * which close. The identity the session belongs to, or undefined once the socket closed.
+   * which close. The identity the session belongs to and its platform roles, read with it, or
+   * undefined once the socket closed.
    */
-  async #enter(hello: Hello): Promise<AuthUser | undefined> {
+  async #enter(hello: Hello): Promise<Entered | undefined> {
     // Read before the session: a sign-out of the device from now on refuses the registration, one
     // before ended the session the read finds.
     const epoch = this.#connections.epoch()
@@ -155,7 +199,7 @@ export class ConnectionHello {
     }
 
     if (read.kind === 'none') {
-      this.#host.close(CLOSE.unauthorized, REASON.refused)
+      await this.#closeEnded(hello, [CLOSE.unauthorized, REASON.refused])
 
       return undefined
     }
@@ -174,16 +218,44 @@ export class ConnectionHello {
     const unregister = this.#connections.add(caller.identity, hello.device, this.#listener, epoch)
 
     if (!unregister) {
-      this.#host.close(CLOSE.revoked, REASON.revoked)
+      // A close of the device or of its identity landed while the session was read: the routes end
+      // the session first, so its row says why when another device or the account's change did.
+      await this.#closeEnded(hello, [CLOSE.revoked, REASON.revoked])
 
       return undefined
     }
 
     this.#registered(unregister)
-    this.#seen.mark(caller.identity, hello.device)
     // The device holds one live socket: an older one it gave up is served no more.
     this.#connections.supersede(caller.identity, hello.device, this.#listener)
+    // Seen before it is welcomed: whatever it does next, the account's devices are judged by it.
+    await this.#seen.mark(caller.identity, hello.device)
 
-    return { id: caller.identity, email: caller.email }
+    return { identity: { id: caller.identity, email: caller.email }, roles: caller.roles }
+  }
+
+  /**
+   * Closes a hello whose session ended or was ended while it was read: with why, when its row says
+   * another device or the account's own change ended it, else with `otherwise` (4401 for a token
+   * that reads no live session, 4001 for a registration a close refused). The row is the hello's
+   * device's, or it says nothing; a row the directory could not read closes the hello as a failed
+   * server.
+   */
+  async #closeEnded(hello: Hello, otherwise: readonly [code: number, text: string]): Promise<void> {
+    const row = await this.#devices.byToken(hello.token)
+
+    if (this.#host.isClosed()) {
+      return
+    }
+
+    if (row.isErr()) {
+      this.#host.fail(row.error)
+
+      return
+    }
+
+    const reason = row.value?.device === hello.device ? row.value.endedReason : undefined
+
+    this.#host.close(...(reason === undefined ? otherwise : endedClose(reason)))
   }
 }

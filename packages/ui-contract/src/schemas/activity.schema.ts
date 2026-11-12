@@ -18,6 +18,7 @@ import {
   screenNameSchema,
 } from '../names.schema'
 
+import { DESCRIPTION_PURPOSES } from './description-purposes'
 import { guardNameSchema, modelFieldPathSchema, routePathSchema } from './screens-schema'
 
 const stateNameSchema = kebabNameSchema.describe(
@@ -28,7 +29,7 @@ const transitionSchema = z
   .strictObject({
     target: stateNameSchema.describe('The state the activity moves to: the next visit.'),
     guard: guardNameSchema.exactOptional(),
-    description: z.string().exactOptional().describe('What happens, for a reader.'),
+    description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.activityTransition),
   })
   .describe('One transition: the user acts on the anchor and reaches the target.')
 
@@ -44,7 +45,7 @@ const transitionsSchema = z
 
 const stateSchema = z
   .strictObject({
-    description: z.string().exactOptional().describe('What the visit is, for a reader.'),
+    description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.visit),
     type: z.literal('final').exactOptional().describe('The activity ends in this state.'),
     meta: z
       .strictObject({
@@ -67,17 +68,14 @@ export const activitySchema = z
   .strictObject({
     id: kebabNameSchema.describe('The id of the activity, the name of its file: `session`.'),
     title: z.string().min(1).describe('The title of the activity, for a reader.'),
-    description: z
-      .string()
-      .min(1)
-      .describe('What the activity is for: the task it serves across its screens.'),
+    description: z.string().min(1).describe(DESCRIPTION_PURPOSES.activity),
     roles: z.array(roleSchema).min(1).describe('The roles that take part in the activity.'),
     data: z
       .record(
         dataNameSchema,
         z
           .strictObject({
-            description: z.string().min(1).describe('What it is, for a reader.'),
+            description: z.string().min(1).describe(DESCRIPTION_PURPOSES.activityData),
             model: modelFieldPathSchema.exactOptional(),
           })
           .describe('One thing the activity carries, and the field of the model it is.'),
@@ -88,7 +86,7 @@ export const activitySchema = z
     meta: z
       .strictObject({
         guards: z
-          .record(guardNameSchema, z.string())
+          .record(guardNameSchema, z.string().describe(DESCRIPTION_PURPOSES.activityGuard))
           .exactOptional()
           .describe('The guards by name, each with what it holds.'),
       })

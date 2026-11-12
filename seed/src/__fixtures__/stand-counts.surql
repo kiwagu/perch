@@ -1,7 +1,9 @@
 -- What seeding left on a stand for the given accounts: the identities at their addresses,
 -- the profiles and the settings of their identity keys, the rows of their private regions,
 -- and how many batches the server accepted into those regions; the organisations they
--- created, their memberships, and which of the databases `$databases` exist in the namespace.
+-- created, their memberships, the pending invitations (those to the organisations in
+-- `$tenantIds` and those to the addresses in `$emails`), and which of the databases
+-- `$databases` exist in the namespace.
 RETURN {
   identities: array::len(SELECT VALUE id FROM identity WHERE email IN $emails),
   tenants: array::len(
@@ -13,6 +15,13 @@ RETURN {
     WHERE
       record::id(identity) IN $ids
       OR record::id(tenant) IN $tenantIds
+  ),
+  invitations: array::len(
+    SELECT VALUE id
+    FROM invitation
+    WHERE
+      record::id(tenant) IN $tenantIds
+      OR email IN $emails
   ),
   databases: array::len(
     array::intersect(

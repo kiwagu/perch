@@ -21,12 +21,48 @@ function formInput({ event }: { readonly event: SignInEvent }): { readonly form:
   return { form: event.form }
 }
 
+/** What a sign-in invokes with: the form, and whether it signs out the device seen least recently. */
+interface SignInAttempt {
+  readonly form: SignInForm
+  readonly signOutOldest: boolean
+}
+
+/**
+ * The sign-in the submit button asks for, or the one the dialog past the limit of devices
+ * confirms, which signs out the account's device seen least recently.
+ */
+function signInInput({ event }: { readonly event: SignInEvent }): SignInAttempt {
+  assertEvent(event, [
+    'user.sign-in.submit-button',
+    'user.sign-in.device-limit-dialog.confirm-button',
+  ])
+
+  return {
+    form: event.form,
+    signOutOldest: event.type === 'user.sign-in.device-limit-dialog.confirm-button',
+  }
+}
+
 /** The email the resend button sent, which the resend takes. */
 function emailInput({ event }: { readonly event: SignInEvent }): { readonly email: string } {
   assertEvent(event, 'user.sign-in.resend-button')
 
   return { email: event.email }
 }
+
+/** The move to the page that asks for a reset mail, carrying the email typed. */
+const toForgotPassword = {
+  target: 'forgot-password',
+  actions: [
+    {
+      type: 'navigate',
+      params: {
+        to: '/forgot-password',
+        search: { email: { anchor: 'user.sign-in.email-input' } },
+      },
+    },
+  ],
+} as const
 
 /** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
 const showError = (...codes: readonly string[]) =>
@@ -37,6 +73,36 @@ const showMail = {
   type: 'show',
   params: { anchor: MAIL_MESSAGE, codes: [CHECK_YOUR_MAIL] },
 } as const
+
+/** The welcome a sign-in that went through says, and the move to the profile. */
+const welcomed = [
+  { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
+  { type: 'navigate', params: { to: '/me' } },
+] as const
+
+/** The dialog asking whether to sign in past the limit of devices. */
+const askPastTheLimit = {
+  type: 'show',
+  params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
+} as const
+
+/**
+ * A refused sign-in: one of an email not verified yet offers the resend, any other goes back with
+ * its code, a banned account's (`account-banned`) among them: no resend is offered for it.
+ */
+const refusedSignIn = [
+  {
+    target: 'unverified',
+    guard: 'emailNotVerified',
+    actions: [showError('email-not-verified')],
+  },
+  {
+    target: 'sign-in',
+    actions: [
+      showError('invalid-credentials', 'account-banned', 'rate-limited', 'other-account', 'failed'),
+    ],
+  },
+] as const
 
 /**
  * The switch into the mode sign-up, judging the passwords as typed with `clear` on the way: to
@@ -54,12 +120,16 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * The sign-in form as the screen's flow says (`contract/domain/screens/sign-in.yaml`): the mode is
  * the state, an attempt is an invoke of its platform action, a failure goes back to the mode with
  * its code; a sign-up, or a resend of the verification mail, leaves the form in the mode sign-in
- * asking to check the mail, and a sign-in of an account not verified yet offers the resend. At
+ * asking to check the mail, and a sign-in of an account not verified yet offers the resend. A
+ * sign-in that finds the account signed in on as many devices as it may be signs nothing in and
+ * asks in its dialog; confirmed, it signs in all the same, signing out the account's device seen
+ * least recently, and the cancel goes back to the form. At
  * sign-up the password is held to the rules of a new password and the password typed again is
  * compared, as either is typed and on the switch into sign-up, and the submit is held while the
- * password breaks a rule or the two differ. Its `show` and `clear` keep the codes of the form's own
- * error and mail message for the view and emit any other; its `navigate` emits the path, for the
- * host to move to.
+ * password breaks a rule or the two differ. In the mode sign-in the forgot-link moves to the page
+ * that asks for a reset mail, carrying the email typed. Its `show` and `clear` keep the codes of
+ * the form's own error and mail message for the view and emit any other; its `navigate` emits the
+ * path with the fields its event carries, for the host to move with.
  */
 export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'signUp' | 'resend'>) {
   return setup({
@@ -70,9 +140,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     },
     guards: signInGuards,
     actors: {
-      'platform.sign-in': fromPromise(
-        ({ input }: { readonly input: { readonly form: SignInForm } }) =>
-          settled(service.signIn(input.form)),
+      'platform.sign-in': fromPromise(({ input }: { readonly input: SignInAttempt }) =>
+        settled(service.signIn(input.form, input.signOutOldest)),
       ),
       // A sign-up and a resend end with the address they mailed: the message names that one, not
       // the field's, which can change after.
@@ -111,7 +180,12 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.emit({ type: 'clear', ...params })
         }
       }),
-      navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
+      // The fields the event carries go with the move: its search takes the email typed from them.
+      navigate: emit(({ event }, params: NavigateParams) => ({
+        type: 'navigate' as const,
+        ...params,
+        ...('fields' in event ? { fields: event.fields } : {}),
+      })),
     },
   }).createMachine({
     id: 'user.sign-in',
@@ -119,12 +193,21 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     context: { error: undefined, mail: undefined, sentTo: undefined },
     states: {
       'sign-in': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.toggle-button': intoSignUp(clearError),
           'user.sign-in.submit-button': { target: 'signing-in' },
         },
       },
       'sign-up': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         on: {
           'user.sign-in.toggle-button': { target: 'sign-in', actions: [clearError] },
           'user.sign-in.password-confirmation-input': {
@@ -144,6 +227,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
       // The list marks the rules the password keeps; the password typed again waits to be judged,
       // and the submit is not taken.
       'password-weak': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         on: {
           'user.sign-in.password-input': [
             { guard: 'passwordBreaksRules' },
@@ -154,6 +244,13 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'passwords-differ': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         entry: [showError('passwords-differ')],
         exit: [clearError],
         on: {
@@ -169,33 +266,43 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'signing-in': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
         entry: [clearError],
         invoke: {
           src: 'platform.sign-in',
-          input: formInput,
-          onDone: {
-            target: 'done',
-            actions: [
-              { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-              { type: 'navigate', params: { to: '/me' } },
-            ],
-          },
-          onError: [
-            {
-              target: 'unverified',
-              guard: 'emailNotVerified',
-              actions: [showError('email-not-verified')],
-            },
-            {
-              target: 'sign-in',
-              actions: [
-                showError('invalid-credentials', 'rate-limited', 'other-account', 'failed'),
-              ],
-            },
+          input: signInInput,
+          onDone: [
+            { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
+            { target: 'done', actions: welcomed },
           ],
+          onError: refusedSignIn,
+        },
+      },
+      // Nothing is signed in unless the dialog is confirmed.
+      'device-limit': {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.device-limit-dialog'] },
+        on: {
+          'user.sign-in.device-limit-dialog.confirm-button': { target: 'signing-in-anyway' },
+          'user.sign-in.device-limit-dialog.cancel-button': { target: 'sign-in' },
+        },
+      },
+      'signing-in-anyway': {
+        meta: { renders: ['user.sign-in.forgot-link'] },
+        invoke: {
+          src: 'platform.sign-in',
+          input: signInInput,
+          onDone: { target: 'done', actions: welcomed },
+          onError: refusedSignIn,
         },
       },
       'signing-up': {
+        meta: {
+          renders: [
+            'user.sign-in.password-rule-list',
+            'user.sign-in.password-confirmation-input',
+            'user.sign-in.name-input',
+          ],
+        },
         entry: [clearError],
         invoke: {
           src: 'platform.sign-up',
@@ -219,20 +326,25 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'check-mail': {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in', actions: [clearMail] },
           'user.sign-in.toggle-button': intoSignUp(clearMail),
         },
       },
       unverified: {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         on: {
+          'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in' },
           'user.sign-in.toggle-button': intoSignUp(clearError),
         },
       },
       resending: {
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
         entry: [clearError],
         invoke: {
           src: 'platform.resend-verification',
@@ -247,7 +359,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           },
         },
       },
-      done: { type: 'final' },
+      done: { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
+      'forgot-password': { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
     },
   })
 }

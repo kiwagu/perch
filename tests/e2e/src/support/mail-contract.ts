@@ -15,33 +15,77 @@ const { screens, problems } = loadScreens(ROOT)
 export interface MailValues {
   readonly params: Readonly<Record<string, string>>
   /**
-   * The account the mail is about: its email for a mail declared `to: account` (the signed-in
-   * account's), its language for one declared `language: account`.
+   * The account the mail is about, the one the action acts on (the signed-in account for an
+   * action on its own account, else the one its parameters name): its email for a mail declared
+   * `to: account`, its language for one declared `language: account`.
    */
   readonly account?: { readonly email: string; readonly language: string }
-}
-
-/** The mail a platform action declares, as the contract says it. */
-function declared(action: string) {
-  const mail = screens?.platform.actions[action]?.mail
-
-  if (screens === undefined || mail === undefined) {
-    throw new Error(
-      `no platform action "${action}" declares a mail (${problems.map(formatProblem).join('; ')})`,
-    )
-  }
-
-  const screen = screens.screens.find((each) => each.id === mail.link.screen)
-
-  return { mail, paths: screen?.bindings.map(({ path }) => path) ?? [] }
+  /**
+   * The account a mail is sent to when the mail goes to an email its action takes as a
+   * parameter (an invitation) and an account has that email: its language for a mail declared
+   * `language: recipient`. A test passes it only then; an invited email without an account has no
+   * language of its own, and its mail speaks the signed-in inviter's (`account`).
+   */
+  readonly recipient?: { readonly language: string }
 }
 
 /**
- * The value a declaration's `to` or `language` names: a parameter of the action, or the account's
- * own.
+ * The platform action `action` as the contract declares it, or undefined when it declares none or
+ * the contract cannot be read; `contractProblems` says why it cannot.
  */
-function valueNamed(name: string, values: MailValues, ofAccount: 'email' | 'language'): string {
-  const value = name === 'account' ? values.account?.[ofAccount] : values.params[name]
+export const platformAction = (action: string) => screens?.platform.actions[action]
+
+/** What keeps the contract from being read, for a failure that found no declaration in it. */
+export const contractProblems = (): string => problems.map(formatProblem).join('; ')
+
+/** The paths of the routes of the screen `screen`, none when the contract has no such screen. */
+export const pathsOf = (screen: string): string[] =>
+  screens?.screens.find((each) => each.id === screen)?.bindings.map(({ path }) => path) ?? []
+
+/** The mail a platform action declares, as the contract says it. */
+function declared(action: string) {
+  const mail = platformAction(action)?.mail
+
+  if (mail === undefined) {
+    throw new Error(`no platform action "${action}" declares a mail (${contractProblems()})`)
+  }
+
+  return { mail, paths: pathsOf(mail.link.screen) }
+}
+
+/**
+ * What a test knows of the value `name` names, or undefined when it gave none: the account's own
+ * (`account`), the language of the account a mail's email belongs to, else the account's
+ * (`recipient`), or a parameter of the action.
+ */
+function givenFor(
+  name: string,
+  values: MailValues,
+  ofAccount: 'email' | 'language',
+): string | undefined {
+  if (name === 'account') {
+    return values.account?.[ofAccount]
+  }
+
+  if (name === 'recipient') {
+    return ofAccount === 'language'
+      ? (values.recipient?.language ?? values.account?.language)
+      : undefined
+  }
+
+  return values.params[name]
+}
+
+/**
+ * The value a declaration's `to` or `language` names: a parameter of the action, the account's
+ * own, or the language of the recipient.
+ */
+export function valueNamed(
+  name: string,
+  values: MailValues,
+  ofAccount: 'email' | 'language',
+): string {
+  const value = givenFor(name, values, ofAccount)
 
   if (value === undefined) {
     throw new Error(`the test gave no value for "${name}"`)
@@ -54,7 +98,7 @@ function valueNamed(name: string, values: MailValues, ofAccount: 'email' | 'lang
  * The `lang` of an HTML document's root element, as an HTML parser builds the document (parse5,
  * the parser jsdom uses): a comment, a quote style or an attribute order changes nothing.
  */
-function rootLanguage(html: string): string | undefined {
+export function rootLanguage(html: string): string | undefined {
   const root = parse(html).childNodes.find((node) => defaultTreeAdapter.isElementNode(node))
 
   return root === undefined

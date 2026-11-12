@@ -7,6 +7,7 @@ import type { RegionHub } from '@workspace/replica/server'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
 import type { DeviceSessions } from '../../auth/device-sessions'
+import type { ProfileEmails } from '../../auth/profile-emails'
 import type { Organisations } from '../../tenants/organisations'
 import type { ConnectionRegistry } from '../connections'
 
@@ -19,10 +20,22 @@ export interface SocketLike {
 export interface SyncConnectionDeps {
   /** Reads the session a hello's token holds, and ends it when the device signs out. */
   readonly sessions: Pick<AuthSessions, 'read' | 'signOut'>
-  /** The devices' rows: a device is marked seen at its hello, then at most every five minutes. */
-  readonly devices: Pick<DeviceSessions, 'seen'>
-  readonly hub: Pick<RegionHub, 'subscribe' | 'unsubscribe' | 'pull' | 'push' | 'heads' | 'compact'>
+  /**
+   * The devices' rows: a device is marked seen at its hello, then at most every five minutes; a
+   * hello whose session ended is told why from its row, when another device or the account's own
+   * change ended it.
+   */
+  readonly devices: Pick<DeviceSessions, 'seen' | 'byToken'>
+  readonly hub: Pick<
+    RegionHub,
+    'subscribe' | 'unsubscribe' | 'changeActor' | 'pull' | 'push' | 'heads' | 'compact'
+  >
   readonly organisations: Pick<Organisations, 'membershipsOf'>
+  /**
+   * Brings the profile's email in step with the account's once a device of the account said hello
+   * (`ProfileEmails.reconcile`): a follow a stopped gateway lost is made good at the next hello.
+   */
+  readonly profiles: Pick<ProfileEmails, 'reconcile'>
   /** Where the connection registers once its session is read, to hear its memberships change. */
   readonly connections: ConnectionRegistry
   readonly clock: Clock

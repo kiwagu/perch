@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider, useBlocker } from '@tanstack/react-router'
 import { act, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { emit, fromPromise, setup } from 'xstate'
 
@@ -16,15 +17,31 @@ type Event =
   | { readonly type: 'x.save-button'; readonly fail: boolean }
   | { readonly type: 'x.nothing-button' }
   | { readonly type: 'x.leave-button' }
+  | { readonly type: 'x.carry-link'; readonly fields: { readonly 'x.y.email-input': string } }
+  | { readonly type: 'x.list.open-link'; readonly items: { readonly 'x.list.thing-item': string } }
   | { readonly type: 'user.profile.sign-out-button' }
   | { readonly type: 'organisation.notes.delete-button' }
+  | { readonly type: 'x.finish-button' }
+  | {
+      readonly type: 'platform.password-reset'
+      readonly fields: { readonly 'x.y.email-input': string }
+    }
 
 /**
- * Two saves in a chain, a button that does nothing, a flow's own move, a leaving control and a
- * control whose action destroys.
+ * Two saves in a chain, a button that does nothing, a flow's own move, a leaving control, a
+ * control whose action destroys, a platform event that moves with a field's value, and an end.
  */
 const machine = setup({
-  types: { events: {} as Event, emitted: {} as { type: 'navigate'; to: string } },
+  types: {
+    events: {} as Event,
+    emitted: {} as {
+      type: 'navigate'
+      to: string
+      search?: Readonly<Record<string, unknown>>
+      fields?: Readonly<Record<string, string>>
+      items?: Readonly<Record<string, string>>
+    },
+  },
   actors: {
     save: fromPromise(async ({ input }: { input: { fail: boolean } }) => {
       await Promise.resolve()
@@ -42,8 +59,34 @@ const machine = setup({
         'x.save-button': 'saving-one',
         'x.nothing-button': { actions: emit({ type: 'navigate', to: '/here' }) },
         'x.leave-button': { actions: emit({ type: 'navigate', to: '/there' }) },
+        'x.carry-link': {
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { email: { anchor: 'x.y.email-input' }, view: 'read' },
+            fields: event.type === 'x.carry-link' ? event.fields : {},
+          })),
+        },
+        'x.list.open-link': {
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { id: { item: 'x.list.thing-item' }, view: 'read' },
+            items: event.type === 'x.list.open-link' ? event.items : {},
+          })),
+        },
         'user.profile.sign-out-button': 'out',
         'organisation.notes.delete-button': 'deleted',
+        'x.finish-button': 'finished',
+        'platform.password-reset': {
+          target: 'moved',
+          actions: emit(({ event }) => ({
+            type: 'navigate' as const,
+            to: '/there',
+            search: { email: { anchor: 'x.y.email-input' } },
+            fields: event.type === 'platform.password-reset' ? event.fields : {},
+          })),
+        },
       },
     },
     'saving-one': {
@@ -56,7 +99,9 @@ const machine = setup({
     },
     'saving-two': { invoke: { src: 'save', input: () => ({ fail: false }), onDone: 'idle' } },
     out: {},
-    deleted: {},
+    deleted: { meta: { renders: ['x.deleted-message'] } },
+    moved: {},
+    finished: { type: 'final' },
   },
 })
 
@@ -138,18 +183,21 @@ const watched = setup({
 type Screen = ReturnType<typeof useScreenMachine<typeof machine>>
 type Watched = ReturnType<typeof useScreenMachine<typeof watched>>
 
-const held: { screen?: Screen; watched?: Watched } = {}
+const held: { screen?: Screen; watched?: Watched; type?: (email: string) => void } = {}
 
+/** A page whose email field the test types into, which a platform event carries for its move. */
 function Page() {
-  const running = useScreenMachine(machine)
+  const [email, setEmail] = useState('ann@example.test')
+  const running = useScreenMachine('x', machine, { 'x.y.email-input': email })
 
   held.screen = running
+  held.type = setEmail
 
   return <output data-testid="state">{String(running.state.value)}</output>
 }
 
 function WatchedPage() {
-  const running = useScreenMachine(watched)
+  const running = useScreenMachine('x', watched)
 
   held.watched = running
 
@@ -167,14 +215,15 @@ const PageModule = defineModule({
   id: 'page',
   declarations: { Page, WatchedPage, There: () => <p>there</p> },
   routes: [
-    { path: '/here', page: 'Page' },
-    { path: '/watched', page: 'WatchedPage' },
-    { path: '/there', page: 'There' },
+    { path: '/here', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/watched', page: 'WatchedPage', roles: ['guest', 'identity'] },
+    { path: '/there', page: 'There', roles: ['guest', 'identity'] },
   ],
 })
 
 async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = confirming()) {
   const { session } = fakeSession()
+  const services = fakeServices(session)
   const router = createAppRouter({
     modules: [PageModule],
     session,
@@ -183,7 +232,7 @@ async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = conf
   })
 
   render(
-    <ServicesProvider services={fakeServices(session)}>
+    <ServicesProvider services={services}>
       <ConfirmGuardContext.Provider value={asking}>
         <LeaveGuardContext.Provider value={guard}>
           <RouterProvider router={router} />
@@ -199,7 +248,7 @@ async function open(guard: LeaveGuard, at = '/here', asking: ConfirmGuard = conf
     throw new Error('the page did not render')
   }
 
-  return { router, running }
+  return { router, running, services }
 }
 
 /** Opens the page of the machine with a background actor, and gives its running screen. */
@@ -362,6 +411,66 @@ describe('useScreenMachine', () => {
     expect(router.state.location.pathname).toBe('/there')
   })
 
+  it("moves with the value a field of the moving event holds, never the field's anchor", async () => {
+    const { router, running } = await open(passing())
+
+    act(() =>
+      running.send({ type: 'x.carry-link', fields: { 'x.y.email-input': 'ann@example.test' } }),
+    )
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test', view: 'read' })
+  })
+
+  it('moves with the id of the entry the moving event acted in, never the anchor of its item', async () => {
+    const { router, running } = await open(passing())
+
+    act(() => running.send({ type: 'x.list.open-link', items: { 'x.list.thing-item': 'thg_1' } }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ id: 'thg_1', view: 'read' })
+  })
+
+  it("brings a platform event to the machine, which moves with what the screen's field holds", async () => {
+    const { router, services } = await open(passing())
+
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
+  })
+
+  it('brings a platform event with what the field holds after the page rendered again', async () => {
+    const { router, services } = await open(passing())
+
+    act(() => held.type?.('bob@example.test'))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    await screen.findByText('there')
+    expect(router.state.location.search).toEqual({ email: 'bob@example.test' })
+  })
+
+  it('lets a platform event pass in a state that does not handle it', async () => {
+    const { running, services } = await open(passing())
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+  })
+
+  it('brings no platform event to a machine that ended', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { running, services } = await open(passing())
+
+    act(() => running.send({ type: 'x.finish-button' }))
+    act(() => services.platformEvent({ type: 'platform.password-reset' }))
+
+    expect(running.actor.getSnapshot().status).toBe('done')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('asks the guard before a leaving control, and sends nothing when the user stays', async () => {
     const guard = passing()
     const staying: LeaveGuard = { ...guard, before: vi.fn(() => Promise.resolve(false)) }
@@ -417,5 +526,14 @@ describe('useScreenMachine', () => {
       false,
     )
     expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
+
+  it("tells what the machine's state renders, read from its states' meta.renders", async () => {
+    const { running } = await open(passing())
+
+    expect(running.renders('x.deleted-message')).toBe(false)
+    expect(running.renders('x.y.email-input')).toBe(true)
+    expect(await act(() => running.submit({ type: 'organisation.notes.delete-button' }))).toBe(true)
+    expect(held.screen?.renders('x.deleted-message')).toBe(true)
   })
 })

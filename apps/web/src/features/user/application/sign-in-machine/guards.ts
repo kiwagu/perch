@@ -1,13 +1,8 @@
 import { assertEvent } from 'xstate'
 
-import { keepsPasswordRules } from '@workspace/kernel'
-
 import { failureOf } from '../../../../platform/actor-outcome'
-import {
-  checkPasswordConfirmation,
-  type PasswordConfirmation,
-  type Passwords,
-} from '../../domain/password-confirmation.rule'
+import type { Passwords } from '../../domain/password-confirmation.rule'
+import { newPasswordGuards } from '../new-password-guards.policy'
 
 import { UNKNOWN_FAILURE } from './context'
 import type { SignInEvent } from './events'
@@ -31,20 +26,25 @@ function passwordsOf(event: SignInEvent): Passwords {
     : { password: event.password, confirmation: event.confirmation }
 }
 
-/** How the password typed again stands to the password, as the event carries both. */
-const confirmationOf = (event: SignInEvent): PasswordConfirmation =>
-  checkPasswordConfirmation(passwordsOf(event))
-
 /**
  * The guards of the screen's flow, by the names of its `meta.guards`: whether a sign-in was refused
- * for an email not verified yet, whether the password breaks a rule of a new password (the
- * kernel's rule, the gateway's too), and three readings of the password typed again.
+ * for an email not verified yet (the gateway's 403 that names no ban; a banned account's is
+ * `data:ACCOUNT_BANNED`, which goes back to the form like any other refusal), whether it found
+ * the account signed in on as many devices as it may be (its outcome `device-limit`), and those
+ * of a new password typed twice at sign-up.
  */
 export const signInGuards = {
   emailNotVerified: ({ event }: GuardArgs) =>
     failureOf(event, UNKNOWN_FAILURE) === 'data:EMAIL_NOT_VERIFIED',
-  passwordBreaksRules: ({ event }: GuardArgs) => !keepsPasswordRules(passwordsOf(event).password),
-  passwordsDiffer: ({ event }: GuardArgs) => confirmationOf(event) !== 'same',
-  confirmationStrays: ({ event }: GuardArgs) => confirmationOf(event) === 'strayed',
-  confirmationFollows: ({ event }: GuardArgs) => confirmationOf(event) !== 'strayed',
+  atDeviceLimit: ({ event }: GuardArgs) => {
+    const output = 'output' in event ? event.output : undefined
+
+    return (
+      typeof output === 'object' &&
+      output !== null &&
+      'kind' in output &&
+      output.kind === 'device-limit'
+    )
+  },
+  ...newPasswordGuards(passwordsOf),
 }

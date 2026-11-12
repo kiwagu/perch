@@ -1,25 +1,38 @@
 import { signJWT } from 'better-auth/crypto'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
+import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
-import { AUTH_SECRET, deviceHeaders } from '../__fixtures__/auth-instance'
+import { sessionStates } from '../__fixtures__/account-ban'
+import { AUTH_SECRET, betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import deviceSessionDevicesStatement from '../__fixtures__/device-session-devices.surql'
+import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
+import identityVerifiedStatement from '../__fixtures__/identity-verified.surql'
+import { signVerificationToken, verificationKey } from '../account-links'
 
 import {
   ANN,
+  ARGON2_WAIT,
   annsLink,
   fakeConnection,
+  heldQueries,
+  isSessionInsert,
   mountedOnFakeAuth,
   mountedOnRealAuth,
   ORIGIN,
+  pastFloor,
+  postTo,
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
+  verifyRequest as verify,
 } from './__fixtures__/mount'
+import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
@@ -32,19 +45,6 @@ const RESEND_FLOOR_MS = 500
 
 /** How early a resend may be measured against the floor: a timer's wake and the clock's rounding. */
 const RESEND_FLOOR_SLACK_MS = 10
-
-/** A verification of the link's `token` from `device` (none names no device), as the web sends it. */
-function verify(token: string, device: string | null): Request {
-  const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
-
-  headers.set('content-type', 'application/json')
-
-  return new Request('http://gateway.test/auth/verify-email', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ token }),
-  })
-}
 
 /** What the first verification of an account answers. */
 const verifiedAnswer = z.object({
@@ -61,6 +61,24 @@ function issuedAt(token: string): number {
     .parse(JSON.parse(Buffer.from(payload ?? '', 'base64url').toString('utf8'))).iat
 }
 
+/**
+ * The token of a link as the gateway mails one to `identity`, around Better Auth's `token`; a
+ * new account's unless one is named.
+ */
+function mailedLink(token: string, identity = identityIdFactory.create()): Promise<string> {
+  return signVerificationToken(
+    { purpose: 'verify-email', identity, token },
+    verificationKey(AUTH_SECRET),
+  )
+}
+
+/** The devices of `identity` whose session has not ended. */
+async function liveDevices(local: LocalDb, identity: IdentityId): Promise<string[]> {
+  const [devices] = await local.db.query<[string[]]>(liveSessionsStatement, { identity })
+
+  return devices
+}
+
 /** An answer as a client sees it: its status, its headers and its body. */
 async function seen(answer: Response | undefined) {
   return {
@@ -71,8 +89,8 @@ async function seen(answer: Response | undefined) {
 }
 
 describe('authHandler, the verification of an email', () => {
-  it('signs the device in the first time, closing its sockets first, and answers the account', async () => {
-    const { route, outbox, closes } = await mountedOnRealAuth()
+  it('signs the device in the first time, its session admitted and its sockets closed, and answers the account', async () => {
+    const { route, outbox, closes, sessions } = await mountedOnRealAuth()
     const token = await annsLink(outbox)
     const answer = await route(verify(token, 'phone'), FROM)
     const body = verifiedAnswer.parse(await answer?.json())
@@ -80,6 +98,8 @@ describe('authHandler, the verification of an email', () => {
     expect(answer?.status).toBe(200)
     expect(body.token).not.toContain('.')
     expect(body.user).toMatchObject({ email: ANN, name: 'Ann', locale: 'en' })
+    // The token left once the session was admitted: it reads as the device's session.
+    expect((await sessions.read(body.token)).kind).toBe('session')
     expect(closes).toEqual([[body.user.id, 'phone', SUPERSEDED]])
     expect(answer?.headers.get('set-cookie')).toBeNull()
     expect(answer?.headers.get('set-auth-token')).toBeNull()
@@ -147,13 +167,16 @@ describe('authHandler, the verification of an email', () => {
     expect(devices).toHaveLength(1)
   })
 
-  it("closes the device's sockets even when the session cannot be read back", async () => {
-    const { route, outbox, registry, annsId } = await mountedOnRealAuth({ readbackFails: true })
+  it("leaves the device's sockets open, and its new session waiting, when the session cannot be read back", async () => {
+    const { route, outbox, registry, annsId, local } = await mountedOnRealAuth({
+      readbackFails: true,
+    })
     const token = await annsLink(outbox)
+    const ann = await annsId()
     const phone = fakeConnection()
     const before = registry.epoch()
 
-    registry.add(await annsId(), 'phone', phone, before)
+    registry.add(ann, 'phone', phone, before)
 
     const { result: answer, printed } = await printedDuring(() =>
       route(verify(token, 'phone'), FROM),
@@ -161,15 +184,23 @@ describe('authHandler, the verification of an email', () => {
 
     expect(answer?.status).toBe(500)
     expect(await answer?.json()).toEqual({ code: 'internal' })
-    expect(phone.ended).toEqual([SUPERSEDED])
-    expect(registry.epoch()).toBeGreaterThan(before)
+    // Nothing admitted the session, so nothing ended the device's earlier one: its sockets stay.
+    expect(phone.ended).toEqual([])
+    expect(registry.epoch()).toBe(before)
+    expect(
+      (await sessionStates(local, ann)).map(({ device, pending, ended_at }) => [
+        device,
+        pending,
+        ended_at,
+      ]),
+    ).toEqual([['phone', true, undefined]])
     expect(printed).not.toContain(READBACK_FAILURE)
   })
 
   it('answers a link it cannot read, one past its lifetime and one of no account 401 with its code alone', async () => {
     const { route, closes } = await mountedOnRealAuth()
-    const expired = await signJWT({ email: ANN }, AUTH_SECRET, -10)
-    const ghost = await signJWT({ email: GHOST }, AUTH_SECRET, 3600)
+    const expired = await mailedLink(await signJWT({ email: ANN }, AUTH_SECRET, -10))
+    const ghost = await mailedLink(await signJWT({ email: GHOST }, AUTH_SECRET, 3600))
     const invalid = await seen(await route(verify('not-a-token', 'phone'), FROM))
     const late = await seen(await route(verify(expired, 'phone'), FROM))
     const unknown = await seen(await route(verify(ghost, 'phone'), FROM))
@@ -179,6 +210,18 @@ describe('authHandler, the verification of an email', () => {
     // A link of no account answers as a link that is no link at all.
     expect(unknown).toEqual(invalid)
     expect(closes).toEqual([])
+  })
+
+  it("answers Better Auth's own token, which the gateway never mails bare, link-invalid, verifying nothing", async () => {
+    const mounted = await mountedOnRealAuth()
+    const link = await annsLink(mounted.outbox)
+    const answer = await seen(await mounted.route(verify(betterAuthToken(link), 'phone'), FROM))
+    const [identities] =
+      await mounted.local.db.query<[{ email_verified: boolean }[]]>(identityVerifiedStatement)
+
+    expect([answer.status, JSON.parse(answer.body)]).toEqual([401, { code: 'link-invalid' }])
+    expect(identities.map((identity) => identity.email_verified)).toEqual([false])
+    expect(mounted.closes).toEqual([])
   })
 
   it('answers a verification that names no device, or no token, 400 without asking Better Auth', async () => {
@@ -396,7 +439,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
   it('verifies, refuses and resends with no address or link printed, logged or answered', async () => {
     const { route, outbox, logs } = await mountedOnRealAuth()
     const token = await annsLink(outbox, MARKED)
-    const expired = await signJWT({ email: MARKED }, AUTH_SECRET, -10)
+    const expired = await mailedLink(await signJWT({ email: MARKED }, AUTH_SECRET, -10))
     const { result, printed } = await printedDuring(async () => {
       const first = await seen(await route(verify(token, 'phone'), FROM))
       const others = [
@@ -450,4 +493,190 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))
   })
+})
+
+describe('authHandler, a verification link and the account it was mailed to', () => {
+  /** An email no account has, until Ann moves to it. */
+  const MOVED = 'ann.moved@example.test'
+
+  /** Whether each identity's email is verified, by its email. */
+  async function verifiedByEmail(local: LocalDb): Promise<Map<string, boolean>> {
+    const [rows] =
+      await local.db.query<[{ email: string; email_verified: boolean }[]]>(
+        identityVerifiedStatement,
+      )
+
+    return new Map(rows.map((row) => [row.email, row.email_verified]))
+  }
+
+  it("answers an account's link link-invalid once its email moved and another account signed up with it, verifying and signing in nothing", async () => {
+    const mounted = await mountedOnRealAuth()
+    const annsToken = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+
+    // Before any change, Ann's link verifies her and signs her laptop in.
+    const first = verifiedAnswer.parse(
+      await (await mounted.route(verify(annsToken, 'laptop'), FROM))?.json(),
+    )
+
+    expect(first.user.id).toBe(ann)
+
+    // Ann moves to another email, which frees hers (the notice of the change goes to it), and Bob
+    // signs up with it.
+    const change = (await mounted.emailChanges.ask(ann, ANN, MOVED))._unsafeUnwrap()
+
+    expect(
+      (await mounted.route(postTo('/auth/confirm-email', { token: change }), FROM))?.status,
+    ).toBe(200)
+    await mounted.outbox.next(ANN, 1)
+
+    const bobsToken = await annsLink(mounted.outbox)
+    const bob = await mounted.annsId()
+
+    expect(bob).not.toBe(ann)
+
+    const old = await mounted.route(verify(annsToken, 'phone'), FROM)
+
+    expect(old?.status).toBe(401)
+    expect(await old?.json()).toEqual({ code: 'link-invalid' })
+    expect(await verifiedByEmail(mounted.local)).toEqual(
+      new Map([
+        [MOVED, true],
+        [ANN, false],
+      ]),
+    )
+    expect(await liveDevices(mounted.local, bob)).toEqual([])
+    expect(mounted.closes).toEqual([[ann, 'laptop', SUPERSEDED]])
+
+    // Bob's own link verifies Bob and signs his device in.
+    const bobs = verifiedAnswer.parse(
+      await (await mounted.route(verify(bobsToken, 'desk'), FROM))?.json(),
+    )
+
+    expect(bobs.user.id).toBe(bob)
+    expect(await liveDevices(mounted.local, bob)).toEqual(['desk'])
+    expect(await verifiedByEmail(mounted.local)).toEqual(
+      new Map([
+        [MOVED, true],
+        [ANN, true],
+      ]),
+    )
+  })
+})
+
+describe('authHandler, a verification link after a reset verified the email', () => {
+  it('answers verified-before, signs nothing in and creates no session', async () => {
+    const { route, outbox, local, clock } = await mountedOnRealAuth()
+    const token = await annsLink(outbox)
+
+    await pastFloor(
+      clock,
+      route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    const link = linkToken(await outbox.next(ANN, 1))
+
+    expect(
+      (
+        await route(
+          postTo('/auth/reset-password', { token: link, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(200)
+
+    const answer = await route(verify(token, 'phone'), FROM)
+    const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({ token: null })
+    expect(devices).toEqual([])
+  })
+
+  it('leaves no session to a verification whose account a reset recovered while Better Auth wrote the session, and answers none', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const token = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+    // The reset link is asked for first: its request takes the email's turn, which the
+    // verification holds.
+    const seen = mounted.outbox.to(ANN).length
+    const asked = await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    expect(asked?.status).toBe(202)
+
+    const reset = linkToken(await mounted.outbox.next(ANN, seen))
+    const insert = queries.hold(isSessionInsert)
+    const verifying = mounted.route(verify(token, 'phone'), FROM)
+
+    // Better Auth read the account unverified, verified it and waits to write the session; a
+    // reset of the account runs to its end meanwhile, ending every session it has.
+    await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (
+        await mounted.route(
+          postTo('/auth/reset-password', { token: reset, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(200)
+    insert.release()
+
+    const answer = await verifying
+
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({ token: null })
+    expect(await liveDevices(mounted.local, ann)).toEqual([])
+  }, 30_000)
+
+  it('leaves no session to a verification whose account a reset recovered and moved to another email while Better Auth wrote the session, and answers link-invalid', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const token = await annsLink(mounted.outbox)
+    const ann = await mounted.annsId()
+    const seen = mounted.outbox.to(ANN).length
+    const asked = await pastFloor(
+      mounted.clock,
+      mounted.route(postTo('/auth/request-password-reset', { email: ANN }), FROM),
+      RESET_REQUEST_FLOOR_MS,
+    )
+
+    expect(asked?.status).toBe(202)
+
+    const reset = linkToken(await mounted.outbox.next(ANN, seen))
+    const insert = queries.hold(isSessionInsert)
+    const verifying = mounted.route(verify(token, 'phone'), FROM)
+
+    // While Better Auth waits to write the session, a reset recovers the account and a
+    // confirmation moves it to another email: the link's email is no longer the account's.
+    await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (
+        await mounted.route(
+          postTo('/auth/reset-password', { token: reset, password: 'New-pass-word-2' }),
+          FROM,
+        )
+      )?.status,
+    ).toBe(200)
+
+    const change = (
+      await mounted.emailChanges.ask(ann, ANN, 'ann.moved@example.test')
+    )._unsafeUnwrap()
+
+    expect(
+      (await mounted.route(postTo('/auth/confirm-email', { token: change }), FROM))?.status,
+    ).toBe(200)
+    insert.release()
+
+    const answer = await verifying
+
+    expect(answer?.status).toBe(401)
+    expect(await answer?.json()).toEqual({ code: 'link-invalid' })
+    expect(await liveDevices(mounted.local, ann)).toEqual([])
+  }, 30_000)
 })

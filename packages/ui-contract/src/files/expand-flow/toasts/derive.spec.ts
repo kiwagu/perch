@@ -20,6 +20,7 @@ const expansionWith = (
   screen,
   toast,
   platformToasts,
+  codeGuards: new Map(),
   issues: [],
   toasts: [],
   writtenToasts: [],
@@ -74,6 +75,24 @@ describe('withDerivedToasts', () => {
     expect(invokeOf(states)['onDone']).toEqual([
       { target: 'idle', guard: 'left', actions: [shown('note-updated')] },
       { target: 'idle', actions: [shown('note-updated')] },
+    ])
+  })
+
+  it('keeps read: false on the branch that takes the toast, the toast appended after its effects', () => {
+    const reread = { type: 'read', params: { anchor: 'sample.list' } }
+    const states = derived(
+      saving('note.updateNote', {
+        onDone: [
+          { target: 'idle', guard: 'left', read: false },
+          { target: 'idle', actions: [reread] },
+        ],
+      }),
+      expansionWith(TOAST),
+    )
+
+    expect(invokeOf(states)['onDone']).toEqual([
+      { target: 'idle', guard: 'left', read: false, actions: [shown('note-updated')] },
+      { target: 'idle', actions: [reread, shown('note-updated')] },
     ])
   })
 

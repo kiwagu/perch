@@ -16,6 +16,29 @@ describe('seed catalog', () => {
     }
   })
 
+  it('marks exactly one account an operator, on the seed domain in every mode', () => {
+    const operators = catalog.accounts.filter((preset) => preset.operator === true)
+
+    expect(operators.map((preset) => preset.ref)).toEqual(['ann'])
+
+    for (const mode of [{ kind: 'demo' }, { kind: 'fresh', run: 'r1' }] as const) {
+      for (const preset of operators) {
+        expect(accountFor(preset, mode).email).toMatch(/^[a-z0-9.-]+@example\.test$/)
+      }
+    }
+  })
+
+  it('refuses an operator mark that is not a boolean', () => {
+    const marked = (operator: unknown) =>
+      validateCatalog({
+        ...catalog,
+        accounts: catalog.accounts.map((preset) => ({ ...preset, operator })),
+      })
+
+    expect(marked(true).isOk()).toBe(true)
+    expect(marked('yes').isErr()).toBe(true)
+  })
+
   it('refuses a duplicate ref, a malformed ref and an empty name', () => {
     const preset = first ?? expect.unreachable('a preset')
 

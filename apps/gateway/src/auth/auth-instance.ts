@@ -10,9 +10,14 @@ import { z } from '@workspace/zod'
 
 import type { MailPort } from '../mail'
 
+import { ResetLinks } from './account-links'
+import { AccountMails } from './account-mails'
+import { ADMIN_PATHS } from './admin-paths'
+import { adminPlugin } from './admin-plugin'
 import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
 import { hashPassword, verifyPassword } from './password-hash'
+import { RESET_LINK_LIFETIME_S, resetMailer } from './reset-mail'
 import { sessionHooks } from './session-hooks'
 import { verificationMailer } from './verification-mail'
 
@@ -21,6 +26,12 @@ import { verificationMailer } from './verification-mail'
  * instance and the gateway's own extension of a session (`DeviceSessions.seen`) both use it.
  */
 export const SESSION_LIFETIME_MS = 30 * 24 * 60 * 60 * 1000
+
+/**
+ * How many devices one account keeps signed in at once: a sign-in that would bring it past them
+ * asks first, then signs out the device seen least recently (`AuthSessions.admit`).
+ */
+export const DEVICE_LIMIT = 10
 
 /** How long a verification link verifies, in seconds: a day. */
 export const VERIFICATION_LINK_LIFETIME_S = 24 * 60 * 60
@@ -53,7 +64,9 @@ export function authOptions(options: AuthInstanceOptions) {
     secret: options.secret,
     trustedOrigins: [...options.trustedOrigins],
     database: surrealAuthAdapter(options.local),
-    plugins: [bearer()],
+    // The admin plugin keeps an account's role and ban and refuses a banned account a session;
+    // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below).
+    plugins: [bearer(), adminPlugin()],
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
@@ -65,6 +78,21 @@ export function authOptions(options: AuthInstanceOptions) {
       // No session before the email is verified: a sign-up answers with no token, a taken email
       // as a new one, and a sign-in of an unverified account is refused after its password.
       requireEmailVerification: true,
+      // A reset link lives an hour; each request's link replaces the account's earlier ones, and
+      // its mail links to the front's own screen.
+      resetPasswordTokenExpiresIn: RESET_LINK_LIFETIME_S,
+      sendResetPassword: resetMailer({
+        links: new ResetLinks(options.local),
+        mails: new AccountMails({
+          mail: options.mail,
+          directory: options.local,
+          publicUrl: options.publicUrl,
+          log: options.log,
+        }),
+      }),
+      // Better Auth's own ending at a reset deletes the sessions' rows in bulk; the gateway ends
+      // every session of the account itself, by its own update, and closes their sockets.
+      revokeSessionsOnPasswordReset: false,
     },
     emailVerification: {
       // Every sign-up sends the mail; a taken email's sends none.
@@ -79,6 +107,7 @@ export function authOptions(options: AuthInstanceOptions) {
         mail: options.mail,
         directory: options.local,
         publicUrl: options.publicUrl,
+        secret: options.secret,
         log: options.log,
       }),
     },
@@ -99,6 +128,9 @@ export function authOptions(options: AuthInstanceOptions) {
       additionalFields: {
         device: { type: 'string', required: true, input: false },
         label: { type: 'string', required: true, input: false },
+        // A sign-in's session until the gateway admits it against the limit of devices, and a
+        // verification's until the gateway admits it: no caller reads a session that waits.
+        pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,
       // Better Auth's refresh stays off, so it never writes `expires_at` after sign-in: its write is
@@ -110,7 +142,13 @@ export function authOptions(options: AuthInstanceOptions) {
       // session hooks keep them: a delete ends the row instead.
     },
     account: AUTH_MODELS.account,
-    verification: AUTH_MODELS.verification,
+    verification: {
+      ...AUTH_MODELS.verification,
+      // Better Auth deletes every expired row whenever it looks a value up, so a reset link past
+      // its hour would read as one nobody had. The rows stay instead: an account keeps one reset
+      // link and one pending change of its email at most, each replaced by the next.
+      disableCleanup: true,
+    },
     advanced: {
       database: { generateId: generateAuthId },
     },
@@ -118,9 +156,22 @@ export function authOptions(options: AuthInstanceOptions) {
     // them in one call, which the session hooks can refuse only at its first row, so it may end
     // none. Bulk endings go through the gateway's own update by identity, `/revoke-other-sessions`
     // included. This guards the HTTP handler only: `auth.api` calls still reach these endpoints.
-    // `/change-password` ends the other sessions through the same bulk delete, so it fails open: it
-    // stays off until a password change ends them through the gateway's own update.
-    disabledPaths: ['/revoke-sessions', '/revoke-other-sessions', '/change-password'],
+    // `/change-password` ends the other sessions through the same bulk delete when it is asked
+    // to, and sets the password apart from them: the gateway changes a password itself, the new
+    // password and every ending in one transaction (`AccountPasswords`). `/change-email` signs a
+    // device in at its confirmation and mails through the verification mail: the gateway asks for
+    // and confirms a change itself (`EmailChanges`). Every endpoint of the admin plugin is switched
+    // off too, read from the plugin's own table (`ADMIN_PATHS`): the gateway keeps the plugin for
+    // its fields and its refusal of a banned account's session only. Its endpoints would set a
+    // role, ban, list, impersonate or remove an account outside the account's turns, and end
+    // sessions by deleting their rows, their sockets left open.
+    disabledPaths: [
+      '/revoke-sessions',
+      '/revoke-other-sessions',
+      '/change-password',
+      '/change-email',
+      ...ADMIN_PATHS,
+    ],
     // Better Auth's limiter restarts its count only after a pause as long as its window, so it
     // refuses an address's 21st request however slowly the 20 before it came; the auth mount
     // applies the gateway's fixed windows instead.

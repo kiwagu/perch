@@ -1,6 +1,12 @@
 /** The sessions of devices: read through Better Auth, ended by the gateway's own updates. */
 
-export type { SessionRevoke, SignOutEnding } from './endings'
+export {
+  type SessionRevoke,
+  type SignInAdmission,
+  type SignOutEnding,
+  toEndedDevices,
+  type VerifiedAdmission,
+} from './endings'
 export type { SessionCaller, SessionRead } from './read'
 export { AuthSessions, type AuthSessionsOptions } from './sessions'
-export type { SignedInAccount } from './verification'
+export type { MailedVerification, SignedInAccount } from './verification'

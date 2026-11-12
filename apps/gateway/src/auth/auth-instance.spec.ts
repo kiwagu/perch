@@ -1,3 +1,4 @@
+import type { BetterAuthPlugin } from 'better-auth'
 import { signJWT } from 'better-auth/crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -7,11 +8,13 @@ import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 
 import { linkToken } from '../mail/__fixtures__/outbox'
 
+import { sessionStates } from './__fixtures__/account-ban'
 import accountCredentialsStatement from './__fixtures__/account-credentials.surql'
 import accountRefuseStatement from './__fixtures__/account-refuse.surql'
 import {
   AUTH_SECRET,
   AUTH_URL,
+  betterAuthToken,
   CLOCK_START,
   deviceHeaders,
   type OpenAuthOptions,
@@ -24,9 +27,12 @@ import deviceSessionExpiriesStatement from './__fixtures__/device-session-expiri
 import deviceSessionMoveEndStatement from './__fixtures__/device-session-move-end.surql'
 import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import identityEmailsStatement from './__fixtures__/identity-emails.surql'
+import identityRoleSetStatement from './__fixtures__/identity-role-set.surql'
+import identityStandingStatement from './__fixtures__/identity-standing.surql'
 import identityVerifiedStatement from './__fixtures__/identity-verified.surql'
-import { VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
-import { sessionHooks } from './session-hooks'
+import { ADMIN_PATHS } from './admin-paths'
+import { type AuthInstance, VERIFICATION_LINK_LIFETIME_S } from './auth-instance'
+import { ADMISSION_HEADER, sessionHooks } from './session-hooks'
 
 const closers: Array<() => Promise<void>> = []
 
@@ -40,6 +46,14 @@ async function instance(options: OpenAuthOptions = {}) {
   closers.push(opened.close)
 
   return opened
+}
+
+/** The path of every endpoint of the admin plugin `auth` runs with, read from the plugin itself. */
+function adminPathsOf(auth: AuthInstance): string[] {
+  const plugins: readonly BetterAuthPlugin[] = auth.options.plugins
+  const endpoints = plugins.find((plugin) => plugin.id === 'admin')?.endpoints ?? {}
+
+  return Object.values(endpoints).map((endpoint) => endpoint.path)
 }
 
 const bearer = (token: string) => new Headers({ authorization: `Bearer ${token}` })
@@ -486,6 +500,64 @@ describe('createAuthInstance', () => {
     expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
   })
 
+  it("switches off every endpoint of Better Auth's admin plugin, as the plugin's own table names them", async () => {
+    const { auth } = await instance()
+    const paths = adminPathsOf(auth)
+
+    expect(paths, 'the plugin is installed and names its endpoints').not.toEqual([])
+    expect(auth.options.disabledPaths).toEqual(expect.arrayContaining(paths))
+    expect(ADMIN_PATHS, "the list the gateway reads is the configured plugin's").toEqual(paths)
+  })
+
+  it("answers every endpoint of the admin plugin 404 at its handler, an operator's request too, and changes nothing", async () => {
+    const { auth, local } = await instance()
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await local.db.query(identityRoleSetStatement, {
+      identity: user.id,
+      role: 'operator',
+      reason: 'MARKER kept',
+    })
+
+    const ask = (method: string, url: string) =>
+      auth.handler(
+        new Request(url, {
+          method,
+          headers: {
+            authorization: `Bearer ${token}`,
+            origin: 'http://localhost',
+            'content-type': 'application/json',
+          },
+          ...(method === 'POST'
+            ? { body: JSON.stringify({ userId: user.id, role: 'user', banReason: 'changed' }) }
+            : {}),
+        }),
+      )
+    const served: string[] = []
+
+    for (const path of adminPathsOf(auth)) {
+      // The path as the table names it, with a trailing slash, and with a query.
+      for (const asked of [path, `${path}/`, `${path}?userId=${user.id}`]) {
+        for (const method of ['GET', 'POST']) {
+          const { status } = await ask(method, `${AUTH_URL}${asked}`)
+
+          if (status !== 404) {
+            served.push(`${method} ${asked} ${status}`)
+          }
+        }
+      }
+    }
+
+    expect(served).toEqual([])
+
+    const [standing] = await local.db.query<[unknown]>(identityStandingStatement, {
+      identity: user.id,
+    })
+
+    expect(standing).toEqual({ role: 'operator', banned: false, ban_reason: 'MARKER kept' })
+    expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
+  })
+
   it('a verification that names no device creates no session', async () => {
     const { auth, outbox, local } = await instance()
 
@@ -494,7 +566,7 @@ describe('createAuthInstance', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const token = linkToken(await outbox.next('ann@example.test'))
+    const token = betterAuthToken(linkToken(await outbox.next('ann@example.test')))
 
     await expect(
       auth.api.verifyEmail({
@@ -707,7 +779,7 @@ describe('createAuthInstance, the verification of an email', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const token = linkToken(await outbox.next('ann@example.test'))
+    const token = betterAuthToken(linkToken(await outbox.next('ann@example.test')))
     const first = await auth.api.verifyEmail({
       query: { token },
       headers: deviceHeaders('phone', 'Phone'),
@@ -728,6 +800,48 @@ describe('createAuthInstance, the verification of an email', () => {
     expect(devices.map(({ device }) => device)).toEqual(['phone'])
   })
 
+  it("writes a verification's session waiting for the gateway's admission, whatever its request names, and a sign-in's waiting only when the gateway's sign-in asks", async () => {
+    const { auth, outbox, local } = await instance()
+    const ann = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await auth.api.signUpEmail({
+      body: { name: 'Bob', email: 'bob@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('desk'),
+    })
+
+    const token = betterAuthToken(linkToken(await outbox.next('bob@example.test')))
+    const { headers } = await auth.api.verifyEmail({
+      query: { token },
+      headers: deviceHeaders('desk'),
+      returnHeaders: true,
+    })
+    const bob = await auth.api.getSession({
+      headers: bearer(headers.get('set-auth-token') ?? expect.unreachable('a signed token')),
+    })
+    const asked = deviceHeaders('phone')
+
+    asked.set(ADMISSION_HEADER, 'pending')
+    await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: asked,
+    })
+    await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('tablet'),
+    })
+
+    const waiting = async (identity: string) =>
+      (await sessionStates(local, identity)).map(({ device, pending }) => [device, pending])
+
+    expect(await waiting(bob?.user.id ?? expect.unreachable('a session'))).toEqual([['desk', true]])
+    // The laptop's verification was admitted by the fixture, as the mount admits one.
+    expect(await waiting(ann.user.id)).toEqual([
+      ['laptop', false],
+      ['phone', true],
+      ['tablet', false],
+    ])
+  })
+
   it('refuses a link past its lifetime with TOKEN_EXPIRED', async () => {
     const { auth } = await instance()
     const expired = await signJWT({ email: 'ann@example.test' }, AUTH_SECRET, -10)
@@ -745,7 +859,7 @@ describe('createAuthInstance, the verification of an email', () => {
       headers: deviceHeaders('laptop'),
     })
 
-    const [, payload] = linkToken(await outbox.next('ann@example.test')).split('.')
+    const [, payload] = betterAuthToken(linkToken(await outbox.next('ann@example.test'))).split('.')
     const claims = JSON.parse(Buffer.from(payload ?? '', 'base64url').toString('utf8')) as {
       iat: number
       exp: number

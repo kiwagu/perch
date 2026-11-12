@@ -1,12 +1,18 @@
 /**
  * The application's router for the specs that hold it to the UI contract: built on a memory
- * history with nobody signed in, never rendered, and read back the way a reload reads a URL.
+ * history over a session that holds a set of roles and never changes, never rendered, and read
+ * back the way a reload reads a URL: matched only, or loaded, its guards and roles run.
  */
 
 import { createMemoryHistory } from '@tanstack/react-router'
 
+import type { AuthUser } from '@workspace/data'
+import { PLATFORM_ROLES, type PlatformRole, TENANT_ROLES, type TenantRole } from '@workspace/kernel'
+import type { Membership } from '@workspace/replica/protocol'
+import { GUEST } from '@workspace/ui-contract/anchors'
+
 import type { ModuleDef } from '../module'
-import { createAppRouter } from '../router'
+import { createAppRouter, type RouterSession } from '../router'
 
 /** The router's name for the value of a splat. */
 export const SPLAT = '_splat'
@@ -14,13 +20,53 @@ export const SPLAT = '_splat'
 /** The router reports a splat's value under `_splat` and again under `*`, its older name. */
 const SPLAT_ALIAS = '*'
 
-/** A router of `of` on a memory history, with nobody signed in; nothing renders it. */
-export function routerOf(of: readonly ModuleDef[]) {
+/** The account a session signs in when its roles name more than `guest`. */
+const ANN: AuthUser = {
+  id: 'idn_0000000000000000.01m52pexcp' as AuthUser['id'],
+  email: 'ann@example.test',
+}
+
+const isTenantRole = (role: string): role is TenantRole =>
+  TENANT_ROLES.some((tenant) => tenant === role)
+
+const isPlatformRole = (role: string): role is PlatformRole =>
+  PLATFORM_ROLES.some((platform) => platform === role)
+
+/**
+ * A session that holds `roles` and never changes: nobody signed in for `guest`; Ann signed in
+ * otherwise, `member` or `admin` her role in the organisation current, `operator` a platform
+ * role of her account.
+ */
+export function holding(roles: readonly string[]): RouterSession {
+  const signedIn = roles.some((role) => role !== GUEST)
+  const tenant = roles.find(isTenantRole)
+  const membership: Membership | undefined =
+    tenant === undefined
+      ? undefined
+      : { tenant: { id: 'tnt_acme', key: 'acme', name: 'Acme' }, role: tenant }
+  const platform: ReadonlySet<PlatformRole> = new Set(roles.filter(isPlatformRole))
+
+  return {
+    current: () => (signedIn ? ANN : undefined),
+    subscribe: () => () => {},
+    signingInHere: () => false,
+    currentTenant: () => membership,
+    subscribeMemberships: () => () => {},
+    roles: () => platform,
+    onRoles: () => () => {},
+  }
+}
+
+/**
+ * A router of `of` on a memory history at `path`, over a session holding `roles` (a guest's by
+ * default); nothing renders it.
+ */
+export function routerOf(of: readonly ModuleDef[], roles: readonly string[] = [GUEST], path = '/') {
   return createAppRouter({
     modules: of,
-    session: { current: () => undefined, subscribe: () => () => {} },
+    session: holding(roles),
     layout: () => null,
-    history: createMemoryHistory({ initialEntries: ['/'] }),
+    history: createMemoryHistory({ initialEntries: [path] }),
   })
 }
 

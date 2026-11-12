@@ -10,6 +10,7 @@ import type {
   effectSchema,
   flowSchema,
   paramValueSchema,
+  platformCompositeSchema,
   platformFileSchema,
   platformSchema,
   screenSchema,
@@ -25,6 +26,7 @@ export type BindingRef = z.infer<typeof bindingRefSchema>
 export type AnchorBinding = z.infer<typeof anchorBindingSchema>
 export type ParamValue = z.infer<typeof paramValueSchema>
 export type Platform = z.infer<typeof platformSchema>
+export type PlatformComposite = z.infer<typeof platformCompositeSchema>
 export type Flow = z.infer<typeof flowSchema>
 /** A plain state of the root: it may end, carry an address and run an invoke. */
 export type FlowState = Exclude<Flow['states'][string], { type: 'parallel' }>

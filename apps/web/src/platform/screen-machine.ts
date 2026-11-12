@@ -1,12 +1,19 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
- * frame's guard (the action that used the input completed), asks the frame's confirmation before
+ * frame's guard (the action that used the input completed), its search taking the value of a field
+ * and the id of an entry from what the moving event carries (`navigate-search.ts`), asks the
+ * frame's confirmation before
  * a destructive control's event and the guard before a leaving control's, in that order, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
  * It also runs the flow's effects on the frame (`frame-effects.ts`): a toast, the notice and its
- * clearing, so no container subscribes to them by hand.
+ * clearing, so no container subscribes to them by hand. And it brings the platform's events
+ * (`platform-events.port.ts`) to the machine while it runs, each carrying what the screen's fields
+ * hold as it comes (`fields`, by anchor, as the container gives them), for a move it makes; a
+ * state that does not handle one lets it pass. It tells the view what the state renders
+ * (`renders(anchor)`, `screen-renders.ts`), and in development and e2e builds reports each state
+ * of `screen` the page settles in (`settled-report.ts`).
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -18,6 +25,7 @@ import type {
   AnyStateMachine,
   EventFromLogic,
   InspectionEvent,
+  StateValue,
 } from 'xstate'
 
 import { useConfirmGuard } from './confirm-guard.port'
@@ -25,6 +33,18 @@ import { questionOf } from './confirmations'
 import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
+import { useService } from './module'
+import {
+  type FieldValues,
+  type ItemIds,
+  isSearch,
+  type NavigateParams,
+  searchOf,
+} from './navigate-search'
+import { PLATFORM_EVENTS } from './platform-events.port'
+import { sendPlatformEvents } from './platform-events-input'
+import { rendersIn } from './screen-renders'
+import { useSettledReport } from './settled-report'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
@@ -61,13 +81,24 @@ const childrenOf = (snapshot: unknown): Map<string, string> =>
     ),
   )
 
-/** A flow's `navigate` effect: where to go, with its search when it gives one. */
+/** Whether `value` is absent or a record of strings: the fields or the items a move carries. */
+const isStrings = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) && Object.values(value).every((each) => typeof each === 'string'))
+
+/**
+ * A flow's `navigate` effect as a machine emits it: where to go, with its search when it gives one,
+ * what the fields of the event that moves hold and the entry it acted in, for the values the
+ * search takes from them.
+ */
 const isNavigate = (
   event: unknown,
-): event is { readonly to: string; readonly search?: Readonly<Record<string, unknown>> } =>
+): event is NavigateParams & { readonly fields?: FieldValues; readonly items?: ItemIds } =>
   isRecord(event) &&
   typeof event['to'] === 'string' &&
-  (event['search'] === undefined || isRecord(event['search']))
+  (event['search'] === undefined || isSearch(event['search'])) &&
+  isStrings(event['fields']) &&
+  isStrings(event['items'])
 
 const DONE = 'xstate.done.actor.'
 const FAILED = 'xstate.error.actor.'
@@ -84,8 +115,27 @@ const endedBy = (type: string): string | undefined =>
 const controlOf = (event: { readonly type: unknown }): string =>
   typeof event.type === 'string' ? event.type : ''
 
-export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMachine) {
+/** What a snapshot of any screen's machine shows: the state the machine is in. */
+interface Showing {
+  readonly value: StateValue
+}
+
+/**
+ * Runs `machine` for the screen whose id is `screen`; `fields` is what the screen's fields hold
+ * now, by anchor, for the moves a platform event makes (a field the flow's move names and the
+ * container leaves out fails that move).
+ */
+export function useScreenMachine<TMachine extends AnyStateMachine>(
+  screen: string,
+  machine: TMachine,
+  fields?: FieldValues,
+) {
   const navigate = useNavigate()
+  const platform = useService(PLATFORM_EVENTS)
+  // Read when an event comes, so a render with new values subscribes nothing.
+  const held = useRef(fields)
+
+  held.current = fields
   const guard = useLeaveGuard()
   const confirmation = useConfirmGuard()
   const ask = useCallback(
@@ -169,8 +219,16 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
   }, [])
   const actor = useActorRef(machine, { inspect })
   const state = useSelector(actor, (snapshot) => snapshot)
+  const snapshot: AnyMachineSnapshot = state
+  const shown: Showing = snapshot
 
   useFrameEffects(actor)
+  useSettledReport(screen, shown.value, () => {
+    const now: AnyMachineSnapshot = actor.getSnapshot()
+    const read: Showing = now
+
+    return read.value
+  })
 
   useEffect(() => {
     const emitter: Pick<AnyActorRef, 'on'> = actor
@@ -178,7 +236,9 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
       if (isNavigate(event)) {
         void navigate({
           to: event.to,
-          ...(event.search === undefined ? {} : { search: event.search }),
+          ...(event.search === undefined
+            ? {}
+            : { search: searchOf(event.search, event.fields ?? {}, event.items ?? {}) }),
           ignoreBlocker: true,
         })
       }
@@ -186,6 +246,8 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
 
     return () => moved.unsubscribe()
   }, [actor, navigate])
+
+  useEffect(() => sendPlatformEvents(platform, actor, () => held.current), [actor, platform])
 
   /**
    * Sends `event` and resolves with the outcome of the actions it started, once the machine took
@@ -243,5 +305,5 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(machine: TMac
     [ask, start],
   )
 
-  return { state, send, submit, actor }
+  return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value) }
 }

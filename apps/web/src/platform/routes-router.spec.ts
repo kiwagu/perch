@@ -7,7 +7,13 @@
  * reaches the same state after a reload. A parameter's value is the contract's sample of its
  * schema (`parameterSample`: its example, default or first enum value, else one built within
  * its bounds and pattern); every sampled search satisfies the binding's schema; a parameter
- * no value of which can be built skips the binding's search case, named.
+ * no value of which can be built skips the binding's search case, named. On a branch the
+ * pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may add or change a binding before
+ * its route, so only the bindings the app has a route for are walked, each as the contract says
+ * it now, or as it had it at the branch's merge base with `main` (`CONTRACT_AHEAD_BASE`) while
+ * the route still equals that one (`heldTo` of `__fixtures__/route-bindings.ts`); `bun run
+ * check` and `main` walk every binding as it is now. Each binding is walked on a router over a
+ * device that holds the roles it serves: a device it refuses never has its search read.
  */
 
 import { join } from 'node:path'
@@ -28,6 +34,7 @@ import { z } from '@workspace/zod'
 
 import { modules } from '../modules'
 
+import { bindingsAtBase, bindingsOf, heldBindings } from './__fixtures__/route-bindings'
 import { type AppRouter, type Matched, matchAt, routerOf, SPLAT } from './__fixtures__/router'
 import { defineModule } from './module'
 import { allModules } from './router'
@@ -247,18 +254,21 @@ function searchCase(router: AppRouter, binding: Binding, skip: (note: string) =>
   )
 }
 
+const AT_BASE = bindingsAtBase(ROOT)
 const { screens, problems } = loadScreens(ROOT)
-// On a branch (`CONTRACT_AHEAD=1`) a binding may wait for its route: only the routed ones are
-// walked; `bun run check` and `main` walk every binding.
-const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
-const routed = new Set(
-  allModules(modules).flatMap((module) => module.routes.map(({ path }) => path)),
-)
-const bindings: readonly (readonly [string, Binding])[] = (screens?.screens ?? [])
-  .filter((screen) => screen.frame !== true)
-  .flatMap((screen) => screen.bindings.map((binding) => [binding.path, binding] as const))
-  .filter(([path]) => !AHEAD || routed.has(path))
-const router = routerOf(modules)
+// The bindings the app's routes are held to: on a branch only the routed ones, each as now or
+// as at the base; `bun run check` and `main` walk every binding as it is now.
+const bindings: readonly (readonly [string, Binding])[] = heldBindings(
+  bindingsOf((screens?.screens ?? []).filter((screen) => screen.frame !== true)),
+  allModules(modules).flatMap((module) => module.routes),
+  'bindings' in AT_BASE ? AT_BASE.bindings : [],
+).map(({ binding }) => [binding.path, binding] as const)
+/**
+ * The application's router over a device that holds the roles a binding serves, which its route
+ * admits: a refused device's search is never read (`router.tsx`), so each binding is walked as
+ * a device it serves.
+ */
+const routerFor = (binding: Binding): AppRouter => routerOf(modules, binding.roles)
 
 const Page = () => null
 
@@ -267,17 +277,19 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/org/$key', page: 'Page' },
-    { path: '/notes/{-$tab}', page: 'Page' },
-    { path: '/files/$', page: 'Page' },
+    { path: '/org/$key', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/notes/{-$tab}', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/files/$', page: 'Page', roles: ['guest', 'identity'] },
     {
       path: '/list',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({ tab: z.enum(['a', 'b']).default('a'), page: z.int().min(1) }),
     },
     {
       path: '/range',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({
         below: z.number().max(-2),
         between: z.int().min(-5).max(-1),
@@ -288,6 +300,7 @@ const SampleModule = defineModule({
     {
       path: '/find',
       page: 'Page',
+      roles: ['guest', 'identity'],
       search: z.object({
         q: z.string().max(5),
         name: z.string().min(3),
@@ -581,14 +594,22 @@ describe('the bindings of the contract on the router', () => {
     expect(bindings.length).toBeGreaterThan(0)
   })
 
-  it.for(bindings)('%s matches its route again with its parameters', ([, binding], { skip }) => {
-    roundTrip(router, binding, skip)
+  // A base that does not load fails here, once; the bindings then wait for it.
+  it("the contract at the branch's base loads", () => {
+    expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
   })
 
-  it.for(bindings)(
+  it.skipIf('problem' in AT_BASE).for(bindings)(
+    '%s matches its route again with its parameters',
+    ([, binding], { skip }) => {
+      roundTrip(routerFor(binding), binding, skip)
+    },
+  )
+
+  it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s declares the path parameters the router reports',
     ([path, binding], { skip }) => {
-      const names = parameterNames(router, binding)
+      const names = parameterNames(routerFor(binding), binding)
 
       // A splat is declared by its `$` alone: a `params` property cannot be named `_splat`.
       expect(names.declared, `the params ${path} declares`).toEqual(
@@ -603,10 +624,10 @@ describe('the bindings of the contract on the router', () => {
     },
   )
 
-  it.for(bindings)(
+  it.skipIf('problem' in AT_BASE).for(bindings)(
     '%s builds its search and reads it back with the defaults',
     ([, binding], { skip }) => {
-      searchCase(router, binding, skip)
+      searchCase(routerFor(binding), binding, skip)
     },
   )
 })

@@ -7,7 +7,7 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, dataError, type SignInInput } from '@workspace/data'
-import { type ProfileId, profileIdFactory, settingsIdFactory } from '@workspace/ids'
+import type { ProfileId } from '@workspace/ids'
 
 import type { ProfileRow } from '../../features/user/application/profile.service'
 
@@ -91,32 +91,41 @@ const profileOf = (
 ): ResultAsync<ProfileRow | undefined, SeedError> =>
   device.profiles.read({ identity: user.id }).map(([row]) => row)
 
-/** The account's profile as the catalog describes it: created when missing, its bio set. */
+/** A record the start made sure of is missing: the start did not make the account whole. */
+const notStarted = (record: string) =>
+  dataError('data:WRITE_FAILED', `the account has no ${record} after its start`)
+
+/**
+ * Starts the account the way the app does, now that the device has pulled what it has: the start
+ * a sign-in or the first verification kept is finished, or one is kept from the catalog's name and
+ * language and finished, creating only what is missing, under the ids derived from the identity.
+ * The app's own start, which finishes the same start beside it, then finds both records.
+ */
+const started = (
+  device: SeedDevice,
+  user: AuthUser,
+  input: AccountInput,
+): ResultAsync<void, SeedError> =>
+  device.starts
+    .keepAfterPull(user, { name: input.name, locale: input.locale })
+    .asyncAndThen(() => device.starts.resumeAfterPull(user))
+
+/** The account's profile as the catalog describes it: its bio set. */
 const ensureProfile = (
   device: SeedDevice,
   user: AuthUser,
   input: AccountInput,
 ): ResultAsync<ProfileId, SeedError> =>
-  profileOf(device, user)
-    .andThen((row): ResultAsync<Pick<ProfileRow, 'id' | 'bio'>, SeedError> => {
-      if (row) {
-        return okAsync(row)
-      }
+  profileOf(device, user).andThen((profile) =>
+    profile
+      ? (profile.bio === input.bio
+          ? okAsync(undefined)
+          : device.profiles.updateBio({ id: profile.id, bio: input.bio })
+        ).map(() => profile.id)
+      : errAsync(notStarted('profile')),
+  )
 
-      const id = profileIdFactory.create()
-
-      return device.profiles
-        .createProfile({ id, identity: user.id, name: input.name, email: user.email })
-        .map(() => ({ id, bio: undefined }))
-    })
-    .andThen((profile) =>
-      (profile.bio === input.bio
-        ? okAsync(undefined)
-        : device.profiles.updateBio({ id: profile.id, bio: input.bio })
-      ).map(() => profile.id),
-    )
-
-/** The account's settings as the catalog describes them: created when missing, its language set. */
+/** The account's settings as the catalog describes them: its language set. */
 const ensureSettings = (
   device: SeedDevice,
   user: AuthUser,
@@ -124,11 +133,7 @@ const ensureSettings = (
 ): ResultAsync<void, SeedError> =>
   device.settings.read({ identity: user.id }).andThen(([row]): ResultAsync<void, SeedError> => {
     if (!row) {
-      return device.settings.createSettings({
-        id: settingsIdFactory.create(),
-        identity: user.id,
-        locale: input.locale,
-      })
+      return errAsync(notStarted('settings'))
     }
 
     return row.locale === input.locale
@@ -137,9 +142,10 @@ const ensureSettings = (
   })
 
 /**
- * Signs in, or signs up and verifies the account through its mail (`signedInOrVerified`), then
- * writes its settings and its profile as the catalog describes them, the settings first as the
- * first verification writes them, and waits until the gateway acknowledged everything.
+ * Signs in, or signs up and verifies the account through its mail (`signedInOrVerified`), starts
+ * it as the app does (`started`: its settings in the catalog's language and the device's own
+ * theme, then its profile), sets its settings and its profile as the catalog describes them, and
+ * waits until the gateway acknowledged everything.
  */
 export function ensureAccount(
   device: SeedDevice,
@@ -148,9 +154,11 @@ export function ensureAccount(
   return device
     .enter(() => signedInOrVerified(device, input))
     .andThen((user) =>
-      ensureSettings(device, user, input).andThen(() =>
-        ensureProfile(device, user, input).map((profileId) => ({ user, profileId })),
-      ),
+      started(device, user, input)
+        .andThen(() => ensureSettings(device, user, input))
+        .andThen(() =>
+          ensureProfile(device, user, input).map((profileId) => ({ user, profileId })),
+        ),
     )
     .andThen((seeded) => device.settle().map(() => seeded))
 }

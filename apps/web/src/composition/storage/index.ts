@@ -1,6 +1,6 @@
 /** Small persistent key-value storage shared by the tabs of one browser, and what the session keeps in it. */
 
-export { ACCOUNT_START_KEY, keptAccountStart } from './account-start'
+export { accountStartKeyOf, keptAccountStart } from './account-start'
 export { deviceIdFrom } from './device'
 export {
   browserStorage,
@@ -10,13 +10,21 @@ export {
   type StorageEvents,
 } from './key-value'
 export {
-  MEMBERSHIPS_KEY,
+  addLeftoverIdentity,
+  dropLeftoverIdentity,
+  LEFTOVER_IDENTITIES_KEY,
+  leftoverIdentities,
+} from './leftover-identities'
+export {
+  isMembershipsKey,
+  membershipsKeyOf,
   savedMemberships,
   savedTenant,
   saveMemberships,
   saveTenant,
 } from './memberships'
-export { forgetNotice, savedNotice, saveNotice } from './notice'
+export { forgetNotice, markSignIn, savedNotice, saveNotice, signInMark } from './notice'
+export { PASSWORD_RESET_KEY, savePasswordReset } from './password-reset'
 export {
   addPendingRevoke,
   forgetPendingRevoke,
@@ -24,14 +32,36 @@ export {
   type PendingToken,
   pendingRevokes,
 } from './pending-revokes'
+export { dropRole, forgetRoles, isRolesKey, rolesKeyOf, savedRoles, saveRoles } from './roles'
 export {
-  forgetDevice,
-  IDENTITY_KEY,
+  CURRENT_KEY,
+  type KeptSession,
+  newSignInId,
+  type SignInId,
+  type SignInOwner,
+} from './sign-in'
+export {
+  dropUnreadableSignIn,
+  forgetSignIn,
+  isSessionKey,
   type KeptDevice,
+  type SavedSignIn,
   saveDevice,
   savedIdentity,
+  savedSession,
+  savedSignIn,
   savedToken,
-  TOKEN_KEY,
+  savedTokenOf,
+  saveIdentityEmail,
+  sessionKept,
+  signedInKeyOf,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
+export {
+  forgetSyncLeader,
+  SYNC_LEADER_KEY,
+  type SyncLeader,
+  savedSyncLeader,
+  saveSyncLeader,
+} from './sync-leader'
 export { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'

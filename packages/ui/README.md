@@ -36,13 +36,19 @@ than its portal or overlay. A control that is not a test target carries a
 - `./components/platform/*`: props-driven building blocks of the application shell.
   - `AppShell`: the page frame (brand, actions, status, the navigation as a bottom bar on
     small screens and a side rail from `lg`); `navigationTestId` is the anchor of its
-    `<nav>`.
+    `<nav>`. Without `navigation` it renders no `<nav>`, and the page takes the whole width
+    with no room kept for the bar.
   - `OptionSelect`: a labelled choice between a few options; `testId` marks the trigger, and
     each option carries the derived `<testId>.option` with its value as `data-value`.
   - `ConfirmDialog`: a modal question with one action and a way back (`title`,
     `description`, `confirmLabel`, `cancelLabel`, `destructive`, `onConfirm`, `onCancel`);
     `testId` marks the dialog, with `code` as its `data-code`, and its buttons carry
     `<testId>.confirm-button` and `<testId>.cancel-button`.
+  - `PasswordInput`: a password input with its eye beside it (`showLabel`, `hideLabel` for its
+    accessible name), which shows what the input holds as typed or hides it again; `testId`
+    marks the input, and the eye carries the derived `<testId>.visibility-button` with `show`
+    or `hide` as its `data-value`, what a click does. Whether the input shows its value is its
+    own, never a flow's: the eye is always enabled, the input disabled or not.
   - `navItemVariants`: the classes of a navigation item, active or not.
 - `./unsaved-input`: whether the fields of a page hold input the user typed and no action
   took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`

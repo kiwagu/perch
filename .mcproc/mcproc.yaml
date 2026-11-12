@@ -9,8 +9,9 @@
 # checkouts then run side by side, and `mcproc ls` in each shows only its own.
 version: 1
 # the mcproc release this manifest was last checked against, which `mcproc describe` shows as
-# "written by" beside the running one; an mcproc older than 0.13.0 refuses the field
-mcproc: 0.17.0
+# "written by" beside the running one; an mcproc older than 0.13.0 refuses the field. The root
+# scripts need 0.19.0 or later: the e2e runs take turns through `mcproc exec --exclusive`.
+mcproc: 0.19.0
 project: perch
 vars:
   slot: 0                                   # the main checkout; a worktree gets its own
@@ -149,14 +150,12 @@ apps:
       sync over WebSocket, the only client of the dev SurrealDB. Sets up its namespace
       account on the stand first; restarted on a change of its sources.
     kind: server
+    # the stand's values become the gateway's settings in scripts/stand-gateway/, which defines
+    # the gateway's user on the stand first; root `bun run dev` starts the gateway the same way
     run: >-
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc SURREAL_USER=root SURREAL_PASS=root
-      bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_dev }}/rpc GATEWAY_PORT={{ gateway }}
-      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
-      GATEWAY_AUTH_SECRET={{ stand_auth_secret }} GATEWAY_PUBLIC_URL=https://localhost:{{ front }}
-      GATEWAY_SMTP_URL=smtp://127.0.0.1:{{ maildev_smtp }} GATEWAY_MAIL_FROM='{{ stand_mail_from }}'
-      exec bun apps/gateway/src/index.ts
+      exec bun scripts/stand-gateway/cli.ts --surreal={{ surreal_dev }} --gateway={{ gateway }}
+      --front={{ front }} --smtp={{ maildev_smtp }} --mail-from='{{ stand_mail_from }}'
+      --auth-secret={{ stand_auth_secret }} -- bun apps/gateway/src/index.ts
     port: '{{ gateway }}'
     url: http://127.0.0.1:{{ gateway }}/health
     memory: 256M
@@ -189,13 +188,9 @@ apps:
       of its sources.
     kind: server
     run: >-
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc SURREAL_USER=root SURREAL_PASS=root
-      bun scripts/stand-operator.ts &&
-      SURREAL_URL=ws://127.0.0.1:{{ surreal_e2e }}/rpc GATEWAY_PORT={{ gateway_e2e }}
-      GATEWAY_SURREAL_USER=gateway GATEWAY_SURREAL_PASS=gateway-stand-password
-      GATEWAY_AUTH_SECRET={{ stand_auth_secret }} GATEWAY_PUBLIC_URL=https://localhost:{{ front_e2e }}
-      GATEWAY_SMTP_URL=smtp://127.0.0.1:{{ maildev_smtp_e2e }} GATEWAY_MAIL_FROM='{{ stand_mail_from }}'
-      exec bun apps/gateway/src/index.ts
+      exec bun scripts/stand-gateway/cli.ts --surreal={{ surreal_e2e }} --gateway={{ gateway_e2e }}
+      --front={{ front_e2e }} --smtp={{ maildev_smtp_e2e }} --mail-from='{{ stand_mail_from }}'
+      --auth-secret={{ stand_auth_secret }} -- bun apps/gateway/src/index.ts
     port: '{{ gateway_e2e }}'
     url: http://127.0.0.1:{{ gateway_e2e }}/health
     memory: 256M
@@ -211,8 +206,9 @@ apps:
     description: >-
       Caddy on https://localhost:{{ front }}: the web app's development build from
       apps/web/dist-dev, kept fresh by the web watcher (a 404 until its first build finishes),
-      and, under /backend/, the gateway; certificates from infra/dev/make-certs.sh. Restarted
-      on a change of the Caddyfile or the compose file.
+      and, under /backend/, the gateway on 127.0.0.1:{{ gateway }}, whether pm2 runs them (`web`,
+      `gateway`) or root `bun run dev` does; certificates from infra/dev/make-certs.sh.
+      Restarted on a change of the Caddyfile or the compose file.
     kind: server
     # docker would create a missing apps/web/dist-dev as root, which the watcher could not write.
     # The compose project is this checkout's slug and the container is named, so two stands
@@ -221,7 +217,7 @@ apps:
       docker rm -f {{ project }}-caddy-dev >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist-dev &&
       FRONT_PORT={{ front }} GATEWAY_PORT={{ gateway }} PERCH_UI_MANIFEST={{ ui_manifest }}
-      WEB_DIST=dist-dev
+      WEB_DIST=dist-dev PERCH_CLIENT_ADDRESS=peer
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-dev caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
@@ -231,19 +227,20 @@ apps:
     containers: ['{{ project }}-caddy-dev']
     watch: [infra/dev/Caddyfile, infra/dev/compose.yaml]
     watch_delay: 1000
-    # start order only: Caddy serves whatever apps/web/dist-dev holds
-    depends_on: [web, gateway]
   caddy-e2e:
     description: >-
       Caddy on https://localhost:{{ front_e2e }}: the web app's build from apps/web/dist (the
       e2e launcher makes the production build first) and, under /backend/, the gateway-e2e;
-      certificates from infra/dev/make-certs.sh.
+      certificates from infra/dev/make-certs.sh. It names to the gateway the client address each
+      browser claims (PERCH_CLIENT_ADDRESS=claimed), so each Playwright worker spends request
+      limits of its own.
     kind: server
     # docker would create a missing apps/web/dist as root, which a build could not write
     run: >-
       docker rm -f {{ project }}-caddy-e2e >/dev/null 2>&1;
       sh infra/dev/make-certs.sh >/dev/null && mkdir -p apps/web/dist &&
       FRONT_PORT={{ front_e2e }} GATEWAY_PORT={{ gateway_e2e }} PERCH_UI_MANIFEST={{ ui_manifest }}
+      PERCH_CLIENT_ADDRESS=claimed
       exec docker compose -p {{ project }} -f infra/dev/compose.yaml
       run --rm --name {{ project }}-caddy-e2e caddy
     # Caddy listens from its container, outside the app's processes, so the app declares
@@ -252,6 +249,10 @@ apps:
     memory: 128M
     containers: ['{{ project }}-caddy-e2e']
     depends_on: [gateway-e2e]
+# dev: the whole dev stand under pm2. services: its dedicated services alone, for the Bun dev
+# scripts that root `bun run dev` runs in the foreground (the gateway and the web watcher); none
+# of them depends on those scripts, since a start brings an app's dependencies up first.
 profiles:
   dev: [surrealdb-dev, maildev-dev, gateway, web, caddy-dev]
+  services: [surrealdb-dev, maildev-dev, caddy-dev]
   e2e: [surrealdb-e2e, maildev-e2e, gateway-e2e, caddy-e2e]

@@ -10,6 +10,7 @@ import {
 import type { Clock } from '@workspace/replica'
 import { manualClock } from '@workspace/replica/testing'
 
+import { ban } from './__fixtures__/account-ban'
 import {
   AUTH_SECRET,
   CLOCK_START,
@@ -23,7 +24,7 @@ import deviceSessionRowStatement from './__fixtures__/device-session-row.surql'
 import { type AuthInstance, SESSION_LIFETIME_MS } from './auth-instance'
 import { AuthSessions } from './auth-sessions'
 import { deviceRoutes } from './device.routes'
-import { endedAt } from './device-session-rows'
+import { type DeviceSessionRow, endedAt } from './device-session-rows'
 import { DeviceSessions } from './device-sessions'
 
 const closers: Array<() => Promise<void>> = []
@@ -105,6 +106,19 @@ const ENDINGS: ReadonlyArray<readonly [string, (ending: Ending) => Promise<void>
 interface ExpiredEnding extends Ending {
   readonly devices: DeviceSessions
   readonly clock: Clock
+}
+
+/**
+ * Why each of `ENDINGS` signed the device out, as its row keeps it for the device's next hello:
+ * only a sign-out from another device names a reason; the device's own sign-out and a new sign-in
+ * of the same device name none.
+ */
+const REASONS: Readonly<Record<string, DeviceSessionRow['endedReason']>> = {
+  'its sign-out': undefined,
+  'its ending by its row': 'revoked',
+  'the ending of every session of its identity': 'revoked',
+  "Better Auth's own sign-out": undefined,
+  'a new sign-in of its device': undefined,
 }
 
 /**
@@ -375,6 +389,72 @@ describe('DeviceSessions', () => {
       expect(ended).toMatchObject({ expiresAt: expiry, endedAt: expiry })
     },
   )
+
+  it.each(ENDINGS)('keeps why %s signed the device out, for its next hello', async (name, end) => {
+    const { auth, local, clock, devices } = await harness()
+    const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
+    const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+
+    await clock.advance(MINUTE_MS)
+    await end({ auth, sessions, identity: identityOf(user.id), token })
+
+    const row = (await devices.byToken(token))._unsafeUnwrap() ?? expect.unreachable('a row')
+
+    expect(row.endedAt).toEqual(new Date(clock.now()))
+    expect(row.endedReason).toBe(REASONS[name])
+  })
+
+  it.each(EXPIRED_ENDINGS)(
+    'keeps no reason for a session that had expired when %s marked it ended',
+    async (_, end) => {
+      const { auth, local, clock, devices } = await harness()
+      const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
+      const { token, user } = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+      const identity = identityOf(user.id)
+
+      await clock.advance(Date.now() - 3 * MINUTE_MS - clock.now())
+
+      const expiry = new Date(clock.now() + MINUTE_MS)
+
+      await local.db.query(deviceSessionMoveEndStatement, { session_token: token, ends_at: expiry })
+      await clock.advance(2 * MINUTE_MS)
+      await end({ auth, sessions, devices, clock, identity, token })
+
+      const row = (await devices.byToken(token))._unsafeUnwrap() ?? expect.unreachable('a row')
+
+      expect(row.endedAt).toEqual(expiry)
+      expect(row.endedReason).toBeUndefined()
+    },
+  )
+
+  it('reads the sessions a ban of the account ended, keeping `banned` as why, by token and in its list', async () => {
+    const { auth, local, clock, devices } = await harness()
+    const laptop = await signUpOn(auth, 'ann@example.test', deviceHeaders('laptop'))
+    const phone = await auth.api.signInEmail({
+      body: { email: 'ann@example.test', password: 'Pass-word-1' },
+      headers: deviceHeaders('phone'),
+    })
+    const ann = identityOf(laptop.user.id)
+
+    await clock.advance(MINUTE_MS)
+
+    const banned = new Date(clock.now())
+
+    await ban(local, ann, banned)
+
+    expect((await devices.byToken(laptop.token))._unsafeUnwrap()).toMatchObject({
+      device: 'laptop',
+      endedAt: banned,
+      endedReason: 'banned',
+    })
+    expect(
+      (await devices.list(ann))._unsafeUnwrap().map((row) => [row.device, row.endedReason]),
+    ).toEqual([
+      ['laptop', 'banned'],
+      ['phone', 'banned'],
+    ])
+    expect((await devices.byToken(phone.token))._unsafeUnwrap()?.endedAt).toEqual(banned)
+  })
 
   it('fails its reads and writes once the directory is closed', async () => {
     const { auth, local, devices } = await harness()

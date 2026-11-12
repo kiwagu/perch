@@ -2,8 +2,9 @@
  * A flow may run ahead of the app's machine on a branch: a business commit changes the flow,
  * the implementation commit after the developer's review brings the machine up to it. The
  * machine may then lack what the flow added (a state, an event, a guarded branch, an effect, a
- * region, an invoke) but does nothing the flow does not say: every state, event, transition,
- * target, guard, effect and invoke source it has is the flow's, its effects in the flow's order.
+ * region, an invoke, an anchor a state renders) but does nothing the flow does not say: every
+ * state, event, transition, target, guard, effect, invoke source and rendered anchor it has is
+ * the flow's, its effects in the flow's order.
  */
 
 import { sameValue } from '../../records'
@@ -68,6 +69,8 @@ function stateOf(app: ProjectedState, flow: ProjectedState): ProjectedState {
 
   return {
     final: flow.final,
+    // Both sorted: the app's anchors in the flow's order are those of a subset.
+    renders: within(app.renders, flow.renders, Object.is) ? app.renders : flow.renders,
     entry: effectsOf(app.entry, flow.entry),
     exit: effectsOf(app.exit, flow.exit),
     on: shared(app.on, flow.on, transitionsOf),

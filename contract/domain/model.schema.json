@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Perch data model",
-  "description": "The entities the screens read and write. The platform's own tables (accounts, organisations, memberships, device sessions) are not modeled here: the screens reach them through the platform actions of platform.yaml.",
+  "description": "The entities the screens read and write; the platform's own tables (accounts, organisations, memberships, device sessions) are reached through the actions of platform.yaml.",
   "$defs": {
     "profile": {
       "type": "object",
@@ -12,16 +12,19 @@
         "id": "prf",
         "actions": {
           "createProfile": {
-            "description": "Creates the profile of a new account, when its email is first verified, on the device that verified it.",
-            "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" }
+            "description": "Creates the profile of a new account on the first device that enters it.",
+            "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" },
+            "changes": ["accounts.read"]
           },
           "updateName": {
             "description": "Replaces the name.",
-            "params": { "id": "$id", "name": "name" }
+            "params": { "id": "$id", "name": "name" },
+            "changes": ["accounts.list", "accounts.read"]
           },
           "updateBio": {
             "description": "Replaces the bio.",
-            "params": { "id": "$id", "bio": "bio" }
+            "params": { "id": "$id", "bio": "bio" },
+            "changes": []
           }
         },
         "unique": [["identity"]]
@@ -68,19 +71,26 @@
     },
     "settings": {
       "type": "object",
-      "description": "The settings of an account: what the app is like for it, today its language. One row per account, created when its email is first verified, in the account's private region, so every device of the account reads and changes it offline and the others follow. Nobody but the account ever reads it.",
+      "description": "The settings of an account: what the app is like for it. Each of its devices reads and changes them offline, and nobody but the account ever reads them.",
       "x-perch": {
         "table": "settings",
         "region": "private",
         "id": "stg",
         "actions": {
           "createSettings": {
-            "description": "Creates the settings of a new account, when its email is first verified, on the device that verified it, each with its starting value.",
-            "params": { "id": "$id", "identity": "identity", "locale": "locale" }
+            "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account signed up with, and the theme that device shows.",
+            "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" },
+            "changes": []
           },
           "updateLocale": {
             "description": "Stores the language the account chose.",
-            "params": { "id": "$id", "locale": "locale" }
+            "params": { "id": "$id", "locale": "locale" },
+            "changes": []
+          },
+          "updateTheme": {
+            "description": "Stores the theme the account chose.",
+            "params": { "id": "$id", "theme": "theme" },
+            "changes": []
           }
         },
         "unique": [["identity"]]
@@ -100,9 +110,14 @@
           "description": "The language the account chose; it follows the account across devices.",
           "enum": ["en", "es"],
           "x-perch": { "crdt": "none" }
+        },
+        "theme": {
+          "description": "The theme the account chose: light, dark, or system (the device's own setting, followed as it changes); it follows the account across its tabs and devices.",
+          "enum": ["light", "dark", "system"],
+          "x-perch": { "crdt": "none" }
         }
       },
-      "required": ["id", "identity", "locale"],
+      "required": ["id", "identity", "locale", "theme"],
       "additionalProperties": false
     },
     "note": {
@@ -120,15 +135,18 @@
         "actions": {
           "createNote": {
             "description": "Adds a note by the signed-in member.",
-            "params": { "id": "$id", "author": "author", "text": "text" }
+            "params": { "id": "$id", "author": "author", "text": "text" },
+            "changes": []
           },
           "updateNote": {
             "description": "Replaces the text of a note.",
-            "params": { "id": "$id", "text": "text" }
+            "params": { "id": "$id", "text": "text" },
+            "changes": []
           },
           "deleteNote": {
             "description": "Deletes a note.",
-            "params": { "id": "$id" }
+            "params": { "id": "$id" },
+            "changes": []
           }
         }
       },

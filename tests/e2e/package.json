@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
+    "test": "bun test ./scripts ./src/support",
     "test:e2e": "bun scripts/run-e2e.ts"
   },
   "devDependencies": {

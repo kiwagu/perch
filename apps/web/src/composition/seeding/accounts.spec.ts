@@ -1,7 +1,9 @@
+import { err } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { AuthUser } from '@workspace/data'
+import { type AuthUser, dataError } from '@workspace/data'
 
+import { AccountStartService } from '../../features/user/application/account-start.service'
 import { ProfileService } from '../../features/user/application/profile.service'
 import {
   settingsCommands,
@@ -18,9 +20,10 @@ import {
   verifiedElsewhere,
 } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
+import { keptAccountStart, savedSession } from '../storage'
 
 import { ensureAccount } from './accounts'
-import type { AccountInput, Inbox, SeedDevice } from './types'
+import type { AccountInput, Inbox, SeedDevice, SeedStarts } from './types'
 
 const ann: AccountInput = {
   email: 'ann@example.test',
@@ -78,23 +81,71 @@ function fakeInbox(
   return { asked, inbox }
 }
 
-/** A seed device over a test world of the fake gateway: the session, the account's services, `inbox`. */
-async function device(auth: FakeGatewayAuth, inbox: Inbox) {
-  const world = await openTestWorld({ auth, online: false })
+/**
+ * A seed device over a test world of the fake gateway: the session, the account's services, the
+ * starts of new accounts as the app composes them over the browser's storage, `inbox`. With
+ * `beside`, the app finishes the start it kept, as the root does once the space is open, in
+ * `beside` (what each finish answered), while the seed goes on.
+ */
+async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<boolean>[]) {
+  const tab: { starts?: AccountStartService } = {}
+  const world = await openTestWorld({
+    auth,
+    online: false,
+    keepAccountStart: (signIn, user, from) => tab.starts?.keepAfterPull(signIn, user, from),
+  })
 
   worlds.push(world)
 
   const { session, commands } = world
+  const profiles = new ProfileService(session.runner, commands, {
+    shape: profileShape,
+    commands: profileCommands,
+  })
+  const settings = new SettingsService(session.runner, commands, {
+    shape: settingsShape,
+    commands: settingsCommands,
+  })
+  const starts = new AccountStartService(
+    profiles,
+    settings,
+    keptAccountStart(world.storage),
+    (run) => run(() => session.flush()),
+    () => 'system',
+  )
+
+  tab.starts = starts
+
+  // The seed keeps a start under the sign-in current on the device, as the seed client does.
+  const seedStarts: SeedStarts = {
+    keepAfterPull: (user, from) => {
+      const signIn = savedSession(world.storage)?.signIn
+
+      return signIn === undefined
+        ? err(dataError('data:AUTH_FAILED', 'nobody is signed in on the seed device'))
+        : starts.keepAfterPull(signIn, user, from)
+    },
+    resumeAfterPull: (user) => starts.resumeAfterPull(user),
+  }
+
+  if (beside) {
+    world.session.subscribe((user) => {
+      if (user !== undefined) {
+        beside.push(
+          starts.resumeAfterPull(user).match(
+            () => true,
+            () => false,
+          ),
+        )
+      }
+    })
+  }
+
   const seed: SeedDevice = {
     session,
-    profiles: new ProfileService(session.runner, commands, {
-      shape: profileShape,
-      commands: profileCommands,
-    }),
-    settings: new SettingsService(session.runner, commands, {
-      shape: settingsShape,
-      commands: settingsCommands,
-    }),
+    profiles,
+    settings,
+    starts: seedStarts,
     inbox,
     enter: (signIn) => signIn(),
     settle: () => session.flush(),
@@ -151,6 +202,28 @@ describe("the seed client's account", () => {
       profile: { name: 'Ann', bio: 'Seeded.' },
       settings: { locale: 'es' },
     })
+  })
+
+  it("starts the account as the app does, under the ids derived from its identity, while the app's own start finishes it beside the seed: one record of each", async () => {
+    const auth = fakeGatewayAuth()
+    const { inbox } = fakeInbox(auth)
+    const beside: Promise<boolean>[] = []
+    const { seed, world } = await device(auth, inbox, beside)
+    const seeded = (await ensureAccount(seed, ann))._unsafeUnwrap()
+    const body = seeded.user.id.slice(seeded.user.id.indexOf('_') + 1)
+
+    // The verification kept the start, and the app began finishing it as the space opened.
+    expect(beside).toHaveLength(1)
+    expect(await Promise.all(beside)).toEqual([true])
+
+    const { profile, settings } = await written(seed, seeded.user)
+
+    expect(settings?.id).toBe(`stg_${body}`)
+    expect(profile?.id).toBe(`prf_${body}`)
+    expect(seeded.profileId).toBe(`prf_${body}`)
+    expect((await seed.settings.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
+    expect((await seed.profiles.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
+    expect(keptAccountStart(world.storage).kept(seeded.user.id)).toBeUndefined()
   })
 
   it('has the mail of an account not verified yet sent again, and opens the new link', async () => {

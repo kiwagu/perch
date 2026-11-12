@@ -8,7 +8,8 @@
 
 import { z } from '@workspace/zod'
 
-import { anchorSchema, kebabNameSchema } from '../../../names.schema'
+import { anchorSchema, codeSchema, kebabNameSchema } from '../../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { actionNameSchema } from '../anchor'
 import { routePathSchema } from '../binding'
 import { actionParamsSchema } from '../params'
@@ -29,6 +30,38 @@ export const toastOptOutSchema = z
     'No toast says the success of this action: the flow shows its outcome itself, or it is visible by itself.',
   )
 
+/**
+ * The opt-out of a read after the action: the invoke changes nothing a list of the screen shows,
+ * so nothing reads after it, in every outcome. A region written `by` its button passes it to its
+ * invoke; the canonical flow keeps it on the invoke, a statement for the checks that XState
+ * ignores and the machine comparison leaves out. One outcome alone says it on its branch
+ * (`branchReadOptOutSchema`, `transitions.ts`), never both.
+ */
+export const readOptOutSchema = z
+  .literal(false)
+  .describe(
+    'Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused.',
+  )
+
+/**
+ * A guard by failure code: it holds when the action of the invoke whose `onError` it guards
+ * failed with one of its codes, so a bare `show` on its branch shows exactly them.
+ */
+export const codeGuardSchema = z
+  .strictObject({
+    codes: z
+      .array(codeSchema)
+      .min(1)
+      .describe('The codes it holds for: the action failed with one of them.'),
+  })
+  .describe(
+    'A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes.',
+  )
+
+const guardSchema = z
+  .union([z.string().describe(DESCRIPTION_PURPOSES.guard), codeGuardSchema])
+  .describe('What a guard holds: a sentence, or the failure codes it holds for.')
+
 /** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
 export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
   transition: T
@@ -45,13 +78,14 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       .describe('Per parameter, the anchor whose value it takes or a constant.'),
     onDone: transitions.describe('What follows when the action succeeds.'),
     onError: transitions.exactOptional().describe('What follows when the action fails.'),
+    read: readOptOutSchema.exactOptional(),
   }
   const invoke = (
     parts.toastOptOut === true
       ? z.strictObject({ ...invokeShape, toast: toastOptOutSchema.exactOptional() })
       : z.strictObject(invokeShape)
   ).describe('The action the state runs while the machine is in it.')
-  const description = z.string().exactOptional().describe('What the state is, for a reader.')
+  const description = z.string().exactOptional().describe(DESCRIPTION_PURPOSES.state)
   const entry = effects.exactOptional().describe('The effects on entering the state.')
   const exit = effects.exactOptional().describe('The effects on leaving the state.')
   const on = z
@@ -59,6 +93,13 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     .exactOptional()
     .describe(
       'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
+    )
+  const renders = z
+    .array(anchorSchema)
+    .min(1)
+    .exactOptional()
+    .describe(
+      'Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.',
     )
   const meta = z
     .strictObject({
@@ -69,9 +110,16 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
         })
         .exactOptional()
         .describe('The route that reaches this state: a link or a reload restores it.'),
+      renders,
     })
     .exactOptional()
-    .describe('What the contract says of the state beyond XState: its address.')
+    .describe(
+      'What the contract says of the state beyond XState: its address and the anchors it renders.',
+    )
+  const regionMeta = z
+    .strictObject({ renders })
+    .exactOptional()
+    .describe('What the contract says of the state beyond XState: the anchors it renders.')
   const state = z
     .strictObject({
       description,
@@ -84,13 +132,20 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     })
     .describe('One state of the flow.')
   const regionState = z
-    .strictObject({ description, entry, exit, on, invoke: invoke.exactOptional() })
+    .strictObject({
+      description,
+      meta: regionMeta,
+      entry,
+      exit,
+      on,
+      invoke: invoke.exactOptional(),
+    })
     .describe(
       'One state of a region: a plain state that does not end, has no address and no nested states.',
     )
   const region = z
     .strictObject({
-      description: z.string().exactOptional().describe('What the area is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
       initial: flowStateNameSchema.describe('The state the region starts in.'),
       states: z
         .record(flowStateNameSchema, regionState)
@@ -160,14 +215,16 @@ export function flowSchemaOf<
         .describe(
           'The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
         ),
-      description: z.string().exactOptional().describe('What the flow is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.flow),
       initial: flowStateNameSchema.describe('The state the screen opens in.'),
       meta: z
         .strictObject({
           guards: z
-            .record(guardNameSchema, z.string())
+            .record(guardNameSchema, guardSchema)
             .exactOptional()
-            .describe('The guards by name, each with what it holds.'),
+            .describe(
+              'The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.',
+            ),
         })
         .exactOptional()
         .describe('What the contract says of the flow beyond XState: its guards.'),

@@ -1,10 +1,43 @@
-export { baseOf, isKnownAnchor, testIdFor } from './derive'
-export { ANCHOR_PATTERN, FIELD_KINDS, isAnchor, kindOf, screenOf, segmentsOf } from './grammar'
+export { baseOf, isKnownAnchor, isSizeOption, sizeOptionOf, testIdFor } from './derive'
+export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
+export {
+  ANCHOR_PATTERN,
+  CONTROL_KINDS,
+  FIELD_KINDS,
+  isAnchor,
+  isUnder,
+  kindOf,
+  LISTING_KINDS,
+  partOf,
+  screenOf,
+  segmentsOf,
+} from './grammar'
+export { type InEntry, itemIdOf } from './item'
 export {
   ANCHOR_ATTRIBUTES,
   PAGE_HELPER,
   type PerchPageHelper,
   type RenderedAnchor,
   type RenderedPage,
+  SETTLED_STATE,
+  type SettledState,
+  type SettledValue,
 } from './page-helper'
+export {
+  NEXT_LINK,
+  PAGE,
+  PAGING_PARTS,
+  type Pager,
+  PREVIOUS_LINK,
+  pagerOf,
+  pageSearchOf,
+  RANGE,
+  type SearchedSource,
+  SIZE,
+  SIZE_SELECT,
+  searchKeysOf,
+} from './paging'
+export { isListed, isRendered, listedBy, type RenderedAt, renderedAt } from './rendered'
+export { admits, GUEST, heldRoles, IDENTITY } from './roles'
 export { CONTRACT_VERSION } from './version'
+export { VISIBILITY_BASE_KIND, VISIBILITY_BUTTON, VISIBILITY_VALUES } from './visibility'

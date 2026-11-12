@@ -116,6 +116,31 @@ describe('measureCoverage', () => {
   it('counts the anchors of each screen and the scenarios that reach it', () => {
     expect(measureCoverage(sample()).screens).toEqual([{ id: 'sample', anchors: 6, scenarios: 1 }])
   })
+  it('lists the composites the platform declares that no screen opts into', () => {
+    const platform = readFileSync(join(FIXTURES, PLATFORM_FILE), 'utf8')
+    const composite = (name: string) =>
+      `  ${name}:\n    description: The rules a new password keeps.\n    list: ${name}-list\n    itemState: met\n    items:\n      length: At least eight characters.\n`
+    const screen = readFileSync(join(FIXTURES, SCREEN), 'utf8')
+    const secret =
+      'sample.title-input:\n    kind: input\n    secret: true\n    composite: password-rules\n'
+
+    expect(measureCoverage(sample()).unusedComposites).toEqual([])
+    expect(
+      measureCoverage(
+        sample({
+          [PLATFORM_FILE]: `${platform}composites:\n${composite('password-rules')}${composite('pin-rules')}`,
+        }),
+      ).unusedComposites,
+    ).toEqual(['password-rules', 'pin-rules'])
+    expect(
+      measureCoverage(
+        sample({
+          [PLATFORM_FILE]: `${platform}composites:\n${composite('password-rules')}${composite('pin-rules')}`,
+          [SCREEN]: screen.replace('sample.title-input:\n    kind: input\n', secret),
+        }),
+      ).unusedComposites,
+    ).toEqual(['pin-rules'])
+  })
 })
 
 describe('totalsOf', () => {

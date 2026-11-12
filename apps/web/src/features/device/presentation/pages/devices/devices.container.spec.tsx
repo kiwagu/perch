@@ -1,13 +1,19 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { okAsync } from 'neverthrow'
+import { okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
-import { identityIdFactory } from '@workspace/ids'
+import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
 
-import { FakeDevices, offline, phone, rejected } from '../../../../../platform/__fixtures__/devices'
+import {
+  FakeDevices,
+  laptop,
+  offline,
+  phone,
+  rejected,
+} from '../../../../../platform/__fixtures__/devices'
 import { memoryInstall } from '../../../../../platform/__fixtures__/install'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { memoryTheme } from '../../../../../platform/__fixtures__/theme'
@@ -17,6 +23,7 @@ import { InstallContext } from '../../../../../platform/install'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
+import type { SessionNotice } from '../../../../../platform/session.port'
 import { ThemeContext } from '../../../../../platform/theme'
 import { openedFrame } from '../../../../app-shell/presentation/shell/__fixtures__/frame'
 import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
@@ -26,34 +33,47 @@ import { DeviceModule } from '../../../device.module'
 import en from '../../i18n/device.en.json'
 
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+const bob = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
 let devices: FakeDevices
 
 /** How many times the page had the session sign this device out. */
 let signedOutHere = 0
 
-/** Whether Ann is still signed in, and who hears the account change. */
-let signedIn = true
+/** The words the page left for the sign-in page, oldest first. */
+let leftForSignIn: SessionNotice[] = []
+
+/** Who is signed in on the browser, and who hears the account change. */
+let account: typeof ann | undefined = ann
 const accountListeners = new Set<(user: typeof ann | undefined) => void>()
+
+/** The browser's account changes to `next`, as this tab or another one changes it. */
+function tell(next: typeof ann | undefined): void {
+  account = next
+
+  for (const listener of accountListeners) {
+    listener(next)
+  }
+}
 
 /** Ann's account goes away, as a sign-out here or from another device leaves it. */
 function signOut(): void {
-  signedIn = false
-
-  for (const listener of accountListeners) {
-    listener(undefined)
-  }
+  tell(undefined)
 }
 
 /** The devices page in the application's frame, for Ann signed in, over `devices`. */
 async function openPage(): Promise<void> {
   signedOutHere = 0
-  signedIn = true
+  leftForSignIn = []
+  account = ann
   accountListeners.clear()
 
   const session = {
     ...fakeSession().session,
-    current: () => (signedIn ? ann : undefined),
+    leaveNotice: (notice: SessionNotice) => {
+      leftForSignIn.push(notice)
+    },
+    current: () => account,
     subscribe: (listener: (user: typeof ann | undefined) => void) => {
       accountListeners.add(listener)
 
@@ -140,6 +160,76 @@ describe('DevicesContainer', () => {
     expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list']])
   })
 
+  it('reads the devices again when a sign-out went through but its answer could not list them', async () => {
+    devices = new FakeDevices()
+
+    await openPage()
+
+    const revoke = devices.revoke.bind(devices)
+
+    // The read the sign-out makes after it fails; the page's own read after it does not.
+    devices.revoke = (id) =>
+      revoke(id).andTee(() => {
+        devices.refusal = offline()
+      })
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+    expect(devices.calls).toEqual([['list'], ['revoke', phone.id], ['list'], ['list']])
+  })
+
+  it('reads the devices again after a sign-out answered without them, though the one before came with them', async () => {
+    const tablet = {
+      id: device_sessionIdFactory.create(),
+      label: 'Chrome on Android',
+      createdAt: new Date('2026-10-03T12:00:00.000Z'),
+      lastSeenAt: new Date('2026-10-16T18:00:00.000Z'),
+      current: false,
+    }
+
+    devices = new FakeDevices()
+    devices.rows = [laptop, phone, tablet]
+
+    await openPage()
+    fireEvent.click(within(await row(phone.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(phone.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+
+    const revoke = devices.revoke.bind(devices)
+
+    // The second sign-out goes through, but the read it makes after it fails.
+    devices.revoke = (id) =>
+      revoke(id).andTee(() => {
+        devices.refusal = offline()
+      })
+    await waitFor(async () =>
+      expect(
+        (
+          within(await row(tablet.label)).getByTestId(
+            'device.list.revoke-button',
+          ) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    )
+    fireEvent.click(within(await row(tablet.label)).getByTestId('device.list.revoke-button'))
+
+    expect(
+      await within(await row(tablet.label)).findByTestId('device.list.revoked-cell'),
+    ).toBeTruthy()
+    expect(devices.calls).toEqual([
+      ['list'],
+      ['revoke', phone.id],
+      ['list'],
+      ['revoke', tablet.id],
+      ['list'],
+      ['list'],
+    ])
+  })
+
   it('says so when the gateway refuses a sign-out, and reads the list again', async () => {
     devices = new FakeDevices()
 
@@ -204,6 +294,40 @@ describe('DevicesContainer', () => {
 
     await waitFor(() => expect(signedOutHere).toBe(1))
     expect(devices.calls).toEqual([['list'], ['everywhere']])
+    // The session keeps a word it left on the device's data in place of this one.
+    await waitFor(() => expect(leftForSignIn).toEqual(['signed-out-elsewhere']))
+  })
+
+  it('leaves the sign-in page no word when the account that asked to sign out everywhere signs out, and another signs in, before the gateway answers', async () => {
+    devices = new FakeDevices()
+
+    let answer: () => void = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+
+    devices.signOutEverywhere = () => {
+      devices.calls.push(['everywhere'])
+
+      return ResultAsync.fromSafePromise(answered)
+    }
+
+    await openPage()
+    await row(phone.label)
+    fireEvent.click(screen.getByTestId('device.everywhere.open-button'))
+    fireEvent.click(await screen.findByTestId('device.everywhere.dialog.confirm-button'))
+    await waitFor(() => expect(devices.calls).toEqual([['list'], ['everywhere']]))
+
+    // Ann signs out and Bob signs in, in this tab or another, while the request is in flight.
+    act(() => signOut())
+    await waitFor(() => expect(screen.queryByTestId('device.everywhere.open-button')).toBeNull())
+    act(() => tell(bob))
+    await act(async () => answer())
+    await new Promise((resolve) => setTimeout(resolve, 50))
+
+    // The page went with Ann's account: its flow ended there, and neither moved nor left a word.
+    expect(screen.queryByTestId('device.everywhere.open-button')).toBeNull()
+    expect(leftForSignIn).toEqual([])
   })
 
   it('neither reads the devices again nor says they could not be read once the account signs out', async () => {

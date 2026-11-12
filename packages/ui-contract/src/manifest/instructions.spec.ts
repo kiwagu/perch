@@ -55,6 +55,14 @@ describe('instructionsOf', () => {
     )
     expect(instructions.session).toContain("never assume it from the action's name")
   })
+  it('says which reads an action of the platform or of the model changes, written on every action', () => {
+    expect(instructions.session).toContain(
+      'its `changes` (written on every action, `[]` where it changes none: the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds, platform actions a list, a section or a table takes as its `source`)',
+    )
+    expect(instructions.model).toContain(
+      'its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it)',
+    )
+  })
   it('says a binding is a route of the router and a route a state address', () => {
     expect(instructions.screenMap).toContain('a TanStack Router path')
     expect(instructions.screenMap).toContain(
@@ -82,6 +90,75 @@ describe('instructionsOf', () => {
       "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",
     )
   })
+  it("says a password input's visibility-button is presentation only, held by the input itself", () => {
+    expect(instructions.screenMap).toContain('`<input>.visibility-button`')
+    expect(instructions.screenMap).toContain('never an event of a flow and always enabled')
+    expect(instructions.screenMap).toContain('`contract.derivedParts`')
+    expect(instructions.gaps).toContain('whether a password input shows what it holds')
+  })
+  it('says what a paged list reads and derives, and that a new search starts at page 1', () => {
+    expect(instructions.bindings).toContain(
+      'gives it that value again each time the parameter becomes another',
+    )
+    expect(instructions.screenMap).toContain(
+      'each time the organisation or account it reads for becomes another or a search parameter it reads does',
+    )
+    expect(instructions.screenMap).toContain(
+      '`params` (each a search parameter of the route, `{ "search": "<name>" }`, or a constant) and `paged: true` (one page of the action\'s entries: the page and the size the route\'s search parameters `page` and `size` name; the list derives `range`, whose `data-from`, `data-to` and `data-total` say which entries the page shows of how many, `previous-link` and `next-link`, each only where there is such a page, and `size-select`, whose options carry the action\'s `paged.sizes` and choose the route\'s `size`, which writes no `x-perch`; a paged list has at most 3 segments, as its options add two to its name)',
+    )
+    expect(instructions.screenMap).toContain(
+      'a navigate that sets a search parameter a paged list reads says `page: 1`',
+    )
+  })
+  it('says who a route serves, in which order the router decides, and who sees an anchor', () => {
+    expect(instructions.screenMap).toContain(
+      '`roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other)',
+    )
+    expect(instructions.screenMap).toContain(
+      "`roles` (who sees it, among the roles its screen's bindings serve; absent: every role of the screen)",
+    )
+  })
+  it('says a navigate may carry into a search what a field of the screen holds', () => {
+    expect(instructions.screenMap).toContain('`{ "anchor": "<field>" }`')
+  })
+  it('says a navigate may carry into a search the data-id of the entry whose control acted', () => {
+    expect(instructions.screenMap).toContain(
+      '`{ "item": "<item>" }`, the `data-id` of the entry of that item or row whose control the user acted on, a control (a button, a link, a tab or a field) in the item\'s part (`<part>.<name>`) on whose event the navigate runs',
+    )
+    expect(instructions.screenMap).toContain(
+      'an item or a row as a value of `params` or `input` gives the `data-id` of the entry whose control acts, likewise',
+    )
+  })
+  it('says what a clear does to a field and to an anchor that carries codes', () => {
+    expect(instructions.screenMap).toContain(
+      '`clear` empties a field of the screen, a secret one included, so it holds no input any more, as if nothing was typed',
+    )
+    expect(instructions.screenMap).toContain(
+      'and makes an anchor that carries codes show none until one is shown again',
+    )
+  })
+  it('says when a list with a platform source reads it, what a read does, and what read: false says', () => {
+    expect(instructions.screenMap).toContain('effects `show`, `clear`, `read` and `navigate`')
+    expect(instructions.screenMap).toContain(
+      '`read` makes a list of the screen whose `source` is a platform action read that action again and show its entries once the read is in',
+    )
+    expect(instructions.screenMap).toContain(
+      'such a list also reads it each time it starts to render after it did not and each time the organisation or account it reads for becomes another or a search parameter it reads does, and a navigate that sets a search parameter a paged list reads says `page: 1`; one whose `source` is an entity follows the stored data and is never read',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on an invoke says nothing reads after its action',
+    )
+    expect(instructions.screenMap).toContain(
+      '`read: false` on one branch of its `onDone` or `onError` says nothing reads after that outcome, where another branch reads',
+    )
+    expect(instructions.screenMap).toContain(
+      "after an invoke that does not say `read: false`, every branch of its `onDone` reads each list of the screen with a platform source that its action may change, or says `read: false`: a list one of whose entries its `input` takes, one whose source's `params` take a value its `input` takes, and one whose source its action's `changes` names; a failure holds no read, so an `onError` reads where it says",
+    )
+    expect(instructions.screenMap).toContain('the four effects')
+    expect(instructions.screenMap).toContain(
+      "an invoke's `read: false`, or a branch's, is a statement of the contract, nothing the machine runs",
+    )
+  })
   it("says a flow's state may be a parallel state of regions, each event in one area", () => {
     expect(instructions.screenMap).toContain('`type: parallel`')
     expect(instructions.screenMap).toContain('its `states` are regions')
@@ -90,6 +167,16 @@ describe('instructionsOf', () => {
       "an event is handled by one region or by the state's own `on`, never by two",
     )
     expect(instructions.screenMap).toContain('`#<flow id>.<state>`')
+  })
+  it("says which anchors a flow's state renders, those nested under a listed one with it", () => {
+    expect(instructions.screenMap).toContain(
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user: an anchor a state does not render is absent from the page or hidden on it.",
+    )
+  })
+  it('says a guard is a sentence or the failure codes it holds for, on an onError only', () => {
+    expect(instructions.screenMap).toContain(
+      'A guard of `meta.guards` is a sentence saying when it holds, or `{ "codes": [<code>, …] }`, which guards only a branch of an invoke\'s `onError` and holds when its action failed with one of those codes.',
+    )
   })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')
@@ -107,6 +194,36 @@ describe('instructionsOf', () => {
     expect(instructions.gaps).toContain('`Emulation refused:`')
     expect(instructions.gaps).toContain('`Proposal:`')
     expect(instructions.gaps).toContain('Never hold it in the app or in a test instead')
+  })
+  it('says what a composite opt-in is and how the anchors it derives are marked', () => {
+    expect(instructions.screenMap).toContain(
+      '`composite` on a secret input names the platform composite it opts into (`platform.composites.<name>`)',
+    )
+    expect(instructions.screenMap).toContain(
+      'each marked `derivedFrom` with the composite and, for an item, its name',
+    )
+  })
+  it('says a ranked message shows the first of the codes raised before it shows, unless cleared', () => {
+    expect(instructions.screenMap).toContain(
+      '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a `clear` of it, in any flow, takes away every code raised before it)',
+    )
+  })
+  it("says a button's params derive from its fields, and an error's codes and outcome from its flow", () => {
+    expect(instructions.bindings).toContain(
+      "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning",
+    )
+    expect(instructions.bindings).toContain(
+      'the failures of the actions bound beside it and invoked against it by the flow, plus the codes the flow shows on it, `failed` last',
+    )
+    expect(instructions.bindings).toContain(
+      "an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there",
+    )
+    expect(instructions.bindings).toContain(
+      'a start state, one several states enter, or one a platform or data event enters, writes its `onError`',
+    )
+    expect(instructions.bindings).toContain(
+      "an `onError` written as its target alone still shows the failure on that error, on the screen's error when no control enters and the input names no field",
+    )
   })
   it('writes every instruction', () => {
     for (const text of Object.values(instructions)) {

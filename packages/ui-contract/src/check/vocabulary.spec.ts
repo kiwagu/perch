@@ -8,6 +8,13 @@ import { vocabularyProblems } from './vocabulary'
 const printed = (contract = sampleContract()): string[] =>
   vocabularyProblems(contract).map(formatProblem)
 
+const composite = {
+  description: 'The rules a new password keeps.',
+  list: 'password-rule-list',
+  itemState: 'current',
+  items: { length: '10 to 35 characters.' },
+}
+
 describe('vocabularyProblems', () => {
   it('finds nothing in a consistent contract', () => {
     expect(printed()).toEqual([])
@@ -70,6 +77,16 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: choice values of "sample.gone-select.option": no such anchor in the screens',
     ])
   })
+  it('refuses choice values for a visibility-button, whose values are its suffix own', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').derived = ['visibility-button']
+    contract.vocabulary.choiceValues['sample.title-input.visibility-button'] = { show: 'shows it' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: choice values of "sample.title-input.visibility-button": a visibility-button carries show or hide, the values of its suffix, and takes no rows',
+    ])
+  })
   it('reports a code no anchor or platform action uses', () => {
     const contract = sampleContract()
 
@@ -78,6 +95,23 @@ describe('vocabularyProblems', () => {
     expect(printed(contract)).toEqual([
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
+  })
+  it('wants every derived suffix to end with a kind of the vocabulary, the kind of its part', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.suffixes['range'] = 'the entries the page shows'
+    contract.vocabulary.suffixes['error-message'] = 'the error text of a field'
+    contract.vocabulary.suffixes['close-button'] = 'the X that closes a dialog'
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: derived suffix "range": its kind "range" is not a kind of the vocabulary',
+      'contract/vocabulary.md:1: derived suffix "error-message": its kind "message" is not a kind of the vocabulary',
+    ])
+
+    contract.vocabulary.kinds['range'] = 'the range'
+    contract.vocabulary.kinds['message'] = 'the message'
+
+    expect(printed(contract)).toEqual([])
   })
   it('asks no row of a derived toast code, but the rule row once one is derived', () => {
     const contract = sampleContract()
@@ -131,6 +165,30 @@ describe('vocabularyProblems', () => {
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not a reserved anchor of the vocabulary',
       'contract/domain/platform.yaml:1: reserved[0]: "sample.page" is not an anchor of the app-shell screen',
       'contract/domain/platform.yaml:1: reserved[1]: "app-shell.nav" is not an anchor of the app-shell screen',
+    ])
+  })
+  it('wants a row for every composite of the platform, and a composite for every row', () => {
+    const declared = sampleContract()
+
+    declared.screens.platform.composites = { 'password-rules': composite }
+    expect(vocabularyProblems(declared).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"]: "password-rules" is not a composite of the vocabulary',
+    ])
+
+    const documented = sampleContract()
+
+    documented.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(documented).map(formatProblem)).toEqual([
+      'contract/vocabulary.md:1: composite "password-rules" is documented but undeclared',
+    ])
+  })
+  it('wants the item state of a composite among the row states', () => {
+    const contract = sampleContract()
+
+    contract.screens.platform.composites = { 'password-rules': { ...composite, itemState: 'met' } }
+    contract.vocabulary.composites = { 'password-rules': 'the rules' }
+    expect(vocabularyProblems(contract).map(formatProblem)).toEqual([
+      'contract/domain/platform.yaml:1: composites["password-rules"].itemState[0]: "met" is not a row state of the vocabulary',
     ])
   })
   it('takes a choice-values anchor derived only through a suffix its base lists in derived', () => {

@@ -1,18 +1,12 @@
-import {
-  type Browser,
-  type BrowserContext,
-  type BrowserContextOptions,
-  test as base,
-  expect,
-  type Page,
-  type TestStepInfo,
-} from '@playwright/test'
+import { test as base, expect, type Page, type TestStepInfo } from '@playwright/test'
 
 import type { SeedAccount } from '@workspace/seed/catalog'
 
+import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
+import { CLIENT_ADDRESS_HEADER, clientAddressOf } from './client-address'
 import { generate } from './data'
 import { openDeclaredMail } from './mail-contract'
-import { type SecurityWatch, watchSecurity } from './security'
+import { mailbox } from './mailbox'
 
 export { expect }
 
@@ -40,6 +34,26 @@ export interface AnotherAccount {
   signUp(): Promise<Page>
 }
 
+/**
+ * Another device for an account the test makes itself: a browser of its own (a context of its
+ * own, so its own storage, Web Locks and BroadcastChannel) that opens nothing until a test asks
+ * and signs nothing in by itself.
+ */
+export interface FreshDevice {
+  /** The device's page, on no address yet. */
+  open(): Promise<Page>
+}
+
+/**
+ * Devices for an account the test makes itself, as many as it opens: each a browser of its own
+ * (a context of its own, so its own storage, Web Locks and BroadcastChannel) that signs nothing in
+ * by itself.
+ */
+export interface FreshDevices {
+  /** Opens one more device and gives its page, on no address yet. */
+  open(): Promise<Page>
+}
+
 interface Fixtures {
   /**
    * A user who has just signed up through the sign-in page, opened the link of the verification
@@ -48,6 +62,8 @@ interface Fixtures {
   readonly signedIn: SeedAccount
   readonly secondDevice: SecondDevice
   readonly anotherAccount: AnotherAccount
+  readonly freshDevice: FreshDevice
+  readonly freshDevices: FreshDevices
 }
 
 /** The shell's status line once it says the app is ready: the frame and the screen are rendered. */
@@ -61,6 +77,13 @@ export async function appReady(page: Page): Promise<void> {
 /** The shell's notice, located by its anchor and its contract code together. */
 export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
+
+/** Waits until the shell's word on the sync carries `code` (by default `synced`). */
+export async function syncSays(page: Page, code = 'synced', timeout = 15_000): Promise<void> {
+  await expect(page.getByTestId('app-shell.sync-message')).toHaveAttribute('data-code', code, {
+    timeout,
+  })
+}
 
 /** One toast of the frame, located by its anchor and its contract code together. */
 export const toast = (page: Page, code: string) =>
@@ -113,38 +136,70 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   await page.waitForURL('**/me')
 }
 
+/**
+ * Clicks the profile's sign-out button and waits up to 15 s for the sign-in page: a sign-out waits
+ * for the sync channel first.
+ */
+export async function signOut(page: Page): Promise<void> {
+  await page.getByTestId('user.profile.sign-out-button').click()
+  await expectPathname(page, '/sign-in', 15_000)
+}
+
 /** A fresh account to sign up with, under a name of its own. */
 const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate.name() })
 
 /**
- * Opens the sign-in page, switches it to sign-up and submits `account`, its password typed twice;
+ * Opens the sign-in page, chooses `locale` in the frame's language select when it is not the
+ * browser's (`en`), switches the page to sign-up and submits `account`, its password typed twice;
  * waits until the page asks to check the mail, the sign-up's mail on its way and nothing signed in.
+ * A guest's language lives in the open page only, so it is chosen on the same load that signs up.
+ * The gateway answers a sign-up no sooner than its floor (800 ms), by when an assertion looks only
+ * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
-export async function startSignUp(page: Page, account: SeedAccount): Promise<void> {
+export async function startSignUp(page: Page, account: SeedAccount, locale = 'en'): Promise<void> {
   await page.goto('/sign-in')
   await appReady(page)
+
+  if (locale !== 'en') {
+    const select = page.getByTestId('app-shell.locale-select')
+
+    await select.click()
+    await page
+      .locator(`[data-testid="app-shell.locale-select.option"][data-value="${locale}"]`)
+      .click()
+    await expect(select).toHaveAttribute('data-value', locale)
+  }
+
   await page.getByTestId('user.sign-in.toggle-button').click()
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
   await page.getByTestId('user.sign-in.password-confirmation-input').fill(account.password)
   await page.getByTestId('user.sign-in.name-input').fill(account.name)
   await page.getByTestId('user.sign-in.submit-button').click()
-  await expect(checkYourMail(page)).toBeVisible()
+  await expect
+    .poll(() => checkYourMail(page).isVisible(), {
+      message: 'the sign-in page asks to check the mail',
+      intervals: [50],
+    })
+    .toBe(true)
 }
 
 /**
  * Signs `account` (a fresh one by default) up through the sign-in page in the app's language
- * `locale` (the browser's, `en`, unless the test chose another), then opens the link of the mail
+ * `locale` (the browser's, `en`, unless the test chooses another there), then opens the link of the mail
  * the sign-up declares, held to its declaration, in the same page, which signs it in; returns it
- * on `/me`.
+ * on `/me`. The mail is the account's email's first after the ones it already holds, counted
+ * before the sign-up: an email invited before it signs up holds the invitation first.
  */
 export async function signUp(
   page: Page,
   account = freshAccount(),
   locale = 'en',
 ): Promise<SeedAccount> {
-  await startSignUp(page, account)
-  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } })
+  const seen = await mailbox.count(account.email)
+
+  await startSignUp(page, account, locale)
+  await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } }, seen)
   await expectPathname(page, '/me')
 
   return account
@@ -164,71 +219,24 @@ export function pageLoads(page: Page): () => number {
   return () => loads
 }
 
-/** The browsers of the running test: the step check looks at every page they have open. */
-const browsers = new Set<BrowserContext>()
-
-/** The front every stand serves the app from, the origin the security check holds to its headers. */
-function frontOf(baseURL: string | undefined): string {
-  if (baseURL === undefined) {
-    throw new Error('the e2e projects give every browser the base URL of the front')
-  }
-
-  return new URL(baseURL).origin
-}
-
-/** Fails the test with every problem a browser reported against the front's security policy. */
-function expectSecure(problems: readonly string[]): void {
-  expect(
-    problems,
-    'the front sends its security headers and no page or worker breaks its policy',
-  ).toEqual([])
-}
-
-/**
- * A browser context of the test's own, opened on first use and watched by the security check
- * from before its first page; `close` closes it if it opened, then fails the test with the
- * problems it reported until then.
- */
-function ownBrowser(
-  browser: Browser,
-  options: BrowserContextOptions,
-  front: string,
-): { open(): Promise<Page>; close(): Promise<void> } {
-  let opened: Promise<{ page: Page; security: SecurityWatch }> | undefined
-
-  return {
-    open: async () => {
-      opened ??= browser.newContext(options).then(async (context) => {
-        browsers.add(context)
-        const security = await watchSecurity(context, front)
-
-        return { page: await context.newPage(), security }
-      })
-
-      return (await opened).page
-    },
-    close: async () => {
-      if (opened) {
-        const { page, security } = await opened
-        const context = page.context()
-        const problems = security.problems()
-
-        browsers.delete(context)
-        await context.close()
-        expectSecure(problems)
-      }
-    },
-  }
-}
-
 const extended = base.extend<Fixtures>({
+  // Every browser of a test, its own contexts included (Playwright Test gives them the test's
+  // options), claims its worker's client address at the front (`client-address.ts`).
+  extraHTTPHeaders: async ({ extraHTTPHeaders }, use, testInfo) => {
+    await use({
+      ...extraHTTPHeaders,
+      [CLIENT_ADDRESS_HEADER]: clientAddressOf(testInfo.parallelIndex),
+    })
+  },
+  // Every browser of a test is watched from before its first page: the front's security policy,
+  // and what each page shows in each state of its screen it settled in (`browsers.ts`).
   page: async ({ page, baseURL }, use) => {
-    const security = await watchSecurity(page.context(), frontOf(baseURL))
+    const watch = await watchBrowser(page.context(), frontOf(baseURL))
 
     browsers.add(page.context())
     await use(page)
     browsers.clear()
-    expectSecure(security.problems())
+    expectWatched(await watch.problems())
   },
   signedIn: async ({ page }, use) => {
     await use(await signUp(page))
@@ -266,6 +274,29 @@ const extended = base.extend<Fixtures>({
       },
     })
     await device.close()
+  },
+  freshDevice: async ({ browser, contextOptions, baseURL }, use) => {
+    const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
+
+    await use({ open: device.open })
+    await device.close()
+  },
+  freshDevices: async ({ browser, contextOptions, baseURL }, use) => {
+    const devices: { close(): Promise<void> }[] = []
+
+    await use({
+      open: () => {
+        const device = ownBrowser(browser, contextOptions, frontOf(baseURL))
+
+        devices.push(device)
+
+        return device.open()
+      },
+    })
+
+    for (const device of devices) {
+      await device.close()
+    }
   },
 })
 

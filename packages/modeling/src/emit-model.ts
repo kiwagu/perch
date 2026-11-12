@@ -226,15 +226,18 @@ export function emitModel(bundle: ComponentBundle, schema: SchemaModel): Generat
 }
 
 /**
- * For every replicated table, the region whose documents hold its records and the
- * field kinds the replica's write path and projector need.
+ * For every replicated table, the region whose documents hold its records and the kind of
+ * each of its fields: the replica's write path and projector read the kinds, and a write of
+ * the server's own names only the fields listed. A field annotated `-- @readonly` carries
+ * `readonly: true`: a device sets it only when it creates the record, and the gateway refuses a
+ * batch that changes it.
  */
 export function emitReplicaSchema(schema: SchemaModel): string {
   const tables = Object.entries(schema.tables)
     .filter(([, table]) => table.region !== undefined)
     .sort(([left], [right]) => (left < right ? -1 : 1))
     .map(([name, table]) => {
-      const fields: Record<string, unknown> = {}
+      const fields: Record<string, object> = {}
 
       for (const [field, type] of Object.entries(table.fields)) {
         const inner = type.kind === 'option' ? type.inner : type
@@ -246,6 +249,12 @@ export function emitReplicaSchema(schema: SchemaModel): string {
           fields[field] = { kind: 'record', table: inner.tables[0] }
         } else if (inner.kind === 'scalar' && inner.name === 'datetime') {
           fields[field] = { kind: 'datetime' }
+        } else {
+          fields[field] = { kind: 'plain' }
+        }
+
+        if (table.readonlyFields?.includes(field)) {
+          fields[field] = { ...fields[field], readonly: true }
         }
       }
 

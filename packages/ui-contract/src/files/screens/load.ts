@@ -1,22 +1,29 @@
 /**
  * Reads the screens and the platform. Each `.yaml` file under `contract/domain/screens`, at any
- * depth and sorted by path, is one screen, named by the path of its first binding
- * (`screenFile`); `contract/domain/platform.yaml` holds the contract version and the platform
- * section. Each file is YAML, then its Zod schema. A missing or empty folder, a file that
- * is not `.yaml`, a file named otherwise than its screen's first binding says and a
- * missing platform file are problems of the file or folder concerned. Once every file is
- * read, what a file leaves to the contract is derived (`derive/`): an error anchor's codes and
- * fields from the failures of the actions its part binds, as the model and the platform give
- * them, and whether a field holds input, from its kind and its bindings; and, with a
- * confirmation on the frame, the question each control of a destructive action asks before it
- * runs (`derive/questions.ts`), the confirmation carrying every code asked with. A file may author its flow in the shorter forms (a transition as its target, an effect
- * by its name, a region by its pattern or its button, the region of a button left out): each
- * flow is expanded with the codes the anchors of all screens carry, the failures of the
- * actions, the screen's buttons and the frame's toast anchor, which says the success of each
- * model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
+ * depth and sorted by path, is one screen, named by the path of its first binding (`screenFile`);
+ * `contract/domain/platform.yaml` holds the contract version and the platform section. Each file
+ * is YAML, then its Zod schema. A missing or empty folder, a file that is not `.yaml`, a file
+ * named otherwise than its screen's first binding says and a missing platform file are problems
+ * of the file or folder concerned. Once every file is read, what a file leaves to the contract is
+ * derived (`derive/`): a composite a secret input opts into, derived as its list and items
+ * (`derive/composites.ts`); the params of a form's button, from what the fields of its part pass
+ * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
+ * reads them as if written; the parts a paged list derives (`derive/paging.ts`); an error anchor's codes and fields from the failures of the actions
+ * its part binds and its flow shows on it, as the model and the platform give them, and the codes
+ * the flow shows on it (`derive/errors.ts`); whether a field holds input, from its kind and its
+ * bindings; and, with a confirmation on the frame, the question each control of a destructive
+ * action asks before it runs (`derive/questions.ts`), the confirmation carrying every code asked
+ * with. Once a screen parses, its flow canonical, each control whose flow moves to another screen
+ * asks the platform's leave question before its event while a change of screen asks, losing the
+ * fields of its screen the move does not carry (`derive/leaves.ts`); a file never writes that
+ * question. A file may author its flow in the shorter forms (a transition as its
+ * target, an effect by its name, a region by its pattern or its button, the region of a button
+ * left out): each flow is expanded with the codes the anchors of all screens carry, the failures
+ * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
+ * each model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
- * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each
- * screen with its file, with the toasts and the questions the loader derived.
+ * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each screen
+ * with its file, with the toasts and the questions the loader derived.
  */
 
 import { join } from 'node:path'
@@ -28,9 +35,14 @@ import {
   type FailureOf,
   failuresOf,
   toastCodesOf,
+  withDerivedComposites,
   withDerivedErrors,
   withDerivedInputs,
+  withDerivedLeaves,
+  withDerivedPaging,
+  withDerivedParams,
   withDerivedQuestions,
+  withoutWrittenLeaves,
   withQuestionCodes,
   withToastCodes,
 } from '../derive'
@@ -50,7 +62,7 @@ import {
   toastOfRead,
 } from './lookups'
 import { expandedOf, parsedOf } from './screen-file'
-import type { PlatformFile, Screen, ScreensFile } from './types'
+import type { Platform, PlatformComposite, PlatformFile, Screen, ScreensFile } from './types'
 
 const SUFFIX = '.yaml'
 
@@ -58,6 +70,8 @@ function readScreenFiles(
   root: string,
   failureOf: FailureOf,
   platformToasts: Readonly<Record<string, string>>,
+  composites: Readonly<Record<string, PlatformComposite>>,
+  unsavedInput: Platform['unsavedInput'],
 ): {
   screens: Screen[]
   files: string[]
@@ -87,7 +101,21 @@ function readScreenFiles(
       problems.push(...yaml.problems)
 
       if (yaml.problems.length === 0) {
-        read.push({ file, value: withDerivedInputs(withDerivedErrors(yaml.value, failureOf)) })
+        const unwritten = withoutWrittenLeaves(file, yaml.value)
+        const composed = withDerivedComposites(file, unwritten.value, composites)
+        const bound = withDerivedParams(file, composed.value)
+        const paged = withDerivedPaging(file, bound.value)
+
+        problems.push(
+          ...unwritten.problems,
+          ...composed.problems,
+          ...bound.problems,
+          ...paged.problems,
+        )
+        read.push({
+          file,
+          value: withDerivedInputs(withDerivedErrors(paged.value, failureOf)),
+        })
       }
     } else {
       problems.push({
@@ -162,7 +190,7 @@ function readScreenFiles(
       problems.push(...loaded.problems)
 
       if (loaded.screen !== undefined) {
-        screens.push(loaded.screen)
+        screens.push(withDerivedLeaves(loaded.screen, unsavedInput))
         files.push(file)
       }
     }
@@ -209,7 +237,13 @@ export function loadScreensWith(
     problems: screenProblems,
     toasts,
     questions,
-  } = readScreenFiles(root, failureOf, platform?.toasts ?? {})
+  } = readScreenFiles(
+    root,
+    failureOf,
+    platform?.toasts ?? {},
+    platform?.composites ?? {},
+    platform?.unsavedInput,
+  )
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {

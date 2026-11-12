@@ -83,11 +83,39 @@ describe('flowSchema', () => {
       }),
     ).toBe(false)
   })
-  it('refuses an effect other than show, clear and navigate', () => {
+  it('refuses an effect other than show, clear, read and navigate', () => {
     expect(
       changed((config) => {
         Object.assign(stateOf(config, 'sign-in'), { entry: [{ type: 'assign', params: {} }] })
       }),
+    ).toBe(false)
+  })
+  it('takes a read of an anchor, in full and by its name, and nothing more of it', () => {
+    expect(
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          entry: [{ type: 'read', params: { anchor: 'device.list' } }],
+        })
+      }),
+    ).toBe(true)
+    expect(
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          entry: [{ type: 'read', params: { anchor: 'device.list', codes: ['failed'] } }],
+        })
+      }),
+    ).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: { a: { entry: [{ read: 'device.list' }] } },
+      }).success,
+    ).toBe(true)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: { a: { entry: [{ read: { 'device.list': ['failed'] } }] } },
+      }).success,
     ).toBe(false)
   })
   it('refuses a clear naming codes', () => {
@@ -112,6 +140,59 @@ describe('flowSchema', () => {
         Object.assign(stateOf(config, 'sign-in'), {
           exit: [{ type: 'navigate', params: { to: 'me' } }],
         })
+      }),
+    ).toBe(false)
+  })
+  it('takes a search value from the field an anchor names, and nothing else of an object', () => {
+    const navigating = (search: unknown): boolean =>
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'navigate', params: { to: '/sign-in', search } }],
+        })
+      })
+
+    expect(navigating({ email: { anchor: 'user.sign-in.email-input' }, mode: 'sign-in' })).toBe(
+      true,
+    )
+    expect(navigating({ email: { anchor: 'user.sign-in.email-input', value: 'x' } })).toBe(false)
+    expect(navigating({ email: { search: 'email' } })).toBe(false)
+    expect(navigating({ email: { anchor: 'email' } })).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse({
+        initial: 'a',
+        states: {
+          a: {
+            on: {
+              'user.sign-in.forgot-link': {
+                actions: [
+                  {
+                    navigate: {
+                      to: '/forgot-password',
+                      search: { email: { anchor: 'user.sign-in.email-input' } },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      }).success,
+    ).toBe(true)
+  })
+  it('takes a search value from the entry an item names, and nothing else of it', () => {
+    const navigating = (search: unknown): boolean =>
+      changed((config) => {
+        Object.assign(stateOf(config, 'sign-in'), {
+          exit: [{ type: 'navigate', params: { to: '/sign-in', search } }],
+        })
+      })
+
+    expect(navigating({ id: { item: 'console.users.list.account-item' }, page: 1 })).toBe(true)
+    expect(navigating({ id: { item: 1 } })).toBe(false)
+    expect(navigating({ id: { item: 'id' } })).toBe(false)
+    expect(
+      navigating({
+        id: { item: 'console.users.list.account-item', anchor: 'user.sign-in.email-input' },
       }),
     ).toBe(false)
   })
@@ -372,5 +453,209 @@ describe('the toast opt-out', () => {
         },
       }).success,
     ).toBe(false)
+  })
+})
+
+describe('the read opt-out', () => {
+  const flowWith = (invoke: Record<string, unknown>) => ({
+    initial: 'saving',
+    states: { saving: { invoke: { src: 'thing.createThing', onDone: 'saving', ...invoke } } },
+  })
+
+  it('lets an authored invoke and a region by its button say nothing reads', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ read: false })).success).toBe(true)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', read: false }).success,
+    ).toBe(true)
+  })
+
+  it('takes only false, and the canonical flow keeps it on the invoke for the checks', () => {
+    expect(authoredFlowSchema.safeParse(flowWith({ read: true })).success).toBe(false)
+    expect(
+      controlRegionSchema.safeParse({ by: 'sample.form.add-button', read: 'device.list' }).success,
+    ).toBe(false)
+
+    const canonical = (read: unknown) =>
+      flowSchema.safeParse({
+        initial: 'saving',
+        states: {
+          saving: { invoke: { src: 'thing.createThing', onDone: { target: 'saving' }, read } },
+        },
+      }).success
+
+    expect(canonical(false)).toBe(true)
+    expect(canonical(true)).toBe(false)
+  })
+})
+
+describe('the read opt-out of a branch', () => {
+  const branchedWith = (branch: Record<string, unknown>, outcome = 'onDone') => ({
+    initial: 'saving',
+    meta: { guards: { ownChange: 'the account changed its own role' } },
+    states: {
+      saving: {
+        invoke: {
+          src: 'thing.createThing',
+          onDone: { target: 'saving' },
+          [outcome]: [{ target: 'saving', guard: 'ownChange', ...branch }, { target: 'saving' }],
+        },
+      },
+    },
+  })
+
+  it('lets a branch of an onDone or an onError say nothing reads after it, authored or canonical', () => {
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: false })).success).toBe(true)
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: false }, 'onError')).success).toBe(
+      true,
+    )
+    expect(flowSchema.safeParse(branchedWith({ read: false })).success).toBe(true)
+    expect(flowSchema.safeParse(branchedWith({ read: false }, 'onError')).success).toBe(true)
+    expect(
+      controlRegionSchema.safeParse({
+        by: 'sample.form.add-button',
+        onDone: [{ guard: 'ownChange', read: false }, { target: 'idle' }],
+      }).success,
+    ).toBe(true)
+  })
+
+  it('takes only false on a branch, and keeps it beside the branch effects', () => {
+    expect(authoredFlowSchema.safeParse(branchedWith({ read: true })).success).toBe(false)
+    expect(
+      authoredFlowSchema.safeParse(branchedWith({ read: 'sample.devices-list' })).success,
+    ).toBe(false)
+    expect(flowSchema.safeParse(branchedWith({ read: true })).success).toBe(false)
+
+    const parsed = flowSchema.parse(
+      branchedWith({
+        read: false,
+        actions: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
+      }),
+    )
+    const saving = parsed.states['saving']
+
+    expect(
+      saving !== undefined && saving.type !== 'parallel' ? saving.invoke?.onDone : undefined,
+    ).toEqual([
+      {
+        target: 'saving',
+        guard: 'ownChange',
+        read: false,
+        actions: [{ type: 'clear', params: { anchor: 'sample.form.error' } }],
+      },
+      { target: 'saving' },
+    ])
+  })
+})
+
+describe('the anchors a state renders, `meta.renders`', () => {
+  const RENDERS = ['organisation.create.form', 'organisation.create.toggle-button']
+
+  it('takes them on a plain state of the root, beside its address', () => {
+    expect(
+      changed((config) => {
+        stateOf(config, 'sign-up')['meta'] = { renders: ['user.sign-in.name-input'] }
+        Object.assign(stateOf(config, 'sign-in')['meta'] ?? {}, {
+          renders: ['user.sign-in.forgot-link'],
+        })
+      }),
+    ).toBe(true)
+  })
+  it('takes them on a parallel state and on a state of a region, never an address there', () => {
+    expect(
+      viewingChanged((viewing) => {
+        viewing['meta'] = { address: { path: '/org' }, renders: RENDERS }
+        stateOf(regionOf(viewing, 'form'), 'open')['meta'] = { renders: RENDERS }
+      }),
+    ).toBe(true)
+    expect(
+      viewingChanged((viewing) => {
+        stateOf(regionOf(viewing, 'form'), 'open')['meta'] = {
+          address: { path: '/org' },
+          renders: RENDERS,
+        }
+      }),
+    ).toBe(false)
+  })
+  it('refuses them on a region itself', () => {
+    expect(
+      viewingChanged((viewing) => {
+        regionOf(viewing, 'form')['meta'] = { renders: RENDERS }
+      }),
+    ).toBe(false)
+  })
+  it('wants one anchor or more', () => {
+    for (const renders of [[], ['Organisation create'], [{ anchor: 'organisation.create.form' }]]) {
+      expect(
+        changed((config) => {
+          stateOf(config, 'sign-up')['meta'] = { renders }
+        }),
+        JSON.stringify(renders),
+      ).toBe(false)
+    }
+  })
+
+  /** An authored flow whose one parallel state holds `region`, its only region written. */
+  const authoredWith = (region: Record<string, unknown>): boolean =>
+    authoredFlowSchema.safeParse({
+      initial: 'viewing',
+      meta: { guards: { titleStored: 'what was typed is the stored title' } },
+      states: { viewing: { type: 'parallel', states: { area: region } } },
+    }).success
+  const BY = { by: 'sample.form.add-button' }
+  const DRAFT = {
+    pattern: 'draft',
+    input: 'sample.title-input',
+    stored: 'model.thing.title',
+    guard: 'titleStored',
+  }
+
+  it('takes them on a state of a region an authored flow writes in full', () => {
+    expect(
+      authoredWith({
+        initial: 'closed',
+        states: { closed: { meta: { renders: ['sample.form.add-button'] } } },
+      }),
+    ).toBe(true)
+  })
+  it('refuses them on the short forms: a region by its button or by its pattern', () => {
+    expect(authoredWith(BY)).toBe(true)
+    expect(authoredWith(DRAFT)).toBe(true)
+    expect(authoredWith({ ...BY, meta: { renders: ['sample.form.add-button'] } })).toBe(false)
+    expect(authoredWith({ ...DRAFT, meta: { renders: ['sample.title-input'] } })).toBe(false)
+  })
+})
+
+describe('the guards of `meta.guards`, by a sentence or by failure code', () => {
+  /** The sign-in config with the guards `guards`. */
+  const withGuards = (guards: Record<string, unknown>) =>
+    changed((config) => {
+      config['meta'] = { guards }
+    })
+
+  it('takes a sentence or the failure codes a guard holds for, in either flow', () => {
+    const guards = {
+      nameGiven: 'the name input holds a name',
+      refused: { codes: ['email-not-verified'] },
+      unusable: { codes: ['link-invalid', 'link-expired'] },
+    }
+
+    expect(withGuards(guards)).toBe(true)
+    expect(authoredFlowSchema.safeParse({ ...SIGN_IN, meta: { guards } }).success).toBe(true)
+  })
+  it('wants one code or more, each a code, under `codes` alone', () => {
+    for (const guard of [
+      { codes: [] },
+      { codes: ['Email not verified'] },
+      { codes: 'email-not-verified' },
+      { code: 'email-not-verified' },
+      { codes: ['email-not-verified'], description: 'the email is not verified' },
+      ['email-not-verified'],
+      true,
+    ]) {
+      expect(
+        withGuards({ nameGiven: 'the name input holds a name', refused: guard }),
+        JSON.stringify(guard),
+      ).toBe(false)
+    }
   })
 })

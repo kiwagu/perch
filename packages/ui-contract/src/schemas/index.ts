@@ -1,4 +1,10 @@
 export { activitySchema } from './activity.schema'
+export {
+  DESCRIPTION_BUDGET,
+  DESCRIPTION_PURPOSES,
+  type DescriptionKind,
+  descriptionLength,
+} from './description-purposes'
 export { entityDefinitionSchema, entityFieldSchema } from './entity.schema'
 export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'
@@ -11,15 +17,22 @@ export {
   authoredScreenFileSchema,
   bindingRefSchema,
   bindingSchema,
+  codeGuardSchema,
   controlRegionSchema,
+  derivedFromSchema,
   draftPatternSchema,
   effectSchema,
   flowSchema,
+  type PlatformComposite,
   type PlatformMail,
+  type PlatformNotice,
   paramValueSchema,
+  platformCompositeSchema,
   platformFileSchema,
   platformMailSchema,
+  platformNoticeSchema,
   platformSchema,
+  RECIPIENT,
   screenFileSchema,
   screenSchema,
   sourceSchema,

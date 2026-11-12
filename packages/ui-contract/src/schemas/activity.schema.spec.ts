@@ -147,6 +147,13 @@ describe('activitySchema', () => {
       }),
     ).toBe(false)
   })
+  it('takes a guard as a sentence only: a guard by failure code is for the onError of a flow', () => {
+    expect(
+      changed((activity) => {
+        Object.assign(activity.meta.guards, { refused: { codes: ['email-not-verified'] } })
+      }),
+    ).toBe(false)
+  })
   it('refuses what XState knows and the subset does not: a context, nested states', () => {
     expect(
       changed((activity) => {

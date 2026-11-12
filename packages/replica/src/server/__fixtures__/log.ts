@@ -9,6 +9,7 @@ import type { AcceptPlan, RegionLog } from '../region-log'
 
 import boundIdentityStatement from './bound-identity.surql'
 import countRowsStatement from './count-rows.surql'
+import storedEmailStatement from './stored-email.surql'
 import storedProfileStatement from './stored-profile.surql'
 import storedSnapshotStatement from './stored-snapshot.surql'
 
@@ -173,6 +174,13 @@ export async function storedProfile(
   return rows[0]
 }
 
+/** The email of profile `key` as its table holds it; undefined when it is gone. */
+export async function storedEmail(local: LocalDb, key: string): Promise<string | undefined> {
+  const [emails] = await local.db.query<[string[]]>(storedEmailStatement, { key })
+
+  return emails[0]
+}
+
 export async function countRows(local: LocalDb, table: string): Promise<number> {
   const [counts] = await local.db.query<[number[]]>(countRowsStatement, { table })
 
@@ -184,4 +192,11 @@ export function nameIn(doc: LoroDoc): unknown {
   const records = doc.getMap('records').toJSON() as Record<string, Record<string, unknown>>
 
   return records['profile/prf_1']?.['name']
+}
+
+/** The profile the fixtures edit, as the document holds it; undefined when it holds none. */
+export function profileIn(doc: LoroDoc): Readonly<Record<string, unknown>> | undefined {
+  const records = doc.getMap('records').toJSON() as Record<string, Record<string, unknown>>
+
+  return records['profile/prf_1']
 }

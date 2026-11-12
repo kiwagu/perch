@@ -2,10 +2,11 @@
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { err, errAsync, okAsync, ResultAsync } from 'neverthrow'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import { z } from '@workspace/zod'
 
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
@@ -32,18 +33,26 @@ const ann: AuthUser = {
 
 /**
  * A session nobody is signed in to until a test says so, as another tab's sign-in or this
- * page's own would; this page's sign-in answers once the test lets it.
+ * page's own would; this page's sign-in answers once the test lets it, and is this tab's own
+ * until then.
  */
 function switchableSession() {
   let user: AuthUser | undefined
+  let here = false
   let answer: (result: AuthUser) => void = () => {}
   const listeners = new Set<(next: AuthUser | undefined) => void>()
-  const signIn = (): ReturnType<SessionPort['signIn']> =>
-    ResultAsync.fromSafePromise(
+  const signIn = (): ReturnType<SessionPort['signIn']> => {
+    here = true
+
+    return ResultAsync.fromSafePromise(
       new Promise<AuthUser>((resolve) => {
-        answer = resolve
+        answer = (result) => {
+          here = false
+          resolve(result)
+        }
       }),
     )
+  }
   const session: SessionPort = {
     ...fakeSession().session,
     current: () => user,
@@ -52,6 +61,7 @@ function switchableSession() {
 
       return () => listeners.delete(listener)
     },
+    signingInHere: () => here,
     signIn,
   }
 
@@ -79,7 +89,7 @@ function UnsavedProbe() {
   return null
 }
 
-function renderSignIn(session: SessionPort) {
+function renderSignIn(session: SessionPort, at = '/sign-in') {
   const TestModule = defineModule({
     id: 'test',
     providers: [
@@ -88,10 +98,21 @@ function renderSignIn(session: SessionPort) {
         useFactory: () => new SignInService(session),
       },
     ],
-    declarations: { SignIn: SignInContainer, Me: () => <p>profile</p> },
+    declarations: {
+      SignIn: SignInContainer,
+      Me: () => <p>profile</p>,
+      Forgot: () => <p>forgot</p>,
+    },
     routes: [
-      { path: '/sign-in', page: 'SignIn', guard: 'guest' },
-      { path: '/me', page: 'Me', guard: 'authenticated' },
+      {
+        path: '/sign-in',
+        page: 'SignIn',
+        guard: 'guest',
+        roles: ['guest'],
+        search: z.object({ email: z.string().max(254).optional() }),
+      },
+      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
+      { path: '/forgot-password', page: 'Forgot', roles: ['guest', 'identity'] },
     ],
   })
   const router = createAppRouter({
@@ -102,7 +123,7 @@ function renderSignIn(session: SessionPort) {
         <Outlet />
       </NoticeProvider>
     ),
-    history: createMemoryHistory({ initialEntries: ['/sign-in'] }),
+    history: createMemoryHistory({ initialEntries: [at] }),
   })
 
   render(
@@ -136,6 +157,56 @@ const metRules = () =>
     )
 
 describe('SignInContainer', () => {
+  it('starts with the email the address carries, and says once the word left for it', async () => {
+    const clearNotice = vi.fn()
+    const session: SessionPort = {
+      ...fakeSession().session,
+      notice: () => 'password-reset-elsewhere',
+      clearNotice,
+    }
+
+    renderSignIn(session, '/sign-in?email=ann%40example.test')
+
+    expect(
+      ((await screen.findByTestId('user.sign-in.email-input')) as HTMLInputElement).value,
+    ).toBe('ann@example.test')
+    expect(screen.getByTestId('user.sign-in.notice-message').getAttribute('data-code')).toBe(
+      'password-reset-elsewhere',
+    )
+    expect(clearNotice).toHaveBeenCalled()
+  })
+
+  it('starts with an empty email without one in the address', async () => {
+    renderSignIn(fakeSession().session)
+
+    expect(
+      ((await screen.findByTestId('user.sign-in.email-input')) as HTMLInputElement).value,
+    ).toBe('')
+  })
+
+  it('moves to ask for a reset mail with the email typed, never the password', async () => {
+    const router = renderSignIn(fakeSession().session)
+
+    await screen.findByTestId('user.sign-in.form')
+    typeInto('user.sign-in.email-input', 'ann@example.test')
+    typeInto('user.sign-in.password-input', 'Secret-ann1')
+    fireEvent.click(screen.getByTestId('user.sign-in.forgot-link'))
+
+    await screen.findByText('forgot')
+    expect(router.state.location.pathname).toBe('/forgot-password')
+    expect(router.state.location.search).toEqual({ email: 'ann@example.test' })
+    expect(router.state.location.href).not.toContain('Secret')
+  })
+
+  it('moves to ask for a reset mail with no email when none is typed', async () => {
+    const router = renderSignIn(fakeSession().session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.forgot-link'))
+
+    await screen.findByText('forgot')
+    expect(router.state.location.search).toEqual({})
+  })
+
   it('moves to the profile once another tab signs someone in: one account per browser', async () => {
     const { session, signedIn } = switchableSession()
     const router = renderSignIn(session)
@@ -257,6 +328,49 @@ describe('SignInContainer', () => {
     expect(messageText()).not.toContain(carol)
   })
 
+  it('asks before signing in past the limit of devices, then signs in all the same once confirmed', async () => {
+    let user: AuthUser | undefined
+    const confirmations: Array<boolean | undefined> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input) => {
+        confirmations.push(input.signOutOldest)
+
+        if (input.signOutOldest !== true) {
+          return errAsync({
+            code: 'data:DEVICE_LIMIT',
+            message: 'the account is on as many devices as it may be',
+          })
+        }
+
+        user = ann
+
+        return okAsync(ann)
+      },
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'Pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const dialog = await screen.findByTestId('user.sign-in.device-limit-dialog')
+
+    expect(dialog.getAttribute('data-code')).toBe('device-limit')
+    expect(router.state.location.pathname).toBe('/sign-in')
+
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(router.state.location.pathname).toBe('/me')
+    expect(confirmations).toEqual([undefined, true])
+  })
+
   it('offers the resend when a sign-in is refused because the email is not verified yet', async () => {
     const session: SessionPort = {
       ...fakeSession().session,
@@ -277,6 +391,29 @@ describe('SignInContainer', () => {
 
     expect(error.getAttribute('data-code')).toBe('email-not-verified')
     expect(screen.getByTestId('user.sign-in.resend-button')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/sign-in')
+  })
+
+  it('tells a banned account it cannot sign in, offering no resend, keeping the email typed', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'Pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('account-banned')
+    expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+    expect(screen.getByTestId('user.sign-in.email-input').getAttribute('value')).toBe(ann.email)
     expect(router.state.location.pathname).toBe('/sign-in')
   })
 

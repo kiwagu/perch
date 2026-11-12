@@ -1,0 +1,502 @@
+import { ResultAsync } from 'neverthrow'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import type { Membership } from '@workspace/replica/protocol'
+
+import {
+  browserDatabases,
+  openTestWorld,
+  type TestWorld,
+  type TestWorldOptions,
+} from '../__fixtures__/session'
+import {
+  signedInElsewhere,
+  signedIn as signedInOn,
+  signedOutElsewhere,
+} from '../__fixtures__/signed-in'
+import type { IdentitySpace } from '../identity-space'
+import {
+  CURRENT_KEY,
+  isMembershipsKey,
+  type KeptDevice,
+  type KeptSession,
+  type MemoryStorage,
+  membershipsKeyOf,
+  memoryStorage,
+  savedMemberships,
+  saveMemberships,
+  saveSigningOut,
+} from '../storage'
+
+const ann: KeptDevice = {
+  identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
+  token: 'token-ann',
+  memberships: [],
+}
+
+const bob: KeptDevice = {
+  identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
+  token: 'token-bob',
+  memberships: [],
+}
+
+const acme: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
+  role: 'admin',
+}
+
+const globex: Membership = {
+  tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
+  role: 'member',
+}
+
+const worlds: TestWorld[] = []
+
+afterEach(async () => {
+  const closing = worlds.splice(0)
+
+  await Promise.all(closing.map((world) => world.close()))
+
+  for (const world of closing) {
+    expect(world.failures).toEqual([])
+  }
+})
+
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+/** Whether `promise` settles within two seconds of real time, for a step that must never hang. */
+function settledWithin(promise: Promise<unknown>): Promise<'settled' | 'hung'> {
+  return Promise.race([
+    promise.then((): 'settled' => 'settled'),
+    new Promise<'hung'>((resolve) => setTimeout(() => resolve('hung'), 2_000)),
+  ])
+}
+
+/** A promise and the function that resolves it. */
+function deferred() {
+  let resolve: () => void = () => {}
+  const promise = new Promise<void>((yes) => {
+    resolve = yes
+  })
+
+  return { promise, resolve }
+}
+
+async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
+  const opened = await openTestWorld(options)
+
+  worlds.push(opened)
+
+  return opened
+}
+
+/** A browser that keeps `device` signed in from an earlier sign-in, and that sign-in (`saved`). */
+function kept(device: KeptDevice): {
+  readonly storage: MemoryStorage
+  readonly saved: KeptSession
+} {
+  const storage = memoryStorage()
+  const saved = signedInOn(storage, device)
+
+  return { storage, saved }
+}
+
+/** A tab of a browser that keeps `device`, offline, its space open and leading. */
+async function signedIn(device: KeptDevice = ann, options: TestWorldOptions = {}) {
+  const { storage, saved } = kept(device)
+  const tab = await world({ storage, online: false, ...options })
+
+  expect((await tab.session.restore()).isOk()).toBe(true)
+  await vi.waitFor(() => expect(tab.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
+
+  const space = tab.session.space() ?? expect.unreachable('the space is open')
+
+  return { ...tab, storage, saved, space }
+}
+
+/** A tab of a browser that keeps Ann, offline, whose database opens once the test lets it. */
+async function annOpeningHeld() {
+  const held = deferred()
+  const shared = browserDatabases()
+  const { storage, saved } = kept(ann)
+  const tab = await world({
+    storage,
+    online: false,
+    databases: {
+      open: (identity) =>
+        ResultAsync.fromSafePromise(held.promise).andThen(() => shared.open(identity)),
+    },
+  })
+
+  return { ...tab, storage, saved, open: held.resolve }
+}
+
+/** Counts the writes of the saved memberships this tab makes from now on. */
+function membershipWrites(storage: MemoryStorage): () => number {
+  const set = vi.spyOn(storage, 'set')
+
+  return () => set.mock.calls.filter(([key]) => isMembershipsKey(key)).length
+}
+
+/** The lists `space` is told to follow from now on. */
+function followed(space: IdentitySpace): () => ReadonlyArray<readonly Membership[]> {
+  const set = vi.spyOn(space, 'setMemberships')
+
+  return () => set.mock.calls.map(([next]) => next)
+}
+
+describe('the adopter of a membership the gateway answers', () => {
+  it('adopts nothing into a space another account replaced', async () => {
+    const { session, storage, tenantsOpened } = await signedIn()
+    const adopt = session.membershipAdopter()
+
+    const bobs = signedInElsewhere(storage, bob)
+
+    await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
+
+    const replacement = session.space() ?? expect.unreachable("Bob's space is open")
+    const lists = followed(replacement)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, bobs)).toEqual([])
+    expect(session.memberships()).toEqual([])
+    expect(tenantsOpened()).toEqual([])
+  })
+
+  it("the same account signed in again on another tab: this space gives way to the later sign-in's, and the adopter of the earlier one adopts nothing", async () => {
+    const { session, storage, space } = await signedIn()
+    const adopt = session.membershipAdopter()
+
+    const again = signedInElsewhere(storage, { ...ann, token: 'token-ann-again' })
+
+    // This tab follows the later sign-in: its space ends whatever ends this tab's from now on.
+    await vi.waitFor(() => {
+      expect(session.space()).toBeDefined()
+      expect(session.space()).not.toBe(space)
+    })
+    expect(session.current()?.id).toBe(ann.identity.id)
+
+    await adopt(acme)
+
+    // The gateway tells the membership over the later sign-in's channel; nothing is written here.
+    expect(savedMemberships(storage, again)).toEqual([])
+    expect(session.memberships()).toEqual([])
+  })
+
+  it('an adopter taken while the space opens adopts into the space that opening produced, not a later one of the same account', async () => {
+    const { session, storage, open } = await annOpeningHeld()
+    const restoring = session.restore()
+    const adopt = session.membershipAdopter()
+
+    open()
+    expect((await restoring).isOk()).toBe(true)
+
+    const produced = session.space() ?? expect.unreachable("Ann's space is open")
+
+    // Another tab signed Ann out and in again before the answer: her space here is a new one.
+    signedOutElsewhere(storage)
+    await vi.waitFor(() => expect(session.space()).toBeUndefined())
+
+    const again = signedInElsewhere(storage, ann)
+
+    await vi.waitFor(() => expect(session.space()?.identity.id).toBe(ann.identity.id))
+
+    const later = session.space() ?? expect.unreachable("Ann's new space is open")
+
+    expect(later).not.toBe(produced)
+
+    const lists = followed(later)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, again)).toEqual([])
+    expect(session.memberships()).toEqual([])
+  })
+
+  it("an opening queued behind an earlier transition binds to its own restore's space", async () => {
+    const { storage, saved } = kept(ann)
+    const { session, opened } = await world({ storage, online: false })
+
+    // Another tab's sign-in reached this tab first: its follow opens Ann's space before the restore does.
+    storage.changeElsewhere(CURRENT_KEY, storage.get(CURRENT_KEY))
+
+    const restoring = session.restore()
+    const adopt = session.membershipAdopter()
+
+    expect(session.current()?.id).toBe(ann.identity.id)
+    expect((await restoring).isOk()).toBe(true)
+    // The follow opened a space, and the restore closed it and opened its own.
+    expect(opened()).toEqual([ann.identity.id, ann.identity.id])
+
+    await adopt(acme)
+
+    expect(savedMemberships(storage, saved)).toEqual([acme])
+    expect(session.memberships()).toEqual([acme])
+  })
+
+  it("an opening queued behind an earlier transition adopts nothing into another account's space its restore opened", async () => {
+    const { session, storage, saved, open, opened, tenantsOpened } = await annOpeningHeld()
+
+    // Another tab's sign-in reached this tab first: its follow opens Ann's space before the restore does.
+    storage.changeElsewhere(CURRENT_KEY, storage.get(CURRENT_KEY))
+    // The follow's turn began: it read Ann and is opening her space, held.
+    await settle()
+
+    const restoring = session.restore()
+    const adopt = session.membershipAdopter()
+
+    expect(session.current()?.id).toBe(ann.identity.id)
+
+    // Another tab signs Bob in while the follow holds the restore's turn; its events are not handled here yet.
+    const bobs = signedInOn(storage, bob)
+
+    open()
+
+    expect((await restoring).isOk()).toBe(true)
+    // The follow opened Ann's space; the restore's own turn found Bob saved and opened his instead.
+    expect(opened()).toEqual([ann.identity.id, bob.identity.id])
+    expect(session.space()?.identity.id).toBe(bob.identity.id)
+
+    const replacement = session.space() ?? expect.unreachable("Bob's space is open")
+    const lists = followed(replacement)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, bobs)).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
+    expect(session.memberships()).toEqual([])
+    expect(tenantsOpened()).toEqual([])
+  })
+
+  it('an opening whose space did not open adopts nothing and resolves', async () => {
+    const { storage, saved } = kept(ann)
+    const { session } = await world({
+      storage,
+      online: false,
+      refusedIdentities: [ann.identity.id],
+    })
+    const restoring = session.restore()
+    const adopt = session.membershipAdopter()
+
+    expect((await restoring)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
+    expect(await settledWithin(adopt(acme))).toBe('settled')
+    expect(savedMemberships(storage, saved)).toEqual([])
+    expect(session.space()).toBeUndefined()
+  })
+
+  it('adopts nothing while this browser signs out, its space still open', async () => {
+    // The gateway is out of reach on a network: the sign-out waits for the channel, its barrier up.
+    const { session, storage, saved, space, driveClock } = await signedIn(ann, { network: true })
+    const adopt = session.membershipAdopter()
+    const signingOut = session.signOut()
+
+    await vi.waitFor(() => expect(storage.get('perch.session.signing-out')).toBeDefined())
+    expect(session.space()).toBe(space)
+
+    const lists = followed(space)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
+
+    expect((await driveClock(signingOut)).isOk()).toBe(true)
+  })
+
+  it('adopts nothing while another tab signs out, its space still open', async () => {
+    const { session, storage, saved, space, clock } = await signedIn()
+    const adopt = session.membershipAdopter()
+
+    // Another tab began a sign-out; this tab's space stays open until that sign-out ends it.
+    saveSigningOut(storage, clock.now())
+
+    const lists = followed(space)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(lists()).toEqual([])
+    expect(savedMemberships(storage, saved)).toEqual([])
+    expect(session.space()).toBe(space)
+  })
+
+  it('adopts nothing after the session closed', async () => {
+    const { session, storage, saved } = await signedIn()
+    const adopt = session.membershipAdopter()
+    const writes = membershipWrites(storage)
+
+    await session.close()
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(savedMemberships(storage, saved)).toEqual([])
+  })
+
+  it('writes nothing when the saved list names the organisation, also with another role saved by another tab whose event is not handled yet', async () => {
+    const { session, storage, saved, space } = await signedIn()
+    const adopt = session.membershipAdopter()
+    const asMember: Membership = { ...acme, role: 'member' }
+
+    // Another tab kept a list naming Acme with another role; its storage event is not handled yet.
+    saveMemberships(storage, saved, [asMember])
+
+    const lists = followed(space)
+    const writes = membershipWrites(storage)
+
+    await adopt(acme)
+
+    expect(writes()).toBe(0)
+    expect(savedMemberships(storage, saved)).toEqual([asMember])
+    expect(lists()).toEqual([[asMember]])
+    expect(session.memberships()).toEqual([asMember])
+
+    // The other tab's event comes now, with what the storage holds: nothing changes.
+    storage.changeElsewhere(
+      membershipsKeyOf(saved.signIn),
+      storage.get(membershipsKeyOf(saved.signIn)),
+    )
+    await settle()
+
+    expect(writes()).toBe(0)
+    expect(session.memberships()).toEqual([asMember])
+  })
+
+  it('appends the membership to a saved list without it', async () => {
+    const { session, storage, saved } = await signedIn()
+    const adopt = session.membershipAdopter()
+
+    saveMemberships(storage, saved, [globex])
+
+    await adopt(acme)
+
+    expect(savedMemberships(storage, saved)).toEqual([globex, acme])
+    expect(
+      session
+        .memberships()
+        .map(({ tenant }) => tenant.key)
+        .sort(),
+    ).toEqual(['acme', 'globex'])
+  })
+
+  it('checks, reads, writes and starts the follow with no await between them', async () => {
+    const { session, storage, space } = await signedIn()
+    const adopt = session.membershipAdopter()
+    const order: string[] = []
+    const set = storage.set.bind(storage)
+    const follow = space.setMemberships.bind(space)
+
+    vi.spyOn(storage, 'set').mockImplementation((key, value) => {
+      if (isMembershipsKey(key)) {
+        order.push('write')
+      }
+
+      set(key, value)
+    })
+    vi.spyOn(space, 'setMemberships').mockImplementation((next) => {
+      order.push('follow')
+
+      return follow(next)
+    })
+
+    const adopting = adopt(acme)
+
+    // Both happened before the adopter returned: before its promise could yield at all.
+    expect(order).toEqual(['write', 'follow'])
+
+    queueMicrotask(() => order.push('yield'))
+    await adopting
+
+    expect(order).toEqual(['write', 'follow', 'yield'])
+  })
+
+  it('a newer list dropping the organisation before the answer leaves it appended, and the next list removes it', async () => {
+    const { session, storage, saved, contexts } = await signedIn({ ...ann, memberships: [acme] })
+    const adopt = session.membershipAdopter()
+    const channel = contexts()[0] ?? expect.unreachable("the channel of Ann's space")
+
+    expect(session.memberships()).toEqual([acme])
+
+    // The gateway's list without Acme (a removal right after the request) comes before the answer.
+    channel.onMemberships([])
+    await vi.waitFor(() => expect(session.memberships()).toEqual([]))
+    expect(savedMemberships(storage, saved)).toEqual([])
+
+    await adopt(acme)
+
+    expect(savedMemberships(storage, saved)).toEqual([acme])
+    expect(session.memberships()).toEqual([acme])
+
+    channel.onMemberships([])
+    await vi.waitFor(() => expect(session.memberships()).toEqual([]))
+    expect(savedMemberships(storage, saved)).toEqual([])
+  })
+
+  it('resolves once this tab followed the list it read or wrote, not later lists, and not hanging on an organisation database that fails to open', async () => {
+    const { session, storage, saved, space, failures, tenantsOpened } = await signedIn(ann, {
+      refusedTenants: ['acme'],
+    })
+    const adopt = session.membershipAdopter()
+    const follow = space.setMemberships.bind(space)
+    const lists: Array<readonly Membership[]> = []
+
+    // The list the adopter wrote is followed; every later list is held for good.
+    vi.spyOn(space, 'setMemberships').mockImplementation((next) => {
+      lists.push(next)
+
+      return lists.length === 1 ? follow(next) : new Promise<void>(() => {})
+    })
+
+    const adopting = adopt(acme)
+
+    // Another tab kept a later list meanwhile.
+    storage.changeElsewhere(
+      membershipsKeyOf(saved.signIn),
+      JSON.stringify({ identity: ann.identity.id, memberships: [acme, globex] }),
+    )
+
+    expect(await settledWithin(adopting)).toBe('settled')
+    expect(lists).toEqual([[acme], [acme, globex]])
+    expect(tenantsOpened()).toEqual([])
+    await vi.waitFor(() => expect(failures.map(({ code }) => code)).toEqual(['data:OPEN_FAILED']))
+    failures.splice(0)
+  })
+
+  it('treats a list adopted here and one heard over the channel alike', async () => {
+    const { session, storage, saved, contexts } = await signedIn()
+    const channel = contexts()[0] ?? expect.unreachable("the channel of Ann's space")
+    const adoptAcme = session.membershipAdopter()
+    const adoptAcmeAgain = session.membershipAdopter()
+    const adoptGlobex = session.membershipAdopter()
+    const writes = membershipWrites(storage)
+
+    // Acme's list was adopted here.
+    await adoptAcme(acme)
+    expect(writes()).toBe(1)
+
+    await adoptAcmeAgain(acme)
+    expect(writes()).toBe(1)
+
+    // Globex's list came over the channel.
+    channel.onMemberships([acme, globex])
+    await vi.waitFor(() => expect(session.memberships()).toEqual([acme, globex]))
+    expect(writes()).toBe(2)
+
+    await adoptGlobex(globex)
+    expect(writes()).toBe(2)
+    expect(savedMemberships(storage, saved)).toEqual([acme, globex])
+  })
+})

@@ -6,7 +6,9 @@
 # e2e stand, apps/web/dist-dev, the dev watcher's, for the dev stand, by WEB_DIST) and, under
 # /backend/, the gateway, WebSocket upgrades included. Host networking lets Caddy reach the
 # gateway on 127.0.0.1; the site binds 127.0.0.1 only. The apps caddy-dev and caddy-e2e pass the
-# stand's ports in FRONT_PORT and GATEWAY_PORT and the manifest switch in PERCH_UI_MANIFEST.
+# stand's ports in FRONT_PORT and GATEWAY_PORT, the manifest switch in PERCH_UI_MANIFEST and, in
+# PERCH_CLIENT_ADDRESS, whom it names to the gateway as the client (peer, or claimed on the e2e
+# stand: the Caddyfile says how).
 #
 # `maildev`: the stand's mailbox. The apps maildev-dev and maildev-e2e pass the stand's ports in
 # MAILDEV_SMTP_PORT and MAILDEV_WEB_PORT.
@@ -18,6 +20,7 @@ services:
       - FRONT_PORT
       - GATEWAY_PORT
       - PERCH_UI_MANIFEST
+      - PERCH_CLIENT_ADDRESS
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro

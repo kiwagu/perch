@@ -19,7 +19,7 @@
         "properties": {
           "description": {
             "type": "string",
-            "description": "What the action does."
+            "description": "What the platform action does. What holds once it succeeds is its `result`, and its parameters, codes, roles and mail say the rest. At most 200 characters."
           },
           "params": {
             "type": "object",
@@ -36,7 +36,7 @@
                 },
                 "description": {
                   "type": "string",
-                  "description": "What the value is and its limits."
+                  "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
                 }
               },
               "required": [
@@ -70,6 +70,42 @@
               "description": "A role of the vocabulary."
             }
           },
+          "paged": {
+            "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+            "type": "object",
+            "properties": {
+              "sizes": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "description": "The sizes a page may have, each once, the smallest first."
+              },
+              "default": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "The size of a page the route does not name, a size."
+              }
+            },
+            "required": [
+              "sizes",
+              "default"
+            ],
+            "additionalProperties": false
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+              "description": "A platform action: `sign-in`, `organisations.create`."
+            },
+            "description": "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none."
+          },
           "mail": {
             "description": "The mail the action sends, when it sends one.",
             "type": "object",
@@ -77,12 +113,12 @@
               "to": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email."
+                "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
               },
               "language": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in."
+                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
               },
               "link": {
                 "type": "object",
@@ -112,13 +148,61 @@
               "link"
             ],
             "additionalProperties": false
+          },
+          "notices": {
+            "description": "The notices the action sends, when it sends any: mails that only tell, with no token, each by its name.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                  "description": "The name of the notice, unique within the action: `password-changed`; a scenario names it `[notice:<action>.<name>]`."
+                },
+                "to": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                  "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                },
+                "language": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-zA-Z0-9]*$",
+                  "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
+                },
+                "link": {
+                  "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
+                  "type": "object",
+                  "properties": {
+                    "screen": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*)?$",
+                      "description": "The screen the link opens, at a route that needs no parameter: the link carries no token and no search."
+                    }
+                  },
+                  "required": [
+                    "screen"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "name",
+                "to",
+                "language"
+              ],
+              "additionalProperties": false,
+              "description": "A notice the action sends: a mail that only tells, with no token."
+            }
           }
         },
         "required": [
           "description",
           "params",
           "result",
-          "codes"
+          "codes",
+          "changes"
         ],
         "additionalProperties": false,
         "description": "One platform action."
@@ -133,7 +217,8 @@
         "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
       },
       "additionalProperties": {
-        "type": "string"
+        "type": "string",
+        "description": "What the event means: when the platform raises it. What follows is said by the flows that handle it. At most 200 characters."
       }
     },
     "leaving": {
@@ -159,6 +244,63 @@
         "description": "A code of the vocabulary (data-code)."
       }
     },
+    "composites": {
+      "description": "The composites by name: a list with its items the platform declares once (`password-rules`), derived into every screen whose secret input writes `composite: <name>`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the composite is for: the list it derives on a screen carries it, and each item has a description of its own. At most 200 characters."
+          },
+          "list": {
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+              },
+              {
+                "pattern": "-list$"
+              }
+            ],
+            "description": "The last segment of the list the composite derives on a screen, `<screen>.<list>`: a `list`, so it ends with `-list` (`password-rule-list`)."
+          },
+          "itemState": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+            "description": "The data-state each item takes once what it says holds: a row state of the vocabulary (`met`)."
+          },
+          "items": {
+            "type": "object",
+            "propertyNames": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+            },
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 1,
+              "description": "What the item of the composite's list says: every screen that opts in derives an item anchor with it as its description, and the composite's `itemState` marks it. At most 200 characters."
+            },
+            "minProperties": 1,
+            "description": "The items by name, each with its description: the screen gets `<screen>.<list>.<name>-item`, an `item` with the item state."
+          }
+        },
+        "required": [
+          "description",
+          "list",
+          "itemState",
+          "items"
+        ],
+        "additionalProperties": false,
+        "description": "A composite the platform declares once where its policy lives: a list with its items, derived into every screen whose field opts in with `composite: <name>`."
+      }
+    },
     "unsavedInput": {
       "type": "object",
       "properties": {
@@ -173,7 +315,7 @@
             "question",
             "never"
           ],
-          "description": "A change of screen the user starts: a link, Back, Forward."
+          "description": "A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward."
         },
         "actions": {
           "type": "string",
@@ -207,7 +349,7 @@
         "elsewhere": {
           "type": "string",
           "const": "cannot",
-          "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+          "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed."
         }
       },
       "required": [

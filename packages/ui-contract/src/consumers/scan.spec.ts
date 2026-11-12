@@ -29,23 +29,75 @@ describe('collectFromTest', () => {
       { kind: 'anchor', value: 'sample.page', line: 1 },
     ])
   })
-  it('reads the anchors, codes, states and values of the selectors in strings and templates', () => {
+  it('reads the anchors, codes, states and values of the selectors in strings and templates, each paired with the anchor of its element', () => {
     const { literals, problems } = collected('known.ts')
 
     expect(literals.filter(({ line }) => line >= 8 && line <= 16)).toEqual([
       { kind: 'anchor', value: 'sample.save-button', line: 8 },
-      { kind: 'code', value: 'saved', line: 8 },
+      { kind: 'code', value: 'saved', line: 8, of: 'sample.save-button' },
       { kind: 'anchor', value: 'sample.list', line: 9 },
-      { kind: 'state', value: 'loading', line: 9 },
+      { kind: 'state', value: 'loading', line: 9, of: 'sample.list' },
       { kind: 'anchor', value: 'sample.mode-select.option', line: 10 },
-      { kind: 'value', value: 'a', line: 10 },
+      { kind: 'value', value: 'a', line: 10, of: 'sample.mode-select.option' },
       { kind: 'anchor', value: 'sample.key-select.option', line: 11 },
-      { kind: 'value', value: 'k12', line: 11 },
+      { kind: 'value', value: 'k12', line: 11, of: 'sample.key-select.option' },
       { kind: 'anchor', value: 'sample.thing-item', line: 13 },
-      { kind: 'state', value: 'current', line: 13 },
+      { kind: 'state', value: 'current', line: 13, of: 'sample.thing-item' },
       { kind: 'anchor', value: 'sample.save-button', line: 15 },
     ])
     expect(problems).toEqual([])
+  })
+  it('pairs a code, a state or a value with the data-testid selector of the same element, before or after it', () => {
+    const text = [
+      `a('[data-code="failed"][data-testid="sample.save-button"]')`,
+      `a('[data-testid="sample.thing-item"]:not([data-state="loading"])')`,
+      `a('[data-testid="sample.thing-item"][data-id="thg-1"][data-state="current"]')`,
+      `a('[data-testid="sample.list"], [data-testid="sample.thing-item"][data-state="current"]')`,
+    ].join('\n')
+
+    expect(collectFromTest(text, 'a.ts').literals.filter(({ kind }) => kind !== 'anchor')).toEqual([
+      { kind: 'code', value: 'failed', line: 1, of: 'sample.save-button' },
+      { kind: 'state', value: 'loading', line: 2, of: 'sample.thing-item' },
+      { kind: 'state', value: 'current', line: 3, of: 'sample.thing-item' },
+      { kind: 'state', value: 'current', line: 4, of: 'sample.thing-item' },
+    ])
+  })
+  it('pairs nothing across elements: a space, a combinator, a list, a :has(, an expression, an anchor built at runtime', () => {
+    const text = [
+      `a('[data-testid="sample.list"] [data-state="current"]')`,
+      `a('[data-testid="sample.list"] >> [data-state="current"]')`,
+      `a('[data-testid="sample.list"]>[data-state="current"]')`,
+      `a('[data-testid="sample.list"],[data-state="current"]')`,
+      `a('[data-testid="sample.list"]:has([data-state="current"])')`,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
+      'a(`[data-testid="sample.list"]${x}[data-state="current"]`)',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
+      'a(`[data-testid="${id}"][data-state="current"]`)',
+    ].join('\n')
+    const { literals, problems } = collectFromTest(text, 'a.ts')
+
+    expect(literals.filter(({ kind }) => kind !== 'anchor')).toEqual(
+      [1, 2, 3, 4, 5, 6, 7].map((line) => ({ kind: 'state', value: 'current', line })),
+    )
+    expect(problems.map(formatProblem)).toEqual([`a.ts:7: ${RUNTIME_TEST_ANCHOR}`])
+  })
+  it('pairs what toHaveAttribute asserts with the last getByTestId of its receiver, and not through a variable or a helper', () => {
+    expect(collected('paired.ts').literals.filter(({ kind }) => kind !== 'anchor')).toEqual([
+      { kind: 'state', value: 'current', line: 11, of: 'sample.list' },
+      { kind: 'code', value: 'failed', line: 12, of: 'sample.save-button' },
+      { kind: 'state', value: 'loading', line: 13, of: 'sample.thing-item' },
+      { kind: 'state', value: 'current', line: 14 },
+      { kind: 'state', value: 'current', line: 15, of: 'sample.save-button' },
+      { kind: 'state', value: 'loading', line: 18, of: 'sample.thing-item' },
+      { kind: 'code', value: 'saved', line: 19 },
+      { kind: 'state', value: 'current', line: 20 },
+      { kind: 'state', value: 'current', line: 21 },
+      { kind: 'code', value: 'lost', line: 22, of: 'sample.list' },
+      { kind: 'value', value: 'a', line: 23, of: 'sample.mode-select.option' },
+      { kind: 'state', value: 'loading', line: 26, of: 'sample.list' },
+      { kind: 'state', value: 'current', line: 31, of: 'sample.list' },
+      { kind: 'code', value: 'saved', line: 34 },
+    ])
   })
   it('passes over a data-id, a code, state or value from an expression, and a selector that is not an equality', () => {
     // biome-ignore lint/suspicious/noTemplateCurlyInString: the source under test contains a template literal
@@ -68,7 +120,7 @@ describe('collectFromTest', () => {
       `an anchor built at runtime; write it as a literal, getByTestId('<anchor>') or [data-testid="<anchor>"]`,
     )
   })
-  it('reads the code, state, value or anchor toHaveAttribute asserts, with .not too, at the line of the value', () => {
+  it('reads the code, state, value or anchor toHaveAttribute asserts, with .not too, at the line of the value, paired with an inline getByTestId', () => {
     const { literals, problems } = collected('attributes.ts')
 
     expect(literals).toEqual([
@@ -79,7 +131,7 @@ describe('collectFromTest', () => {
       { kind: 'state', value: 'loading', line: 11 },
       { kind: 'code', value: 'failed', line: 12 },
       { kind: 'anchor', value: 'sample.mode-select.option', line: 13 },
-      { kind: 'value', value: 'c', line: 15 },
+      { kind: 'value', value: 'c', line: 15, of: 'sample.mode-select.option' },
       { kind: 'anchor', value: 'sample.list', line: 17 },
     ])
     expect(problems).toEqual([])

@@ -1,6 +1,8 @@
 /**
  * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes and Better Auth's sign-up, sign-in, verification and resend under `/auth`, the device
+ * routes, the invitation routes, the console's routes for operators under `/console` and the auth
+ * mount under `/auth` (Better Auth's sign-up, sign-in, verification and resend, and the gateway's
+ * own recovery and changes of a password and an email and deletion of an account), the device
  * routes in front so the two sign-outs under `/auth` are the gateway's own; and the sync
  * connection of each device over a WebSocket at `/sync`.
  */
@@ -12,9 +14,11 @@ import { createLogger } from '@workspace/logger'
 import { authHandler } from './auth/auth-handler'
 import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
+import { consoleRoutes } from './console'
 import { clientAddress } from './limits/client-address'
 import { SyncConnection } from './sync/sync-connection'
-import { organisationRoutes } from './tenants/organisation.routes'
+import { invitationRoutes } from './tenants/invitation-routes'
+import { organisationRoutes } from './tenants/organisation-routes'
 
 export interface ServerOptions {
   /** The port to listen on; 0 lets the system choose a free one. */
@@ -36,8 +40,9 @@ interface SocketData {
 
 /**
  * The largest request body the server reads: a body is a sign-up's name, email and password, a
- * sign-in's email and password, a verification link's token, an email to send it to again, an
- * organisation's key and name, or an email to invite.
+ * sign-in's email and password, a link's token, an email to send a link to again, a password with
+ * a new password or a new email, an organisation's key and name, an email to invite with its role,
+ * an invitation's token or id, or a member's new role.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -79,16 +84,46 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
   const onFailure = (error: DataError) => httpLog.error({ code: error.code }, error.message)
   // The device routes come first: `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` are
   // theirs; the auth mount answers every other path under `/auth/`, handing Better Auth only its
-  // sign-up, sign-in, verification and resend.
+  // sign-up, sign-in, verification and resend, and answering the recovery and the changes of a
+  // password and an email and the deletion of an account itself.
   const routes: readonly Route[] = [
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
       clock: root.clock,
     }),
-    organisationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
+    organisationRoutes(root.sessions, root.organisations, {
+      onFailure,
+      limits: root.limits,
+      clock: root.clock,
+    }),
+    invitationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
+    consoleRoutes({
+      sessions: root.sessions,
+      accounts: root.accountDirectory,
+      bans: root.accountBans,
+      names: root.profileNames,
+      emailChanges: root.emailChanges,
+      passwords: root.passwords,
+      auth: root.auth,
+      mails: root.mails,
+      limits: root.limits,
+      departure: root.departure,
+      teardown: root.teardown,
+      connections: root.connections,
+      turns: root.accountTurns,
+      onFailure,
+    }),
     authHandler({
       auth: root.auth,
       sessions: root.sessions,
+      passwords: root.passwords,
+      resets: root.resets,
+      emailChanges: root.emailChanges,
+      deletions: root.deletions,
+      departure: root.departure,
+      teardown: root.teardown,
+      mails: root.mails,
+      profiles: root.profiles,
       limits: root.limits,
       connections: root.connections,
       clock: root.clock,
@@ -139,6 +174,7 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
           hub: root.hub,
           schema: root.schema,
           organisations: root.organisations,
+          profiles: root.profiles,
           connections: root.connections,
           clock: root.clock,
           log: syncLog,

@@ -2,8 +2,10 @@
  * `ui-manifest/manifest.json`, the published contract built from the contract folder (the
  * vocabulary, the screen files, the platform file, the activities and the model) and the
  * scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an
- * agent, the screens verbatim with an example link on each binding, every declared anchor
- * with its screen, the platform, the activities verbatim, the scenarios parsed and the model.
+ * agent, the platform's composites among them, the screens verbatim with an example link on
+ * each binding, every declared anchor with its screen (a field's composite opt-in and the
+ * anchors a composite derives marked so), the platform, the activities verbatim, the scenarios
+ * parsed and the model.
  */
 
 import { z } from '@workspace/zod'
@@ -25,6 +27,8 @@ import {
   anchorBindingSchema,
   asksSchema,
   bindingSchema,
+  derivedFromSchema,
+  leavesSchema,
   platformSchema,
   screenSchema,
 } from './screens-schema'
@@ -62,6 +66,26 @@ const contractSchema = z
       'The part of a composite the suffix marks.',
       'The suffixes of derived anchors: `<anchor>.<suffix>`.',
     ),
+    derivedParts: z
+      .record(
+        kebabNameSchema,
+        z
+          .strictObject({
+            kind: kebabNameSchema.describe('The kind of the part: the last word of its suffix.'),
+            description: z
+              .string()
+              .describe('What the part is: the meaning of its suffix in the vocabulary.'),
+            values: tableOf(
+              z.string(),
+              'What the part says while it carries the value.',
+              'The data-value values the suffix itself defines, never rows of `choiceValues`.',
+            ).optional(),
+          })
+          .describe('The part a derived suffix marks.'),
+      )
+      .describe(
+        'Each derived suffix with the part it marks: its kind, its meaning and, when the suffix defines them, its data-value values (a `visibility-button`: `show`, `hide`).',
+      ),
     attributes: tableOf(
       z.string(),
       '`<on>: <meaning>`: the elements that carry it, then what it holds.',
@@ -102,6 +126,11 @@ const contractSchema = z
     reserved: z
       .array(baseAnchorSchema)
       .describe('The anchors the shell owns; a feature never declares them.'),
+    composites: tableOf(
+      kebabNameSchema,
+      'What the composite is for.',
+      'The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`.',
+    ),
     pageHelper: z
       .literal('__perch.ui')
       .describe('Where development and e2e builds install the page helper on `window`.'),
@@ -115,6 +144,12 @@ const idSchema = z
     screen: screenNameSchema.describe('The id of the screen that declares the anchor.'),
     binding: anchorBindingSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()
@@ -129,14 +164,30 @@ const idSchema = z
       .array(kebabNameSchema)
       .optional()
       .describe('The derived suffixes the element renders.'),
-    roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
+    roles: z
+      .array(roleSchema)
+      .optional()
+      .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
+    composite: kebabNameSchema
+      .optional()
+      .describe(
+        'The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.',
+      ),
+    derivedFrom: derivedFromSchema.optional(),
     holdsInput: z
       .boolean()
       .optional()
       .describe(
         'The field holds input: the app is to ask before a leave that would lose what is typed into it.',
+      ),
+    secret: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.',
       ),
   })
   .describe('One declared anchor, as a test looks it up.')

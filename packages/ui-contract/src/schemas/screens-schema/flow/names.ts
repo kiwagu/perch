@@ -1,9 +1,13 @@
 /**
  * The names a flow uses: its states and the targets of its transitions, its events (an
- * anchor, a platform event, a data event), its guards, and the literals of a search.
+ * anchor, a platform event, a data event), its guards, and the values of a search: literals in
+ * an address, and in a navigate also the value a field of the screen holds or the data-id of the
+ * entry of an item whose control the user acted on.
  */
 
 import { z } from '@workspace/zod'
+
+import { anchorSchema } from '../../../names.schema'
 
 export const flowStateNameSchema = z
   .string()
@@ -43,3 +47,28 @@ const literalSchema = z
 export const searchSchema = z
   .record(z.string(), literalSchema)
   .describe('Search parameters of the binding, each a literal (`$id` for a minted id).')
+
+export const navigateSearchSchema = z
+  .record(
+    z.string(),
+    z.union([
+      literalSchema,
+      z
+        .strictObject({
+          anchor: anchorSchema.describe('A field of the screen, declared on it.'),
+        })
+        .describe(
+          'The value the field holds when the app moves: `{ anchor: user.sign-in.email-input }`.',
+        ),
+      z
+        .strictObject({
+          item: anchorSchema.describe('An item or a row of the screen, with a `dataId`.'),
+        })
+        .describe(
+          'The data-id of the entry whose control the user acted on: `{ item: device.list.session-item }`.',
+        ),
+    ]),
+  )
+  .describe(
+    'Search parameters of the binding, each a literal (`$id` for a minted id), `{ anchor }`, the value a field of the screen holds, or `{ item }`, the data-id of the entry whose control the user acted on.',
+  )

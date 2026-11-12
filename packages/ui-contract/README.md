@@ -22,30 +22,59 @@ for Bun.
 - `.`: the tooling, for Bun.
   - Loaders of the contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
-    lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`),
+    lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`; a
+    vocabulary without its "Composites" section reads as an empty table),
     `loadScreens(root)` (every `.yaml` file under `contract/domain/screens`, sorted by path, one screen
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
-    failures of the actions, an error's codes and fields, the buttons whose regions the flow
-    leaves out, whether each field holds input), its flow expanded from the shorter forms with the codes the anchors of every
-    screen carry and the failures of the actions, the success of each mutation said on the
+    anchors of the platform's composites its secret inputs opt into with `composite: <name>`,
+    the list `<screen>.<list>` and an item `<screen>.<list>.<item>-item` per item right after
+    the input, each marked `derivedFrom`, refused for an unknown composite, an opt-in on anything
+    but a secret input, a second opt-in of one composite on a screen, an id a written anchor or
+    another composite has, and a `derivedFrom` the file writes (`composites.ts`); a button's
+    params, for each action it binds the union of those the fields of its part pass to it, a
+    param it writes winning key by key, two fields passing one param with different values a
+    problem of the button (`form-params.ts`); the parts of a paged list, `range`,
+    `previous-link`, `next-link` and `size-select`, after the suffixes its `derived` writes, one
+    the file writes a problem (`paging.ts`); the failures of the actions; an error's codes, from
+    the actions bound beside it, the actions its flow invokes whose failure shows on it and the
+    codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
+    `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
+    input), its flow expanded from the shorter forms with the codes the anchors of every
+    screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
+    that a guard by failure code guards shows that guard's codes, one on a later branch the
+    failure's codes but those of the code-guarded branches before it, a problem when they
+    leave none; `files/expand-flow/effects.ts`), the default outcome of each request
+    (`files/expand-flow/requests.ts` over `files/derive/requests.ts`: an invoke whose action
+    fails with codes and that writes no `onError` clears its error on entry, unless its `entry`
+    does, and goes back to the one state that entered it on a control, showing the failure on
+    `<part>.error` of those controls, of its input's fields when none, else `<screen>.error`,
+    and `<screen>.error` when there is no part (no control enters, the input names no field);
+    one written as its target alone gets the show; a state where its area starts, one two
+    states, an outcome, a platform or a data event or a target from outside its area enter,
+    and one with no error are problems that ask for its `onError`), the success of each
+    mutation said on the
     frame's toast anchor (a model action by its name, a platform action by the platform's
     `toasts` map), which carries every code a flow shows on it
     (`files/expand-flow/toasts/`, `files/derive/toasts.ts`), and the question before each
     destructive action, on its control (`asks`) and on the frame's confirmation, which
     carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
     then parsed through
-    `screenFileSchema`;
+    `screenFileSchema`, each control whose flow moves to another screen then asking the leave
+    question, with the fields it loses (`leaves`, `files/derive/leaves.ts`);
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
     and `contract/domain/platform.yaml`, the version and the platform section (its actions,
     events, `leaving` actions, `toasts` (the platform actions whose success toasts, with
-    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first), reserved anchors and status line), through
+    their codes), `unsavedInput` (how each leave that would lose unsaved input asks first),
+    `composites` (each a list with its items, their descriptions and their item state, declared
+    once for the screens that opt in), reserved anchors and status line), through
     `platformFileSchema`; assembled into one `ScreensFile` whose `files` name the file of each
     screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
-    `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
+    `entityDefinitionSchema`, each action of an entity a `ModelAction`: its `params` and the
+    reads it `changes`, which every action writes), `loadActivities(root)` (every `.yaml` file under
     `contract/domain/activities`, sorted by path, one activity each through `activitySchema`, its
     file named by its id; the folder is optional, so none is no problem) and
     `loadScenarios(root)` (every `.md` file under
@@ -55,9 +84,31 @@ for Bun.
     problem of its file); both return beside their files `lines`, by id the line of each
     place of the file by its JSON path (`states.profile.on["user.profile.sign-out-button"]`,
     `steps[2]`), which the `Contract` carries as `activityLines` and `scenarioLines`. The
-    paths: `CONTRACT_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`, `MODEL_FILE`,
-    `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and the five
-    schema files.
+    paths: `CONTRACT_DIR`, `DOMAIN_DIR`, `VOCABULARY_FILE`, `SCREENS_DIR`, `PLATFORM_FILE`,
+    `MODEL_FILE`, `ACTIVITIES_DIR`, `activityFile(id)`, `SCENARIOS_DIR`, `scenarioFile(id)` and
+    the five schema files; `isBusinessFile(path)` says whether a file is one of the business
+    layer's (a domain file, the vocabulary or a scenario): the only files a commit on the
+    contract trunk may stage.
+  - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain
+    files write, as they write them, never one the engine derives or the loader fills in as it
+    expands a shorter form: the screen files (a screen's own, its route parameters', its
+    anchors', its container `states`, its flow's own, sentence guards, states, regions and
+    transitions with the outcomes of invokes and of a region's button), the platform file (its
+    actions and their parameters, its `events`, its composites' own and their items), the
+    activities (their own, their data, sentence guards, visits and transitions) and the model
+    (its own, each entity's, action's and field's, the subschemas of the document, an entity or
+    a field included), each read as YAML, the model's JSON too, so each has its line. Each is a
+    `WrittenDescription`: its `file`, `line`, JSON path
+    `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The place names it
+    alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`,
+    `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`,
+    `user.profile flow editing.save`, `user.delete-account flow deleting onError #2` (the
+    second of its guarded alternatives), `user.profile guard nameChanged`, `user.sign-in
+    binding /sign-in search email`, `platform action sign-up param email`, `platform event
+    started`, `platform composite password-rules`, `model`, `model entity profile`, `model
+    action profile.updateName`, `model field profile.name`, `activity session state profile
+    on user.profile.sign-out-button`. The `Contract` carries them as `descriptions`, read by
+    `loadContract`, so the contract at a git ref has those its files write there.
   - The scenario files: `parseScenario(id, markdown)` reads one (a YAML front matter checked
     by `scenarioHeaderSchema`: `tags`, an optional `activity`, `devices`, `data`; then the
     fixed Markdown sections in any order) into a `Scenario` with `lines`, the line of each
@@ -68,17 +119,43 @@ for Bun.
     flow canonical), `authoredScreenFileSchema` (a screen file as written, its flow in the
     shorter forms too: `authoredFlowSchema`, with the region pattern `draftPatternSchema` and
     the region of a button `controlRegionSchema`, its anchors
-    those of `authoredAnchorDefSchema`; the source of `contract/schemas/screen.schema.json`), `platformFileSchema`
+    those of `authoredAnchorDefSchema`, whose `binding` is a model field, an action, a route or
+    `{ search }`, the search parameter a field starts with, and whose platform `source` takes
+    `params` (each `{ search }` or `{ value }`, never a field) and `paged: true`; the source of
+    `contract/schemas/screen.schema.json`), `platformFileSchema` (an action's `paged`, the page
+    sizes it answers each once, the smallest first, with its `default`, and its `changes`, the
+    platform actions whose answer, for the organisation, the account and the params it ran
+    with, differs once it succeeds, written on every action, `[]` for none, a key every action
+    of the model writes too)
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
-    and `language`, each a parameter of the action or `ACCOUNT`, the signed-in account, a
-    reserved word no parameter of an action that sends a mail takes, and
+    and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
+    on (the signed-in account for an action on its own account, else the one its parameters
+    name, whoever is signed in), a
+    reserved word no parameter of an action that sends a mail or a notice takes, the language
+    also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's,
+    a reserved word no parameter of an action that sends a mail takes, and
     the `link` with the `screen` it opens and the `search` parameter carrying its token; the
-    type `PlatformMail`),
+    type `PlatformMail`) and `platformNoticeSchema` (a notice of the action's `notices`, a mail
+    that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's,
+    never `RECIPIENT`, `to:
+    account` being the account's email as it was before the action changed anything, and an
+    optional plain `link` to a `screen`, never a `search`; the type `PlatformNotice`),
     `flowSchema` (a screen's `flow`: the XState v5 machine config subset `createMachine` takes
     as written, each state of the root plain or parallel with its regions, a region's state
-    leaving for a state of the root by `#<flow id>.<state>`, its `effectSchema`
-    and `transitionSchema`, with the types `Flow`, `FlowState` (a plain state of the root),
-    `FlowParallelState`, `FlowRegion`, `FlowRegionState`, `FlowTransition` and `Effect`),
+    leaving for a state of the root by `#<flow id>.<state>`, a state of any kind saying in
+    `meta.renders` the anchors it renders (an anchor no state lists is rendered in every
+    state, one a state lists only in the states that list it, a region's state rendering its
+    parallel state's too, and a listed anchor the anchors declared under it,
+    `<anchor>.<rest>`, which are rendered where it is or where they are listed themselves;
+    never on a region an authored flow writes by its pattern or its button), each guard of `meta.guards` a sentence or `codeGuardSchema` (`{ codes }`, the
+    failure codes it holds for), its `effectSchema` (`show`, `clear`, `read`, a list of the
+    flow's own screen with a platform source reading it again, and `navigate`, whose search value is a literal, `{ anchor }`, the
+    value a field of the screen holds, or `{ item }`, the data-id of the entry whose control
+    the user acted on), an invoke's `read: false` (nothing reads after its
+    action; XState ignores it), a branch's `read: false` (nothing reads after that outcome of
+    an invoke, `branchReadOptOutSchema`; XState ignores it) and `transitionSchema`, with the types `Flow`,
+    `FlowState` (a plain state of the root), `FlowParallelState`, `FlowRegion`,
+    `FlowRegionState`, `FlowTransition` and `Effect`),
     `activitySchema` (an activity across screens: an XState v5
     machine config in the subset of the flows without effects or `invoke`, whose states are
     visits to screens, each a dot-free name with `meta.screen` and `meta.address`, with the
@@ -90,26 +167,76 @@ for Bun.
     `schemaDrift(root)` turn them into the committed `contract/schemas/screen.schema.json`,
     `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
-    authored).
+    authored). `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each
+    description field in one text: what it is for, what it leaves to others and its budget,
+    `DESCRIPTION_BUDGET` (200 characters, for every one); each text is that field's
+    `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint,
+    the model's own description taking its text in the shape `loadModel` reads the document
+    with, and the budget problem quotes it. `descriptionLength(text)` counts a description as
+    the budget does, in characters.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
-    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`).
+    `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
+    `[notice:<action>.<name>]`), in the order the text writes them.
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
     a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
-    screens is in the vocabulary, every code is used), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names), `bindingsProblems` (model fields,
-    actions and their params, each an anchor, a constant or a search parameter every route of
-    the screen declares, routes, sources), `flowProblems` (a flow names states, events,
-    guards, actions with their `input`, anchors with their codes and bindings that exist,
+    screens is in the vocabulary, every derived suffix ends with a kind of it, every code is
+    used, no choice values for a
+    `visibility-button`, whose values its suffix defines, the platform's composites and the
+    rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
+    never named like a derived one, entry and names, `secret` on a field alone, a
+    `visibility-button` derived by a secret `input` alone, `ranked` on a message of two codes
+    or more alone, each listed once), `bindingsProblems` (model fields,
+    actions and their params, each an anchor (never a `visibility-button`, which holds no
+    input; an item or a row of its own screen with a `dataId`, of a list, a table or a
+    section, taken from a control, a button, a link, a tab or a field, in its part), a
+    constant or a search parameter every route
+    of the screen declares, routes,
+    the search parameter a field starts with, one every route of the screen declares, never on
+    another kind nor a secret field, sources, a platform source's params each a parameter of
+    its action taking a constant or a search parameter every route of the screen declares),
+    `flowProblems` (a flow names states, events
+    (never a `visibility-button`, which is presentation only), guards, actions with their
+    `input` (taken from no `visibility-button` either), anchors with their codes and bindings
+    that exist, a clear's anchor one that carries codes, which then shows none, whatever its
+    kind and screen, else a field of its own screen, which it empties (a secret one included;
+    never a `visibility-button`), a read's anchor a list, section or table of its own screen
+    whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`),
+    an invoke that says `read: false` reading in none of its outcomes, a branch that says
+    `read: false` an outcome of an invoke (never the transition of an event) that reads nothing
+    itself, under no invoke that says it already, every branch of an invoke's `onDone` reading
+    each list, section or table of its own screen with a platform source that the invoke
+    holds, or saying `read: false`: one whose entry its `input` takes (`containersOf`), whose
+    source's `params` take a value its `input` takes, or whose source its action's `changes`
+    names, a failure holding none and an invoke that says `read: false` holding nothing, a
+    region written `by` its button held as its invoke (`flow/held-reads.ts`), a navigate's
+    search keys of the binding it moves to, each value a literal, `{ anchor }`, a field its own screen declares (never a
+    `visibility-button` nor a secret field), or `{ item }`, an entry of its own screen with a
+    `dataId`, of a list, a table or a section, into a key that takes a string, taken on the
+    event of a control (`CONTROL_KINDS`) in the entry's part, never in an entry, an exit or an
+    invoke's outcome,
+    and an invoke's input that takes an entry run in a state only such controls enter
+    (`flow/items.ts`), `page: 1` beside any key a paged list of the screen it moves to
+    reads (`flow/pages.ts`), and each navigate on a transition, one to a transition, a control's
+    on a control of its own screen outside the frame (a derived part within its screen only),
+    to its own path only on a screen of one
+    binding, and leaving its screen, losing the same fields, everywhere its control is handled
+    or nowhere (`flow/leaves.ts`),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
     which the app gives its machine, in a region),
-    handles each event of a parallel state in one area, reaches every state, leaves every
-    plain state that is not final, and puts the one transition without a guard last) over
+    handles each event of a parallel state in one area, lists in `meta.renders` anchors its own
+    screen declares (a derived part's base, never the part), each once and never beside an
+    anchor it is declared under, renders in a plain state of the root or a state of a region
+    every anchor it handles that a state lists (a derived part, or an anchor declared under a
+    listed one, through the anchor it is under), guards by failure code only branches of an invoke's
+    `onError`, each code one its action fails with and listed once, reaches every state,
+    leaves every plain state that is not final, and puts the one transition without a guard
+    last) over
     the tree of its states, `flowNodes(flow)` (every state in the order of the file as a
     `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode` with its path
     of names and its place in the flow), with `deepTargetOf`, `idTargetOf`, `rootOf`,
@@ -117,14 +244,17 @@ for Bun.
     state of the root a target lands in, each region at its starting state: a deep target's,
     else the initial, and the region states the deep targets of the root enter),
     `activitiesProblems` (an activity's states visit screens that exist
-    at bindings of theirs, its events are anchors of that screen or of the frame, and each
+    at bindings of theirs, its events are anchors of that screen or of the frame, never a
+    `visibility-button`, and each
     transition is backed by the flow of the anchor's screen navigating to the target's path,
     or by a link to it; its roles, data, targets, guards, reachability and exits),
     `runsProblems` (every flow and every activity runs in XState as written: the walk of
     `./machines` reaches every state and takes every transition and guarded branch to its
     target with its effects; a machine XState will not build is a problem, never a crash),
     `routesProblems` with `parseRoutePath(path)` (the router's path syntax), `searchProblems`
-    (enum controls, `retain`, each example of a parameter against that parameter, Ajv's
+    (enum controls, save the `size` of a screen with a paged list, whose control is the derived
+    `<list>.size-select.option` and which writes no `x-perch`; `retain`; each example of a
+    parameter against that parameter, Ajv's
     reasons at `bindings[i].params.properties.<name>.examples[j]`, an empty example of a
     path parameter, and a value for each `$param`, else `needs an example` at its property),
     `leavingProblems` (each action of `platform.leaving` exists and is listed once),
@@ -133,15 +263,51 @@ for Bun.
     reserved dialog with a code, a confirm-button and a cancel-button that runs no action of
     its own, and actions that ask need an action under `leaving`), `mailsProblems` (the mail a
     platform action declares goes to a parameter of the action or the account, takes its
-    language from one or the account, and links to a screen whose every route declares its
-    search parameter; an action that sends a mail has no parameter named `account`)
-    and `scenariosProblems` (bracket references, a mail by the platform action that declares
-    it, roles and the
-    activity a scenario names, as problems of each scenario's file). A problem of an activity
+    language from one, the account or, for a mail to a parameter from an action no guest runs,
+    its recipient, and links to a screen whose every route declares its search parameter; an
+    action that sends a mail or a notice has no parameter named `account`, and one that sends
+    a mail none named `recipient`), `noticesProblems` (the notices of a platform action carry
+    names unique within it, go to a parameter of the action or the account, take their
+    language from one or the account, never the recipient, and link, when they do, to a screen with a route, every route of which needs no
+    parameter: no `$param`, no splat, no required search key), `changesProblems` (rule 19, the
+    reads an action changes, which every action writes, the schema refusing one without them:
+    each name of the `changes` of a platform action or of an action of the model is a platform
+    action, never the action itself, that a list, a section or a table
+    of some screen takes as its `source`, written once; a problem per name, at its place in the
+    platform file or the model), `accessProblems` (rule 17, who a
+    route serves: no binding's `guard` sends away an account its `roles` name, an anchor's
+    `roles` are among those its screen's bindings serve, the frame aside, a link to a route
+    whose roles name neither `guest` nor `identity` is shown to no device the route refuses,
+    every restriction above it admitting the device by the roles it holds together, and
+    the binding at `/$` names `guest` and `identity`), `pagingProblems` (rule 18, a paged
+    list: its action pages, its sizes each once, the smallest first, its default one of them,
+    taking the number parameters `page` and `size`; every route of its screen declares `page`,
+    an integer from 1 whose default is 1, and `size`, an integer of the action's sizes whose
+    default is the action's; no source's `params` names `page` or `size`; a screen pages one
+    list; a paged list has at most 3 segments, its size options adding two to its name) and `scenariosProblems` (bracket references, a mail by the platform action that declares
+    it, a notice by its action and its name, resolved by `unknownNotice`, a value `show` or `hide` once an input renders a `visibility-button`, roles and the
+    activity a scenario names, as problems of each scenario's file; in each text, the where,
+    the scenario sentence, a step or an expected result, a `[code:x]`, `[state:x]` or
+    `[value:x]` pairs with the anchor named last before it, a route being no anchor, and must
+    be one that anchor carries, `<anchor> never carries code <x>`; after a mail or a notice,
+    what follows speaks of it and pairs with no anchor until the text names one again; with no
+    anchor to pair with, it need only be one of the contract), and `descriptionsProblems`
+    (every description of `contract.descriptions` keeps `DESCRIPTION_BUDGET` characters; one
+    past it is a problem at its line, `<path>: the description of <place> is <n> characters,
+    past its budget of 200; its purpose: "<the purpose of its field>"`). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
+  - `anchorCarries(contract)`: whether an anchor carries a code, a state or a value
+    (`Carried`): one it declares or one an anchor under it, `<anchor>.<rest>`, declares (the
+    items of a composite's list, the options of a select, the eye of an input). Codes are the
+    loaded `codes`, the derived ones included; states the anchor's `states`; values the rows of
+    its choice values and its options' (a pattern row matching), or `show` and `hide` on a
+    `visibility-button`. The scenarios check pairs its brackets through it, and
+    `pairingResolver(contract)` says why a value does not pair with its anchor
+    (`<anchor> never carries code <x>`), for the scenarios and the consumers check alike.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and
     returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes,
-    `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls,
+    `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each
+    with its base when the call writes it as a literal),
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
@@ -152,7 +318,9 @@ for Bun.
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
     `compareWithContract(collected, screens, vocabulary)` wants each literal declared once,
     the literals equal to the anchors of the screen files, no literal named like another plus
-    a suffix, every suffix in the vocabulary and every code a code of the contract
+    a suffix, every suffix in the vocabulary and listed in the `derived` of an anchor of the
+    contract (of the base itself when it is a literal), so a `visibility-button` no input
+    declares is never rendered, and every code a code of the contract
     (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
     codes the loader derived), and a `holdsInput` written only as
     `{false}` on a field the contract says holds no input, never on another kind, and on every
@@ -183,15 +351,41 @@ for Bun.
     collects the `.ts` files under `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given;
     `compareConsumers(consumed, contract)` wants every anchor known (declared, or derived
     from a declared base with a suffix it lists in `derived`), every code, state and choice
-    value in the vocabulary, as the scenarios check resolves its bracket references.
+    value in the vocabulary (and `show` or `hide` once an input renders a
+    `visibility-button`), as the scenarios check resolves its bracket references. A code, a
+    state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor
+    carries, as `anchorCarries` reads it: in a selector string, the `data-testid` selector of
+    the same element pairs with it, before or after it (`elementAnchors` in `elements.ts`).
+    Attribute selectors written one after another are of one element; a `:not(`, `:is(` or
+    `:where(` of one compound is that element too, a `data-testid` in a `:not(` naming none;
+    a `:has(`, any other parenthesised argument, or a `:not(` holding a combinator or a list
+    speaks of elements of its own, which pair among themselves, and after its `)` the
+    element before it goes on; a space, a combinator, a list, an expression or other text
+    leads to another element. A `toHaveAttribute` value pairs with the last
+    `getByTestId('<anchor>')` of the receiver of `expect(<receiver>)` (`assertedAnchor` in
+    `receiver.ts`), through the steps that narrow what it found (`first`, `last`, `nth`,
+    `filter`, `and`) and no other. A receiver held in a variable or built by a helper pairs
+    with nothing and is held to the contract alone.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section), the screens verbatim with
-    each binding's `example` link (`exampleOf`), the platform section and the activities
+    states taken from the vocabulary and the platform section) and `derivedParts` (each derived
+    suffix with the kind of the part it marks, the meaning of the suffix as its `description`
+    and, for a `visibility-button`, its values) and
+    `composites` (the vocabulary's table of the platform's composites), the screens verbatim with
+    each binding's `example` link (`exampleOf`) and each anchor's description, the written one
+    (a secret input's with `(type password)` appended once) or else the one the engine says
+    (`files/derive/descriptions.ts`: a heading names its screen, a link with one route binding
+    leads to the screen at that path, a secret input holds a secret the user types, an error
+    says why the actions beside it, then those its screen's flow invokes against it, did not go
+    through, each code with its meaning from the vocabulary), the
+    platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes, `holdsInput` of a field among them), `routeParams` and the model document.
+    with its kind, its screen and its attributes, `holdsInput` of a field among them, a ranked
+    message's `ranked`, a secret
+    input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
+    and the model document.
     `productInfo(root)` names the product (the root package's version, the commit checked out
     or null). `writeManifest(root, outDir, manifest)` validates it against
     `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing
@@ -200,20 +394,68 @@ for Bun.
     an anchor shows its facts), `manifest.schema.json` and `model.schema.json`.
     `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its
     problems when it finds any, or loads the contract and does all three.
+    `settledProblems(contract, settled)`: the e2e harness's check of a `SettledState` against
+    the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids`), one line
+    per problem: of the screen's anchors rendered only where listed, with their derived parts,
+    one visible where the state does not render it, and one the state renders that is not on
+    the page or hidden, unless it, or an anchor it is under, has `roles`, `own` or a `dataId`,
+    or it is a part shown on demand (`option`, `item`, `error-message`, and a paged list's
+    `range`, `previous-link` and `next-link`).
   - The hand-over: `contractAt(ref, root)` reads the contract files, the screen files, the
     activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or
     returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before,
     after)` returns the `ContractChanges` (screens, anchors, codes, entities, fields as
-    `entity.field` and activities by id, added and removed, sorted; an anchor removed and one
+    `entity.field`, activities by id and the platform's composites by name, added and
+    removed, sorted; an anchor removed and one
     added are a rename when they are the only ones of their screen and kind; on the anchors
-    both sides hold, the codes as `<anchor> <code>` and an error's fields as `<error> <code>
-    -> <field>`, written or derived, and the fields that hold input as `<anchor> holds input`;
-    the actions of `platform.leaving` added and removed, and the entries of
-    `platform.unsavedInput` as `<leave>: <how it asks>`;
+    both sides hold, the derived parts as `<anchor>.<suffix>` (a `visibility-button` among
+    them), the codes as `<anchor> <code>`, the states as `<anchor> <state>`, the roles each is
+    shown to as `<anchor> <role>` and an error's
+    fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
+    as `<anchor> holds input`, the controls that ask before they leave their screen as
+    `<anchor> leaves losing <field>, <field>`, and the messages that rank their codes as
+    `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
+    who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added
+    whole with every line; each list that reads a platform action as `<anchor> reads
+    platform.<action>`, its params by name (`q=search:q`, `kind="all"`) and `paged` when it
+    pages (`handoff/source-lines.ts`); the actions of `platform.leaving` added and removed, the entries of
+    `platform.unsavedInput` as `<leave>: <how it asks>`, and the notices of the platform
+    actions as `<action>.<name>`;
     per activity both sides hold, the transitions added and removed as `<state> on <anchor> ->
-    <target>`);
+    <target>`; per screen both sides hold with a flow on either side, the lines of its flow
+    added and removed (a flow one side lacks has none, so a flow added or removed whole shows
+    every line; a screen added or removed whole is a change of the screens alone),
+    `flowLines(flow)` (an internal helper of the hand-over, `handoff/flow-lines.ts`, not
+    exported from the root): `initial <state>`, `guard <name> takes <code>, <code>` (one per
+    guard by failure code, its codes as written; a guard's sentence is prose, no line),
+    `<path> address <path> <search as JSON, keys sorted>` (those the state's address has), `<path> renders <anchor>` (one per anchor of its
+    `meta.renders`), `<path> entry|exit <effect>`, `<path> on
+    <event> -> <target> [<guard>] <effects>`, `<path> invoke <action> <input as JSON, keys
+    sorted> [read: false]`, `<path> onDone|onError [#<n>] -> <target> [<guard>] [read: false]
+    <effects>`, `<path> final`, descriptions aside; a guarded
+    alternative and an entry or exit effect carry their position, `#<n>`, among more than
+    one, as order runs the machine; so a screen file written shorter that loads to the same
+    flow shows no change); the platform actions by name, added and removed; per platform
+    action either side holds, the lines of the action added and removed (an action one side
+    lacks has none, so an action added or removed whole shows every line, its mail among them),
+    `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
+    <type>`, `result: <text>`, `code <code>`, `role <role>`, `paged by <sizes>, <default> by
+    default`, `changes <read>`, `mail to <to> language
+    <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
+    <screen>]`, descriptions aside; per action of the model either side holds, by
+    `<entity>.<action>`, the reads its `changes` names, as `changes <read>`, added and removed
+    (an action one side lacks names none); and last `descriptions`, by `descriptionChanges(before,
+    after, renamed)` (`handoff/description-changes.ts`): sorted by place, each description of
+    `contract.descriptions` (`readDescriptions`, the reader the budget reads with) that one side
+    adds, removes or changes, a `DescriptionChange` `{ place, before?, after? }` with its length
+    in characters on each side it has, a renamed anchor's under its new name;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
-    line per list that is not empty, the transitions as `transitions added in <activity>`.
+    line per list that is not empty, the transitions as `transitions added in <activity>`,
+    the lines of a flow as `flow lines added in <screen>`, those of a platform action as
+    `platform action lines added in <action>` and those of an action of the model as `model
+    action lines added in <entity>.<action>`, and last `descriptions changed: <place> <before>
+    -> <after>, ...`, `new` where it has no length before and `gone` where it has none after
+    (`app-shell.theme-select 191 -> 340`).
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
     and action with the anchors whose binding (one or a list) names it, none when it is
     unbound (`ModelCoverage`, `BoundMember`): the first measure, with
@@ -228,14 +470,25 @@ for Bun.
     (whatever they carry), and as problems the markers it cannot apply and the ones that
     ignore no control; `measureCoverage(root)` returns the model's measure, the activities', the
     controls per feature module (`FEATURES_DIR`) and for the kit (`UI_KIT_DIR`,
-    `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), and per
-    screen its anchors and the scenarios that reach it; `renderCoverage(measure, totals)`
+    `UI_KIT_MODULE`) with the unmarked and ignored ones by file (`FileControl`), per
+    screen its anchors and the scenarios that reach it, and the composites the platform
+    declares that no anchor opts into (`unusedComposites`); `renderCoverage(measure, totals)`
     (`totalsOf`) prints the block, its totals line `fields bound x/y, actions bound x/y` (then
     `activities n, transitions walked x/y` when the contract has any, with a table of them
-    after the model) before the controls marked and ignored, `listControls(measure)` the two
+    after the model) before the controls marked and ignored, then a line `Note: composite
+    <name> is declared and used by no screen.` for each unused composite, a note that fails
+    nothing (`compositeNotes(measure)`, internal to the coverage command, which also prints
+    them after `--write`), `listControls(measure)` the two
     lists as `file:line: <element>`, and `replaceCoverageBlock(note, block)` puts the block
-    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`. The counting method is
-    described in `contract/COVERAGE.md`; it is a report, not a rule of the contract.
+    between `COVERAGE_START` and `COVERAGE_END` of `COVERAGE_FILE`; `coverageDrift(note,
+    block)` (`handoff/coverage-drift.ts`) finds nothing when the note already holds the block
+    as `replaceCoverageBlock` writes it, else one problem at the line of its start marker
+    naming `bun run contract:coverage --write`. The counting method is
+    described in `contract/COVERAGE.md`; it is a report, not a rule of the contract. Beside it,
+    `listDescriptions(contract)` (an internal helper of the coverage command,
+    `handoff/descriptions.ts`, behind `coverage --descriptions`, not exported from the root)
+    lists as `<anchor>: <description>` every written description equal to the one the engine
+    says itself, for the developer to drop; an anchor a composite derives is never listed.
   - `parameterSample(parameter, slot)`: the value of a route parameter a link carries in a
     `SampleSlot`, `path` or `search`: its first example, else its default, else its first
     enum value, else one built within its `minLength`, `maxLength`, `minimum`, `maximum` and
@@ -261,20 +514,60 @@ for Bun.
   `segmentsOf(anchor)`, `kindOf(anchor)` (the last dash-separated word of the last segment),
   `screenOf(anchor, screenNames)` (the longest screen name on segment boundaries);
   `testIdFor(base, suffix)`, the only way to build a derived anchor `<base>.<suffix>`,
-  `baseOf(anchor, suffixes)`, `isKnownAnchor(anchor, declared, suffixes)`; `CONTRACT_VERSION`.
+  `baseOf(anchor, suffixes)`, `sizeOptionOf(list)` (a paged list's size options,
+  `<list>.size-select.option`), `isSizeOption(anchor, paged)` (whether an anchor names those of
+  one of the paged lists) and `isKnownAnchor(anchor, declared, suffixes, paged)` (a declared
+  anchor, a declared base with a suffix, or a paged list's size options, as the engine's
+  `knownAnchors` tells them); `CONTRACT_VERSION`.
+  `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
+  `partOf(anchor)`, the part it sits in (the anchor without its last segment);
+  `CONTROL_KINDS`, the kinds a person acts on (a button, a link, a tab and the `FIELD_KINDS`),
+  the only carriers of an entry's `data-id`. The roles a
+  device holds: `GUEST` (`guest`, nobody signed in) and `IDENTITY` (`identity`, an account
+  signed in), the two of which a device holds exactly one, `heldRoles(signedIn, others)` (the
+  set it holds: `guest` alone, else `identity` and each other role) and `admits(roles, held)`
+  (a binding's or an anchor's roles admit a device that holds one of them). The entries of a
+  list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
+  sections it belongs to: those it is declared under, the nearest first, then those beside it
+  in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
+  entry, never the entry itself); `itemIdOf(control, item)`, the `data-id` of the entry of
+  `item` a control is in, which a navigate's `{ item }` search takes (it throws outside such an
+  entry or for one without an id). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
+  search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
+  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
+  `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to
+  `0` when it shows none, and the page before and after where there is one),
+  `searchKeysOf(source)` (the search parameters a source reads, which read it again when one
+  changes: those its params take, then `page` and `size` when it pages) and
+  `pageSearchOf(search, { page, size }, defaultSize)` (the search a part moves to, the other
+  keys kept and a value equal to its default left out).
+  What a state renders, read from a flow or from an app's machine config alike:
+  `renderedAt(config, value)` returns the `RenderedAt` of XState's state value (`listed`, the
+  names any state lists in `meta.renders`; `rendered`, those the states the machine is in
+  list); `isListed(at, anchor)` (rendered only where listed: a state lists it or an anchor it
+  is under) and `isRendered(at, anchor)` (no state lists it, or this state lists it or an
+  anchor it is under). Rendered means visible to the user. `listedBy(state)` is how all of them
+  read one state's list (an array of its own, its strings alone), the comparison of machines
+  included.
+  The eye of a password input, presentation only: `VISIBILITY_BUTTON` (`visibility-button`, a
+  suffix the sources still write as a literal in `testIdFor`), `VISIBILITY_BASE_KIND` (`input`,
+  the one kind that renders it) and `VISIBILITY_VALUES` (`show`, `hide`, its `data-value`
+  with what each says).
   The page helper's contract: `PAGE_HELPER` (`__perch.ui`), `ANCHOR_ATTRIBUTES` (the
   `data-testid`, `data-state`, `data-code`, `data-id` and `data-value` names), the types
   `RenderedAnchor`, `RenderedPage` and `PerchPageHelper`, and `window.__perch` declared on
-  `Window` for any code that imports them.
+  `Window` for any code that imports them. The report of a settled state to an e2e run:
+  `SETTLED_STATE` (`__perchSettledState`, the binding the run exposes, declared on `Window`),
+  `SettledState` (the screen, the state value as `SettledValue` and the `RenderedPage`).
 - `./machines`: a flow in XState, for the check and for an app's own machines.
   `walk(flow)` builds the flow with `setup({ guards, actions, actors }).createMachine` (a stub
   per guard, per effect and per `invoke.src`), reaches every state, a parallel state's regions
   each on its own with the others at their initial, and gives the `visited` states and each
   case with its `expected` and `actual` outcome (handled, state, effects); `casesOfFlow(flow)`
   the cases the flow says. An app holds a machine of its own to its flow with
-  `projected(config)` (initial state, states, final states, regions, events with their
-  targets and guards, invoke sources, the contract's effects; the app's own actions left
-  out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
+  `projected(config)` (initial state, states, final states, what each state renders
+  (`meta.renders`, as a set), regions, events with their targets and guards, invoke sources,
+  the contract's effects, `read` among them; the app's own actions and an invoke's or a branch's `read: false` left out), `beyondTheSubset(config)` (what a machine does that the flow subset has no
   counterpart for), `aheadOf(app, flow)` (the flow as far as a machine that lags it has
   come: equal to the machine's projection exactly when it does nothing the flow does not
   say) and `laggingOf(app, flow, base)` (the flow at the branch's base when the machine is
@@ -283,18 +576,19 @@ for Bun.
 
 ## Commands
 
-- `bun run test`: the anchor grammar, the loaders, the scenario parser and formatter, the
-  schema writer, the references, the contract check, the sources check, the consumers check,
-  the coverage-ignore markers, the manifest, the hand-over diff, the coverage note, the
-  routes view, and the walk and comparison of machines.
+- `bun run test`: the anchor grammar, the loaders, the reader of the written descriptions, the
+  scenario parser and formatter, the schema writer, the references, the contract check, the
+  sources check, the consumers check, the coverage-ignore markers, the manifest, the hand-over
+  diff, the coverage note, the routes view, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
-  other and the schema drift; prints `file:line: message` per problem and exits 1, or a
-  one-line summary; part of `bun run check` and the pre-commit hook).
+  other, every written description against its budget and the schema drift; prints
+  `file:line: message` per problem and exits 1, or a one-line summary; part of `bun run check`
+  and the pre-commit hook).
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or
@@ -317,25 +611,39 @@ for Bun.
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
-  `<ref>`, all of it as added when that commit has no `contract/`, the codes and the error
-  fields the anchors both hold gain or lose (derived ones included), the fields that start or
-  stop holding input, the leaving actions, how each leave asks, the activities and the
-  transitions changed in each included; prints the hand-over block, or the changes as JSON
-  with `--json`). A change to the contract carries the output of
+  `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived
+  parts, the codes, the states, the roles and the error fields the anchors both hold gain or
+  lose (derived ones included), who each route serves, the source each list reads with its
+  params and its paging, the fields that start or
+  stop holding input, the messages that rank their codes with their order, the leaving
+  actions, how each leave asks, the activities and the
+  transitions changed in each, the lines changed in each screen's flow, the platform
+  actions with the lines changed in each, its mail among them, the reads each action of the
+  model comes to change or stops changing, and each written description
+  added, removed or changed with its length before and after, included; prints
+  the hand-over block, or the changes as JSON with `--json`). A change to the contract
+  carries the output of
   `bun run contract:diff main` in its description.
-- From the root: `bun run contract:coverage` (`ui-contract coverage [--write] [--json]
-  [--unmarked]`: the coverage block, first the fields and actions of each entity of the
+- From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
+  [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios
   walk, then the controls marked and ignored per feature
   module and for the kit with the unmarked and ignored ones listed, and the anchors and
   scenarios per screen; `--write` puts it between the markers of `contract/COVERAGE.md`,
   `--json` prints the measure, `--unmarked` prints the unmarked controls and the ignored ones
-  with their reasons as `file:line: <element>`; a coverage-ignore marker without a reason,
+  with their reasons as `file:line: <element>`, `--descriptions` the written descriptions the
+  engine would say itself as `<anchor>: <description>`; a coverage-ignore marker without a reason,
   without an element after it or ignoring no control is printed as a problem and exits 1,
-  writing nothing). Not part of `bun run check`: the note is a report.
+  writing nothing). The measure fails nothing: the note is a report. `--check` compares the
+  block of `contract/COVERAGE.md` with what `--write` would write: when they differ it prints a
+  problem at the line of the block's start marker, naming `bun run contract:coverage --write`,
+  and exits 1; when they are equal it says so in one line. `bun run contract:coverage:check`
+  runs it, in `bun run check` and in the pre-commit hook on `main` only, as `e2e:coverage` runs
+  there.
 - From the root: `bun run contract:flow <screen>` (`ui-contract flow <screen> [--json]`: the
   flow of a screen, named by its id or its file, as every reader takes it, expanded from
-  the shorter forms its file may write it in, the regions it leaves out derived). Not part
+  the shorter forms its file may write it in, the regions it leaves out derived and the
+  default outcome of each request filled in). Not part
   of `bun run check`: it is a view.
 - From the root: `bun run contract:routes` (`ui-contract routes [--json]`: the routes of the
   screen files in four sections, the table (path, screen, guard, roles, history, params,

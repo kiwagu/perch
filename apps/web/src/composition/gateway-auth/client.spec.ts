@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import type { DataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
 
 import { fakeFetch, noContent, respond, respondText } from '../__fixtures__/gateway-fetch'
+import {
+  EMAIL_MARKER,
+  keepsNothingOfTheRejection,
+  namesNone,
+  PASSWORD_MARKER,
+  rejectsCarrying,
+  TOKEN_MARKER,
+} from '../__fixtures__/rejection'
 
 import { type Fetcher, type GatewayAuth, gatewayAuth } from './client'
 
@@ -67,48 +74,6 @@ function typed(fetcher: Fetcher) {
   return { fetcher: recording, types }
 }
 
-/** Whether `error` says nothing of `secrets`, in its message or anywhere else it carries. */
-function namesNone(error: DataError, ...secrets: string[]): void {
-  for (const secret of secrets) {
-    expect(error.message).not.toContain(secret)
-    expect(JSON.stringify(error)).not.toContain(secret)
-  }
-}
-
-/** Markers a failed request may carry back in its rejection: the link's token, an email, a password. */
-const TOKEN_MARKER = 'token-marker-7f3a'
-const EMAIL_MARKER = 'marker-7f3a@example.test'
-const PASSWORD_MARKER = 'password-marker-7f3a'
-
-/**
- * A fetch that rejects with what its request carried, in the rejection's message and in its own
- * properties, as a failing fetch may.
- */
-const rejectsCarrying = () => () =>
-  Promise.reject(
-    Object.assign(
-      new TypeError(`Failed to fetch ${TOKEN_MARKER} for ${EMAIL_MARKER} with ${PASSWORD_MARKER}`),
-      {
-        request: {
-          body: JSON.stringify({
-            token: TOKEN_MARKER,
-            email: EMAIL_MARKER,
-            password: PASSWORD_MARKER,
-          }),
-        },
-        sent: [TOKEN_MARKER, EMAIL_MARKER, PASSWORD_MARKER],
-      },
-    ),
-  )
-
-/** Whether `error` keeps no cause and names no marker, in its message or anywhere else. */
-function keepsNothingOfTheRejection(error: DataError): void {
-  expect(error.code).toBe('data:OFFLINE')
-  expect(error.cause).toBeUndefined()
-  expect(Object.keys(error)).not.toContain('cause')
-  namesNone(error, TOKEN_MARKER, EMAIL_MARKER, PASSWORD_MARKER)
-}
-
 /** Credentials made of the markers, which a rejection must not carry back. */
 const markedCredentials = { email: EMAIL_MARKER, password: PASSWORD_MARKER }
 
@@ -148,6 +113,27 @@ describe('gatewayAuth', () => {
     ])
   })
 
+  it('keeps what an account that has not started starts from, when the sign-in carries it', async () => {
+    const { fetcher } = fakeFetch(
+      respond(200, { ...signedIn, start: { name: 'Ann', locale: 'es' } }),
+    )
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrap()).toEqual({
+      identity: { id: ann, email: credentials.email },
+      token: 'token-1',
+      start: { name: 'Ann', locale: 'es' },
+    })
+
+    // A start the app cannot take is no signed-in account.
+    for (const start of [{ name: '', locale: 'es' }, { name: 'Ann', locale: 'fr' }, 'Ann']) {
+      const odd = fakeFetch(respond(200, { ...signedIn, start }))
+
+      expect((await signIn(gatewayAuth(BASE, odd.fetcher)))._unsafeUnwrapErr().code).toBe(
+        'data:AUTH_FAILED',
+      )
+    }
+  })
+
   it('keeps the raw token of the body, never the signed one of the set-auth-token header', async () => {
     const { fetcher } = fakeFetch(withSignedHeader(signedIn))
 
@@ -180,6 +166,26 @@ describe('gatewayAuth', () => {
     expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
       'data:EMAIL_NOT_VERIFIED',
     )
+  })
+
+  it('reads 409 to a sign-in as the account at its limit of devices, nothing signed in', async () => {
+    const { fetcher } = fakeFetch(respond(409, { code: 'device-limit' }))
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
+      'data:DEVICE_LIMIT',
+    )
+  })
+
+  it('confirms a sign-in past the limit of devices in its body, only when asked to', async () => {
+    const { fetcher, sent } = fakeFetch(respond(200, signedIn), respond(200, signedIn))
+    const auth = gatewayAuth(BASE, fetcher)
+
+    expect((await auth.signIn({ ...credentials, signOutOldest: true }, device)).isOk()).toBe(true)
+    expect((await auth.signIn({ ...credentials, signOutOldest: false }, device)).isOk()).toBe(true)
+    expect(sent.map(({ body }) => body)).toEqual([
+      { ...credentials, signOutOldest: true },
+      credentials,
+    ])
   })
 
   it('reads 400 and 422 to a sign-up as a refused sign-up, naming neither email nor password', async () => {

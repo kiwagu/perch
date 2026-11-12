@@ -7,7 +7,8 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 
 1. **The model.** The entities the screen shows and changes are in
    `contract/domain/model.schema.json` with their fields and actions; an action of the platform is
-   in the `actions` of `contract/domain/platform.yaml`.
+   in the `actions` of `contract/domain/platform.yaml`. Every action, a new one included, says
+   under `changes` the reads it changes (`[]` for none): its schema refuses one without it.
 2. **The name.** The screen name is a row of "Screen names in use" in
    `contract/vocabulary.md`, added in the same change.
 3. **The screen file** `contract/domain/screens/<pathname>.yaml`, named by its first binding's path
@@ -18,7 +19,13 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    directly (a tab, a filter, a selection) is a path or search parameter, so the route is its
    address. A path parameter carries `examples`, fake values it accepts
    (`examples: [ org_01hzx9k2 ]`), so the binding's example link is concrete (one whose
-   schema no value can be built for must); check it with `bun run contract:routes`.
+   schema no value can be built for must); check it with `bun run contract:routes`. `roles`
+   are the roles the route serves: an account that holds none gets the not-found screen at
+   the same address, after the `guard` and before the search is read. A route that must not
+   show itself to a guest leaves `guard` out and names no `guest`; a link to a route whose
+   roles name neither `guest` nor `identity` is seen by no device the route refuses: its own
+   `roles`, or those of a container it is declared under (the frame's nav link to such a route
+   says `roles` itself, or sits in a nav that does), name only roles the route serves.
 5. **The root.** A container that scopes the screen: a page `status`, a `form` or a
    `section`.
 6. **The controls.** Every control a test or an agent drives (button, link, input,
@@ -26,7 +33,15 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 7. **The lists.** The container (`list` or `table`); every entry (`item` or `row`) with
    `dataId`, and its row states when an entry differs or changes in place; the controls of
    an entry; the cells a test reads. A choice that is not an entity has `dataValue`, and each
-   fixed value is a row of "Choice values".
+   fixed value is a row of "Choice values". A list read from a platform action says its
+   `source`: its `params` from the route's search or constants, and `paged: true` with the
+   action's `paged: { sizes, default }` and the route's `page` and `size` when it pages (the
+   parts it derives are never written; pattern 17). Each action, of the platform or of the
+   model, that changes what that source answers names it under its `changes`. Then every
+   invoke of the screen (a region `by` its button included) whose action changes it, or whose
+   `input` takes one of its entries or a value its `params` take, reads it on each branch of
+   its `onDone` (`read: <list>`) or says `read: false`; `contract:check` refuses a branch that
+   does neither.
 8. **The dialogs.** Each one a `ConfirmDialog` mounted with its own `testId` and `code`,
    its buttons in `derived`.
 9. **The messages.** Every `error`, `message` and notice a test asserts, with its `codes`,
@@ -35,14 +50,16 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     screen's `states` say what each state shows.
 11. **The rest of the screen.** `entry` (the anchors a test starts from, alternatives by
     state included), the `flow` (an XState machine config: its states, per event on an
-    anchor the transition with its `target`, `guard` and effects `show`, `clear` and `navigate`, an
+    anchor the transition with its `target`, `guard` and effects `show`, `clear`, `read` and `navigate`, an
     `invoke` state per action with its `onDone` and `onError`, the screen's independent
-    areas as the regions of a parallel state, each event in one area;
+    areas as the regions of a parallel state, each event in one area, an anchor only some
+    states render in `meta.renders` of each of them, the anchors under it coming with it;
     `contract:check` runs it in XState) and the `wireframe` (the default state as an
     aria snapshot).
 12. **The scenario.** At least one file under `tests/e2e/scenarios/<entity>/base/` that opens
-    the screen, written from the contract alone. Then the review stop of
-    `.cursor/rules/ui-contract.mdc`: the contract diff to the developer, and wait for the OK.
+    the screen, written from the contract alone, on the contract trunk. Then the review of
+    `.cursor/rules/ui-contract.mdc`: the contract diff to the developer, the OK on the card,
+    and the take onto the feature's branch.
 13. **The code**, after the OK; `bun run e2e:scaffold <id>` writes the scenario's test. The
     module route equals the binding (`routes-contract.spec.ts`) and the router round-trips it
     (`routes-router.spec.ts`); the view renders exactly the anchors of the file. An element
@@ -50,21 +67,26 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
     `aria-label` from a translation key.
 14. **The checks.** `contract:check`, `contract:check:sources`, `contract:check:consumers`,
     `e2e:coverage`, then `contract:coverage --unmarked` (nothing unmarked) and
-    `contract:coverage --write`.
+    `contract:coverage --write`, which `contract:coverage:check` then finds current.
 15. **The hand-off.** The output of `bun run contract:diff main` (`templates.md`).
 
 ## A new field or action of an entity
 
 1. **The model.** A field goes into the entity's `properties` with its `x-perch` (`readonly`,
-   `record`, `crdt`); an action into `x-perch.actions` with its parameters, and the roles
-   that may run it into `can`.
+   `record`, `crdt`); an action into `x-perch.actions` with its parameters and, under
+   `changes`, which every action writes, the platform actions a list takes as its `source`
+   whose answer differs once it succeeds (`[]` for none), and the roles that may run it into
+   `can`.
 2. **Unbound first.** `bun run contract:coverage` lists the new field or action as
    `unbound`: the contract knows it, no screen shows it yet.
 3. **The screen file.** An anchor binds it: `binding: { model: <entity>.<field> }`, or
    `{ action: <entity>.<action>, params: { ... } }` with each parameter naming the anchor
    whose value it takes. The codes of its failures go into the anchor's `codes` and the
    vocabulary's "Codes"; its event goes into the `flow` as a transition into a state that
-   invokes the action, whose `onError` shows those codes on the anchor that carries them.
+   invokes the action, whose `onError` shows those codes on the anchor that carries them, and
+   whose `onDone` reads each list of the screen it holds (one whose source its `changes`
+   names, or one of whose entries or source's params its `input` takes), or says `read:
+   false`.
 4. **The scenario.** A step that uses it and an expected result with a code, a state or a
    value, in brackets.
 5. **The code and the tests.** The view renders the anchor; the database side follows its own
@@ -98,8 +120,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    transition it takes, after the route of the state it leaves; with several devices, each
    step opens with `On device X,`.
 5. **The checks.** `contract:check` holds the activity to the screens and runs it in
-   XState, and `bun run contract:coverage --write`
-   shows how many of its transitions the scenarios walk.
+   XState, and `bun run contract:coverage` shows how many of its transitions the
+   scenarios walk; the area branch writes it into the note (`--write`) with the
+   implementation.
 6. **The hand-off** as for a new screen.
 
 ## Rewriting a component
@@ -136,9 +159,9 @@ incoming change.
 6. **The commits.** This audit follows the merge commit as any contract change, a kind per
    commit: the meta change when the merge brought one (the vocabulary's grammar, the tooling), on
    `feat/contract-first-pass` and landed first (the branches of the rule), the
-   business change (the screen files, the model, the scenarios), which stops for the
-   developer's review, then the implementation's (the attributes, the markers and the
-   tests), after the OK.
+   business change (the screen files, the model, the scenarios), on the contract trunk and
+   taken from it after the developer's OK, then the implementation's (the attributes, the
+   markers and the tests).
 
 ## Changing the coverage method
 
@@ -150,4 +173,5 @@ means, so the same change:
 1. runs `bun run contract:coverage --unmarked` before and after;
 2. gives every element that entered or left the count an anchor or a marker with its reason;
 3. updates "How it is counted" and the specs beside the code;
-4. rewrites the block with `bun run contract:coverage --write`.
+4. rewrites the block with `bun run contract:coverage --write`; `bun run check` fails a block
+   left behind (`contract:coverage:check`).

@@ -43,23 +43,6 @@ export function withJsonBody(
   })
 }
 
-/**
- * Better Auth's answer without its `Set-Cookie` headers, its status, body and other headers kept.
- * The web signs in by bearer token alone, so a session cookie would serve nothing and outlive a
- * sign-out in the browser.
- */
-export function withoutCookies(response: Response): Response {
-  const headers = new Headers(response.headers)
-
-  headers.delete('set-cookie')
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers,
-  })
-}
-
 /** The headers of a request without the credentials it carried: Better Auth must see no session. */
 export function withoutCredentials(headers: Headers): Headers {
   const kept = new Headers(headers)
@@ -80,12 +63,31 @@ export function withoutCredentials(headers: Headers): Headers {
 const refusalCode = z.object({ code: z.string().regex(/^[A-Z][A-Z0-9_]*$/) })
 
 /**
- * Better Auth's refusal as the client gets it: its status and its code, nothing of its message,
- * its cookies or any other part of its body, which can carry what was sent or what failed.
+ * The code a client reads for Better Auth's refusal coded `code`: the contract's name where it has
+ * one of its own, its refusal of a banned account's session (`BANNED_USER`, the admin plugin's) being
+ * `account-banned`; Better Auth's code otherwise.
+ */
+const clientCode = (code: string): string => (code === 'BANNED_USER' ? 'account-banned' : code)
+
+/**
+ * Better Auth's refusal as the client gets it: its status and its code (`clientCode`), nothing of
+ * its message, its cookies or any other part of its body, which can carry what was sent or what
+ * failed.
  */
 export async function refusalOf(answer: Response): Promise<Response> {
   const body = refusalCode.safeParse(await answer.json().catch(() => undefined))
-  const code = answer.status >= 500 ? 'internal' : body.success ? body.data.code : 'bad-request'
+  const code =
+    answer.status >= 500 ? 'internal' : body.success ? clientCode(body.data.code) : 'bad-request'
 
   return Response.json({ code }, { status: answer.status })
 }
+
+/** 400 `bad-request`: a body or a header the route cannot read. */
+export const badRequest = (): Response => Response.json({ code: 'bad-request' }, { status: 400 })
+
+/** 500 `internal`: the gateway failed, nothing of why. */
+export const internal = (): Response => Response.json({ code: 'internal' }, { status: 500 })
+
+/** A refusal by `code` with `status`, nothing else in its body. */
+export const refused = (status: number, code: string): Response =>
+  Response.json({ code }, { status })
