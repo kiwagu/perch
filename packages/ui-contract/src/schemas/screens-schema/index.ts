@@ -6,6 +6,7 @@ export {
   bindingRefSchema,
   derivedFromSchema,
   modelFieldPathSchema,
+  platformActionNameSchema,
   sourceSchema,
 } from './anchor'
 export { bindingSchema, routePathSchema } from './binding'

@@ -683,7 +683,11 @@ actions:
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
     result: the page of accounts, the newest first, and how many the search finds
     codes: [ failed ]
+    changes: []
 ```
+
+A read changes no other read (`changes: []`); an action whose success changes the page this
+one answers names `accounts.list` under its own `changes`.
 
 Every route of the screen declares `page` and `size` as the list reads them, and the list
 takes its search from the route, never from a field:

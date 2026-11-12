@@ -2,6 +2,7 @@ export { accessProblems } from './access'
 export { activitiesProblems } from './activities'
 export { bindingsProblems } from './bindings'
 export { anchorCarries, type Carried } from './carries'
+export { changesProblems } from './changes'
 export { confirmationsProblems } from './confirmations'
 export {
   bindingRefsOf,
