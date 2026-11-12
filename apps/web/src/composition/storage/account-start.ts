@@ -15,7 +15,6 @@ const accountStart = z.object({
   identity: idSchemas.identity.schema,
   name: z.string().min(1),
   locale: z.enum(SUPPORTED_LOCALES),
-  afterPull: z.boolean(),
 })
 
 /** What a kept value says, when it is JSON at all. */

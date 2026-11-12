@@ -251,21 +251,23 @@ describe('createAppRoot', () => {
     ])
   })
 
-  it("finishes, as the saved identity's space opens, the start of its account this browser kept, in the theme this device shows", async () => {
+  it("finishes the start of the saved identity's account this browser kept once its tab pulled what the account has, in the theme this device shows", async () => {
     const storage = memoryStorage()
 
     saveDevice(storage, ann)
     // A first verification here created nothing yet when the page went.
-    keptAccountStart(storage).keep({
-      identity: ann.identity.id,
-      name: 'Ann',
-      locale: 'es',
-      afterPull: false,
-    })
+    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'es' })
 
-    const { result } = await boot(storage, [], [], { theme: () => 'dark' })
+    const { result, transports } = await boot(storage, [], [], { theme: () => 'dark' })
 
     services = result._unsafeUnwrap()
+
+    // Nothing is created before the pull.
+    expect(keptAccountStart(storage).kept()).toBeDefined()
+
+    for (const transport of transports) {
+      transport.goOnline()
+    }
 
     const profiles = new ProfileService(services.runner, services.commands, {
       shape: profileShape,
@@ -296,7 +298,6 @@ describe('createAppRoot', () => {
       identity: identityIdFactory.create(),
       name: 'Bob',
       locale: 'en',
-      afterPull: false,
     })
     await booted.close()
 
@@ -316,7 +317,6 @@ describe('createAppRoot', () => {
       identity: identityIdFactory.create(),
       name: 'Bob',
       locale: 'en',
-      afterPull: false,
     })
 
     expect((await services.session.signOut())._unsafeUnwrap()).toBe('signed-out')
