@@ -19,7 +19,10 @@ import {
   type NotesService,
 } from '../../features/organisation/application/notes.service'
 import { OrganisationModule } from '../../features/organisation/organisation.module'
-import { ACCOUNT_START_SERVICE } from '../../features/user/application/account-start.service'
+import {
+  ACCOUNT_START_SERVICE,
+  type AccountStartService,
+} from '../../features/user/application/account-start.service'
 import {
   PROFILE_SERVICE,
   type ProfileService,
@@ -37,7 +40,7 @@ import { type Fetcher, gatewayAuth } from '../gateway-auth'
 import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppServices, createAppRoot } from '../root'
-import { memoryStorage } from '../storage'
+import { type KeyValueStorage, memoryStorage, savedSession } from '../storage'
 import { syncTransport } from '../sync-transport'
 
 import { ensureAccount, readAccount } from './accounts'
@@ -49,6 +52,7 @@ import type {
   SeedDevice,
   SeedError,
   SeedOrganisationDevice,
+  SeedStarts,
 } from './types'
 
 /** How long the client waits, each time, for the gateway to answer and acknowledge. */
@@ -66,7 +70,12 @@ function gatewaySyncUrl(gatewayUrl: string): string {
   return `${gatewayUrl.replace(/^http/, 'ws')}/sync`
 }
 
-function seedClient(services: AppServices, failures: DataError[], inbox: Inbox): SeedClient {
+function seedClient(
+  services: AppServices,
+  failures: DataError[],
+  inbox: Inbox,
+  storage: KeyValueStorage,
+): SeedClient {
   const scope = services.container.child()
 
   for (const provider of UserModule.providers) {
@@ -140,7 +149,7 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
     invitations: services.container.get(INVITATIONS),
     profiles,
     settings,
-    starts: services.container.get(ACCOUNT_START_SERVICE),
+    starts: seedStarts(services.container.get(ACCOUNT_START_SERVICE), storage),
     notes,
     inbox,
     enter,
@@ -171,6 +180,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
   // The space reports asynchronously (the projector, the sync engine); a seed fails on the first report.
   const failures: DataError[] = []
   const fetcher: Fetcher = options.fetcher ?? fetch
+  const storage = memoryStorage()
 
   const start = createAppRoot({
     openLocal: () =>
@@ -207,7 +217,7 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     locks: soleDevice,
     hints: () => syncHints(undefined),
     clock: systemClock,
-    storage: memoryStorage(),
+    storage,
     visibility: { current: () => 'visible', onChange: () => () => {} },
     // A seed client shows no frame to offer a newer build in.
     servedBuild: { watch: () => () => {} },
@@ -223,5 +233,19 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
 
   return start.opened
     .mapErr(({ error }) => error)
-    .map(() => seedClient(start.services, failures, options.inbox))
+    .map(() => seedClient(start.services, failures, options.inbox, storage))
+}
+
+/** The starts of `service`, keeping a start under the sign-in current in `storage`. */
+function seedStarts(service: AccountStartService, storage: KeyValueStorage): SeedStarts {
+  return {
+    keepAfterPull: (user, from) => {
+      const signIn = savedSession(storage)?.signIn
+
+      return signIn === undefined
+        ? err(dataError('data:AUTH_FAILED', 'nobody is signed in on the seed client'))
+        : service.keepAfterPull(signIn, user, from)
+    },
+    resumeAfterPull: (user) => service.resumeAfterPull(user),
+  }
 }

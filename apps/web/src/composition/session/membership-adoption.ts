@@ -69,6 +69,6 @@ export class MembershipAdoption {
       return Promise.resolve()
     }
 
-    return organisations.adopt(open.space, joined)
+    return organisations.adopt(open, joined)
   }
 }

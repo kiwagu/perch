@@ -2,34 +2,36 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { signedIn, signedOut } from '../__fixtures__/signed-in'
+
 import { memoryStorage } from './key-value'
 import { addPendingRevoke, forgetPendingRevoke, pendingRevokes } from './pending-revokes'
-import { forgetDevice, saveDevice } from './signed-in'
+import { savedSession } from './signed-in'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   token: 'token-ann',
-  memberships: [],
 }
 
 describe('the session tokens left to sign out', () => {
   const annLeft = { token: ann.token, device: 'device-1' }
   const bobLeft = { token: 'token-bob', device: 'device-1' }
 
-  it('keeps a token per sign-out the gateway did not confirm, each forgotten on its own; forgetting the device leaves them', () => {
+  it('keeps a token per sign-out the gateway did not confirm, each forgotten on its own; the sign-out leaves them', () => {
     const storage = memoryStorage()
 
     expect(pendingRevokes(storage)).toEqual([])
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     expect(addPendingRevoke(storage, annLeft)).toEqual([])
     expect(addPendingRevoke(storage, bobLeft)).toEqual([])
     // A token kept already is not kept twice.
     expect(addPendingRevoke(storage, annLeft)).toEqual([])
 
-    forgetDevice(storage)
+    signedOut(storage)
 
+    expect(savedSession(storage)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([annLeft, bobLeft])
 
     forgetPendingRevoke(storage, annLeft.token)

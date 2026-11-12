@@ -10,14 +10,14 @@ import {
   signUpVerified,
   type TestWorld,
 } from '../__fixtures__/session'
+import { signedIn as signedInOn, signedOut } from '../__fixtures__/signed-in'
 import {
   type MemoryStorage,
   memoryStorage,
-  saveDevice,
+  newSignInId,
   savedIdentity,
   savedToken,
-  TOKEN_KEY,
-  tokenRecord,
+  signedInKeyOf,
 } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
@@ -138,17 +138,26 @@ describe("a change of the signed-in account's password or email", () => {
   it.each([
     [
       'signed Ann out and Bob in',
-      (storage: MemoryStorage) =>
-        saveDevice(storage, {
+      (storage: MemoryStorage) => {
+        signedInOn(storage, {
           identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
           token: 'token-bob',
-          memberships: [],
-        }),
+        })
+      },
     ],
     [
-      "wrote Bob's token, not yet his identity",
-      (storage: MemoryStorage) =>
-        storage.set(TOKEN_KEY, tokenRecord(identityIdFactory.create(), 'token-bob')),
+      "signed Ann out and wrote Bob's sign-in, not yet made it current",
+      (storage: MemoryStorage) => {
+        signedOut(storage)
+        storage.set(
+          signedInKeyOf(newSignInId()),
+          JSON.stringify({
+            identity: identityIdFactory.create(),
+            email: 'bob@example.test',
+            token: 'token-bob',
+          }),
+        )
+      },
     ],
   ])(
     "asks nothing with another account's session that another tab saved while the space opens: it %s",

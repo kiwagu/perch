@@ -1,6 +1,6 @@
 /** Small persistent key-value storage shared by the tabs of one browser, and what the session keeps in it. */
 
-export { ACCOUNT_START_KEY, keptAccountStart } from './account-start'
+export { accountStartKeyOf, keptAccountStart } from './account-start'
 export { deviceIdFrom } from './device'
 export {
   browserStorage,
@@ -34,18 +34,27 @@ export {
 } from './pending-revokes'
 export { dropRole, forgetRoles, isRolesKey, rolesKeyOf, savedRoles, saveRoles } from './roles'
 export {
-  forgetDevice,
-  IDENTITY_KEY,
-  type KeptDevice,
+  CURRENT_KEY,
   type KeptSession,
+  newSignInId,
+  type SignInId,
+  type SignInOwner,
+} from './sign-in'
+export {
+  dropUnreadableSignIn,
+  forgetSignIn,
+  isSessionKey,
+  type KeptDevice,
+  type SavedSignIn,
   saveDevice,
   savedIdentity,
   savedSession,
+  savedSignIn,
   savedToken,
   savedTokenOf,
   saveIdentityEmail,
-  TOKEN_KEY,
-  tokenRecord,
+  sessionKept,
+  signedInKeyOf,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
 export {

@@ -2,56 +2,94 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { signedIn } from '../__fixtures__/signed-in'
+
 import { memoryStorage } from './key-value'
 import { membershipsKeyOf } from './memberships'
 import { dropRole, forgetRoles, isRolesKey, rolesKeyOf, savedRoles, saveRoles } from './roles'
-import { forgetDevice, IDENTITY_KEY, saveDevice } from './signed-in'
+import { CURRENT_KEY, newSignInId } from './sign-in'
+import { forgetSignIn, signedInKeyOf } from './signed-in'
 
 const ann = identityIdFactory.create()
 const bob = identityIdFactory.create()
 
+/** Ann's sign-in, another sign-in of hers, and Bob's: three records, each under its own key. */
+function owners() {
+  return {
+    annFirst: { signIn: newSignInId(), identity: ann },
+    annAgain: { signIn: newSignInId(), identity: ann },
+    bobs: { signIn: newSignInId(), identity: bob },
+  }
+}
+
 describe("the account's platform roles on the device", () => {
-  it('keeps one record per identity, under a key of its own', () => {
-    expect(rolesKeyOf(ann)).toBe(`perch.session.roles.${ann}`)
-    expect(rolesKeyOf(bob)).not.toBe(rolesKeyOf(ann))
+  it('keeps one record per sign-in, under a key of its own', () => {
+    const signIn = newSignInId()
+
+    expect(rolesKeyOf(signIn)).toBe(`perch.session.roles.${signIn}`)
+    expect(rolesKeyOf(newSignInId())).not.toBe(rolesKeyOf(signIn))
   })
 
   it('knows its keys from the session’s other keys', () => {
-    expect(isRolesKey(rolesKeyOf(ann))).toBe(true)
+    const signIn = newSignInId()
 
-    for (const key of [IDENTITY_KEY, membershipsKeyOf(ann), 'perch.session.token', 'perch.theme']) {
+    expect(isRolesKey(rolesKeyOf(signIn))).toBe(true)
+
+    for (const key of [
+      CURRENT_KEY,
+      signedInKeyOf(signIn),
+      membershipsKeyOf(signIn),
+      `perch.session.tenant.${signIn}`,
+      'perch.theme',
+    ]) {
       expect(isRolesKey(key)).toBe(false)
     }
   })
 
-  it('reads back the roles saved for the identity', () => {
+  it('reads back the roles saved for the sign-in, in a record naming its identity', () => {
     const storage = memoryStorage()
+    const { annFirst } = owners()
 
-    saveRoles(storage, ann, ['operator'])
+    saveRoles(storage, annFirst, ['operator'])
 
-    expect(savedRoles(storage, ann)).toEqual(['operator'])
+    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
+    expect(JSON.parse(storage.get(rolesKeyOf(annFirst.signIn)) ?? 'null')).toEqual({
+      identity: ann,
+      roles: ['operator'],
+    })
 
-    saveRoles(storage, ann, [])
+    saveRoles(storage, annFirst, [])
 
-    expect(savedRoles(storage, ann)).toEqual([])
+    expect(savedRoles(storage, annFirst)).toEqual([])
   })
 
-  it('reads none for an identity without a record', () => {
-    expect(savedRoles(memoryStorage(), ann)).toEqual([])
+  it("reads none for a sign-in without a record, the same account's other sign-in too", () => {
+    const storage = memoryStorage()
+    const { annFirst, annAgain } = owners()
+
+    expect(savedRoles(storage, annFirst)).toEqual([])
+
+    saveRoles(storage, annFirst, ['operator'])
+
+    expect(savedRoles(storage, annAgain)).toEqual([])
   })
 
-  it("never writes one identity's roles into another's record", () => {
+  it("never writes one sign-in's roles into another's record: another account's, nor the same account's", () => {
     const storage = memoryStorage()
+    const { annFirst, annAgain, bobs } = owners()
 
-    saveRoles(storage, ann, ['operator'])
-    saveRoles(storage, bob, [])
+    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, bobs, [])
+    saveRoles(storage, annAgain, [])
 
-    expect(savedRoles(storage, ann)).toEqual(['operator'])
-    expect(savedRoles(storage, bob)).toEqual([])
+    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual([])
+    expect(savedRoles(storage, annAgain)).toEqual([])
   })
 
   it('reads none from a record that does not parse', () => {
     const storage = memoryStorage()
+    const { annFirst } = owners()
 
     for (const value of [
       'not json',
@@ -60,67 +98,95 @@ describe("the account's platform roles on the device", () => {
       JSON.stringify({ identity: ann, roles: 'operator' }),
       JSON.stringify({ identity: ann, roles: ['root'] }),
     ]) {
-      storage.set(rolesKeyOf(ann), value)
+      storage.set(rolesKeyOf(annFirst.signIn), value)
 
-      expect(savedRoles(storage, ann)).toEqual([])
+      expect(savedRoles(storage, annFirst)).toEqual([])
     }
   })
 
-  it("reads none from another identity's record found under the identity's key", () => {
+  it("reads none from another identity's record found under the sign-in's key", () => {
     const storage = memoryStorage()
+    const { annFirst, bobs } = owners()
 
-    saveRoles(storage, bob, ['operator'])
-    storage.set(rolesKeyOf(ann), storage.get(rolesKeyOf(bob)) ?? expect.unreachable('a record'))
+    saveRoles(storage, bobs, ['operator'])
+    storage.set(
+      rolesKeyOf(annFirst.signIn),
+      storage.get(rolesKeyOf(bobs.signIn)) ?? expect.unreachable('a record'),
+    )
 
-    expect(savedRoles(storage, ann)).toEqual([])
+    expect(savedRoles(storage, annFirst)).toEqual([])
+    // Nor from Bob's own record, read as Ann's.
+    expect(savedRoles(storage, { signIn: bobs.signIn, identity: ann })).toEqual([])
   })
 
-  it("drops a role from the identity's record alone", () => {
+  it("drops a role from the sign-in's record alone", () => {
     const storage = memoryStorage()
+    const { annFirst, annAgain, bobs } = owners()
 
-    saveRoles(storage, ann, ['operator'])
-    saveRoles(storage, bob, ['operator'])
-    dropRole(storage, ann, 'operator')
+    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, annAgain, ['operator'])
+    saveRoles(storage, bobs, ['operator'])
+    dropRole(storage, annFirst, 'operator')
 
-    expect(storage.get(rolesKeyOf(ann))).toBeDefined()
-    expect(savedRoles(storage, ann)).toEqual([])
-    expect(savedRoles(storage, bob)).toEqual(['operator'])
+    expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeDefined()
+    expect(savedRoles(storage, annFirst)).toEqual([])
+    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual(['operator'])
   })
 
-  it('creates no record when it drops a role of an identity without one', () => {
+  it("leaves a sign-in's record as it is when the drop is asked for another identity", () => {
     const storage = memoryStorage()
+    const { annFirst } = owners()
 
-    dropRole(storage, ann, 'operator')
+    saveRoles(storage, annFirst, ['operator'])
+    dropRole(storage, { signIn: annFirst.signIn, identity: bob }, 'operator')
 
-    expect(storage.get(rolesKeyOf(ann))).toBeUndefined()
+    expect(savedRoles(storage, annFirst)).toEqual(['operator'])
   })
 
-  it('forgets the record of one identity, leaving the others', () => {
+  it('creates no record when it drops a role of a sign-in without one', () => {
     const storage = memoryStorage()
+    const { annFirst } = owners()
 
-    saveRoles(storage, ann, ['operator'])
-    saveRoles(storage, bob, ['operator'])
-    forgetRoles(storage, ann)
+    dropRole(storage, annFirst, 'operator')
 
-    expect(storage.get(rolesKeyOf(ann))).toBeUndefined()
-    expect(savedRoles(storage, bob)).toEqual(['operator'])
+    expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeUndefined()
   })
 
-  it("forgetDevice removes the signed-out identity's record beside its memberships", () => {
+  it('forgets the record of one sign-in, leaving the others', () => {
     const storage = memoryStorage()
+    const { annFirst, annAgain, bobs } = owners()
 
-    saveDevice(storage, {
+    saveRoles(storage, annFirst, ['operator'])
+    saveRoles(storage, annAgain, ['operator'])
+    saveRoles(storage, bobs, ['operator'])
+    forgetRoles(storage, annFirst.signIn)
+
+    expect(storage.get(rolesKeyOf(annFirst.signIn))).toBeUndefined()
+    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual(['operator'])
+  })
+
+  it("forgetting a sign-in removes its record beside its memberships, and no other sign-in's", () => {
+    const storage = memoryStorage()
+    const { annAgain, bobs } = owners()
+    const session = signedIn(storage, {
       identity: { id: ann, email: 'ann@example.test' },
       token: 't',
-      memberships: [],
     })
-    saveRoles(storage, ann, ['operator'])
-    saveRoles(storage, bob, ['operator'])
-    forgetDevice(storage)
 
-    expect(storage.get(rolesKeyOf(ann))).toBeUndefined()
-    expect(storage.get(membershipsKeyOf(ann))).toBeUndefined()
-    // A record of another identity is no part of this sign-out.
-    expect(savedRoles(storage, bob)).toEqual(['operator'])
+    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, annAgain, ['operator'])
+    saveRoles(storage, bobs, ['operator'])
+
+    expect(storage.get(membershipsKeyOf(session.signIn))).toBeDefined()
+
+    forgetSignIn(storage, session.signIn)
+
+    expect(storage.get(rolesKeyOf(session.signIn))).toBeUndefined()
+    expect(storage.get(membershipsKeyOf(session.signIn))).toBeUndefined()
+    // A record of another sign-in, of the same account or of another one, is no part of it.
+    expect(savedRoles(storage, annAgain)).toEqual(['operator'])
+    expect(savedRoles(storage, bobs)).toEqual(['operator'])
   })
 })

@@ -16,7 +16,7 @@ import type {
 import type { ChangeRejected, ChangesReloaded, ProtocolRefused } from '../../platform/events.port'
 import type { AccountSignedUpAs, GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
-import type { KeyValueStorage } from '../storage'
+import type { KeyValueStorage, SignInId } from '../storage'
 
 /**
  * What the channel of one identity needs: the device it names in its hello, the session token
@@ -80,9 +80,10 @@ export interface SessionOptions {
   /**
    * A sign-in answered that the account has not started (no settings or profile of it reached
    * the gateway yet): what it starts from, told before the device is saved, so the start is kept
-   * for this browser to finish once it has pulled what the account has.
+   * under that sign-in (`signIn`, the id it saves its records under) for this browser to finish
+   * once it has pulled what the account has.
    */
-  readonly keepAccountStart: (user: AuthUser, from: AccountSignedUpAs) => void
+  readonly keepAccountStart: (signIn: SignInId, user: AuthUser, from: AccountSignedUpAs) => void
   readonly onError: (error: DataError) => void
   /**
    * Tells the app a change the gateway refused, or refused again, and a sync protocol it no longer

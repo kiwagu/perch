@@ -5,14 +5,15 @@ import type { PlatformRole } from '@workspace/kernel'
 
 import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
 import { sharedStorage } from './__fixtures__/shared-storage'
+import { signedIn, signedOut } from './__fixtures__/signed-in'
 import { type AccountsDeps, accountsApi } from './accounts-api'
 import { SessionRoles } from './session'
 import {
   type KeptDevice,
   type MemoryStorage,
-  saveDevice,
+  rolesKeyOf,
   savedRoles,
-  savedTokenOf,
+  savedSession,
   saveRoles,
 } from './storage'
 
@@ -57,10 +58,10 @@ function api(
 ) {
   const dropped: Array<readonly [IdentityId, PlatformRole]> = []
   const client = accountsApi('/backend', {
-    credentials: () => ({ identity: ann.identity.id, token: ann.token }),
+    credentials: () => ({ identity: ann.identity.id, token: ann.token, signIn: 'sign-in-ann' }),
     device: () => 'device-1',
-    dropRole: (identity, role) => {
-      dropped.push([identity, role])
+    dropRole: (asker, role) => {
+      dropped.push([asker.identity, role])
     },
     fetcher,
     ...overrides,
@@ -228,9 +229,11 @@ function heldFetch(answer: () => Promise<Response>) {
 /** The credentials a tab showing `shown()` reads from its storage, as the composition root does. */
 const credentialsOf = (storage: MemoryStorage, shown: () => IdentityId | undefined) => () => {
   const identity = shown()
-  const saved = identity === undefined ? undefined : savedTokenOf(storage, identity)
+  const saved = savedSession(storage)
 
-  return identity === undefined || saved === undefined ? undefined : { identity, token: saved }
+  return identity !== undefined && saved?.identity === identity
+    ? { identity, token: saved.token, signIn: saved.signIn }
+    : undefined
 }
 
 describe('a not-operator answered after the browser changed accounts', () => {
@@ -240,8 +243,9 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const other = browser.tab()
     let shown: IdentityId | undefined = ann.identity.id
 
-    saveDevice(here, ann)
-    saveRoles(here, ann.identity.id, ['operator'])
+    const annSession = signedIn(here, ann)
+
+    saveRoles(here, annSession, ['operator'])
 
     const roles = new SessionRoles({ storage: here, shown: () => shown })
     const told = vi.fn()
@@ -252,42 +256,75 @@ describe('a not-operator answered after the browser changed accounts', () => {
     const client = accountsApi('/backend', {
       credentials: credentialsOf(here, () => shown),
       device: () => 'device-1',
-      dropRole: (identity, role) => roles.drop(identity, role),
+      dropRole: (asker, role) => roles.drop(asker, role),
       fetcher: held.fetcher,
     })
     const asked = client.list(search)
 
     // Another tab signs Ann out and Bob in, an operator; this tab follows and shows Bob.
-    saveDevice(other, bob)
-    saveRoles(other, bob.identity.id, ['operator'])
+    const bobSession = signedIn(other, bob)
+
+    saveRoles(other, bobSession, ['operator'])
     shown = bob.identity.id
 
     held.release()
 
     expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
     expect(held.sent.map(({ authorization }) => authorization)).toEqual(['Bearer token-ann'])
-    expect(savedRoles(here, ann.identity.id)).toEqual([])
-    expect(savedRoles(here, bob.identity.id)).toEqual(['operator'])
-    expect(savedRoles(other, bob.identity.id)).toEqual(['operator'])
+    expect(savedRoles(here, annSession)).toEqual([])
+    expect(savedRoles(here, bobSession)).toEqual(['operator'])
+    expect(savedRoles(other, bobSession)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
     expect(told).toHaveBeenCalled()
+  })
+
+  it("leaves the operator role of the same account's later sign-in alone", async () => {
+    const browser = sharedStorage()
+    const here = browser.tab()
+    const other = browser.tab()
+    const first = signedIn(here, ann)
+
+    saveRoles(here, first, ['operator'])
+
+    const roles = new SessionRoles({ storage: here, shown: () => ann.identity.id })
+    const held = heldFetch(respond(403, { code: 'not-operator' }))
+    const client = accountsApi('/backend', {
+      credentials: credentialsOf(here, () => ann.identity.id),
+      device: () => 'device-1',
+      dropRole: (asker, role) => roles.drop(asker, role),
+      fetcher: held.fetcher,
+    })
+    const asked = client.list(search)
+
+    // Another tab signs Ann out and in again, an operator again by then; its welcome kept that.
+    signedOut(other)
+
+    const again = signedIn(other, { ...ann, token: 'token-ann-again' })
+
+    saveRoles(other, again, ['operator'])
+    held.release()
+
+    expect((await asked)._unsafeUnwrapErr().code).toBe('not-operator')
+    expect(savedRoles(here, again)).toEqual(['operator'])
+    expect(savedRoles(other, again)).toEqual(['operator'])
+    expect([...roles.current()]).toEqual(['operator'])
   })
 
   it('creates no record for an identity that had none', async () => {
     const browser = sharedStorage()
     const here = browser.tab()
 
-    saveDevice(here, ann)
+    const session = signedIn(here, ann)
 
     const roles = new SessionRoles({ storage: here, shown: () => ann.identity.id })
     const client = accountsApi('/backend', {
       credentials: credentialsOf(here, () => ann.identity.id),
       device: () => 'device-1',
-      dropRole: (identity, role) => roles.drop(identity, role),
+      dropRole: (asker, role) => roles.drop(asker, role),
       fetcher: fakeFetch(respond(403, { code: 'not-operator' })).fetcher,
     })
 
     expect((await client.read(cara))._unsafeUnwrapErr().code).toBe('not-operator')
-    expect(here.get(`perch.session.roles.${ann.identity.id}`)).toBeUndefined()
+    expect(here.get(rolesKeyOf(session.signIn))).toBeUndefined()
   })
 })

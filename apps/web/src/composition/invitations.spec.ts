@@ -10,17 +10,15 @@ import { OrganisationService } from '../features/organisation/application/organi
 import type { InvitationsPort, ReceivedInvitation } from '../platform/invitations.port'
 
 import { openTestWorld, type TestWorld } from './__fixtures__/session'
+import { signedIn, signedInElsewhere } from './__fixtures__/signed-in'
 import { createInvitations } from './invitations'
 import {
-  IDENTITY_KEY,
   type KeptDevice,
-  type MemoryStorage,
+  type KeptSession,
   membershipsKeyOf,
   memoryStorage,
-  saveDevice,
   savedMemberships,
   saveMemberships,
-  TOKEN_KEY,
 } from './storage'
 
 const ann = {
@@ -89,55 +87,47 @@ afterEach(async () => {
   opened = undefined
 })
 
-/** Ann signed in on a device that is not online, a member of no organisation yet. */
-async function annSignedIn(): Promise<TestWorld> {
+/**
+ * Ann signed in on a device that is not online, a member of no organisation yet; `annSession` is
+ * her sign-in.
+ */
+async function annSignedIn(): Promise<TestWorld & { readonly annSession: KeptSession }> {
   const storage = memoryStorage()
+  const annSession = signedIn(storage, ann)
 
-  saveDevice(storage, ann)
   opened = await openTestWorld({ storage, online: false })
   expect((await opened.session.restore()).isOk()).toBe(true)
 
-  return opened
-}
-
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, membershipsKeyOf(device.identity.id)]) {
-    storage.changeElsewhere(key, other.get(key))
-  }
+  return { ...opened, annSession }
 }
 
 describe('createInvitations', () => {
   it('accept saves the membership into the session as a creation does, its database open when it answers', async () => {
-    const { session, storage, tenantsOpened } = await annSignedIn()
+    const { session, storage, tenantsOpened, annSession } = await annSignedIn()
     const { api, calls } = answering()
     const invitations = createInvitations(api, session)
 
     expect((await invitations.accept(received.id))._unsafeUnwrap()).toEqual(acme)
     expect(calls).toEqual([['accept', received.id]])
     expect(session.memberships()).toEqual([acme])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(savedMemberships(storage, annSession)).toEqual([acme])
     expect(session.space()?.tenants()).toEqual(['acme'])
     expect(tenantsOpened()).toEqual(['acme'])
   })
 
   it('accept adds the membership to the newest list any tab kept, not to an older one the space still shows', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
 
-    saveMemberships(storage, ann.identity.id, [globex])
+    saveMemberships(storage, annSession, [globex])
 
     const invitations = createInvitations(answering().api, session)
 
     expect((await invitations.accept(received.id)).isOk()).toBe(true)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, annSession)).toEqual([globex, acme])
   })
 
   it('accept takes in a change of memberships another tab kept while the gateway answered', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
     let answer = (): void => {}
     const answered = new Promise<void>((resolve) => {
       answer = resolve
@@ -149,13 +139,13 @@ describe('createInvitations', () => {
     const accepting = createInvitations(api, session).accept(received.id)
 
     storage.changeElsewhere(
-      membershipsKeyOf(ann.identity.id),
+      membershipsKeyOf(annSession.signIn),
       JSON.stringify({ identity: ann.identity.id, memberships: [globex] }),
     )
     answer()
 
     expect((await accepting).isOk()).toBe(true)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, annSession)).toEqual([globex, acme])
     await vi.waitFor(() =>
       expect(
         session
@@ -179,19 +169,20 @@ describe('createInvitations', () => {
     const accepting = createInvitations(api, session).accept(received.id)
 
     // Meanwhile another tab signed Bob in: this tab's space is his now.
-    signInElsewhere(storage, bob)
+    const bobSession = signedInElsewhere(storage, bob)
+
     await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
     answer()
 
     expect((await accepting)._unsafeUnwrap()).toEqual(acme)
-    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(savedMemberships(storage, bobSession)).toEqual([])
     expect(session.memberships()).toEqual([])
     expect(session.space()?.tenants()).toEqual([])
     expect(tenantsOpened()).toEqual([])
   })
 
   it('a refused accept adopts nothing and answers the refusal as it came', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
     const refusing: InvitationsPort = {
       ...answering().api,
       accept: () => errAsync(dataError('data:WRITE_REJECTED', 'invitation-gone')),
@@ -203,7 +194,7 @@ describe('createInvitations', () => {
       message: 'invitation-gone',
     })
     expect(session.memberships()).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, annSession)).toEqual([])
   })
 
   it("reads, lists and declines as the gateway did, leaving the session's memberships alone", async () => {
@@ -224,9 +215,9 @@ describe('createInvitations', () => {
   })
 
   it('the service selects the accepted organisation once its adoption settled: its database is open, and it is the current one', async () => {
-    const { session, storage, tenantsOpened } = await annSignedIn()
+    const { session, storage, tenantsOpened, annSession } = await annSignedIn()
 
-    saveMemberships(storage, ann.identity.id, [globex])
+    saveMemberships(storage, annSession, [globex])
 
     const service = new OrganisationService(
       session,
