@@ -201,8 +201,13 @@ describe('a navigate is a leave its trigger names', () => {
   })
 
   it("refuses a navigate on the size option of another screen's paged list", () => {
-    const contract = sample()
+    const contract = paged(sample())
 
+    screenIn(contract, 'help').anchors['help.accounts-list'] = {
+      kind: 'list',
+      source: { platform: 'devices.list', paged: true },
+      derived: [...PAGING_PARTS],
+    } as AnchorDef
     Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
       'help.accounts-list.size-select.option': { actions: [navigate('/sample/$key')] },
     })
