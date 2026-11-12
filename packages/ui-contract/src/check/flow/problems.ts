@@ -28,6 +28,7 @@ import { codeGuardProblems } from './code-guards'
 import { heldReadProblems } from './held-reads'
 import type { At, InFlow } from './in-flow'
 import { itemProblems } from './items'
+import { leaveProblems } from './leaves'
 import { stuckProblems, unreachableProblems } from './reach'
 import { branchReadOptOutProblems, readOptOutProblems } from './reads'
 import { addressProblems, effectProblems, eventProblems } from './references'
@@ -150,6 +151,7 @@ export function flowProblems(contract: Contract): Problem[] {
       ...rendersProblems(inFlow),
       ...codeGuardProblems(inFlow),
       ...itemProblems(inFlow),
+      ...leaveProblems(inFlow),
       ...unusedGuardProblems(inFlow),
       ...unreachableProblems(inFlow),
       ...stuckProblems(inFlow),

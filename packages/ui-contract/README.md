@@ -59,7 +59,8 @@ for Bun.
     destructive action, on its control (`asks`) and on the frame's confirmation, which
     carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
     then parsed through
-    `screenFileSchema`;
+    `screenFileSchema`, each control whose flow moves to another screen then asking the leave
+    question, with the fields it loses (`leaves`, `files/derive/leaves.ts`);
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
@@ -218,8 +219,12 @@ for Bun.
     event of a control (`CONTROL_KINDS`) in the entry's part, never in an entry, an exit or an
     invoke's outcome,
     and an invoke's input that takes an entry run in a state only such controls enter
-    (`flow/items.ts`), and `page: 1` beside any key a paged list of the screen it moves to
-    reads (`flow/pages.ts`),
+    (`flow/items.ts`), `page: 1` beside any key a paged list of the screen it moves to
+    reads (`flow/pages.ts`), and each navigate on a transition, one to a transition, a control's
+    on a control of its own screen outside the frame (a derived part within its screen only),
+    to its own path only on a screen of one
+    binding, and leaving its screen, losing the same fields, everywhere its control is handled
+    or nowhere (`flow/leaves.ts`),
     resolves every target as XState does (a state of the root or a deep target
     `<parallel>.<region>.<state>` from the root, a state of its own region or an id target
     `#<flow id>.<state>` of its own flow, whose `id` is a one-segment name the flow declares,
@@ -407,7 +412,8 @@ for Bun.
     them), the codes as `<anchor> <code>`, the states as `<anchor> <state>`, the roles each is
     shown to as `<anchor> <role>` and an error's
     fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
-    as `<anchor> holds input` and the messages that rank their codes as
+    as `<anchor> holds input`, the controls that ask before they leave their screen as
+    `<anchor> leaves losing <field>, <field>`, and the messages that rank their codes as
     `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
     who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added
     whole with every line; each list that reads a platform action as `<anchor> reads
