@@ -42,6 +42,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'link-invalid', text: t('user.verify-email.error.link-invalid') }
     case 'data:LINK_EXPIRED':
       return { code: 'link-expired', text: t('user.verify-email.error.link-expired') }
+    case 'data:ACCOUNT_BANNED':
+      return { code: 'account-banned', text: t('user.verify-email.error.account-banned') }
     case 'data:OTHER_ACCOUNT':
       return { code: 'other-account', text: t('user.verify-email.error.other-account') }
     case 'data:RATE_LIMITED':

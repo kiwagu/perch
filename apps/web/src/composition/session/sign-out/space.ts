@@ -1,7 +1,7 @@
 /**
  * How a session's space ends on this device once its sign-out has decided: its keys forgotten,
  * and its databases deleted, or kept for the next sign-in as the identity when they hold changes
- * not sent yet, with the word the sign-in page says of it. Every word names the last sign-in on
+ * not sent yet, with the words the sign-in page says of it. Every word names the last sign-in on
  * the browser as the session ended (`raised`, its `signInMark`): a sign-in made since ends it,
  * however late it comes.
  */
@@ -75,10 +75,17 @@ export class SpaceEnding {
   /**
    * Forgets the token, leaving a live one to sign out, and closes the space, keeping its database
    * with the changes it holds: the sign-in page says that signing in again as the identity
-   * sends them.
+   * sends them, unless `notice`, the word of the ending that kept it, ranks above that one
+   * (`account-banned`). Both words are left, and the page says the first by the rank of
+   * `SESSION_NOTICES` (`savedNotice`): the order is kept in that list alone.
    */
-  keep(open: OpenSpace, keys: KeysLeft, raised: string): void {
+  keep(open: OpenSpace, keys: KeysLeft, raised: string, notice?: SessionNotice): void {
     saveNotice(this.#host.options.storage, 'resend-after-sign-in', raised)
+
+    if (notice) {
+      saveNotice(this.#host.options.storage, notice, raised)
+    }
+
     this.#pendingRevoke.forgetKeys(keys)
 
     if (this.#host.open() === open) {

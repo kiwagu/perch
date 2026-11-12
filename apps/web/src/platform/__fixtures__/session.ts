@@ -4,6 +4,7 @@ import { EventBus } from '@workspace/cqrs'
 import { dataError } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container } from '@workspace/di'
+import type { PlatformRole } from '@workspace/kernel'
 
 import {
   settingsCommands,
@@ -19,6 +20,8 @@ import { SERVED_BUILD } from '../served-build.port'
 import type { ServicesView } from '../services'
 import { type PushRejection, SESSION, type SessionPort } from '../session.port'
 import { SYNC_STATUS, type SyncStatus } from '../sync-status.port'
+
+const NO_ROLES: ReadonlySet<PlatformRole> = new Set()
 
 /** A session nobody is signed in to. */
 export function fakeSession(): { readonly session: SessionPort } {
@@ -52,6 +55,8 @@ export function fakeSession(): { readonly session: SessionPort } {
       subscribeMemberships: () => () => {},
       currentTenant: () => undefined,
       selectTenant: () => {},
+      roles: () => NO_ROLES,
+      onRoles: () => () => {},
     },
   }
 }

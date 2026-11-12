@@ -464,6 +464,7 @@ describe('a sign-in past the limit of devices', () => {
   it.each([
     ['data:EMAIL_NOT_VERIFIED', 'unverified'],
     ['data:INVALID_CREDENTIALS', 'sign-in'],
+    ['data:ACCOUNT_BANNED', 'sign-in'],
   ] as const)(
     'shows %s, refusing the confirmed sign-in, as a refused sign-in does',
     async (code, state) => {

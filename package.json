@@ -33,6 +33,7 @@
     "perf:measure": "mcproc exec --memory 3G --exclusive e2e --note perf -- bun tests/e2e/scripts/perf-measure.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",
     "seed:sweep": "mcproc exec -- bun seed/src/cli.ts sweep",
+    "operator": "mcproc exec -- bun apps/gateway/scripts/operator/cli.ts",
     "refactor:scan": "bun run scripts/find-refactor-candidates.ts",
     "check": "VITEST_MAX_WORKERS=${VITEST_MAX_WORKERS:-4} nice -n 10 turbo run typecheck typecheck:root lint lint:root lint:surql test test:root model:check i18n:check refactor:ci readme:check e2e:coverage contract:check contract:check:sources contract:check:consumers contract:coverage:check --concurrency=4",
     "typecheck:root": "tsc -p scripts/tsconfig.json",

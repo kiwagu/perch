@@ -1,17 +1,17 @@
 import { err, ok, type Result } from 'neverthrow'
 
-import { TENANT_ROLES } from '@workspace/kernel'
+import { PLATFORM_ROLES, TENANT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROTOCOL_VERSION = 8
+export const PROTOCOL_VERSION = 9
 
 /**
  * Close codes of the gateway: a message the protocol refuses, a session token it refuses, a
  * region of somebody else, a hello that did not come in time, a sign-out, a device signed out
  * from another device (one device, or every device of the identity), a device signed out
- * because the account's password changed (by a reset link, or on another device), and a device
+ * because the account's password changed (by a reset link, or on another device), a device
  * signed out because a sign-in on another one went past the account's limit of devices, this one
- * seen least recently.
+ * seen least recently, and a device signed out because an operator banned its account.
  */
 export const CLOSE = {
   protocol: 4400,
@@ -22,6 +22,7 @@ export const CLOSE = {
   revoked: 4001,
   passwordChanged: 4002,
   deviceLimit: 4003,
+  banned: 4004,
 } as const
 
 /** The id a device names itself with: the browser's own stable id, minted on first use. */
@@ -115,6 +116,8 @@ export const serverMessage = z.discriminatedUnion('type', [
     /** The identity's private region and the region of each organisation it belongs to. */
     regions: z.array(regionHead),
     memberships: z.array(membership),
+    /** The account's platform roles (`operator`), read with its session at this hello. */
+    roles: z.array(z.enum(PLATFORM_ROLES)),
     time: z.int(),
   }),
   /** The identity's memberships changed: the regions the device may name changed with them. */

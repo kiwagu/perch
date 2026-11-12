@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import { Input } from '@workspace/ui/components/ui/input'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
@@ -31,16 +32,19 @@ import { NOTICE_TEXTS } from './notice-texts'
 import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
 
+/** The roles of a page anyone opens, a guest or any signed-in account. */
+const ANYONE = ['guest', 'identity']
+
 const HomeModule = defineModule({
   id: 'home',
   declarations: { Home: () => <p>home</p> },
-  routes: [{ path: '/home', page: 'Home' }],
+  routes: [{ path: '/home', page: 'Home', roles: ANYONE }],
 })
 
 const FormModule = defineModule({
   id: 'form',
   declarations: { Form: () => <Input aria-label="name" defaultValue="" /> },
-  routes: [{ path: '/form', page: 'Form' }],
+  routes: [{ path: '/form', page: 'Form', roles: ANYONE }],
 })
 
 const BrokenModule = defineModule({
@@ -50,7 +54,20 @@ const BrokenModule = defineModule({
       throw new Error('the page broke')
     },
   },
-  routes: [{ path: '/broken', page: 'Broken' }],
+  routes: [{ path: '/broken', page: 'Broken', roles: ANYONE }],
+})
+
+/**
+ * A page at the console's address for an operator alone, beside the not-found page every account
+ * opens: the frame names and marks the screen the router resolved, not the address.
+ */
+const OperatorsModule = defineModule({
+  id: 'operators',
+  declarations: { Console: () => <p>the operator's page</p>, Lost: () => <p>no page here</p> },
+  routes: [
+    { path: '/console/users', page: 'Console', roles: ['operator'] },
+    { path: '/$', page: 'Lost', roles: ['guest', 'identity', 'member', 'admin'] },
+  ],
 })
 
 describe('ShellContainer', () => {
@@ -157,6 +174,85 @@ describe('ShellContainer', () => {
     act(() => account(undefined))
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
+  })
+
+  it("names and marks a page its roles refuse as the not-found page, and follows the account's roles while open", async () => {
+    const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
+    const { session: guest } = fakeSession()
+    let roles: ReadonlySet<PlatformRole> = new Set()
+    const listeners = new Set<(next: ReadonlySet<PlatformRole>) => void>()
+    const session: SessionPort = {
+      ...guest,
+      current: () => ann,
+      roles: () => roles,
+      onRoles: (listener) => {
+        listeners.add(listener)
+
+        return () => {
+          listeners.delete(listener)
+        }
+      },
+    }
+    // The account's roles read anew, as a welcome or another tab brings them.
+    const grant = (next: readonly PlatformRole[]) => {
+      roles = new Set(next)
+
+      for (const listener of listeners) {
+        listener(roles)
+      }
+    }
+    const router = createAppRouter({
+      modules: [OperatorsModule],
+      session,
+      layout: () => (
+        <NoticeProvider texts={NOTICE_TEXTS}>
+          <ShellContainer>
+            <Outlet />
+          </ShellContainer>
+        </NoticeProvider>
+      ),
+      history: createMemoryHistory({ initialEntries: ['/console/users'] }),
+    })
+    const notFoundTitle = en['app.title.page'].replace('{title}', en['app.title.not-found'])
+    // The links of the navigation marked current.
+    const current = () =>
+      screen
+        .getAllByRole('link')
+        .filter((link) => link.getAttribute('aria-current') === 'page')
+        .map((link) => link.getAttribute('data-testid'))
+
+    render(
+      <I18nProvider locale="en" catalogs={{ en, es }}>
+        <ThemeContext.Provider value={memoryTheme()}>
+          <InstallContext.Provider value={memoryInstall()}>
+            <ShellFrameContext.Provider value={openedFrame()}>
+              <ServicesProvider services={fakeServices(session)}>
+                <RouterProvider router={router} />
+              </ServicesProvider>
+            </ShellFrameContext.Provider>
+          </InstallContext.Provider>
+        </ThemeContext.Provider>
+      </I18nProvider>,
+    )
+
+    await screen.findByText('no page here')
+    await waitFor(() => expect(document.title).toBe(notFoundTitle))
+    expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
+    expect(current()).toEqual([])
+
+    act(() => grant(['operator']))
+
+    await screen.findByText("the operator's page")
+    await waitFor(() => expect(document.title).not.toBe(notFoundTitle))
+    expect(current()).toEqual(['app-shell.nav.console-link'])
+
+    act(() => grant([]))
+
+    await screen.findByText('no page here')
+    await waitFor(() => expect(document.title).toBe(notFoundTitle))
+    expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
+    expect(current()).toEqual([])
+    expect(router.state.location.href).toBe('/console/users')
   })
 
   it('tells the user of a change the gateway refused and this device undid', async () => {

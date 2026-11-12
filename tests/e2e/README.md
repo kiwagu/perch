@@ -37,14 +37,17 @@ shifts the port), which `bun run test:e2e` sets from the mcproc manifest through
 serves the web app's production build (`apps/web/dist`, written by the launcher before each
 run; no dev server) and, under `/backend/`, the gateway on one origin. They read the mails the
 gateway sent from the stand's MailDev at `MAILBOX_URL` (http://127.0.0.1:1090 in the main
-checkout), which `mcproc exec` sets too.
+checkout), which `mcproc exec` sets too. A test of the operator console appoints its operator as
+the host does, with the operator command against the stand's database at `SURREAL_URL`, which
+`mcproc exec` sets as well (`src/support/operators.ts`).
 
 Each test carries the tag of its scenario's `tags`, written by hand in its `test.describe`
 (`{ tag: '@smoke' }`); nothing compares the two yet. The tag decides where a test runs: the
 `mobile` project runs all of them, the `desktop` project only `@smoke` (its `grep`), so a phone
 goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) and `organisation/base/` but the tests named below,
-`not-found/base/`, `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
+`not-found/base/`, `console/flows/not-operator` (an account and a guest at the console's
+addresses), `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
 `open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
 tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
@@ -56,8 +59,11 @@ tests of an invitation (`invite-new-account`, `accept-by-link`, `decline-invitat
 `theme-from-the-frame`, the other `app-shell/base/` tests (install,
 a new version, offline, an outdated protocol, the sync status, a sign-out in another tab while
 the data opens or once it did not open), `app-shell/flows/` (a guest
-across the tabs of one browser) and `organisation/flows/` (two accounts, each in a browser of
-its own). `bun run test:e2e --grep @smoke` runs the first set
+across the tabs of one browser), `organisation/flows/` (two accounts, each in a browser of
+its own), `console/base/` (an operator and the accounts it acts on, each in a browser of its
+own) and the other `console/flows/` tests (an account banned or given a new email before it
+verified its email, an operator whose role is taken away while its console is open). `bun run
+test:e2e --grep @smoke` runs the first set
 on both projects.
 
 Every browser of the suite reaches the front from 127.0.0.1, and the gateway counts its
@@ -280,8 +286,9 @@ sign-in form without waiting for its answer), `deviceLimitDialog` (the dialog as
 sign in past the limit, by its anchor and its code) and `expectDeviceCSignedOut` (the list of
 devices once the sign-in past the limit went through: device C's alone `revoked`, by the order
 the devices signed in).
-`src/support/data.ts`: the generators (accounts, emails, another, a new and a wrong password,
-names, bios, organisation keys and names, note texts).
+`src/support/data.ts`: the generators (accounts, emails, a group of emails sharing a prefix,
+another, a new and a wrong password, names, bios, the reason of a ban, organisation keys and
+names, note texts).
 `src/support/mailbox.ts`: `mailbox`, the e2e stand's mailbox (`Mailbox` of `@workspace/mailbox`
 at `MAILBOX_URL`): the mails to an address, their count, and the next one, waited for; and
 `expectBoundedNonArrival`, a bounded non-arrival: an address's mail count stays put from the
@@ -305,6 +312,22 @@ or no link when it declares none; and, given `hides`, that its subject, text and
 recipient's address taken out, name neither that email nor its local part nor its domain) and
 `nextDeclaredNotice` (waits for the notice to its declared recipient after the mails a test has
 seen there and holds it to its declaration). A failure prints no address, link or HTML.
+`src/support/operators.ts`: `grantOperator` and `revokeOperator`, which set the platform role
+of the account of an email as the host does, with the operator command
+(`apps/gateway/scripts/operator/cli.ts`) run under Bun from the repository root against the
+stand's database (`SURREAL_URL`) as its root user: Playwright's workers run in Node, which cannot
+load the `.surql` files the command's code imports. A command that does not exit 0 fails the
+test with its exit code and its own words, never its arguments or the password. A device learns
+a role at its next hello, so a test reloads the operator's page after the grant.
+`src/support/console.ts`: the operator console the tests share: `signUpOperator` (signs up
+through the mail, grants the role, reloads, and waits for the navigation's console link),
+`openUsers` (opens `/console/users` through that link and waits for its search box: the console's
+pages load on their own after the frame), `searchAccounts`, `chooseSize`, `openAccount` (searches
+an email and follows the open link of its entry once the address carries the search, then waits
+for the card, read; answers the account's id), `expectAddress` (the path and exactly the search
+parameters expected), `expectRange` (the list's range by its `data-from`, `data-to` and
+`data-total`), and the locators `consoleLink`, `accountItems`, `accountItem` and
+`listedEmails`.
 
 ## Commands
 
@@ -312,7 +335,7 @@ seen there and holds it to its declaration). A failure prints no address, link o
   memory lease (the run waits its turn when the host is short of memory), in mcproc's `e2e`
   group (`--exclusive e2e`: one e2e run or `perf:measure` at a time on the host, whichever
   checkout starts it; a waiting run says whom it waits for, for up to an hour) and with
-  `E2E_BASE_URL` and `MAILBOX_URL` set; the launcher builds the dependencies and the web app's production
+  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` set; the launcher builds the dependencies and the web app's production
   build through turbo with `PERCH_UI_HOOKS=1`, so the build installs the page helper (and stops when `apps/web/dist/index.html` is missing afterwards), starts
   the `e2e` profile with `--reload` (apps already online restart: the database is empty, the
   gateway and the front run the current code and configuration) and waits for it, then runs
@@ -326,7 +349,8 @@ seen there and holds it to its declaration). A failure prints no address, link o
   a stand of another checkout or another project's alike. So the launcher runs Playwright under
   pasta (package `passt`, rootless): pasta copies the host's IPv4 setup into a network namespace
   once, so the browser sees a network that stays the same, and forwards the loopback ports of
-  `E2E_BASE_URL` and `MAILBOX_URL` to the host, and no other port either way (its gateway
+  `E2E_BASE_URL`, `MAILBOX_URL` and `SURREAL_URL` (the stand's database, which the operator
+  command a test runs writes to) to the host, and no other port either way (its gateway
   address does not lead to the host's loopback either). IPv4 only: inside,
   `localhost` resolves to ::1 first, where the front does not listen. IPv6 is also switched off
   inside before Playwright starts: the kernel gives the namespace's interface an IPv6 link-local
@@ -347,6 +371,6 @@ seen there and holds it to its declaration). A failure prints no address, link o
   scenario file of `scenarios/` from its steps, never over an existing file;
   `bun run e2e:coverage` checks that every scenario has its test and every test its scenario.
 - `mcproc stop e2e`: stops the `e2e` profile.
-- `bun run test` (here): the unit tests of the reporter and of the browser's network
-  (`bun test ./scripts`).
+- `bun run test` (here): the unit tests of the reporter, of the browser's network and of the
+  support's operator command (`bun test ./scripts ./src/support`).
 - `bun run typecheck`, `bun run lint`.

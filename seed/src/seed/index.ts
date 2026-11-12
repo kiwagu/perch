@@ -1,5 +1,6 @@
 export { openStand, openStandTenant, type StandOptions } from '@workspace/web/seeding'
 
+export { type CommandRunner, spawnCommand } from './command-runner'
 export {
   runSeed,
   type SeededEntry,

@@ -112,6 +112,7 @@ Run from the root; each is described in the README named beside it.
 | Command | What it does | README |
 |---|---|---|
 | `bun run seed`, `bun run seed:sweep` | seed the dev stand through its gateway, or remove the seed data (with the dev stand's addresses from `mcproc exec`; neither needs the auth secret) | [seed](../../seed/README.md) |
+| `bun run operator -- grant <email>`, `revoke <email>` | appoint an operator, or take the role back, by writing the role of the account in the dev stand's directory (the stand's address from `mcproc exec`); devices learn it at their next hello | [apps/gateway](../../apps/gateway/scripts/operator/README.md) |
 | `bun run load -- --devices 20 --members 10 --hold 15` | the gateway load test: a gateway of its own on port 5197 in front of the e2e stand's SurrealDB, one table row per step | [apps/gateway](../../apps/gateway/README.md), *Load test* |
 | `bun run perf:measure` | the start's timings on a slowed-down phone against their budgets, on the production build the e2e stand serves, in turn with the e2e runs (mcproc's `e2e` group) | [tests/e2e](../../tests/e2e/README.md) |
 | `bun run e2e:scaffold <scenario id>`, `bun run e2e:coverage` | the failing test of a new scenario, and the check that every scenario has its test | [tests/e2e](../../tests/e2e/README.md) |

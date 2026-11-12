@@ -108,10 +108,11 @@ function renderSignIn(session: SessionPort, at = '/sign-in') {
         path: '/sign-in',
         page: 'SignIn',
         guard: 'guest',
+        roles: ['guest'],
         search: z.object({ email: z.string().max(254).optional() }),
       },
-      { path: '/me', page: 'Me', guard: 'authenticated' },
-      { path: '/forgot-password', page: 'Forgot' },
+      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
+      { path: '/forgot-password', page: 'Forgot', roles: ['guest', 'identity'] },
     ],
   })
   const router = createAppRouter({
@@ -390,6 +391,29 @@ describe('SignInContainer', () => {
 
     expect(error.getAttribute('data-code')).toBe('email-not-verified')
     expect(screen.getByTestId('user.sign-in.resend-button')).toBeTruthy()
+    expect(router.state.location.pathname).toBe('/sign-in')
+  })
+
+  it('tells a banned account it cannot sign in, offering no resend, keeping the email typed', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    fireEvent.change(screen.getByTestId('user.sign-in.password-input'), {
+      target: { value: 'Pass-word-1' },
+    })
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('account-banned')
+    expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+    expect(screen.getByTestId('user.sign-in.email-input').getAttribute('value')).toBe(ann.email)
     expect(router.state.location.pathname).toBe('/sign-in')
   })
 

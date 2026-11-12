@@ -38,7 +38,7 @@ const rootOptions = {
  * mail it sent, which signs the laptop in: her identity and raw token.
  */
 async function signUpAnn(root: GatewayRoot) {
-  mailsOf(root.auth, rootOptions.mail)
+  mailsOf(root.auth, rootOptions.mail, root.sessions)
 
   const { token, user } = await signUpOn(
     root.auth,

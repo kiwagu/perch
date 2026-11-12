@@ -12,7 +12,7 @@ import { type AuthUser, type DataError, dataError, openLocalDb } from '@workspac
 import { nodeEngines } from '@workspace/data/engines/node'
 import { readSchema } from '@workspace/data/schema-files'
 import { systemClock } from '@workspace/replica'
-import { type LockManagerLike, syncHints, WebSocketTransport } from '@workspace/replica/sync'
+import { type LockManagerLike, syncHints } from '@workspace/replica/sync'
 
 import {
   NOTES_SERVICE,
@@ -29,6 +29,7 @@ import {
 } from '../../features/user/application/settings/settings.service'
 import { UserModule } from '../../features/user/user.module'
 import { INVITATIONS } from '../../platform/invitations.port'
+import { accountsApi } from '../accounts-api'
 import type { CommandLogger } from '../commands'
 import { devicesApi } from '../devices-api'
 import { type Fetcher, gatewayAuth } from '../gateway-auth'
@@ -36,6 +37,7 @@ import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
 import { type AppServices, createAppRoot } from '../root'
 import { memoryStorage } from '../storage'
+import { syncTransport } from '../sync-transport'
 
 import { ensureAccount, readAccount } from './accounts'
 import { ensureInvited, ensureJoined, ensureOrganisation, readOrganisation } from './organisations'
@@ -198,15 +200,8 @@ export function openClient(options: ClientOptions): ResultAsync<SeedClient, Data
     organisationsApi: (deps) => organisationsApi(options.gatewayUrl, { ...deps, fetcher }),
     devicesApi: (deps) => devicesApi(options.gatewayUrl, { ...deps, fetcher }),
     invitationsApi: (deps) => invitationsApi(options.gatewayUrl, { ...deps, fetcher }),
-    transport: (context) =>
-      new WebSocketTransport({
-        url: gatewaySyncUrl(options.gatewayUrl),
-        device: context.device,
-        credentials: context.credentials,
-        onMemberships: context.onMemberships,
-        onEnded: context.onEnded,
-        clock: systemClock,
-      }),
+    accountsApi: (deps) => accountsApi(options.gatewayUrl, { ...deps, fetcher }),
+    transport: syncTransport({ url: gatewaySyncUrl(options.gatewayUrl), clock: systemClock }),
     locks: soleDevice,
     hints: () => syncHints(undefined),
     clock: systemClock,

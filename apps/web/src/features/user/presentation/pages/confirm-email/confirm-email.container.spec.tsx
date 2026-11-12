@@ -41,6 +41,7 @@ function open(
       {
         path: '/confirm-email',
         page: 'Confirm',
+        roles: ['guest', 'identity'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],

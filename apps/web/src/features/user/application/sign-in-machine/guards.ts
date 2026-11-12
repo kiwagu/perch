@@ -28,8 +28,10 @@ function passwordsOf(event: SignInEvent): Passwords {
 
 /**
  * The guards of the screen's flow, by the names of its `meta.guards`: whether a sign-in was refused
- * for an email not verified yet, whether it found the account signed in on as many devices as it
- * may be (its outcome `device-limit`), and those of a new password typed twice at sign-up.
+ * for an email not verified yet (the gateway's 403 that names no ban; a banned account's is
+ * `data:ACCOUNT_BANNED`, which goes back to the form like any other refusal), whether it found
+ * the account signed in on as many devices as it may be (its outcome `device-limit`), and those
+ * of a new password typed twice at sign-up.
  */
 export const signInGuards = {
   emailNotVerified: ({ event }: GuardArgs) =>

@@ -7,8 +7,10 @@
  * Accounts are created through the gateway at `--gateway`, else at `GATEWAY_DEV_URL`, which
  * `bun run seed` sets from the mcproc manifest: this checkout's dev gateway. Each new account is
  * verified through the mail the gateway sends it, read from the stand's mailbox at `--mailbox`,
- * else at `MAILBOX_DEV_URL`, set the same way. The stand behind the gateway is reached only by
- * the sweep (`seed sweep`, and `--reset` before seeding): `--url` (else `SURREAL_DEV_URL`, set
+ * else at `MAILBOX_DEV_URL`, set the same way. The stand behind the gateway is reached by the
+ * sweep (`seed sweep`, and `--reset` before seeding) and by the operator command that appoints the
+ * catalog's operator once the accounts exist (`bun apps/gateway/scripts/operator/cli.ts`, run by
+ * the seed on the same stand and as the same user): `--url` (else `SURREAL_DEV_URL`, set
  * the same way), `--namespace=`, `--database=`, `--user=` and `--pass=` name it and its system
  * user, by default the stand's root on the gateway's database.
  */
@@ -19,7 +21,7 @@ import { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
 import type { SeedMode } from './catalog'
-import { runSeed, type StandTarget, sweep } from './seed'
+import { runSeed, type StandTarget, spawnCommand, sweep } from './seed'
 
 const FLAGS = new Set(['--fresh', '--reset'])
 
@@ -129,6 +131,7 @@ export async function main(
     mode,
     reset: argv.includes('--reset'),
     inbox: new Mailbox(mailbox.data),
+    runCommand: spawnCommand,
   })
 
   if (result.isErr()) {

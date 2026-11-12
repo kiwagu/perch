@@ -153,6 +153,13 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext',
     sourcemap: mode === 'development',
     minify: mode !== 'development',
+    // What the start loads statically is one chunk. A script loaded on demand (a lazy page, the
+    // database code) shares modules with the start, which Rolldown would otherwise split into
+    // common chunks of their own, all loaded with the start: the first frame grows by the cost of
+    // the split, more than a lazy page saves.
+    rolldownOptions: {
+      output: { codeSplitting: { groups: [{ name: 'first-frame', tags: ['$initial'] }] } },
+    },
   },
   // A worker's bundle runs its own plugins: its WASM loses the source-map section too.
   worker: { format: 'es', plugins: () => [stripWasmSourceMaps()] },

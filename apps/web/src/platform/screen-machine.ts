@@ -1,7 +1,8 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
  * frame's guard (the action that used the input completed), its search taking the value of a field
- * from what the moving event carries (`navigate-search.ts`), asks the frame's confirmation before
+ * and the id of an entry from what the moving event carries (`navigate-search.ts`), asks the
+ * frame's confirmation before
  * a destructive control's event and the guard before a leaving control's, in that order, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
@@ -33,7 +34,13 @@ import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
 import { isLeavingControl } from './leaving'
 import { useService } from './module'
-import { type FieldValues, isSearch, type NavigateParams, searchOf } from './navigate-search'
+import {
+  type FieldValues,
+  type ItemIds,
+  isSearch,
+  type NavigateParams,
+  searchOf,
+} from './navigate-search'
 import { PLATFORM_EVENTS } from './platform-events.port'
 import { sendPlatformEvents } from './platform-events-input'
 import { rendersIn } from './screen-renders'
@@ -74,17 +81,24 @@ const childrenOf = (snapshot: unknown): Map<string, string> =>
     ),
   )
 
+/** Whether `value` is absent or a record of strings: the fields or the items a move carries. */
+const isStrings = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) && Object.values(value).every((each) => typeof each === 'string'))
+
 /**
  * A flow's `navigate` effect as a machine emits it: where to go, with its search when it gives one,
- * and what the fields of the event that moves hold, for the values the search takes from them.
+ * what the fields of the event that moves hold and the entry it acted in, for the values the
+ * search takes from them.
  */
-const isNavigate = (event: unknown): event is NavigateParams & { readonly fields?: FieldValues } =>
+const isNavigate = (
+  event: unknown,
+): event is NavigateParams & { readonly fields?: FieldValues; readonly items?: ItemIds } =>
   isRecord(event) &&
   typeof event['to'] === 'string' &&
   (event['search'] === undefined || isSearch(event['search'])) &&
-  (event['fields'] === undefined ||
-    (isRecord(event['fields']) &&
-      Object.values(event['fields']).every((value) => typeof value === 'string')))
+  isStrings(event['fields']) &&
+  isStrings(event['items'])
 
 const DONE = 'xstate.done.actor.'
 const FAILED = 'xstate.error.actor.'
@@ -224,7 +238,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
           to: event.to,
           ...(event.search === undefined
             ? {}
-            : { search: searchOf(event.search, event.fields ?? {}) }),
+            : { search: searchOf(event.search, event.fields ?? {}, event.items ?? {}) }),
           ignoreBlocker: true,
         })
       }

@@ -1,9 +1,10 @@
 /**
  * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes, the invitation routes and the auth mount under `/auth` (Better Auth's sign-up, sign-in,
- * verification and resend, and the gateway's own recovery and changes of a password and an email
- * and deletion of an account), the device routes in front so the two sign-outs under `/auth` are
- * the gateway's own; and the sync connection of each device over a WebSocket at `/sync`.
+ * routes, the invitation routes, the console's routes for operators under `/console` and the auth
+ * mount under `/auth` (Better Auth's sign-up, sign-in, verification and resend, and the gateway's
+ * own recovery and changes of a password and an email and deletion of an account), the device
+ * routes in front so the two sign-outs under `/auth` are the gateway's own; and the sync
+ * connection of each device over a WebSocket at `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
@@ -13,6 +14,7 @@ import { createLogger } from '@workspace/logger'
 import { authHandler } from './auth/auth-handler'
 import { deviceRoutes } from './auth/device.routes'
 import type { GatewayRoot } from './composition/root'
+import { consoleRoutes } from './console'
 import { clientAddress } from './limits/client-address'
 import { SyncConnection } from './sync/sync-connection'
 import { invitationRoutes } from './tenants/invitation-routes'
@@ -95,6 +97,22 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       clock: root.clock,
     }),
     invitationRoutes(root.sessions, root.organisations, { onFailure, limits: root.limits }),
+    consoleRoutes({
+      sessions: root.sessions,
+      accounts: root.accountDirectory,
+      bans: root.accountBans,
+      names: root.profileNames,
+      emailChanges: root.emailChanges,
+      passwords: root.passwords,
+      auth: root.auth,
+      mails: root.mails,
+      limits: root.limits,
+      departure: root.departure,
+      teardown: root.teardown,
+      connections: root.connections,
+      turns: root.accountTurns,
+      onFailure,
+    }),
     authHandler({
       auth: root.auth,
       sessions: root.sessions,
