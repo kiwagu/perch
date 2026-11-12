@@ -19,6 +19,7 @@ import {
   type NotesService,
 } from '../../features/organisation/application/notes.service'
 import { OrganisationModule } from '../../features/organisation/organisation.module'
+import { ACCOUNT_START_SERVICE } from '../../features/user/application/account-start.service'
 import {
   PROFILE_SERVICE,
   type ProfileService,
@@ -139,6 +140,7 @@ function seedClient(services: AppServices, failures: DataError[], inbox: Inbox):
     invitations: services.container.get(INVITATIONS),
     profiles,
     settings,
+    starts: services.container.get(ACCOUNT_START_SERVICE),
     notes,
     inbox,
     enter,

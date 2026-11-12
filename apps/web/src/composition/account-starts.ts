@@ -1,14 +1,11 @@
 /**
- * The starts of new accounts on this browser: the service a first verification starts an account
- * with, and what finishes one it left half-way. Each time an identity's space opens here (the start
- * of the page, a sign-in, a verification) the start kept for it is finished, unless it waits for
- * the device's first pull: a sign-in that answered `start` (the account has no settings or profile
- * at the gateway yet) keeps one, which the tab that leads the sync finishes once its engine says
- * the account's private region caught up with the gateway, so it creates only what the pull left
- * missing. The tabs take their turns under one Web
- * Lock, each leaving its writes durable and projected for the next. A sign-out forgets the kept
- * start with the device (`forgetDevice`), a session that merely closes keeps it. A failure is
- * logged by its code alone.
+ * The starts of new accounts on this browser. A sign-in or a first verification of an account that
+ * has no settings or profile at the gateway yet keeps its start, which the tab that leads the sync
+ * finishes once its engine says the account's private region caught up with the gateway, so it
+ * creates only what the pull left missing; a start left half-way is finished after a later pull.
+ * The tabs take their turns under one Web Lock, each leaving its writes durable and projected for
+ * the next. A sign-out forgets the kept start with the device (`forgetDevice`), a session that
+ * merely closes keeps it. A failure is logged by its code alone.
  */
 
 import { err, ResultAsync } from 'neverthrow'
@@ -100,10 +97,12 @@ export interface AccountStartsDeps {
 
 /** The starts of new accounts on this browser, and what the root tells them. */
 export interface AccountStarts {
+  /** The service the starts run on, for a composition that finishes one itself (the seed client). */
   readonly service: AccountStartService
   /**
-   * A sign-in answered that the account has not started: its start is kept until this device has
-   * pulled what the account has. A name the profile refuses keeps nothing, and is logged.
+   * A sign-in or a first verification answered that the account has not started: its start is kept
+   * until this device has pulled what the account has. A name the profile refuses keeps nothing,
+   * and is logged.
    */
   keepAfterPull(user: AuthUser, from: AccountStartFrom): void
   /** This tab's sync changed: a tab that leads finishes a start waiting for the pull, once pulled. */
@@ -139,7 +138,6 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
   // in changes nothing here: a closing session keeps the start, a sign-out forgot it already.
   deps.session.subscribe((user) => {
     if (user !== undefined) {
-      void starts.resume(user).match(() => undefined, logged)
       // The space is open now: a tab that led before it was finishes what waits for the pull.
       afterPull()
     }
@@ -175,12 +173,8 @@ function afterFirstPull(
 ): () => void {
   let watched: SyncEngine | undefined
 
-  /** The start kept for `identity` that waits for the pull, if any. */
-  const waiting = (identity: string) => {
-    const start = kept.kept()
-
-    return start?.identity === identity && start.afterPull
-  }
+  /** Whether a start is kept for `identity`: it waits for the pull. */
+  const waiting = (identity: string) => kept.kept()?.identity === identity
 
   return () => {
     const space = deps.space()

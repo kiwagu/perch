@@ -283,6 +283,7 @@ flow:
           by: console.account.removal.remove-button
           onDone:
             target: "#account.removed"
+            read: false
             description: The account is gone; the app moves to the accounts, where the toast says so.
             actions:
               - navigate: /console/users

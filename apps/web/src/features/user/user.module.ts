@@ -5,7 +5,6 @@ import { COMMANDS } from '../../platform/commands.port'
 import { defineModule } from '../../platform/module'
 import { SESSION } from '../../platform/session.port'
 
-import { ACCOUNT_START_SERVICE } from './application/account-start.service'
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
 import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-email.service'
@@ -40,8 +39,7 @@ export const UserModule = defineModule({
     },
     {
       provide: VERIFY_EMAIL_SERVICE,
-      useFactory: (container) =>
-        new VerifyEmailService(container.get(SESSION), container.get(ACCOUNT_START_SERVICE)),
+      useFactory: (container) => new VerifyEmailService(container.get(SESSION)),
     },
   ],
   declarations: {

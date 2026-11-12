@@ -9,6 +9,7 @@ import type { ProfileId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { NoteRow, NotesService } from '../../features/organisation/application/notes.service'
+import type { AccountStartService } from '../../features/user/application/account-start.service'
 import type { ProfileRow, ProfileService } from '../../features/user/application/profile.service'
 import type {
   SettingsRow,
@@ -125,8 +126,10 @@ export interface SeedClient {
 /** The seed client's device as its account steps use it: its session, services and mailbox. */
 export interface SeedDevice {
   readonly session: Pick<SessionPort, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
-  readonly profiles: Pick<ProfileService, 'read' | 'createProfile' | 'updateBio'>
-  readonly settings: Pick<SettingsService, 'read' | 'createSettings' | 'updateLocale'>
+  readonly profiles: Pick<ProfileService, 'read' | 'updateBio'>
+  readonly settings: Pick<SettingsService, 'read' | 'updateLocale'>
+  /** The app's starts of new accounts, which create an account's settings and profile. */
+  readonly starts: Pick<AccountStartService, 'keepAfterPull' | 'resumeAfterPull'>
   readonly inbox: Inbox
   /**
    * Signs in through `signIn` and waits for the first catch-up, which brings what the gateway
