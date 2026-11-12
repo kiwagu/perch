@@ -5,7 +5,10 @@
  * with `CONTRACT_AHEAD=1`, `CONTRACT_AHEAD_BASE`, the merge base of HEAD and the local `main`,
  * at whose flows a machine may still be (during a merge, the base the merge's commit will have,
  * so a merge of `main` compares the app it brings with the flows it brings), and
- * `CONTRACT_AHEAD_HEAD`, the commit the branch is at, whose flows the app was built from. Both
+ * `CONTRACT_AHEAD_HEAD`, the commit the branch is at, whose flows the app was built from. During
+ * a merge that commit is the tip before it, which the engine the merge brings may no longer read
+ * (a key it now requires): then the merge runs without it, held to its base alone, while outside
+ * a merge the tests report a HEAD whose contract does not load. Both
  * are named here rather than read by the tests, so the test cache, keyed by them, never carries
  * a pass made against one branch state into another with the same files. When
  * that merge base cannot be found (no local `main`, or no history shared with it), or an
@@ -18,6 +21,8 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
+
+import { contractAt } from '@workspace/ui-contract'
 
 const LANDING_BRANCH = 'main'
 
@@ -41,7 +46,7 @@ const unknownMerge = (action: string): string =>
 
 type Mode =
   | { readonly kind: 'strict' }
-  | { readonly kind: 'ahead'; readonly base: string; readonly head: string }
+  | { readonly kind: 'ahead'; readonly base: string; readonly head: string | undefined }
   | { readonly kind: 'stop'; readonly problem: string }
 
 /** The commits a merge in progress brings in, or why they cannot be told. */
@@ -52,6 +57,17 @@ function git(args: readonly string[]): string | undefined {
   const run = spawnSync('git', [...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
 
   return run.status === 0 ? run.stdout.trim() : undefined
+}
+
+/** Whether the engine here reads the contract `revision` holds, in the repository at `root`. */
+function readsContractAt(revision: string, root: string): boolean {
+  try {
+    contractAt(revision, root)
+
+    return true
+  } catch {
+    return false
+  }
 }
 
 /** The lines of `text` that hold something. */
@@ -123,10 +139,16 @@ function modeOf(): Mode {
   // With the commits a merge brings in, the merge base of main and the merge's commit to be.
   const base = git(['merge-base', `refs/heads/${LANDING_BRANCH}`, 'HEAD', ...merge.heads])
   const head = git(['rev-parse', '--verify', 'HEAD^{commit}'])
+  const root = git(['rev-parse', '--show-toplevel'])
 
-  return base === undefined || base === '' || head === undefined
-    ? { kind: 'stop', problem: NO_MERGE_BASE }
-    : { kind: 'ahead', base, head }
+  if (base === undefined || base === '' || head === undefined || root === undefined) {
+    return { kind: 'stop', problem: NO_MERGE_BASE }
+  }
+
+  // The tip before a merge, whose contract the engine the merge brings cannot read, gives no flows.
+  const merging = merge.heads.length > 0
+
+  return { kind: 'ahead', base, head: merging && !readsContractAt(head, root) ? undefined : head }
 }
 
 function usage(): never {
@@ -161,7 +183,7 @@ function main(argv: readonly string[]): number {
             ...strict,
             CONTRACT_AHEAD: '1',
             CONTRACT_AHEAD_BASE: mode.base,
-            CONTRACT_AHEAD_HEAD: mode.head,
+            ...(mode.head === undefined ? {} : { CONTRACT_AHEAD_HEAD: mode.head }),
           },
   })
 
