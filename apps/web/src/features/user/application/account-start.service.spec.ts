@@ -88,12 +88,16 @@ function records() {
 }
 
 describe('AccountStartService', () => {
-  it('starts a new account with its settings, then its profile, under ids derived from its identity, and keeps nothing once both exist', async () => {
+  it('keeps the start until the pull, then creates the settings and then the profile, under ids derived from the identity, and keeps nothing once both exist', async () => {
     const kept = keptHere()
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect((await starts.start(ann, { name: 'Ann', locale: 'es' })).isOk()).toBe(true)
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
+    expect(held.created).toEqual([])
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
     expect(held.created).toEqual(['settings', 'profile'])
 
     const [settings] = held.settingsRows()
@@ -109,94 +113,23 @@ describe('AccountStartService', () => {
     expect(kept.now()).toBeUndefined()
   })
 
-  it('refuses a name the profile would refuse before it writes or keeps anything', async () => {
+  it('keeps nothing for a name the profile would refuse', () => {
     const kept = keptHere()
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect((await starts.start(ann, { name: '  ', locale: 'en' }))._unsafeUnwrapErr().code).toBe(
+    expect(starts.keepAfterPull(ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code).toBe(
       'profile:NAME_REQUIRED',
     )
-    expect(held.created).toEqual([])
     expect(kept.now()).toBeUndefined()
   })
 
-  it('keeps a start whose profile could not be created, and the next open of its space here creates exactly that profile', async () => {
-    const kept = keptHere()
-    const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
-
-    held.refuseProfiles(true)
-
-    expect((await starts.start(ann, { name: 'Ann', locale: 'es' }))._unsafeUnwrapErr().code).toBe(
-      'data:WRITE_FAILED',
-    )
-    expect(held.created).toEqual(['settings'])
-    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: false })
-
-    held.refuseProfiles(false)
-
-    expect((await starts.resume(ann)).isOk()).toBe(true)
-    expect(held.created).toEqual(['settings', 'profile'])
-    expect(held.profileRows()).toMatchObject([{ identity: ann.id, name: 'Ann', email: ann.email }])
-    expect(kept.now()).toBeUndefined()
-
-    // Nothing is left to finish: another open creates nothing.
-    expect((await starts.resume(ann)).isOk()).toBe(true)
-    expect(held.created).toEqual(['settings', 'profile'])
-  })
-
-  it("creates nothing on the open of another account's space, nor where nothing was kept", async () => {
-    const kept = keptHere()
-    const held = records()
-    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
-    const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
-
-    expect((await starts.resume(ann)).isOk()).toBe(true)
-
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
-
-    expect((await starts.resume(bob)).isOk()).toBe(true)
-    expect(held.created).toEqual([])
-  })
-
-  it('reads the kept start in its turn: one another tab finished meanwhile creates nothing', async () => {
-    const kept = keptHere()
-    const held = records()
-    let letRun = () => {}
-    const waiting = new Promise<void>((resolve) => {
-      letRun = resolve
-    })
-    // The turn comes once another tab's turn ended.
-    const later: StartTurns = (run) =>
-      ResultAsync.fromSafePromise(waiting).andThen(() => run(() => okAsync(undefined)))
-    const starts = new AccountStartService(held.profiles, held.settings, kept, later, shows)
-
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
-
-    const resuming = starts.resume(ann)
-
-    // Another tab finished the start in its turn, and forgot it.
-    kept.forget()
-    letRun()
-
-    expect((await resuming).isOk()).toBe(true)
-    expect(held.created).toEqual([])
-  })
-})
-
-describe('AccountStartService, for a start a sign-in learnt of', () => {
-  it('keeps it until the pull, creating nothing as the space opens, and only what is missing after', async () => {
+  it('creates only what the pull left missing', async () => {
     const kept = keptHere()
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
     expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
-    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es', afterPull: true })
-
-    // The space opens before the device pulled: nothing is created.
-    expect((await starts.resume(ann)).isOk()).toBe(true)
-    expect(held.created).toEqual([])
 
     // The pull brought the settings another device made: only the profile is missing.
     expect(
@@ -217,29 +150,66 @@ describe('AccountStartService, for a start a sign-in learnt of', () => {
     expect(kept.now()).toBeUndefined()
   })
 
-  it('keeps nothing for a name the profile would refuse', () => {
+  it('keeps a start whose profile could not be created, and the next finish creates exactly that profile', async () => {
     const kept = keptHere()
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect(starts.keepAfterPull(ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code).toBe(
-      'profile:NAME_REQUIRED',
-    )
+    held.refuseProfiles(true)
+
+    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect((await starts.resumeAfterPull(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
+    expect(held.created).toEqual(['settings'])
+    expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
+
+    held.refuseProfiles(false)
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['settings', 'profile'])
+    expect(held.profileRows()).toMatchObject([{ identity: ann.id, name: 'Ann', email: ann.email }])
     expect(kept.now()).toBeUndefined()
+
+    // Nothing is left to finish: another finish creates nothing.
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.created).toEqual(['settings', 'profile'])
   })
 
-  it("finishes after the pull a start the first verification kept, and nobody else's", async () => {
+  it("creates nothing for another account's start, nor where nothing was kept", async () => {
     const kept = keptHere()
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
     const bob: AuthUser = { id: identityIdFactory.create(), email: 'bob@example.test' }
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en', afterPull: false })
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
 
     expect((await starts.resumeAfterPull(bob)).isOk()).toBe(true)
     expect(held.created).toEqual([])
-    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
-    expect(held.created).toEqual(['settings', 'profile'])
+  })
+
+  it('reads the kept start in its turn: one another tab finished meanwhile creates nothing', async () => {
+    const kept = keptHere()
+    const held = records()
+    let letRun = () => {}
+    const waiting = new Promise<void>((resolve) => {
+      letRun = resolve
+    })
+    // The turn comes once another tab's turn ended.
+    const later: StartTurns = (run) =>
+      ResultAsync.fromSafePromise(waiting).andThen(() => run(() => okAsync(undefined)))
+    const starts = new AccountStartService(held.profiles, held.settings, kept, later, shows)
+
+    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+
+    const resuming = starts.resumeAfterPull(ann)
+
+    // Another tab finished the start in its turn, and forgot it.
+    kept.forget()
+    letRun()
+
+    expect((await resuming).isOk()).toBe(true)
+    expect(held.created).toEqual([])
   })
 })
 
@@ -361,7 +331,7 @@ describe('AccountStartService over a projection that lags', () => {
     expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
 
     expect((await starts.resumeAfterPull(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
-    expect(kept.now()).toMatchObject({ identity: ann.id, afterPull: true })
+    expect(kept.now()).toMatchObject({ identity: ann.id })
   })
 })
 
@@ -386,7 +356,7 @@ describe('AccountStartService on a session', () => {
     await opened.close()
   })
 
-  it('finishes a start left without its profile, with no second settings and no second profile, however often it is resumed', async () => {
+  it('finishes a start left without its profile, with no second settings and no second profile, however often it is finished', async () => {
     const input = {
       email: 'ann@example.test',
       password: 'Pass-word-1',
@@ -416,18 +386,22 @@ describe('AccountStartService on a session', () => {
       shows,
     )
 
-    expect((await failing.start(user, { name: 'Ann', locale: 'es' })).isErr()).toBe(true)
+    expect(failing.keepAfterPull(user, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect((await failing.resumeAfterPull(user)).isErr()).toBe(true)
     expect((await opened.session.flush()).isOk()).toBe(true)
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)
     expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
 
     refuse = false
 
-    // Two opens of the space at once, as two tabs of the browser would: one of each record.
-    const resumed = await Promise.all([failing.resume(user), failing.resume(user)])
+    // Two finishes at once, as two tabs of the browser would: one of each record.
+    const resumed = await Promise.all([
+      failing.resumeAfterPull(user),
+      failing.resumeAfterPull(user),
+    ])
 
     expect(resumed.some((each) => each.isOk())).toBe(true)
-    expect((await failing.resume(user)).isOk()).toBe(true)
+    expect((await failing.resumeAfterPull(user)).isOk()).toBe(true)
     expect((await opened.session.flush()).isOk()).toBe(true)
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
       { locale: 'es', theme: 'dark' },

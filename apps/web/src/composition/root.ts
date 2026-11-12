@@ -196,7 +196,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       sync.syncState(state)
       starts.syncState(state)
     },
-    // The start of an account a sign-in learnt of waits for this device's first pull.
+    // The start of an account a sign-in or a first verification learnt of waits for the first pull.
     keepAccountStart: (user, from) => starts.keepAfterPull(user, from),
     onError: options.onError,
     publish: (event) => {

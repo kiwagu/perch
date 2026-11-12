@@ -1,5 +1,4 @@
-import { okAsync } from 'neverthrow'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import {
@@ -40,10 +39,9 @@ const submitted = {
 /** The sign-in form over the session, as the page runs it. */
 const form = () => createActor(createSignInMachine(new SignInService(opened.session))).start()
 
-/** The page of a verification link over the session, which starts nothing: a start is not asked. */
+/** The page of a verification link over the session. */
 function linkPage(link: string) {
-  const starts = { start: vi.fn(() => okAsync<void, never>(undefined)) }
-  const service = new VerifyEmailService(opened.session, starts)
+  const service = new VerifyEmailService(opened.session)
   const actor = createActor(
     createVerifyEmailMachine({
       token: link,
@@ -52,7 +50,7 @@ function linkPage(link: string) {
     }),
   ).start()
 
-  return { actor, starts }
+  return { actor }
 }
 
 describe('a banned account at sign-in', () => {
@@ -129,17 +127,16 @@ describe('a banned account at sign-in', () => {
 })
 
 describe('the link of a banned account', () => {
-  it('verifies the email and signs nothing in: the page ends banned, offering no new link, starting nothing', async () => {
+  it('verifies the email and signs nothing in: the page ends banned, offering no new link', async () => {
     expect((await opened.session.signUp(ann)).isOk()).toBe(true)
     opened.auth.ban(ann.email)
 
-    const { actor, starts } = linkPage(opened.auth.linkFor(ann.email))
+    const { actor } = linkPage(opened.auth.linkFor(ann.email))
     const ended = await waitFor(actor, (state) => state.status === 'done')
 
     expect(ended.value).toBe('banned')
     expect(ended.context.error).toBe('data:ACCOUNT_BANNED')
     expect(ended.can({ type: 'user.verify-email.resend-button', email: ann.email })).toBe(false)
-    expect(starts.start).not.toHaveBeenCalled()
     expect(opened.session.current()).toBeUndefined()
 
     // The email is verified all the same: once the ban is lifted the account signs in.
