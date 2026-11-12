@@ -55,7 +55,7 @@ import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedSession, savedTokenOf } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedSession } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -163,9 +163,11 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   // The account and its token are read in one step.
   const credentials = (): Credentials | undefined => {
     const here = session.current()
-    const token = here === undefined ? undefined : savedTokenOf(options.storage, here.id)
+    const saved = savedSession(options.storage)
 
-    return here === undefined || token === undefined ? undefined : { identity: here.id, token }
+    return here !== undefined && saved?.identity === here.id
+      ? { identity: here.id, token: saved.token, signIn: saved.signIn }
+      : undefined
   }
   const bearer: BearerDeps = {
     token: () => credentials()?.token,
@@ -231,7 +233,7 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   const accounts = options.accountsApi({
     credentials,
     device: bearer.device,
-    dropRole: (identity, role) => session.dropRole(identity, role),
+    dropRole: (asker, role) => session.dropRole(asker, role),
   })
   // The account's settings, which the frame reads and stores as well as the account's pages.
   const settings = new SettingsService(session.runner, commands, {

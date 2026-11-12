@@ -215,10 +215,10 @@ modeling stage.
   `GET /console/accounts/:id` and the actions on an account,
   `POST /console/accounts/:id/{rename,email,ban,unban,sign-out,reset,verification,removal}`
   (each answered 204), for an operator: each request reads the tab's credentials once as
-  it starts (the identity it shows and the token saved for it), each answer is parsed and each
-  refusal is a code of its action (`failed` for any other), and a `not-operator` takes
-  `operator` off the roles saved for that identity (`SessionService.dropRole`), whichever
-  identity is shown by then. One tab per browser leads the
+  it starts (the identity it shows, the token saved for it and the sign-in that saved it), each
+  answer is parsed and each refusal is a code of its action (`failed` for any other), and a
+  `not-operator` takes `operator` off the roles saved for that sign-in alone
+  (`SessionService.dropRole`), whichever sign-in is shown or current by then. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`, its hello presenting the session token) for the private region and every
   organisation's; the tabs hint each other over a BroadcastChannel, so each reads what the others

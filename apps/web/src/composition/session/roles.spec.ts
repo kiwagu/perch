@@ -168,12 +168,12 @@ describe('SessionRoles', () => {
     expect(heard).toEqual([['operator'], [], ['operator']])
   })
 
-  it('drops a role from the record of the identity that asked, whichever identity is shown', () => {
+  it('drops a role from the record of the sign-in that asked, whichever sign-in is shown or current', () => {
     // Ann's sign-in is the one saved on the browser; this tab still shows Bob.
     const { storage, session: anns, roles, heard } = rolesOf(ann, () => bob)
 
     saveRoles(storage, anns, ['operator'])
-    roles.drop(ann, 'operator')
+    roles.drop(anns, 'operator')
 
     expect(savedRoles(storage, anns)).toEqual([])
 
@@ -182,7 +182,7 @@ describe('SessionRoles', () => {
 
     saveRoles(storage, bobs, ['operator'])
     roles.followSaved()
-    roles.drop(ann, 'operator')
+    roles.drop(anns, 'operator')
 
     expect(savedRoles(storage, bobs)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
@@ -193,17 +193,31 @@ describe('SessionRoles', () => {
     const { storage, session, roles, heard } = rolesOf(ann, () => ann)
 
     roles.apply(session, ['operator'])
-    roles.drop(ann, 'operator')
+    roles.drop(session, 'operator')
 
     expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
     expect(heard).toEqual([['operator'], []])
   })
 
-  it('creates no record when it drops a role of an identity without one', () => {
+  it("leaves the role of the same account's later sign-in, asked for by an earlier one", () => {
+    const { storage, session: first, roles } = rolesOf(ann, () => ann)
+
+    saveRoles(storage, first, ['operator'])
+
+    const again = signedInAs(storage, ann)
+
+    saveRoles(storage, again, ['operator'])
+    roles.drop(first, 'operator')
+
+    expect(savedRoles(storage, again)).toEqual(['operator'])
+    expect([...roles.current()]).toEqual(['operator'])
+  })
+
+  it('creates no record when it drops a role of a sign-in without one', () => {
     const { storage, session, roles } = rolesOf(ann, () => ann)
 
-    roles.drop(ann, 'operator')
+    roles.drop(session, 'operator')
 
     expect(storage.get(rolesKeyOf(session.signIn))).toBeUndefined()
   })

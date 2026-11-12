@@ -4,9 +4,9 @@
  * it is that identity's. Only a welcome writes a record (`apply`), heard by the tab that leads the
  * browser's sync while the sign-in it welcomed is still the one saved on the browser; the other
  * tabs follow it through the storage (`followSaved`), reading and writing nothing. A console
- * request the gateway refused as `not-operator` drops the role from the current sign-in's record
- * while it is of the identity that asked (`drop`), whichever identity is shown by then. The ending
- * of a sign-in removes its record (`forgetSignIn`).
+ * request the gateway refused as `not-operator` drops the role from the record of the sign-in
+ * that asked (`drop`), whichever sign-in is current by then. The ending of a sign-in removes its
+ * record (`forgetSignIn`).
  */
 
 import type { IdentityId } from '@workspace/ids'
@@ -16,6 +16,7 @@ import {
   dropRole,
   type KeptSession,
   type KeyValueStorage,
+  type SignInOwner,
   savedRoles,
   savedSession,
   saveRoles,
@@ -80,17 +81,13 @@ export class SessionRoles {
   }
 
   /**
-   * The gateway refused `identity` a request for want of `role`: the role goes from the record of
-   * the sign-in current on the browser while it is that identity's, whichever identity is shown
-   * now; a sign-in without a record gets none.
+   * The gateway refused the sign-in `asker` a request for want of `role`: the role goes from that
+   * sign-in's record, as the request captured it when it started, whichever sign-in is current
+   * now (a later one of the same account keeps what its own welcome brought); a sign-in without
+   * a record, its own ended already, gets none.
    */
-  drop(identity: IdentityId, role: PlatformRole): void {
-    const current = savedSession(this.#options.storage)
-
-    if (current?.identity === identity) {
-      dropRole(this.#options.storage, current, role)
-    }
-
+  drop(asker: SignInOwner, role: PlatformRole): void {
+    dropRole(this.#options.storage, asker, role)
     this.tell()
   }
 

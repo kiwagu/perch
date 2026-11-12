@@ -1,7 +1,6 @@
 import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
@@ -19,6 +18,7 @@ import {
   isRolesKey,
   isSessionKey,
   type KeptSession,
+  type SignInOwner,
   savedIdentity,
 } from '../storage'
 
@@ -357,11 +357,11 @@ export class SessionService implements SessionPort {
   }
 
   /**
-   * The gateway refused `identity` a request for want of `role` (a console call's `not-operator`):
-   * the role goes from that identity's record, whichever identity is shown now.
+   * The gateway refused the sign-in `asker` a request for want of `role` (a console call's
+   * `not-operator`): the role goes from that sign-in's record, whichever sign-in is current now.
    */
-  dropRole(identity: IdentityId, role: PlatformRole): void {
-    this.#roles.drop(identity, role)
+  dropRole(asker: SignInOwner, role: PlatformRole): void {
+    this.#roles.drop(asker, role)
   }
 
   /**
