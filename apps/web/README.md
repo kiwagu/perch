@@ -45,27 +45,28 @@ modeling stage.
   A verification link's token signs the device in the same way the first time it is exchanged
   (`SessionService.verifyEmail`, the gateway's own `POST /backend/auth/verify-email` with
   `{ token }` and the device's headers, its answer read through a zod schema): in the same lock,
-  kept and opened as a sign-in, and answered with the account's name and its sign-up language; as a link
+  kept and opened as a sign-in, its start kept as a sign-in that learnt of one keeps it (below); as a link
   names no email, another account saved on the browser refuses it (`data:OTHER_ACCOUNT`) only
   once the gateway answered, and its new token is left to sign out. A link verified before signs
   nothing in (`verified-before`), the link of an account an operator banned verifies its email,
   signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`), and a
-  refused one fails as `data:LINK_EXPIRED` or `data:LINK_INVALID`, naming no token. The account a first verification signed in starts on
-  this browser (`composition/account-starts.ts`, the user module's `AccountStartService`): its
-  start is kept in `perch.session.account-start` (the identity, the name and the sign-up
-  language) until its settings (in that language and the theme the device shows as it creates
-  them) and its profile both exist, and finished each time that identity's space opens here
-  again. The tabs take their turns under the Web Lock
+  refused one fails as `data:LINK_EXPIRED` or `data:LINK_INVALID`, naming no token. The account a first verification or a sign-in finds
+  not started starts on this browser (`composition/account-starts.ts`, the user module's
+  `AccountStartService`): its start is kept in `perch.session.account-start` (the identity, the
+  name and the sign-up language) until its settings (in that language and the theme the device
+  shows as it creates them) and its profile both exist. The tabs take their turns under the Web Lock
   `perch.session.account-start` (`oneTabAtATime`, the helper the sign-in lock runs on too): each
   reads the kept start and the account's records afresh in the local store they share, and
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
   another one created. A sign-out forgets the kept start with the device (`forgetDevice`); a
-  session that only closes (a tab that goes) keeps it for the next open. A start that a sign-out
-  left unfinished stays so until a sign-in learns of it: a sign-in whose answer carries `start`
-  (`{ name, locale }`: the account has no settings or profile at the gateway yet, because a reset
-  verified its email or the device that verified it has not synced its start) keeps that start
-  before the device is saved (`SessionOptions.keepAccountStart`), marked `afterPull`; such a start
-  is not finished as the space opens, but by the tab that leads the sync once its engine says the
+  session that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
+  stays so until a sign-in learns of it. The first verification's answer (`{ name, locale }` of the
+  sign-up), and a sign-in's answer that carries `start` (the account has no settings or profile at
+  the gateway yet, because a reset verified its email or the device that verified it has not
+  synced its start), keep that start before the device is saved
+  (`SessionOptions.keepAccountStart`). The gateway marks the email verified before the
+  verification signs the device in, so another device may sign in and start the account
+  meanwhile: a start is finished by the tab that leads the sync once its engine says the
   account's private region caught up with the gateway on this connection
   (`SyncEngine.caughtUp(privateRegionId(identity), …)`: the welcome named it, it still syncs, its
   subscription was answered and every update since was imported in full, none lost and none

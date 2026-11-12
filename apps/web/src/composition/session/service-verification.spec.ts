@@ -81,9 +81,9 @@ describe('verifying an email', () => {
     expect((await tab.session.verifyEmail(link))._unsafeUnwrap()).toEqual({
       kind: 'signed-in',
       user: ann,
-      name: 'Ann',
-      locale: 'en',
     })
+    // The account has not started: its start is kept, from the name and language it signed up with.
+    expect(tab.startsKept).toEqual([[ann, { name: 'Ann', locale: 'en' }]])
 
     const device = deviceIdFrom(tab.storage)
 
@@ -227,8 +227,8 @@ describe('signing up', () => {
     expect(auth.linkFor(annSignUp.email)).toBe(link)
     expect((await tab.session.verifyEmail(link))._unsafeUnwrap()).toMatchObject({
       kind: 'signed-in',
-      name: 'Ann',
     })
+    expect(tab.startsKept).toMatchObject([[{ email: annSignUp.email }, { name: 'Ann' }]])
     expect((await tab.session.signOut()).isOk()).toBe(true)
     expect((await tab.session.signIn(again))._unsafeUnwrapErr().code).toBe(
       'data:INVALID_CREDENTIALS',

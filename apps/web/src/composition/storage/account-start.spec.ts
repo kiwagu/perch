@@ -9,7 +9,6 @@ const start = {
   identity: identityIdFactory.create(),
   name: 'Ann',
   locale: 'es' as const,
-  afterPull: false,
 }
 
 describe('the kept account start', () => {
