@@ -32,6 +32,7 @@ const ACTION = {
   params: { email: { type: 'string', description: 'The address.' } },
   result: 'a mail is on its way',
   codes: ['failed'],
+  changes: [],
 }
 
 describe('platformSchema mail', () => {
@@ -181,5 +182,11 @@ describe('platformSchema changes', () => {
     for (const value of [['Devices.list'], ['devices list'], ['devices.'], 'devices.list', true]) {
       expect(changing(value), JSON.stringify(value)).toBe(false)
     }
+  })
+  it('refuses an action that does not say what it changes, at its changes', () => {
+    const { changes: _changes, ...unsaid } = ACTION
+    const parsed = platformSchema.safeParse({ ...PLATFORM, actions: { send: unsaid } })
+
+    expect(parsed.error?.issues.map(({ path }) => path)).toEqual([['actions', 'send', 'changes']])
   })
 })

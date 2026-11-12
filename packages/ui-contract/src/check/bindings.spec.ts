@@ -272,6 +272,7 @@ describe('bindingsProblems', () => {
       result: 'the devices',
       codes: ['devices-read-failed'],
       roles: ['member'],
+      changes: [],
     }
     anchorIn(contract, 'sample.devices-list').source = {
       platform: 'devices.list',

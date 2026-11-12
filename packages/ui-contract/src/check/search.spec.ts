@@ -42,6 +42,7 @@ function pagedSample(): ReturnType<typeof sampleContract> {
     paged: { sizes: [10, 25, 50], default: 25 },
     result: 'the page of accounts and how many there are',
     codes: ['failed'],
+    changes: [],
   }
   screenIn(contract, 'sample').anchors['sample.accounts-list'] = {
     kind: 'list',
