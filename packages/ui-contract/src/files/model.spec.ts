@@ -25,6 +25,20 @@ function writeModel(change: (document: Document) => void): void {
 
 const messages = (): string[] => loadModel(root).problems.map((problem) => problem.message)
 
+/** The actions of the fixture's `thing`, as the document holds them, for a spec to change. */
+function thingActions(document: Document): Record<string, object> {
+  const perch = document.$defs['thing']?.['x-perch'] as
+    | { actions?: Record<string, object> }
+    | undefined
+  const actions = perch?.actions
+
+  if (actions === undefined) {
+    throw new Error('the fixture lost the actions of thing')
+  }
+
+  return actions
+}
+
 beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'ui-contract-model-'))
   mkdirSync(join(root, 'contract'))
@@ -95,6 +109,36 @@ describe('loadModel', () => {
     expect(messages()).toEqual([
       '$defs.thing.properties.size: a string field that is not readonly needs x-perch.crdt ("none" for last-writer-wins)',
     ])
+  })
+  it('carries the reads an action says it changes, and none where it says none', () => {
+    writeModel((document) => {
+      const actions = thingActions(document)
+
+      actions['createThing'] = { ...actions['createThing'], changes: ['things.list'] }
+      actions['updateThing'] = { ...actions['updateThing'], changes: [] }
+    })
+
+    expect(loadModel(root).model?.entities['thing']?.actions).toEqual({
+      createThing: {
+        description: 'Adds a thing.',
+        params: { id: '$id', title: 'title' },
+        changes: ['things.list'],
+      },
+      updateThing: { params: { id: '$id', title: 'title' }, changes: [] },
+    })
+  })
+  it('refuses a read an action changes that no platform action could be named', () => {
+    writeModel((document) => {
+      const actions = thingActions(document)
+
+      actions['updateThing'] = { ...actions['updateThing'], changes: ['Things.list'] }
+    })
+
+    const [problem, ...more] = messages()
+
+    expect(loadModel(root).model).toBeUndefined()
+    expect(more).toEqual([])
+    expect(problem).toMatch(/^\$defs\.thing\["x-perch"\]\.actions\.updateThing\.changes\[0\]: /)
   })
   it('reports a string field that is not readonly and has no crdt', () => {
     writeModel((document) => {

@@ -6754,6 +6754,15 @@
                 ],
                 "additionalProperties": false
               },
+              "changes": {
+                "description": "The reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                }
+              },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
                 "type": "object",

@@ -32,7 +32,7 @@ const LANGUAGE = [
 
 const SESSION = [
   'Every scenario starts in a fresh browser context with nobody signed in (`guest`).',
-  "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows) and, when it sends mails, its `mail` and its `notices`; never assume it from the action's name.",
+  "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows), its `changes` (the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds: platform actions a list, a section or a table takes as its `source`) and, when it sends mails, its `mail` and its `notices`; never assume it from the action's name.",
   'One account per browser: a second account, or a second device of the same one, needs a browser context of its own.',
 ].join(' ')
 
@@ -67,7 +67,7 @@ const BINDINGS = [
 
 const MODEL = [
   '`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity.',
-  "An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters, and `unique` and `index`.",
+  "An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (as a platform action says it), and `unique` and `index`.",
   "A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer).",
 ].join(' ')
 
