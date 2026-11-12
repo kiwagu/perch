@@ -13,15 +13,18 @@
         "actions": {
           "createProfile": {
             "description": "Creates the profile of a new account on the first device that enters it.",
-            "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" }
+            "params": { "id": "$id", "identity": "identity", "name": "name", "email": "email" },
+            "changes": ["accounts.read"]
           },
           "updateName": {
             "description": "Replaces the name.",
-            "params": { "id": "$id", "name": "name" }
+            "params": { "id": "$id", "name": "name" },
+            "changes": ["accounts.list", "accounts.read"]
           },
           "updateBio": {
             "description": "Replaces the bio.",
-            "params": { "id": "$id", "bio": "bio" }
+            "params": { "id": "$id", "bio": "bio" },
+            "changes": []
           }
         },
         "unique": [["identity"]]
@@ -76,15 +79,18 @@
         "actions": {
           "createSettings": {
             "description": "Creates the settings of a new account on the first device that enters it, as its profile, each with its starting value: the language the account signed up with, and the theme that device shows.",
-            "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" }
+            "params": { "id": "$id", "identity": "identity", "locale": "locale", "theme": "theme" },
+            "changes": []
           },
           "updateLocale": {
             "description": "Stores the language the account chose.",
-            "params": { "id": "$id", "locale": "locale" }
+            "params": { "id": "$id", "locale": "locale" },
+            "changes": []
           },
           "updateTheme": {
             "description": "Stores the theme the account chose.",
-            "params": { "id": "$id", "theme": "theme" }
+            "params": { "id": "$id", "theme": "theme" },
+            "changes": []
           }
         },
         "unique": [["identity"]]
@@ -129,15 +135,18 @@
         "actions": {
           "createNote": {
             "description": "Adds a note by the signed-in member.",
-            "params": { "id": "$id", "author": "author", "text": "text" }
+            "params": { "id": "$id", "author": "author", "text": "text" },
+            "changes": []
           },
           "updateNote": {
             "description": "Replaces the text of a note.",
-            "params": { "id": "$id", "text": "text" }
+            "params": { "id": "$id", "text": "text" },
+            "changes": []
           },
           "deleteNote": {
             "description": "Deletes a note.",
-            "params": { "id": "$id" }
+            "params": { "id": "$id" },
+            "changes": []
           }
         }
       },
