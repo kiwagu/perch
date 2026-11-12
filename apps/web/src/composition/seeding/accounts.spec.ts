@@ -82,10 +82,17 @@ function fakeInbox(
 
 /**
  * A seed device over a test world of the fake gateway: the session, the account's services, the
- * starts of new accounts as the app composes them over the browser's storage, `inbox`.
+ * starts of new accounts as the app composes them over the browser's storage, `inbox`. With
+ * `beside`, the app finishes the start it kept, as the root does once the space is open, in
+ * `beside` (what each finish answered), while the seed goes on.
  */
-async function device(auth: FakeGatewayAuth, inbox: Inbox) {
-  const world = await openTestWorld({ auth, online: false })
+async function device(auth: FakeGatewayAuth, inbox: Inbox, beside?: Promise<boolean>[]) {
+  const tab: { starts?: AccountStartService } = {}
+  const world = await openTestWorld({
+    auth,
+    online: false,
+    keepAccountStart: (user, from) => tab.starts?.keepAfterPull(user, from),
+  })
 
   worlds.push(world)
 
@@ -98,17 +105,34 @@ async function device(auth: FakeGatewayAuth, inbox: Inbox) {
     shape: settingsShape,
     commands: settingsCommands,
   })
+  const starts = new AccountStartService(
+    profiles,
+    settings,
+    keptAccountStart(world.storage),
+    (run) => run(() => session.flush()),
+    () => 'system',
+  )
+
+  tab.starts = starts
+
+  if (beside) {
+    world.session.subscribe((user) => {
+      if (user !== undefined) {
+        beside.push(
+          starts.resumeAfterPull(user).match(
+            () => true,
+            () => false,
+          ),
+        )
+      }
+    })
+  }
+
   const seed: SeedDevice = {
     session,
     profiles,
     settings,
-    starts: new AccountStartService(
-      profiles,
-      settings,
-      keptAccountStart(world.storage),
-      (run) => run(() => session.flush()),
-      () => 'system',
-    ),
+    starts,
     inbox,
     enter: (signIn) => signIn(),
     settle: () => session.flush(),
@@ -167,24 +191,26 @@ describe("the seed client's account", () => {
     })
   })
 
-  it("starts the account as the app does, under the ids derived from its identity, so the app's own start beside it creates nothing more", async () => {
+  it("starts the account as the app does, under the ids derived from its identity, while the app's own start finishes it beside the seed: one record of each", async () => {
     const auth = fakeGatewayAuth()
     const { inbox } = fakeInbox(auth)
-    const { seed } = await device(auth, inbox)
+    const beside: Promise<boolean>[] = []
+    const { seed, world } = await device(auth, inbox, beside)
     const seeded = (await ensureAccount(seed, ann))._unsafeUnwrap()
     const body = seeded.user.id.slice(seeded.user.id.indexOf('_') + 1)
+
+    // The verification kept the start, and the app began finishing it as the space opened.
+    expect(beside).toHaveLength(1)
+    expect(await Promise.all(beside)).toEqual([true])
+
     const { profile, settings } = await written(seed, seeded.user)
 
     expect(settings?.id).toBe(`stg_${body}`)
     expect(profile?.id).toBe(`prf_${body}`)
     expect(seeded.profileId).toBe(`prf_${body}`)
-
-    // The app finishes a start it kept for the account: it finds both records.
-    expect(seed.starts.keepAfterPull(seeded.user, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
-
-    expect((await seed.starts.resumeAfterPull(seeded.user)).isOk()).toBe(true)
     expect((await seed.settings.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
     expect((await seed.profiles.read({ identity: seeded.user.id }))._unsafeUnwrap()).toHaveLength(1)
+    expect(keptAccountStart(world.storage).kept()).toBeUndefined()
   })
 
   it('has the mail of an account not verified yet sent again, and opens the new link', async () => {
