@@ -92,6 +92,7 @@ flow:
     signing-out-everywhere:
       invoke:
         src: platform.sign-out-everywhere
+        read: false
         onDone:
           target: signed-out
           actions:
