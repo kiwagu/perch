@@ -7022,7 +7022,7 @@
                 "question",
                 "never"
               ],
-              "description": "A change of screen the user starts: a link, Back, Forward."
+              "description": "A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward."
             },
             "actions": {
               "type": "string",
@@ -7056,7 +7056,7 @@
             "elsewhere": {
               "type": "string",
               "const": "cannot",
-              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed."
             }
           },
           "required": [
