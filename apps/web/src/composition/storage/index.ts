@@ -10,6 +10,12 @@ export {
   type StorageEvents,
 } from './key-value'
 export {
+  addLeftoverIdentity,
+  dropLeftoverIdentity,
+  LEFTOVER_IDENTITIES_KEY,
+  leftoverIdentities,
+} from './leftover-identities'
+export {
   isMembershipsKey,
   membershipsKeyOf,
   savedMemberships,
@@ -40,4 +46,11 @@ export {
   tokenRecord,
 } from './signed-in'
 export { forgetSigningOut, saveSigningOut, signingOutSince } from './signing-out'
+export {
+  forgetSyncLeader,
+  SYNC_LEADER_KEY,
+  type SyncLeader,
+  savedSyncLeader,
+  saveSyncLeader,
+} from './sync-leader'
 export { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'

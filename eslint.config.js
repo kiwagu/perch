@@ -72,4 +72,26 @@ export default [
       ],
     },
   },
+  {
+    // The web app writes the storage its tabs share only through its storage module, where each
+    // record is reviewed with its key: a tab hears another tab's writes late, so a record of an
+    // account lives under that account's own key, and a tab that still shows one account cannot
+    // write over the next one's. The module's own specs and the fixtures write it as tabs would.
+    files: ['apps/web/src/{composition,platform}/**/*.{ts,tsx}'],
+    ignores: ['apps/web/src/composition/storage/**', '**/*.spec.{ts,tsx}', '**/__fixtures__/**'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        // `storage.set(…)`, `storage.remove(…)`, and the same on `options.storage`, `deps.storage`…
+        ...[
+          'CallExpression[callee.property.name=/^(set|remove)$/][callee.object.name="storage"]',
+          'CallExpression[callee.property.name=/^(set|remove)$/][callee.object.property.name="storage"]',
+        ].map((selector) => ({
+          selector,
+          message:
+            "Write the tabs' shared storage through composition/storage/, where each record is reviewed with its key: a tab hears another tab's writes late, so a record of an account lives under that account's own key.",
+        })),
+      ],
+    },
+  },
 ]
