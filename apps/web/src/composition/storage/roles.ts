@@ -3,8 +3,8 @@
  * key of its own (`perch.session.roles.<sign-in>`) naming the identity it is of, so no write of
  * one sign-in's roles touches another's, and the ending of one removes nothing of the next. Only
  * the welcome of the tab that leads the browser's sync writes a record; a console request the
- * gateway refused as `not-operator` drops the role from the current sign-in's record while it is
- * of the identity that asked; the ending of a sign-in removes its record.
+ * gateway refused as `not-operator` drops the role from the record of the sign-in that asked,
+ * whichever sign-in is current by then; the ending of a sign-in removes its record.
  */
 
 import { idSchemas } from '@workspace/ids'
