@@ -12,6 +12,8 @@ export interface SelectProps<Value, Multiple extends boolean | undefined = false
   extends SelectPrimitive.Root.Props<Value, Multiple> {
   /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
+  /** The anchor its trigger renders, which the select's root reports while it holds unsaved input. */
+  readonly anchor?: string | undefined
 }
 
 /** What a select holds: one value, several, or none chosen. */
@@ -54,12 +56,14 @@ function sameChoice<Value>(
 /** The select's root, tracking what is chosen with the comparison of its one mode. */
 function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
   holdsInput = true,
+  anchor,
   onValueChange,
   ...props
 }: SelectProps<Value, Multiple>) {
   const several = props.multiple === true
   const { typed } = useTracksInput<Choice<Value>>({
     holdsInput,
+    anchor,
     value: props.value,
     // Base UI starts a multiple select with none chosen as an empty list, a single one as null.
     defaultValue: props.defaultValue ?? (several ? [] : null),

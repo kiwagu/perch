@@ -6,6 +6,8 @@ import { useTracksInput } from '@workspace/ui/unsaved-input'
 export interface TextareaProps extends React.ComponentProps<'textarea'> {
   /** The field keeps what is typed until an action takes it (the default); false for a field whose own change runs its action. */
   readonly holdsInput?: boolean | undefined
+  /** The anchor the field renders, which it also reports while it holds unsaved input. */
+  readonly 'data-testid'?: string | undefined
 }
 
 /** A value as the textarea shows it. */
@@ -15,6 +17,7 @@ const text = (value: React.ComponentProps<'textarea'>['value']): string | undefi
 function Textarea({ className, holdsInput = true, onChange, ...props }: TextareaProps) {
   const { typed } = useTracksInput({
     holdsInput,
+    anchor: props['data-testid'],
     value: text(props.value),
     defaultValue: text(props.defaultValue) ?? '',
   })

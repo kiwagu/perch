@@ -53,8 +53,12 @@ than its portal or overlay. A control that is not a test target carries a
 - `./unsaved-input`: whether the fields of a page hold input the user typed and no action
   took yet. `UnsavedInputScope` collects what the fields inside report, `useUnsavedInput()`
   says whether any holds unsaved input now (whoever guards a leave reads it; false outside a
-  scope), and `useTracksInput` is what a field component uses to track itself against the
-  last value the app gave it. `FormScopeContext` lets a form capture what its fields hold when
+  scope), `useUnsavedFields()` gives a reader that tells, when called, which fields do by the
+  anchors they render and whether one renders none (a leave that carries some fields asks only
+  for the others; two fields of one anchor stay two), and `useTracksInput` is what a field
+  component uses to track itself against the last value the app gave it, reporting its anchor
+  (an `Input` or `Textarea` its `data-testid`, a `Select` its `anchor`, which `OptionSelect`
+  sets to its `testId`, since the trigger carries the anchor and the root tracks). `FormScopeContext` lets a form capture what its fields hold when
   a submit starts and mark those values saved when it saved. `Input`, `Textarea`, `Select` and `OptionSelect` track themselves: each is unsaved
   while its value differs from the last value the app gave it (the `value` prop whenever it
   did not come from the field's own last change, or the `defaultValue` at mount; a select
