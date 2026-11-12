@@ -80,7 +80,9 @@ export const useUnsavedInput = (): boolean => useContext(UnsavedContext)
 
 /**
  * Reads, each time it is called, which fields of the scope hold unsaved input now: what a guard
- * asks when a question comes, never a render's value. Outside a scope it reads none.
+ * asks when a question comes, never a render's value. Now is as the fields last reported, which
+ * they do in an effect after a render commits, so a read in the very handler that changed a field
+ * sees what it held before. Outside a scope it reads none.
  */
 export const useUnsavedFields = (): (() => UnsavedFields) => useContext(FieldsContext)
 

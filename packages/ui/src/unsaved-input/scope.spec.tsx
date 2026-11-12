@@ -1,5 +1,5 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
-import { useEffect } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
@@ -127,20 +127,61 @@ describe('useUnsavedFields', () => {
   it('keeps an anchor while another field that shares it still holds unsaved input', () => {
     const { rerender } = render(
       <UnsavedInputScope>
-        <Named field={NAMED_A} anchor="x.a-input" unsaved />
-        <Named field={NAMED_B} anchor="x.a-input" unsaved />
+        <Named key="a" field={NAMED_A} anchor="x.a-input" unsaved />
+        <Named key="b" field={NAMED_B} anchor="x.a-input" unsaved />
         <Reader />
       </UnsavedInputScope>,
     )
 
+    // B stays mounted and reports nothing again: only A leaves.
     act(() => {
       rerender(
         <UnsavedInputScope>
-          <Named field={NAMED_B} anchor="x.a-input" unsaved />
+          <Named key="b" field={NAMED_B} anchor="x.a-input" unsaved />
           <Reader />
         </UnsavedInputScope>,
       )
     })
+
+    expect(fieldsNow()).toEqual({ anchors: ['x.a-input'], unnamed: false })
+  })
+
+  it('follows a field whose anchor changes, and one that stops naming any, through one reader', () => {
+    const scoped = (anchor: string | undefined) => (
+      <UnsavedInputScope>
+        <Named field={NAMED_A} anchor={anchor} unsaved />
+        <Reader />
+      </UnsavedInputScope>
+    )
+    const { rerender } = render(scoped('x.a-input'))
+    const first = reader
+    const now = () => {
+      const fields = first?.()
+
+      return { anchors: [...(fields?.anchors ?? [])], unnamed: fields?.unnamed }
+    }
+
+    expect(now()).toEqual({ anchors: ['x.a-input'], unnamed: false })
+
+    rerender(scoped('x.b-input'))
+    expect(now()).toEqual({ anchors: ['x.b-input'], unnamed: false })
+
+    rerender(scoped(undefined))
+    expect(now()).toEqual({ anchors: [], unnamed: true })
+
+    rerender(scoped('x.a-input'))
+    expect(now()).toEqual({ anchors: ['x.a-input'], unnamed: false })
+  })
+
+  it('reads a field once under StrictMode, whose effects run twice', () => {
+    render(
+      <StrictMode>
+        <UnsavedInputScope>
+          <Named field={NAMED_A} anchor="x.a-input" unsaved />
+          <Reader />
+        </UnsavedInputScope>
+      </StrictMode>,
+    )
 
     expect(fieldsNow()).toEqual({ anchors: ['x.a-input'], unnamed: false })
   })
