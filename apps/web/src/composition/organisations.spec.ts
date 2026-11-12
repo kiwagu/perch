@@ -8,18 +8,16 @@ import type { Membership } from '@workspace/replica/protocol'
 import type { InvitationView, MemberView } from '../platform/organisations.port'
 
 import { openTestWorld, type TestWorld } from './__fixtures__/session'
+import { signedIn, signedInElsewhere } from './__fixtures__/signed-in'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import {
-  IDENTITY_KEY,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
-  type MemoryStorage,
+  type KeptSession,
+  membershipsKeyOf,
   memoryStorage,
-  saveDevice,
   savedMemberships,
   saveMemberships,
-  TOKEN_KEY,
 } from './storage'
 
 const ann = {
@@ -99,31 +97,23 @@ afterEach(async () => {
   opened = undefined
 })
 
-/** Ann signed in on a device that is not online, a member of no organisation yet. */
-async function annSignedIn(): Promise<TestWorld> {
+/**
+ * Ann signed in on a device that is not online, a member of no organisation yet; `annSession` is
+ * her sign-in.
+ */
+async function annSignedIn(): Promise<TestWorld & { readonly annSession: KeptSession }> {
   const storage = memoryStorage()
+  const annSession = signedIn(storage, ann)
 
-  saveDevice(storage, ann)
   opened = await openTestWorld({ storage, online: false })
   expect((await opened.session.restore()).isOk()).toBe(true)
 
-  return opened
-}
-
-/** Another tab of the browser signs `device` in: this tab hears each key it writes, in order. */
-function signInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const other = memoryStorage()
-
-  saveDevice(other, device)
-
-  for (const key of [TOKEN_KEY, IDENTITY_KEY, MEMBERSHIPS_KEY]) {
-    storage.changeElsewhere(key, other.get(key))
-  }
+  return { ...opened, annSession }
 }
 
 describe('createOrganisations', () => {
   it('create saves the membership into the session and makes it current when it is the only one', async () => {
-    const { session, storage, tenantsOpened } = await annSignedIn()
+    const { session, storage, tenantsOpened, annSession } = await annSignedIn()
     const { api, created } = answering()
     const organisations = createOrganisations(api, session)
 
@@ -133,21 +123,21 @@ describe('createOrganisations', () => {
     expect(created).toEqual([{ key: 'acme', name: 'Acme' }])
     expect(session.memberships()).toEqual([acme])
     expect(session.currentTenant()).toEqual(acme)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(savedMemberships(storage, annSession)).toEqual([acme])
     expect(session.space()?.tenants()).toEqual(['acme'])
     expect(tenantsOpened()).toEqual(['acme'])
   })
 
   it('create adds the membership to the newest list any tab kept, not to an older one the space still shows', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
 
     // Another tab kept a newer list, which this tab's space has not followed yet.
-    saveMemberships(storage, ann.identity.id, [globex])
+    saveMemberships(storage, annSession, [globex])
 
     const organisations = createOrganisations(answering().api, session)
 
     expect((await organisations.create({ key: 'acme', name: 'Acme' })).isOk()).toBe(true)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, annSession)).toEqual([globex, acme])
     expect(
       session
         .memberships()
@@ -157,7 +147,7 @@ describe('createOrganisations', () => {
   })
 
   it('create takes in a change of memberships another tab kept while the gateway answered', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
     let answer = (): void => {}
     const answered = new Promise<void>((resolve) => {
       answer = resolve
@@ -171,13 +161,13 @@ describe('createOrganisations', () => {
 
     // Meanwhile another tab keeps the identity's memberships: it joined Globex.
     storage.changeElsewhere(
-      MEMBERSHIPS_KEY,
+      membershipsKeyOf(annSession.signIn),
       JSON.stringify({ identity: ann.identity.id, memberships: [globex] }),
     )
     answer()
 
     expect((await creating).isOk()).toBe(true)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, annSession)).toEqual([globex, acme])
     await vi.waitFor(() =>
       expect(
         session
@@ -201,12 +191,13 @@ describe('createOrganisations', () => {
     const creating = createOrganisations(api, session).create({ key: 'acme', name: 'Acme' })
 
     // Meanwhile another tab signed Bob in: this tab's space is his now.
-    signInElsewhere(storage, bobsDevice)
+    const bobSession = signedInElsewhere(storage, bobsDevice)
+
     await vi.waitFor(() => expect(session.space()?.identity.id).toBe(bob.identity.id))
     answer()
 
     expect((await creating)._unsafeUnwrap()).toEqual(acme)
-    expect(savedMemberships(storage, bob.identity.id)).toEqual([])
+    expect(savedMemberships(storage, bobSession)).toEqual([])
     expect(session.memberships()).toEqual([])
     expect(session.space()?.tenants()).toEqual([])
     expect(tenantsOpened()).toEqual([])
@@ -234,24 +225,24 @@ describe('createOrganisations', () => {
   })
 
   it('setRole asks the gateway and adopts nothing: the new role reaches every device over the sync channel', async () => {
-    const { session, storage, tenantsOpened } = await annSignedIn()
+    const { session, storage, tenantsOpened, annSession } = await annSignedIn()
     const { api, calls } = answering()
     const organisations = createOrganisations(api, session)
 
     expect((await organisations.create({ key: 'acme', name: 'Acme' })).isOk()).toBe(true)
 
-    const before = savedMemberships(storage, ann.identity.id)
+    const before = savedMemberships(storage, annSession)
     const opened = tenantsOpened()
 
     expect((await organisations.setRole('acme', bob.identity.id, 'admin')).isOk()).toBe(true)
     expect(calls).toEqual([['setRole', 'acme', bob.identity.id, 'admin']])
     expect(session.memberships()).toEqual([acme])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual(before)
+    expect(savedMemberships(storage, annSession)).toEqual(before)
     expect(tenantsOpened()).toEqual(opened)
   })
 
   it('setRole passes a refusal of the gateway on and still adopts nothing', async () => {
-    const { session, storage } = await annSignedIn()
+    const { session, storage, annSession } = await annSignedIn()
     const refusing: OrganisationsApi = {
       ...answering().api,
       setRole: () => errAsync(dataError('data:WRITE_REJECTED', 'last-admin')),
@@ -265,6 +256,6 @@ describe('createOrganisations', () => {
       message: 'last-admin',
     })
     expect(session.memberships()).toEqual([])
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([])
+    expect(savedMemberships(storage, annSession)).toEqual([])
   })
 })

@@ -50,9 +50,8 @@ const platformActionSchema = z
       ),
     changes: z
       .array(platformActionNameSchema)
-      .optional()
       .describe(
-        "The reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+        "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
       ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
@@ -73,7 +72,9 @@ const unsavedInputSchema = z
     ),
     screen: z
       .enum(['question', 'never'])
-      .describe('A change of screen the user starts: a link, Back, Forward.'),
+      .describe(
+        'A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward.',
+      ),
     actions: z
       .enum(['question', 'never'])
       .describe('A control bound to an action of `leaving`, before the action runs.'),
@@ -93,7 +94,7 @@ const unsavedInputSchema = z
     elsewhere: z
       .literal('cannot')
       .describe(
-        'A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed.',
+        'A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed.',
       ),
   })
   .describe(

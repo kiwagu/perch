@@ -18,16 +18,17 @@ import {
   type TestWorldOptions,
 } from '../__fixtures__/session'
 import { sharedStorage } from '../__fixtures__/shared-storage'
+import { signedInElsewhere } from '../__fixtures__/signed-in'
 import type { NamedDevice } from '../gateway-auth'
 import {
   deviceIdFrom,
   pendingRevokes,
   savedIdentity,
   savedMemberships,
+  savedSession,
   savedTenantDatabases,
   savedToken,
   saveTenantDatabases,
-  tokenRecord,
 } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
@@ -118,8 +119,8 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     await vi.waitFor(() => expect(reads.pending).toHaveLength(1))
     await settle()
 
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(b.session.current()).toBeUndefined()
     expect(b.opened()).toEqual([])
 
@@ -176,6 +177,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     // Meanwhile the other tab signs Bob in, whole.
     expect((await b.session.signIn(bobSignUp))._unsafeUnwrap().id).toBe(bob)
 
+    const bobs = savedSession(storage) ?? expect.unreachable("Bob's sign-in")
     const bobToken = savedToken(storage) ?? expect.unreachable("Bob's token")
 
     reads.pending[0]?.answer(ok([acme]))
@@ -184,7 +186,7 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     // Bob's session is untouched: his identity, token and memberships.
     expect(savedIdentity(storage)?.id).toBe(bob)
     expect(savedToken(storage)).toBe(bobToken)
-    expect(savedMemberships(storage, bob)).toEqual([globex])
+    expect(savedMemberships(storage, bobs)).toEqual([globex])
     expect(a.opened()).not.toContain(ann)
     // Ann's token, and only hers, waits to be signed out.
     expect(annToken).not.toBe(bobToken)
@@ -286,7 +288,10 @@ describe("a sign-in whose memberships read is pending: nothing reaches the brows
     const annToken = savedToken(storage) ?? expect.unreachable("Ann's token")
 
     // Another tab signs Ann in again meanwhile, with a token of its own.
-    storage.changeElsewhere('perch.session.token', tokenRecord(ann, 'token-of-the-other-tab'))
+    signedInElsewhere(storage, {
+      identity: { id: ann, email: annSignUp.email },
+      token: 'token-of-the-other-tab',
+    })
     fail()
 
     expect((await signingIn)._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
@@ -332,7 +337,6 @@ describe("one sign-in at a time across the browser's tabs", () => {
 
     expect((await first)._unsafeUnwrap().id).toBe(ann)
 
-    const space = a.session.space() ?? expect.unreachable("the first tab's space")
     const firstToken = reads.pending[0]?.token
 
     expect((await second)._unsafeUnwrap().id).toBe(ann)
@@ -340,10 +344,11 @@ describe("one sign-in at a time across the browser's tabs", () => {
     // The later token is the one kept: the gateway's later sign-in ended the device's earlier one.
     expect(savedToken(storage)).toBe('token-3')
     expect(firstToken).toBe('token-2')
-    await settle()
-    // The first tab's space is open as it was.
+    // The first tab follows the later sign-in: the space of its own, ended by it, gives way to
+    // the later sign-in's.
+    await vi.waitFor(() => expect(a.opened()).toEqual([ann, ann]))
+    await vi.waitFor(() => expect(a.session.space()).toBeDefined())
     expect(a.session.current()?.id).toBe(ann)
-    expect(a.session.space()).toBe(space)
     expect(pendingRevokes(storage)).toEqual([])
   })
 

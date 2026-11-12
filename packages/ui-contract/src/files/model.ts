@@ -32,8 +32,8 @@ export interface ModelAction {
   description?: string
   /** Per parameter, the field it sets (`$id` for a new id). */
   params: Record<string, string>
-  /** The platform actions whose answer differs once it succeeds; `[]`: none. */
-  changes?: string[]
+  /** The platform actions whose answer differs once it succeeds, written on every action; `[]`: none. */
+  changes: string[]
 }
 
 export interface ModelEntity {
@@ -105,7 +105,7 @@ function entityOf(name: string, entity: z.output<typeof entityDefinitionSchema>)
         {
           ...(description === undefined ? {} : { description }),
           params,
-          ...(changes === undefined ? {} : { changes }),
+          changes,
         },
       ]),
     ),

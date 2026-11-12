@@ -254,10 +254,10 @@ describe('the account card over the gateway', () => {
     const asker = identityIdFactory.create()
     const dropped: Array<readonly [IdentityId, PlatformRole]> = []
     const gateway = accountsApi('/backend', {
-      credentials: () => ({ identity: asker, token: 'token-asker' }),
+      credentials: () => ({ identity: asker, token: 'token-asker', signIn: 'sign-in-asker' }),
       device: () => 'device-1',
-      dropRole: (identity, role) => {
-        dropped.push([identity, role])
+      dropRole: (from, role) => {
+        dropped.push([from.identity, role])
       },
       fetcher: fakeFetch(respond(403, { code: 'not-operator' })).fetcher,
     })

@@ -7,8 +7,8 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 
 1. **The model.** The entities the screen shows and changes are in
    `contract/domain/model.schema.json` with their fields and actions; an action of the platform is
-   in the `actions` of `contract/domain/platform.yaml`. Each action says under `changes` the
-   reads it changes (`[]` for none).
+   in the `actions` of `contract/domain/platform.yaml`. Every action, a new one included, says
+   under `changes` the reads it changes (`[]` for none): its schema refuses one without it.
 2. **The name.** The screen name is a row of "Screen names in use" in
    `contract/vocabulary.md`, added in the same change.
 3. **The screen file** `contract/domain/screens/<pathname>.yaml`, named by its first binding's path
@@ -37,7 +37,11 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    `source`: its `params` from the route's search or constants, and `paged: true` with the
    action's `paged: { sizes, default }` and the route's `page` and `size` when it pages (the
    parts it derives are never written; pattern 17). Each action, of the platform or of the
-   model, that changes what that source answers names it under its `changes`.
+   model, that changes what that source answers names it under its `changes`. Then every
+   invoke of the screen (a region `by` its button included) whose action changes it, or whose
+   `input` takes one of its entries or a value its `params` take, reads it on each branch of
+   its `onDone` (`read: <list>`) or says `read: false`; `contract:check` refuses a branch that
+   does neither.
 8. **The dialogs.** Each one a `ConfirmDialog` mounted with its own `testId` and `code`,
    its buttons in `derived`.
 9. **The messages.** Every `error`, `message` and notice a test asserts, with its `codes`,
@@ -70,15 +74,19 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
 
 1. **The model.** A field goes into the entity's `properties` with its `x-perch` (`readonly`,
    `record`, `crdt`); an action into `x-perch.actions` with its parameters and, under
-   `changes`, the platform actions a list takes as its `source` whose answer differs once it
-   succeeds (`[]` for none), and the roles that may run it into `can`.
+   `changes`, which every action writes, the platform actions a list takes as its `source`
+   whose answer differs once it succeeds (`[]` for none), and the roles that may run it into
+   `can`.
 2. **Unbound first.** `bun run contract:coverage` lists the new field or action as
    `unbound`: the contract knows it, no screen shows it yet.
 3. **The screen file.** An anchor binds it: `binding: { model: <entity>.<field> }`, or
    `{ action: <entity>.<action>, params: { ... } }` with each parameter naming the anchor
    whose value it takes. The codes of its failures go into the anchor's `codes` and the
    vocabulary's "Codes"; its event goes into the `flow` as a transition into a state that
-   invokes the action, whose `onError` shows those codes on the anchor that carries them.
+   invokes the action, whose `onError` shows those codes on the anchor that carries them, and
+   whose `onDone` reads each list of the screen it holds (one whose source its `changes`
+   names, or one of whose entries or source's params its `input` takes), or says `read:
+   false`.
 4. **The scenario.** A step that uses it and an expected result with a code, a state or a
    value, in brackets.
 5. **The code and the tests.** The view renders the anchor; the database side follows its own

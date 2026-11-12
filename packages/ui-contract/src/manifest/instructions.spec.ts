@@ -55,12 +55,12 @@ describe('instructionsOf', () => {
     )
     expect(instructions.session).toContain("never assume it from the action's name")
   })
-  it('says which reads an action of the platform or of the model changes', () => {
+  it('says which reads an action of the platform or of the model changes, written on every action', () => {
     expect(instructions.session).toContain(
-      'its `changes` (the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds: platform actions a list, a section or a table takes as its `source`)',
+      'its `changes` (written on every action, `[]` where it changes none: the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds, platform actions a list, a section or a table takes as its `source`)',
     )
     expect(instructions.model).toContain(
-      'its `actions` with their parameters and their `changes` (as a platform action says it)',
+      'its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it)',
     )
   })
   it('says a binding is a route of the router and a route a state address', () => {
@@ -150,6 +150,9 @@ describe('instructionsOf', () => {
     )
     expect(instructions.screenMap).toContain(
       '`read: false` on one branch of its `onDone` or `onError` says nothing reads after that outcome, where another branch reads',
+    )
+    expect(instructions.screenMap).toContain(
+      "after an invoke that does not say `read: false`, every branch of its `onDone` reads each list of the screen with a platform source that its action may change, or says `read: false`: a list one of whose entries its `input` takes, one whose source's `params` take a value its `input` takes, and one whose source its action's `changes` names; a failure holds no read, so an `onError` reads where it says",
     )
     expect(instructions.screenMap).toContain('the four effects')
     expect(instructions.screenMap).toContain(

@@ -1,6 +1,6 @@
 // scenario: user/base/unopenable-database
 import { appReady, expect, test } from '../../support/fixtures'
-import { databases, identityDatabase } from '../../support/storage'
+import { databases, identityDatabase, signedInIdentity } from '../../support/storage'
 
 test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }, () => {
   test("A device that cannot open the account's data offers to sign out on it, which leaves nothing of the account behind", async ({
@@ -69,6 +69,6 @@ test.describe('Sign out of a device whose data will not open', { tag: '@smoke' }
     // - Within 15 seconds of step 4 the browser keeps no local database of the account and no
     //   longer names the account as signed in
     await expect.poll(() => databases(page), { timeout: 15_000 }).not.toContain(database)
-    expect(await page.evaluate(() => localStorage.getItem('perch.session.identity'))).toBeNull()
+    expect(await signedInIdentity(page)).toBe('')
   })
 })

@@ -16,6 +16,8 @@ import { useUnsavedInputChannel } from './scope'
 export interface TrackedInput<Value> {
   /** False for a field whose own change runs its action: it never holds unsaved input. */
   readonly holdsInput: boolean
+  /** The anchor the field renders, which it reports with what it holds; none without one. */
+  readonly anchor: string | undefined
   /** The controlled value; undefined for an uncontrolled field. */
   readonly value: Value | undefined
   /** What an uncontrolled field starts with: its default value, else its empty one. */
@@ -53,9 +55,11 @@ export function useTracksInput<Value>(input: TrackedInput<Value>): {
     given.current = givenNow
     shown.current = current
   })
+  const { anchor } = input
+
   useEffect(() => {
-    channel?.report(id, unsaved)
-  }, [channel, id, unsaved])
+    channel?.report(id, unsaved, anchor)
+  }, [channel, id, unsaved, anchor])
   useEffect(() => () => channel?.forget(id), [channel, id])
 
   const capture = useCallback(() => {

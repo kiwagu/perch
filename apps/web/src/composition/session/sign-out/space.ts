@@ -35,7 +35,7 @@ export class SpaceEnding {
   }
 
   /**
-   * Forgets the device's identity and token, leaving a live token to sign out, then deletes the
+   * Forgets the sign-in of `open`, leaving its token to sign out while it lives, then deletes the
    * identity's databases, the sign-in page saying `notice`, if any. The other tabs hear the
    * identity go and close their own spaces, which lets the stores be deleted. A delete another
    * tab still holds up after a few seconds goes on (`SpaceDeletion`), and the sign-in page says
@@ -52,7 +52,7 @@ export class SpaceEnding {
       saveNotice(this.#host.options.storage, notice, raised)
     }
 
-    this.#pendingRevoke.forgetKeys(keys)
+    this.#pendingRevoke.forgetKeys(keys, open.signIn)
 
     const current = this.#host.open() === open
     const tell = () => current && this.#host.emit(undefined)
@@ -73,7 +73,8 @@ export class SpaceEnding {
   }
 
   /**
-   * Forgets the token, leaving a live one to sign out, and closes the space, keeping its database
+   * Forgets the sign-in of `open`, leaving its token to sign out while it lives, and closes the
+   * space, keeping its database
    * with the changes it holds: the sign-in page says that signing in again as the identity
    * sends them, unless `notice`, the word of the ending that kept it, ranks above that one
    * (`account-banned`). Both words are left, and the page says the first by the rank of
@@ -86,7 +87,7 @@ export class SpaceEnding {
       saveNotice(this.#host.options.storage, notice, raised)
     }
 
-    this.#pendingRevoke.forgetKeys(keys)
+    this.#pendingRevoke.forgetKeys(keys, open.signIn)
 
     if (this.#host.open() === open) {
       this.#host.leaveAndTell()

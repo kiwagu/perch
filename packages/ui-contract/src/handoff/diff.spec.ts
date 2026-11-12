@@ -165,6 +165,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       questions: { added: [], removed: [] },
+      leaveQuestions: { added: [], removed: [] },
       ranks: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
@@ -758,6 +759,43 @@ describe('diffContracts and the questions before destructive actions', () => {
   })
 })
 
+describe('diffContracts and the questions before leaves', () => {
+  /** The fixture contract, `sample.save-button` leaving its screen losing `loses`, if given. */
+  const leaving = (loses?: string[]): Contract => {
+    const contract = fixtureContract()
+    const anchor = contract.screens.screens[0]?.anchors['sample.save-button']
+
+    if (loses !== undefined && anchor !== undefined) {
+      anchor.leaves = { dialog: 'app-shell.leave-dialog', loses }
+    }
+
+    return contract
+  }
+
+  it('lists a control that starts or stops asking before it leaves, with what it loses', () => {
+    expect(diffContracts(leaving(), leaving(['sample.title-input'])).leaveQuestions).toEqual({
+      added: ['sample.save-button leaves losing sample.title-input'],
+      removed: [],
+    })
+    expect(diffContracts(leaving(['sample.title-input']), leaving()).leaveQuestions).toEqual({
+      added: [],
+      removed: ['sample.save-button leaves losing sample.title-input'],
+    })
+  })
+
+  it('shows another set of lost fields as the old line removed and the new one added', () => {
+    expect(
+      diffContracts(
+        leaving(['sample.title-input']),
+        leaving(['sample.name-input', 'sample.title-input']),
+      ).leaveQuestions,
+    ).toEqual({
+      added: ['sample.save-button leaves losing sample.name-input, sample.title-input'],
+      removed: ['sample.save-button leaves losing sample.title-input'],
+    })
+  })
+})
+
 describe('diffContracts and the ranked messages', () => {
   /** The fixture contract with `sample.status-message`, its codes ranked in `order` when given. */
   const ranking = (order?: readonly string[]): Contract => {
@@ -953,6 +991,7 @@ describe('diffContracts and the platform actions', () => {
       params: { email: { type: 'string', description: 'The email of the account.' } },
       result: 'the mail is on its way',
       codes: ['failed'],
+      changes: [],
       mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'token' } },
     }
 

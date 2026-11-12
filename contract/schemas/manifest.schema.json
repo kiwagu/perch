@@ -1241,6 +1241,31 @@
                   "additionalProperties": false,
                   "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
                 },
+                "leaves": {
+                  "type": "object",
+                  "properties": {
+                    "dialog": {
+                      "type": "string",
+                      "description": "The frame's dialog that asks whether to leave and lose what was typed."
+                    },
+                    "loses": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+                    }
+                  },
+                  "required": [
+                    "dialog",
+                    "loses"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
+                },
                 "composite": {
                   "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
                   "type": "string",
@@ -6617,6 +6642,31 @@
             "additionalProperties": false,
             "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
           },
+          "leaves": {
+            "type": "object",
+            "properties": {
+              "dialog": {
+                "type": "string",
+                "description": "The frame's dialog that asks whether to leave and lose what was typed."
+              },
+              "loses": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+              }
+            },
+            "required": [
+              "dialog",
+              "loses"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
+          },
           "composite": {
             "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
             "type": "string",
@@ -6755,13 +6805,13 @@
                 "additionalProperties": false
               },
               "changes": {
-                "description": "The reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
                 "type": "array",
                 "items": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                   "description": "A platform action: `sign-in`, `organisations.create`."
-                }
+                },
+                "description": "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none."
               },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
@@ -6858,7 +6908,8 @@
               "description",
               "params",
               "result",
-              "codes"
+              "codes",
+              "changes"
             ],
             "additionalProperties": false,
             "description": "One platform action."
@@ -6971,7 +7022,7 @@
                 "question",
                 "never"
               ],
-              "description": "A change of screen the user starts: a link, Back, Forward."
+              "description": "A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward."
             },
             "actions": {
               "type": "string",
@@ -7005,7 +7056,7 @@
             "elsewhere": {
               "type": "string",
               "const": "cannot",
-              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed."
             }
           },
           "required": [

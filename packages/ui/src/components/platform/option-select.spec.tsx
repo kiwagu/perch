@@ -1,9 +1,15 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
-import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import {
+  type UnsavedFields,
+  UnsavedInputScope,
+  useUnsavedFields,
+  useUnsavedInput,
+} from '@workspace/ui/unsaved-input'
 
 const options = [
   { value: 'en', label: 'English' },
@@ -122,5 +128,53 @@ describe('OptionSelect', () => {
     await screen.findAllByRole('option')
 
     expect(document.querySelector('[data-testid]')).toBeNull()
+  })
+})
+
+let reader: (() => UnsavedFields) | undefined
+
+function Reader() {
+  reader = useUnsavedFields()
+
+  return null
+}
+
+/** An option select as the app renders one: what is chosen is kept, as the app keeps it. */
+function Chosen() {
+  const [value, setValue] = useState<'en' | 'es'>('en')
+
+  return (
+    <OptionSelect
+      label="Language"
+      value={value}
+      options={options}
+      onChange={setValue}
+      testId="x.y.language-select"
+    />
+  )
+}
+
+describe('the anchor an option select reports', () => {
+  it('is its testId, on its trigger, while another option is chosen and not saved', async () => {
+    render(
+      <UnsavedInputScope>
+        <Chosen />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.click(screen.getByTestId('x.y.language-select'))
+
+    const spanish = (await screen.findAllByTestId('x.y.language-select.option')).find(
+      (item) => item.getAttribute('data-value') === 'es',
+    ) as HTMLElement
+
+    await vi.waitFor(() => expect(getComputedStyle(spanish).pointerEvents).not.toBe('none'))
+    await userEvent.click(spanish)
+
+    expect({ anchors: [...(reader?.().anchors ?? [])], unnamed: reader?.().unnamed }).toEqual({
+      anchors: ['x.y.language-select'],
+      unnamed: false,
+    })
   })
 })

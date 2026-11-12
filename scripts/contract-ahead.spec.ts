@@ -1,11 +1,16 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const CONTRACT_AHEAD = fileURLToPath(new URL('./contract-ahead.ts', import.meta.url))
+
+/** A whole contract the engine reads, its files where a repository keeps them. */
+const CONTRACT = fileURLToPath(
+  new URL('../packages/ui-contract/src/__fixtures__/repository', import.meta.url),
+)
 
 /** What the hook's command sees: the ahead mode, the base and the branch's HEAD, `null` where unset. */
 const PRINT_MODE =
@@ -48,15 +53,21 @@ function commit(root: string, text: string, file = 'notes.md'): void {
   author(root, 'commit', '-q', '-m', text)
 }
 
-/** A checkout of its own whose first branch is `branch`, with one commit on it. */
+/** A checkout of its own whose first branch is `branch`, with one commit on it: a contract. */
 function checkout(branch: string): string {
   const root = mkdtempSync(join(tmpdir(), 'contract-ahead-'))
 
   made.push(root)
   git(root, 'init', '-q', '-b', branch)
+  cpSync(CONTRACT, root, { recursive: true })
   commit(root, 'start')
 
   return root
+}
+
+/** Commits a contract the engine cannot read on the branch `root` is on: its platform breaks. */
+function breakContract(root: string): void {
+  commit(root, 'version: [', 'contract/domain/platform.yaml')
 }
 
 /**
@@ -180,6 +191,44 @@ describe('contract-ahead', () => {
     author(root, '-c', `core.hooksPath=${hooks}`, 'merge', '-q', '-m', 'merge main', 'main')
 
     expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed, head])
+  })
+
+  it('runs a merge of main without the HEAD whose contract the engine here cannot read', () => {
+    const root = checkout('main')
+    const landed = landedSince(root)
+
+    breakContract(root)
+    git(root, 'merge', '-q', '--no-commit', 'main')
+
+    const result = run(root)
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(['1', landed, null])
+  })
+
+  it('runs an automatic merge of main without that HEAD, in its hook', () => {
+    const root = checkout('main')
+    const landed = landedSince(root)
+    const { hooks, mode } = mergeHook()
+
+    breakContract(root)
+    author(root, '-c', `core.hooksPath=${hooks}`, 'merge', '-q', '-m', 'merge main', 'main')
+
+    expect(JSON.parse(readFileSync(mode, 'utf8'))).toEqual(['1', landed, null])
+  })
+
+  it('keeps the HEAD of a commit outside a merge, whose contract the tests then report', () => {
+    const root = checkout('main')
+    const base = git(root, 'rev-parse', 'HEAD')
+
+    git(root, 'switch', '-q', '-c', 'feature')
+    breakContract(root)
+
+    const head = git(root, 'rev-parse', 'HEAD')
+    const result = run(root)
+
+    expect(result.status).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(['1', base, head])
   })
 
   it('runs an automatic pull of main at the base the merge will have, in its hook', () => {

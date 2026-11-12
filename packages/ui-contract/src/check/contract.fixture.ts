@@ -3,7 +3,7 @@
  * on it, and a spec changes one thing and asserts the one problem that follows.
  */
 
-import type { Activity, ActivityState, AnchorDef, Flow, FlowState, Screen } from '../files'
+import type { Activity, ActivityState, AnchorDef, Effect, Flow, FlowState, Screen } from '../files'
 
 import type { Contract } from './contract'
 
@@ -193,6 +193,7 @@ export function sampleContract(): Contract {
             params: { forgetUnsent: { type: 'boolean', description: 'Drop the unsent changes.' } },
             result: 'this device signs out',
             codes: ['failed'],
+            changes: [],
           },
           'devices.list': {
             description: 'Lists the devices.',
@@ -200,6 +201,7 @@ export function sampleContract(): Contract {
             result: 'the devices',
             codes: ['devices-read-failed'],
             roles: ['member'],
+            changes: [],
           },
         },
         reserved: ['app-shell.status'],
@@ -236,8 +238,8 @@ export function sampleContract(): Contract {
           region: 'tenant',
           id: 'thg',
           actions: {
-            createThing: { params: { id: '$id', title: 'title' } },
-            updateThing: { params: { id: '$id', title: 'title' } },
+            createThing: { params: { id: '$id', title: 'title' }, changes: [] },
+            updateThing: { params: { id: '$id', title: 'title' }, changes: [] },
           },
           unique: [],
           index: [],
@@ -294,6 +296,25 @@ export function flowStateIn(contract: Contract, name: string): FlowState {
   }
 
   return state
+}
+
+/**
+ * The sample with each of `effects` on a branch of its own after the save (the `onDone` of
+ * `saving`, every branch but the last guarded), where a list of navigates is checked case by case:
+ * a move after an action asks nothing, and a transition moves the app once.
+ */
+export function afterSave(contract: Contract, effects: readonly Effect[]): void {
+  const invoke = flowStateIn(contract, 'saving').invoke
+
+  if (invoke === undefined) {
+    throw new Error('the sample saves in the state saving')
+  }
+
+  invoke.onDone = effects.map((effect, index) =>
+    index < effects.length - 1
+      ? { target: 'editing', guard: 'titleGiven', actions: [effect] }
+      : { target: 'editing', actions: [effect] },
+  )
 }
 
 /** The activity `id` of a contract, for a spec to change. */

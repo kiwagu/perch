@@ -10,7 +10,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 
-import { savedIdentity, savedToken } from '../storage'
+import { type KeptSession, savedSession, savedSignIn } from '../storage'
 
 import type { SessionHost } from './host'
 import type { TransportContext } from './options'
@@ -51,7 +51,7 @@ export class SessionElsewhere {
 
     return () =>
       ResultAsync.fromSafePromise(
-        asking && still() ? this.#outElsewhere(asking.space.identity.id, still) : Promise.resolve(),
+        asking && still() ? this.#outElsewhere(() => asking.signIn, still) : Promise.resolve(),
       )
   }
 
@@ -63,7 +63,11 @@ export class SessionElsewhere {
    * changes nothing, and so does a session the 4001 already ended. Resolves once it ran.
    */
   accountDeleted(identity: IdentityId): Promise<void> {
-    return this.#outElsewhere(identity)
+    return this.#outElsewhere(() => {
+      const open = this.#host.open()
+
+      return open?.signIn.identity === identity ? open.signIn : undefined
+    })
   }
 
   /**
@@ -82,9 +86,9 @@ export class SessionElsewhere {
     }
 
     const still = () =>
-      this.#host.open() === asking && savedToken(this.#host.options.storage) === token
+      this.#host.open() === asking && savedSession(this.#host.options.storage)?.token === token
 
-    return () => this.#outElsewhere(asking.space.identity.id, still, 'password-changed-elsewhere')
+    return () => this.#outElsewhere(() => asking.signIn, still, 'password-changed-elsewhere')
   }
 
   /** Whether a channel of this page heard the gateway refuse the build's protocol; see `SessionPort`. */
@@ -92,27 +96,35 @@ export class SessionElsewhere {
     return this.#protocolRefused
   }
 
-  transportContext(identity: IdentityId): TransportContext {
-    return sessionTransportContext(identity, this.#host.options.storage, {
+  /**
+   * The context of the channel of the space of the sign-in `session`: what it hears acts for that
+   * sign-in alone, while its space is the one open here, and the endings it hears end that one.
+   */
+  transportContext(session: KeptSession): TransportContext {
+    const identity = session.identity
+    const ofSession = () => session
+    const isOpen = () => this.#host.open()?.signIn.signIn === session.signIn
+
+    return sessionTransportContext(session, this.#host.options.storage, {
       memberships: (memberships) => {
-        if (this.#host.open()?.space.identity.id === identity) {
+        if (isOpen()) {
           void this.#organisations.apply(memberships)
         }
       },
       // Kept for the identity whose space is open here, as its memberships are; the roles judge
       // again that it is still the one signed in on the browser.
       roles: (roles) => {
-        if (this.#host.open()?.space.identity.id === identity) {
-          this.#roles.apply(identity, roles)
+        if (isOpen()) {
+          this.#roles.apply(session, roles)
         }
       },
       refused: () =>
-        void this.#forced(() => this.#signingOut.refused(identity).map(this.#followIfSignedIn)),
-      revoked: () => void this.#outElsewhere(identity),
+        void this.#forced(() => this.#signingOut.refused(session).map(this.#followIfSignedIn)),
+      revoked: () => void this.#outElsewhere(ofSession),
       passwordChanged: () =>
-        void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
-      deviceLimit: () => void this.#outElsewhere(identity, undefined, 'device-limit-elsewhere'),
-      banned: () => void this.#outElsewhere(identity, undefined, 'account-banned'),
+        void this.#outElsewhere(ofSession, undefined, 'password-changed-elsewhere'),
+      deviceLimit: () => void this.#outElsewhere(ofSession, undefined, 'device-limit-elsewhere'),
+      banned: () => void this.#outElsewhere(ofSession, undefined, 'account-banned'),
       // The build is what the gateway refuses, whichever account's channel heard it, and while
       // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
@@ -128,10 +140,11 @@ export class SessionElsewhere {
   }
 
   /**
-   * Another tab changed the saved identity: this tab follows, closing a space that is no longer
-   * it and, with none open, opening the space of the identity another tab signed in. An identity
-   * this tab shows without its space leaves at once, not behind the start's open, so nothing
-   * more is asked or shown in its name meanwhile.
+   * Another tab changed the saved sign-in: this tab follows, closing a space that is no longer
+   * the current sign-in's (another account's, or an earlier sign-in of the same one) and, with
+   * none open, opening the space of the sign-in another tab saved. An identity this tab shows
+   * without its space leaves at once, not behind the start's open, so nothing more is asked or
+   * shown in its name meanwhile.
    */
   follow(): void {
     if (this.#host.isClosed()) {
@@ -143,9 +156,9 @@ export class SessionElsewhere {
     void this.#host
       .serially((generation) => {
         const open = this.#host.open()
-        const saved = savedIdentity(this.#host.options.storage)
+        const saved = savedSignIn(this.#host.options.storage)
 
-        if (open && saved?.id !== open.space.identity.id) {
+        if (open && saved?.session.signIn !== open.signIn.signIn) {
           this.#host.leaveAndTell()
         }
 
@@ -164,20 +177,22 @@ export class SessionElsewhere {
    * Signed out from another device (4001), everywhere at this device's request, by a change of
    * the account's password (4002), by a sign-in past the account's limit of devices (4003), or by
    * an operator's ban of the account (4004), whose `notice` says so: as a refused token, and the
-   * sign-in page says why. Whichever of two
+   * sign-in page says why. It ends the sign-in `ended` names in its turn, if any. Whichever of two
    * runs second changes nothing, and so does one whose session is no longer open (`still`) when
    * its turn comes.
    */
   #outElsewhere(
-    identity: IdentityId,
+    ended: () => KeptSession | undefined,
     still = () => true,
     notice: ElsewhereNotice = 'signed-out-elsewhere',
   ): Promise<void> {
-    return this.#forced(() =>
-      still()
-        ? this.#signingOut.refused(identity, notice).map(this.#followIfSignedIn)
-        : okAsync(undefined),
-    )
+    return this.#forced(() => {
+      const session = still() ? ended() : undefined
+
+      return session
+        ? this.#signingOut.refused(session, notice).map(this.#followIfSignedIn)
+        : okAsync(undefined)
+    })
   }
 
   /**

@@ -122,6 +122,23 @@ export const asksSchema = z
     "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
   )
 
+/** The question a control asks before its flow moves to another screen, derived by the loader. */
+export const leavesSchema = z
+  .strictObject({
+    dialog: z
+      .string()
+      .describe("The frame's dialog that asks whether to leave and lose what was typed."),
+    loses: z
+      .array(baseAnchorSchema)
+      .min(1)
+      .describe(
+        'The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input.',
+      ),
+  })
+  .describe(
+    "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does.",
+  )
+
 /** Where a derived anchor of a composite comes from, written by the loader only. */
 export const derivedFromSchema = z
   .strictObject({
@@ -188,6 +205,7 @@ export const anchorDefSchema = z
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(
@@ -231,5 +249,5 @@ export const authoredAnchorDefSchema = anchorDefSchema
         "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.",
       ),
   })
-  .omit({ asks: true, derivedFrom: true })
+  .omit({ asks: true, leaves: true, derivedFrom: true })
   .describe('One declared anchor, as a screen file writes it.')

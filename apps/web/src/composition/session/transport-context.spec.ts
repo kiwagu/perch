@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { identityIdFactory } from '@workspace/ids'
 import type { EndReason } from '@workspace/replica/sync'
 
-import { memoryStorage } from '../storage'
+import { type KeptSession, memoryStorage } from '../storage'
 
 import { type SessionChannelEvents, sessionTransportContext } from './transport-context'
 
@@ -24,10 +24,13 @@ function contextHearing() {
     protocolRefused: hear('protocolRefused'),
   }
 
-  return {
-    heard,
-    context: sessionTransportContext(identityIdFactory.create(), memoryStorage(), events),
+  const session: KeptSession = {
+    signIn: 'sign-in',
+    identity: identityIdFactory.create(),
+    token: 'token',
   }
+
+  return { heard, context: sessionTransportContext(session, memoryStorage(), events) }
 }
 
 describe('sessionTransportContext', () => {

@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { memoryStorage } from '../storage'
-
+import { memoryStorage } from './key-value'
 import {
   addLeftoverIdentity,
   dropLeftoverIdentity,

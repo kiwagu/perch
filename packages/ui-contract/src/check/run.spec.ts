@@ -121,15 +121,10 @@ describe('checkContract', () => {
     ])
   })
   it('holds the reads an action changes to the platform actions the lists read', () => {
-    edit(PLATFORM_FILE, (text) =>
-      text.replace(
-        '    codes:\n      - failed\n',
-        '    codes:\n      - failed\n    changes: [ sign-out ]\n',
-      ),
-    )
+    edit(PLATFORM_FILE, (text) => text.replace('    changes: []\n', '    changes: [ sign-out ]\n'))
     edit(MODEL_FILE, (text) =>
       text.replace(
-        '"updateThing": { "params": { "id": "$id", "title": "title" } }',
+        '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": [] }',
         '"updateThing": { "params": { "id": "$id", "title": "title" }, "changes": ["sign-out"] }',
       ),
     )

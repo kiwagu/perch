@@ -13,7 +13,10 @@
  * the flow shows on it (`derive/errors.ts`); whether a field holds input, from its kind and its
  * bindings; and, with a confirmation on the frame, the question each control of a destructive
  * action asks before it runs (`derive/questions.ts`), the confirmation carrying every code asked
- * with. A file may author its flow in the shorter forms (a transition as its
+ * with. Once a screen parses, its flow canonical, each control whose flow moves to another screen
+ * asks the platform's leave question before its event while a change of screen asks, losing the
+ * fields of its screen the move does not carry (`derive/leaves.ts`); a file never writes that
+ * question. A file may author its flow in the shorter forms (a transition as its
  * target, an effect by its name, a region by its pattern or its button, the region of a button
  * left out): each flow is expanded with the codes the anchors of all screens carry, the failures
  * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
@@ -35,9 +38,11 @@ import {
   withDerivedComposites,
   withDerivedErrors,
   withDerivedInputs,
+  withDerivedLeaves,
   withDerivedPaging,
   withDerivedParams,
   withDerivedQuestions,
+  withoutWrittenLeaves,
   withQuestionCodes,
   withToastCodes,
 } from '../derive'
@@ -57,7 +62,7 @@ import {
   toastOfRead,
 } from './lookups'
 import { expandedOf, parsedOf } from './screen-file'
-import type { PlatformComposite, PlatformFile, Screen, ScreensFile } from './types'
+import type { Platform, PlatformComposite, PlatformFile, Screen, ScreensFile } from './types'
 
 const SUFFIX = '.yaml'
 
@@ -66,6 +71,7 @@ function readScreenFiles(
   failureOf: FailureOf,
   platformToasts: Readonly<Record<string, string>>,
   composites: Readonly<Record<string, PlatformComposite>>,
+  unsavedInput: Platform['unsavedInput'],
 ): {
   screens: Screen[]
   files: string[]
@@ -95,11 +101,17 @@ function readScreenFiles(
       problems.push(...yaml.problems)
 
       if (yaml.problems.length === 0) {
-        const composed = withDerivedComposites(file, yaml.value, composites)
+        const unwritten = withoutWrittenLeaves(file, yaml.value)
+        const composed = withDerivedComposites(file, unwritten.value, composites)
         const bound = withDerivedParams(file, composed.value)
         const paged = withDerivedPaging(file, bound.value)
 
-        problems.push(...composed.problems, ...bound.problems, ...paged.problems)
+        problems.push(
+          ...unwritten.problems,
+          ...composed.problems,
+          ...bound.problems,
+          ...paged.problems,
+        )
         read.push({
           file,
           value: withDerivedInputs(withDerivedErrors(paged.value, failureOf)),
@@ -178,7 +190,7 @@ function readScreenFiles(
       problems.push(...loaded.problems)
 
       if (loaded.screen !== undefined) {
-        screens.push(loaded.screen)
+        screens.push(withDerivedLeaves(loaded.screen, unsavedInput))
         files.push(file)
       }
     }
@@ -225,7 +237,13 @@ export function loadScreensWith(
     problems: screenProblems,
     toasts,
     questions,
-  } = readScreenFiles(root, failureOf, platform?.toasts ?? {}, platform?.composites ?? {})
+  } = readScreenFiles(
+    root,
+    failureOf,
+    platform?.toasts ?? {},
+    platform?.composites ?? {},
+    platform?.unsavedInput,
+  )
   const problems = [...screenProblems, ...platformProblems]
 
   if (problems.length > 0 || platform === undefined) {

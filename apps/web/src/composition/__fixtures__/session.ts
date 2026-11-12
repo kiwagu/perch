@@ -232,7 +232,8 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
-    keepAccountStart: options.keepAccountStart ?? ((user, from) => startsKept.push([user, from])),
+    keepAccountStart:
+      options.keepAccountStart ?? ((signIn, user, from) => startsKept.push([signIn, user, from])),
     listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
     openLocal: (identity) =>
       (options.refusedIdentities?.includes(identity)

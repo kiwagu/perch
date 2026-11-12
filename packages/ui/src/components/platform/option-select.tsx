@@ -35,6 +35,7 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
       value={props.value}
       disabled={props.disabled}
       holdsInput={props.holdsInput}
+      anchor={props.testId}
       onValueChange={(value) => {
         if (value !== null) {
           props.onChange(value as Value)
