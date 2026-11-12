@@ -1,57 +1,62 @@
 /**
- * The organisations the signed-in identity belongs to, and the one this browser works in. Each
- * identity's memberships are kept under a key of their own (`perch.session.memberships.<identity>`):
- * a tab hears another tab's writes late, so one that still shows an account another tab signed
- * out may write its list after the next account signed in; under its own key that list overwrites
- * nothing of the next account's.
+ * The organisations the signed-in identity belongs to, and the one chosen on this browser, kept
+ * per sign-in (`perch.session.memberships.<sign-in>`, `perch.session.tenant.<sign-in>`): a tab
+ * hears another tab's writes late, so one that still shows a sign-in another tab ended may write
+ * its list after the next sign-in, of another account or of the same one again; under its own
+ * sign-in's key that list overwrites nothing of the next one's, and the ending of the earlier
+ * sign-in removes nothing of it.
  */
 
-import { type IdentityId, idSchemas } from '@workspace/ids'
+import { idSchemas } from '@workspace/ids'
 import { type Membership, membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { KeyValueStorage } from './key-value'
+import type { SignInId, SignInOwner } from './sign-in'
 
 const MEMBERSHIPS_KEY_PREFIX = 'perch.session.memberships.'
 
-/** The key of the memberships kept for `identity`; the tabs follow them. */
-export function membershipsKeyOf(identity: IdentityId): string {
-  return `${MEMBERSHIPS_KEY_PREFIX}${identity}`
+/** The organisation chosen on this browser during a sign-in: `perch.session.tenant.<sign-in>`. */
+const TENANT_KEY_PREFIX = 'perch.session.tenant.'
+
+/** The key of the memberships kept for sign-in `signIn`; the tabs follow them. */
+export function membershipsKeyOf(signIn: SignInId): string {
+  return `${MEMBERSHIPS_KEY_PREFIX}${signIn}`
 }
 
-/** Whether `key` is the key of an identity's memberships. */
+/** Whether `key` is the key of a sign-in's memberships. */
 export function isMembershipsKey(key: string): boolean {
   return key.startsWith(MEMBERSHIPS_KEY_PREFIX)
 }
 
-/** The organisation this browser works in. */
-export const TENANT_KEY = 'perch.session.tenant'
+const tenantKeyOf = (signIn: SignInId): string => `${TENANT_KEY_PREFIX}${signIn}`
 
 const savedMembershipsSchema = z.object({
   identity: idSchemas.identity.schema,
   memberships: z.array(membership),
 })
 
-/** Keeps the organisations the identity belongs to, as the gateway last told this device. */
+/** Keeps the organisations the identity of `owner` belongs to, as the gateway last told this device. */
 export function saveMemberships(
   storage: KeyValueStorage,
-  identity: IdentityId,
+  owner: SignInOwner,
   memberships: readonly Membership[],
 ): void {
-  storage.set(membershipsKeyOf(identity), JSON.stringify({ identity, memberships }))
+  storage.set(
+    membershipsKeyOf(owner.signIn),
+    JSON.stringify({ identity: owner.identity, memberships }),
+  )
 }
 
-/** Forgets the memberships kept for `identity`; those of other identities stay. */
-export function forgetMemberships(storage: KeyValueStorage, identity: IdentityId): void {
-  storage.remove(membershipsKeyOf(identity))
-}
-
-/** The memberships kept for `identity`; none when they were kept for another or do not parse. */
+/**
+ * The memberships kept for the sign-in of `owner`; none when they were kept for another identity
+ * or do not parse.
+ */
 export function savedMemberships(
   storage: KeyValueStorage,
-  identity: IdentityId,
+  owner: SignInOwner,
 ): readonly Membership[] {
-  const text = storage.get(membershipsKeyOf(identity))
+  const text = storage.get(membershipsKeyOf(owner.signIn))
 
   if (text === undefined) {
     return []
@@ -60,18 +65,24 @@ export function savedMemberships(
   try {
     const parsed = savedMembershipsSchema.safeParse(JSON.parse(text))
 
-    return parsed.success && parsed.data.identity === identity ? parsed.data.memberships : []
+    return parsed.success && parsed.data.identity === owner.identity ? parsed.data.memberships : []
   } catch {
     return []
   }
 }
 
-/** Keeps the key of the organisation this browser works in. */
-export function saveTenant(storage: KeyValueStorage, key: string): void {
-  storage.set(TENANT_KEY, key)
+/** Keeps the key of the organisation chosen on this browser during sign-in `signIn`. */
+export function saveTenant(storage: KeyValueStorage, signIn: SignInId, key: string): void {
+  storage.set(tenantKeyOf(signIn), key)
 }
 
-/** The key of the organisation this browser works in, if one is kept. */
-export function savedTenant(storage: KeyValueStorage): string | undefined {
-  return storage.get(TENANT_KEY)
+/** The key of the organisation chosen during sign-in `signIn`, if one is kept. */
+export function savedTenant(storage: KeyValueStorage, signIn: SignInId): string | undefined {
+  return storage.get(tenantKeyOf(signIn))
+}
+
+/** Forgets the memberships and the organisation chosen of sign-in `signIn`; other sign-ins' stay. */
+export function forgetMemberships(storage: KeyValueStorage, signIn: SignInId): void {
+  storage.remove(membershipsKeyOf(signIn))
+  storage.remove(tenantKeyOf(signIn))
 }

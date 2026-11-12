@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
 import type { GatewayAuth } from '../gateway-auth'
-import { savedIdentity } from '../storage'
+import { savedIdentity, savedSession } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'es' }
 
@@ -57,7 +57,7 @@ describe('the start a sign-in answers', () => {
     expect(savedIdentity(world.storage)?.id).toBe(user.id)
   })
 
-  it('names the account and what it starts from', async () => {
+  it('names the sign-in it is kept under, the account and what it starts from', async () => {
     const { starting } = await notStarted()
     const world = await openTestWorld({ auth: starting, online: false })
 
@@ -65,7 +65,10 @@ describe('the start a sign-in answers', () => {
 
     const user = (await world.session.signIn(annSignUp))._unsafeUnwrap()
 
-    expect(world.startsKept).toEqual([[user, { name: 'Ann', locale: 'es' }]])
+    // Kept under the sign-in's own id, the one its records are saved under.
+    expect(world.startsKept).toEqual([
+      [savedSession(world.storage)?.signIn, user, { name: 'Ann', locale: 'es' }],
+    ])
   })
 
   it('is not there when the account has started', async () => {
@@ -116,7 +119,11 @@ describe('the start a first verification answers', () => {
 
     expect(verified).toMatchObject({ kind: 'signed-in' })
     expect(world.startsKept).toEqual([
-      [verified.kind === 'signed-in' ? verified.user : undefined, { name: 'Ann', locale: 'es' }],
+      [
+        savedSession(world.storage)?.signIn,
+        verified.kind === 'signed-in' ? verified.user : undefined,
+        { name: 'Ann', locale: 'es' },
+      ],
     ])
   })
 

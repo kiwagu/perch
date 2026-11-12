@@ -52,14 +52,14 @@ modeling stage.
   signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`), and a
   refused one fails as `data:LINK_EXPIRED` or `data:LINK_INVALID`, naming no token. The account a first verification or a sign-in finds
   not started starts on this browser (`composition/account-starts.ts`, the user module's
-  `AccountStartService`): its start is kept in `perch.session.account-start` (the identity, the
-  name and the sign-up language) until its settings (in that language and the theme the device
+  `AccountStartService`): its start is kept in `perch.session.account-start.<id>`, under the id
+  of the sign-in that learnt of it (the identity, the name and the sign-up language) until its settings (in that language and the theme the device
   shows as it creates them) and its profile both exist. The tabs take their turns under the Web Lock
   `perch.session.account-start` (`oneTabAtATime`, the helper the sign-in lock runs on too): each
   reads the kept start and the account's records afresh in the local store they share, and
   leaves what it wrote durable and projected before it lets go, so no tab creates a record
-  another one created. A sign-out forgets the kept start with the device (`forgetDevice`); a
-  session that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
+  another one created. The ending of that sign-in forgets the start (`forgetSignIn`); a session
+  that only closes (a tab that goes) keeps it. A start that a sign-out left unfinished
   stays so until a sign-in learns of it. The first verification's answer (`{ name, locale }` of the
   sign-up), and a sign-in's answer that carries `start` (the account has no settings or profile at
   the gateway yet, because a reset verified its email or the device that verified it has not
@@ -90,17 +90,17 @@ modeling stage.
   another account signed in here stays. Until the sign-in is whole its token
   stays in memory: the session reads the memberships with it and the device it named
   (`GET /backend/organisations`, `listMemberships(token, device)`), then, while the session is
-  still open and no other tab saved another account, saves the memberships, the token and the
-  identity in one step (the identity last, which the other tabs follow) and opens the space. A
-  read that fails, a session closed meanwhile or another account saved meanwhile fails the
-  sign-in and leaves this attempt's token to sign out, and so does a throw while the attempt
-  holds its token (the read, the save: `data:AUTH_FAILED` naming nothing of the throw; the token
-  is left to sign out first, then a save it broke off is undone while the saved token is this
-  attempt's, neither step stopped by a throw of the other); a space that then does not open lets
-  go of the token the same way: left to sign out first, then the device forgotten only while the
-  saved token is still this attempt's, never another tab's (an open or a cleanup that throws fails
-  the sign-in as `data:AUTH_FAILED` naming nothing of the throw; a session closed meanwhile keeps
-  the saved device whole for the next start). The tabs of a browser sign in one at a time, under the Web
+  still open and no other tab saved another account, saves the sign-in in one step, under the id
+  the attempt minted before its first write (the pointer to it last, which the other tabs
+  follow), and opens the space. A read that fails, a session closed meanwhile or another account
+  saved meanwhile fails the sign-in and leaves this attempt's token to sign out, and so does a
+  throw while the attempt holds its token (the read, the save: `data:AUTH_FAILED` naming nothing
+  of the throw; the token is left to sign out first, then whatever the attempt saved under its id
+  is forgotten, neither step stopped by a throw of the other); a space that then does not open
+  lets go of the token the same way, forgetting only what this attempt saved, never another
+  tab's sign-in (an open or a cleanup that throws fails the sign-in as `data:AUTH_FAILED` naming
+  nothing of the throw; a session closed meanwhile keeps the saved device whole for the next
+  start). The tabs of a browser sign in one at a time, under the Web
   Lock `perch.session.sign-in` held from the request to the saved device (not through the
   space's opening): a later sign-in asks the gateway only once the earlier one saved, so the
   storage ends with the live token (the gateway's later sign-in ends the device's earlier
@@ -109,13 +109,21 @@ modeling stage.
   minted again when the stored value is not a device id of 1 to 64 characters) and a
   label read from the user agent (`deviceLabel`: "Chrome on Linux", "Safari on iPhone",
   "Browser on device" when it cannot tell, at most 60 characters); the sync channel names the
-  same id in its hello and every organisation call sends it as `X-Perch-Device`. The
-  identity, its session token (`perch.session.token`, kept until a sign-out together with the
-  identity it was issued to, `{ identity, token }`: the calls made for an identity, its own, the
-  organisation and device routes' and its channel's, read the token through its owner in one
-  step, never another account's that another tab saved since)
-  and its memberships (`perch.session.memberships.<identity>`, the current tenant in
-  `perch.session.tenant`) are kept in local storage, and the identity's space opens
+  same id in its hello and every organisation call sends it as `X-Perch-Device`. Each sign-in
+  is kept in local storage under the id it mints before its first write (`crypto.randomUUID()`):
+  its record `perch.session.signed-in.<id>` (`{ identity, email, token }`: the calls made for an
+  identity, its own and the organisation and device routes', read the token through its owner in
+  one step, never another account's that another tab saved since), and under the same id its
+  memberships (`perch.session.memberships.<id>`), the organisation chosen
+  (`perch.session.tenant.<id>`), its platform roles (`perch.session.roles.<id>`), the email an
+  email confirmation asked during it gave the identity (`perch.session.email.<id>`, read over the
+  record's email) and the start of an account it learnt of (`perch.session.account-start.<id>`).
+  The pointer `perch.session.current` names the current sign-in: a sign-in writes it last, once
+  the rest is saved, and nothing removes it; it holds no personal data, and after a sign-out it
+  names a sign-in whose records are gone, which is nobody signed in. A sign-in clears the keys an
+  earlier build kept (`perch.session.identity`, `perch.session.token`, `perch.session.refresh`):
+  a browser signed in by that build reads nobody signed in and signs in again. The identity's
+  space opens
   (`openIdentitySpace`: database `indxdb://app-identity-<id>`, region `identity:<id>`,
   projector, write path), with a database of its own for each organisation the identity
   belongs to (`openTenantSpace`: `indxdb://app-identity-<id>-t_<key>`, region `tenant:<key>`;
@@ -123,20 +131,23 @@ modeling stage.
   one at a time, under the Web Lock `perch-open:<database>` (`openOneAtATime`): two engines
   setting up the same new database at once conflict and one open fails. The tabs share that
   storage but hear each other's writes late (a browser hands another tab's write to this tab some
-  time after it was made, and no lock makes it sooner), so what a tab writes for an account goes
-  under that account's own key: its memberships, the email an email confirmation gave it
-  (`perch.session.email.<session>`, under a tag of the token of the session the confirmation was
-  asked in, read over the identity's email while that session lasts) and its platform roles. A tab that still shows an account another tab
-  signed out may write its list or confirm its email meanwhile: the next account's records stay
-  as they are, and no identity comes back without its token. A sign-out forgets the records of the
-  identity saved, or of the one the token names when a sign-in's save broke before the identity.
-  Known limits: two tabs of the SAME account can still write its memberships in the wrong order
-  (a demotion or a removal one tab heard, overwritten by another tab's older list); the next list
-  or welcome sets them right. And the identity and its token are one record each for the browser:
-  a tab that has not yet heard another tab sign the next account in can, with a sign-out or the
-  cleanup of a failed sign-in, remove that account's records, which signs it out on this browser
-  (it signs in again) and leaves its new session at the gateway until it expires; keeping them by
-  sign-in, as the sign-in page's words are kept, is the next step. Every write through the storage port the session uses
+  time after it was made, and no lock makes it sooner), and a removal removes whatever the
+  browser holds by then, so what a tab writes goes under its sign-in's id, and whatever ends a
+  sign-in (a sign-out, a forced one, a refused token, the sign-out of a space that did not open,
+  the cleanup of a failed sign-in) names the sign-in it ends as it begins, from the space it ends,
+  its channel or its own attempt, and removes and revokes that sign-in's records and token alone,
+  never the one the pointer names by then: a tab that has not yet heard another tab sign the next
+  sign-in in, of another account or of the same one again, leaves it whole, and a list or an
+  email confirmation it writes for the sign-in it still shows lands beside nothing anyone reads.
+  A tab follows the pointer and the records: its space leaves once its sign-in's record is gone
+  or another sign-in is current, even of the same account, and the current sign-in's space opens;
+  the channel presents its own sign-in's token only while that record is kept. Known limits: two
+  tabs of the SAME sign-in can still write its memberships in the wrong order (a demotion or a
+  removal one tab heard, overwritten by another tab's older list); the next list or welcome sets
+  them right. And the local databases are an identity's, not a sign-in's: a sign-out in a tab
+  that has not yet heard the same account signed in again in another tab deletes them all the
+  same (a delete that tab holds up goes on after a few seconds), and the account pulls them
+  again. Every write through the storage port the session uses
   (`KeyValueStorage`) is made in `composition/storage/`, which the lint holds
   (`eslint.config.js`); the device's own facts that adapters of their own write straight to
   `localStorage` (a guest's theme, the install prompt, the probe that checks site storage works)
@@ -204,10 +215,10 @@ modeling stage.
   `GET /console/accounts/:id` and the actions on an account,
   `POST /console/accounts/:id/{rename,email,ban,unban,sign-out,reset,verification,removal}`
   (each answered 204), for an operator: each request reads the tab's credentials once as
-  it starts (the identity it shows and the token saved for it), each answer is parsed and each
-  refusal is a code of its action (`failed` for any other), and a `not-operator` takes
-  `operator` off the roles saved for that identity (`SessionService.dropRole`), whichever
-  identity is shown by then. One tab per browser leads the
+  it starts (the identity it shows, the token saved for it and the sign-in that saved it), each
+  answer is parsed and each refusal is a code of its action (`failed` for any other), and a
+  `not-operator` takes `operator` off the roles saved for that sign-in alone
+  (`SessionService.dropRole`), whichever sign-in is shown or current by then. One tab per browser leads the
   identity's sync through a Web Lock and runs the sync engine over the gateway's WebSocket
   (`/backend/sync`, its hello presenting the session token) for the private region and every
   organisation's; the tabs hint each other over a BroadcastChannel, so each reads what the others

@@ -8,7 +8,7 @@ import type { AccountsPort, Acted } from '../platform/accounts.port'
 import { fakeFetch, noContent, respond } from './__fixtures__/gateway-fetch'
 import { accountsApi } from './accounts-api'
 
-const ann = { identity: identityIdFactory.create(), token: 'token-ann' }
+const ann = { identity: identityIdFactory.create(), token: 'token-ann', signIn: 'sign-in-ann' }
 const cara = identityIdFactory.create()
 
 /** The client over `fetcher`, asking as Ann with her token, the roles dropped into `dropped`. */
@@ -17,8 +17,8 @@ function api(fetcher: ReturnType<typeof fakeFetch>['fetcher']) {
   const client = accountsApi('/backend', {
     credentials: () => ann,
     device: () => 'device-1',
-    dropRole: (identity, role) => {
-      dropped.push([identity, role])
+    dropRole: (asker, role) => {
+      dropped.push([asker.identity, role])
     },
     fetcher,
   })

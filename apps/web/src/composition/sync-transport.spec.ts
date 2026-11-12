@@ -15,8 +15,9 @@ import {
 import type { DeviceNetwork, SyncTransport } from '@workspace/replica/sync'
 import { manualClock } from '@workspace/replica/testing'
 
+import { signedIn } from './__fixtures__/signed-in'
 import { SessionRoles, sessionTransportContext } from './session'
-import { deviceIdFrom, memoryStorage, saveDevice, savedRoles } from './storage'
+import { deviceIdFrom, memoryStorage, savedRoles } from './storage'
 import { syncTransport } from './sync-transport'
 
 /** A socket the test opens, feeds and closes by hand; it keeps what the transport sent. */
@@ -81,10 +82,9 @@ afterEach(() => {
 function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
   const storage = memoryStorage()
 
-  saveDevice(storage, {
+  const session = signedIn(storage, {
     identity: { id: ann, email: 'ann@example.test' },
     token: 'token-ann',
-    memberships: [],
   })
 
   const roles = new SessionRoles({ storage, shown: () => ann })
@@ -97,9 +97,9 @@ function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
 
   roles.subscribe((held) => told.push([...held]))
 
-  const context = sessionTransportContext(ann, storage, {
+  const context = sessionTransportContext(session, storage, {
     memberships: (list) => memberships.push(list),
-    roles: (held) => roles.apply(ann, held),
+    roles: (held) => roles.apply(session, held),
     refused: hear('refused'),
     revoked: hear('revoked'),
     passwordChanged: hear('passwordChanged'),
@@ -134,7 +134,7 @@ function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
     return socket
   }
 
-  return { storage, roles, told, memberships, heard, clock, sockets, opened }
+  return { storage, session, roles, told, memberships, heard, clock, sockets, opened }
 }
 
 describe('syncTransport: the channel the browser and the seed open', () => {
@@ -149,17 +149,17 @@ describe('syncTransport: the channel the browser and the seed open', () => {
   })
 
   it("keeps a welcome's roles in the identity's record and tells the subscribers", () => {
-    const { storage, roles, told, opened } = annChannel()
+    const { storage, session, roles, told, opened } = annChannel()
 
     opened().receive(welcomeWith(['operator']))
 
-    expect(savedRoles(storage, ann)).toEqual(['operator'])
+    expect(savedRoles(storage, session)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
     expect(told).toEqual([['operator']])
   })
 
   it('takes the role away when a later welcome does not carry it', async () => {
-    const { storage, roles, told, clock, opened } = annChannel()
+    const { storage, session, roles, told, clock, opened } = annChannel()
 
     opened().receive(welcomeWith(['operator']))
     // The connection is lost; the device connects again and is welcomed anew, without the role.
@@ -167,7 +167,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
     await clock.advance(1_000)
     opened().receive(welcomeWith([]))
 
-    expect(savedRoles(storage, ann)).toEqual([])
+    expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
     expect(told).toEqual([['operator'], []])
   })
