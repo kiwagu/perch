@@ -1,28 +1,41 @@
 -- Admits the sign-in whose new session holds token $session_token against the limit of $limit
 -- devices one account keeps signed in at once, judged at $now in one transaction, one admission of
--- an account at a time (the gateway takes the account's turn for it): the account's devices with
--- a live admitted session are counted, the new session's own device included and a device with
--- several live sessions once; a session still waiting for its admission (`pending`) counts for its
--- own sign-in only. The sign-in is admitted as it is (`admitted`) within the limit, and when its
--- session is no longer live. Past it, a sign-in not confirmed ($sign_out_oldest false) leaves
--- nothing: its session, never handed to its device, is deleted (`asked`). A confirmed one signs out
--- the other device seen least recently (by `last_seen_at`, then by its id): its live sessions end
--- at $now and keep `device-limit` as their reason (`signed-out`, with that `device`). An admitted
--- session waits no more, and its device keeps it as its newest: the device's other admitted
--- sessions end with no reason, as at any new sign-in of the device. Until then they stay live, so
--- a device signed in already keeps its place while its new sign-in waits.
+-- an account at a time (the gateway takes the account's turn for it). The session is found by its
+-- token whatever became of it, to learn whose it is, and that account's ban is read in the same
+-- transaction: a banned account lets nothing in (`banned`), its session ended `banned` unless the
+-- ban ended it already, so whichever of the ban and the admission commits second sees the other.
+-- Otherwise the account's devices with a live admitted session are counted, the new session's own
+-- device included and a device with several live sessions once; a session still waiting for its
+-- admission (`pending`) counts for its own sign-in only. The sign-in is admitted as it is
+-- (`admitted`) within the limit, and when its session is no longer live. Past it, a sign-in not
+-- confirmed ($sign_out_oldest false) leaves nothing: its session, never handed to its device, is
+-- deleted (`asked`). A confirmed one signs out the other device seen least recently (by
+-- `last_seen_at`, then by its id): its live sessions end at $now and keep `device-limit` as their
+-- reason (`signed-out`, with that `device`). An admitted session waits no more, and its device
+-- keeps it as its newest: the device's other admitted sessions end with no reason, as at any new
+-- sign-in of the device. Until then they stay live, so a device signed in already keeps its place
+-- while its new sign-in waits.
 BEGIN TRANSACTION;
-  LET $own = (
+  LET $row = (
     SELECT
       identity,
-      device
+      device,
+      ended_at,
+      expires_at
     FROM ONLY device_session
-    WHERE
-      token = $session_token
-      AND ended_at = NONE
-      AND expires_at > $now
+    WHERE token = $session_token
     LIMIT 1
   );
+  LET $banned = $row != NONE
+  AND type::record('identity', $row.identity).banned = true;
+  LET $own = IF !$banned
+  AND $row != NONE
+  AND $row.ended_at = NONE
+  AND $row.expires_at > $now {
+    $row;
+  } ELSE {
+    NONE;
+  };
   LET $live = IF $own = NONE {
     [];
   } ELSE {
@@ -40,14 +53,26 @@ BEGIN TRANSACTION;
       )
     GROUP BY device;
   };
-  LET $outcome = IF array::len($live) <= $limit {
+  LET $outcome = IF $banned {
+    'banned';
+  } ELSE IF array::len($live) <= $limit {
     'admitted';
   } ELSE IF $sign_out_oldest {
     'signed-out';
   } ELSE {
     'asked';
   };
-  IF $outcome = 'asked' {
+  IF $outcome = 'banned' {
+    -- Never handed out: ended as the ban ends every session, unless the ban ended it already.
+    UPDATE device_session SET
+      ended_reason = 'banned',
+      ended_at = time::min([expires_at, $now]),
+      expires_at = time::min([expires_at, $now])
+    WHERE
+      token = $session_token
+      AND ended_at = NONE
+    RETURN NONE;
+  } ELSE IF $outcome = 'asked' {
     DELETE device_session WHERE token = $session_token RETURN NONE;
   } ELSE {
     UPDATE device_session SET

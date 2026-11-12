@@ -48,11 +48,17 @@ export const OrganisationModule = defineModule({
   ],
   declarations: { OrganisationPage: OrganisationContainer, InvitationPage: InvitationContainer },
   routes: [
-    { path: '/org', page: 'OrganisationPage', guard: 'authenticated' },
+    {
+      path: '/org',
+      page: 'OrganisationPage',
+      guard: 'authenticated',
+      roles: ['identity', 'member', 'admin'],
+    },
     // Open to anyone: the link says what it offers, and a guest is asked to sign in first.
     {
       path: '/invitation',
       page: 'InvitationPage',
+      roles: ['guest', 'identity'],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
   ],

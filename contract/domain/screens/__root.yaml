@@ -38,6 +38,11 @@ anchors:
     kind: link
     binding: { route: /settings }
     roles: [ identity, member, admin ]
+  app-shell.nav.console-link:
+    kind: link
+    description: Leads to the console, for an operator alone.
+    binding: { route: /console/users }
+    roles: [ operator ]
   app-shell.theme-select:
     kind: select
     description: "The theme of this device for a guest; it starts as the theme this device showed last, so after a sign-out it keeps the signed-out account's theme."

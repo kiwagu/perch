@@ -12,6 +12,7 @@ import { identityByEmail } from '../identity-by-email'
 import sessionEndStatement from '../surql/device-session-end.surql'
 import sessionEndByTokenStatement from '../surql/device-session-end-by-token.surql'
 import sessionsAdmitStatement from '../surql/device-sessions-admit.surql'
+import sessionsAdmitVerifiedStatement from '../surql/device-sessions-admit-verified.surql'
 import sessionsEndAllStatement from '../surql/device-sessions-end-all.surql'
 
 import {
@@ -21,6 +22,8 @@ import {
   toSessionRevoke,
   toSignInAdmission,
   toSignOutEnding,
+  toVerifiedAdmission,
+  type VerifiedAdmission,
 } from './endings'
 import { readSession, type SessionRead } from './read'
 import {
@@ -67,7 +70,10 @@ export class AuthSessions {
     this.#secret = options.secret
   }
 
-  /** Who the live session that holds `token` belongs to, or none (`readSession`). */
+  /**
+   * Who the live session that holds `token` belongs to, or none, a session still waiting for its
+   * admission among them (`readSession`).
+   */
   read(token: string): Promise<SessionRead> {
     return readSession(this.#auth, token)
   }
@@ -119,15 +125,18 @@ export class AuthSessions {
   /**
    * Admits the sign-in of `identity` whose new session holds `token` against the limit of devices
    * one account keeps signed in at once (`DEVICE_LIMIT`), now, in one transaction, the account's
-   * admissions one at a time: within the limit the session is admitted and waits no more
-   * (`pending`), the device's earlier sessions ending as at any new sign-in of the device; past
-   * it, a sign-in not confirmed (`signOutOldest` false) has its session deleted
-   * and is asked, a confirmed one signs out the account's other device seen least recently, whose
-   * session keeps `device-limit` as why it ended. Only admitted sessions count, the new one beside
-   * them, so a sign-in still waiting for its admission takes no place from another, a device
-   * signed in already takes no new place, and of two sign-ins for the last place one is admitted
-   * and the other asked. A session whose admission failed keeps waiting: nothing counts, lists or
-   * hands it out.
+   * admissions one at a time. The session is found by its token whether or not it ended, and the
+   * account's ban is read in the same transaction: a banned account answers `banned`, its session
+   * ended `banned` unless the ban ended it already, so a ban that committed before the admission is
+   * seen by it, and one after it ends the admitted session itself. Otherwise, within the limit the
+   * session is admitted and waits no more (`pending`), the device's earlier sessions ending as at
+   * any new sign-in of the device; past it, a sign-in not confirmed (`signOutOldest` false) has
+   * its session deleted and is asked, a confirmed one signs out the account's other device seen
+   * least recently, whose session keeps `device-limit` as why it ended. Only admitted sessions
+   * count, the new one beside them, so a sign-in still waiting for its admission takes no place
+   * from another, a device signed in already takes no new place, and of two sign-ins for the last
+   * place one is admitted and the other asked. A session whose admission failed keeps waiting:
+   * nothing counts, lists, reads or hands it out.
    */
   admit(
     identity: IdentityId,
@@ -152,8 +161,38 @@ export class AuthSessions {
   }
 
   /**
+   * Admits the session the first verification of `identity`'s email signed in, which holds
+   * `token`, now, in one transaction, in the account's turn of admissions beside its sign-ins'.
+   * Better Auth writes it waiting for this admission, so it is handed to the device only once it
+   * answers `admitted`. The session is found by its token whether or not it ended, and the
+   * account's ban is read in the same transaction: a banned account answers `banned`, the session
+   * ended `banned` unless the ban ended it already. Otherwise a live session waits no more and its
+   * device keeps it as its newest, the device's other admitted sessions ending as at any new
+   * sign-in of the device (`admitted`); no limit of devices is judged. A session no longer live, a
+   * reset having ended it meanwhile, answers `gone`. A session whose admission failed keeps
+   * waiting: nothing counts, lists, reads or hands it out.
+   */
+  admitVerified(identity: IdentityId, token: string): ResultAsync<VerifiedAdmission, DataError> {
+    return new ResultAsync(
+      this.#admissions.run(identity, () =>
+        writing(
+          this.#directory.db
+            .query<unknown[]>(sessionsAdmitVerifiedStatement, {
+              session_token: token,
+              now: this.#now(),
+            })
+            .retry(),
+          'a verification could not be admitted',
+        ).andThen((results) => toVerifiedAdmission(results.at(-2))),
+      ),
+    )
+  }
+
+  /**
    * The session Better Auth signed in at a verification, by the signed token of its answer, and
-   * its account (`readSignedIn`). Devices never present the signed form: `read` refuses it.
+   * its account (`readSignedIn`), whether or not it waits for its admission: the one read of a
+   * waiting session but the admissions', and how the gateway learns its raw token. Devices never
+   * present the signed form: `read` refuses it.
    */
   signedIn(signedToken: string): ResultAsync<SignedInAccount | undefined, DataError> {
     return readSignedIn(this.#auth, signedToken)

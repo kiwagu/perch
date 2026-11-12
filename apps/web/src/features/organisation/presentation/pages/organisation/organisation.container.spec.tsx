@@ -92,7 +92,14 @@ async function openPage(
   const TestModule = defineModule({
     id: 'test',
     declarations: { Organisation: OrganisationContainer },
-    routes: [{ path: '/org', page: 'Organisation', guard: 'authenticated' }],
+    routes: [
+      {
+        path: '/org',
+        page: 'Organisation',
+        guard: 'authenticated',
+        roles: ['identity', 'member', 'admin'],
+      },
+    ],
   })
   const router = createAppRouter({
     modules: [TestModule],

@@ -12,6 +12,7 @@ export {
   screenOf,
   segmentsOf,
 } from './grammar'
+export { type InEntry, itemIdOf } from './item'
 export {
   ANCHOR_ATTRIBUTES,
   PAGE_HELPER,

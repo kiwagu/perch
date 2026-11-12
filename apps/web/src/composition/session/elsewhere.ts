@@ -1,7 +1,8 @@
 /**
- * What reaches the session from elsewhere: the channel of its space (memberships, a session token
- * the gateway refuses, a sign-out from another device or everywhere) and the other tabs of the
- * browser (a sign-in or a sign-out made there).
+ * What reaches the session from elsewhere: the channel of its space (memberships, the account's
+ * platform roles, a session token the gateway refuses, a sign-out from another device or
+ * everywhere, or by a ban of the account) and the other tabs of the browser (a sign-in or a
+ * sign-out made there).
  */
 
 import { okAsync, ResultAsync } from 'neverthrow'
@@ -14,6 +15,7 @@ import { savedIdentity, savedToken } from '../storage'
 import type { SessionHost } from './host'
 import type { TransportContext } from './options'
 import type { SessionOrganisations } from './organisations'
+import type { SessionRoles } from './roles'
 import type { SessionSignIn } from './sign-in'
 import type { ElsewhereNotice, ForcedSignOut, SessionSignOut } from './sign-out'
 import { sessionTransportContext } from './transport-context'
@@ -21,6 +23,7 @@ import { sessionTransportContext } from './transport-context'
 export interface SessionElsewhereOptions {
   readonly host: SessionHost
   readonly organisations: SessionOrganisations
+  readonly roles: SessionRoles
   readonly signingIn: SessionSignIn
   readonly signingOut: SessionSignOut
 }
@@ -28,6 +31,7 @@ export interface SessionElsewhereOptions {
 export class SessionElsewhere {
   readonly #host: SessionHost
   readonly #organisations: SessionOrganisations
+  readonly #roles: SessionRoles
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   #protocolRefused = false
@@ -35,6 +39,7 @@ export class SessionElsewhere {
   constructor(options: SessionElsewhereOptions) {
     this.#host = options.host
     this.#organisations = options.organisations
+    this.#roles = options.roles
     this.#signingIn = options.signingIn
     this.#signingOut = options.signingOut
   }
@@ -94,12 +99,20 @@ export class SessionElsewhere {
           void this.#organisations.apply(memberships)
         }
       },
+      // Kept for the identity whose space is open here, as its memberships are; the roles judge
+      // again that it is still the one signed in on the browser.
+      roles: (roles) => {
+        if (this.#host.open()?.space.identity.id === identity) {
+          this.#roles.apply(identity, roles)
+        }
+      },
       refused: () =>
         void this.#forced(() => this.#signingOut.refused(identity).map(this.#followIfSignedIn)),
       revoked: () => void this.#outElsewhere(identity),
       passwordChanged: () =>
         void this.#outElsewhere(identity, undefined, 'password-changed-elsewhere'),
       deviceLimit: () => void this.#outElsewhere(identity, undefined, 'device-limit-elsewhere'),
+      banned: () => void this.#outElsewhere(identity, undefined, 'account-banned'),
       // The build is what the gateway refuses, whichever account's channel heard it, and while
       // its space still opens too: kept for the frame that listens later, and published.
       protocolRefused: () => {
@@ -149,8 +162,9 @@ export class SessionElsewhere {
 
   /**
    * Signed out from another device (4001), everywhere at this device's request, by a change of
-   * the account's password (4002), or by a sign-in past the account's limit of devices (4003),
-   * whose `notice` says so: as a refused token, and the sign-in page says why. Whichever of two
+   * the account's password (4002), by a sign-in past the account's limit of devices (4003), or by
+   * an operator's ban of the account (4004), whose `notice` says so: as a refused token, and the
+   * sign-in page says why. Whichever of two
    * runs second changes nothing, and so does one whose session is no longer open (`still`) when
    * its turn comes.
    */

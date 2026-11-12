@@ -18,5 +18,5 @@ export const DeviceModule = defineModule({
     },
   ],
   declarations: { DevicesPage: DevicesContainer },
-  routes: [{ path: '/devices', page: 'DevicesPage', guard: 'authenticated' }],
+  routes: [{ path: '/devices', page: 'DevicesPage', guard: 'authenticated', roles: ['identity'] }],
 })

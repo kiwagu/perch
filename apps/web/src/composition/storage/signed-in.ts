@@ -10,6 +10,7 @@ import type { SignedInDevice } from '../gateway-auth'
 import { ACCOUNT_START_KEY } from './account-start'
 import type { KeyValueStorage } from './key-value'
 import { MEMBERSHIPS_KEY, saveMemberships, TENANT_KEY } from './memberships'
+import { forgetRoles } from './roles'
 
 /** Who is signed in on this browser; the tabs follow it. */
 export const IDENTITY_KEY = 'perch.session.identity'
@@ -106,16 +107,24 @@ function read<T>(storage: KeyValueStorage, key: string, schema: z.ZodType<T>): T
 }
 
 /**
- * Forgets who is signed in and the token; the other tabs hear the identity go. The inventory of
- * the organisation databases stays: the databases may stay too. So do the tokens left to sign
- * out. A refresh key an older build kept goes too, and the start of the account this browser kept
- * to finish: signed out, the browser no longer knows what the account has.
+ * Forgets who is signed in and the token; the other tabs hear the identity go. The memberships
+ * go, and the platform roles kept for the identity signed out (the records of other identities
+ * stay). The inventory of the organisation databases stays: the databases may stay too. So do
+ * the tokens left to sign out. A refresh key an older build kept goes too, and the start of the
+ * account this browser kept to finish: signed out, the browser no longer knows what the account
+ * has.
  */
 export function forgetDevice(storage: KeyValueStorage): void {
+  const signedOut = savedIdentity(storage)
+
   storage.remove(ACCOUNT_START_KEY)
   storage.remove(TOKEN_KEY)
   storage.remove(OLD_REFRESH_KEY)
   storage.remove(IDENTITY_KEY)
   storage.remove(MEMBERSHIPS_KEY)
   storage.remove(TENANT_KEY)
+
+  if (signedOut) {
+    forgetRoles(storage, signedOut.id)
+  }
 }

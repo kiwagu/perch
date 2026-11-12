@@ -1,7 +1,9 @@
 import { type Command, runCommand, type Shape } from '@workspace/data'
+import { z } from '@workspace/zod'
 
 import { openStand, openStandTenant, type SeedManifest, type StandOptions } from '../seed'
 
+import identityRolesText from './identity-roles.surql'
 import memberWriteText from './member-write.surql'
 import membersText from './members.surql'
 import standCountsText from './stand-counts.surql'
@@ -60,6 +62,16 @@ const standCounts: Shape<StandCountsParams, LeftOnStand> = {
   ],
 }
 
+const identityRoles: Shape<{ readonly emails: readonly string[] }, unknown> = {
+  id: 'fixture.identityRoles',
+  kind: 'shape',
+  text: identityRolesText,
+  params: [{ name: 'emails', type: 'array<string>' }],
+  tables: ['identity'],
+}
+
+const IdentityRoles = z.array(z.object({ email: z.string(), role: z.string().nullish() }))
+
 const members: Shape<Record<string, never>, readonly string[]> = {
   id: 'fixture.members',
   kind: 'shape',
@@ -99,6 +111,30 @@ export async function leftOnStand(
         ),
       })
     )._unsafeUnwrap()
+  } finally {
+    await stand.close()
+  }
+}
+
+/**
+ * Reads, as the stand's operator, which of the accounts at `emails` hold the platform role
+ * `operator`: their addresses, in alphabetical order.
+ */
+export async function operatorsAmong(
+  target: StandOptions,
+  emails: readonly string[],
+): Promise<readonly string[]> {
+  const stand = (await openStand(target))._unsafeUnwrap()
+
+  try {
+    const rows = IdentityRoles.parse(
+      (await stand.runner.read(identityRoles, { emails }))._unsafeUnwrap(),
+    )
+
+    return rows
+      .filter((row) => row.role === 'operator')
+      .map((row) => row.email)
+      .sort()
   } finally {
     await stand.close()
   }

@@ -6,9 +6,9 @@ export type ChannelState = 'up' | 'down'
  * Why a channel ended for good: the gateway refused the token, signed the device out at its own
  * request, refused the protocol this device speaks (an application older than the gateway),
  * signed the device out from another device (`revoked`), ended its session because the
- * account's password changed, through a reset link or on another device (`password-changed`), or
+ * account's password changed, through a reset link or on another device (`password-changed`),
  * because a sign-in on another device went past the account's limit of devices
- * (`device-limit`).
+ * (`device-limit`), or because an operator banned the account (`banned`).
  */
 export type EndReason =
   | 'unauthorized'
@@ -17,6 +17,7 @@ export type EndReason =
   | 'revoked'
   | 'password-changed'
   | 'device-limit'
+  | 'banned'
 
 export interface DeviceCredentials {
   readonly token: string

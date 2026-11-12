@@ -86,9 +86,10 @@ function open(at: string, opening: Opening = {}) {
       {
         path: '/invitation',
         page: 'Invitation',
+        roles: ['guest', 'identity'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/org', page: 'Organisation' },
+      { path: '/org', page: 'Organisation', roles: ['guest', 'identity'] },
     ],
   })
   const router = createAppRouter({

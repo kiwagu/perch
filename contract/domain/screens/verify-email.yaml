@@ -56,6 +56,7 @@ flow:
   meta:
     guards:
       signedIn: "the link verified the email just now and this device is signed in to the account; false when the email was verified before, which signs nothing in"
+      accountBanned: { codes: [ account-banned ] }
   states:
     verifying:
       description: The token of the link is being exchanged.
@@ -74,7 +75,18 @@ flow:
             description: The email was verified before; nothing is signed in.
             actions:
               - show: { user.verify-email.message: [ verified-before ] }
-        onError: resend-offered
+        onError:
+          - target: banned
+            guard: accountBanned
+            description: The link verified the email, but an operator banned the account, so nothing is signed in and no new link is offered.
+            actions:
+              - show: user.verify-email.error
+          - target: resend-offered
+            actions:
+              - show: user.verify-email.error
+    banned:
+      description: The error says the account is banned; the email is verified, and nothing is signed in.
+      type: final
     verified:
       description: The message says the email was verified before, beside user.verify-email.sign-in-link.
       type: final

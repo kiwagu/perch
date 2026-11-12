@@ -7,6 +7,8 @@ import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { ACCOUNT_BANNED_CODE, accountBanned } from './answer-body'
+
 /** The account as it signed up: its name and its language, which its profile and settings start from. */
 export interface AccountSignedUpAs {
   readonly name: string
@@ -41,10 +43,13 @@ export const deviceHeaders = (device: NamedDevice) => ({
   'X-Perch-Device-Label': device.label,
 })
 
-/** The sign-in's answer as Better Auth's client reads it: its body, or the status it refused with. */
+/**
+ * The sign-in's answer as Better Auth's client reads it: its body, or the status it refused with
+ * and the `code` the refusal's body names, when it has one.
+ */
 export interface ClientAnswer {
   readonly data: unknown
-  readonly error: { readonly status: number } | null
+  readonly error: { readonly status: number; readonly code?: unknown } | null
 }
 
 /**
@@ -57,12 +62,10 @@ const signedInAccount = z.object({
   start: z.object({ name: z.string().min(1), locale: z.enum(SUPPORTED_LOCALES) }).optional(),
 })
 
-/** The statuses the gateway refuses a sign-in with, and what each means here. */
+/** The statuses the gateway refuses a sign-in with, and what each means here; a 403 is read apart. */
 const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly message: string }> =
   new Map([
     [401, { code: 'data:INVALID_CREDENTIALS', message: 'wrong email or password' }],
-    // The password was right, the email is not verified yet.
-    [403, { code: 'data:EMAIL_NOT_VERIFIED', message: 'the email is not verified yet' }],
     // The account is signed in on as many devices as it may be: nothing is signed in.
     [
       409,
@@ -74,7 +77,22 @@ const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly mes
     [429, { code: 'data:RATE_LIMITED', message: 'too many attempts' }],
   ])
 
-function refused(status: number): DataError {
+/**
+ * What a 403 means: the password was right, and the body's code tells why nothing is signed in:
+ * `account-banned` an account an operator banned, any other (a body that names none or does not
+ * parse too) an email not verified yet.
+ */
+function forbidden(code: unknown): DataError {
+  return code === ACCOUNT_BANNED_CODE
+    ? accountBanned()
+    : dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet')
+}
+
+function refused({ status, code }: NonNullable<ClientAnswer['error']>): DataError {
+  if (status === 403) {
+    return forbidden(code)
+  }
+
   const refusal = REFUSALS.get(status)
 
   return refusal
@@ -88,7 +106,7 @@ function refused(status: number): DataError {
  */
 export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, DataError> {
   if (answer.error) {
-    return errAsync(refused(answer.error.status))
+    return errAsync(refused(answer.error))
   }
 
   const parsed = signedInAccount.safeParse(answer.data)

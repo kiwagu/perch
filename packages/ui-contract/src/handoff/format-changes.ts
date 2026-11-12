@@ -69,8 +69,9 @@ const descriptionsOf = (changes: readonly DescriptionChange[]) =>
 
 /**
  * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, the
- * lines changed in each screen's flow, the lines changed in each platform action, and last the
- * descriptions changed, each with its length before and after.
+ * lines changed in each screen's flow, the lines changed in each platform action, the reads
+ * each action of the model comes to change or stops changing, and last the descriptions
+ * changed, each with its length before and after.
  */
 const listsOf = (changes: ContractChanges) => [
   ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
@@ -82,6 +83,9 @@ const listsOf = (changes: ContractChanges) => [
   ),
   ...Object.entries(changes.actionLines).flatMap(([name, change]) =>
     linesOf(change, 'platform action line', 'platform action lines', ` in ${name}`),
+  ),
+  ...Object.entries(changes.modelActionLines).flatMap(([name, change]) =>
+    linesOf(change, 'model action line', 'model action lines', ` in ${name}`),
   ),
   ...descriptionsOf(changes.descriptions),
 ]

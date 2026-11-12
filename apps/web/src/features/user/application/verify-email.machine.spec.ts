@@ -108,6 +108,16 @@ describe('verify-email machine', () => {
     },
   )
 
+  it('ends in banned when the link is the one of a banned account, with no new link to send and nothing welcomed', async () => {
+    const { actor, emitted } = page({ verify: () => refused('data:ACCOUNT_BANNED') })
+    const ended = await waitFor(actor, (state) => state.status === 'done')
+
+    expect(ended.value).toBe('banned')
+    expect(ended.context).toEqual({ error: 'data:ACCOUNT_BANNED', message: undefined })
+    expect(ended.can({ type: RESEND, email: ann.email })).toBe(false)
+    expect(emitted).toEqual([])
+  })
+
   it('keeps an unknown code for a failure that carries none', async () => {
     const { actor } = page({
       verify: () => new ResultAsync<EmailVerified, SignInError>(Promise.reject(new Error('boom'))),

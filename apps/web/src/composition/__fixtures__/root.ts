@@ -7,6 +7,7 @@ import type { IdentityId } from '@workspace/ids'
 import { syncHints } from '@workspace/replica/sync'
 import { FakeLocks, gatewayStub, manualClock } from '@workspace/replica/testing'
 
+import { accountsApi } from '../accounts-api'
 import { devicesApi } from '../devices-api'
 import { invitationsApi } from '../invitations-api'
 import { organisationsApi } from '../organisations-api'
@@ -65,6 +66,11 @@ export async function bootRoot(
       }),
     invitationsApi: (deps) =>
       invitationsApi('/backend', {
+        ...deps,
+        fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
+      }),
+    accountsApi: (deps) =>
+      accountsApi('/backend', {
         ...deps,
         fetcher: () => Promise.reject(new Error('the gateway is not reached in these tests')),
       }),

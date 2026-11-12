@@ -1,3 +1,5 @@
+import type { PlatformRole } from '@workspace/kernel'
+
 import type { Clock } from '../../clock'
 import {
   CLOSE,
@@ -34,9 +36,11 @@ export interface WebSocketTransportOptions {
   readonly device: string
   /** Hears the identity's memberships: those it was welcomed with, then each change of them. */
   readonly onMemberships?: (memberships: readonly Membership[]) => void
+  /** Hears the account's platform roles each welcome carries, after its memberships. */
+  readonly onRoles?: (roles: readonly PlatformRole[]) => void
   /**
-   * The gateway refused the token or the protocol, or signed the device out, at its own request
-   * or from another device: no reconnect follows.
+   * The gateway refused the token or the protocol, or signed the device out, at its own request,
+   * from another device or for its account's sake: no reconnect follows.
    */
   readonly onEnded: (reason: EndReason) => void
   readonly clock: Clock
@@ -258,6 +262,10 @@ export class WebSocketTransport implements SyncTransport {
 
     if (message.type === 'welcome' || message.type === 'memberships') {
       this.#options.onMemberships?.(message.memberships)
+    }
+
+    if (message.type === 'welcome') {
+      this.#options.onRoles?.(message.roles)
     }
 
     for (const listener of this.#messageListeners) {

@@ -1,10 +1,11 @@
--- The identity (its key) whose email is $email, in any case, the hash on its credential row, the
--- name and the language it signed up with, and whether it has started (its profile and its
--- settings both reached the directory through its private region), or NONE when no account has the
--- email: what a sign-in reads before Better Auth checks the password and again once Better Auth
--- wrote the session.
+-- The identity (its key) whose email is $email, in any case, the hash on its credential row,
+-- whether it is banned, the name and the language it signed up with, and whether it has started
+-- (its profile and its settings both reached the directory through its private region), or NONE
+-- when no account has the email: what a sign-in reads before Better Auth checks the password and
+-- again once Better Auth wrote the session, and a verification likewise.
 SELECT
   record::id(id) AS identity,
+  banned,
   name,
   locale,
   (

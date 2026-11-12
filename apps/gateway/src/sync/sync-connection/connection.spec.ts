@@ -29,14 +29,17 @@ import {
 import { RegionHub, singleDatabase } from '@workspace/replica/server'
 import { manualClock } from '@workspace/replica/testing'
 
+import { ban } from '../../auth/__fixtures__/account-ban'
 import {
   AUTH_SECRET,
   accountServicesOf,
+  betterAuthToken,
   deviceHeaders,
   openAuth,
   signUpOn,
 } from '../../auth/__fixtures__/auth-instance'
 import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
+import identityRoleSetStatement from '../../auth/__fixtures__/identity-role-set.surql'
 import { authHandler } from '../../auth/auth-handler'
 import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
@@ -45,6 +48,7 @@ import { ProfileEmails } from '../../auth/profile-emails'
 import { NAMESPACE } from '../../config'
 import { KeyedTurns } from '../../keyed-turns'
 import { RequestLimits } from '../../limits/request-limits'
+import { linkToken } from '../../mail/__fixtures__/outbox'
 import { admitted, specInvitations } from '../../tenants/__fixtures__/invitations'
 import { specRetell } from '../../tenants/__fixtures__/retell'
 import { Organisations } from '../../tenants/organisations'
@@ -61,6 +65,7 @@ import { ConnectionRegistry } from '../connections'
 
 import { SyncConnection } from './connection'
 import type { SocketLike, SyncConnectionDeps } from './deps'
+import { SUPERSEDED } from './reasons'
 
 const ann = { email: 'ann@example.test' }
 
@@ -292,6 +297,28 @@ async function openGateway(options: GatewayOptions = {}) {
       )
 
       return response?.status
+    },
+    /**
+     * Signs `email` up and verifies it on `device` as Better Auth does, before the gateway admits
+     * the session it wrote: the identity, and the raw token of that waiting session.
+     */
+    verifying: async ({ email }: { readonly email: string }, device: string = DEVICE) => {
+      await opened.auth.api.signUpEmail({
+        body: { name: 'Cleo', email, password: 'Pass-word-1' },
+        headers: deviceHeaders(device),
+      })
+
+      const { headers } = await opened.auth.api.verifyEmail({
+        query: { token: betterAuthToken(linkToken(await opened.outbox.next(email))) },
+        headers: deviceHeaders(device),
+        returnHeaders: true,
+      })
+      const read =
+        (
+          await sessions.signedIn(headers.get('set-auth-token') ?? expect.unreachable('a token'))
+        )._unsafeUnwrap() ?? expect.unreachable('a session')
+
+      return { identity: read.user.id, token: read.token }
     },
     /**
      * Signs `email` up and verifies it on `device`: the identity, and the raw token of the session
@@ -547,6 +574,7 @@ describe('SyncConnection', () => {
         identity: ann.identity.id,
         regions: [{ region: `identity:${ann.identity.id}`, head: 0 }],
         memberships: [],
+        roles: [],
         time: 1_000,
       },
     ])
@@ -555,6 +583,28 @@ describe('SyncConnection', () => {
     expect(seen).toEqual([{ identity: ann.identity.id, device: DEVICE }])
     // The hello timer is gone with the hello.
     expect(clock.pending()).toBe(0)
+  })
+
+  it("welcomes a device with its account's platform roles, read with its session at each hello", async () => {
+    const gateway = await openGateway()
+    const anns = await gateway.signUp(ann)
+    const roleOf = async (role: string) => {
+      await gateway.local.db.query(identityRoleSetStatement, { identity: anns.identity.id, role })
+    }
+    const welcomedRoles = async () => {
+      const { socket, connection } = open(gateway)
+
+      await hello(connection, anns.token)
+
+      return socket.sent.flatMap((message) => (message.type === 'welcome' ? [message.roles] : []))
+    }
+
+    await roleOf('operator')
+    expect(await welcomedRoles()).toEqual([['operator']])
+
+    // Taken back: the next hello reads it so, nothing kept from the one before.
+    await roleOf('user')
+    expect(await welcomedRoles()).toEqual([[]])
   })
 
   it('welcomes a device once the mark of its hello landed, so it is seen before it hears anything', async () => {
@@ -626,6 +676,29 @@ describe('SyncConnection', () => {
     expect(fixture.seen).toEqual([])
   })
 
+  it('closes 4401 a hello with the token of a session a verification wrote, as a token nobody holds, until the gateway admits it, and welcomes it then', async () => {
+    const gateway = await openGateway()
+    const cleo = await gateway.verifying({ email: 'cleo@example.test' })
+    const waiting = open(gateway)
+
+    await hello(waiting.connection, cleo.token)
+
+    expect(waiting.socket.closes).toEqual([[CLOSE.unauthorized, 'the session was not accepted']])
+    expect(waiting.socket.sent).toEqual([])
+    expect(gateway.connections.forIdentity(cleo.identity)).toEqual([])
+    expect(waiting.seen).toEqual([])
+    expect(
+      (await gateway.sessions.admitVerified(cleo.identity, cleo.token))._unsafeUnwrap(),
+    ).toEqual({ kind: 'admitted' })
+
+    const admitted = open(gateway)
+
+    await hello(admitted.connection, cleo.token)
+
+    expect(admitted.socket.closes).toEqual([])
+    expect(admitted.socket.sent.map((message) => message.type)).toEqual(['welcome'])
+  })
+
   it("closes 4401 a hello under another device than its session's, and registers nothing", async () => {
     const { socket, connection, ann, connections, seen } = await connect()
 
@@ -649,6 +722,11 @@ describe('SyncConnection', () => {
       code: CLOSE.deviceLimit,
       text: 'signed out by a sign-in past the limit of devices',
     },
+    {
+      reason: 'banned',
+      code: CLOSE.banned,
+      text: 'signed out because the account was banned',
+    },
   ])(
     'closes with $code the hello of a device whose session ended as $reason while it was offline',
     async ({ reason, code, text }) => {
@@ -667,6 +745,18 @@ describe('SyncConnection', () => {
       expect(seen).toEqual([])
     },
   )
+
+  it('closes 4004 the hello of a device whose account an operator banned while it was offline, and registers nothing', async () => {
+    const { socket, connection, ann, connections, seen, local, clock } = await connect()
+
+    await ban(local, ann.identity.id, new Date(clock.now()))
+    await hello(connection, ann.token)
+
+    expect(socket.closes).toEqual([[CLOSE.banned, 'signed out because the account was banned']])
+    expect(socket.sent).toEqual([])
+    expect(connections.forIdentity(ann.identity.id)).toEqual([])
+    expect(seen).toEqual([])
+  })
 
   it("closes 4401 a hello under another device than its ended session's, whatever ended it", async () => {
     const { socket, connection, ann, local, clock } = await connect()
@@ -915,6 +1005,28 @@ describe('SyncConnection', () => {
     expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
   })
 
+  it.each([
+    [CLOSE.signedOut, 'signed out'],
+    [CLOSE.revoked, 'signed out from another device'],
+    [CLOSE.passwordChanged, 'signed out because the password changed'],
+    [CLOSE.deviceLimit, 'signed out by a sign-in past the limit of devices'],
+    [CLOSE.banned, 'signed out because the account was banned'],
+    [SUPERSEDED, 'another connection of this device took over'],
+  ] as const)(
+    'closes a welcomed connection the registry ends with %i, saying why as its hello does',
+    async (code, reason) => {
+      const gateway = await openGateway()
+      const signedUp = await gateway.signUp(ann)
+      const { socket, connection } = openHolding(gateway, holding())
+
+      await hello(connection, signedUp.token)
+      await gateway.connections.close(signedUp.identity.id, undefined, code)
+
+      expect(socket.closes).toEqual([[code, reason]])
+      expect(gateway.connections.forIdentity(signedUp.identity.id)).toEqual([])
+    },
+  )
+
   it('closes with 4001 a device signed out while its hello is under way, before its welcome', async () => {
     const gateway = await openGateway()
     const signedUp = await gateway.signUp(ann)
@@ -1121,6 +1233,7 @@ describe('SyncConnection', () => {
           { region: 'tenant:acme', head: 0 },
         ],
         memberships: [acme],
+        roles: [],
         time: 0,
       },
     ])
@@ -1145,6 +1258,7 @@ describe('SyncConnection', () => {
         identity: anns.identity.id,
         regions: [{ region: `identity:${anns.identity.id}`, head: 0 }],
         memberships: [acme],
+        roles: [],
         time: 0,
       },
     ])

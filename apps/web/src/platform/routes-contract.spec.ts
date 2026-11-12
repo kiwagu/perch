@@ -1,6 +1,6 @@
 /**
  * The routes of the modules are the bindings of the UI contract, one to one: the
- * same path, guard, history and retained parameters, and the same search schema
+ * same path, guard, roles (as a set), history and retained parameters, and the same search schema
  * once both sides are reduced to what the router enforces (`__fixtures__/route-bindings.ts`).
  * On a branch the pre-commit hook sets `CONTRACT_AHEAD=1`: a business commit may add or change
  * a binding before its route, so a binding may wait for its route, and a route may still equal
@@ -117,6 +117,7 @@ describe('the binding a route is held to', () => {
       path: '/list',
       page,
       guard: 'guest',
+      roles: ['identity'],
       search: z.object({ q: z.string().optional() }),
     }
 
@@ -124,7 +125,7 @@ describe('the binding a route is held to', () => {
   })
 
   it('is the binding at the base when the route still equals that one', () => {
-    const route: RouteDef = { path: '/list', page }
+    const route: RouteDef = { path: '/list', page, roles: ['identity'] }
 
     expect(heldTo(route, now, [was])).toBe(was)
     expect(heldTo(route, now, [{ ...was, screen: 'other' }])).toBe(now)
@@ -137,10 +138,21 @@ describe('the binding a route is held to', () => {
   })
 
   it('is the binding now, which it fails, when the route equals neither', () => {
-    const route: RouteDef = { path: '/list', page, guard: 'authenticated' }
+    const route: RouteDef = { path: '/list', page, guard: 'authenticated', roles: ['identity'] }
 
     expect(heldTo(route, now, [was])).toBe(now)
     expect(bindingReading(now.binding)).not.toEqual(routeReading(route))
+  })
+
+  it('reads the roles as a set: their order and a repeat do not count, another role does', () => {
+    const binding = bindingSchema.parse({ path: '/list', roles: ['member', 'admin'] })
+
+    expect(routeReading({ path: '/list', page, roles: ['admin', 'member', 'admin'] })).toEqual(
+      bindingReading(binding),
+    )
+    expect(routeReading({ path: '/list', page, roles: ['admin'] })).not.toEqual(
+      bindingReading(binding),
+    )
   })
 })
 
@@ -171,6 +183,7 @@ describe('the routes of the modules', () => {
       const app = routeReading(route)
 
       expect(binding?.guard, `${screen}: guard of ${path}`).toBe(app.guard)
+      expect(binding?.roles, `${screen}: roles of ${path}`).toEqual(app.roles)
       expect(binding?.history, `${screen}: history of ${path}`).toBe(app.history)
       expect(binding?.retain, `${screen}: retain of ${path}`).toEqual(app.retain)
       expect(binding?.search, `${screen}: search of ${path}`).toEqual(app.search)

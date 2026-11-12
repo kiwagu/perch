@@ -72,7 +72,8 @@ for Bun.
     screen and whose `toasts` record the toasts the loader derived, problems named by the file and the path inside it, a YAML error by its line),
     `loadModel(root)` (`contract/domain/model.schema.json`, checked against the
     JSON Schema 2020-12 meta-schema, then each `$defs` entity through
-    `entityDefinitionSchema`), `loadActivities(root)` (every `.yaml` file under
+    `entityDefinitionSchema`, each action of an entity a `ModelAction`: its `params` and, when it
+    says them, the reads it `changes`), `loadActivities(root)` (every `.yaml` file under
     `contract/domain/activities`, sorted by path, one activity each through `activitySchema`, its
     file named by its id; the folder is optional, so none is no problem) and
     `loadScenarios(root)` (every `.md` file under
@@ -121,7 +122,9 @@ for Bun.
     `{ search }`, the search parameter a field starts with, and whose platform `source` takes
     `params` (each `{ search }` or `{ value }`, never a field) and `paged: true`; the source of
     `contract/schemas/screen.schema.json`), `platformFileSchema` (an action's `paged`, the page
-    sizes it answers each once, the smallest first, with its `default`)
+    sizes it answers each once, the smallest first, with its `default`, and its `changes`, the
+    platform actions whose answer, for the organisation, the account and the params it ran
+    with, differs once it succeeds, a key an action of the model has too)
     and their parts, `platformMailSchema` among them (the mail a platform action sends: `to`
     and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts
     on (the signed-in account for an action on its own account, else the one its parameters
@@ -255,7 +258,11 @@ for Bun.
     a mail none named `recipient`), `noticesProblems` (the notices of a platform action carry
     names unique within it, go to a parameter of the action or the account, take their
     language from one or the account, never the recipient, and link, when they do, to a screen with a route, every route of which needs no
-    parameter: no `$param`, no splat, no required search key), `accessProblems` (rule 17, who a
+    parameter: no `$param`, no splat, no required search key), `changesProblems` (rule 19, the
+    reads an action changes: each name of the `changes` of a platform action or of an action of
+    the model is a platform action, never the action itself, that a list, a section or a table
+    of some screen takes as its `source`, written once; a problem per name, at its place in the
+    platform file or the model), `accessProblems` (rule 17, who a
     route serves: no binding's `guard` sends away an account its `roles` name, an anchor's
     `roles` are among those its screen's bindings serve, the frame aside, a link to a route
     whose roles name neither `guest` nor `identity` is shown to no device the route refuses,
@@ -420,17 +427,20 @@ for Bun.
     lacks has none, so an action added or removed whole shows every line, its mail among them),
     `actionLines(action)` (an internal helper, `handoff/action-lines.ts`): `param <name>:
     <type>`, `result: <text>`, `code <code>`, `role <role>`, `paged by <sizes>, <default> by
-    default`, `mail to <to> language
+    default`, `changes <read>`, `mail to <to> language
     <language> link <screen>?<search>`, `notice <name> to <to> language <language> [link
-    <screen>]`, descriptions aside; and last `descriptions`, by `descriptionChanges(before,
+    <screen>]`, descriptions aside; per action of the model either side holds, by
+    `<entity>.<action>`, the reads its `changes` names, as `changes <read>`, added and removed
+    (an action one side lacks names none); and last `descriptions`, by `descriptionChanges(before,
     after, renamed)` (`handoff/description-changes.ts`): sorted by place, each description of
     `contract.descriptions` (`readDescriptions`, the reader the budget reads with) that one side
     adds, removes or changes, a `DescriptionChange` `{ place, before?, after? }` with its length
     in characters on each side it has, a renamed anchor's under its new name;
     `formatChanges(changes)` prints the block a change hands over: a summary line, then one
     line per list that is not empty, the transitions as `transitions added in <activity>`,
-    the lines of a flow as `flow lines added in <screen>` and those of a platform action as
-    `platform action lines added in <action>`, and last `descriptions changed: <place> <before>
+    the lines of a flow as `flow lines added in <screen>`, those of a platform action as
+    `platform action lines added in <action>` and those of an action of the model as `model
+    action lines added in <entity>.<action>`, and last `descriptions changed: <place> <before>
     -> <after>, ...`, `new` where it has no length before and `gone` where it has none after
     (`app-shell.theme-select 191 -> 340`).
   - The coverage note: `modelCoverage(contract)` lists, per entity of the model, every field
@@ -507,7 +517,9 @@ for Bun.
   list: `ENTRY_KINDS` (`item`, `row`), `containersOf(entry, anchors)` (the lists, tables and
   sections it belongs to: those it is declared under, the nearest first, then those beside it
   in its part) and `inPartOf(entry, control)` (a control in the entry's part, rendered in each
-  entry, never the entry itself). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
+  entry, never the entry itself); `itemIdOf(control, item)`, the `data-id` of the entry of
+  `item` a control is in, which a navigate's `{ item }` search takes (it throws outside such an
+  entry or for one without an id). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
   search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
   `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
   `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to
@@ -593,7 +605,8 @@ for Bun.
   stop holding input, the messages that rank their codes with their order, the leaving
   actions, how each leave asks, the activities and the
   transitions changed in each, the lines changed in each screen's flow, the platform
-  actions with the lines changed in each, its mail among them, and each written description
+  actions with the lines changed in each, its mail among them, the reads each action of the
+  model comes to change or stops changing, and each written description
   added, removed or changed with its length before and after, included; prints
   the hand-over block, or the changes as JSON with `--json`). A change to the contract
   carries the output of

@@ -170,9 +170,23 @@ The authored files, edited by hand or by a model in the modeling thread:
   screen with a route, every route of which needs no parameter, as the link carries none (no
   `$param`, no splat, no required search key); the schema refuses a `search` on it. A scenario
   names a notice by its action and its name, `[notice:reset-password.password-changed]`.
+
+  An action says under `changes` the reads it changes: the platform actions whose answer, for
+  the organisation, the account and the params it ran with, differs once it succeeds, each one
+  that a list, a section or a table of some screen takes as its `source`. `organisations.invite`
+  changes `organisations.invitations`, and `sign-out-everywhere` changes `devices.list` and
+  `accounts.read`. A switch of the organisation or the account (a select, a create, an accept)
+  is the first read's (see "Reading a screen file", `source`), so it is never named, and
+  neither is what another account reads for itself: an invitation does not change the
+  inviter's `invitations.mine`. `changes: []` says the action changes none; an action that writes no
+  `changes` says nothing of it. The check refuses a name that is not a platform action, an
+  action that names itself, as it changes what other reads answer, a name that no list, section
+  or table takes as its source, and a name written twice in one `changes`.
 - `domain/model.schema.json`: the data model, a JSON Schema 2020-12 document with one `$defs` entry
   per entity and the contract's `x-perch` keyword (table, region, id prefix, owner, rules,
-  actions, how each field merges).
+  actions, how each field merges). An action of `x-perch.actions` says the reads of the
+  platform it changes under `changes`, as a platform action does, held by the same check:
+  `profile.updateName` changes `accounts.list` and `accounts.read`, where the name shows.
 - `domain/activities/<id>.yaml`: one activity across screens per file, named by its `id`
   (`domain/activities/session.yaml`); the folder is optional (see "Activities").
 
@@ -429,7 +443,10 @@ flight when what it reads for becomes another is dropped: its answer is shown no
 entered after another that rendered it too reads nothing, so an anchor no state lists, rendered
 in every state, is read only at those moments. Every other read is said by the flow, with the
 effect `read: <anchor>` (below, the effects of a flow): a read after an action that changed
-what the list shows, never prose in a description. `{ entity: <entity>, order, direction }`:
+what the list shows, never prose in a description. The `changes` of an action (see "The
+folder") names the sources whose answer it changes, so it tells which lists of a screen that
+runs it show something else once it succeeds.
+`{ entity: <entity>, order, direction }`:
 the entries are the stored entries of that entity of the model, which the anchor follows as
 they change, here or on another device; such a list is never read.
 
@@ -1347,7 +1364,9 @@ gap is fixed in the contract files first, never worked around in a test.
   screen whose every route declares the search parameter that
   carries its token; every notice it declares has a name no other notice of the action has,
   goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose
-  every route needs no parameter; no binding's `guard` sends away an account its `roles` name
+  every route needs no parameter; every name of an action's `changes`, a platform action's or
+  one of the model's, is a platform action, never the action itself, that a list, a section or
+  a table of some screen takes as its `source`, written once; no binding's `guard` sends away an account its `roles` name
   (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among
   those its screen's bindings serve (the frame aside), a link to a route whose roles name
   neither `guest` nor `identity` is shown to no device the route refuses: every restriction
@@ -1590,7 +1609,8 @@ rank their codes, with their order, who each route serves, the platform action e
 with its params and its paging, the platform actions added or removed
 and the notices they declare, the transitions added or removed in each activity both sides
 hold, the lines of the flow added or removed in each screen both sides hold with a flow, the
-lines of each platform action added, removed or changed, and each written description added,
+lines of each platform action added, removed or changed, the reads each action of the model
+comes to change or stops changing, and each written description added,
 removed or changed with its length before and after), and below
 it, by hand, the reason for each rename or removal, since those break whoever reads the old
 name:
@@ -1648,11 +1668,15 @@ added in <action>` and `platform action lines removed in <action>`, one per fact
 each parameter with its type (`param email: string`), its result (`result: <the text>`, the
 one prose that stays, since it says what holds once the action succeeds), each code its failure
 shows (`code rate-limited`), each role that may run it, its page sizes when it pages (`paged by
-10, 25, 50, 25 by default`), its mail (`mail to email language
+10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice
 password-changed to account language account link user.forgot-password`). An action added or
-removed whole shows every line, as nothing else in the summary says its mail. Last, `descriptions
+removed whole shows every line, as nothing else in the summary says its mail. The reads an
+action of the model changes are listed by the entity and the action, as `model action lines
+added in <entity>.<action>` and `model action lines removed in <entity>.<action>`, a line each
+in the same form (`model action lines added in profile.updateName: changes accounts.list,
+changes accounts.read`); an action added or removed whole shows each read it changes. Last, `descriptions
 changed:` lists, sorted by place, each description a domain file writes (see "Descriptions")
 that the change adds, removes or changes, with its length in characters before and after:
 `app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added,

@@ -2,6 +2,7 @@ import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
@@ -13,7 +14,7 @@ import type {
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace } from '../identity-space'
-import { IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
+import { IDENTITY_KEY, isRolesKey, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
@@ -22,6 +23,7 @@ import type { OpenSpace } from './open-space'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
+import { SessionRoles } from './roles'
 import { SessionSignIn } from './sign-in'
 import { SignInNotice } from './sign-in-notice'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
@@ -54,6 +56,7 @@ export class SessionService implements SessionPort {
   readonly #options: SessionOptions
   readonly #state: SessionState
   readonly #organisations: SessionOrganisations
+  readonly #roles: SessionRoles
   readonly #account: SessionAccount
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
@@ -68,11 +71,19 @@ export class SessionService implements SessionPort {
   constructor(options: SessionOptions) {
     this.#options = options
     this.#signInNotice = new SignInNotice(options.storage)
-    // The organisations follow every change of identity, once the subscribers heard of it.
-    this.#state = new SessionState(options, this.#transitions, () => this.#organisations.tell())
+    // The organisations and the roles follow every change of identity, once the subscribers
+    // heard of it.
+    this.#state = new SessionState(options, this.#transitions, () => {
+      this.#organisations.tell()
+      this.#roles.tell()
+    })
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
       open: () => this.#state.open(),
+    })
+    this.#roles = new SessionRoles({
+      storage: options.storage,
+      shown: () => this.#state.current()?.id,
     })
     this.#account = new SessionAccount({
       auth: options.auth,
@@ -119,6 +130,7 @@ export class SessionService implements SessionPort {
     this.#elsewhere = new SessionElsewhere({
       host,
       organisations: this.#organisations,
+      roles: this.#roles,
       signingIn: this.#signingIn,
       signingOut: this.#signingOut,
     })
@@ -144,6 +156,8 @@ export class SessionService implements SessionPort {
           this.#elsewhere.follow()
         } else if (key === MEMBERSHIPS_KEY) {
           this.#organisations.followSaved()
+        } else if (isRolesKey(key)) {
+          this.#roles.followSaved()
         }
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
@@ -325,6 +339,22 @@ export class SessionService implements SessionPort {
 
   selectTenant(key: string): void {
     this.#organisations.select(key)
+  }
+
+  roles(): ReadonlySet<PlatformRole> {
+    return this.#roles.current()
+  }
+
+  onRoles(listener: (roles: ReadonlySet<PlatformRole>) => void): () => void {
+    return this.#roles.subscribe(listener)
+  }
+
+  /**
+   * The gateway refused `identity` a request for want of `role` (a console call's `not-operator`):
+   * the role goes from that identity's record, whichever identity is shown now.
+   */
+  dropRole(identity: IdentityId, role: PlatformRole): void {
+    this.#roles.drop(identity, role)
   }
 
   /**
