@@ -6,9 +6,10 @@
  * at whose flows a machine may still be (during a merge, the base the merge's commit will have,
  * so a merge of `main` compares the app it brings with the flows it brings), and
  * `CONTRACT_AHEAD_HEAD`, the commit the branch is at, whose flows the app was built from. During
- * a merge that commit is the tip before it, which the engine the merge brings may no longer read
- * (a key it now requires): then the merge runs without it, held to its base alone, while outside
- * a merge the tests report a HEAD whose contract does not load. Both
+ * a merge that commit is the tip before it, whose contract the engine the merge brings may fail to
+ * load, for any reason (a key it now requires among them): then the merge runs without it, its
+ * machines held to the base and to the flows now, while outside a merge the tests report a HEAD
+ * whose contract does not load. Both
  * are named here rather than read by the tests, so the test cache, keyed by them, never carries
  * a pass made against one branch state into another with the same files. When
  * that merge base cannot be found (no local `main`, or no history shared with it), or an
