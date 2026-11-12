@@ -17,6 +17,7 @@ type Event =
   | { readonly type: 'x.save-button'; readonly fail: boolean }
   | { readonly type: 'x.nothing-button' }
   | { readonly type: 'x.leave-button' }
+  | { readonly type: 'user.sign-in.forgot-link' }
   | { readonly type: 'x.carry-link'; readonly fields: { readonly 'x.y.email-input': string } }
   | { readonly type: 'x.list.open-link'; readonly items: { readonly 'x.list.thing-item': string } }
   | { readonly type: 'user.profile.sign-out-button' }
@@ -76,6 +77,10 @@ const machine = setup({
           })),
         },
         'user.profile.sign-out-button': 'out',
+        'user.sign-in.forgot-link': {
+          target: 'moved',
+          actions: emit({ type: 'navigate', to: '/there' }),
+        },
         'organisation.notes.delete-button': 'deleted',
         'x.finish-button': 'finished',
         'platform.password-reset': {
@@ -493,6 +498,28 @@ describe('useScreenMachine', () => {
 
     expect(guard.before).toHaveBeenCalledWith('user.profile.sign-out-button')
     expect(screen.getByTestId('state').textContent).toBe('out')
+  })
+
+  it('asks the guard before a control whose flow leaves its screen, and sends nothing when the user stays', async () => {
+    const staying: LeaveGuard = { ...passing(), before: vi.fn(() => Promise.resolve(false)) }
+    const { running } = await open(staying)
+
+    await act(async () => running.send({ type: 'user.sign-in.forgot-link' }))
+
+    expect(staying.before).toHaveBeenCalledWith('user.sign-in.forgot-link')
+    expect(screen.getByTestId('state').textContent).toBe('idle')
+  })
+
+  it('asks nothing for a control that asks first when its state does not take the event', async () => {
+    const guard = passing()
+    const { running } = await open(guard, '/here', confirming())
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+
+    await act(async () => running.send({ type: 'user.sign-in.forgot-link' }))
+    expect(await act(() => running.submit({ type: 'user.sign-in.forgot-link' }))).toBe(false)
+    expect(guard.before).not.toHaveBeenCalled()
   })
 
   it('asks the confirmation before a destructive control, and sends nothing when the user stays', async () => {

@@ -1,9 +1,12 @@
 /**
  * The one way a screen runs its machine. The hook runs the flow's `navigate` effects past the
- * frame's guard (the action that used the input completed), its search taking the value of a field
+ * frame's guard (the action that used the input completed, or the guard asked before the control
+ * whose flow moves), its search taking the value of a field
  * and the id of an entry from what the moving event carries (`navigate-search.ts`), asks the
  * frame's confirmation before
- * a destructive control's event and the guard before a leaving control's, in that order, and
+ * a destructive control's event and the guard before the event of a control that leaves what was
+ * typed (its action leaves, or its flow moves to another screen), in that order, only when the
+ * state the machine is in takes that event, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
@@ -32,7 +35,7 @@ import { useConfirmGuard } from './confirm-guard.port'
 import { questionOf } from './confirmations'
 import { useFrameEffects } from './frame-effects'
 import { useLeaveGuard } from './leave-guard.port'
-import { isLeavingControl } from './leaving'
+import { leavesInput } from './leaving'
 import { useService } from './module'
 import {
   type FieldValues,
@@ -48,10 +51,9 @@ import { useSettledReport } from './settled-report'
 
 /**
  * Whether `control` asks before its event: the confirmation when its action destroys, the guard
- * when it leaves; one that does neither sends at once.
+ * when it leaves what was typed; one that does neither sends at once.
  */
-const asks = (control: string): boolean =>
-  questionOf(control) !== undefined || isLeavingControl(control)
+const asks = (control: string): boolean => questionOf(control) !== undefined || leavesInput(control)
 
 /**
  * A submit under way: whether the machine took its event yet and whether that event selected a
@@ -142,7 +144,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
     (control: string): Promise<boolean> =>
       confirmation
         .before(control)
-        .then((go) => go && (!isLeavingControl(control) || guard.before(control))),
+        .then((go) => go && (!leavesInput(control) || guard.before(control))),
     [confirmation, guard],
   )
   // Each step of the root carries the event that made it: a submit's own event object, or the end
@@ -288,6 +290,13 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
         return
       }
 
+      // A question for an event the state would not take asks about nothing.
+      const now: AnyMachineSnapshot = actor.getSnapshot()
+
+      if (!now.can(event)) {
+        return
+      }
+
       void ask(control).then((go) => {
         if (go) {
           actor.send(event)
@@ -300,9 +309,15 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
     (event: EventFromLogic<TMachine>): Promise<boolean> => {
       const control = controlOf(event)
 
-      return asks(control) ? ask(control).then((go) => go && start(event)) : start(event)
+      if (!asks(control)) {
+        return start(event)
+      }
+
+      const now: AnyMachineSnapshot = actor.getSnapshot()
+
+      return now.can(event) ? ask(control).then((go) => go && start(event)) : Promise.resolve(false)
     },
-    [ask, start],
+    [actor, ask, start],
   )
 
   return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value) }

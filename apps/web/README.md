@@ -396,8 +396,9 @@ modeling stage.
   `__fixtures__/machine-flows.ts`); running every flow and
   activity in XState is the contract check's, not the app's.
   The guard of unsaved input: `leaving.ts` holds `LEAVE_POLICY`, how each leave that would
-  lose what was typed asks (the platform's `unsavedInput`), and `LEAVING_CONTROLS`, the
-  anchors bound to an action of `leaving`, both held to the contract by
+  lose what was typed asks (the platform's `unsavedInput`), `LEAVING_CONTROLS`, the
+  anchors bound to an action of `leaving`, and `NAVIGATING_CONTROLS`, the controls whose flow
+  moves to another screen with the fields that move loses (the anchors that carry `leaves`), all held to the contract by
   `leaving-contract.spec.ts`; `leave-guard.port.ts` is how a screen asks the frame before such
   a leave (`useLeaveGuard()`: `confirm()`, `before(control)`; every leave goes ahead without
   a provider). The question before a destructive action: `confirmations.ts` holds
@@ -410,7 +411,7 @@ modeling stage.
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
   field left out, and each `{ item: <item> }` from its `items`, the id of the entry acted in
   (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
-  control's event waits for the confirmation and a leaving control's for the guard, and `submit(event)` resolves with the outcome of the actions
+  control's event waits for the confirmation and a leaving or navigating control's for the guard, each only when the state takes the event, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
