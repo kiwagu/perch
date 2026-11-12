@@ -130,9 +130,13 @@ modeling stage.
   signed out may write its list or confirm its email meanwhile: the next account's records stay
   as they are, and no identity comes back without its token. A sign-out forgets the records of the
   identity saved, or of the one the token names when a sign-in's save broke before the identity.
-  Known limit: two tabs of the SAME account can still write its memberships in the wrong order (a
-  demotion or a removal one tab heard, overwritten by another tab's older list); the next list or
-  welcome sets them right. Every write through the storage port the session uses
+  Known limits: two tabs of the SAME account can still write its memberships in the wrong order
+  (a demotion or a removal one tab heard, overwritten by another tab's older list); the next list
+  or welcome sets them right. And the identity and its token are one record each for the browser:
+  a tab that has not yet heard another tab sign the next account in can, with a sign-out or the
+  cleanup of a failed sign-in, remove that account's records, which signs it out on this browser
+  (it signs in again) and leaves its new session at the gateway until it expires; keeping them by
+  sign-in, as the sign-in page's words are kept, is the next step. Every write through the storage port the session uses
   (`KeyValueStorage`) is made in `composition/storage/`, which the lint holds
   (`eslint.config.js`); the device's own facts that adapters of their own write straight to
   `localStorage` (a guest's theme, the install prompt, the probe that checks site storage works)
