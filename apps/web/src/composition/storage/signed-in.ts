@@ -10,6 +10,7 @@ import type { SignedInDevice } from '../gateway-auth'
 import { ACCOUNT_START_KEY } from './account-start'
 import type { KeyValueStorage } from './key-value'
 import { forgetMemberships, saveMemberships, TENANT_KEY } from './memberships'
+import { signInMark } from './notice'
 import { forgetRoles } from './roles'
 
 /** Who is signed in on this browser; the tabs follow it. */
@@ -27,9 +28,11 @@ const OLD_REFRESH_KEY = 'perch.session.refresh'
 
 /**
  * The email an email confirmation gave the signed-in identity, kept under a key of the identity's
- * own (`perch.session.email.<identity>`) and read over the identity's record: a tab hears another
- * tab's writes late, so a confirmation answered after another tab signed the identity out writes
- * here, beside nothing, and never brings the identity back without its token.
+ * own (`perch.session.email.<identity>`) with the sign-in it was asked in (`signInMark`), and read
+ * over the identity's record during that sign-in alone: a tab hears another tab's writes late, so a
+ * confirmation answered after another tab signed the identity out writes here, beside nothing,
+ * never bringing the identity back without its token, and one answered after the identity signed
+ * in again names an earlier sign-in, so the email of the later one stands.
  */
 const EMAIL_KEY_PREFIX = 'perch.session.email.'
 
@@ -37,7 +40,11 @@ const emailKeyOf = (identity: AuthUser['id']): string => `${EMAIL_KEY_PREFIX}${i
 
 const savedIdentitySchema = z.object({ id: idSchemas.identity.schema, email: z.string() })
 
-const confirmedEmailSchema = z.object({ identity: idSchemas.identity.schema, email: z.string() })
+const confirmedEmailSchema = z.object({
+  identity: idSchemas.identity.schema,
+  email: z.string(),
+  signIn: z.string(),
+})
 
 const savedTokenSchema = z.object({ identity: idSchemas.identity.schema, token: z.string() })
 
@@ -69,28 +76,32 @@ export function saveDevice(storage: KeyValueStorage, device: KeptDevice): void {
 
 /**
  * Keeps the new email of `identity` while it is the one signed in on this browser, as its email's
- * confirmation answered, under the identity's own key, never in the identity's record.
+ * confirmation answered, under the identity's own key, never in the identity's record, with the
+ * sign-in the confirmation was asked in (`asked`, the `signInMark` then; now by default).
  */
 export function saveIdentityEmail(
   storage: KeyValueStorage,
   identity: AuthUser['id'],
   email: string,
+  asked: string = signInMark(storage),
 ): void {
   if (savedIdentity(storage)?.id === identity) {
-    storage.set(emailKeyOf(identity), JSON.stringify({ identity, email }))
+    storage.set(emailKeyOf(identity), JSON.stringify({ identity, email, signIn: asked }))
   }
 }
 
 /**
- * The identity signed in on this browser, with the email a confirmation gave it since its sign-in
- * when there is one; a kept value that does not describe one is none.
+ * The identity signed in on this browser, with the email a confirmation asked during its current
+ * sign-in gave it, when there is one; a kept value that does not describe one is none.
  */
 export function savedIdentity(storage: KeyValueStorage): AuthUser | undefined {
   const saved = read(storage, IDENTITY_KEY, savedIdentitySchema)
   const confirmed =
     saved === undefined ? undefined : read(storage, emailKeyOf(saved.id), confirmedEmailSchema)
 
-  return saved && confirmed?.identity === saved.id ? { ...saved, email: confirmed.email } : saved
+  return saved && confirmed?.identity === saved.id && confirmed.signIn === signInMark(storage)
+    ? { ...saved, email: confirmed.email }
+    : saved
 }
 
 /** The session token the device presents to the gateway, if it keeps one, whoever it is of. */

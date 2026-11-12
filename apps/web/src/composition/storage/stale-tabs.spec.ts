@@ -7,6 +7,7 @@ import { laggingStorage } from '../__fixtures__/lagging-storage'
 
 import { memoryStorage } from './key-value'
 import { savedMemberships, saveMemberships } from './memberships'
+import { markSignIn, signInMark } from './notice'
 import {
   forgetDevice,
   saveDevice,
@@ -119,6 +120,31 @@ describe('the email a confirmation keeps', () => {
     browser.deliver()
 
     expect(savedIdentity(confirming)?.email).toBe('ann@third.example.test')
+  })
+})
+
+describe('the email a confirmation of an ended session keeps', () => {
+  it("does not stand over the email of the identity's next sign-in, landed before it", () => {
+    const browser = laggingStorage()
+    const confirming = browser.tab()
+    const other = browser.tab()
+
+    saveDevice(other, ann)
+    markSignIn(other)
+    browser.deliver()
+
+    // The confirmation is asked in Ann's session, which another tab ends and signs her in again,
+    // with the email she has now; its answer comes to a tab that has not heard of that.
+    const asked = signInMark(confirming)
+
+    forgetDevice(other)
+    saveDevice(other, { ...ann, identity: { ...ann.identity, email: 'ann@third.example.test' } })
+    markSignIn(other)
+    saveIdentityEmail(confirming, ann.identity.id, 'ann@new.example.test', asked)
+    browser.deliver()
+
+    expect(savedIdentity(confirming)?.email).toBe('ann@third.example.test')
+    expect(savedIdentity(other)?.email).toBe('ann@third.example.test')
   })
 })
 

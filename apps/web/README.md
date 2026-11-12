@@ -125,15 +125,18 @@ modeling stage.
   storage but hear each other's writes late (a browser hands another tab's write to this tab some
   time after it was made, and no lock makes it sooner), so what a tab writes for an account goes
   under that account's own key: its memberships, the email an email confirmation gave it
-  (`perch.session.email.<identity>`, read over the email it signed in with, until its next
-  sign-in or sign-out) and its platform roles. A tab that still shows an account another tab
+  (`perch.session.email.<identity>`, with the sign-in the confirmation was asked in, read over
+  the email of that sign-in alone) and its platform roles. A tab that still shows an account another tab
   signed out may write its list or confirm its email meanwhile: the next account's records stay
   as they are, and no identity comes back without its token. A sign-out forgets the records of the
   identity saved, or of the one the token names when a sign-in's save broke before the identity.
   Known limit: two tabs of the SAME account can still write its memberships in the wrong order (a
   demotion or a removal one tab heard, overwritten by another tab's older list); the next list or
-  welcome sets them right. Every write of that storage goes through `composition/storage/`, which
-  the lint holds (`eslint.config.js`). Reads and writes are routed by
+  welcome sets them right. Every write through the storage port the session uses
+  (`KeyValueStorage`) is made in `composition/storage/`, which the lint holds
+  (`eslint.config.js`); the device's own facts that adapters of their own write straight to
+  `localStorage` (a guest's theme, the install prompt, the probe that checks site storage works)
+  are outside it. Reads and writes are routed by
   region (`RoutingShapeRunner`, `RoutingWritePath`): a shape over the tenant region's tables
   and a command into the tenant region go to the current organisation (the one selected on
   this browser, otherwise the first by key; none refuses with `no organisation is selected`),

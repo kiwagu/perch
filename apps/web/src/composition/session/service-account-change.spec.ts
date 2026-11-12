@@ -217,6 +217,33 @@ describe('the confirmation of a new email', () => {
     expect(savedIdentity(storage)).toEqual({ id: me.id, email: annSignUp.email })
   })
 
+  it('changes nothing of a later sign-in of the account: a confirmation changes the sign-in it was asked in', async () => {
+    const { session, auth, storage, driveClock } = await signedIn()
+
+    expect((await session.changeEmail('Ann.New@example.test', annSignUp.password)).isOk()).toBe(
+      true,
+    )
+
+    // The gateway takes the link only once this browser has signed Ann out and in again.
+    let answer = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const confirm = auth.confirmEmail.bind(auth)
+
+    auth.confirmEmail = (link) => ResultAsync.fromSafePromise(answered).andThen(() => confirm(link))
+
+    const confirming = session.confirmEmail(auth.confirmationLinkFor(annSignUp.email))
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect((await session.signIn(annSignUp)).isOk()).toBe(true)
+    answer()
+
+    expect((await confirming).isOk()).toBe(true)
+    // The later sign-in's email stands; the next one reads the email the gateway has then.
+    expect(savedIdentity(storage)?.email).toBe(annSignUp.email)
+  })
+
   it('keeps the refusal of a link that does not work', async () => {
     const { session } = await signedIn()
 

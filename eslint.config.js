@@ -73,10 +73,12 @@ export default [
     },
   },
   {
-    // The web app writes the storage its tabs share only through its storage module, where each
-    // record is reviewed with its key: a tab hears another tab's writes late, so a record of an
-    // account lives under that account's own key, and a tab that still shows one account cannot
-    // write over the next one's. The module's own specs and the fixtures write it as tabs would.
+    // The web app writes the storage its tabs share through the session's storage port only in
+    // its storage module, where each record is reviewed with its key: a tab hears another tab's
+    // writes late, so a record of an account lives under that account's own key, and a tab that
+    // still shows one account cannot write over the next one's. The module's own specs and the
+    // fixtures write it as tabs would. The device's own facts that adapters write straight to
+    // localStorage (a guest's theme, the install prompt, the site storage probe) are not held here.
     files: ['apps/web/src/{composition,platform}/**/*.{ts,tsx}'],
     ignores: ['apps/web/src/composition/storage/**', '**/*.spec.{ts,tsx}', '**/__fixtures__/**'],
     rules: {
