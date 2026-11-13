@@ -3,10 +3,11 @@ import type { Page } from '@playwright/test'
 
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
+import { watchShown } from '../../support/shown'
 
 /** The frame's leave dialog, by its anchor and its code together. */
-const dialog = (page: Page) =>
-  page.locator('[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]')
+const DIALOG = '[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]'
+const dialog = (page: Page) => page.locator(DIALOG)
 
 test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => {
   test('A signed-in user is asked before an unsaved name is lost, and not when nothing would be lost', async ({
@@ -61,13 +62,17 @@ test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => 
       await name.fill(signedIn.name)
     })
 
-    await test.step('8. Click [app-shell.nav.organisation-link]', async () => {
+    const shown = await test.step('8. Click [app-shell.nav.organisation-link]', async () => {
+      const watch = await watchShown(page, DIALOG)
+
       await page.getByTestId('app-shell.nav.organisation-link').click()
+
+      return watch
     })
 
     // - After step 8 the page is on [/org] without [app-shell.leave-dialog] having been shown
     await expect(page).toHaveURL(/\/org$/)
-    await expect(dialog(page)).toHaveCount(0)
+    expect(await shown()).toBe(false)
 
     await test.step("9. Open [/me], enter the new name into [user.profile.name-input] and reload the page, accepting the browser's prompt", async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
