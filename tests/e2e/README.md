@@ -234,6 +234,11 @@ offline until the app's reconnect delay has grown to its longest (`untilLongestR
 `BACK_ONLINE_MS`, how long a page back online may take to connect again.
 `src/support/storage.ts`: the IndexedDB databases a page's browser keeps and the names the app
 gives them (`databases`, `identityDatabase`, `organisationDatabase`).
+`src/support/shown.ts`: `watchShown`, which watches a page from now on for an element a selector
+matches and tells, once asked, whether one appeared, though it is gone by then: "without …
+having been shown", which a look after the move cannot tell. It reads attributes as each look
+finds them: an element added and removed again whole counts, one that matches by its attributes
+only for a moment between two looks does not.
 `src/support/browsers.ts`: what every browser a test opens is held to, from before its first
 page: `watchBrowser` (the front's security policy and the settled states), `expectWatched`
 (fails the test with what it reported) and `ownBrowser` (a browser context of the test's own,

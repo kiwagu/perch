@@ -5,7 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
-import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import {
+  type UnsavedFields,
+  UnsavedInputScope,
+  useUnsavedFields,
+  useUnsavedInput,
+} from '@workspace/ui/unsaved-input'
 
 function Probe() {
   return <output data-testid="probe">{String(useUnsavedInput())}</output>
@@ -169,5 +174,41 @@ describe('Textarea', () => {
     expect(probe()).toBe('true')
     await user.type(screen.getByLabelText('bio'), '{backspace}')
     expect(probe()).toBe('false')
+  })
+})
+
+let reader: (() => UnsavedFields) | undefined
+
+function Reader() {
+  reader = useUnsavedFields()
+
+  return null
+}
+
+describe('the anchor a field reports', () => {
+  it('is the anchor an input renders, while it holds unsaved input', async () => {
+    render(
+      <UnsavedInputScope>
+        <Input aria-label="name" data-testid="x.name-input" defaultValue="" />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.type(screen.getByLabelText('name'), 'Ann')
+
+    expect([...(reader?.().anchors ?? [])]).toEqual(['x.name-input'])
+  })
+
+  it('is the anchor a textarea renders, while it holds unsaved input', async () => {
+    render(
+      <UnsavedInputScope>
+        <Textarea aria-label="bio" data-testid="x.bio-input" defaultValue="" />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.type(screen.getByLabelText('bio'), 'Hi')
+
+    expect([...(reader?.().anchors ?? [])]).toEqual(['x.bio-input'])
   })
 })

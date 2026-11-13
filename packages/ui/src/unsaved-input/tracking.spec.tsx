@@ -11,7 +11,7 @@ describe('useTracksInput', () => {
     const defaultValue = () => 'called'
     const { result } = renderHook(
       () => {
-        useTracksInput({ holdsInput: true, value: undefined, defaultValue })
+        useTracksInput({ holdsInput: true, anchor: undefined, value: undefined, defaultValue })
 
         return useUnsavedInput()
       },
