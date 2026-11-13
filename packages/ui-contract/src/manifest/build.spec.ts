@@ -481,14 +481,23 @@ describe('the states a field carries', () => {
     expect(built.contract.fieldStates).toEqual({})
     expect(Object.values(built.ids).some((id) => 'fieldStates' in id)).toBe(false)
   })
-  it('leaves the real manifest without the key on any id', () => {
-    const real = buildManifest({
-      ...contractAt(REPOSITORY_ROOT),
+  it('leaves the real ids byte-equal to what they were, the key aside', () => {
+    const repository = contractAt(REPOSITORY_ROOT)
+    const without = buildManifest({ ...repository, product: PRODUCT, now: NOW })
+    const declaring = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: states },
       product: PRODUCT,
       now: NOW,
     })
+    const added = Object.values(declaring.ids).filter((id) => 'fieldStates' in id)
+    const stripped = Object.fromEntries(
+      Object.entries(declaring.ids).map(([anchor, { fieldStates: _, ...rest }]) => [anchor, rest]),
+    )
 
-    expect(real.contract.fieldStates).toEqual({})
-    expect(Object.values(real.ids).some((id) => 'fieldStates' in id)).toBe(false)
+    expect(without.contract.fieldStates).toEqual({})
+    expect(Object.values(without.ids).some((id) => 'fieldStates' in id)).toBe(false)
+    expect(added.length).toBeGreaterThan(0)
+    expect(JSON.stringify(stripped)).toBe(JSON.stringify(without.ids))
   })
 })
