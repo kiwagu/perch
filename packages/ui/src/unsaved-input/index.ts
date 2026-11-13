@@ -14,4 +14,5 @@ export {
   useUnsavedInput,
   useUnsavedInputChannel,
 } from './scope'
+export { stateBorder } from './state-border'
 export { type TrackedInput, useTracksInput } from './tracking'

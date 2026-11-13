@@ -74,7 +74,13 @@ than its portal or overlay. A control that is not a test target carries a
   anchor, a field is never `saved`. The saved value lives in the field alone: a remount starts
   with none, and the app giving another value clears it. `Form` takes `marksState` (true when
   left out) for all its fields, and `useMarksState(own)` gives a field its own say, else its
-  form's, else true.
+  form's, else true. `Input`, `Textarea`, `Select` and `OptionSelect` take `marksState` too,
+  and it controls only the color: a field always tracks its state and renders `data-state`
+  (`unsaved` or `saved`, absent for none) on its anchor element, whether or not it paints it.
+  Painted, the state changes only `border-color` of the border the element already draws (the
+  `Input`, the `textarea`, the `SelectTrigger`), never its width, spacing or focus halo
+  (`stateBorder(marks)`, one string of classes): invalid (destructive) over `unsaved` (the
+  `warning` token) over `saved` (the `success` token) over focus over the default.
 - `./lib/utils`: `cn` for class names.
 - `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus the tones `success`,
   `warning` and `info` beside its `destructive`) and the base layer; import it once in the app.
