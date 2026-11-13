@@ -172,6 +172,7 @@ export function sampleContract(): Contract {
       appStates: meaning(['opening', 'ready']),
       containerStates: meaning(['loading', 'ready', 'empty']),
       rowStates: located(['current'], 'sample.thing-item'),
+      fieldStates: {},
       codes: located(['saved', 'failed', 'devices-read-failed'], 'sample.save-button'),
       choiceValues: {
         'sample.mode-select.option': meaning(['a', 'b']),

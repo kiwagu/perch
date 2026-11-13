@@ -248,12 +248,13 @@ export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<strin
     ...screens.questions.map(({ code }) => code),
   ])
 
-/** Every state of the vocabulary: app, container and row states. */
+/** Every state of the vocabulary: app, container, row and field states. */
 export const statesOf = (vocabulary: Vocabulary): Set<string> =>
   new Set([
     ...Object.keys(vocabulary.appStates),
     ...Object.keys(vocabulary.containerStates),
     ...Object.keys(vocabulary.rowStates),
+    ...Object.keys(vocabulary.fieldStates),
   ])
 
 /** A choice value written as a pattern (`^[a-z]+$`) stands for every value it matches. */

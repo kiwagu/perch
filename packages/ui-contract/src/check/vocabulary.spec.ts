@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
 
+import { statesOf } from './contract'
 import { anchorIn, sampleContract, screenIn } from './contract.fixture'
 import { vocabularyProblems } from './vocabulary'
 
@@ -181,6 +182,33 @@ describe('vocabularyProblems', () => {
     expect(vocabularyProblems(documented).map(formatProblem)).toEqual([
       'contract/vocabulary.md:1: composite "password-rules" is documented but undeclared',
     ])
+  })
+  it('refuses a field state the kit does not render', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y', dirty: 'z' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Field states": "dirty" is not a state the kit renders (unsaved, saved)',
+    ])
+  })
+  it('wants both field states once the section has a row', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Field states": "saved" is a state the kit renders and is not listed',
+    ])
+  })
+  it('counts the field states among the states of the vocabulary', () => {
+    const contract = sampleContract()
+
+    expect(statesOf(contract.vocabulary).has('unsaved')).toBe(false)
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y' }
+
+    expect(statesOf(contract.vocabulary).has('unsaved')).toBe(true)
   })
   it('wants the item state of a composite among the row states', () => {
     const contract = sampleContract()

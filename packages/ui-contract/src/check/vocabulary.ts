@@ -13,7 +13,7 @@
  * `<object>-<verb>ed` stands for them all, wanted once one is derived.
  */
 
-import { kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
+import { FIELD_STATES, kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
   jsonPath,
@@ -284,6 +284,33 @@ const suffixKindProblems = ({ vocabulary }: Contract): Problem[] =>
         ]
   })
 
+/** The field states are the two the kit renders: a section with a row lists both, no other. */
+function fieldStateProblems({ vocabulary }: Contract): Problem[] {
+  const listed = Object.keys(vocabulary.fieldStates)
+  const rendered: readonly string[] = FIELD_STATES
+
+  if (listed.length === 0) {
+    return []
+  }
+
+  return [
+    ...listed
+      .filter((state) => !rendered.includes(state))
+      .map((state) =>
+        inVocabulary(
+          `section "Field states": "${state}" is not a state the kit renders (${FIELD_STATES.join(', ')})`,
+        ),
+      ),
+    ...rendered
+      .filter((state) => !listed.includes(state))
+      .map((state) =>
+        inVocabulary(
+          `section "Field states": "${state}" is a state the kit renders and is not listed`,
+        ),
+      ),
+  ]
+}
+
 export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...screenProblems(contract),
   ...modelRoleProblems(contract),
@@ -291,6 +318,7 @@ export const vocabularyProblems = (contract: Contract): Problem[] => [
   ...choiceValueProblems(contract),
   ...unusedCodeProblems(contract),
   ...suffixKindProblems(contract),
+  ...fieldStateProblems(contract),
   ...ruleRowProblems(contract, 'toasts', contract.screens.toasts, TOAST_RULE_ROW),
   ...ruleRowProblems(contract, 'questions', contract.screens.questions, CONFIRM_RULE_ROW),
 ]

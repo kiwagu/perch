@@ -86,6 +86,24 @@ describe('parseVocabulary', () => {
     expect(older.problems).toEqual([])
     expect(older.vocabulary.composites).toEqual({})
   })
+  it('reads the field states, and a vocabulary without the section reads none', () => {
+    const states = parseVocabulary(
+      `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | the field holds input not yet saved |\n| \`saved\` | the field holds what was saved |\n`,
+    )
+
+    expect(states.problems).toEqual([])
+    expect(Object.keys(states.vocabulary.fieldStates)).toEqual(['unsaved', 'saved'])
+    expect(vocabulary.fieldStates).toEqual({})
+    expect(problems).toEqual([])
+  })
+  it('wants a state and a meaning in a field states row', () => {
+    const markdown = `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | |\n| \`saved\` |\n`
+
+    expect(parseVocabulary(markdown).problems.map((problem) => problem.message)).toEqual([
+      'section "Field states": the "Meaning" cell is empty',
+      'section "Field states": a row has 1 cell(s), expected 2',
+    ])
+  })
   it('reports an unknown section by line', () => {
     const markdown = `${fixture}\n## Extra\n\nMore text.\n`
 
