@@ -1,8 +1,15 @@
-export { type Capture, type FormScope, FormScopeContext, useFormScope } from './form-scope'
+export {
+  type Capture,
+  type FormScope,
+  FormScopeContext,
+  useFormScope,
+  useMarksState,
+} from './form-scope'
 export {
   type UnsavedFields,
   type UnsavedInputChannel,
   UnsavedInputScope,
+  useStoresValue,
   useUnsavedFields,
   useUnsavedInput,
   useUnsavedInputChannel,
