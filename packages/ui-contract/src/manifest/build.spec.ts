@@ -430,3 +430,79 @@ describe('a composite a secret input opts into', () => {
     expect(built.ids['sample.title-input']).not.toHaveProperty('derivedFrom')
   })
 })
+
+describe('the states a field carries', () => {
+  const states = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+
+  function withFields(fieldStates: Record<string, string>) {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    sample.anchors['sample.title-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { model: 'thing.title' },
+    }
+    sample.anchors['sample.note-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+    }
+    sample.anchors['sample.save-button'] = { kind: 'button' }
+
+    return buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, fieldStates },
+      product: PRODUCT,
+      now: NOW,
+    })
+  }
+
+  it('lists on a model-bound input both states and on an action-bound input unsaved', () => {
+    const built = withFields(states)
+
+    expect(built.ids['sample.title-input']?.fieldStates).toEqual(['unsaved', 'saved'])
+    expect(built.ids['sample.note-input']?.fieldStates).toEqual(['unsaved'])
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('leaves a button without the key', () => {
+    expect(withFields(states).ids['sample.save-button']).not.toHaveProperty('fieldStates')
+  })
+  it("publishes the vocabulary's table in the contract", () => {
+    expect(withFields(states).contract.fieldStates).toEqual(states)
+  })
+  it('adds nothing to the manifest of a vocabulary without the section', () => {
+    const built = withFields({})
+
+    expect(built.contract.fieldStates).toEqual({})
+    expect(Object.values(built.ids).some((id) => 'fieldStates' in id)).toBe(false)
+  })
+  it('leaves the real ids byte-equal to what they were, the key aside', () => {
+    const repository = contractAt(REPOSITORY_ROOT)
+    const without = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: {} },
+      product: PRODUCT,
+      now: NOW,
+    })
+    const declaring = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: states },
+      product: PRODUCT,
+      now: NOW,
+    })
+    const added = Object.values(declaring.ids).filter((id) => 'fieldStates' in id)
+    const stripped = Object.fromEntries(
+      Object.entries(declaring.ids).map(([anchor, { fieldStates: _, ...rest }]) => [anchor, rest]),
+    )
+
+    expect(without.contract.fieldStates).toEqual({})
+    expect(Object.values(without.ids).some((id) => 'fieldStates' in id)).toBe(false)
+    expect(added.length).toBeGreaterThan(0)
+    expect(JSON.stringify(stripped)).toBe(JSON.stringify(without.ids))
+  })
+})

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { Form } from '@workspace/ui/components/ui/form'
 import {
   Select,
   SelectContent,
@@ -300,5 +301,66 @@ describe('Select', () => {
     // A strict style policy refuses an inline <style>; the class it would define is the kit's.
     expect(document.querySelectorAll('style')).toHaveLength(0)
     expect(document.querySelector('.base-ui-disable-scrollbar')).not.toBeNull()
+  })
+})
+
+describe('the state a Select trigger shows on its own border', () => {
+  const STORED = new Set(['x.kind-select'])
+
+  function Marked(props: { readonly marksState?: boolean }) {
+    const [value, setValue] = useState<string | null>('a')
+
+    return (
+      <UnsavedInputScope stores={(anchor) => STORED.has(anchor)}>
+        <Form onSubmit={() => true}>
+          <Select
+            items={ITEMS}
+            value={value}
+            onValueChange={setValue}
+            anchor="x.kind-select"
+            marksState={props.marksState}
+          >
+            <SelectTrigger aria-label="kind" data-testid="x.kind-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <button type="submit">save</button>
+        </Form>
+      </UnsavedInputScope>
+    )
+  }
+
+  it('has no state untouched, unsaved once another is chosen, saved once a submit saved it', async () => {
+    render(<Marked />)
+
+    const trigger = screen.getByLabelText('kind')
+
+    expect(trigger.hasAttribute('data-state')).toBe(false)
+    await choose('Beta')
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    await userEvent.click(screen.getByText('save'))
+    expect(trigger.getAttribute('data-state')).toBe('saved')
+  })
+
+  it('colors its border by the state, and loses the colors with marksState={false}, keeping data-state', async () => {
+    const { rerender } = render(<Marked />)
+    const trigger = screen.getByLabelText('kind')
+
+    expect(trigger.className).toContain('data-[state=unsaved]:not-aria-invalid:border-warning')
+    expect(trigger.className).toContain('data-[state=saved]:not-aria-invalid:border-success')
+    expect(trigger.className).not.toMatch(/(^| )focus-visible:border-ring/)
+
+    rerender(<Marked marksState={false} />)
+    await choose('Beta')
+    expect(trigger.className).not.toContain('border-warning')
+    expect(trigger.className).toMatch(/(^| )focus-visible:border-ring/)
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
   })
 })
