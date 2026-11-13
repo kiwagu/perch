@@ -370,7 +370,8 @@ for Bun.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
     `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section) and `derivedParts` (each derived
+    states taken from the vocabulary and the platform section), the table of field states as
+    `fieldStates` (`{}` when the vocabulary has none) and `derivedParts` (each derived
     suffix with the kind of the part it marks, the meaning of the suffix as its `description`
     and, for a `visibility-button`, its values) and
     `composites` (the vocabulary's table of the platform's composites), the screens verbatim with
@@ -382,7 +383,10 @@ for Bun.
     through, each code with its meaning from the vocabulary), the
     platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
-    with its kind, its screen and its attributes, `holdsInput` of a field among them, a ranked
+    with its kind, its screen and its attributes, `holdsInput` of a field among them, the
+    `fieldStates` of a field (`fieldStatesOf`: `unsaved` for a field that holds input, `saved`
+    too when its binding is a model field, nothing when the vocabulary's "Field states" section
+    is absent; listed only when not empty), a ranked
     message's `ranked`, a secret
     input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
     and the model document.

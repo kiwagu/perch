@@ -214,7 +214,9 @@ code and the tests follow; the checks hold them to the contract.
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the
-   contract code in the presentation layer. An icon-only control also gets an `aria-label`.
+   contract code in the presentation layer. A field carries `data-state` `unsaved` while it
+   holds input no save has taken, and `saved` when it shows a stored value; the manifest's
+   `fieldStates` lists them. An icon-only control also gets an `aria-label`.
    A control that is not a test target gets a coverage-ignore marker with its reason.
    `references/patterns.md` has one example per case.
 7. **The tests.** `bun run e2e:scaffold <id>` writes the failing test of a new scenario. The
