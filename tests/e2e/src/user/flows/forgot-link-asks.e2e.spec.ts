@@ -3,10 +3,11 @@ import type { Page } from '@playwright/test'
 
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
+import { watchShown } from '../../support/shown'
 
 /** The frame's leave dialog, by its anchor and its code together. */
-const dialog = (page: Page) =>
-  page.locator('[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]')
+const DIALOG = '[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]'
+const dialog = (page: Page) => page.locator(DIALOG)
 
 test.describe('Leave the sign-in form by its forgot-password link', { tag: '@full' }, () => {
   test('A guest who typed a password is asked before the link loses it, while the email it carries asks nothing', async ({
@@ -60,16 +61,22 @@ test.describe('Leave the sign-in form by its forgot-password link', { tag: '@ful
     await expect(page).toHaveURL(/\/forgot-password(\?.*)?$/)
     await expect(resetEmail).toHaveValue(data.email)
 
-    await test.step('7. Open [/sign-in], wait for [app-shell.status] to reach [state:ready], enter the email into [user.sign-in.email-input] and click [user.sign-in.forgot-link]', async () => {
-      await page.goto('/sign-in')
-      await appReady(page)
-      await email.fill(data.email)
-      await forgot.click()
-    })
+    const shown =
+      await test.step('7. Open [/sign-in], wait for [app-shell.status] to reach [state:ready], enter the email into [user.sign-in.email-input] and click [user.sign-in.forgot-link]', async () => {
+        await page.goto('/sign-in')
+        await appReady(page)
+        await email.fill(data.email)
+
+        const watch = await watchShown(page, DIALOG)
+
+        await forgot.click()
+
+        return watch
+      })
 
     // - After step 7 the page is on [/forgot-password] without [app-shell.leave-dialog] having been shown, and [user.forgot-password.email-input] shows the email
     await expect(page).toHaveURL(/\/forgot-password(\?.*)?$/)
-    await expect(dialog(page)).toHaveCount(0)
+    expect(await shown()).toBe(false)
     await expect(resetEmail).toHaveValue(data.email)
   })
 })
