@@ -121,7 +121,9 @@ modules' routes.
   platform's `unsavedInput` (`platform/leaving.ts`, `LEAVE_POLICY`): while a field holds
   unsaved input it asks through `app-shell.leave-dialog` (code `unsaved-input`; leave or
   stay) before another screen opens, a link, Back or Forward, and before a leaving control
-  runs (`useLeaveGuard().before(control)`), and turns on the browser's own prompt for a
+  runs (`useLeaveGuard().before(control)`); before a control whose flow moves to another screen
+  it asks only while a field that move loses holds unsaved input, or a field that renders no
+  anchor (the kit's `useUnsavedFields()`), and turns on the browser's own prompt for a
   reload, a closed tab or an address typed by hand. A change of search inside one screen, a
   flow's own navigation (`useScreenMachine`) and a leave nobody started here pass. The
   language select asks it first, and carries `holdsInput={false}`: its choice applies at
