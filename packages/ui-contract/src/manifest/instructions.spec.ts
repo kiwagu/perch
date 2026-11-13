@@ -203,6 +203,11 @@ describe('instructionsOf', () => {
       'each marked `derivedFrom` with the composite and, for an item, its name',
     )
   })
+  it('says which states a field carries and that saved lasts while the field stays on the screen', () => {
+    expect(instructions.screenMap).toContain(
+      'A field carries `data-state` `unsaved` while it holds input no save has taken; one whose `fieldStates` lists `saved` carries `saved` once a save stored what it shows, while it stays on the screen; a field carries no `data-state` otherwise.',
+    )
+  })
   it('says a ranked message shows the first of the codes raised before it shows, unless cleared', () => {
     expect(instructions.screenMap).toContain(
       '`ranked` (a message whose `codes` are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a `clear` of it, in any flow, takes away every code raised before it)',

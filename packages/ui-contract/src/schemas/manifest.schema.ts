@@ -10,6 +10,7 @@
 
 import { z } from '@workspace/zod'
 
+import { FIELD_STATES } from '../anchors'
 import {
   anchorSchema,
   baseAnchorSchema,
@@ -131,6 +132,11 @@ const contractSchema = z
       'What the composite is for.',
       'The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`.',
     ),
+    fieldStates: tableOf(
+      z.string(),
+      'What the state of a field means.',
+      'The data-state values of a field that holds input; `unsaved` and `saved`.',
+    ),
     pageHelper: z
       .literal('__perch.ui')
       .describe('Where development and e2e builds install the page helper on `window`.'),
@@ -177,6 +183,10 @@ const idSchema = z
         'The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.',
       ),
     derivedFrom: derivedFromSchema.optional(),
+    fieldStates: z
+      .array(z.enum(FIELD_STATES))
+      .optional()
+      .describe('The data-state values the field takes about its input, `unsaved` and `saved`.'),
     holdsInput: z
       .boolean()
       .optional()
