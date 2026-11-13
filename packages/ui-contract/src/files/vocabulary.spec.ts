@@ -97,10 +97,11 @@ describe('parseVocabulary', () => {
     expect(problems).toEqual([])
   })
   it('wants a state and a meaning in a field states row', () => {
-    const markdown = `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | |\n| \`saved\` |\n`
+    const markdown = `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | |\n| | a meaning |\n| \`saved\` |\n`
 
     expect(parseVocabulary(markdown).problems.map((problem) => problem.message)).toEqual([
       'section "Field states": the "Meaning" cell is empty',
+      'section "Field states": the "State" cell is empty',
       'section "Field states": a row has 1 cell(s), expected 2',
     ])
   })
