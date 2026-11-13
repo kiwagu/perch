@@ -771,6 +771,15 @@ out, and the loader derives it, the same way every time:
   submit button also runs with it (the sign-in email) holds input. The loader sets
   `holdsInput` on every field; a written value wins. The manifest carries it, and
   `contract:diff` lists the fields that start or stop holding input.
+- **Which states a field carries.** A field of kind `input`, `textarea` or `select` that holds
+  input carries `data-state` `unsaved` while it holds input no save has taken. One whose
+  binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored
+  what it shows, for as long as it stays on the screen; a reload or leaving the screen clears
+  it. A field whose own change runs its action (`holdsInput: false`) carries no state. The
+  states come from the vocabulary's "Field states" section, and a vocabulary without it
+  declares none. The manifest lists each field's states under `fieldStates` in `ids`, and the
+  table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is
+  held to them.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
   a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and

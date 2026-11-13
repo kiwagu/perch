@@ -15,6 +15,7 @@ export {
   own,
 } from './contract'
 export { descriptionsProblems } from './descriptions'
+export { fieldStatesOf, showsStoredValue } from './field-states'
 export {
   type DeepTarget,
   deepEnteredOf,
