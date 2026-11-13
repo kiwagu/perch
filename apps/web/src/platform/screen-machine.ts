@@ -6,7 +6,7 @@
  * frame's confirmation before
  * a destructive control's event and the guard before the event of a control that leaves what was
  * typed (its action leaves, or its flow moves to another screen), in that order, only when the
- * state the machine is in takes that event, and
+ * state the machine is in takes that event, and sends it once answered only when it still does, and
  * lets a form await the outcome of what an event started: `submit`
  * resolves once no action the event started is still running, `true` when none failed (a chain
  * of actions counts as one). It reads that from XState's inspection, so no flow changes for it.
@@ -251,6 +251,15 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
 
   useEffect(() => sendPlatformEvents(platform, actor, () => held.current), [actor, platform])
 
+  /** Whether the state the machine is in now takes `event`. */
+  const takes = useCallback(
+    (event: EventFromLogic<TMachine>): boolean => {
+      const now: AnyMachineSnapshot = actor.getSnapshot()
+
+      return now.can(event)
+    },
+    [actor],
+  )
   /**
    * Sends `event` and resolves with the outcome of the actions it started, once the machine took
    * it: `false` when the state does not take it, at once when it started none.
@@ -258,9 +267,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
   const start = useCallback(
     (event: EventFromLogic<TMachine>) =>
       new Promise<boolean>((settle) => {
-        const now: AnyMachineSnapshot = actor.getSnapshot()
-
-        if (!now.can(event)) {
+        if (!takes(event)) {
           settle(false)
 
           return
@@ -278,7 +285,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
         byEvent.current.set(event, run)
         actor.send(event)
       }),
-    [actor],
+    [actor, takes],
   )
   const send = useCallback(
     (event: EventFromLogic<TMachine>) => {
@@ -290,20 +297,19 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
         return
       }
 
-      // A question for an event the state would not take asks about nothing.
-      const now: AnyMachineSnapshot = actor.getSnapshot()
-
-      if (!now.can(event)) {
+      // A question for an event the state would not take asks about nothing, and the state may
+      // move on while the user answers.
+      if (!takes(event)) {
         return
       }
 
       void ask(control).then((go) => {
-        if (go) {
+        if (go && takes(event)) {
           actor.send(event)
         }
       })
     },
-    [actor, ask],
+    [actor, ask, takes],
   )
   const submit = useCallback(
     (event: EventFromLogic<TMachine>): Promise<boolean> => {
@@ -313,11 +319,10 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
         return start(event)
       }
 
-      const now: AnyMachineSnapshot = actor.getSnapshot()
-
-      return now.can(event) ? ask(control).then((go) => go && start(event)) : Promise.resolve(false)
+      // `start` takes the event only when the state still takes it once the user answered.
+      return takes(event) ? ask(control).then((go) => go && start(event)) : Promise.resolve(false)
     },
-    [actor, ask, start],
+    [ask, start, takes],
   )
 
   return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value) }

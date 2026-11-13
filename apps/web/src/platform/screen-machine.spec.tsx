@@ -522,6 +522,31 @@ describe('useScreenMachine', () => {
     expect(guard.before).not.toHaveBeenCalled()
   })
 
+  it('sends nothing once the user leaves when the state stopped taking the event while it asked', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const answer: { leave: (go: boolean) => void } = { leave: () => {} }
+    const asking: LeaveGuard = {
+      ...passing(),
+      before: vi.fn(
+        () =>
+          new Promise<boolean>((settle) => {
+            answer.leave = settle
+          }),
+      ),
+    }
+    const { running } = await open(asking)
+
+    await act(async () => running.send({ type: 'user.sign-in.forgot-link' }))
+    expect(asking.before).toHaveBeenCalledWith('user.sign-in.forgot-link')
+
+    act(() => running.send({ type: 'x.finish-button' }))
+    await act(async () => answer.leave(true))
+
+    expect(running.actor.getSnapshot().status).toBe('done')
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
   it('asks the confirmation before a destructive control, and sends nothing when the user stays', async () => {
     const staying = confirming(false)
     const { running } = await open(passing(), '/here', staying)

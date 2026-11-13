@@ -411,7 +411,7 @@ modeling stage.
   taking each `{ anchor: <field> }` from what the moving event carries in its `fields`, an empty
   field left out, and each `{ item: <item> }` from its `items`, the id of the entry acted in
   (`navigate-search.ts`, the effects' params in `flow-effects.ts`), a destructive
-  control's event waits for the confirmation and a leaving or navigating control's for the guard, each only when the state takes the event, and `submit(event)` resolves with the outcome of the actions
+  control's event waits for the confirmation and a leaving or navigating control's for the guard, each only when the state takes the event, and goes once answered only when the state still takes it, and `submit(event)` resolves with the outcome of the actions
   the event started, and of the ones they started in turn, judged apart from any other submit
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
