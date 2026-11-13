@@ -51,8 +51,8 @@ Tests and agents assert codes, never text. A `message`, `error`, `toast` or `dia
 changes with the language. A `status`, a `list`, a `section` and an `item` carry
 `data-state` with a state from "App states", "Container states" or "Row states". A field
 (an `input`, a `textarea` or a `select`) carries `data-state` `unsaved` while it holds input
-no save has taken, and, when it shows a stored value, `saved` once a save stored what it
-shows, for as long as it stays on the screen; a reload or leaving the screen clears it. A
+no save has taken, and, when its binding is a model field, `saved` once a save stored what
+it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. A
 field carries no `data-state` otherwise, and never one when its own change runs its action.
 These states come from "Field states"; a vocabulary without that section declares none. A choice
 that is not an entity (an `option`, a `badge`, a `button` that switches a mode) carries

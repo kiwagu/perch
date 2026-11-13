@@ -384,9 +384,10 @@ for Bun.
     platform section (its `composites` among it) and the activities
     verbatim, the scenarios parsed, `ids` (every declared anchor
     with its kind, its screen and its attributes, `holdsInput` of a field among them, the
-    `fieldStates` of a field (`fieldStatesOf`: `unsaved` for a field that holds input, `saved`
-    too when its binding is a model field, nothing when the vocabulary's "Field states" section
-    is absent; listed only when not empty), a ranked
+    `fieldStates` of a field (`fieldStatesOf`: only an `input`, `textarea` or `select` that holds
+    input has any, `unsaved`, and `saved` too when its binding is a model field; each state
+    must be declared in the vocabulary's "Field states" section, so none when it is absent;
+    listed only when not empty), a ranked
     message's `ranked`, a secret
     input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
     and the model document.
