@@ -1,5 +1,6 @@
 export { baseOf, isKnownAnchor, isSizeOption, sizeOptionOf, testIdFor } from './derive'
 export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
+export { FIELD_STATES, type FieldState, STATEFUL_FIELD_KINDS } from './field-states'
 export {
   ANCHOR_PATTERN,
   CONTROL_KINDS,
