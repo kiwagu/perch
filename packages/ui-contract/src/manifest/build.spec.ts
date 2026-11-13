@@ -483,7 +483,12 @@ describe('the states a field carries', () => {
   })
   it('leaves the real ids byte-equal to what they were, the key aside', () => {
     const repository = contractAt(REPOSITORY_ROOT)
-    const without = buildManifest({ ...repository, product: PRODUCT, now: NOW })
+    const without = buildManifest({
+      ...repository,
+      vocabulary: { ...repository.vocabulary, fieldStates: {} },
+      product: PRODUCT,
+      now: NOW,
+    })
     const declaring = buildManifest({
       ...repository,
       vocabulary: { ...repository.vocabulary, fieldStates: states },
