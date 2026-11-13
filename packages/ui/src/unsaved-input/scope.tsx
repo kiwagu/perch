@@ -5,6 +5,9 @@
  * asked, which ones by their anchors, so a leave that carries some fields asks only for the others.
  * Each field is its own: two that render one anchor are two. Outside a scope a field reports
  * nowhere.
+ *
+ * The frame also says, through `stores`, which anchors show a stored value: only such a field may
+ * show itself saved. Without the predicate no field does, since a saved mark must never lie.
  */
 
 import {
@@ -35,8 +38,14 @@ const NONE: UnsavedFields = { anchors: new Set(), unnamed: false }
 const ChannelContext = createContext<UnsavedInputChannel | undefined>(undefined)
 const UnsavedContext = createContext(false)
 const FieldsContext = createContext<() => UnsavedFields>(() => NONE)
+const storesNothing = (): boolean => false
+const StoresContext = createContext<(anchor: string) => boolean>(storesNothing)
 
-export function UnsavedInputScope(props: { readonly children: ReactNode }) {
+export function UnsavedInputScope(props: {
+  readonly children: ReactNode
+  /** Whether the field that renders `anchor` shows a stored value; none does without it. */
+  readonly stores?: ((anchor: string) => boolean) | undefined
+}) {
   const fields = useRef(new Map<symbol, string | undefined>())
   const [unsaved, setUnsaved] = useState(false)
   const channel = useMemo<UnsavedInputChannel>(
@@ -69,7 +78,9 @@ export function UnsavedInputScope(props: { readonly children: ReactNode }) {
   return (
     <ChannelContext.Provider value={channel}>
       <FieldsContext.Provider value={read}>
-        <UnsavedContext.Provider value={unsaved}>{props.children}</UnsavedContext.Provider>
+        <StoresContext.Provider value={props.stores ?? storesNothing}>
+          <UnsavedContext.Provider value={unsaved}>{props.children}</UnsavedContext.Provider>
+        </StoresContext.Provider>
       </FieldsContext.Provider>
     </ChannelContext.Provider>
   )
@@ -89,3 +100,6 @@ export const useUnsavedFields = (): (() => UnsavedFields) => useContext(FieldsCo
 /** The channel a field reports to; none outside a scope. */
 export const useUnsavedInputChannel = (): UnsavedInputChannel | undefined =>
   useContext(ChannelContext)
+
+/** Whether the field that renders an anchor shows a stored value; false without a predicate or outside a scope. */
+export const useStoresValue = (): ((anchor: string) => boolean) => useContext(StoresContext)

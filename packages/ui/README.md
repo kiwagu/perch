@@ -24,7 +24,8 @@ than its portal or overlay. A control that is not a test target carries a
   `warning`, `info` or `destructive`) paints its title, description and icon in that tone.
   `Form` is a form whose `onSubmit` returns whether it saved; on `true` each of its own fields
   takes the value it held when the submit started as saved (what was typed during the save
-  stays unsaved), and the default submit is always prevented. Add more with
+  stays unsaved), and the default submit is always prevented; `marksState={false}` turns off
+  the state marks of its fields, unless a field says otherwise. Add more with
   `bunx shadcn add <name>` in this folder, or copy what `bunx shadcn view <name>` prints when
   `add` cannot resolve an alias; the file then belongs to us and is edited in place. `toast` is
   the kit's own:
@@ -64,6 +65,22 @@ than its portal or overlay. A control that is not a test target carries a
   did not come from the field's own last change, or the `defaultValue` at mount; a select
   compares its choices, one or several, as it compares an item, `isItemEqualToValue` or
   `Object.is`), and takes `holdsInput={false}` for a choice that applies at once.
+  `useTracksInput` also returns the field's `state` (a `FieldState` of the contract, or none):
+  `unsaved` while it holds unsaved input; `saved` while it shows the value a `Form` submit that
+  saved took and the app last gave it that value; none otherwise, and always none for a
+  `holdsInput={false}` field. Only a field that shows a stored value may be `saved`: the frame
+  says which through `UnsavedInputScope`'s `stores(anchor)`, read with `useStoresValue()`;
+  without it (or outside a scope), for an anchor it does not store, or for a field without an
+  anchor, a field is never `saved`. The saved value lives in the field alone: a remount starts
+  with none, and the app giving another value clears it. `Form` takes `marksState` (true when
+  left out) for all its fields, and `useMarksState(own)` gives a field its own say, else its
+  form's, else true. `Input`, `Textarea`, `Select` and `OptionSelect` take `marksState` too,
+  and it controls only the color: a field always tracks its state and renders `data-state`
+  (`unsaved` or `saved`, absent for none) on its anchor element, whether or not it paints it.
+  Painted, the state changes only `border-color` of the border the element already draws (the
+  `Input`, the `textarea`, the `SelectTrigger`), never its width, spacing or focus halo
+  (`stateBorder(marks)`, one string of classes): invalid (destructive) over `unsaved` (the
+  `warning` token) over `saved` (the `success` token) over focus over the default.
 - `./lib/utils`: `cn` for class names.
 - `./styles/global.css`: Tailwind, the theme tokens (shadcn's, plus the tones `success`,
   `warning` and `info` beside its `destructive`) and the base layer; import it once in the app.
