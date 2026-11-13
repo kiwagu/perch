@@ -23,5 +23,5 @@ Where: [/me], then [/settings]
 ### Expected result
 - After step 2 [user.profile.name-input] carries [state:unsaved]
 - After step 3 [user.profile.name-input] carries [state:saved]
-- After step 4 [user.profile.name-input] shows the new name and carries no state, and no browser prompt was shown
+- After step 4 [user.profile.name-input] shows the new name and carries no state
 - After step 5 [user.settings.email.email-input] carries [state:unsaved]

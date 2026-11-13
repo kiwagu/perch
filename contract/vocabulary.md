@@ -170,7 +170,8 @@ container state.
 ## Field states
 
 The `data-state` of a field: an `input`, a `textarea` or a `select`. A field carries no
-`data-state` otherwise.
+`data-state` otherwise. These states belong only to fields that hold input. Only a field
+bound to a model field can carry `saved`.
 
 | State | Meaning |
 |---|---|
