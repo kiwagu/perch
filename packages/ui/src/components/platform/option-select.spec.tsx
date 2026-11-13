@@ -178,3 +178,45 @@ describe('the anchor an option select reports', () => {
     })
   })
 })
+
+describe('OptionSelect marksState', () => {
+  it('passes marksState to its trigger, which keeps data-state either way', async () => {
+    const Unmarked = () => {
+      const [value, setValue] = useState<'en' | 'es'>('en')
+
+      return (
+        <OptionSelect
+          label="Language"
+          value={value}
+          options={options}
+          onChange={setValue}
+          testId="x.y.locale-select"
+          marksState={false}
+        />
+      )
+    }
+
+    render(<Unmarked />)
+
+    const trigger = screen.getByTestId('x.y.locale-select')
+
+    expect(trigger.className).not.toContain('border-warning')
+
+    await userEvent.click(trigger)
+    await userEvent.click(await screen.findByRole('option', { name: 'Spanish' }))
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).not.toContain('border-warning')
+
+    cleanup()
+    render(
+      <OptionSelect
+        label="Language"
+        value="en"
+        options={options}
+        onChange={() => {}}
+        testId="x.y.locale-select"
+      />,
+    )
+    expect(screen.getByTestId('x.y.locale-select').className).toContain('border-warning')
+  })
+})
