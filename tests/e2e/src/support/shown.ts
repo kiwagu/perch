@@ -7,10 +7,12 @@
 import type { Page } from '@playwright/test'
 
 /**
- * Watches `page` from now on for an element `selector` matches: one there now, one added, or one
- * an attribute change makes match, though it is gone again by the next look. The function it
- * gives ends the watch and tells whether one appeared; it fails when the page loaded anew in the
- * meantime, which ends the watch with the document it watched.
+ * Watches `page` from now on for an element `selector` matches: one there now, or one added,
+ * though it is gone again by the next look. Each look reads attributes as they are then, so an
+ * element that matches by its attributes only for a moment between two looks goes unseen (one
+ * added and removed again whole, as a dialog comes and goes, keeps them and is seen). The function
+ * it gives ends the watch and tells whether one appeared; it fails when the page loaded anew in
+ * the meantime, which ends the watch with the document it watched.
  */
 export async function watchShown(page: Page, selector: string): Promise<() => Promise<boolean>> {
   const watch = await page.evaluateHandle((watched: string) => {
