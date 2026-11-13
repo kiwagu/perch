@@ -399,7 +399,9 @@ modeling stage.
   lose what was typed asks (the platform's `unsavedInput`), `LEAVING_CONTROLS`, the
   anchors bound to an action of `leaving`, and `NAVIGATING_CONTROLS`, the controls whose flow
   moves to another screen with the fields that move loses (the anchors that carry `leaves`), all held to the contract by
-  `leaving-contract.spec.ts`; `leave-guard.port.ts` is how a screen asks the frame before such
+  `leaving-contract.spec.ts`; `stored-fields.ts` holds `STORED_FIELDS`, the fields that store what was typed
+  (the contract's model-bound inputs, held to it by `stored-fields-contract.spec.ts`), which
+  `main.tsx` hands to the unsaved-input scope as `stores` so they turn green once saved; `leave-guard.port.ts` is how a screen asks the frame before such
   a leave (`useLeaveGuard()`: `confirm()`, `before(control)`; every leave goes ahead without
   a provider). The question before a destructive action: `confirmations.ts` holds
   `ASKING_CONTROLS`, the anchors that carry `asks` with their codes, held to the contract by

@@ -95,7 +95,7 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
 | not-found | 3 | 3 |
-| app-shell | 22 | 90 |
+| app-shell | 22 | 91 |
 | user.confirm-email | 5 | 6 |
 | console.account | 36 | 8 |
 | console.users | 14 | 9 |
@@ -103,10 +103,10 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 | device | 10 | 6 |
 | user.forgot-password | 6 | 12 |
 | organisation.invitation | 8 | 7 |
-| user.profile | 10 | 76 |
+| user.profile | 10 | 77 |
 | organisation | 45 | 22 |
 | user.reset-password | 15 | 10 |
-| user.settings | 27 | 24 |
+| user.settings | 27 | 25 |
 | user.sign-in | 20 | 58 |
 | user.verify-email | 7 | 7 |
 
