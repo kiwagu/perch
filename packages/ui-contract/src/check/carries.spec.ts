@@ -85,6 +85,28 @@ describe('anchorCarries', () => {
   })
 })
 
+describe('the field states of a field', () => {
+  it('a field carries the field states the contract derives for it', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+    anchorIn(contract, 'sample.title-input').holdsInput = true
+    screenIn(contract, 'sample').anchors['sample.email-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+    }
+
+    const carries = anchorCarries(contract)
+
+    expect(carries('sample.title-input', 'state', 'saved')).toBe(true)
+    expect(carries('sample.title-input', 'state', 'unsaved')).toBe(true)
+    expect(carries('sample.email-input', 'state', 'unsaved')).toBe(true)
+    expect(carries('sample.email-input', 'state', 'saved')).toBe(false)
+    expect(carries('sample.save-button', 'state', 'saved')).toBe(false)
+  })
+})
+
 describe('the page sizes of a paged list', () => {
   /** The sample with a paged list of devices, whose action pages by 10 or 25. */
   function paged(): ReturnType<typeof sampleContract> {

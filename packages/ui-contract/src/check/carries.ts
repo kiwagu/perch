@@ -18,13 +18,14 @@ import {
   pageSizeOptionsOf,
   visibilityButtonsOf,
 } from './contract'
+import { fieldStatesOf } from './field-states'
 
 /** What an anchor carries a value of: its `data-code`, its `data-state` or its `data-value`. */
 export type Carried = 'code' | 'state' | 'value'
 
 /**
  * Whether `anchor`, or an anchor under it, carries `value` as its `carried`: a code of its
- * `codes`, a state of its `states`, a row of its choice values (or a value its pattern row
+ * `codes`, a state of its `states` or of the field states the contract derives for it, a row of its choice values (or a value its pattern row
  * matches), or `show`/`hide` on a visibility-button.
  */
 export function anchorCarries(
@@ -44,7 +45,14 @@ export function anchorCarries(
       case 'code':
         return declares(anchor, value, 'codes')
       case 'state':
-        return declares(anchor, value, 'states')
+        return (
+          declares(anchor, value, 'states') ||
+          declared.some(
+            ({ anchor: other, def }) =>
+              isUnder(anchor, other) &&
+              (fieldStatesOf(def, contract.vocabulary) as readonly string[]).includes(value),
+          )
+        )
       case 'value':
         return (
           choices.some(([other, rows]) => isUnder(anchor, other) && isValueOf(rows, value)) ||
