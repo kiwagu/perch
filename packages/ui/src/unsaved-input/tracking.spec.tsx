@@ -219,6 +219,35 @@ describe('useTracksInput state', () => {
   })
 })
 
+describe('useTracksInput state across the fields of one form', () => {
+  it('after a save, only the fields that were unsaved turn saved', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <UnsavedInputScope stores={() => true}>
+        <Form onSubmit={() => Promise.resolve(true)}>
+          <Field app="Ann" anchor="x.y.first-input" />
+          <Field app="Bob" anchor="x.y.second-input" />
+          <button type="submit">save</button>
+        </Form>
+      </UnsavedInputScope>,
+    )
+
+    const [first, second] = screen.getAllByLabelText('name')
+
+    if (first === undefined || second === undefined) throw new Error('two fields expected')
+
+    await user.type(first, 'a')
+    await user.click(screen.getByText('save'))
+    await act(async () => {})
+
+    const [firstState, secondState] = screen.getAllByTestId('state')
+
+    expect(firstState?.textContent).toBe('saved')
+    expect(secondState?.textContent).toBe('none')
+  })
+})
+
 describe('useStoresValue', () => {
   it('answers what the scope stores, and false without a predicate or outside a scope', () => {
     const asks = (wrapper?: (props: { readonly children: ReactNode }) => ReactNode) =>
