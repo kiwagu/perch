@@ -59,6 +59,27 @@ function screenProblems(contract: Contract): Problem[] {
   const unlisted = unlistedIn(inScreens)
   const names = Object.keys(vocabulary.screenNames)
   const states = statesOf(vocabulary)
+  // A field state is derived from the field, so an anchor never writes one.
+  const fieldStates = Object.keys(vocabulary.fieldStates)
+  const writable = new Set([
+    ...Object.keys(vocabulary.appStates),
+    ...Object.keys(vocabulary.containerStates),
+    ...Object.keys(vocabulary.rowStates),
+  ])
+  const writtenFieldStates = (
+    written: readonly string[] | undefined,
+    at: readonly PropertyKey[],
+  ): Problem[] =>
+    (written ?? []).flatMap((state, index) =>
+      fieldStates.includes(state) && !writable.has(state)
+        ? [
+            inScreens(
+              [...at, index],
+              `"${state}" is a field state: it is derived from the field, a screen file never writes it`,
+            ),
+          ]
+        : [],
+    )
   const anchors = declaredAnchors(screens)
   // A code the loader derived on the toast anchor or the confirmation is vouched for by its rule
   // row, not a row of its own.
@@ -93,6 +114,7 @@ function screenProblems(contract: Contract): Problem[] {
         ...unlisted(def.derived, [...at, 'derived'], vocabulary.suffixes, 'a derived suffix'),
         ...unlisted(def.codes, [...at, 'codes'], codesFor(anchor), 'a code'),
         ...unlisted(def.states, [...at, 'states'], states, 'a state'),
+        ...writtenFieldStates(def.states, [...at, 'states']),
         ...unlisted(def.roles, [...at, 'roles'], vocabulary.roles, 'a role'),
       ]),
     ...screen.bindings.flatMap((binding, at) =>
@@ -293,6 +315,12 @@ function fieldStateProblems({ vocabulary }: Contract): Problem[] {
     return []
   }
 
+  const sharing = [
+    ['an app', vocabulary.appStates],
+    ['a container', vocabulary.containerStates],
+    ['a row', vocabulary.rowStates],
+  ] as const
+
   return [
     ...listed
       .filter((state) => !rendered.includes(state))
@@ -308,6 +336,15 @@ function fieldStateProblems({ vocabulary }: Contract): Problem[] {
           `section "Field states": "${state}" is a state the kit renders and is not listed`,
         ),
       ),
+    ...sharing.flatMap(([noun, table]) =>
+      listed
+        .filter((state) => has(table, state))
+        .map((state) =>
+          inVocabulary(
+            `section "Field states": "${state}" is also ${noun} state: a state name means one thing`,
+          ),
+        ),
+    ),
   ]
 }
 

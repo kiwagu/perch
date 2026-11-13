@@ -25,7 +25,7 @@ export type Carried = 'code' | 'state' | 'value'
 
 /**
  * Whether `anchor`, or an anchor under it, carries `value` as its `carried`: a code of its
- * `codes`, a state of its `states` or of the field states the contract derives for it, a row of its choice values (or a value its pattern row
+ * `codes`, a state of its `states`, or a field state the contract derives for it (a written one never counts), a row of its choice values (or a value its pattern row
  * matches), or `show`/`hide` on a visibility-button.
  */
 export function anchorCarries(
@@ -35,6 +35,7 @@ export function anchorCarries(
   const choices = Object.entries(contract.vocabulary.choiceValues)
   const visibilityButtons = [...visibilityButtonsOf(contract.screens)]
   const sizeOptions = [...pageSizeOptionsOf(contract.screens)]
+  const fieldStates = new Set(Object.keys(contract.vocabulary.fieldStates))
   const declares = (anchor: string, value: string, of: 'codes' | 'states'): boolean =>
     declared.some(
       ({ anchor: other, def }) => isUnder(anchor, other) && (def[of] ?? []).includes(value),
@@ -45,14 +46,14 @@ export function anchorCarries(
       case 'code':
         return declares(anchor, value, 'codes')
       case 'state':
-        return (
-          declares(anchor, value, 'states') ||
-          declared.some(
-            ({ anchor: other, def }) =>
-              isUnder(anchor, other) &&
-              (fieldStatesOf(def, contract.vocabulary) as readonly string[]).includes(value),
-          )
-        )
+        // A field state is decided by the derivation alone, never by what an anchor writes.
+        return fieldStates.has(value)
+          ? declared.some(
+              ({ anchor: other, def }) =>
+                isUnder(anchor, other) &&
+                (fieldStatesOf(def, contract.vocabulary) as readonly string[]).includes(value),
+            )
+          : declares(anchor, value, 'states')
       case 'value':
         return (
           choices.some(([other, rows]) => isUnder(anchor, other) && isValueOf(rows, value)) ||
