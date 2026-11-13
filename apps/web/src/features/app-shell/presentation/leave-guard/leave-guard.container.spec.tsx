@@ -218,6 +218,25 @@ describe('LeaveGuard', () => {
     expect(await screen.findByText(`${forgot}: false`)).toBeDefined()
   })
 
+  it('settles a question a second one replaces as Stay, and answers the second', async () => {
+    const user = userEvent.setup()
+    const forgot = 'user.sign-in.forgot-link'
+
+    await open()
+    await user.type(screen.getByLabelText('password'), 'Secret-1')
+    await user.click(screen.getByText(`${forgot}: none`))
+    await screen.findByTestId('app-shell.leave-dialog')
+
+    // The open dialog keeps the pointer off the page, so the second ask is a plain click.
+    act(() => screen.getByText('app-shell.locale-select: none').click())
+
+    expect(await screen.findByText(`${forgot}: false`)).toBeDefined()
+    expect(dialog()).not.toBeNull()
+    await user.click(screen.getByTestId('app-shell.leave-dialog.confirm-button'))
+    expect(await screen.findByText('app-shell.locale-select: true')).toBeDefined()
+    expect(screen.getByText(`${forgot}: false`)).toBeDefined()
+  })
+
   it('counts a field that renders no anchor among those a leave loses', async () => {
     const user = userEvent.setup()
     const forgot = 'user.sign-in.forgot-link'

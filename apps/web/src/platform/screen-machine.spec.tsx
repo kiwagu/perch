@@ -510,6 +510,45 @@ describe('useScreenMachine', () => {
     expect(screen.getByTestId('state').textContent).toBe('idle')
   })
 
+  it('submits a control whose flow leaves its screen once the user leaves, past the blocker', async () => {
+    const guard = passing()
+    const { router, running } = await open(guard)
+
+    expect(await act(() => running.submit({ type: 'user.sign-in.forgot-link' }))).toBe(true)
+
+    await screen.findByText('there')
+    expect(guard.before).toHaveBeenCalledTimes(1)
+    expect(router.state.location.pathname).toBe('/there')
+  })
+
+  it('asks the confirmation before the guard, and the guard nothing when the user stays at it', async () => {
+    const order: string[] = []
+    const guard: LeaveGuard = {
+      ...passing(),
+      before: vi.fn(() => {
+        order.push('guard')
+
+        return Promise.resolve(true)
+      }),
+    }
+    const answers = [false, true]
+    const asking: ConfirmGuard = {
+      before: vi.fn(() => {
+        order.push('confirmation')
+
+        return Promise.resolve(answers.shift() ?? true)
+      }),
+    }
+    const { running } = await open(guard, '/here', asking)
+
+    expect(await act(() => running.submit({ type: 'user.sign-in.forgot-link' }))).toBe(false)
+    expect(order).toEqual(['confirmation'])
+    expect(screen.getByTestId('state').textContent).toBe('idle')
+
+    expect(await act(() => running.submit({ type: 'user.sign-in.forgot-link' }))).toBe(true)
+    expect(order).toEqual(['confirmation', 'confirmation', 'guard'])
+  })
+
   it('asks nothing for a control that asks first when its state does not take the event', async () => {
     const guard = passing()
     const { running } = await open(guard, '/here', confirming())
