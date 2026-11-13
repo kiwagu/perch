@@ -5,7 +5,8 @@
  * reports to the scope's channel, and lets its form mark the value a saved submit took.
  *
  * Its state follows: `unsaved` while it holds unsaved input; `saved` while it shows the value a
- * saved submit took and the app last gave it that value, and only when the scope says its anchor
+ * saved submit took (a submit only marks a field saved that was unsaved when it started, though
+ * it takes every field's value as given) and the app last gave it that value, and only when the scope says its anchor
  * shows a stored value; none otherwise. The saved value lives in this instance alone: a remount
  * starts with none, and the app giving another value clears it.
  *
@@ -49,6 +50,8 @@ export function useTracksInput<Value>(input: TrackedInput<Value>): {
   // As of the last commit: the last value the app gave the field, and what it showed.
   const given = useRef(input.value === undefined ? input.defaultValue : input.value)
   const shown = useRef(given.current)
+  // Whether the field held unsaved input as of the last commit.
+  const unsavedShown = useRef(false)
   // What the field's own last change was; set by the change, before the render it causes.
   const typedLast = useRef<{ readonly value: Value } | undefined>(undefined)
   // The value the last saved submit took, while the app has given no other since.
@@ -74,6 +77,7 @@ export function useTracksInput<Value>(input: TrackedInput<Value>): {
   useLayoutEffect(() => {
     given.current = givenNow
     shown.current = current
+    unsavedShown.current = unsaved
 
     if (saved.current !== undefined && !same(givenNow, saved.current.value)) {
       saved.current = undefined
@@ -87,10 +91,15 @@ export function useTracksInput<Value>(input: TrackedInput<Value>): {
 
   const capture = useCallback(() => {
     const submitted = shown.current
+    const wasUnsaved = unsavedShown.current
 
     return () => {
       given.current = submitted
-      saved.current = { value: submitted }
+
+      if (wasUnsaved) {
+        saved.current = { value: submitted }
+      }
+
       rerender(bump)
     }
   }, [])

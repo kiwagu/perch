@@ -67,7 +67,8 @@ than its portal or overlay. A control that is not a test target carries a
   `Object.is`), and takes `holdsInput={false}` for a choice that applies at once.
   `useTracksInput` also returns the field's `state` (a `FieldState` of the contract, or none):
   `unsaved` while it holds unsaved input; `saved` while it shows the value a `Form` submit that
-  saved took and the app last gave it that value; none otherwise, and always none for a
+  saved took and the app last gave it that value (a save turns `saved` only the fields it found
+  unsaved; the others stay as they were, though the save took their values too); none otherwise, and always none for a
   `holdsInput={false}` field. Only a field that shows a stored value may be `saved`: the frame
   says which through `UnsavedInputScope`'s `stores(anchor)`, read with `useStoresValue()`;
   without it (or outside a scope), for an anchor it does not store, or for a field without an
