@@ -48,6 +48,8 @@ export interface ContractChanges {
   errorFields: Change
   /** As `<anchor>`, the fields that hold input, on the anchors both contracts hold. */
   inputs: Change
+  /** As `<anchor> shows no state colour`, the fields that drop it, on the anchors both contracts hold. */
+  stateColours: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
   /**
@@ -242,6 +244,9 @@ export function diffContracts(
     ),
     inputs: carriedChanges(before, after, anchors.renamed, (def) =>
       def.holdsInput === true ? ['holds input'] : [],
+    ),
+    stateColours: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.marksState === false ? ['shows no state colour'] : [],
     ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],

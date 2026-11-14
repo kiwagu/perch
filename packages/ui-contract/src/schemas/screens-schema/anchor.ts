@@ -169,6 +169,12 @@ export const anchorDefSchema = z
       .describe(
         'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
       ),
+    marksState: z
+      .literal(false)
+      .optional()
+      .describe(
+        'The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it.',
+      ),
     secret: z
       .literal(true)
       .optional()

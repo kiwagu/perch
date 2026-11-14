@@ -7,12 +7,13 @@
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
  * problem, since no check can follow it. A key or a map value is a contract code only in
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
- * while a `data-code` literal outside the grammar is a problem. And `holdsInput={false}`
- * beside a field's anchor, for the opt-out the contract derives: a literal on the element
- * that carries the anchor as a literal, or a prop passed through.
+ * while a `data-code` literal outside the grammar is a problem. And `holdsInput={false}` and
+ * `marksState={false}` beside a field's anchor, for the opt-outs the contract decides: a
+ * boolean literal on the element that carries the anchor as a literal, or a prop passed
+ * through.
  */
 
-import { type Expression, parseSync, Visitor } from 'oxc-parser'
+import { type Expression, type JSXAttributeValue, parseSync, Visitor } from 'oxc-parser'
 
 import type { Problem } from '../files'
 
@@ -38,6 +39,12 @@ export const HOLDS_INPUT_ANCHOR =
 export const HOLDS_INPUT_VALUE =
   'holdsInput is {false} or left out; the contract decides it (a prop passed through is fine)'
 
+export const MARKS_STATE_ANCHOR =
+  "marksState goes on the element that carries the field's anchor as a literal"
+
+export const MARKS_STATE_VALUE =
+  'marksState is {false} or left out; the contract decides it (a prop passed through is fine)'
+
 export interface Collected {
   file: string
   literals: Array<{ anchor: string; form: 'attribute' | 'prop' | 'key' | 'constant'; line: number }>
@@ -46,6 +53,8 @@ export interface Collected {
   codes: Array<{ code: string; form: 'attribute' | 'key' | 'map'; line: number }>
   /** `holdsInput` written as a literal on the element of a field's anchor. */
   inputs: Array<{ anchor: string; holdsInput: boolean; line: number }>
+  /** `marksState` written as a literal on the element of a field's anchor. */
+  colours: Array<{ anchor: string; marksState: boolean; line: number }>
   problems: Problem[]
 }
 
@@ -53,7 +62,32 @@ type LiteralForm = Collected['literals'][number]['form']
 type CodeForm = Collected['codes'][number]['form']
 
 /** A file without any of these words declares no anchor and no code, and is not parsed. */
-const WORDS = /data-testid|testId|TestId|_TEST_ID|data-code|code:|_CODES|holdsInput/
+const WORDS = /data-testid|testId|TestId|_TEST_ID|data-code|code:|_CODES|holdsInput|marksState/
+
+/** A boolean prop the contract decides, and what is said of it when the source writes it wrong. */
+interface Flag {
+  readonly name: string
+  readonly anchorMessage: string
+  readonly valueMessage: string
+}
+
+const HOLDS_INPUT: Flag = {
+  name: 'holdsInput',
+  anchorMessage: HOLDS_INPUT_ANCHOR,
+  valueMessage: HOLDS_INPUT_VALUE,
+}
+
+const MARKS_STATE: Flag = {
+  name: 'marksState',
+  anchorMessage: MARKS_STATE_ANCHOR,
+  valueMessage: MARKS_STATE_VALUE,
+}
+
+interface ElementAttribute {
+  readonly name: string
+  readonly value: JSXAttributeValue | null
+  readonly start: number
+}
 
 const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
 const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
@@ -72,6 +106,7 @@ export function collectFromSource(text: string, file: string): Collected {
     derived: [],
     codes: [],
     inputs: [],
+    colours: [],
     problems: [],
   }
 
@@ -118,6 +153,45 @@ export function collectFromSource(text: string, file: string): Collected {
     }
   }
 
+  /**
+   * A boolean literal prop of an element, with the anchor the element carries as a literal; a
+   * prop passed through is let by, any other value or an element with no such anchor a problem.
+   */
+  const flag = (
+    attributes: readonly ElementAttribute[],
+    { name, anchorMessage, valueMessage }: Flag,
+  ): { anchor: string; value: boolean; line: number } | undefined => {
+    const written = attributes.find((attribute) => attribute.name === name)
+
+    if (written === undefined) {
+      return undefined
+    }
+
+    const expression =
+      written.value?.type === 'JSXExpressionContainer' ? written.value.expression : undefined
+
+    if (expression?.type === 'Identifier' || expression?.type === 'MemberExpression') {
+      return undefined
+    }
+
+    if (expression?.type !== 'Literal' || typeof expression.value !== 'boolean') {
+      collected.problems.push({ file, line: line(written.start), message: valueMessage })
+
+      return undefined
+    }
+
+    const carrier = attributes.find((attribute) => isAnchorAttribute(attribute.name))
+    const value = carrier === undefined ? undefined : attributeValue(carrier.value)
+
+    if (value?.kind !== 'literal') {
+      collected.problems.push({ file, line: line(written.start), message: anchorMessage })
+
+      return undefined
+    }
+
+    return { anchor: value.text, value: expression.value, line: line(written.start) }
+  }
+
   new Visitor({
     JSXAttribute(node) {
       const name = node.name.type === 'JSXIdentifier' ? node.name.name : undefined
@@ -138,39 +212,16 @@ export function collectFromSource(text: string, file: string): Collected {
           ? [{ name: attribute.name.name, value: attribute.value, start: attribute.start }]
           : [],
       )
-      const holds = attributes.find(({ name }) => name === 'holdsInput')
+      const holds = flag(attributes, HOLDS_INPUT)
+      const marks = flag(attributes, MARKS_STATE)
 
-      if (holds === undefined) {
-        return
+      if (holds !== undefined) {
+        collected.inputs.push({ anchor: holds.anchor, holdsInput: holds.value, line: holds.line })
       }
 
-      const expression =
-        holds.value?.type === 'JSXExpressionContainer' ? holds.value.expression : undefined
-
-      if (expression?.type === 'Identifier' || expression?.type === 'MemberExpression') {
-        return
+      if (marks !== undefined) {
+        collected.colours.push({ anchor: marks.anchor, marksState: marks.value, line: marks.line })
       }
-
-      if (expression?.type !== 'Literal' || typeof expression.value !== 'boolean') {
-        collected.problems.push({ file, line: line(holds.start), message: HOLDS_INPUT_VALUE })
-
-        return
-      }
-
-      const carrier = attributes.find(({ name }) => isAnchorAttribute(name))
-      const value = carrier === undefined ? undefined : attributeValue(carrier.value)
-
-      if (value?.kind !== 'literal') {
-        collected.problems.push({ file, line: line(holds.start), message: HOLDS_INPUT_ANCHOR })
-
-        return
-      }
-
-      collected.inputs.push({
-        anchor: value.text,
-        holdsInput: expression.value,
-        line: line(holds.start),
-      })
     },
     ObjectExpression(node) {
       for (const property of node.properties) {

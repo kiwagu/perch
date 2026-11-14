@@ -3,11 +3,18 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen; only a field says whether it holds input; only an input renders a
- * visibility-button.
+ * fields of its own screen; only a field says whether it holds input; only a field that holds
+ * input drops its state colour; only an input renders a visibility-button.
  */
 
-import { FIELD_KINDS, kindOf, screenOf, VISIBILITY_BASE_KIND, VISIBILITY_BUTTON } from '../anchors'
+import {
+  FIELD_KINDS,
+  kindOf,
+  STATEFUL_FIELD_KINDS,
+  screenOf,
+  VISIBILITY_BASE_KIND,
+  VISIBILITY_BUTTON,
+} from '../anchors'
 import type { Problem } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
@@ -167,6 +174,22 @@ const holdsInputProblems = ({ screens }: Contract): Problem[] =>
       : [],
   )
 
+/**
+ * `marksState: false` drops the state colour of a field the kit colours: only an `input`, a
+ * `textarea` or a `select` that holds input shows one.
+ */
+const marksStateProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.marksState !== undefined && !(STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true)
+      ? [
+          locate(screens)(
+            [...at, 'marksState'],
+            'only a field that holds input shows a state colour',
+          ),
+        ]
+      : [],
+  )
+
 /** `secret` says a field holds a secret, which never leaves the page; only a field has it. */
 const secretProblems = ({ screens }: Contract): Problem[] =>
   declaredAnchors(screens).flatMap(({ def, at }) =>
@@ -245,6 +268,7 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...nameProblems(contract),
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
+  ...marksStateProblems(contract),
   ...secretProblems(contract),
   ...rankedProblems(contract),
   ...visibilityProblems(contract),

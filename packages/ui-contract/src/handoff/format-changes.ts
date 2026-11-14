@@ -18,6 +18,7 @@ const LISTS = [
   ['anchorRoles', 'anchor role', 'anchor roles'],
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
+  ['stateColours', 'field without a state colour', 'fields without a state colour'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],

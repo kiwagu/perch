@@ -7,10 +7,13 @@
  * vocabulary, and every suffix of `testIdFor()` too, listed in the `derived` of an anchor of the
  * contract (of the base itself when the call writes it as a literal); a `holdsInput` written in
  * the sources is `{false}`, on a field the contract says holds no input, never on an anchor that
- * is not a field, and every such field rendered carries it. The problems carry `file:line`.
+ * is not a field, and every such field rendered carries it; a `marksState` is `{false}` too, on a
+ * field the contract says drops its state colour, never on an anchor that is not an input, a
+ * textarea or a select that holds input, and every such field rendered carries it. The problems
+ * carry `file:line`.
  */
 
-import { baseOf, FIELD_KINDS } from '../anchors'
+import { baseOf, FIELD_KINDS, STATEFUL_FIELD_KINDS } from '../anchors'
 import { codesOf, type DeclaredAnchor, declaredAnchors, locate } from '../check'
 import {
   type Problem,
@@ -188,6 +191,63 @@ export function compareWithContract(
       ),
     )
 
+  // The state colour is shown by an input, a textarea or a select that holds input, the same test
+  // as the screens check; the contract may drop it, and the element says so once it is rendered.
+  const shown = new Map(
+    contract.map(({ anchor, def, at: path }) => [
+      anchor,
+      {
+        kind: def.kind,
+        shows: STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true,
+        dropped: def.marksState === false,
+        path,
+      },
+    ]),
+  )
+  const colourProblems = collected.flatMap(({ file, colours }) =>
+    colours.flatMap(({ anchor, marksState, line }) => {
+      const colour = shown.get(anchor)
+
+      if (colour !== undefined && !colour.shows) {
+        return [
+          at(
+            { file, line },
+            `"${anchor}" is a ${colour.kind}, not a field that holds input; only such a field shows a state colour`,
+          ),
+        ]
+      }
+
+      if (marksState) {
+        return [at({ file, line }, `"${anchor}": marksState={true} is the default; leave it out`)]
+      }
+
+      return colour?.dropped === false
+        ? [
+            at(
+              { file, line },
+              `"${anchor}" shows its state colour by the contract; drop marksState={false}`,
+            ),
+          ]
+        : []
+    }),
+  )
+  const droppedOnElement = new Set(
+    collected.flatMap(({ colours }) =>
+      colours.filter(({ marksState }) => !marksState).map(({ anchor }) => anchor),
+    ),
+  )
+  const missingColourOptOuts = [...shown]
+    .filter(
+      ([anchor, { shows, dropped }]) =>
+        !options.ahead && shows && dropped && first.has(anchor) && !droppedOnElement.has(anchor),
+    )
+    .map(([, { path }]) =>
+      inScreens(
+        path,
+        'shows no state colour by the contract; its element carries marksState={false}',
+      ),
+    )
+
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
     ...duplicates,
@@ -197,5 +257,7 @@ export function compareWithContract(
     ...codeProblems,
     ...inputProblems,
     ...missingOptOuts,
+    ...colourProblems,
+    ...missingColourOptOuts,
   ])
 }
