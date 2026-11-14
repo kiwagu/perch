@@ -327,12 +327,16 @@ describe('compareWithContract', () => {
       ),
     ).toEqual([
       'list.tsx:5: "sample.list.size-select": holdsInput={true} is the default; leave it out',
+      'list.tsx:5: "sample.list.size-select" holds no input by its paged list\'s facet; its element carries holdsInput={false}',
     ])
   })
   it("reports marksState on a paged list's size select, a select that holds no input", () => {
     expect(
       pagedProblems(
         withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
+          ],
           colours: [
             { anchor: 'sample.list.size-select', base: 'sample.list', marksState: false, line: 5 },
           ],
@@ -390,6 +394,12 @@ describe('compareWithContract', () => {
         withPagedList(
           {
             inputs: [
+              {
+                anchor: 'sample.list.size-select',
+                base: 'sample.list',
+                holdsInput: false,
+                line: 5,
+              },
               { anchor: 'sample.list.next-link', base: 'sample.list', holdsInput: false, line: 6 },
               { anchor: 'sample.list.range', base: 'sample.list', holdsInput: true, line: 7 },
             ],
@@ -430,8 +440,39 @@ describe('compareWithContract', () => {
       'select.tsx:5: "sample.mode-select.size-select" is derived from "sample.mode-select", not a field; only a field holds input',
     ])
   })
-  it("does not want the opt-out on a paged list's size select rendered without the prop", () => {
-    expect(pagedProblems(withPagedList({}))).toEqual([])
+  it("reports a paged list's size select rendered without holdsInput={false}, at its testIdFor()", () => {
+    expect(pagedProblems(withPagedList({}))).toEqual([
+      'list.tsx:5: "sample.list.size-select" holds no input by its paged list\'s facet; its element carries holdsInput={false}',
+    ])
+  })
+  it("passes a paged list's size select that carries holdsInput={false}", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([])
+  })
+  it("lets the contract run ahead of a paged list's size select: no opt-out is wanted yet", () => {
+    expect(
+      compareWithContract(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY, {
+        ahead: true,
+      }).map(formatProblem),
+    ).toEqual([])
+  })
+  it("wants no opt-out on a paged list's next link rendered without a flag", () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'next-link', base: 'sample.list', line: 6 }],
+        }),
+      ]),
+    ).toEqual([])
   })
   it('reports holdsInput on an anchor that is not a field', () => {
     expect(
