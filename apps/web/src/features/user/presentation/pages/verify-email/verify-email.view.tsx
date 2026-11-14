@@ -108,6 +108,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                     type="email"
                     autoComplete="email"
                     required
+                    marksState={false}
                     data-testid="user.verify-email.email-input"
                   />
                 </Field>
