@@ -7,7 +7,8 @@
  * to the page before and after, each only where there is one; and `size-select`, whose options
  * are the sizes. Each moves to the same route keeping the other search keys, a link changing the
  * page by one, the select setting the size and starting at page 1, and leaves out a value equal
- * to its default (page 1, the action's default size).
+ * to its default (page 1, the action's default size). The size select applies its choice at
+ * once, so it holds no input: its element carries `holdsInput={false}`.
  */
 
 /** The search parameter that names the page a paged list shows, from 1. */

@@ -834,7 +834,7 @@
                     "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
                   },
                   "paged": {
-                    "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+                    "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`, which holds no input: its element carries `holdsInput={false}`.",
                     "type": "boolean",
                     "const": true
                   }

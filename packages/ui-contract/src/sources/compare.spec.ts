@@ -110,6 +110,53 @@ const withColours = (colours: Collected['colours']): Collected[] => [
   }),
 ]
 
+/** The contract with a paged list: a list that derives the range, the two links and the size select. */
+const WITH_PAGED_LIST: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.list': {
+        kind: 'list',
+        derived: ['range', 'previous-link', 'next-link', 'size-select'],
+      },
+    },
+  })),
+}
+
+/** The sources that render the paged list and derive its parts, with `flags` as the flags they carry. */
+const withPagedList = (
+  flags: Partial<Pick<Collected, 'inputs' | 'colours'>>,
+  suffixes: readonly string[] = ['size-select'],
+): Collected[] => [
+  ...agreeing(),
+  source('list.tsx', {
+    literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+    derived: suffixes.map((suffix, index) => ({ suffix, base: 'sample.list', line: 5 + index })),
+    ...flags,
+  }),
+]
+
+/** The vocabulary with the parts a paged list derives. */
+const PAGED_VOCABULARY = {
+  ...vocabulary,
+  suffixes: {
+    ...vocabulary.suffixes,
+    ...Object.fromEntries(
+      ['range', 'previous-link', 'next-link', 'size-select'].map((suffix) => [
+        suffix,
+        `the ${suffix}`,
+      ]),
+    ),
+  },
+}
+
+const pagedProblems = (
+  collected: readonly Collected[],
+  screens: ScreensFile = WITH_PAGED_LIST,
+): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY).map(formatProblem)
+
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
     expect(printed(agreeing())).toEqual([])
@@ -258,6 +305,92 @@ describe('compareWithContract', () => {
     ).toEqual([])
   })
 
+  it("lets holdsInput={false} sit on a paged list's size select, which holds no input by its facet", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([])
+  })
+  it("reports holdsInput={true} on a paged list's size select as the default", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: true, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'list.tsx:5: "sample.list.size-select": holdsInput={true} is the default; leave it out',
+    ])
+  })
+  it("reports marksState on a paged list's size select, a select that holds no input", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          colours: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', marksState: false, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'list.tsx:5: "sample.list.size-select" is a select, not a field that holds input; only such a field shows a state colour',
+    ])
+  })
+  it('reports a flag on a derived part that is not a size select: it is no field', () => {
+    expect(
+      pagedProblems(
+        withPagedList(
+          {
+            inputs: [
+              { anchor: 'sample.list.next-link', base: 'sample.list', holdsInput: false, line: 6 },
+              { anchor: 'sample.list.range', base: 'sample.list', holdsInput: true, line: 7 },
+            ],
+            colours: [
+              { anchor: 'sample.list.next-link', base: 'sample.list', marksState: false, line: 6 },
+            ],
+          },
+          ['size-select', 'next-link', 'range'],
+        ),
+      ),
+    ).toEqual([
+      'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field; only a field holds input',
+      'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field that holds input; only such a field shows a state colour',
+      'list.tsx:7: "sample.list.range" is derived from "sample.list", not a field; only a field holds input',
+    ])
+  })
+  it('reports a flag on a size select of a list that is not paged', () => {
+    expect(
+      pagedProblems(
+        [
+          ...agreeing(),
+          source('select.tsx', {
+            derived: [{ suffix: 'size-select', base: 'sample.mode-select', line: 5 }],
+            inputs: [
+              {
+                anchor: 'sample.mode-select.size-select',
+                base: 'sample.mode-select',
+                holdsInput: false,
+                line: 5,
+              },
+            ],
+          }),
+        ],
+        SCREENS,
+      ),
+    ).toEqual([
+      'select.tsx:5: testIdFor("sample.mode-select", "size-select"): "sample.mode-select" does not list "size-select" in its derived',
+      'select.tsx:5: "sample.mode-select.size-select" is derived from "sample.mode-select", not a field; only a field holds input',
+    ])
+  })
+  it("does not want the opt-out on a paged list's size select rendered without the prop", () => {
+    expect(pagedProblems(withPagedList({}))).toEqual([])
+  })
   it('reports holdsInput on an anchor that is not a field', () => {
     expect(
       compareWithContract(

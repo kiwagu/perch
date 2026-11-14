@@ -145,9 +145,11 @@ code and the tests follow; the checks hold them to the contract.
    mutations' successes (an action of the model, or a platform action the platform's `toasts`
    lists) are the exception: the rule row `<object>-<verb>ed` stands for them, and only their
    words are written, in the frame's map. A field holds input by itself; only a
-   field whose own change applies it at once (a select that runs its action with itself,
-   or moves its screen's search with itself) carries `holdsInput={false}` in the JSX, and
-   the contract derives which. A field whose state
+   field whose own change applies it at once, and nothing else applies it (a select that runs
+   its action with itself, or moves its screen's search with itself, and no other control
+   does), carries `holdsInput={false}` in the JSX, and the contract derives which. A paged
+   list's size select holds no input by its facet: its element carries `holdsInput={false}`
+   beside `testIdFor(<list>, 'size-select')`. A field whose state
    colour the contract turns off (`marksState: false`, for fresh input such as an entry form)
    carries `marksState={false}` in the JSX; the flag never goes on a form. A field that holds a
    secret says `secret: true`, and a password input that shows what it holds on demand lists

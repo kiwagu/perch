@@ -316,10 +316,11 @@ for Bun.
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
-    element that carries a field's anchor as a literal; a prop passed through is let by, any
-    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`), its `colours`
-    (`marksState`, read like `holdsInput` by the same reader, a wrapper that carries the anchor as
-    `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
+    element that carries a field's anchor as a literal or as `testIdFor()` of two literals, an
+    entry of the latter with its `base`, as a paged list's size select is built; a prop passed
+    through is let by, any other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`),
+    its `colours` (`marksState`, read like `holdsInput` by the same reader, a wrapper that
+    carries the anchor as `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
     at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
@@ -333,8 +334,12 @@ for Bun.
     `{false}` on a field the contract says holds no input, never on another kind, and on every
     such field rendered (except with `ahead`), and a `marksState` written only as `{false}` on
     a field the contract says drops its state colour, never on a kind that is not an `input`, a
-    `textarea` or a `select` that holds input (a form included), and on every such field
-    rendered (except with `ahead`).
+    `textarea` or a `select` that holds input (a form, a paged list's size select included), and
+    on every such field rendered (except with `ahead`). The opt-outs sit in `sources/opt-outs.ts`:
+    a paged list's size select, `<list>.size-select` of a declared anchor whose `derived`
+    holds `size-select`, is a select that holds no input by its facet, so a `holdsInput={false}`
+    on it is no problem (it is not required on a rendered one), and a flag of a part a
+    `testIdFor()` derives that is no size select is a problem.
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
@@ -551,7 +556,8 @@ for Bun.
   `item` a control is in, which a navigate's `{ item }` search takes (it throws outside such an
   entry or for one without an id). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
   search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
-  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
+  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`; the size select
+  applies its choice at once, so it holds no input),
   `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to
   `0` when it shows none, and the page before and after where there is one),
   `searchKeysOf(source)` (the search parameters a source reads, which read it again when one

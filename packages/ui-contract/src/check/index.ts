@@ -10,6 +10,7 @@ export {
   codesOf,
   type DeclaredAnchor,
   declaredAnchors,
+  type InScreens,
   locate,
   modelTargetOf,
   own,

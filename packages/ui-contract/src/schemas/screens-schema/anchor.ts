@@ -103,7 +103,7 @@ export const sourceSchema = z
           .literal(true)
           .optional()
           .describe(
-            "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+            "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`, which holds no input: its element carries `holdsInput={false}`.",
           ),
       })
       .describe(
