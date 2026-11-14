@@ -167,6 +167,17 @@ container state.
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
 | `met` | each item of the composite `password-rules` | the password typed keeps this rule |
 
+## Field states
+
+The `data-state` of a field: an `input`, a `textarea` or a `select`. A field carries no
+`data-state` otherwise. These states belong only to fields that hold input. Only a field
+bound to a model field can carry `saved`.
+
+| State | Meaning |
+|---|---|
+| `unsaved` | the field holds input no save has taken |
+| `saved` | a save stored what the field shows, while the field stays on the screen |
+
 ## Codes
 
 The `data-code` values. Each code is used by at least one anchor of the screen files, and a

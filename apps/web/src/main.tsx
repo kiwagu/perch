@@ -40,6 +40,7 @@ import { rendersIn } from './platform/screen-renders'
 import { ServicesProvider } from './platform/services'
 import { SettingsWritesContext } from './platform/settings-writes'
 import { useSettledReport } from './platform/settled-report'
+import { storesValue } from './platform/stored-fields'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -67,7 +68,7 @@ function Layout() {
   return (
     <NoticeProvider texts={NOTICE_TEXTS}>
       <ToastProvider texts={TOAST_TEXTS}>
-        <UnsavedInputScope>
+        <UnsavedInputScope stores={storesValue}>
           <LeaveGuard>
             <ConfirmGuard>
               <ShellContainer>
