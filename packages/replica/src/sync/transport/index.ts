@@ -6,7 +6,12 @@ export type {
   RegionChannel,
   SyncTransport,
 } from './port'
-export { RECONNECT_DELAYS_MS, reconnectDelay } from './reconnect-delay'
+export {
+  NETWORK_BACK_DELAY_MS,
+  networkBackDelay,
+  RECONNECT_STEPS_MS,
+  reconnectDelay,
+} from './reconnect-delay'
 export {
   type DeviceNetwork,
   type SocketLike,

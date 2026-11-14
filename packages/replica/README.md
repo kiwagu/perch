@@ -215,14 +215,18 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Its parts:
   `WebSocketTransport` (hello with the session token its `credentials` give, `{ token }`, and
   the `device` it is given, ending as `unauthorized` when they give none; up after the
-  welcome, reconnect after `reconnectDelay(attempt)`, the delay of `RECONNECT_DELAYS_MS` for the
-  attempt (the last one repeating; the load test uses it too), also when no welcome came within
-  `WELCOME_TIMEOUT_MS` of the socket opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
-  the first delay, and leaves one not welcomed yet to the hello it says; with a `network`
+  welcome, reconnect after `reconnectDelay(attempt, random)`, a delay drawn uniformly from 0 up
+  to the step of `RECONNECT_STEPS_MS` for the attempt (full jitter, so the devices a gateway
+  restart drops do not come back at the same instants; the last step repeating; `random`, the
+  option that gives each draw as a number in [0, 1), is `Math.random` by default; the load test
+  draws its delays the same way), also when no welcome came within `WELCOME_TIMEOUT_MS` of the
+  socket opening, and on `reconnect()`, which gives a welcomed connection up and connects again
+  from the first step, and leaves one not welcomed yet to the hello it says; with a `network`
   (`DeviceNetwork`: `online()` and `onOnlineChange`, the platform's word on the device's
   network), heard from `start` until a stop or an ending, the network coming back starts the
-  delays over and connects a reconnect waiting for its delay at once, leaving a socket open or
-  opening to its welcome or its close; the memberships of the
+  delays over and has a reconnect waiting for its delay connect after `networkBackDelay(random)`,
+  a draw from 0 up to `NETWORK_BACK_DELAY_MS`, unless it is due sooner, which it keeps, leaving a
+  socket open or opening to its welcome or its close; the memberships of the
   welcome and of each `memberships` message to `onMemberships`, the platform roles of each
   welcome to `onRoles` after them, both before any listener hears the message, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out

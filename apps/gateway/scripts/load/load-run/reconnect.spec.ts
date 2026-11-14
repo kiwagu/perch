@@ -1,16 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 import { CLOSE } from '@workspace/replica/protocol'
+import { reconnectDelay } from '@workspace/replica/sync'
 
 import { ClosedBeforeWelcome } from '../closed-before-welcome'
 
 import { type ReconnectOptions, reconnect } from './reconnect'
 
-// The loop's default delay is the replica's own `reconnectDelay`: whatever it answers, the
-// loop waits it, which a stand-in with a schedule of its own shows.
+// The loop's default delay is the replica's own `reconnectDelay`, drawn from `Math.random`:
+// whatever it answers, the loop waits it, which a stand-in with a schedule of its own shows.
 vi.mock('@workspace/replica/sync', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@workspace/replica/sync')>()),
-  reconnectDelay: vi.fn((attempt: number) => 7 * (attempt + 1)),
+  reconnectDelay: vi.fn((attempt: number, _random: () => number) => 7 * (attempt + 1)),
 }))
 
 const URL = 'ws://127.0.0.1:1/sync'
@@ -103,7 +104,9 @@ describe('reconnect', () => {
     expect(failed).toEqual([refused, closed])
   })
 
-  it('waits the delay of the replica when it is given none', async () => {
+  it('waits the delay of the replica, drawn from Math.random, when it is given none', async () => {
+    vi.mocked(reconnectDelay).mockClear()
+
     const startedAt = Date.now()
     const { open, calls } = opens([new Error('refused')])
     const done = reconnect(open, {
@@ -116,6 +119,10 @@ describe('reconnect', () => {
     await done
 
     expect(calls.map((at) => at - startedAt)).toEqual([7, 21])
+    expect(vi.mocked(reconnectDelay).mock.calls).toEqual([
+      [0, Math.random],
+      [1, Math.random],
+    ])
   })
 
   it('stops for good on a close the gateway ends a device with, and counts no failed hello for it', async () => {

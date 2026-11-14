@@ -36,7 +36,8 @@ export interface ReconnectOptions {
  * rejection counts one attempt more and the loop waits again, until an open is welcomed. An
  * open that rejected with a close code `endingOf` maps to an ending stops the loop for good.
  * A welcome that comes once the signal has aborted or `until` has passed is too late: the loop
- * closes what it opened and stops. The delay is the replica's own `reconnectDelay`.
+ * closes what it opened and stops. The delay is the replica's own `reconnectDelay`, drawn from
+ * `Math.random` as the transport draws it.
  */
 export async function reconnect<T extends { close: () => void }>(
   open: (signal: AbortSignal) => Promise<T>,
@@ -44,7 +45,7 @@ export async function reconnect<T extends { close: () => void }>(
     signal,
     until,
     onFailed,
-    delay = reconnectDelay,
+    delay = (attempt) => reconnectDelay(attempt, Math.random),
     now = () => performance.now(),
   }: ReconnectOptions,
 ): Promise<Reconnected<T>> {

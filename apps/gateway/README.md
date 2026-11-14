@@ -222,10 +222,11 @@ child gateway with SIGTERM, which closes every socket; as soon as that process h
 starts a new gateway on the same port and notes when its `/health` first answers 200 (polled every
 50 ms). The new gateway is the one the teardown and the signal handlers stop from then on, and one
 that does not start fails the run. A device whose socket closes is neither retired nor counted
-in `closes`: it reconnects as the client's `WebSocketTransport` does, with the replica's own
-`reconnectDelay` (not a copy of its schedule) before each attempt, counted from 0 at the close, and
-the transport's `WELCOME_TIMEOUT_MS` for each open. An open that is refused, closed before the
-welcome or not welcomed in time is a failed hello, and the next attempt waits the next delay; a
+in `closes`: it reconnects as the client's `WebSocketTransport` does, with the delays drawn as the
+transport draws them (the replica's own `reconnectDelay` over `Math.random`, not a copy of its
+schedule) before each attempt, counted from 0 at the close, and the transport's
+`WELCOME_TIMEOUT_MS` for each open. An open that is refused, closed before the welcome or not
+welcomed in time is a failed hello, and the next attempt waits a delay drawn from the next step; a
 close that `endingOf` maps to an ending (a revoked or signed-out device, for one) stops the
 device's loop for good and counts the device as `ended`. On its welcome a device subscribes its
 region again with its copy's version, as the engine's first subscription of a connection does,
