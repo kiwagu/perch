@@ -133,7 +133,11 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
       </CardHeader>
       <CardContent>
         {props.renders('user.reset-password.form') ? (
-          <Form onSubmit={() => props.onSubmit(values)} data-testid="user.reset-password.form">
+          <Form
+            onSubmit={() => props.onSubmit(values)}
+            marksState={false}
+            data-testid="user.reset-password.form"
+          >
             <FieldGroup>
               {aboveForm}
               <Field data-invalid={error?.field === 'password' ? true : undefined}>

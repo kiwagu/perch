@@ -97,7 +97,11 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
             </Alert>
           ) : null}
           {props.renders('user.verify-email.form') ? (
-            <Form onSubmit={() => props.onResend(email)} data-testid="user.verify-email.form">
+            <Form
+              onSubmit={() => props.onResend(email)}
+              marksState={false}
+              data-testid="user.verify-email.form"
+            >
               <FieldGroup>
                 <Field>
                   <FieldLabel htmlFor={emailId}>{t('user.verify-email.email')}</FieldLabel>
