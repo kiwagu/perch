@@ -187,7 +187,9 @@ for Bun.
     used, no choice values for a
     `visibility-button`, whose values its suffix defines, the platform's composites and the
     rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names, `secret` on a field alone, a
+    never named like a derived one, entry and names, `secret` on a field alone, `marksState`
+    (`false`, the field shows no state colour) on an `input`, a `textarea` or a `select` that
+    holds input alone, a
     `visibility-button` derived by a secret `input` alone, `ranked` on a message of two codes
     or more alone, each listed once), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
@@ -312,7 +314,9 @@ for Bun.
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
     element that carries a field's anchor as a literal; a prop passed through is let by, any
-    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`) and an anchor built
+    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`), its `colours`
+    (`marksState`, read like `holdsInput` by the same reader, a wrapper that carries the anchor as
+    `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
     at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
@@ -322,9 +326,12 @@ for Bun.
     contract (of the base itself when it is a literal), so a `visibility-button` no input
     declares is never rendered, and every code a code of the contract
     (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
-    codes the loader derived), and a `holdsInput` written only as
+    codes the loader derived), a `holdsInput` written only as
     `{false}` on a field the contract says holds no input, never on another kind, and on every
-    such field rendered (except with `ahead`).
+    such field rendered (except with `ahead`), and a `marksState` written only as `{false}` on
+    a field the contract says drops its state colour, never on a kind that is not an `input`, a
+    `textarea` or a `select` that holds input (a form included), and on every such field
+    rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
@@ -387,7 +394,8 @@ for Bun.
     `fieldStates` of a field (`fieldStatesOf`: only an `input`, `textarea` or `select` that holds
     input has any, `unsaved`, and `saved` too when its binding is a model field; each state
     must be declared in the vocabulary's "Field states" section, so none when it is absent;
-    listed only when not empty), a ranked
+    listed only when not empty), the `marksState: false` of a field that writes it (the app
+    leaves its border uncoloured; its `fieldStates` still hold), a ranked
     message's `ranked`, a secret
     input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
     and the model document.
@@ -417,7 +425,8 @@ for Bun.
     them), the codes as `<anchor> <code>`, the states as `<anchor> <state>`, the roles each is
     shown to as `<anchor> <role>` and an error's
     fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
-    as `<anchor> holds input`, the controls that ask before they leave their screen as
+    as `<anchor> holds input`, the fields that drop their state colour as
+    `<anchor> shows no state colour`, the controls that ask before they leave their screen as
     `<anchor> leaves losing <field>, <field>`, and the messages that rank their codes as
     `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
     who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added

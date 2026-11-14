@@ -38,6 +38,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   derived: [],
   codes: [],
   inputs: [],
+  colours: [],
   problems: [],
   ...part,
 })
@@ -79,6 +80,33 @@ const withInputs = (inputs: Collected['inputs']): Collected[] => [
       { anchor: 'sample.page.kind-select', form: 'prop', line: 4 },
     ],
     inputs,
+  }),
+]
+
+/** The contract with an input that shows its state colour, one that drops it, and a form. */
+const WITH_COLOURS: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.form': { kind: 'form' },
+      'sample.form.name-input': { kind: 'input', holdsInput: true },
+      'sample.form.code-input': { kind: 'input', holdsInput: true, marksState: false },
+    },
+  })),
+}
+
+/** The sources that render the form and its two inputs, with `colours` as their marksState. */
+const withColours = (colours: Collected['colours']): Collected[] => [
+  ...agreeing(),
+  source('x.tsx', {
+    literals: [
+      { anchor: 'sample.form.name-input', form: 'attribute', line: 3 },
+      { anchor: 'sample.form.code-input', form: 'attribute', line: 4 },
+      { anchor: 'sample.form', form: 'attribute', line: 5 },
+    ],
+    colours,
   }),
 ]
 
@@ -142,6 +170,79 @@ describe('compareWithContract', () => {
         vocabulary,
       ),
     ).toEqual([])
+  })
+  it("holds a field's marksState to the contract", () => {
+    expect(
+      compareWithContract(
+        withColours([
+          { anchor: 'sample.form.name-input', marksState: false, line: 3 },
+          { anchor: 'sample.form.code-input', marksState: true, line: 4 },
+          { anchor: 'sample.form', marksState: false, line: 5 },
+        ]),
+        WITH_COLOURS,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["sample.form.code-input"]: shows no state colour by the contract; its element carries marksState={false}',
+      'x.tsx:3: "sample.form.name-input" shows its state colour by the contract; drop marksState={false}',
+      'x.tsx:4: "sample.form.code-input": marksState={true} is the default; leave it out',
+      'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
+    ])
+    expect(
+      compareWithContract(
+        withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
+        WITH_COLOURS,
+        vocabulary,
+      ),
+    ).toEqual([])
+  })
+  it('lets the contract run ahead of a field that drops its state colour', () => {
+    expect(
+      compareWithContract(withColours([]), WITH_COLOURS, vocabulary).map(formatProblem),
+    ).toEqual([
+      'contract/domain/screens/__root.yaml:1: anchors["sample.form.code-input"]: shows no state colour by the contract; its element carries marksState={false}',
+    ])
+    expect(compareWithContract(withColours([]), WITH_COLOURS, vocabulary, { ahead: true })).toEqual(
+      [],
+    )
+  })
+  it('reports marksState on a field that holds no input, and on a kind the kit does not colour', () => {
+    const screens = structuredClone(WITH_COLOURS)
+
+    Object.assign(screens.screens[0]?.anchors ?? {}, {
+      'sample.page.kind-select': { kind: 'select', holdsInput: false },
+      'sample.form.agree-checkbox': { kind: 'checkbox', holdsInput: true },
+    })
+
+    const rendered = (anchor: string, line: number): Collected['literals'][number] => ({
+      anchor,
+      form: 'attribute',
+      line,
+    })
+
+    expect(
+      compareWithContract(
+        [
+          ...withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
+          source('y.tsx', {
+            literals: [
+              rendered('sample.page.kind-select', 3),
+              rendered('sample.form.agree-checkbox', 4),
+            ],
+            inputs: [{ anchor: 'sample.page.kind-select', holdsInput: false, line: 3 }],
+            colours: [
+              { anchor: 'sample.page.kind-select', marksState: false, line: 3 },
+              { anchor: 'sample.form.agree-checkbox', marksState: false, line: 4 },
+            ],
+          }),
+        ],
+        screens,
+        vocabulary,
+      ).map(formatProblem),
+    ).toEqual([
+      'y.tsx:3: "sample.page.kind-select" is a select, not a field that holds input; only such a field shows a state colour',
+      'y.tsx:4: "sample.form.agree-checkbox" is a checkbox, not a field that holds input; only such a field shows a state colour',
+    ])
   })
   it('wants the opt-out on the element of a field that holds no input, once it is rendered', () => {
     expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary).map(formatProblem)).toEqual(

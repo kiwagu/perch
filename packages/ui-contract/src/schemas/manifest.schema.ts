@@ -193,6 +193,12 @@ const idSchema = z
       .describe(
         'The field holds input: the app is to ask before a leave that would lose what is typed into it.',
       ),
+    marksState: z
+      .literal(false)
+      .optional()
+      .describe(
+        'The field shows no state colour: the app leaves its border uncoloured; its `fieldStates` still hold.',
+      ),
     secret: z
       .literal(true)
       .optional()
