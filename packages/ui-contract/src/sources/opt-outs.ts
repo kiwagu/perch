@@ -46,6 +46,10 @@ const sizeSelectsOf = (
       .map(({ anchor, at: path }) => [testIdFor(anchor, SIZE_SELECT), { path }]),
   )
 
+/** The base of a part is declared when an anchor of the contract carries that name. */
+const isDeclared = (contract: readonly DeclaredAnchor[], base: string): boolean =>
+  contract.some(({ anchor }) => anchor === base)
+
 function holdsInputProblems({
   collected,
   contract,
@@ -67,6 +71,11 @@ function holdsInputProblems({
     inputs.flatMap(({ anchor, base, holdsInput, line }) => {
       const kind = kinds.get(anchor)
       const place = { file, line }
+
+      // An undeclared base is the parts check's problem: no opt-out problem on top of it.
+      if (base !== undefined && !isDeclared(contract, base)) {
+        return []
+      }
 
       if (base !== undefined && !sizeSelects.has(anchor)) {
         return [
@@ -151,6 +160,11 @@ function marksStateProblems({
     colours.flatMap(({ anchor, base, marksState, line }) => {
       const colour = shown.get(anchor)
       const place = { file, line }
+
+      // An undeclared base is the parts check's problem: no opt-out problem on top of it.
+      if (base !== undefined && !isDeclared(contract, base)) {
+        return []
+      }
 
       if (base !== undefined && !sizeSelects.has(anchor)) {
         return [

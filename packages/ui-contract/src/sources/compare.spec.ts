@@ -342,6 +342,48 @@ describe('compareWithContract', () => {
       'list.tsx:5: "sample.list.size-select" is a select, not a field that holds input; only such a field shows a state colour',
     ])
   })
+  it('leaves an undeclared base to the parts check, with holdsInput={false} on its size select', () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'size-select', base: 'missing.list', line: 5 }],
+          inputs: [
+            {
+              anchor: 'missing.list.size-select',
+              base: 'missing.list',
+              holdsInput: false,
+              line: 5,
+            },
+          ],
+        }),
+      ]),
+    ).toEqual([
+      'list.tsx:5: testIdFor("missing.list", "size-select"): "missing.list" is not in contract/domain/screens',
+    ])
+  })
+  it('leaves an undeclared base to the parts check, with marksState={false} on its size select', () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'size-select', base: 'missing.list', line: 5 }],
+          colours: [
+            {
+              anchor: 'missing.list.size-select',
+              base: 'missing.list',
+              marksState: false,
+              line: 5,
+            },
+          ],
+        }),
+      ]),
+    ).toEqual([
+      'list.tsx:5: testIdFor("missing.list", "size-select"): "missing.list" is not in contract/domain/screens',
+    ])
+  })
   it('reports a flag on a derived part that is not a size select: it is no field', () => {
     expect(
       pagedProblems(
