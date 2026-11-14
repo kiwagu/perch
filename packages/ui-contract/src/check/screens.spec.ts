@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatProblem } from '../files'
+import { formatProblem, withDerivedInputs } from '../files'
 
-import { anchorIn, sampleContract, screenIn } from './contract.fixture'
+import { anchorIn, flowStateIn, sampleContract, screenIn } from './contract.fixture'
 import { screensProblems } from './screens'
 
 const printed = (contract = sampleContract()): string[] =>
@@ -134,6 +134,31 @@ describe('screensProblems', () => {
     expect(printed(contract)).toEqual([
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].marksState: only a field that holds input shows a state colour',
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.agree-checkbox"].marksState: only a field that holds input shows a state colour',
+    ])
+  })
+  it("refuses a dropped state colour on a select whose own change moves its screen's search", () => {
+    const contract = sampleContract()
+    const sample = screenIn(contract, 'sample')
+    const editing = flowStateIn(contract, 'editing')
+
+    editing.on = {
+      ...editing.on,
+      'sample.mode-select': {
+        target: 'editing',
+        actions: [
+          {
+            type: 'navigate',
+            params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
+          },
+        ],
+      },
+    }
+    sample.anchors = withDerivedInputs(sample).anchors
+    anchorIn(contract, 'sample.mode-select').marksState = false
+
+    expect(anchorIn(contract, 'sample.mode-select').holdsInput).toBe(false)
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.mode-select"].marksState: only a field that holds input shows a state colour',
     ])
   })
   it('takes a visibility-button on a secret input and refuses it on any other kind', () => {

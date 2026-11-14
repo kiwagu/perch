@@ -11,6 +11,8 @@ import { fail } from './state'
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../../..')
 const HEALTH_TIMEOUT_MS = 30_000
+/** The gap between health checks: the restart step reads the first 200 off it. */
+const HEALTH_POLL_MS = 50
 const STOP_GRACE_MS = 5_000
 
 /** Whether something answers `/health` of `args.gatewayPort` with 200. */
@@ -55,7 +57,7 @@ export async function startGateway(
 
     if (await healthy(args)) return gateway
 
-    await sleep(250)
+    await sleep(HEALTH_POLL_MS)
   }
 
   gateway.kill('SIGTERM')

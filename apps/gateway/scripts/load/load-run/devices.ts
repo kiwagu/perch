@@ -10,10 +10,16 @@ import type { Step } from '../metrics'
 
 import { organise, signUp } from './accounts'
 import { inParallel } from './pacing'
+import { awaitSnapshot, simHandlers } from './sim-handlers'
 import { fail, type Run, type Sim } from './state'
 
 const SNAPSHOT_TIMEOUT_MS = 30_000
 const HANDSHAKE_TIMEOUT_MS = 30_000
+
+/** The address of the sync socket of the gateway of `run`. */
+export function syncUrl(run: Run): string {
+  return `${run.base.replace(/^http/, 'ws')}/sync`
+}
 
 /**
  * Opens the device of an account, subscribes it to its region and waits for the snapshot.
@@ -38,83 +44,19 @@ async function openSim(
     batch: 0,
     timer: undefined,
   }
-  const { counters, book } = run
-  let snapshotted = false
-  let snapshot: { resolve: () => void; reject: (cause: Error) => void } | undefined
-  const waiting = new Promise<void>((resolve, reject) => {
-    snapshot = { resolve, reject }
-  })
-
-  // The timer can fire before the open resolves and the wait begins: no unhandled rejection.
-  waiting.catch(() => undefined)
-
+  const { opening, waiting } = awaitSnapshot()
   let timeout: ReturnType<typeof setTimeout> | undefined
-
-  /** Counts a problem of an open device, or fails the wait for the snapshot. */
-  const trouble = (text: string): void => {
-    if (snapshotted) counters.errors++
-    else snapshot?.reject(new Error(text))
-  }
 
   try {
     const { device } = await LoadDevice.open(
-      `${run.base.replace(/^http/, 'ws')}/sync`,
+      syncUrl(run),
       account.token,
-      {
-        onUpdates: (message, at) => {
-          // The arrival is the fan-out's end; a failed import is an error of its own.
-          if (!message.snapshot) book.received(message.region, message.head, at)
-
-          sim.imports = sim.imports.then(() =>
-            sim.doc.importRemote(message.bytes, message.head).match(
-              () => {
-                if (message.snapshot) {
-                  snapshotted = true
-                  snapshot?.resolve()
-                }
-              },
-              (error) => trouble(`import failed: ${error.code} ${error.message}`),
-            ),
-          )
-          // A throw must not break the chain: the next updates still import.
-          sim.imports = sim.imports.catch(() => {
-            counters.errors++
-          })
-        },
-        onAck: (message, at) => {
-          book.acked(sim.label, message.batch, message.region, message.head, at)
-
-          if (message.compact) {
-            counters.asked++
-            sim.device?.compact(
-              sim.region,
-              message.head,
-              new Uint8Array(sim.doc.doc.export({ mode: 'snapshot' })),
-            )
-          }
-        },
-        onCompaction: (message) => {
-          if (message.outcome === 'accepted') counters.accepted++
-          else counters.other++
-        },
-        onReject: (message) => {
-          counters.errors++
-          counters.firstReject ??= `${message.reason} (${message.detail})`
-        },
-        onError: trouble,
-        onClose: (code) => {
-          if (!snapshotted) trouble(`closed with ${code} before the snapshot`)
-          else if (!run.closing) {
-            counters.closes++
-            retire(run, sim)
-          }
-        },
-      },
+      simHandlers(run, sim, opening),
       { timeoutMs: HANDSHAKE_TIMEOUT_MS, device: account.device },
     )
 
     timeout = setTimeout(
-      () => snapshot?.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
+      () => opening.reject(new Error(`no snapshot within ${SNAPSHOT_TIMEOUT_MS / 1000} s`)),
       SNAPSHOT_TIMEOUT_MS,
     )
 
@@ -125,7 +67,7 @@ async function openSim(
 
     return sim
   } catch (cause) {
-    counters.errors++
+    run.counters.errors++
     console.error(
       `${sim.label}: dropped: ${cause instanceof Error ? cause.message : String(cause)}`,
     )
@@ -136,15 +78,6 @@ async function openSim(
   } finally {
     clearTimeout(timeout)
   }
-}
-
-/** Takes a closed device out of the live counts and stops its writing. */
-function retire(run: Run, sim: Sim): void {
-  if (sim.retired) return
-
-  sim.retired = true
-  clearTimeout(sim.timer)
-  run.live.set(sim.region, (run.live.get(sim.region) ?? 1) - 1)
 }
 
 /** Appends one note to the sim's region and pushes it. */

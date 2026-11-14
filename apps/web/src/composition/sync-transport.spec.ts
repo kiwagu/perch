@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
@@ -72,6 +72,8 @@ afterEach(() => {
   for (const transport of started.splice(0)) {
     transport.stop()
   }
+
+  vi.restoreAllMocks()
 })
 
 /**
@@ -190,9 +192,13 @@ describe('syncTransport: the channel the browser and the seed open', () => {
     expect(heard).toEqual(['banned'])
   })
 
-  it("hears the device's network: a reconnect waiting connects at once once it is back", () => {
+  it("hears the device's network: a reconnect waiting connects after the short delay of the network back", async () => {
+    // The browser gives the transport no random source, so it draws from Math.random, taken when
+    // the transport is built: the close draws 0.9 of the first step, 900 ms, and the network back
+    // draws 0, which comes sooner.
+    const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0.9).mockReturnValueOnce(0)
     const listeners = new Set<() => void>()
-    const { sockets, opened } = annChannel({
+    const { clock, sockets, opened } = annChannel({
       network: {
         online: () => true,
         onOnlineChange: (listener) => {
@@ -209,6 +215,11 @@ describe('syncTransport: the channel the browser and the seed open', () => {
       listener()
     }
 
+    expect(sockets).toHaveLength(1)
+
+    await clock.advance(0)
+
     expect(sockets).toHaveLength(2)
+    expect(random).toHaveBeenCalledTimes(2)
   })
 })

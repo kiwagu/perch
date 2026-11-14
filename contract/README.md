@@ -483,7 +483,8 @@ not hold the last entry. `<list>.size-select`: a select of the page size, shown 
 list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value`
 and are the controls of `size`, which therefore writes no `x-perch` (the check derives them and
 refuses one written); choosing one moves to the same route and search with that `size` and
-page 1. A part leaves out
+page 1, at once, so the select holds no input and its element carries `holdsInput={false}`
+(see "What a screen leaves out"). A part leaves out
 of the address a value equal to its default (page 1, the action's default size), as every link
 of the app does. A range or a link that does not apply is absent from the page, never
 disabled, so a state that lists the list in `meta.renders` does not require them; the size
@@ -765,17 +766,23 @@ out, and the loader derives it, the same way every time:
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
   `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a
   `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask
-  before such a leave. A field one of whose bindings runs an action that takes the field
-  itself as a parameter, an action no other anchor of its screen runs with it (the language
-  select, the organisation select), applies at once and holds none; a field whose action a
-  submit button also runs with it (the sign-in email) holds input. The loader sets
-  `holdsInput` on every field; a written value wins. The manifest carries it, and
+  before such a leave. A field whose own change applies it at once, and nothing else applies
+  it, holds none: one of its bindings runs an action that takes the field itself as a
+  parameter, an action no other anchor of its screen runs with it (the language select, the
+  organisation select), or its own event moves its screen's search with it, a `navigate` to a
+  path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's
+  event does (a filter applied on change). A field whose action a submit button also runs
+  with it (the sign-in email), or whose search a search button moves with it (the search box
+  of the accounts), holds input, and so does one whose event moves to another screen carrying
+  itself: that leaves rather than moves the search. A paged list's derived `size-select` is
+  such a field by its facet: its choice sets the route's `size` at once. The loader sets
+  `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and
   `contract:diff` lists the fields that start or stop holding input.
 - **Which states a field carries.** A field of kind `input`, `textarea` or `select` that holds
   input carries `data-state` `unsaved` while it holds input no save has taken. One whose
   binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored
   what it shows, for as long as it stays on the screen; a reload or leaving the screen clears
-  it. A field whose own change runs its action (`holdsInput: false`) carries no state. The
+  it. A field that holds no input (`holdsInput: false`) carries no state. The
   states come from the vocabulary's "Field states" section, and a vocabulary without it
   declares none. The manifest lists each field's states under `fieldStates` in `ids`, and the
   table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is
@@ -1098,7 +1105,9 @@ Four derived parts belong to a paged list (see "Reading a screen file", `source`
 list whose source says `paged: true`, and a screen file never writes them. The options of the
 size select, `<list>.size-select.option`, carry the action's page sizes as `data-value`, the
 values of the action and never rows of "Choice values", and choose the route's `size`: the
-check knows them, so the binding writes no `x-perch` on `size`.
+check knows them, so the binding writes no `x-perch` on `size`. The size select itself holds no
+input, by its facet: the sources write `holdsInput={false}` beside
+`testIdFor(<list>, 'size-select')`.
 
 One literal per rendered name:
 
@@ -1436,7 +1445,12 @@ gap is fixed in the contract files first, never worked around in a test.
   `holdsInput={false}` on the element with its anchor; a field that holds input carries
   nothing (`holdsInput={true}` is the default and is reported, and so is a
   `holdsInput={false}` on a field that holds input or on an anchor that is not a field), and a
-  rendered field that holds no input without its opt-out is reported at its anchor. On a
+  rendered field that holds no input without its opt-out is reported at its anchor. A flag's
+  anchor is a literal or `testIdFor()` of two literals, so a paged list's size select, which
+  holds no input by its facet, may carry `holdsInput={false}` (`{true}` there is reported as
+  the default, a `marksState` as one on a select that holds no input, and either flag on any
+  other part a `testIdFor()` derives as one on no field); the check does not require it on a
+  rendered size select. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes, and so does a
   field's opt-out not written yet); a commit on

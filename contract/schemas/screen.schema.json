@@ -686,7 +686,7 @@
             "type": "boolean"
           },
           "holdsInput": {
-            "description": "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.",
+            "description": "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one whose own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it, or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes the field) and no other anchor's event moves there with it. A field a submit button runs the action with, or a search button moves the search with, holds input.",
             "type": "boolean"
           },
           "marksState": {
@@ -834,7 +834,7 @@
                     "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
                   },
                   "paged": {
-                    "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+                    "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`, which holds no input: its element carries `holdsInput={false}`.",
                     "type": "boolean",
                     "const": true
                   }
