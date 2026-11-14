@@ -5,13 +5,15 @@ import { type Capture, type FormScope, FormScopeContext } from '@workspace/ui/un
 export interface FormProps extends Omit<ComponentProps<'form'>, 'onSubmit'> {
   /** Runs the form's action; `true` once it saved what its fields held when it started. */
   readonly onSubmit: () => Promise<boolean> | boolean
+  /** Whether its fields mark their state (true when left out); a field's own say wins. */
+  readonly marksState?: boolean | undefined
 }
 
 /**
  * A form whose fields know when a submit saved them: each field holds no unsaved input once the
  * value it held when the submit started is saved. The default submit is always prevented.
  */
-function Form({ onSubmit, ...props }: FormProps) {
+function Form({ onSubmit, marksState = true, ...props }: FormProps) {
   const fields = useRef(new Set<Capture>())
   const scope = useMemo<FormScope>(
     () => ({
@@ -22,8 +24,9 @@ function Form({ onSubmit, ...props }: FormProps) {
           fields.current.delete(capture)
         }
       },
+      marksState,
     }),
-    [],
+    [marksState],
   )
   const submit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()

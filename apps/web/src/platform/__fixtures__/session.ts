@@ -4,6 +4,7 @@ import { EventBus } from '@workspace/cqrs'
 import { dataError } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container } from '@workspace/di'
+import type { PlatformRole } from '@workspace/kernel'
 
 import {
   settingsCommands,
@@ -20,6 +21,8 @@ import type { ServicesView } from '../services'
 import { type PushRejection, SESSION, type SessionPort } from '../session.port'
 import { SYNC_STATUS, type SyncStatus } from '../sync-status.port'
 
+const NO_ROLES: ReadonlySet<PlatformRole> = new Set()
+
 /** A session nobody is signed in to. */
 export function fakeSession(): { readonly session: SessionPort } {
   const refused = () => errAsync(dataError('data:AUTH_FAILED', 'not in this test'))
@@ -35,6 +38,8 @@ export function fakeSession(): { readonly session: SessionPort } {
       changePassword: refused,
       changeEmail: refused,
       confirmEmail: refused,
+      requestAccountDeletion: refused,
+      deleteAccount: refused,
       signOut: refused,
       signingOutEverywhere: () => refused,
       current: () => undefined,
@@ -44,11 +49,14 @@ export function fakeSession(): { readonly session: SessionPort } {
       notice: () => undefined,
       clearNotice: () => {},
       leaveNotice: () => {},
+      dropNotice: () => {},
       protocolRefused: () => false,
       memberships: () => [],
       subscribeMemberships: () => () => {},
       currentTenant: () => undefined,
       selectTenant: () => {},
+      roles: () => NO_ROLES,
+      onRoles: () => () => {},
     },
   }
 }

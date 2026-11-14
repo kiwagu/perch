@@ -11,6 +11,7 @@ import cancelRefuseStatement from '../__fixtures__/email-change-cancel-refuse.su
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
+import { DeviceSessions } from '../device-sessions'
 
 import {
   ANN,
@@ -168,7 +169,7 @@ describe('authHandler, the request for a reset mail', () => {
 
     expect(refused?.status).toBe(401)
     expect(await refused?.json()).toEqual({ code: 'link-invalid' })
-    expect((await mounted.route(reset(second), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(second), FROM))?.status).toBe(200)
   })
 
   it('answers a body that names no email 400, taking nothing', async () => {
@@ -189,8 +190,9 @@ describe('authHandler, the reset of a password', () => {
       FROM,
     )
 
-    expect(answer?.status).toBe(204)
-    expect(await answer?.text()).toBe('')
+    // The laptop's own session was among those ended: it signs out with no channel to hear it.
+    expect(answer?.status).toBe(200)
+    expect(await answer?.json()).toEqual({ signedOut: true })
 
     for (const device of ['laptop', 'phone']) {
       expect(await mounted.sessions.read(ann.tokens.get(device) ?? '')).toEqual({ kind: 'none' })
@@ -198,10 +200,48 @@ describe('authHandler, the reset of a password', () => {
     }
 
     expect(mounted.closes).toEqual([[ann.identity, undefined, CLOSE.passwordChanged]])
+
+    // Every device signed out keeps why, for its next hello.
+    const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
+
+    for (const device of ['laptop', 'phone']) {
+      const row = (await devices.byToken(ann.tokens.get(device) ?? ''))._unsafeUnwrap()
+
+      expect(row?.endedReason).toBe('password-changed')
+    }
+
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'laptop'), FROM))?.status).toBe(
       200,
     )
+  })
+
+  it("answers that the session the request carries was not ended: another account's, or none", async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await signedInOn(mounted, ANN, ['laptop'])
+
+    const bob = await signedInOn(mounted, 'bob@example.test', ['desk'])
+    // Ann's link opened on Bob's desk, signed in to Bob: the reset ends Ann's sessions only.
+    const fromBob = await mounted.route(
+      reset(
+        await resetLink(mounted),
+        NEW_PASSWORD,
+        bob.on('desk') as { device: string; token: string },
+      ),
+      FROM,
+    )
+
+    expect(fromBob?.status).toBe(200)
+    expect(await fromBob?.json()).toEqual({ signedOut: false })
+    expect((await mounted.sessions.read(bob.tokens.get('desk') ?? '')).kind).not.toBe('none')
+    // The notice of the changed password goes after the answer: past it, the next mail is the link.
+    await mounted.outbox.next(ANN, 2)
+
+    const fromNobody = await mounted.route(reset(await resetLink(mounted)), FROM)
+
+    expect(fromNobody?.status).toBe(200)
+    expect(await fromNobody?.json()).toEqual({ signedOut: false })
   })
 
   it('mails the notice of a changed password to the account, linking to the request for a new one', async () => {
@@ -228,7 +268,7 @@ describe('authHandler, the reset of a password', () => {
 
     const token = await resetLink(mounted)
 
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
 
     const again = await mounted.route(reset(token, 'Other-pass-word-3'), FROM)
 
@@ -250,7 +290,7 @@ describe('authHandler, the reset of a password', () => {
       mounted.route(reset(token, 'Other-pass-word-3'), FROM),
     ])
 
-    expect(answers.map((answer) => answer?.status).sort()).toEqual([204, 401])
+    expect(answers.map((answer) => answer?.status).sort()).toEqual([200, 401])
   })
 
   it('ends every other reset link and the pending change of the email', async () => {
@@ -262,7 +302,7 @@ describe('authHandler, the reset of a password', () => {
     )._unsafeUnwrap()
     const claims = (await mounted.emailChanges.read(change))._unsafeUnwrap()
 
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
     expect(claims.kind).toBe('change')
     expect(
       claims.kind === 'change'
@@ -304,7 +344,7 @@ describe('authHandler, the reset of a password', () => {
 
     await mounted.clock.advance(link.expiresAt.getTime() - mounted.clock.now() - 1)
 
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
   })
 
   it('refuses a password that breaks the rules with password-rejected, keeping the link and the old password', async () => {
@@ -323,7 +363,7 @@ describe('authHandler, the reset of a password', () => {
     expect(weak?.status).toBe(400)
     expect(await weak?.json()).toEqual({ code: 'password-rejected' })
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(200)
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
   })
 
   it('answers link-invalid to a token no link holds', async () => {
@@ -424,7 +464,7 @@ describe('authHandler, a reset and what runs beside it', () => {
 
     const [signedIn, answered] = await Promise.all([signingIn, resetting])
 
-    expect(answered?.status).toBe(204)
+    expect(answered?.status).toBe(200)
 
     if (signedIn?.status === 200) {
       const { token: phone } = signedInAnswer.parse(await signedIn.json())
@@ -479,7 +519,7 @@ describe('authHandler, a reset and what runs beside it', () => {
 
     // Once the directory takes the step again, the same link sets the password.
     await mounted.local.db.query(cancelAllowStatement)
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
     expect(await pendingChange(mounted, ann.identity)).toEqual([])
   })
 })
@@ -504,7 +544,7 @@ describe('authHandler, a reset of an account not verified yet', () => {
 
     const token = await resetLink(mounted)
 
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
 
     // Two devices sign in at once: both are told to start the account.
     const answers = await Promise.all(
@@ -555,7 +595,7 @@ describe('authHandler, a reset of an account not verified yet', () => {
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'laptop'), FROM))?.status).toBe(403)
 
     await mounted.local.db.query(cancelAllowStatement)
-    expect((await mounted.route(reset(token), FROM))?.status).toBe(204)
+    expect((await mounted.route(reset(token), FROM))?.status).toBe(200)
     expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'laptop'), FROM))?.status).toBe(
       200,
     )

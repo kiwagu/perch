@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeFetch, noContent, respond } from '../__fixtures__/gateway-fetch'
+import { fakeFetch, noContent, respond, respondText } from '../__fixtures__/gateway-fetch'
 import {
   EMAIL_MARKER,
   keepsNothingOfTheRejection,
@@ -69,11 +69,11 @@ describe('gatewayAuth.resetPassword', () => {
   const password = 'Secret-new1'
 
   it('sets the new password with the token alone, no credentials and no device', async () => {
-    const recorded = fakeFetch(noContent())
+    const recorded = fakeFetch(respond(200, { signedOut: false }))
 
-    expect((await gatewayAuth(BASE, recorded.fetcher).resetPassword(token, password)).isOk()).toBe(
-      true,
-    )
+    expect(
+      (await gatewayAuth(BASE, recorded.fetcher).resetPassword(token, password))._unsafeUnwrap(),
+    ).toEqual({ signedOut: false })
     expect(recorded.sent).toEqual([
       {
         url: `${BASE}/auth/reset-password`,
@@ -85,8 +85,46 @@ describe('gatewayAuth.resetPassword', () => {
     ])
   })
 
+  it("presents the device's session when it has one, and answers whether the reset ended it", async () => {
+    const session = { token: 'session-token-1', device: 'device-1' }
+    const recorded = fakeFetch(respond(200, { signedOut: true }))
+
+    expect(
+      (
+        await gatewayAuth(BASE, recorded.fetcher).resetPassword(token, password, session)
+      )._unsafeUnwrap(),
+    ).toEqual({ signedOut: true })
+    expect(recorded.sent).toEqual([
+      {
+        url: `${BASE}/auth/reset-password`,
+        method: 'POST',
+        authorization: `Bearer ${session.token}`,
+        device: session.device,
+        body: { token, password },
+      },
+    ])
+  })
+
+  it.each([
+    ['no outcome', respond(200, {})],
+    ['an outcome that is not one', respond(200, { signedOut: 'yes' })],
+    ['no JSON', respondText(200, 'set')],
+    ['no body', noContent()],
+  ])(
+    'fails a 200 or 204 that carries %s as an answer that is not the outcome, naming neither secret',
+    async (_what, answer) => {
+      const { fetcher } = fakeFetch(answer)
+      const refused = (
+        await gatewayAuth(BASE, fetcher).resetPassword(token, password)
+      )._unsafeUnwrapErr()
+
+      expect(refused.code).toBe('data:AUTH_FAILED')
+      namesNone(refused, token, password)
+    },
+  )
+
   it('refuses an empty token as a link that does not work, without asking the gateway', async () => {
-    const recorded = fakeFetch(noContent())
+    const recorded = fakeFetch(respond(200, { signedOut: false }))
 
     expect(
       (await gatewayAuth(BASE, recorded.fetcher).resetPassword('', password))._unsafeUnwrapErr()

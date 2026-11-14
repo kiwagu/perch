@@ -6,12 +6,15 @@ export {
 } from './activities'
 export {
   CONFIRM_RULE_ROW,
+  type ControlMove,
+  controlMovesOf,
   type DerivedQuestion,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
   failuresOf,
   isBare,
+  ownControlsOf,
   type Request,
   requestsOf,
   TOAST_RULE_ROW,
@@ -35,7 +38,13 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
-export { loadModel, type Model, type ModelEntity, type ModelField } from './model'
+export {
+  loadModel,
+  type Model,
+  type ModelAction,
+  type ModelEntity,
+  type ModelField,
+} from './model'
 export { englishErrors } from './parse-file'
 export {
   ACTIVITIES_DIR,
@@ -43,7 +52,9 @@ export {
   activityFile,
   CONTRACT_DIR,
   COVERAGE_FILE,
+  DOMAIN_DIR,
   ENTITY_SCHEMA_FILE,
+  isBusinessFile,
   MANIFEST_SCHEMA_FILE,
   MODEL_FILE,
   PLATFORM_FILE,
@@ -86,6 +97,7 @@ export {
   type PlatformComposite,
   type PlatformMail,
   type PlatformNotice,
+  RECIPIENT,
   type Screen,
   type ScreensFile,
 } from './screens'
@@ -95,3 +107,4 @@ export {
   VOCABULARY_SECTIONS,
   type Vocabulary,
 } from './vocabulary'
+export { readDescriptions, type WrittenDescription } from './written-descriptions'

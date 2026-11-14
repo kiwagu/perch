@@ -9,9 +9,10 @@ import { errAsync, ResultAsync } from 'neverthrow'
 import { type DataError, dataError, type SignInInput, type SignUpInput } from '@workspace/data'
 
 import { accountChangeOf } from './account-change'
+import { accountDeletedOf, type DeletedAccount } from './account-deletion'
 import { type EmailConfirmation, emailConfirmationOf } from './email-confirmation'
 import { mailRequested } from './mail-request'
-import { passwordResetOf } from './password-reset'
+import { type PasswordReset, passwordResetOf } from './password-reset'
 import { signedOutOf } from './sign-out'
 import { signedUpOf } from './sign-up'
 import { deviceHeaders, type NamedDevice, type SignedInDevice, signedIn } from './signed-in'
@@ -26,13 +27,21 @@ export interface GatewayAuth {
    * `data:AUTH_FAILED` naming its status, never the email or the password.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
-  /** Signs `device` in; an account whose email is not verified yet fails as `data:EMAIL_NOT_VERIFIED`. */
+  /**
+   * Signs `device` in; an account whose email is not verified yet fails as
+   * `data:EMAIL_NOT_VERIFIED` (a 403 whose body does not name `account-banned`), one an operator
+   * banned, once its password is right, as `data:ACCOUNT_BANNED` (a 403 that names it), and one
+   * signed in on as many devices as it may be as
+   * `data:DEVICE_LIMIT`, nothing signed in, unless `input.signOutOldest` confirms signing out its
+   * device seen least recently.
+   */
   signIn(input: SignInInput, device: NamedDevice): ResultAsync<SignedInDevice, DataError>
   /**
    * Exchanges a verification link's `token`, naming `device`: the first exchange verifies the
    * email and signs the device in (`signed-in`, with the account's name and language), a later one
-   * signs nothing in (`verified-before`). A link past its lifetime fails as `data:LINK_EXPIRED`,
-   * any other the gateway refuses (an empty token too, without asking it) as `data:LINK_INVALID`,
+   * signs nothing in (`verified-before`). The link of an account an operator banned verifies its
+   * email, signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`).
+   * A link past its lifetime fails as `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as `data:LINK_INVALID`,
    * a request to wait as `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any
    * other answer as `data:AUTH_FAILED` naming its status, never a token.
    */
@@ -54,15 +63,20 @@ export interface GatewayAuth {
    */
   requestPasswordReset(email: string): ResultAsync<void, DataError>
   /**
-   * Sets `password` as the account's new one with a reset link's `token`; nothing is signed in,
-   * and the gateway signs every device of the account out. A password that breaks the rules fails
+   * Sets `password` as the account's new one with a reset link's `token`, presenting the `session`
+   * this device holds when it has one; nothing is signed in, and the gateway signs every device of
+   * the account out, answering whether `session` was among them. A password that breaks the rules fails
    * as `data:PASSWORD_REJECTED` (the link still works), a link past its hour as
    * `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as
    * `data:LINK_INVALID`, a request to wait as `data:RATE_LIMITED`, an unreachable gateway as
    * `data:OFFLINE`, and any other answer as `data:AUTH_FAILED` naming its status, never the token
    * or the password.
    */
-  resetPassword(token: string, password: string): ResultAsync<void, DataError>
+  resetPassword(
+    token: string,
+    password: string,
+    session?: AccountSession,
+  ): ResultAsync<PasswordReset, DataError>
   /**
    * Changes the password of the account `session` is signed in to: the gateway signs its other
    * devices out and keeps this one signed in. A wrong current password fails as
@@ -93,6 +107,24 @@ export interface GatewayAuth {
    * `data:OFFLINE`, and any other answer as `data:AUTH_FAILED` naming its status, never the token.
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmation, DataError>
+  /**
+   * Asks to delete the account `session` is signed in to, confirmed by its `password`: the mail
+   * whose link deletes it goes to the account's email, and nothing else changes. A wrong password
+   * fails as `data:INVALID_CREDENTIALS`, an account that is the only administrator of an
+   * organisation with other members as `data:LAST_ADMIN`, and the rest as a change of the
+   * password does.
+   */
+  requestAccountDeletion(password: string, session: AccountSession): ResultAsync<void, DataError>
+  /**
+   * Deletes an account with the `token` of its deletion link, with no session; the gateway signs
+   * every device of the account out, and the answer names the account. A link past its hour fails as
+   * `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as
+   * `data:LINK_INVALID`, an account that became the only administrator of an organisation with
+   * other members as `data:LAST_ADMIN` (the link still works), a request to wait as
+   * `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any other answer (a 200
+   * that does not name the account too) as `data:AUTH_FAILED` naming its status, never the token.
+   */
+  deleteAccount(token: string): ResultAsync<DeletedAccount, DataError>
   /**
    * Has the gateway sign out `token`, the session token of the device `device`. A token the
    * gateway no longer takes (it signs nobody in, or another device holds it) fails as
@@ -131,7 +163,8 @@ function urlOf(input: string | URL | Request): string {
  * `POST <baseUrl>/auth/sign-up/email`, `POST <baseUrl>/auth/verify-email`,
  * `POST <baseUrl>/auth/send-verification-email`, `POST <baseUrl>/auth/request-password-reset`,
  * `POST <baseUrl>/auth/reset-password`, `POST <baseUrl>/auth/change-password`,
- * `POST <baseUrl>/auth/change-email`, `POST <baseUrl>/auth/confirm-email` and
+ * `POST <baseUrl>/auth/change-email`, `POST <baseUrl>/auth/confirm-email`,
+ * `POST <baseUrl>/auth/request-account-deletion`, `POST <baseUrl>/auth/delete-account` and
  * `POST <baseUrl>/auth/sign-out`, whose answers
  * are the gateway's and not Better Auth's. `baseUrl` is absolute (`https://…/backend`). A gateway
  * that cannot be reached leaves the device offline (`data:OFFLINE`); refused credentials and links
@@ -186,7 +219,15 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       }).andThen(signedUpOf),
     signIn: (input, device) =>
       ResultAsync.fromPromise(
-        client.signIn.email({ email: input.email, password: input.password }, callOptions(device)),
+        client.signIn.email(
+          {
+            email: input.email,
+            password: input.password,
+            // The confirmation goes only with a sign-in that confirms.
+            ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+          },
+          callOptions(device),
+        ),
         unreachable,
       ).andThen(signedIn),
     verifyEmail: (token, device) =>
@@ -201,10 +242,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       post('request-password-reset', { email }).andThen((answer) =>
         mailRequested(answer, 'the reset mail'),
       ),
-    resetPassword: (token, password) =>
+    resetPassword: (token, password, session) =>
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
-        : post('reset-password', { token, password }).andThen(passwordResetOf),
+        : post(
+            'reset-password',
+            { token, password },
+            session === undefined ? {} : bearer(session),
+          ).andThen(passwordResetOf),
     changePassword: (input, session) =>
       post('change-password', input, bearer(session)).andThen((answer) =>
         accountChangeOf(answer, 204),
@@ -217,6 +262,14 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       token === ''
         ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
         : post('confirm-email', { token }).andThen(emailConfirmationOf),
+    requestAccountDeletion: (password, session) =>
+      post('request-account-deletion', { password }, bearer(session)).andThen((answer) =>
+        accountChangeOf(answer, 202),
+      ),
+    deleteAccount: (token) =>
+      token === ''
+        ? errAsync(dataError('data:LINK_INVALID', 'the link carries no token'))
+        : post('delete-account', { token }).andThen(accountDeletedOf),
     signOut: (token, device) =>
       ResultAsync.fromPromise(
         fetcher(`${baseUrl}/auth/sign-out`, {

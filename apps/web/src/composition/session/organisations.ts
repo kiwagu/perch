@@ -2,8 +2,10 @@
  * The session's side of the signed-in identity's organisations on this device: the memberships
  * are read after the sign-in, then come from the leading tab's channel and from the other tabs
  * through the storage; they are kept in the storage, handed to the identity's space and told to
- * the subscribers, with the organisation chosen on this browser. It keeps the inventory of the
- * organisation databases the device holds for the identity.
+ * the subscribers, with the organisation chosen on this browser. A membership the gateway
+ * answered this tab (`adopt`) joins the saved list when it does not name the organisation yet,
+ * never in place of an entry a list wrote. It keeps the inventory of the organisation databases
+ * the device holds for the identity.
  */
 
 import type { IdentityId } from '@workspace/ids'
@@ -11,9 +13,11 @@ import type { Membership } from '@workspace/replica/protocol'
 
 import type { IdentitySpace, TenantDatabaseInventory } from '../identity-space'
 import {
+  type KeptSession,
   type KeyValueStorage,
-  savedIdentity,
+  type SignInOwner,
   savedMemberships,
+  savedSession,
   savedTenant,
   savedTenantDatabases,
   saveMemberships,
@@ -21,9 +25,10 @@ import {
   saveTenantDatabases,
 } from '../storage'
 
-/** The space of the identity signed in on this tab. */
+/** The space of the identity signed in on this tab, and the sign-in it is of. */
 export interface OpenIdentity {
   readonly space: IdentitySpace
+  readonly signIn: KeptSession
 }
 
 export interface SessionOrganisationsOptions {
@@ -62,36 +67,43 @@ export class SessionOrganisations {
    * nothing, and one whose database did not open on this device is not kept.
    */
   select(key: string): void {
-    const space = this.#options.open()?.space
+    const open = this.#options.open()
+    const space = open?.space
 
-    if (space?.memberships().some(({ tenant }) => tenant.key === key)) {
+    if (open && space?.memberships().some(({ tenant }) => tenant.key === key)) {
       space.selectTenant(key)
 
       if (space.currentTenant() === key) {
-        saveTenant(this.#options.storage, key)
+        saveTenant(this.#options.storage, open.signIn.signIn, key)
       }
 
       this.tell()
     }
   }
 
-  /** What the space of `identity` opens with: the memberships kept for it and the organisation chosen last. */
-  saved(identity: IdentityId): {
+  /**
+   * What the space of the sign-in `owner` opens with: the memberships kept for it and the
+   * organisation chosen last during it.
+   */
+  saved(owner: SignInOwner): {
     readonly memberships: readonly Membership[]
     readonly tenant: string | undefined
   } {
     const storage = this.#options.storage
 
-    return { memberships: savedMemberships(storage, identity), tenant: savedTenant(storage) }
+    return {
+      memberships: savedMemberships(storage, owner),
+      tenant: savedTenant(storage, owner.signIn),
+    }
   }
 
   /**
    * The inventory of the organisation databases `identity` has on this device, kept in the
    * storage for the tabs and the sessions to come; each change reads it anew, as other tabs
    * change it too. The storage keeps each identity's apart: a change of this one leaves those
-   * kept for other identities as they are. The memberships saved for the identity come with it:
-   * every list is saved before the space counts its databases (`apply`, and the sign-in before
-   * the space opens).
+   * kept for other identities as they are. The memberships saved for the identity come with it,
+   * those of the sign-in current now while it is the identity's: every list is saved before the
+   * space counts its databases (`apply`, and the sign-in before the space opens).
    */
   databases(identity: IdentityId): TenantDatabaseInventory {
     const storage = this.#options.storage
@@ -99,7 +111,11 @@ export class SessionOrganisations {
 
     return {
       keys: kept,
-      savedMemberships: () => savedMemberships(storage, identity),
+      savedMemberships: () => {
+        const current = savedSession(storage)
+
+        return current?.identity === identity ? savedMemberships(storage, current) : []
+      },
       add: (keys) => {
         const before = kept()
         const after = [...new Set([...before, ...keys])].sort()
@@ -120,46 +136,58 @@ export class SessionOrganisations {
   }
 
   /**
-   * The signed-in identity's memberships changed (the gateway said so, or this device created an
-   * organisation): they are kept for the other tabs, before the space counts and opens or
-   * deletes databases to match; resolves once it has. Nothing changes once another tab signed
-   * someone else in.
+   * The signed-in identity's memberships changed (the gateway said so over the channel): they
+   * are kept for the other tabs under the open space's sign-in, before the space counts and
+   * opens or deletes databases to match; resolves once it has. Nothing changes once another tab
+   * ended that sign-in or saved another one.
    */
   apply(next: readonly Membership[]): Promise<void> {
-    const space = this.#options.open()?.space
+    const open = this.#options.open()
 
-    if (!space || !this.#stillSignedIn(space)) {
+    if (!open || !this.#stillSignedIn(open)) {
       return Promise.resolve()
     }
 
-    saveMemberships(this.#options.storage, space.identity.id, next)
+    saveMemberships(this.#options.storage, open.signIn, next)
 
-    return this.#follow(space, next)
+    return this.#follow(open.space, next)
   }
 
   /**
-   * An organisation this device created is a membership at once: it joins the memberships saved
-   * for the identity (the newest list any tab kept, which this tab's space may not have followed
-   * yet), in place of one of the same key, and the list is applied; see `apply`.
+   * A membership the gateway answered this tab (an organisation created, an invitation accepted)
+   * joins the memberships saved for the sign-in of `open`, the newest list any tab kept (which
+   * this tab's space may not have followed yet), unless that list names the organisation already:
+   * its entry came from a list heard after the gateway's tell, or the next list sets it right, so
+   * nothing is written in its place. The check that the sign-in is still the saved one, the
+   * read, the write and the start of the follow happen in one step, with no await between them:
+   * the follow keeps its place among this tab's writes and the storage events handled after it.
+   * Resolves once the space followed the list read or written, waiting for no later list; nothing
+   * changes once another tab ended that sign-in or saved another one.
    */
-  adopt(created: Membership): Promise<void> {
-    const space = this.#options.open()?.space
-
-    if (!space || !this.#stillSignedIn(space)) {
+  adopt(open: OpenIdentity, joined: Membership): Promise<void> {
+    if (!this.#stillSignedIn(open)) {
       return Promise.resolve()
     }
 
-    const saved = savedMemberships(this.#options.storage, space.identity.id)
+    const saved = savedMemberships(this.#options.storage, open.signIn)
 
-    return this.apply([...saved.filter(({ tenant }) => tenant.key !== created.tenant.key), created])
+    if (saved.some(({ tenant }) => tenant.key === joined.tenant.key)) {
+      return this.#follow(open.space, saved)
+    }
+
+    const next = [...saved, joined]
+
+    saveMemberships(this.#options.storage, open.signIn, next)
+
+    return this.#follow(open.space, next)
   }
 
-  /** Another tab kept new memberships of the identity this tab shows: its space follows them. */
+  /** Another tab kept new memberships of the sign-in this tab shows: its space follows them. */
   followSaved(): void {
-    const space = this.#options.open()?.space
+    const open = this.#options.open()
 
-    if (space && this.#stillSignedIn(space)) {
-      void this.#follow(space, savedMemberships(this.#options.storage, space.identity.id))
+    if (open && this.#stillSignedIn(open)) {
+      void this.#follow(open.space, savedMemberships(this.#options.storage, open.signIn))
     }
   }
 
@@ -170,9 +198,9 @@ export class SessionOrganisations {
     }
   }
 
-  /** The identity of `space` is still the one signed in on this browser. */
-  #stillSignedIn(space: IdentitySpace): boolean {
-    return savedIdentity(this.#options.storage)?.id === space.identity.id
+  /** The sign-in of `open` is still the one saved on this browser. */
+  #stillSignedIn(open: OpenIdentity): boolean {
+    return savedSession(this.#options.storage)?.signIn === open.signIn.signIn
   }
 
   /** Has the space follow `next`, then tells the subscribers while it is still the open one. */

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: device
 title: My devices
-description: "The devices of the account: every device signed in and those signed out within 30 days, this one marked, when each was last seen; any other active device is signed out from here, or all of them at once."
+description: The devices of the account, where another device, or all of them at once, is signed out.
 flag: null
 bindings: [ { path: /devices, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ device.page.status, device.list, device.everywhere.open-button ]
@@ -53,6 +53,9 @@ states:
   ready: device.list with an item per device, this device marked, and the sign-out everywhere button.
 flow:
   initial: viewing
+  meta:
+    guards:
+      gatewayOutOfReach: this device could not reach the gateway
   states:
     viewing:
       description: The devices of the account.
@@ -68,12 +71,19 @@ flow:
         input: { device: device.list.session-item }
         onDone:
           target: viewing
-          description: That device signs out; the list is read again and shows it signed out.
-        onError:
-          target: viewing
-          description: The list is read again, unless the gateway is out of reach.
+          description: That device signs out; the list shows it signed out.
           actions:
-            - show: app-shell.notice-message
+            - read: device.list
+        onError:
+          - target: viewing
+            guard: gatewayOutOfReach
+            description: A read would fail too, and its notice would replace this one.
+            actions:
+              - show: app-shell.notice-message
+          - target: viewing
+            actions:
+              - show: app-shell.notice-message
+              - read: device.list
     confirming:
       meta: { renders: [ device.everywhere.dialog ] }
       on:
@@ -82,9 +92,9 @@ flow:
     signing-out-everywhere:
       invoke:
         src: platform.sign-out-everywhere
+        read: false
         onDone:
           target: signed-out
-          description: Every device of the account signs out, this one included; the sign-in page says resend-after-sign-in instead when this device held changes not sent yet.
           actions:
             - show: { user.sign-in.notice-message: [ signed-out-elsewhere ] }
             - navigate: /sign-in

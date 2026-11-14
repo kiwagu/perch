@@ -3,8 +3,10 @@
  * region's, each guard by failure code with the codes it takes (a guard's sentence is prose,
  * as a description is), each state's address (the path and the search a link or a reload
  * restores it by), each anchor a state lists in `meta.renders`, each entry and exit effect, each
- * transition on an event with its target, guard and effects, each invoke with its input and
- * its outcomes, each final state. A state is named by its path (`viewing.form.open`);
+ * transition on an event with its target, guard and effects, each invoke with its input, its
+ * `read: false` when it says nothing reads after its action, and
+ * its outcomes (a branch with its target, guard, its `read: false` when it says nothing reads
+ * after that outcome, and effects), each final state. A state is named by its path (`viewing.form.open`);
  * descriptions are left out, as they change nothing that runs. The diff compares lines as
  * sets, so where order runs the machine a line carries its position, `#<n>`, in a sequence
  * of more than one: the guarded alternatives of an event or an outcome (the first that holds
@@ -37,6 +39,8 @@ const effectText = (effect: Effect): string => {
       return `show ${effect.params.anchor}: ${effect.params.codes.join(' ')}`
     case 'clear':
       return `clear ${effect.params.anchor}`
+    case 'read':
+      return `read ${effect.params.anchor}`
     case 'navigate':
       return `navigate ${effect.params.to}${effect.params.search === undefined ? '' : ` ${JSON.stringify(effect.params.search)}`}`
   }
@@ -50,12 +54,13 @@ const addressLine = (path: string, address: FlowAddress): string =>
     ...(address.search === undefined ? [] : [canonicalJson(address.search)]),
   ].join(' ')
 
-/** `<head>`, then the transition's target, guard and effects, those it has. */
+/** `<head>`, then the transition's target, guard, `read: false` and effects, those it has. */
 const transitionLine = (head: string, transition: FlowTransition): string =>
   [
     head,
     ...(transition.target === undefined ? [] : [`-> ${transition.target}`]),
     ...(transition.guard === undefined ? [] : [`[${transition.guard}]`]),
+    ...(transition.read === false ? ['read: false'] : []),
     ...(transition.actions ?? []).map(effectText),
   ].join(' ')
 
@@ -100,7 +105,7 @@ export function flowLines(flow: Flow): string[] {
         ...(invoke === undefined
           ? []
           : [
-              `${path} invoke ${invoke.src}${invoke.input === undefined ? '' : ` ${canonicalJson(invoke.input)}`}`,
+              `${path} invoke ${invoke.src}${invoke.input === undefined ? '' : ` ${canonicalJson(invoke.input)}`}${invoke.read === false ? ' read: false' : ''}`,
               ...transitionLines(`${path} onDone`, invoke.onDone),
               ...transitionLines(`${path} onError`, invoke.onError),
             ]),

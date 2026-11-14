@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../files'
 
+import { statesOf } from './contract'
 import { anchorIn, sampleContract, screenIn } from './contract.fixture'
 import { vocabularyProblems } from './vocabulary'
 
@@ -96,6 +97,23 @@ describe('vocabularyProblems', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('wants every derived suffix to end with a kind of the vocabulary, the kind of its part', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.suffixes['range'] = 'the entries the page shows'
+    contract.vocabulary.suffixes['error-message'] = 'the error text of a field'
+    contract.vocabulary.suffixes['close-button'] = 'the X that closes a dialog'
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: derived suffix "range": its kind "range" is not a kind of the vocabulary',
+      'contract/vocabulary.md:1: derived suffix "error-message": its kind "message" is not a kind of the vocabulary',
+    ])
+
+    contract.vocabulary.kinds['range'] = 'the range'
+    contract.vocabulary.kinds['message'] = 'the message'
+
+    expect(printed(contract)).toEqual([])
+  })
   it('asks no row of a derived toast code, but the rule row once one is derived', () => {
     const contract = sampleContract()
     const toast = anchorIn(contract, 'sample.save-button')
@@ -163,6 +181,71 @@ describe('vocabularyProblems', () => {
     documented.vocabulary.composites = { 'password-rules': 'the rules' }
     expect(vocabularyProblems(documented).map(formatProblem)).toEqual([
       'contract/vocabulary.md:1: composite "password-rules" is documented but undeclared',
+    ])
+  })
+  it('refuses a field state the kit does not render', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y', dirty: 'z' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Field states": "dirty" is not a state the kit renders (unsaved, saved)',
+    ])
+  })
+  it('wants both field states once the section has a row', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x' }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Field states": "saved" is a state the kit renders and is not listed',
+    ])
+  })
+  it('counts the field states among the states of the vocabulary', () => {
+    const contract = sampleContract()
+
+    expect(statesOf(contract.vocabulary).has('unsaved')).toBe(false)
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y' }
+
+    expect(statesOf(contract.vocabulary).has('unsaved')).toBe(true)
+  })
+  it('refuses an anchor that writes a field state, wherever it stands', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y' }
+
+    const anchors = screenIn(contract, 'sample').anchors
+
+    anchors['sample.note-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+      states: ['saved'],
+    }
+    anchors['sample.flag-button'] = { kind: 'button', states: ['unsaved'] }
+    anchors['sample.plain-select'] = { kind: 'select', holdsInput: false, states: ['saved'] }
+
+    const at = 'contract/domain/screens/sample/$key.yaml:1: anchors'
+    const message = 'is a field state: it is derived from the field, a screen file never writes it'
+
+    expect(printed(contract)).toEqual([
+      `${at}["sample.note-input"].states[0]: "saved" ${message}`,
+      `${at}["sample.flag-button"].states[0]: "unsaved" ${message}`,
+      `${at}["sample.plain-select"].states[0]: "saved" ${message}`,
+    ])
+  })
+  it('refuses a field state that is also an app, container or row state', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'x', saved: 'y' }
+    contract.vocabulary.rowStates = {
+      ...contract.vocabulary.rowStates,
+      saved: { where: 'sample.thing-item', meaning: 'the saved' },
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/vocabulary.md:1: section "Field states": "saved" is also a row state: a state name means one thing',
     ])
   })
   it('wants the item state of a composite among the row states', () => {

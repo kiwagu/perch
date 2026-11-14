@@ -17,9 +17,11 @@ import {
   signUpOn,
 } from '../__fixtures__/auth-instance'
 import identityRefuseStatement from '../__fixtures__/identity-refuse.surql'
+import { ADMIN_PATHS } from '../admin-paths'
 
 import {
   ANN,
+  acceptedSignIn,
   fakeConnections,
   mountedOnFakeAuth,
   noAccounts,
@@ -117,6 +119,9 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
     auth: opened.auth,
     sessions: noSessions,
     ...accountServicesOf(opened),
+    deletions: noAccounts.deletions,
+    departure: noAccounts.departure,
+    teardown: noAccounts.teardown,
     profiles: noAccounts.profiles,
     limits: new RequestLimits({ clock: opened.clock }),
     connections,
@@ -273,6 +278,33 @@ describe('authHandler', () => {
       }
     }
 
+    expect(received).toHaveLength(0)
+  })
+
+  it("answers 404 to every endpoint of Better Auth's admin plugin, by GET and by POST, without reaching it", async () => {
+    const { route, received } = mountedOnFakeAuth(signedInAnswer)
+    const answers: unknown[] = []
+
+    for (const path of ADMIN_PATHS) {
+      for (const method of ['GET', 'POST']) {
+        const response = await route(
+          new Request(`http://gateway.test/auth${path}`, {
+            method,
+            headers: { 'content-type': 'application/json', 'x-perch-device': 'laptop' },
+            ...(method === 'POST' ? { body: JSON.stringify({ userId: STAND_IN_ACCOUNT }) } : {}),
+          }),
+          FROM,
+        )
+
+        answers.push({ path, method, status: response?.status, body: await response?.json() })
+      }
+    }
+
+    expect(answers).toEqual(
+      ADMIN_PATHS.flatMap((path) =>
+        ['GET', 'POST'].map((method) => ({ path, method, ...notFound })),
+      ),
+    )
     expect(received).toHaveLength(0)
   })
 
@@ -509,9 +541,12 @@ describe('authHandler', () => {
   })
 
   it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
-    const body = JSON.stringify({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
+    const body = JSON.stringify(acceptedSignIn())
     const { route, clock } = mountedOnFakeAuth(() => {
-      const headers = new Headers({ 'content-type': 'application/json' })
+      const headers = new Headers({
+        'content-type': 'application/json',
+        'set-auth-token': 'raw-token.signature',
+      })
 
       headers.append('Set-Cookie', 'better-auth.session_token=signed; Path=/; HttpOnly')
       headers.append('Set-Cookie', 'better-auth.session_data=cached; Path=/; HttpOnly')
@@ -523,7 +558,8 @@ describe('authHandler', () => {
     expect(response?.status).toBe(200)
     expect(response?.headers.getSetCookie()).toEqual([])
     expect(response?.headers.has('set-cookie')).toBe(false)
-    expect(response?.headers.get('content-type')).toBe('application/json')
+    expect(response?.headers.get('set-auth-token')).toBe('raw-token.signature')
+    expect(response?.headers.get('content-type')).toMatch(/^application\/json\b/)
     expect(await response?.text()).toBe(body)
 
     // A sign-up answers the mount's own 202: nothing of Better Auth's answer, its cookies included.
@@ -657,10 +693,7 @@ describe('authHandler', () => {
     const closing = new Promise<void>((resolve) => {
       release = resolve
     })
-    const { route, closes } = mountedOnFakeAuth(
-      () => Response.json({ token: 'raw-token', user: { id: ann } }),
-      closing,
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)), closing)
     let answered = false
     const answer = route(signIn('ann@example.test'), FROM).then((response) => {
       answered = true
@@ -674,7 +707,7 @@ describe('authHandler', () => {
     release()
 
     expect((await answer)?.status).toBe(200)
-    expect(await (await answer)?.json()).toEqual({ token: 'raw-token', user: { id: ann } })
+    expect(await (await answer)?.json()).toEqual(acceptedSignIn(ann))
   })
 
   it('closes no socket for a sign-up Better Auth accepted: it signs nothing in', async () => {
@@ -702,11 +735,13 @@ describe('authHandler', () => {
     expect(refused?.status).toBe(401)
     expect(await refused?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
 
-    // An acceptance that names no session of an account cannot be held to one: it fails.
+    // An acceptance that names no session of an account cannot be held to one: it fails, and so
+    // does one that names the account without its email, its name or whether it is verified.
     for (const answer of [
       () => new Response('not json', { status: 200 }),
       () => Response.json({ token: 'raw-token' }),
       () => Response.json({ token: 'raw-token', user: { id: 'not-an-identity' } }),
+      () => Response.json({ token: 'raw-token', user: { id: ann } }),
     ]) {
       const { route, closes } = mountedOnFakeAuth(answer)
       const response = await route(signIn('ann@example.test'), FROM)
@@ -718,9 +753,7 @@ describe('authHandler', () => {
 
     // A sign-in that names no device: Better Auth refuses it, and a stand-in that does not closes
     // nothing all the same.
-    const { route, closes } = mountedOnFakeAuth(() =>
-      Response.json({ token: 'raw-token', user: { id: ann } }),
-    )
+    const { route, closes } = mountedOnFakeAuth(() => Response.json(acceptedSignIn(ann)))
     const unnamed = new Request('http://gateway.test/auth/sign-in/email', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },

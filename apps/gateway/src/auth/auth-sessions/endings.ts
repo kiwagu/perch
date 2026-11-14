@@ -30,6 +30,66 @@ const signOutAnswer = z.array(z.boolean())
 /** What an ending of several sessions answers: the device of each session marked, and whether it was live. */
 const endedSessions = z.array(z.object({ device: z.string(), live: z.boolean() }))
 
+/**
+ * What a sign-in's admission against the limit of devices did: let it in as it is (`admitted`),
+ * deleted its session, not confirmed past the limit (`asked`), let it in and signed out the other
+ * device seen least recently (`signed-out`), or found its account banned and let nothing in, its
+ * session ended `banned` unless the ban had ended it already (`banned`).
+ */
+export type SignInAdmission =
+  | { readonly kind: 'admitted' }
+  | { readonly kind: 'asked' }
+  | { readonly kind: 'banned' }
+  | { readonly kind: 'signed-out'; readonly device: string }
+
+/** What the admission of a sign-in answers. */
+const admissionAnswer = z.object({
+  outcome: z.enum(['admitted', 'asked', 'banned', 'signed-out']),
+  device: z.string().optional(),
+})
+
+/** The admission of a sign-in as the directory answered it. */
+export function toSignInAdmission(value: unknown): Result<SignInAdmission, DataError> {
+  const answer = admissionAnswer.safeParse(value)
+
+  if (!answer.success) {
+    return err(dataError('data:QUERY_FAILED', 'the admission of a sign-in has an unknown shape'))
+  }
+
+  const { outcome, device } = answer.data
+
+  if (outcome !== 'signed-out') {
+    return ok({ kind: outcome })
+  }
+
+  return device === undefined
+    ? err(dataError('data:QUERY_FAILED', 'the admission of a sign-in signed out no device'))
+    : ok({ kind: 'signed-out', device })
+}
+
+/**
+ * What the admission of the session a first verification signed in did: let it in, its device
+ * keeping it as its newest (`admitted`); found its account banned and let nothing in, the session
+ * ended `banned` unless the ban had ended it already (`banned`); or found it no longer live, a reset
+ * or another ending of every session of the account having ended it meanwhile (`gone`).
+ */
+export type VerifiedAdmission =
+  | { readonly kind: 'admitted' }
+  | { readonly kind: 'banned' }
+  | { readonly kind: 'gone' }
+
+/** What the admission of a verification's session answers. */
+const verifiedAdmissionAnswer = z.object({ outcome: z.enum(['admitted', 'banned', 'gone']) })
+
+/** The admission of a verification's session as the directory answered it. */
+export function toVerifiedAdmission(value: unknown): Result<VerifiedAdmission, DataError> {
+  const answer = verifiedAdmissionAnswer.safeParse(value)
+
+  return answer.success
+    ? ok({ kind: answer.data.outcome })
+    : err(dataError('data:QUERY_FAILED', 'the admission of a verification has an unknown shape'))
+}
+
 /** The devices whose session an ending of several sessions ended while it was live, each once. */
 export function toEndedDevices(value: unknown): Result<readonly string[], DataError> {
   const answer = endedSessions.safeParse(value)

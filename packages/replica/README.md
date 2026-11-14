@@ -40,7 +40,8 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `compactIfLong(limit)` (compacts once the log holds more than `limit` rows past the snapshot,
   and leaves it for later while imported updates wait for their history), `close()`. A document
   opens from the snapshot and the rows after it. Sync state: `importRemote(bytes, head)` resolves to an `ImportOutcome` and moves
-  the cursor only when nothing is left pending, `pulled()`, `advanceCursor(head)`,
+  the cursor only when nothing is left pending (while a local update fails to persist, the server's
+  update is held back behind it and fails as such), `pulled()`, `advanceCursor(head)`,
   `outbox(limit)` of `OutboxRow`s (`id`, `seq`, `bytes`), `acknowledge(rows)`, which drops
   exactly those rows by id, `importLocal(rows)`, which imports outbox rows into the document
   only (the leader does so with each batch it pushes), and `catchUpLocal()`, which imports
@@ -63,22 +64,26 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   a tenant region; `privateRegionId(identity)`; `identityRegions(identity, memberships)`, the
   identity's private region and the region of each of its organisations.
 - `@workspace/replica/protocol`: the client-to-gateway sync contract as Zod schemas
-  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (8), `CLOSE`, `MAX_PUSH_UPDATES`,
+  (`clientMessage`, `serverMessage`, `PROTOCOL_VERSION` (9), `CLOSE`, `MAX_PUSH_UPDATES`,
   `rejectReason`, whose `foreign-peer` names a batch under a Loro peer another identity
   writes as, `compactionOutcome`) with `encodeMessage` / `decodeMessage`, which carry
   Loro bytes as base64 and return a `Result` with a `ProtocolError` for refused text; a
   `hello` carries the device's session token (`token`, the raw token its sign-in answered) and
   names the device it comes from (`device`, the browser's own id of 1 to 64 characters,
   `deviceId`, required: a hello without it breaks the protocol, 4400); the `welcome` carries
-  the regions the device may name with their heads and the identity's memberships, and a
-  `memberships` message tells each later change of them. `CLOSE` names the gateway's close
+  the regions the device may name with their heads, the identity's memberships and the
+  account's platform roles (`roles`, of `PLATFORM_ROLES`: `operator`, read with the session at
+  that hello), and a `memberships` message tells each later change of the memberships. `CLOSE` names the gateway's close
   codes: `protocol` 4400, `unauthorized` 4401 (a token that holds no live session, or a session
   opened on another device than the one the hello names), `forbidden` 4403, `timeout` 4408,
   `signedOut` 4000 (the device's own sign-out), `revoked` 4001 (the device's session was
   signed out from another device, alone or with every device of its identity, also while its
-  hello is under way) and `passwordChanged` 4002 (the device's session ended because the
+  hello is under way), `passwordChanged` 4002 (the device's session ended because the
   account's password changed: through a reset link, every device; on another device, every
-  device but that one). And the membership contract the gateway
+  device but that one), `deviceLimit` 4003 (a sign-in on another device went past the
+  account's limit of devices and signed out this one, seen least recently) and `banned` 4004
+  (an operator banned the account, which ended every session it had). A device that was
+  offline when its session ended hears the same code at its next hello. And the membership contract the gateway
   and devices share: `membership` (an organisation's `id`, `key` and `name` with the
   identity's role there) and `tenantRole` (`member` or `admin`), with their types `Membership`
   and `TenantRole`.
@@ -131,7 +136,12 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   updates after `vv` or a full snapshot, and checks the device's batches against `actor`
   (`Actor`: its identity id and its `Ability`); a subscription after `close()` is answered with
   an internal error before anything else, and a private region other than the actor's own with
-  `forbidden-region`, neither holding the region; `push(region, subscriber, batch, updates)` answers
+  `forbidden-region`, neither holding the region; `changeActor(region, subscriberId, actor)`
+  judges the device's batches by `actor` from then on, at once: a subscription still waiting in the
+  region's queue takes it too and is answered as it (never as the actor it was asked with), a batch
+  already queued is judged by the actor the hub holds when it takes the batch in, and a region the
+  hub does not hold or a device that did not subscribe to it changes nothing;
+  `push(region, subscriber, batch, updates)` answers
   with an ack (asking for a compaction once the log outgrows its limit) or a reject
   (`foreign-owner` for a record of another region, `forbidden-action` for a write the actor's
   ability refuses, `foreign-peer` for a batch under the server's Loro peer or one another
@@ -208,14 +218,20 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   welcome, reconnect after
   `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
   opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
-  the first delay, and leaves one not welcomed yet to the hello it says; the memberships of the
-  welcome and of each `memberships` message to `onMemberships`, `onEnded` with an `EndReason`
+  the first delay, and leaves one not welcomed yet to the hello it says; with a `network`
+  (`DeviceNetwork`: `online()` and `onOnlineChange`, the platform's word on the device's
+  network), heard from `start` until a stop or an ending, the network coming back starts the
+  delays over and connects a reconnect waiting for its delay at once, leaving a socket open or
+  opening to its welcome or its close; the memberships of the
+  welcome and of each `memberships` message to `onMemberships`, the platform roles of each
+  welcome to `onRoles` after them, both before any listener hears the message, `onEnded` with an `EndReason`
   when the token (`unauthorized`) or the protocol (`protocol`) is refused, the device is signed out
-  (`signed-out`), signed out from another device (`revoked`, 4001) or by a change of the
-  account's password (`password-changed`, 4002), none followed by a
+  (`signed-out`), signed out from another device (`revoked`, 4001), by a change of the
+  account's password (`password-changed`, 4002), by a sign-in past the account's limit of
+  devices (`device-limit`, 4003) or by a ban of the account (`banned`, 4004), none followed by a
   reconnect; `endingOf(code)` tells which close code ends the channel with which reason; the
   engine stops syncing on a refused protocol and reports it, and stops its passes without a
-  report on `revoked` and `password-changed`) behind the `SyncTransport` port;
+  report on `revoked`, `password-changed`, `device-limit` and `banned`) behind the `SyncTransport` port;
   `RegionSync` per region (subscribe, import and pull, push with acknowledgement or rollback,
   compaction proposals; only the regions the welcome names are subscribed, probed and pushed on
   that connection: one the identity left while offline is left alone, counts as settled, and
@@ -225,9 +241,10 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   cursor past rows the document lacks; a push or pull answered with an error or unanswered for 30 seconds is
   given up for now and sent again, and
   an unanswered one, like a probe unanswered for 30 seconds, has the transport reconnect; an
-  import that fails subscribes again at once, on every full pass and on a reconnect, until the
-  answer to a subscription imports in full: nothing tells a pull's answer from the updates the
-  gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
+  import that fails is reported, unless a local update that failed to persist held it back (its
+  write heard of that failure, and the engine reports it once), and subscribes again at once, on
+  every full pass and on a reconnect, until the answer to a subscription imports in full: nothing
+  tells a pull's answer from the updates the gateway sends meanwhile, so a pull never counts as that recovery; the first subscription on a
   connection goes with the document's version and the first update after it is its answer, and
   any later one there (a recovery, a region replaced, a subscription sent again) goes without a
   version, the snapshot that only such a subscription gets being its answer; only
@@ -260,7 +277,7 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   `test-device`, by default), a `StubTransport` that behaves like the gateway's connection
   without a network (welcomed with the identity's private region, where it is the owner, and,
   for each of the `memberships`, none by default, the organisation's region, where its batches
-  are checked with the abilities of the membership's role), can go
+  are checked with the abilities of the membership's role, and with no platform role), can go
   offline and come back, and counts its `reconnects()`;
   `dropNextFanOutTo`, `rejectEverything`, `swallowNextPush`, `swallowNextProbe`,
   `refuseNextPull`, `keepOpenOnSignOut` (takes the sign-out in, handles nothing more and leaves

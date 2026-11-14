@@ -5,7 +5,7 @@
  * rest for its host: the frame's anchors (`frame-effects.ts`), a field to empty, a move.
  */
 
-export type { FieldValues, NavigateParams } from './navigate-search'
+export type { FieldValues, ItemIds, NavigateParams } from './navigate-search'
 
 export interface ShowParams {
   readonly anchor: string

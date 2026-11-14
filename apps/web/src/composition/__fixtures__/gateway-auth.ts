@@ -26,7 +26,13 @@ export type FakeAuthRequest =
       readonly name: string
       readonly locale: string
     }
-  | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
+  | {
+      readonly kind: 'sign-in'
+      readonly email: string
+      readonly device: NamedDevice
+      /** Present on a sign-in that confirmed signing out the device seen least recently. */
+      readonly signOutOldest?: true
+    }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
   | { readonly kind: 'request-reset'; readonly email: string }
@@ -34,6 +40,8 @@ export type FakeAuthRequest =
   | { readonly kind: 'change-password'; readonly token: string; readonly device: string }
   | { readonly kind: 'change-email'; readonly email: string; readonly token: string }
   | { readonly kind: 'confirm'; readonly token: string }
+  | { readonly kind: 'request-deletion'; readonly token: string; readonly device: string }
+  | { readonly kind: 'delete'; readonly token: string }
   | { readonly kind: 'sign-out'; readonly token: string; readonly device: string }
 
 export interface FakeGatewayAuth extends GatewayAuth {
@@ -51,6 +59,27 @@ export interface FakeGatewayAuth extends GatewayAuth {
   resetLinkFor(email: string): string
   /** The token of the latest link that confirms the change of the account of `email` to a new one. */
   confirmationLinkFor(email: string): string
+  /** The token of the latest link that deletes the account of `email`. */
+  deletionLinkFor(email: string): string
+  /**
+   * Makes the account of `email` (or not any longer, with `false`) the only administrator of an
+   * organisation with other members: a request to delete it, and the deletion itself, are then
+   * refused as `data:LAST_ADMIN` and change nothing.
+   */
+  blockDeletion(email: string, blocked?: boolean): void
+  /**
+   * Puts the account of `email` at its limit of devices (`at`, by default) or takes it off: a
+   * sign-in of it that does not confirm signing out its device seen least recently is then refused
+   * as `data:DEVICE_LIMIT`, nothing signed in, and one that confirms signs in.
+   */
+  atDeviceLimit(email: string, at?: boolean): void
+  /**
+   * Has an operator ban the account of `email` (or lift it, with `false`): a sign-in of it with
+   * the right password, its email verified, is then refused as `data:ACCOUNT_BANNED`, nothing
+   * signed in; the first exchange of a link of it verifies its email, signs nothing in and is
+   * refused alike.
+   */
+  ban(email: string, banned?: boolean): void
 }
 
 /** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
@@ -63,8 +92,10 @@ const isLocale = (locale: string): locale is Locale =>
  * answer that signs a device in carries a new session token. A sign-up signs nothing in: a new
  * email makes an account not verified yet and a verification link, as its mail would carry; one
  * that has an account changes nothing; both answer alike. A sign-in with the right password of an
- * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`. The first exchange of any of
- * the account's links verifies it and signs the device in, a later one signs nothing in.
+ * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`, and one of an account an
+ * operator banned (`ban`) as `data:ACCOUNT_BANNED`, once the email is verified. The first
+ * exchange of any of the account's links verifies it and signs the device in, a later one signs
+ * nothing in; one of a banned account verifies it and is refused as `data:ACCOUNT_BANNED`.
  */
 export function fakeGatewayAuth(): FakeGatewayAuth {
   const accounts = new Map<string, Account>()
@@ -76,6 +107,14 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
   const resets = new Map<string, string>()
   /** The account and the new email of each confirmation link's token; only the newest works. */
   const confirmations = new Map<string, { readonly email: string; readonly next: string }>()
+  /** The email of the account each deletion link's token deletes; only the newest works. */
+  const deletions = new Map<string, string>()
+  /** The emails of the accounts that are the only administrator of an organisation with others. */
+  const onlyAdmins = new Set<string>()
+  /** The emails of the accounts at their limit of devices. */
+  const atLimit = new Set<string>()
+  /** The emails of the accounts an operator banned. */
+  const banned = new Set<string>()
   /** The email of the account each session token was given for. */
   const sessions = new Map<string, string>()
   const requests: FakeAuthRequest[] = []
@@ -116,6 +155,34 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return link
     },
+    deletionLinkFor: (email) => {
+      const link = [...deletions].findLast(([, of]) => of === email.toLowerCase())?.[0]
+
+      if (link === undefined) throw new Error('the gateway made no deletion link for the email')
+
+      return link
+    },
+    atDeviceLimit: (email, at = true) => {
+      if (at) {
+        atLimit.add(email.toLowerCase())
+      } else {
+        atLimit.delete(email.toLowerCase())
+      }
+    },
+    ban: (email, on = true) => {
+      if (on) {
+        banned.add(email.toLowerCase())
+      } else {
+        banned.delete(email.toLowerCase())
+      }
+    },
+    blockDeletion: (email, blocked = true) => {
+      if (blocked) {
+        onlyAdmins.add(email.toLowerCase())
+      } else {
+        onlyAdmins.delete(email.toLowerCase())
+      }
+    },
     resetLinkFor: (email) => {
       const link = [...resets].findLast(([, of]) => of === email.toLowerCase())?.[0]
 
@@ -154,7 +221,12 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return okAsync(undefined)
     },
     signIn: (input, device) => {
-      requests.push({ kind: 'sign-in', email: input.email, device })
+      requests.push({
+        kind: 'sign-in',
+        email: input.email,
+        device,
+        ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+      })
 
       const account = accounts.get(input.email.toLowerCase())
 
@@ -164,6 +236,19 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       if (!account.verified) {
         return errAsync(dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'))
+      }
+
+      if (banned.has(input.email.toLowerCase())) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      if (atLimit.has(input.email.toLowerCase()) && input.signOutOldest !== true) {
+        return errAsync(
+          dataError(
+            'data:DEVICE_LIMIT',
+            'the account is signed in on as many devices as it may be',
+          ),
+        )
       }
 
       const given = token()
@@ -187,6 +272,10 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       }
 
       accounts.set(email, { ...account, verified: true })
+
+      if (banned.has(email)) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
 
       const given = token()
 
@@ -226,7 +315,7 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return okAsync(undefined)
     },
-    resetPassword: (link, password) => {
+    resetPassword: (link, password, session) => {
       requests.push({ kind: 'reset', token: link })
 
       const email = resets.get(link)
@@ -240,7 +329,16 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       resets.delete(link)
       accounts.set(email, { ...account, password, verified: true })
 
-      return okAsync(undefined)
+      // It ends every session of the account, the one presented with it among them when it was one.
+      const signedOut = session !== undefined && sessions.get(session.token) === email
+
+      for (const [given, of] of sessions) {
+        if (of === email) {
+          sessions.delete(given)
+        }
+      }
+
+      return okAsync({ signedOut })
     },
     changePassword: (input, session) => {
       requests.push({ kind: 'change-password', token: session.token, device: session.device })
@@ -319,6 +417,58 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       }
 
       return okAsync({ identity: account.identity.id, email: change.next })
+    },
+    requestAccountDeletion: (password, session) => {
+      requests.push({ kind: 'request-deletion', token: session.token, device: session.device })
+
+      const email = sessions.get(session.token)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (email === undefined || account === undefined) {
+        return errAsync(dataError('data:AUTH_FAILED', 'the gateway refused the session token'))
+      }
+
+      if (account.password !== password) {
+        return errAsync(dataError('data:INVALID_CREDENTIALS', 'the password is wrong'))
+      }
+
+      if (onlyAdmins.has(email)) {
+        return errAsync(dataError('data:LAST_ADMIN', 'the account is the last administrator'))
+      }
+
+      // The newest link replaces the earlier ones.
+      for (const [link, of] of deletions) {
+        if (of === email) deletions.delete(link)
+      }
+
+      linked += 1
+      deletions.set(`delete-${linked}`, email)
+
+      return okAsync(undefined)
+    },
+    deleteAccount: (link) => {
+      requests.push({ kind: 'delete', token: link })
+
+      const email = deletions.get(link)
+      const account = email === undefined ? undefined : accounts.get(email)
+
+      if (email === undefined || account === undefined) {
+        return errAsync(dataError('data:LINK_INVALID', 'the gateway refused the link'))
+      }
+
+      if (onlyAdmins.has(email)) {
+        return errAsync(dataError('data:LAST_ADMIN', 'the account is the last administrator'))
+      }
+
+      // The account goes for good, its sessions and its links with it.
+      deletions.delete(link)
+      accounts.delete(email)
+
+      for (const [given, of] of sessions) {
+        if (of === email) sessions.delete(given)
+      }
+
+      return okAsync({ identity: account.identity.id })
     },
     signOut: (signedOut, device) => {
       requests.push({ kind: 'sign-out', token: signedOut, device })

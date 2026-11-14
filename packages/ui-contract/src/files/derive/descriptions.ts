@@ -9,13 +9,13 @@
  * equal to the derived one is listed by `contract:coverage --descriptions` for the owner to drop.
  */
 
+import { partOf } from '../../anchors'
 import { isRecord, listOf } from '../../records'
 import type { AnchorDef, Screen } from '../screens'
 import type { Vocabulary } from '../vocabulary'
 
 import { type FailureOf, unionOf } from './failures'
 import { flowSourcesOf } from './flow-errors'
-import { partOf } from './form-params'
 
 export const TYPE_PASSWORD = '(type password)'
 

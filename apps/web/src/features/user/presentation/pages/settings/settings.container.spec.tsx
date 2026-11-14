@@ -37,13 +37,25 @@ function UnsavedProbe() {
   return null
 }
 
-function open(answer: () => ChangeAnswer) {
+/** What a request for the account's deletion answers. */
+type DeletionAnswer = ReturnType<SessionPort['requestAccountDeletion']>
+
+function open(
+  answer: () => ChangeAnswer,
+  deletion: () => DeletionAnswer = () => okAsync(undefined),
+) {
   const changePassword = vi.fn((_current: string, _password: string) => answer())
-  const session: SessionPort = { ...fakeSession().session, current: () => ann, changePassword }
+  const requestAccountDeletion = vi.fn((_password: string) => deletion())
+  const session: SessionPort = {
+    ...fakeSession().session,
+    current: () => ann,
+    changePassword,
+    requestAccountDeletion,
+  }
   const TestModule = defineModule({
     id: 'test',
     declarations: { Settings: SettingsContainer },
-    routes: [{ path: '/settings', page: 'Settings', guard: 'authenticated' }],
+    routes: [{ path: '/settings', page: 'Settings', guard: 'authenticated', roles: ['identity'] }],
   })
   const router = createAppRouter({
     modules: [TestModule],
@@ -69,12 +81,13 @@ function open(answer: () => ChangeAnswer) {
     </I18nProvider>,
   )
 
-  return { changePassword }
+  return { changePassword, requestAccountDeletion }
 }
 
 const CURRENT = 'user.settings.password.current-password-input'
 const NEW = 'user.settings.password.new-password-input'
 const CONFIRMATION = 'user.settings.password.password-confirmation-input'
+const DELETION_PASSWORD = 'user.settings.deletion.password-input'
 
 const value = (testId: string) => (screen.getByTestId(testId) as HTMLInputElement).value
 
@@ -120,5 +133,57 @@ describe('SettingsContainer', () => {
     expect(value(CURRENT)).toBe('Secret-old1')
     expect(value(NEW)).toBe('Secret-new1')
     expect(unsavedNow).toBe(true)
+  })
+
+  it('shows the deletion form with its anchors, and no message before a send', async () => {
+    open(() => okAsync(undefined))
+
+    for (const anchor of [
+      'user.settings.deletion.form',
+      'user.settings.deletion.password-input',
+      'user.settings.deletion.send-button',
+    ]) {
+      expect(await screen.findByTestId(anchor)).toBeTruthy()
+    }
+
+    expect(screen.queryByTestId('user.settings.deletion.message')).toBeNull()
+    expect(screen.queryByTestId('user.settings.deletion.error')).toBeNull()
+  })
+
+  it('sends the deletion link with the password, says so, then empties the password', async () => {
+    const { requestAccountDeletion } = open(() => okAsync(undefined))
+
+    await screen.findByTestId('user.settings.deletion.form')
+    fireEvent.change(screen.getByTestId(DELETION_PASSWORD), { target: { value: 'Secret-ann1' } })
+    expect(unsavedNow).toBe(true)
+    await act(async () => fireEvent.click(screen.getByTestId('user.settings.deletion.send-button')))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('user.settings.deletion.message').getAttribute('data-code')).toBe(
+        'check-your-mail',
+      ),
+    )
+    expect(requestAccountDeletion).toHaveBeenCalledWith('Secret-ann1')
+    await waitFor(() => expect(value(DELETION_PASSWORD)).toBe(''))
+    await waitFor(() => expect(unsavedNow).toBe(false))
+  })
+
+  it('keeps the password as typed when the request is refused, and says why', async () => {
+    open(
+      () => okAsync(undefined),
+      () => errAsync({ code: 'data:INVALID_CREDENTIALS' as const, message: 'wrong' }),
+    )
+
+    await screen.findByTestId('user.settings.deletion.form')
+    fireEvent.change(screen.getByTestId(DELETION_PASSWORD), { target: { value: 'Wrong-pass1' } })
+    await act(async () => fireEvent.click(screen.getByTestId('user.settings.deletion.send-button')))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('user.settings.deletion.error').getAttribute('data-code')).toBe(
+        'invalid-credentials',
+      ),
+    )
+    expect(value(DELETION_PASSWORD)).toBe('Wrong-pass1')
+    expect(screen.queryByTestId('user.settings.deletion.message')).toBeNull()
   })
 })

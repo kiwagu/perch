@@ -50,12 +50,15 @@ function One() {
   return (
     <>
       <Input aria-label="name" defaultValue="" />
+      <Input aria-label="email" data-testid="user.sign-in.email-input" defaultValue="" />
+      <Input aria-label="password" data-testid="user.sign-in.password-input" defaultValue="" />
       <Link to="/two">to two</Link>
       <Link to="/one" search={{ tab: 'b' }}>
         to tab b
       </Link>
       <Asking control="app-shell.locale-select" />
       <Asking control="x.other-button" />
+      <Asking control="user.sign-in.forgot-link" />
     </>
   )
 }
@@ -64,8 +67,13 @@ const Pages = defineModule({
   id: 'pages',
   declarations: { One, Two: () => <p>two</p> },
   routes: [
-    { path: '/one', page: 'One', search: z.object({ tab: z.enum(['a', 'b']).default('a') }) },
-    { path: '/two', page: 'Two' },
+    {
+      path: '/one',
+      page: 'One',
+      roles: ['guest', 'identity'],
+      search: z.object({ tab: z.enum(['a', 'b']).default('a') }),
+    },
+    { path: '/two', page: 'Two', roles: ['guest', 'identity'] },
   ],
 })
 
@@ -192,5 +200,51 @@ describe('LeaveGuard', () => {
     await user.click(screen.getByText('x.other-button: true'))
     expect(dialog()).toBeNull()
     await act(() => Promise.resolve())
+  })
+
+  it('asks before a control whose flow leaves its screen only while a field it loses holds unsaved input', async () => {
+    const user = userEvent.setup()
+    const forgot = 'user.sign-in.forgot-link'
+
+    await open()
+    await user.type(screen.getByLabelText('email'), 'ann@example.test')
+    await user.click(screen.getByText(`${forgot}: none`))
+    expect(await screen.findByText(`${forgot}: true`)).toBeDefined()
+    expect(dialog()).toBeNull()
+
+    await user.type(screen.getByLabelText('password'), 'Secret-1')
+    await user.click(screen.getByText(`${forgot}: true`))
+    await user.click(await screen.findByTestId('app-shell.leave-dialog.cancel-button'))
+    expect(await screen.findByText(`${forgot}: false`)).toBeDefined()
+  })
+
+  it('settles a question a second one replaces as Stay, and answers the second', async () => {
+    const user = userEvent.setup()
+    const forgot = 'user.sign-in.forgot-link'
+
+    await open()
+    await user.type(screen.getByLabelText('password'), 'Secret-1')
+    await user.click(screen.getByText(`${forgot}: none`))
+    await screen.findByTestId('app-shell.leave-dialog')
+
+    // The open dialog keeps the pointer off the page, so the second ask is a plain click.
+    act(() => screen.getByText('app-shell.locale-select: none').click())
+
+    expect(await screen.findByText(`${forgot}: false`)).toBeDefined()
+    expect(dialog()).not.toBeNull()
+    await user.click(screen.getByTestId('app-shell.leave-dialog.confirm-button'))
+    expect(await screen.findByText('app-shell.locale-select: true')).toBeDefined()
+    expect(screen.getByText(`${forgot}: false`)).toBeDefined()
+  })
+
+  it('counts a field that renders no anchor among those a leave loses', async () => {
+    const user = userEvent.setup()
+    const forgot = 'user.sign-in.forgot-link'
+
+    await open()
+    await user.type(screen.getByLabelText('name'), 'Ann')
+    await user.click(screen.getByText(`${forgot}: none`))
+    await user.click(await screen.findByTestId('app-shell.leave-dialog.confirm-button'))
+    expect(await screen.findByText(`${forgot}: true`)).toBeDefined()
   })
 })

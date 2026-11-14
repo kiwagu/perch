@@ -14,6 +14,7 @@ export { createSyncEngine, type SyncEngine, type SyncEngineOptions } from './syn
 export {
   type ChannelState,
   type DeviceCredentials,
+  type DeviceNetwork,
   type EndReason,
   endingOf,
   RECONNECT_DELAYS_MS,

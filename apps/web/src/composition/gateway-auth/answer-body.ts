@@ -1,6 +1,6 @@
 /**
- * The body of a gateway answer, read once and never quoted: the code a refusal names, and what a
- * link the gateway refused means.
+ * The body of a gateway answer, read once and never quoted: the code a refusal names, what a link
+ * the gateway refused means, what a conflict means, and what a banned account's refusal means.
  */
 
 import { ResultAsync } from 'neverthrow'
@@ -18,6 +18,13 @@ const refusal = z.object({ code: z.string() })
 export const refusalCode = (response: Response): ResultAsync<string | undefined, never> =>
   answerBody(response).map((body) => refusal.safeParse(body).data?.code)
 
+/** The code a 403 names for an account an operator banned. */
+export const ACCOUNT_BANNED_CODE = 'account-banned'
+
+/** What a 403 that names `account-banned` means: nothing is signed in, the account is banned. */
+export const accountBanned = (): DataError =>
+  dataError('data:ACCOUNT_BANNED', 'the account is banned')
+
 /**
  * What a 401 to a link's token means: `link-expired` a link past its lifetime, any other a link
  * that does not work (unknown, used before or replaced by a newer one).
@@ -27,4 +34,22 @@ export const linkRefusedBy = (response: Response): ResultAsync<DataError, never>
     code === 'link-expired'
       ? dataError('data:LINK_EXPIRED', 'the link is past its lifetime')
       : dataError('data:LINK_INVALID', 'the gateway refused the link'),
+  )
+
+/**
+ * What a 409 means: `last-admin` an account that is the only administrator of an organisation
+ * with other members, which blocks its deletion until those members are removed; any other code
+ * is `otherwise`, the call's own reading of an answer it does not know.
+ */
+export const conflictRefusedBy = (
+  response: Response,
+  otherwise: DataError,
+): ResultAsync<DataError, never> =>
+  refusalCode(response).map((code) =>
+    code === 'last-admin'
+      ? dataError(
+          'data:LAST_ADMIN',
+          'the account is the only administrator of an organisation with other members',
+        )
+      : otherwise,
   )

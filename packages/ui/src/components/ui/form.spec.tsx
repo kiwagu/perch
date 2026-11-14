@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
-import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import { UnsavedInputScope, useMarksState, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 function Probe() {
   return <output data-testid="probe">{String(useUnsavedInput())}</output>
@@ -93,5 +93,53 @@ describe('Form', () => {
     await user.type(screen.getByLabelText('first'), 'a')
     await user.click(screen.getByText('save'))
     await waitFor(() => expect(probe()).toBe('true'))
+  })
+})
+
+/** Shows whether a field with its own `own` marks its state. */
+function Marks(props: { readonly own?: boolean | undefined }) {
+  return <output data-testid="marks">{String(useMarksState(props.own))}</output>
+}
+
+const marks = () => screen.getByTestId('marks').textContent
+
+describe('Form marksState', () => {
+  it("defaults to true, a form's false reaches its fields, a field's own value wins", () => {
+    const { rerender } = render(
+      <Form onSubmit={() => true}>
+        <Marks />
+      </Form>,
+    )
+
+    expect(marks()).toBe('true')
+
+    rerender(
+      <Form onSubmit={() => true} marksState={false}>
+        <Marks />
+      </Form>,
+    )
+    expect(marks()).toBe('false')
+
+    rerender(
+      <Form onSubmit={() => true} marksState={false}>
+        <Marks own />
+      </Form>,
+    )
+    expect(marks()).toBe('true')
+
+    rerender(
+      <Form onSubmit={() => true}>
+        <Marks own={false} />
+      </Form>,
+    )
+    expect(marks()).toBe('false')
+  })
+
+  it('is true outside a form unless the field says otherwise', () => {
+    const { rerender } = render(<Marks />)
+
+    expect(marks()).toBe('true')
+    rerender(<Marks own={false} />)
+    expect(marks()).toBe('false')
   })
 })

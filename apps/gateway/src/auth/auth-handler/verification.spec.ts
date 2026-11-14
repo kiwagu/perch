@@ -8,6 +8,7 @@ import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
+import { sessionStates } from '../__fixtures__/account-ban'
 import { AUTH_SECRET, betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import deviceSessionDevicesStatement from '../__fixtures__/device-session-devices.surql'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
@@ -29,6 +30,7 @@ import {
   printedDuring,
   READBACK_FAILURE,
   resendRequest,
+  verifyRequest as verify,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
@@ -43,19 +45,6 @@ const RESEND_FLOOR_MS = 500
 
 /** How early a resend may be measured against the floor: a timer's wake and the clock's rounding. */
 const RESEND_FLOOR_SLACK_MS = 10
-
-/** A verification of the link's `token` from `device` (none names no device), as the web sends it. */
-function verify(token: string, device: string | null): Request {
-  const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
-
-  headers.set('content-type', 'application/json')
-
-  return new Request('http://gateway.test/auth/verify-email', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ token }),
-  })
-}
 
 /** What the first verification of an account answers. */
 const verifiedAnswer = z.object({
@@ -100,8 +89,8 @@ async function seen(answer: Response | undefined) {
 }
 
 describe('authHandler, the verification of an email', () => {
-  it('signs the device in the first time, closing its sockets first, and answers the account', async () => {
-    const { route, outbox, closes } = await mountedOnRealAuth()
+  it('signs the device in the first time, its session admitted and its sockets closed, and answers the account', async () => {
+    const { route, outbox, closes, sessions } = await mountedOnRealAuth()
     const token = await annsLink(outbox)
     const answer = await route(verify(token, 'phone'), FROM)
     const body = verifiedAnswer.parse(await answer?.json())
@@ -109,6 +98,8 @@ describe('authHandler, the verification of an email', () => {
     expect(answer?.status).toBe(200)
     expect(body.token).not.toContain('.')
     expect(body.user).toMatchObject({ email: ANN, name: 'Ann', locale: 'en' })
+    // The token left once the session was admitted: it reads as the device's session.
+    expect((await sessions.read(body.token)).kind).toBe('session')
     expect(closes).toEqual([[body.user.id, 'phone', SUPERSEDED]])
     expect(answer?.headers.get('set-cookie')).toBeNull()
     expect(answer?.headers.get('set-auth-token')).toBeNull()
@@ -176,13 +167,16 @@ describe('authHandler, the verification of an email', () => {
     expect(devices).toHaveLength(1)
   })
 
-  it("closes the device's sockets even when the session cannot be read back", async () => {
-    const { route, outbox, registry, annsId } = await mountedOnRealAuth({ readbackFails: true })
+  it("leaves the device's sockets open, and its new session waiting, when the session cannot be read back", async () => {
+    const { route, outbox, registry, annsId, local } = await mountedOnRealAuth({
+      readbackFails: true,
+    })
     const token = await annsLink(outbox)
+    const ann = await annsId()
     const phone = fakeConnection()
     const before = registry.epoch()
 
-    registry.add(await annsId(), 'phone', phone, before)
+    registry.add(ann, 'phone', phone, before)
 
     const { result: answer, printed } = await printedDuring(() =>
       route(verify(token, 'phone'), FROM),
@@ -190,8 +184,16 @@ describe('authHandler, the verification of an email', () => {
 
     expect(answer?.status).toBe(500)
     expect(await answer?.json()).toEqual({ code: 'internal' })
-    expect(phone.ended).toEqual([SUPERSEDED])
-    expect(registry.epoch()).toBeGreaterThan(before)
+    // Nothing admitted the session, so nothing ended the device's earlier one: its sockets stay.
+    expect(phone.ended).toEqual([])
+    expect(registry.epoch()).toBe(before)
+    expect(
+      (await sessionStates(local, ann)).map(({ device, pending, ended_at }) => [
+        device,
+        pending,
+        ended_at,
+      ]),
+    ).toEqual([['phone', true, undefined]])
     expect(printed).not.toContain(READBACK_FAILURE)
   })
 
@@ -582,7 +584,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
 
     const answer = await route(verify(token, 'phone'), FROM)
     const [devices] = await local.db.query<[unknown[]]>(deviceSessionDevicesStatement)
@@ -622,7 +624,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
     insert.release()
 
     const answer = await verifying
@@ -660,7 +662,7 @@ describe('authHandler, a verification link after a reset verified the email', ()
           FROM,
         )
       )?.status,
-    ).toBe(204)
+    ).toBe(200)
 
     const change = (
       await mounted.emailChanges.ask(ann, ANN, 'ann.moved@example.test')

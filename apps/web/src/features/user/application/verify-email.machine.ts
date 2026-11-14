@@ -20,6 +20,9 @@ type MessageCode = (typeof MESSAGES)[number]
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'verify-email:UNKNOWN'
 
+/** The code of a link that verified the email of an account an operator banned. */
+const ACCOUNT_BANNED = 'data:ACCOUNT_BANNED'
+
 export interface VerifyEmailContext {
   /** The code of the failure the error shows: of the exchange, or of the last resend. */
   readonly error: string | undefined
@@ -72,6 +75,11 @@ function signedIn(event: object): boolean {
   )
 }
 
+/** Whether the exchange failed because the link is the one of a banned account. */
+function accountBanned(event: object): boolean {
+  return failureOf(event, UNKNOWN_FAILURE) === ACCOUNT_BANNED
+}
+
 /** The email the resend button sent, which the resend takes. */
 function emailInput({ event }: { readonly event: VerifyEmailEvent }): { readonly email: string } {
   assertEvent(event, 'user.verify-email.resend-button')
@@ -82,8 +90,9 @@ function emailInput({ event }: { readonly event: VerifyEmailEvent }): { readonly
 /**
  * The verify page as the screen's flow says (`contract/domain/screens/verify-email.yaml`): it
  * starts by exchanging the token of its address; the first verification welcomes on the frame and
- * moves to the profile, a link verified before says so and ends, a refused one offers to send a new
- * link to an email typed, as often as it is asked. Its `show` and `clear` keep the codes of the
+ * moves to the profile, a link verified before says so and ends, the link of a banned account
+ * says so and ends (its email is verified, nothing is signed in, no new link is offered), a
+ * refused one offers to send a new link to an email typed, as often as it is asked. Its `show` and `clear` keep the codes of the
  * page's error and message for the view and emit any other; its `navigate` emits the path, for
  * the host to move to.
  */
@@ -96,6 +105,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
     },
     guards: {
       signedIn: ({ event }) => signedIn(event),
+      accountBanned: ({ event }) => accountBanned(event),
     },
     actors: {
       'platform.verify-email': fromPromise<EmailVerified, { readonly token: string }>(({ input }) =>
@@ -133,6 +143,7 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
     context: { error: undefined, message: undefined, sentTo: undefined },
     states: {
       verifying: {
+        meta: { renders: ['user.verify-email.status'] },
         invoke: {
           src: 'platform.verify-email',
           input: () => ({ token: deps.token }),
@@ -155,31 +166,55 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
               ],
             },
           ],
-          onError: {
-            target: 'resend-offered',
-            actions: [
-              {
-                type: 'show',
-                params: {
-                  anchor: VERIFY_ERROR,
-                  codes: [
-                    'link-invalid',
-                    'link-expired',
-                    'other-account',
-                    'rate-limited',
-                    'failed',
-                  ],
+          onError: [
+            {
+              target: 'banned',
+              guard: 'accountBanned',
+              actions: [
+                { type: 'show', params: { anchor: VERIFY_ERROR, codes: ['account-banned'] } },
+              ],
+            },
+            {
+              target: 'resend-offered',
+              actions: [
+                {
+                  type: 'show',
+                  params: {
+                    anchor: VERIFY_ERROR,
+                    codes: [
+                      'link-invalid',
+                      'link-expired',
+                      'other-account',
+                      'rate-limited',
+                      'failed',
+                    ],
+                  },
                 },
-              },
-            ],
-          },
+              ],
+            },
+          ],
         },
       },
-      verified: { type: 'final' },
+      banned: { type: 'final' },
+      verified: { type: 'final', meta: { renders: ['user.verify-email.sign-in-link'] } },
       'resend-offered': {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         on: { 'user.verify-email.resend-button': { target: 'resending' } },
       },
       resending: {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         invoke: {
           src: 'platform.resend-verification',
           input: emailInput,
@@ -201,6 +236,13 @@ export function createVerifyEmailMachine(deps: VerifyEmailMachineDeps) {
         },
       },
       sent: {
+        meta: {
+          renders: [
+            'user.verify-email.form',
+            'user.verify-email.email-input',
+            'user.verify-email.resend-button',
+          ],
+        },
         on: { 'user.verify-email.resend-button': { target: 'resending' } },
       },
       done: { type: 'final' },

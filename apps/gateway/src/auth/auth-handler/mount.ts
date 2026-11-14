@@ -1,16 +1,23 @@
+import type { ResultAsync } from 'neverthrow'
+
+import type { DataError } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 
 import type { KeyedTurns } from '../../keyed-turns'
 import type { RequestLimits } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import type { ConnectionRegistry } from '../../sync/connections'
-import type { EmailChanges, ResetLinks } from '../account-links'
+import type { DepartureError, DepartureSteps } from '../../tenants/account-departure'
+import type { AccountDeletions, EmailChanges, ResetLinks } from '../account-links'
 import type { AccountMails } from '../account-mails'
 import type { AccountPasswords } from '../account-passwords'
+import type { AccountTeardown } from '../account-teardown'
 import type { AuthInstance } from '../auth-instance'
 import type { AuthSessions } from '../auth-sessions'
 import type { ProfileEmails } from '../profile-emails'
 
+import { deleteAccount, requestAccountDeletion } from './account-deletion'
 import { changeEmail, confirmEmail } from './email-change'
 import { changePassword } from './password-change'
 import { requestPasswordReset, resetPassword } from './password-reset'
@@ -27,6 +34,23 @@ const RESET_PATH = '/auth/reset-password'
 const CHANGE_PASSWORD_PATH = '/auth/change-password'
 const CHANGE_EMAIL_PATH = '/auth/change-email'
 const CONFIRM_EMAIL_PATH = '/auth/confirm-email'
+const REQUEST_DELETION_PATH = '/auth/request-account-deletion'
+const DELETE_ACCOUNT_PATH = '/auth/delete-account'
+
+/**
+ * The organisations of an account whose deletion is asked: whether it is the only admin of a
+ * ready organisation with other members (`blocked`, a read that decides nothing for a deletion),
+ * and its departure from every one of them (`Organisations.leaveAll`), which decides that in the
+ * turns of its memberships and runs `steps` there: `before` once it is allowed, ahead of every
+ * write, and `after` once the account left, while no invite of it can land.
+ */
+export interface AccountDepartures {
+  blocked(identity: IdentityId): ResultAsync<boolean, DataError>
+  leave<T, Stop>(
+    identity: IdentityId,
+    steps: DepartureSteps<T, Stop>,
+  ): ResultAsync<T, DepartureError | Stop>
+}
 
 /**
  * What the mount answers with: Better Auth, the gateway's sessions, passwords, account links,
@@ -36,7 +60,14 @@ export interface AuthMountDeps {
   readonly auth: Pick<AuthInstance, 'handler'>
   readonly sessions: Pick<
     AuthSessions,
-    'signedIn' | 'identityOf' | 'verificationOf' | 'read' | 'signOut'
+    | 'signedIn'
+    | 'identityOf'
+    | 'verificationOf'
+    | 'read'
+    | 'signOut'
+    | 'revokeAll'
+    | 'admit'
+    | 'admitVerified'
   >
   /** The reset mail, the reset, the change and the check of a password, an email's credential. */
   readonly passwords: Pick<
@@ -47,8 +78,20 @@ export interface AuthMountDeps {
   readonly resets: Pick<ResetLinks, 'read'>
   /** The pending changes of accounts' emails, and the change itself. */
   readonly emailChanges: Pick<EmailChanges, 'ask' | 'cancel' | 'read' | 'claim' | 'move'>
-  /** The confirmation of a new email and the notices of a changed password and email. */
-  readonly mails: Pick<AccountMails, 'confirmEmail' | 'passwordChanged' | 'emailChanged'>
+  /** The pending deletions of accounts, and their links. */
+  readonly deletions: Pick<AccountDeletions, 'ask' | 'read' | 'claim'>
+  /** The organisations a deleted account leaves. */
+  readonly departure: AccountDepartures
+  /** Whom the notice of a deleted account goes to, and the removal of the account's own rows. */
+  readonly teardown: Pick<AccountTeardown, 'addressee' | 'remove'>
+  /**
+   * The confirmation of a new email, the deletion mail, and the notices of a changed password, a
+   * changed email and a deleted account.
+   */
+  readonly mails: Pick<
+    AccountMails,
+    'confirmEmail' | 'passwordChanged' | 'emailChanged' | 'deleteAccount' | 'accountDeleted'
+  >
   /** The profile's email, which follows the account's into its private region. */
   readonly profiles: Pick<ProfileEmails, 'queue'>
   readonly limits: Pick<
@@ -58,8 +101,10 @@ export interface AuthMountDeps {
     | 'verificationMail'
     | 'resetMail'
     | 'emailChangeMail'
+    | 'deletionMail'
     | 'passwordReset'
     | 'emailConfirmation'
+    | 'accountDeletion'
   >
   readonly connections: Pick<ConnectionRegistry, 'close'>
   /** The gateway's clock. */
@@ -68,8 +113,9 @@ export interface AuthMountDeps {
    * One account's work, one turn at a time in this process: its sign-ups, verifications and reset
    * requests by its email in lower case; its reset, its changes of password and of email by its
    * identity's key; a confirmation by both, the identity first, then the new email, so no sign-up
-   * of the new email runs meanwhile. A sign-in takes no turn (`signIn`). No work takes an
-   * identity's turn inside an email's, so the turns never wait on each other in a circle.
+   * of the new email runs meanwhile; a request to delete the account and a deletion by its
+   * identity's key. A sign-in takes no turn (`signIn`). No work takes an identity's turn inside an
+   * email's, so the turns never wait on each other in a circle.
    */
   readonly accounts: KeyedTurns<string>
 }
@@ -77,12 +123,14 @@ export interface AuthMountDeps {
 /**
  * The paths the mount answers, each by `POST` only; every other path under `/auth/` answers 404
  * here. Handing everything over would expose each endpoint Better Auth and its plugins add, such
- * as the list of an account's sessions with every session's token, or an ending of a session
- * that leaves its device's sockets open; a later feature allows its endpoint here on purpose. The
+ * as the list of an account's sessions with every session's token, an ending of a session that
+ * leaves its device's sockets open, or the admin plugin's ban and role of an account; a later
+ * feature allows its endpoint here on purpose. The
  * verification is taken by POST with its token in the body and handed to Better Auth's GET, so a
  * token never sits in a URL the gateway serves. The reset, the changes of password and email and
  * the confirmation reach no Better Auth route over HTTP: the mount calls Better Auth on the
- * server where it needs it.
+ * server where it needs it. Better Auth's own deletion of a user is not among them: the gateway
+ * deletes an account itself, by a mailed link.
  */
 const SERVED_PATHS: ReadonlyMap<
   string,
@@ -97,6 +145,8 @@ const SERVED_PATHS: ReadonlyMap<
   [CHANGE_PASSWORD_PATH, changePassword],
   [CHANGE_EMAIL_PATH, changeEmail],
   [CONFIRM_EMAIL_PATH, confirmEmail],
+  [REQUEST_DELETION_PATH, requestAccountDeletion],
+  [DELETE_ACCOUNT_PATH, deleteAccount],
 ])
 
 /** `answer` once the client address took one of its credential checks (429 when they are spent). */
@@ -112,12 +162,12 @@ function credentialChecked(
 
 /**
  * Better Auth's sign-up, sign-in, verification and resend behind the gateway's own limits, and the
- * gateway's recovery and change of a password and change of an email. Of the paths under
- * `/auth/`, only the first four are handed to Better Auth's handler, at the path Better Auth
- * serves them under (the front's prefix put back); the other five are answered here, calling
- * Better Auth on the server where they need it. Another method on any of them answers 405 with
- * `Allow: POST`, and every other path under `/auth/` 404 `not-found`, Better Auth not asked. A
- * path outside `/auth/` is not answered here (`undefined`). The device routes come before this
+ * gateway's recovery and change of a password, change of an email and deletion of an account. Of
+ * the paths under `/auth/`, only the first four are handed to Better Auth's handler, at the path
+ * Better Auth serves them under (the front's prefix put back); the other seven are answered here,
+ * calling Better Auth on the server where they need it. Another method on any of them answers 405
+ * with `Allow: POST`, and every other path under `/auth/` 404 `not-found`, Better Auth not asked.
+ * A path outside `/auth/` is not answered here (`undefined`). The device routes come before this
  * one in the server, so the sign-outs they serve under `/auth/` are theirs.
  *
  * - `POST /auth/sign-up/email` and `POST /auth/sign-in/email` each first take one of their client
@@ -128,11 +178,13 @@ function credentialChecked(
  *   `SIGN_UP_FLOOR_MS` after the request began; 400 `bad-request` for a body that names no email
  *   or no password; 400 `weak-password` at once for a password that breaks the rules of a new
  *   password, before its email's turn and Better Auth; it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
- *   the account, as Better Auth answers it without its cookies. It must first find a place among
+ *   the account, its id, email, name and whether its email is verified, built from Better Auth's
+ *   answer by that allowlist, without its cookies (`signIn`). It must first find a place among
  *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
  *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a
- *   failure, 200 and 403 (the password was right, the email is not verified) clear the email's,
- *   and any other answer, or a handler that threw, gives it back. A sign-in whose body is not
+ *   failure, 200 and 403 (the password was right, but the email is not verified or the account
+ *   is banned) clear the email's, and any other answer, or a handler that threw, gives it back.
+ *   A sign-in whose body is not
  *   JSON naming an email answers 400 `bad-request`; one that is reaches Better Auth as that JSON,
  *   whatever content type it came with, so the email Better Auth checks is the one counted. A
  *   sign-in Better Auth accepts closes the identity's sync sockets on the device the request
@@ -151,9 +203,10 @@ function credentialChecked(
  *   for a body that names no email.
  * - `POST /auth/request-password-reset` `{ email }` (`requestPasswordReset`): 202 with no body,
  *   alike for any email, no sooner than `RESET_REQUEST_FLOOR_MS` after it began.
- * - `POST /auth/reset-password` `{ token, password }` (`resetPassword`): 204, every session of
- *   the account ended and its sockets closed with 4002; 400 `password-rejected`, 401
- *   `link-invalid` or `link-expired`.
+ * - `POST /auth/reset-password` `{ token, password }`, with the device's token when it has one
+ *   (`resetPassword`): 200 `{ signedOut }`, every session of the account ended and its sockets
+ *   closed with 4002, `signedOut` saying whether the request's own session was one of them; 400
+ *   `password-rejected`, 401 `link-invalid` or `link-expired`.
  * - `POST /auth/change-password` `{ currentPassword, password }`, with the device's token
  *   (`changePassword`): 204, every other session of the account ended and its sockets closed
  *   with 4002; 400 `invalid-credentials` or `password-rejected`.
@@ -162,6 +215,13 @@ function credentialChecked(
  *   `CHANGE_EMAIL_FLOOR_MS` after it began; 400 `invalid-credentials` or `email-invalid`.
  * - `POST /auth/confirm-email` `{ token }` (`confirmEmail`): 200 `{ identity, email }` once the
  *   account's email is the new one; 401 `link-invalid` or `link-expired`.
+ * - `POST /auth/request-account-deletion` `{ password }`, with the device's token
+ *   (`requestAccountDeletion`): 202 with no body once the deletion mail is on its way to the
+ *   account's email; 400 `invalid-credentials`, 409 `last-admin`.
+ * - `POST /auth/delete-account` `{ token }` (`deleteAccount`): 200 `{ identity }` once the account
+ *   is gone, every session of it ended and its sockets closed with 4001 first, and its sockets
+ *   closed with 4001 once more after its rows went; 401 `link-invalid` or `link-expired`, 409
+ *   `last-admin`.
  *
  * A limit that refuses answers 429 `rate-limited` with `Retry-After`, Better Auth not asked. Every
  * other refusal Better Auth answers reaches the client as its status and `{ code }` alone, a

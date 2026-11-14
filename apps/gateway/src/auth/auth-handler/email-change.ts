@@ -4,13 +4,12 @@ import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
-import type { SignInOutcome } from '../../limits/request-limits'
+import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
-import { bearerRefused } from '../bearer-caller'
 
-import { until } from './floor'
 import type { AuthMountDeps } from './mount'
+import { confirmPassword } from './password-confirmation'
 import { badRequest, internal, refused } from './requests'
 import { type MountCaller, signedIn } from './signed-in'
 
@@ -99,9 +98,8 @@ async function asked(
 }
 
 /**
- * In the account's turn: the caller's session read again, with the account's email as it is now,
- * then its password checked against its failed sign-ins and the credential row, then the change
- * kept (`keepChange`): `kept`, or the answer that refuses it.
+ * In the account's turn: the caller's password confirmed (`confirmPassword`), with the account's
+ * email as it is now, then the change kept (`keepChange`): `kept`, or the answer that refuses it.
  */
 async function authenticated(
   deps: AuthMountDeps,
@@ -109,46 +107,13 @@ async function authenticated(
   password: string,
   newEmail: string,
 ): Promise<Response | 'kept'> {
-  const read = await deps.sessions.read(caller.token)
+  const confirmed = await confirmPassword(deps, caller, password)
 
-  if (read.kind === 'failed') {
-    return internal()
+  if (confirmed instanceof Response) {
+    return confirmed
   }
 
-  if (
-    read.kind === 'none' ||
-    read.caller.identity !== caller.identity ||
-    read.caller.device !== caller.device
-  ) {
-    return bearerRefused()
-  }
-
-  const email = read.caller.email.toLowerCase()
-  const attempt = deps.limits.signInAttempt(email)
-
-  if (!attempt.allowed) {
-    return tooMany(attempt)
-  }
-
-  let outcome: SignInOutcome = 'unjudged'
-
-  try {
-    const matches = await deps.passwords.matches(caller.identity, password)
-
-    if (matches.isErr()) {
-      return internal()
-    }
-
-    outcome = matches.value ? 'succeeded' : 'failed'
-  } finally {
-    attempt.settle(outcome)
-  }
-
-  if (outcome === 'failed') {
-    return refused(400, 'invalid-credentials')
-  }
-
-  const kept = await keepChange(deps, caller.identity, email, newEmail)
+  const kept = await keepChange(deps, caller.identity, confirmed.email, newEmail)
 
   return kept.isOk() ? 'kept' : internal()
 }

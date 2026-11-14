@@ -17,6 +17,7 @@ import {
 import refuseAppends from './__fixtures__/refuse-appends.surql'
 import countsStatement from './__fixtures__/replica-counts.surql'
 import coversStatement from './__fixtures__/snapshot-covers.surql'
+import { isHeldBack } from './held-back'
 import { RegionDoc, type RegionRef } from './region-doc'
 import { replaceRegionDoc } from './region-replacement'
 import { RegionStore } from './region-store'
@@ -175,6 +176,30 @@ describe('RegionDoc persistence', () => {
 
     expect(failure.code).toBe('data:WRITE_FAILED')
     expect(failure.cause).toBe(refusal)
+  })
+
+  it('holds a server update back while a local update fails to persist, and says so', async () => {
+    const broken = interceptQueries(local, (text) => {
+      if (text === appendStatement) {
+        throw new Error('the disk is full')
+      }
+    })
+    const region = (await RegionDoc.open(broken, ref))._unsafeUnwrap()
+
+    writeName(region, 'Ann')
+
+    const failure = (
+      await region.importRemote(updateWithMissingHistory().fill, 1)
+    )._unsafeUnwrapErr()
+
+    expect(isHeldBack(failure)).toBe(true)
+    expect(failure.code).toBe('data:WRITE_FAILED')
+    expect(failure.cause).toMatchObject({
+      code: 'data:WRITE_FAILED',
+      message: `could not persist an update of ${ref.id}`,
+    })
+    expect(region.pulled()).toBe(0)
+    expect(await counts()).toEqual({ snapshots: 0, updates: 0, outbox: 0 })
   })
 
   it('compacts the log into one full snapshot and keeps numbering after a reopen', async () => {
@@ -611,6 +636,18 @@ describe('a region reset on the device', () => {
 
     expect((await old.catchUpLocal())._unsafeUnwrapErr().code).toBe('data:REGION_STALE')
     expect(old.recordJson(key)).toBeUndefined()
+  })
+
+  it('answers a stale region, not a held-back update, when its own update failed on the reset', async () => {
+    const old = await open()
+
+    await reset(await open())
+    writeName(old, 'Ann')
+
+    const failure = (await old.importRemote(updateWithMissingHistory().fill, 5))._unsafeUnwrapErr()
+
+    expect(failure.code).toBe('data:REGION_STALE')
+    expect(isHeldBack(failure)).toBe(false)
   })
 
   it('refuses its server imports, its cursor and its compaction', async () => {

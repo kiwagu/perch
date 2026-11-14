@@ -8,13 +8,15 @@ model no screen shows yet. The second is the code's: how many of the
 controls a user can act on carry an anchor, per feature module of the web app and for the UI
 kit, which are left unmarked and which are declared off the coverage by a marker, and how
 many anchors and scenarios each screen has. `bun run contract:coverage --write` rewrites the
-block below from the code and the contract; the text around it is written by hand.
+block below from the code and the contract; the text around it is written by hand. The block
+stays what that command writes: `bun run contract:coverage:check` fails when it is not, in `bun
+run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
-The contract declares 11 screens, 148 anchors and 62 codes.
+The contract declares 15 screens, 232 anchors and 92 codes.
 
-Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5/8; controls marked 60/61, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 89/90, ignored 2.
 
 ## Model
 
@@ -39,8 +41,10 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | id | field | unbound |
 | identity | field | unbound |
 | locale | field | `app-shell.locale-select`, `user.settings.locale-select` |
+| theme | field | `app-shell.theme-select`, `user.settings.theme-select` |
 | createSettings | action | unbound |
 | updateLocale | action | `app-shell.locale-select`, `user.settings.locale-select` |
+| updateTheme | action | `user.settings.theme-select` |
 
 ### note
 
@@ -65,12 +69,13 @@ Totals: fields bound 5/13, actions bound 6/8; activities 1, transitions walked 5
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
 | app-shell | 10 | 10 | 0 | 100% |
+| console | 16 | 16 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
-| organisation | 14 | 14 | 0 | 100% |
-| user | 28 | 28 | 0 | 100% |
+| organisation | 23 | 23 | 0 | 100% |
+| user | 32 | 32 | 0 | 100% |
 | ui kit | 4 | 3 | 2 | 75% |
-| all | 61 | 60 | 2 | 98% |
+| all | 90 | 89 | 2 | 99% |
 
 ### Unmarked
 
@@ -89,17 +94,21 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| not-found | 3 | 1 |
-| app-shell | 21 | 53 |
-| user.confirm-email | 5 | 4 |
-| device | 10 | 1 |
-| user.forgot-password | 6 | 10 |
-| user.profile | 10 | 44 |
-| organisation | 30 | 10 |
-| user.reset-password | 15 | 8 |
-| user.settings | 22 | 13 |
-| user.sign-in | 19 | 35 |
-| user.verify-email | 7 | 6 |
+| not-found | 3 | 3 |
+| app-shell | 22 | 91 |
+| user.confirm-email | 5 | 6 |
+| console.account | 36 | 8 |
+| console.users | 14 | 9 |
+| user.delete-account | 4 | 6 |
+| device | 10 | 6 |
+| user.forgot-password | 6 | 12 |
+| organisation.invitation | 8 | 7 |
+| user.profile | 10 | 77 |
+| organisation | 45 | 22 |
+| user.reset-password | 15 | 10 |
+| user.settings | 27 | 25 |
+| user.sign-in | 20 | 58 |
+| user.verify-email | 7 | 7 |
 
 <!-- coverage:end -->
 

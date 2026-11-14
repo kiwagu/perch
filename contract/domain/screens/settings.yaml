@@ -1,10 +1,10 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: its theme (light, dark, or the device's own setting) and its language, which follow it across its tabs and devices, and its password and email."
+description: "The signed-in account's settings: its theme and language, its password and email, and the request that deletes the account."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
-entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form ]
+entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.deletion.form ]
 anchors:
   user.settings.heading:
     kind: heading
@@ -97,6 +97,30 @@ anchors:
     fields:
       invalid-credentials: user.settings.email.password-input
       email-invalid: user.settings.email.email-input
+  user.settings.deletion.form:
+    kind: form
+    description: "Asks to delete the account: a mail to its email carries the link of the page that deletes it."
+  user.settings.deletion.password-input:
+    kind: input
+    secret: true
+    description: The password the account has now, which confirms the request.
+    binding:
+      action: platform.request-account-deletion
+      params:
+        password: user.settings.deletion.password-input
+    derived: [ visibility-button ]
+  user.settings.deletion.send-button:
+    kind: button
+    description: Sends the mail whose link leads to deleting the account.
+    binding: { action: platform.request-account-deletion }
+  user.settings.deletion.message:
+    kind: message
+    description: Asks to open the link of the mail sent to the account's email; the account goes only on the press of the page it opens.
+    codes: [ check-your-mail ]
+  user.settings.deletion.error:
+    kind: error
+    fields:
+      invalid-credentials: user.settings.deletion.password-input
 flow:
   id: settings
   initial: viewing
@@ -108,6 +132,7 @@ flow:
       passwordsDiffer: the new password typed again is not the same as the new password
       confirmationStrays: "the new password typed again is no longer how the new password begins: a character differs, or it is longer"
       confirmationFollows: the new password typed again is how the new password begins, all of it or a part, or is empty
+      deletionBlocked: { codes: [ last-admin ] }
   states:
     viewing:
       type: parallel
@@ -243,6 +268,40 @@ flow:
             sent:
               on:
                 user.settings.email.send-button: sending
+        deletion:
+          description: Asking to delete the account.
+          initial: idle
+          states:
+            idle:
+              on:
+                user.settings.deletion.send-button: sending
+            sending:
+              entry:
+                - clear: user.settings.deletion.error
+              invoke:
+                src: platform.request-account-deletion
+                input: { password: user.settings.deletion.password-input }
+                onDone:
+                  target: sent
+                  actions:
+                    - show: { user.settings.deletion.message: [ check-your-mail ] }
+                    - clear: user.settings.deletion.password-input
+                onError:
+                  - target: idle
+                    guard: deletionBlocked
+                    description: The password was right, but the account is the only admin of an organisation with other members, so the password is emptied and leaving for the organisation page asks nothing.
+                    actions:
+                      - clear: user.settings.deletion.message
+                      - show: user.settings.deletion.error
+                      - clear: user.settings.deletion.password-input
+                  - target: idle
+                    actions:
+                      - clear: user.settings.deletion.message
+                      - show: user.settings.deletion.error
+            sent:
+              description: The mail is on its way; a second press sends a fresh link, which replaces the first.
+              on:
+                user.settings.deletion.send-button: sending
 wireframe: |-
   - heading "Settings" [level=1]
   - combobox "Theme": System
@@ -255,3 +314,5 @@ wireframe: |-
   - textbox "New email"
   - textbox "Password"
   - button "Send the confirmation"
+  - textbox "Password"
+  - button "Send the deletion link"

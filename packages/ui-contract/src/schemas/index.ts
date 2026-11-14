@@ -1,4 +1,10 @@
 export { activitySchema } from './activity.schema'
+export {
+  DESCRIPTION_BUDGET,
+  DESCRIPTION_PURPOSES,
+  type DescriptionKind,
+  descriptionLength,
+} from './description-purposes'
 export { entityDefinitionSchema, entityFieldSchema } from './entity.schema'
 export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'
@@ -26,6 +32,7 @@ export {
   platformMailSchema,
   platformNoticeSchema,
   platformSchema,
+  RECIPIENT,
   screenFileSchema,
   screenSchema,
   sourceSchema,

@@ -32,6 +32,7 @@ const ACTION = {
   params: { email: { type: 'string', description: 'The address.' } },
   result: 'a mail is on its way',
   codes: ['failed'],
+  changes: [],
 }
 
 describe('platformSchema mail', () => {
@@ -136,5 +137,56 @@ describe('platformSchema composites', () => {
     ]) {
       expect(composites({ 'password-rules': composite }), JSON.stringify(composite)).toBe(false)
     }
+  })
+})
+
+describe('platformSchema paged', () => {
+  const paged = (value: unknown) =>
+    platformSchema.safeParse({
+      ...PLATFORM,
+      actions: { 'accounts.list': { ...ACTION, paged: value } },
+    }).success
+
+  it('accepts the page sizes an action answers and its default', () => {
+    expect(paged({ sizes: [10, 25, 50], default: 25 })).toBe(true)
+    expect(paged({ sizes: [20], default: 20 })).toBe(true)
+  })
+  it('refuses no size, a size under 1 or not whole, no default, and a key of its own', () => {
+    for (const value of [
+      { sizes: [], default: 25 },
+      { sizes: [0, 25], default: 25 },
+      { sizes: [2.5], default: 2.5 },
+      { sizes: [25] },
+      { sizes: [25], default: 25, max: 50 },
+      { size: 50 },
+      true,
+    ]) {
+      expect(paged(value), JSON.stringify(value)).toBe(false)
+    }
+  })
+})
+
+describe('platformSchema changes', () => {
+  const changing = (value: unknown) =>
+    platformSchema.safeParse({
+      ...PLATFORM,
+      actions: { 'organisations.invite': { ...ACTION, changes: value } },
+    }).success
+
+  it('accepts the platform actions an action changes the answer of, and none', () => {
+    expect(changing(['organisations.invitations'])).toBe(true)
+    expect(changing(['devices.list', 'accounts.read'])).toBe(true)
+    expect(changing([])).toBe(true)
+  })
+  it('refuses a name no platform action could have, and anything but a list', () => {
+    for (const value of [['Devices.list'], ['devices list'], ['devices.'], 'devices.list', true]) {
+      expect(changing(value), JSON.stringify(value)).toBe(false)
+    }
+  })
+  it('refuses an action that does not say what it changes, at its changes', () => {
+    const { changes: _changes, ...unsaid } = ACTION
+    const parsed = platformSchema.safeParse({ ...PLATFORM, actions: { send: unsaid } })
+
+    expect(parsed.error?.issues.map(({ path }) => path)).toEqual([['actions', 'send', 'changes']])
   })
 })

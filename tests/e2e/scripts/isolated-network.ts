@@ -10,17 +10,28 @@
  * host's loopback is reachable from inside, the host's resolver included: the namespace gets no
  * DNS (`--dns none`), as the run's addresses are loopback ones `/etc/hosts` names.
  * IPv4 only: inside, `localhost` resolves to ::1 first, which pasta would forward to the host's
- * ::1, where the stand's front does not listen. The command starts through `/bin/sh`: the AppArmor
- * profile Debian and Ubuntu ship for pasta lets it execute only what lies under /bin and /usr/bin,
- * so it would refuse `bunx` in ~/.bun/bin, while the shell it starts may run anything.
+ * ::1, where the stand's front does not listen. The kernel still gives the namespace's interface
+ * an IPv6 link-local address, and its duplicate address check ends a second or two after pasta
+ * starts the command, an address change that would abort the requests of the browser started
+ * meanwhile. So the shell that starts the command first switches IPv6 off in the namespace, and
+ * the browser meets a network that is already final. The command starts through `/bin/sh`: the
+ * AppArmor profile Debian and Ubuntu ship for pasta lets it execute only what lies under /bin and
+ * /usr/bin, so it would refuse `bunx` in ~/.bun/bin, while the shell it starts may run anything.
  */
 
 import { spawnSync } from 'node:child_process'
 
-/** The addresses the run reaches on the host: the front the browser opens, the mailbox the tests read. */
-const ADDRESSES = ['E2E_BASE_URL', 'MAILBOX_URL'] as const
+/**
+ * The addresses the run reaches on the host: the front the browser opens, the mailbox the tests
+ * read, and the stand's database, where the host's operator command a test runs sets an account's
+ * platform role. Forwarding a port changes no interface the browser sees.
+ */
+const ADDRESSES = ['E2E_BASE_URL', 'MAILBOX_URL', 'SURREAL_URL'] as const
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1'])
+
+/** Writing 1 here switches IPv6 off in the namespace of the writer, which pasta starts as root of a user namespace of its own. */
+const IPV6_SWITCH = '/proc/sys/net/ipv6/conf/all/disable_ipv6'
 
 /** The port of `address` when it is on the host's loopback; an address elsewhere is reached through pasta's own network. */
 function loopbackPort(address: string | undefined): number | undefined {
@@ -33,7 +44,7 @@ function loopbackPort(address: string | undefined): number | undefined {
   return Number(url.port || (url.protocol === 'https:' ? '443' : '80'))
 }
 
-/** The pasta command that runs `command` in a network namespace of its own, reaching the host's loopback only at the run's addresses. */
+/** The pasta command that runs `command` in a network namespace of its own, with IPv6 switched off there, reaching the host's loopback only at the run's addresses. */
 export function isolatedCommand(command: readonly string[], env: NodeJS.ProcessEnv): string[] {
   const ports = [
     ...new Set(
@@ -60,8 +71,9 @@ export function isolatedCommand(command: readonly string[], env: NodeJS.ProcessE
     '--',
     '/bin/sh',
     '-c',
-    'exec "$@"',
+    'echo 1 > "$1" && shift && exec "$@"',
     'sh',
+    IPV6_SWITCH,
     ...command,
   ]
 }

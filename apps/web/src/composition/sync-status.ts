@@ -11,27 +11,22 @@ import type { ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { Clock } from '@workspace/replica'
-import { z } from '@workspace/zod'
 
 import type { SyncStatus, SyncStatusPort } from '../platform/sync-status.port'
 
 import type { SyncState } from './identity-space'
-import type { KeyValueStorage } from './storage'
+import {
+  forgetSyncLeader,
+  type KeyValueStorage,
+  type SyncLeader as Leader,
+  SYNC_LEADER_KEY,
+  savedSyncLeader,
+  saveSyncLeader,
+} from './storage'
 
-const KEY = 'perch.sync.leader'
 const EVERY = 2_000
 /** A leader that has not refreshed its record for this long went away. */
 const STALE = 3 * EVERY
-
-const leaderSchema = z.object({
-  channel: z.enum(['up', 'down']),
-  // Whether changes wait to be sent; null until a read of the outbox answered, or after one failed.
-  waiting: z.boolean().nullable(),
-  stopped: z.boolean(),
-  at: z.number(),
-})
-
-type Leader = z.output<typeof leaderSchema>
 
 export interface SyncStatusOptions {
   readonly storage: KeyValueStorage
@@ -54,23 +49,6 @@ export interface SyncStatusSource extends SyncStatusPort {
   syncState(state: SyncState): void
   /** Stops the timer and the listeners; a leader's record goes. */
   stop(): void
-}
-
-function readLeader(storage: KeyValueStorage): Leader | undefined {
-  const text = storage.get(KEY)
-
-  if (text === undefined) {
-    return undefined
-  }
-
-  try {
-    const read = leaderSchema.safeParse(JSON.parse(text))
-
-    return read.success ? read.data : undefined
-  } catch {
-    // Not a record this code wrote: there is no leader to read.
-    return undefined
-  }
 }
 
 export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
@@ -97,7 +75,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
       at: options.clock.now(),
     }
 
-    options.storage.set(KEY, JSON.stringify(leader))
+    saveSyncLeader(options.storage, leader)
   }
   const answer = (next: Leader['waiting']) => {
     if (next !== waiting) {
@@ -144,7 +122,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
     })
   }
   const unlistenStorage = options.storage.onChangeElsewhere((key) => {
-    if (key === KEY || key === undefined) {
+    if (key === SYNC_LEADER_KEY || key === undefined) {
       notify()
     }
   })
@@ -158,7 +136,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         return undefined
       }
 
-      const leader = readLeader(options.storage)
+      const leader = savedSyncLeader(options.storage)
 
       if (!options.canSync || options.protocolRefused() || leader?.stopped === true) {
         return 'sync-stopped'
@@ -205,7 +183,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
         check()
       } else if (led) {
         // This tab no longer leads, signed out or handing over: the next leader writes its own.
-        options.storage.remove(KEY)
+        forgetSyncLeader(options.storage)
       }
 
       notify()
@@ -223,7 +201,7 @@ export function syncStatus(options: SyncStatusOptions): SyncStatusSource {
 
       if (leading) {
         leading = false
-        options.storage.remove(KEY)
+        forgetSyncLeader(options.storage)
       }
     },
   }

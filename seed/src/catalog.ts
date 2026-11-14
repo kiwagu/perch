@@ -19,6 +19,8 @@ const AccountPreset = z.strictObject({
   name: z.string().trim().min(1).max(80),
   bio: z.string().trim().min(1),
   locale: z.enum(['en', 'es']),
+  /** Marked, the account is made an operator of the platform once the seed has created it. */
+  operator: z.boolean().optional(),
 })
 
 const OrganisationPreset = z.strictObject({
@@ -45,7 +47,13 @@ export type Catalog = z.infer<typeof Catalog>
 
 export const catalog: Catalog = {
   accounts: [
-    { ref: 'ann', name: 'Ann Example', bio: 'Demo account of the seed.', locale: 'en' },
+    {
+      ref: 'ann',
+      name: 'Ann Example',
+      bio: 'Demo account of the seed.',
+      locale: 'en',
+      operator: true,
+    },
     { ref: 'beto', name: 'Beto Ejemplo', bio: 'Cuenta de ejemplo de la semilla.', locale: 'es' },
   ],
   organisations: [{ ref: 'acme', key: 'acme', name: 'Acme Corp', admin: 'ann', members: ['beto'] }],

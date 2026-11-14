@@ -1,8 +1,8 @@
 /**
  * The set-ups of the auth mount's specs: the mount over a stand-in for Better Auth, or over a real
- * instance on an embedded directory with the gateway's sessions, limits, sockets and turns; an
- * account with its verification link; a sign-up and a resend as the web sends them; a connection
- * that records its closes; and what a run prints.
+ * instance on an embedded directory with the gateway's sessions, limits, sockets and turns, and the
+ * organisations an account's deletion leaves; an account with its verification link; a sign-up
+ * and a resend as the web sends them; a connection that records its closes; and what a run prints.
  */
 
 import { inspect } from 'node:util'
@@ -10,15 +10,22 @@ import { inspect } from 'node:util'
 import { errAsync, okAsync } from 'neverthrow'
 import { expect, onTestFinished, vi } from 'vitest'
 
-import { dataError, type LocalDb } from '@workspace/data'
-import { interceptQueries } from '@workspace/data/testing'
+import { dataError, type LocalDb, openLocalDb, tenantDatabase } from '@workspace/data'
+import { nodeEngines } from '@workspace/data/engines/node'
+import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory, idSchemas } from '@workspace/ids'
 import { type ManualClock, manualClock } from '@workspace/replica/testing'
 
+import { NAMESPACE } from '../../../config'
 import { KeyedTurns } from '../../../keyed-turns'
 import { RequestLimits } from '../../../limits/request-limits'
 import { linkToken, type Outbox } from '../../../mail/__fixtures__/outbox'
 import { ConnectionRegistry, type MembershipsListener } from '../../../sync/connections'
+import { specInvitations } from '../../../tenants/__fixtures__/invitations'
+import { specRetell } from '../../../tenants/__fixtures__/retell'
+import { AccountDeparture } from '../../../tenants/account-departure'
+import { Organisations } from '../../../tenants/organisations'
+import { TenantDatabases } from '../../../tenants/tenant-databases'
 import {
   AUTH_SECRET,
   accountServicesOf,
@@ -27,8 +34,11 @@ import {
   openAuth,
   signUpOn,
 } from '../../__fixtures__/auth-instance'
+import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
+import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
+import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import { type AuthMountDeps, authHandler } from '../mount'
 
 /** The account most specs sign up and verify. */
@@ -87,9 +97,17 @@ export function fakeConnections(closing: Promise<void> = Promise.resolve()) {
  */
 export const STAND_IN_ACCOUNT = identityIdFactory.create()
 
+/**
+ * An accepted sign-in of `identity` (the stand-in's account unless named), as Better Auth answers
+ * one and the device gets it: the raw session token and the account.
+ */
+export const acceptedSignIn = (identity: IdentityId = STAND_IN_ACCOUNT) => ({
+  token: 'raw-token',
+  user: { id: identity, email: ANN, name: 'Ann', emailVerified: true },
+})
+
 /** An accepted sign-in of the stand-in's account, as Better Auth answers one. */
-export const signedInAnswer = (): Response =>
-  Response.json({ token: 'raw-token', user: { id: STAND_IN_ACCOUNT } })
+export const signedInAnswer = (): Response => Response.json(acceptedSignIn())
 
 /** What a stand-in that is not meant to be asked fails with. */
 const notHere = () => errAsync(dataError('data:QUERY_FAILED', 'nothing is read here'))
@@ -101,7 +119,8 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
- * account, no session is read back, no token holds a session, and nothing is signed out.
+ * account, no session is read back, no token holds a session, nothing is signed out, and every
+ * sign-in and verification is admitted.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -113,16 +132,26 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signedIn: notHere,
   read: async () => ({ kind: 'none' }),
   signOut: notHere,
+  revokeAll: notHere,
+  admit: () => okAsync({ kind: 'admitted' }),
+  admitVerified: () => okAsync({ kind: 'admitted' }),
 }
 
 /**
- * Stand-ins for the passwords, account links and mails, for the specs of the sign-up, the sign-in
- * and the verification over a stand-in for Better Auth: every one of them fails, as none is meant
- * to be asked.
+ * Stand-ins for the passwords, account links, mails and an account's deletion, for the specs of
+ * the sign-up, the sign-in and the verification over a stand-in for Better Auth: every one of them
+ * fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
-  'passwords' | 'resets' | 'emailChanges' | 'mails' | 'profiles'
+  | 'passwords'
+  | 'resets'
+  | 'emailChanges'
+  | 'deletions'
+  | 'departure'
+  | 'teardown'
+  | 'mails'
+  | 'profiles'
 > = {
   passwords: {
     requestReset: notHere,
@@ -133,7 +162,12 @@ export const noAccounts: Pick<
     // Every email reads alike before and after Better Auth's answer: the stand-in's account, its
     // one password, nothing a confirmation moved or a reset changed.
     credentialOf: () =>
-      okAsync({ identity: STAND_IN_ACCOUNT, hash: 'stand-in-hash', start: undefined }),
+      okAsync({
+        identity: STAND_IN_ACCOUNT,
+        hash: 'stand-in-hash',
+        banned: false,
+        start: undefined,
+      }),
   },
   resets: { read: notHere },
   emailChanges: {
@@ -143,10 +177,15 @@ export const noAccounts: Pick<
     claim: notHere,
     move: notHere,
   },
+  deletions: { ask: notHere, read: () => okAsync({ kind: 'invalid' }), claim: notHere },
+  departure: { blocked: notHere, leave: notHere },
+  teardown: { addressee: notHere, remove: notHere },
   mails: {
     confirmEmail: () => undefined,
     passwordChanged: () => undefined,
     emailChanged: () => undefined,
+    deleteAccount: () => undefined,
+    accountDeleted: () => undefined,
   },
   profiles: { queue: () => undefined },
 }
@@ -185,16 +224,84 @@ export const READBACK_FAILURE = 'MARKER the session of marker-ann@example.test t
 export interface RealMountOptions extends OpenAuthOptions {
   /** The readback of the session a verification signed in fails, with `READBACK_FAILURE`. */
   readonly readbackFails?: boolean
+  /**
+   * What the organisations reach the directory through, made from the directory: a test watches
+   * or holds their queries with it.
+   */
+  readonly organisationsDirectory?: (local: LocalDb) => LocalDb
+  /**
+   * Stands between the mount and each admission of a sign-in against the limit of devices, given
+   * the admission the sessions make: a test holds it, or answers a failure instead.
+   */
+  readonly admission?: (
+    admit: () => ReturnType<AuthSessions['admit']>,
+  ) => ReturnType<AuthSessions['admit']>
+  /** Every ending of a session by its token fails, as on a directory that takes no writes. */
+  readonly signOutFails?: boolean
+  /**
+   * Stands between the mount and Better Auth's handler, given the handler: a test makes its
+   * promise reject once the handler did its work, as a failure Better Auth rethrows outside its
+   * router does.
+   */
+  readonly handler?: (handle: AuthInstance['handler']) => AuthInstance['handler']
 }
 
 /** The instance each outbox the fixture opened belongs to. */
 const INSTANCES = new WeakMap<Outbox, AuthInstance>()
 
 /**
+ * The organisations over `directory`, each organisation's database on an embedded engine of its
+ * own (closed when the test finishes), and the departure an account's deletion asks of them, as
+ * the composition root wires it: `blocked` by the directory's memberships, the departure itself
+ * through `Organisations.leaveAll`.
+ */
+function organisationsOver(directory: LocalDb, onError: (code: string) => void) {
+  const databases = new TenantDatabases({
+    open: (key) =>
+      openLocalDb({
+        engines: nodeEngines(),
+        url: 'mem://',
+        namespace: NAMESPACE,
+        database: tenantDatabase(key),
+        schema: readSchema('tenant'),
+      }),
+    clock: manualClock(),
+    onError: (error) => onError(error.code),
+  })
+
+  onTestFinished(() => databases.close())
+
+  // No device subscribes to a region here: the hub has none to let go of.
+  const hub = { retire: () => okAsync(undefined) }
+  const organisations = new Organisations({
+    directory,
+    databases,
+    revoke: async () => {},
+    rerole: async () => {},
+    hub,
+    invitations: specInvitations(directory),
+    retell: specRetell(),
+  })
+  const departure = new AccountDeparture({ directory, databases, hub })
+
+  return {
+    organisations,
+    departure: {
+      blocked: (identity) => departure.blocked(identity),
+      leave: (identity, steps) => organisations.leaveAll(identity, steps),
+    } satisfies AuthMountDeps['departure'],
+  }
+}
+
+/**
  * The mount over a real Better Auth instance on an embedded directory (closed when the test
  * finishes), with the gateway's sessions over it, a real registry of sync connections (`registry`)
  * whose every close the mount asks for is also kept (`closes`), real limits on the instance's
- * clock, and the accounts' turns (`turns`), which a test may hold to make work wait.
+ * clock, the accounts' turns (`turns`), which a test may hold to make work wait, and the
+ * organisations (`organisations`) an account's deletion leaves. What a deletion does to the
+ * account is kept in order (`steps`): its departure from the organisations asked, its sessions
+ * ended, its sockets closed, its rows removed. What the mount answers with (`deps`) is kept too, so
+ * another route of a spec answers over the very same services, turns and limits.
  */
 export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const opened = await openAuth(
@@ -204,9 +311,11 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   onTestFinished(opened.close)
   INSTANCES.set(opened.outbox, opened.auth)
 
+  // The gateway's sessions reach the directory as the instance does: a test holds or fails their
+  // statements by the same hook.
   const sessions = new AuthSessions({
     auth: opened.auth,
-    directory: opened.local,
+    directory: opened.directory,
     clock: opened.clock,
     secret: AUTH_SECRET,
   })
@@ -217,8 +326,18 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
   const turns = new KeyedTurns<string>()
   /** The identities whose profile was asked to follow their email, in order. */
   const followed: IdentityId[] = []
-  const route = authHandler({
-    auth: opened.auth,
+  const steps: string[] = []
+  const { organisations, departure } = organisationsOver(
+    options.organisationsDirectory?.(opened.local) ?? opened.local,
+    (code) => failures.push(code),
+  )
+  const teardown = new AccountTeardown(opened.local)
+  /** What the mount answers with; the console's routes of a spec answer over the same. */
+  const deps: AuthMountDeps = {
+    auth:
+      options.handler === undefined
+        ? opened.auth
+        : { handler: options.handler(opened.auth.handler) },
     sessions: {
       verificationOf: (token) => sessions.verificationOf(token),
       identityOf: (email) => sessions.identityOf(email),
@@ -227,9 +346,40 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
           ? errAsync(dataError('data:QUERY_FAILED', READBACK_FAILURE))
           : sessions.signedIn(signed),
       read: (token) => sessions.read(token),
-      signOut: (token) => sessions.signOut(token),
+      signOut: (token) =>
+        options.signOutFails === true
+          ? errAsync(dataError('data:QUERY_FAILED', 'the session could not be ended'))
+          : sessions.signOut(token),
+      revokeAll: (identity) => {
+        steps.push('sessions ended')
+
+        return sessions.revokeAll(identity)
+      },
+      admit: (identity, token, signOutOldest) => {
+        const admit = () => sessions.admit(identity, token, signOutOldest)
+
+        return options.admission === undefined ? admit() : options.admission(admit)
+      },
+      admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
+    deletions: accounts.accountDeletions,
+    departure: {
+      blocked: (identity) => departure.blocked(identity),
+      leave: (identity, departureSteps) => {
+        steps.push('departure')
+
+        return departure.leave(identity, departureSteps)
+      },
+    },
+    teardown: {
+      addressee: (identity) => teardown.addressee(identity),
+      remove: (identity) => {
+        steps.push('rows removed')
+
+        return teardown.remove(identity)
+      },
+    },
     profiles: {
       queue: (identity) => {
         followed.push(identity)
@@ -239,13 +389,15 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     connections: {
       close: (identity, device, code) => {
         closes.push([identity, device, code])
+        steps.push(`sockets closed ${code}`)
 
         return registry.close(identity, device, code)
       },
     },
     clock: opened.clock,
     accounts: turns,
-  })
+  }
+  const route = authHandler(deps)
   /** Ann's identity, once she signed up. */
   const annsId = async (): Promise<IdentityId> => {
     const identity = (await sessions.identityOf(ANN))._unsafeUnwrap()
@@ -265,9 +417,13 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     failures,
     closes,
     route,
+    deps,
     annsId,
     turns,
     followed,
+    organisations,
+    teardown,
+    steps,
   }
 }
 
@@ -301,8 +457,16 @@ export function signUpRequest(email: string, password = PASSWORD): Request {
   })
 }
 
-/** A sign-in of `email` with `password` from `device`, as the web sends it from the front's origin. */
-export function signInRequest(email: string, password: string, device: string): Request {
+/**
+ * A sign-in of `email` with `password` from `device`, as the web sends it from the front's origin;
+ * `signOutOldest` confirms a sign-in past the account's limit of devices.
+ */
+export function signInRequest(
+  email: string,
+  password: string,
+  device: string,
+  signOutOldest?: boolean,
+): Request {
   const headers = deviceHeaders(device)
 
   headers.set('content-type', 'application/json')
@@ -310,7 +474,25 @@ export function signInRequest(email: string, password: string, device: string): 
   return new Request('http://gateway.test/auth/sign-in/email', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(
+      signOutOldest === undefined ? { email, password } : { email, password, signOutOldest },
+    ),
+  })
+}
+
+/**
+ * A verification of a link's `token` from `device` (none names no device), as the web sends it from
+ * the front's origin.
+ */
+export function verifyRequest(token: string, device: string | null): Request {
+  const headers = device === null ? new Headers({ origin: ORIGIN }) : deviceHeaders(device)
+
+  headers.set('content-type', 'application/json')
+
+  return new Request('http://gateway.test/auth/verify-email', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ token }),
   })
 }
 
@@ -331,6 +513,7 @@ export function fakeConnection(): MembershipsListener & { readonly ended: number
     ended,
     memberships: () => Promise.resolve(),
     revoke: () => Promise.resolve(),
+    rerole: () => Promise.resolve(),
     end: (code) => {
       ended.push(code)
 
@@ -338,6 +521,34 @@ export function fakeConnection(): MembershipsListener & { readonly ended: number
     },
     supersede: () => undefined,
   }
+}
+
+/**
+ * A socket of `device` of `identity` whose hello read `epoch` (the registry's epoch now unless
+ * named), registered in `registry` as a hello registers it: a connection that records the codes it
+ * is closed with and leaves the registry at its first close, as a real one does once its socket
+ * closed. `undefined` when the registry refused it, a close of the device or of its identity having
+ * landed since `epoch`.
+ */
+export function welcomed(
+  registry: ConnectionRegistry,
+  identity: IdentityId,
+  device: string,
+  epoch: number = registry.epoch(),
+): ReturnType<typeof fakeConnection> | undefined {
+  const socket = fakeConnection()
+  let remove: (() => void) | undefined
+  const leaving: ReturnType<typeof fakeConnection> = {
+    ...socket,
+    end: async (code) => {
+      await socket.end(code)
+      remove?.()
+    },
+  }
+
+  remove = registry.add(identity, device, leaving, epoch)
+
+  return remove === undefined ? undefined : leaving
 }
 
 /**
@@ -416,7 +627,8 @@ export interface SignedInAccount {
 
 /**
  * Signs `email` up with `password`, verifies it through its mail on the first of `devices` and
- * signs it in on each other one, each device then saying hello with a socket in `registry`.
+ * signs it in on each other one, each device then saying hello with a socket in `registry`
+ * (`welcomed`).
  */
 export async function signedInOn(
   mounted: Awaited<ReturnType<typeof mountedOnRealAuth>>,
@@ -438,11 +650,15 @@ export async function signedInOn(
     tokens.set(device, signedIn.token)
   }
 
-  const sockets = new Map(devices.map((device) => [device, fakeConnection()] as const))
-
-  for (const [device, socket] of sockets) {
-    mounted.registry.add(identity, device, socket, mounted.registry.epoch())
-  }
+  const sockets = new Map(
+    devices.map(
+      (device) =>
+        [
+          device,
+          welcomed(mounted.registry, identity, device) ?? expect.unreachable('a socket welcomed'),
+        ] as const,
+    ),
+  )
 
   return {
     identity,
@@ -519,6 +735,17 @@ export interface HeldQuery {
 /** Better Auth's adapter writes a session with an insert into its table. */
 export const isSessionInsert = (text: string): boolean =>
   text.startsWith('INSERT') && text.includes('`device_session`')
+
+/** The admission of a sign-in against the account's limit of devices, and its re-check of a ban. */
+export const isAdmission = (text: string): boolean => text === sessionsAdmitStatement
+
+/** The admission of a verification's session, and its re-check of a ban. */
+export const isVerifiedAdmission = (text: string): boolean =>
+  text === sessionsAdmitVerifiedStatement
+
+/** Better Auth's adapter reads a session by its token from its table, as at a session's read. */
+export const isSessionLookup = (text: string): boolean =>
+  text.startsWith('SELECT') && text.includes('FROM `device_session`')
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

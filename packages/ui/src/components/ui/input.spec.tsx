@@ -1,11 +1,17 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { Suspense, startTransition, use, useState } from 'react'
+import { type ReactNode, Suspense, startTransition, use, useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
-import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import {
+  type UnsavedFields,
+  UnsavedInputScope,
+  useUnsavedFields,
+  useUnsavedInput,
+} from '@workspace/ui/unsaved-input'
 
 function Probe() {
   return <output data-testid="probe">{String(useUnsavedInput())}</output>
@@ -169,5 +175,115 @@ describe('Textarea', () => {
     expect(probe()).toBe('true')
     await user.type(screen.getByLabelText('bio'), '{backspace}')
     expect(probe()).toBe('false')
+  })
+})
+
+let reader: (() => UnsavedFields) | undefined
+
+function Reader() {
+  reader = useUnsavedFields()
+
+  return null
+}
+
+describe('the anchor a field reports', () => {
+  it('is the anchor an input renders, while it holds unsaved input', async () => {
+    render(
+      <UnsavedInputScope>
+        <Input aria-label="name" data-testid="x.name-input" defaultValue="" />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.type(screen.getByLabelText('name'), 'Ann')
+
+    expect([...(reader?.().anchors ?? [])]).toEqual(['x.name-input'])
+  })
+
+  it('is the anchor a textarea renders, while it holds unsaved input', async () => {
+    render(
+      <UnsavedInputScope>
+        <Textarea aria-label="bio" data-testid="x.bio-input" defaultValue="" />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.type(screen.getByLabelText('bio'), 'Hi')
+
+    expect([...(reader?.().anchors ?? [])]).toEqual(['x.bio-input'])
+  })
+})
+
+/** Types into the field, then submits its form so that what it holds is saved. */
+async function typeAndSave(label: string, text: string): Promise<void> {
+  await userEvent.type(screen.getByLabelText(label), text)
+  await userEvent.click(screen.getByText('save'))
+}
+
+const STORED = new Set(['x.name-input', 'x.bio-input'])
+
+/** A form whose one field is `children`, in a scope that says the anchors it stores. */
+function Saving(props: { readonly children: ReactNode; readonly marksState?: boolean }) {
+  return (
+    <UnsavedInputScope stores={(anchor) => STORED.has(anchor)}>
+      <Form onSubmit={() => true} marksState={props.marksState}>
+        {props.children}
+        <button type="submit">save</button>
+      </Form>
+    </UnsavedInputScope>
+  )
+}
+
+describe.each([
+  [
+    'Input',
+    'x.name-input',
+    (marksState?: boolean) => (
+      <Input aria-label="f" data-testid="x.name-input" defaultValue="" marksState={marksState} />
+    ),
+  ],
+  [
+    'Textarea',
+    'x.bio-input',
+    (marksState?: boolean) => (
+      <Textarea aria-label="f" data-testid="x.bio-input" defaultValue="" marksState={marksState} />
+    ),
+  ],
+])('the state a %s shows on its own border', (_name, _anchor, field) => {
+  it('has no state untouched, unsaved once typed, saved once a submit saved it', async () => {
+    render(<Saving>{field()}</Saving>)
+
+    const element = screen.getByLabelText('f')
+
+    expect(element.hasAttribute('data-state')).toBe(false)
+    await userEvent.type(element, 'x')
+    expect(element.getAttribute('data-state')).toBe('unsaved')
+    await userEvent.click(screen.getByText('save'))
+    expect(element.getAttribute('data-state')).toBe('saved')
+  })
+
+  it('colors its border by the state, and loses the colors with marksState={false}, keeping data-state', async () => {
+    const { rerender } = render(<Saving>{field()}</Saving>)
+    const element = screen.getByLabelText('f')
+
+    expect(element.className).toContain('data-[state=unsaved]:not-aria-invalid:border-warning')
+    expect(element.className).toContain('data-[state=saved]:not-aria-invalid:border-success')
+    expect(element.className).not.toMatch(/(^| )focus-visible:border-ring/)
+
+    rerender(<Saving>{field(false)}</Saving>)
+    await typeAndSave('f', 'x')
+    expect(element.className).not.toContain('border-warning')
+    expect(element.className).not.toContain('border-success')
+    expect(element.className).toMatch(/(^| )focus-visible:border-ring/)
+    expect(element.getAttribute('data-state')).toBe('saved')
+  })
+
+  it("takes its form's marksState, which its own wins over", () => {
+    render(<Saving marksState={false}>{field()}</Saving>)
+    expect(screen.getByLabelText('f').className).not.toContain('border-warning')
+
+    cleanup()
+    render(<Saving marksState={false}>{field(true)}</Saving>)
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
   })
 })

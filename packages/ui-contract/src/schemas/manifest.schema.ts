@@ -10,6 +10,7 @@
 
 import { z } from '@workspace/zod'
 
+import { FIELD_STATES } from '../anchors'
 import {
   anchorSchema,
   baseAnchorSchema,
@@ -28,6 +29,7 @@ import {
   asksSchema,
   bindingSchema,
   derivedFromSchema,
+  leavesSchema,
   platformSchema,
   screenSchema,
 } from './screens-schema'
@@ -130,6 +132,11 @@ const contractSchema = z
       'What the composite is for.',
       'The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`.',
     ),
+    fieldStates: tableOf(
+      z.string(),
+      'What the state of a field means.',
+      'The data-state values of a field that holds input; `unsaved` and `saved`.',
+    ),
     pageHelper: z
       .literal('__perch.ui')
       .describe('Where development and e2e builds install the page helper on `window`.'),
@@ -143,6 +150,12 @@ const idSchema = z
     screen: screenNameSchema.describe('The id of the screen that declares the anchor.'),
     binding: anchorBindingSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    ranked: z
+      .literal(true)
+      .optional()
+      .describe(
+        'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
+      ),
     fields: z
       .record(codeSchema, baseAnchorSchema)
       .optional()
@@ -157,15 +170,23 @@ const idSchema = z
       .array(kebabNameSchema)
       .optional()
       .describe('The derived suffixes the element renders.'),
-    roles: z.array(roleSchema).optional().describe('The roles that see the element.'),
+    roles: z
+      .array(roleSchema)
+      .optional()
+      .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
     asks: asksSchema.optional(),
+    leaves: leavesSchema.optional(),
     composite: kebabNameSchema
       .optional()
       .describe(
         'The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.',
       ),
     derivedFrom: derivedFromSchema.optional(),
+    fieldStates: z
+      .array(z.enum(FIELD_STATES))
+      .optional()
+      .describe('The data-state values the field takes about its input, `unsaved` and `saved`.'),
     holdsInput: z
       .boolean()
       .optional()

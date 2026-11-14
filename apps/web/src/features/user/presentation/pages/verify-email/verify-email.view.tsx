@@ -10,17 +10,24 @@ import { Input } from '@workspace/ui/components/ui/input'
 
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
+/** The anchors only some states of the flow render that the page shows or leaves out. */
+export type VerifyEmailListed =
+  | 'user.verify-email.status'
+  | 'user.verify-email.sign-in-link'
+  | 'user.verify-email.form'
+
 export interface VerifyEmailViewProps {
-  /** Whether the link is being checked. */
-  readonly verifying: boolean
+  /**
+   * Whether the flow's state renders an anchor: the status while the link is checked, the way to
+   * sign in once it was verified before, the form that sends a new link once one is offered.
+   */
+  readonly renders: (anchor: VerifyEmailListed) => boolean
   /** The code the message shows: the link was verified before, or a new one is on its way. */
   readonly message?: 'verified-before' | 'check-your-mail' | undefined
   /** The address the new link went to, which `check-your-mail` names. */
   readonly sentTo?: string | undefined
   /** The code of the failure the error shows: of the link, or of the last resend. */
   readonly error?: string | undefined
-  /** Whether the form that sends a new link shows. */
-  readonly showForm: boolean
   /** Whether its button can send now. */
   readonly canResend: boolean
   /** Sends a new link to `email`: resolves whether it did. */
@@ -35,6 +42,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'link-invalid', text: t('user.verify-email.error.link-invalid') }
     case 'data:LINK_EXPIRED':
       return { code: 'link-expired', text: t('user.verify-email.error.link-expired') }
+    case 'data:ACCOUNT_BANNED':
+      return { code: 'account-banned', text: t('user.verify-email.error.account-banned') }
     case 'data:OTHER_ACCOUNT':
       return { code: 'other-account', text: t('user.verify-email.error.other-account') }
     case 'data:RATE_LIMITED':
@@ -61,7 +70,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
       </CardHeader>
       <CardContent>
         <FieldGroup>
-          {props.verifying ? (
+          {props.renders('user.verify-email.status') ? (
             <p role="status" data-testid="user.verify-email.status" data-state="loading">
               {t('user.verify-email.checking')}
             </p>
@@ -75,7 +84,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {props.message === 'verified-before' ? (
+          {props.renders('user.verify-email.sign-in-link') ? (
             <Link to="/sign-in" className="underline" data-testid="user.verify-email.sign-in-link">
               {t('user.verify-email.sign-in')}
             </Link>
@@ -87,7 +96,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
               </AlertDescription>
             </Alert>
           ) : null}
-          {props.showForm ? (
+          {props.renders('user.verify-email.form') ? (
             <Form onSubmit={() => props.onResend(email)} data-testid="user.verify-email.form">
               <FieldGroup>
                 <Field>

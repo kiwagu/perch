@@ -6,22 +6,56 @@ import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
-import { SignInView, type SignInViewProps } from './sign-in.view'
+import {
+  type SignInListed,
+  type SignInValues,
+  SignInView,
+  type SignInViewProps,
+} from './sign-in.view'
 
-function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 'en') {
+/** What the states of each mode render, as the flow lists them, the resend button aside. */
+const RENDERS: Readonly<Record<SignInViewProps['mode'], readonly SignInListed[]>> = {
+  'sign-in': ['user.sign-in.forgot-link'],
+  'sign-up': [
+    'user.sign-in.password-rule-list',
+    'user.sign-in.password-confirmation-input',
+    'user.sign-in.name-input',
+  ],
+}
+
+/**
+ * Renders the view in the mode `props` gives (sign-in by default), with what a state of that mode
+ * renders; `resend` renders the resend button too, as the states asking to check the mail do, and
+ * `dialog` the dialog past the limit of devices, as the state asking about it does.
+ */
+function renderView(
+  {
+    resend = false,
+    dialog = false,
+    ...props
+  }: Partial<SignInViewProps> & { readonly resend?: boolean; readonly dialog?: boolean } = {},
+  locale: 'en' | 'es' = 'en',
+) {
+  const rendered = new Set<SignInListed>([
+    ...RENDERS[props.mode ?? 'sign-in'],
+    ...(resend ? (['user.sign-in.resend-button'] as const) : []),
+    ...(dialog ? (['user.sign-in.device-limit-dialog'] as const) : []),
+  ])
   const handlers = {
     onSubmit: vi.fn(() => Promise.resolve(true)),
     onToggleMode: vi.fn(),
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
     onForgot: vi.fn((_email: string) => {}),
+    onConfirmDeviceLimit: vi.fn((_values: SignInValues) => {}),
+    onCancelDeviceLimit: vi.fn(),
   }
 
   renderWithProviders(
     <SignInView
       startEmail=""
       mode="sign-in"
-      showResend={false}
+      renders={(anchor) => rendered.has(anchor)}
       can={() => true}
       {...handlers}
       {...props}
@@ -34,6 +68,47 @@ function renderView(props: Partial<SignInViewProps> = {}, locale: 'en' | 'es' = 
 
 const type = (testId: string, value: string) =>
   fireEvent.change(screen.getByTestId(testId), { target: { value } })
+
+describe('the question past the limit of devices', () => {
+  it('asks in its dialog while the flow renders it, in the language of the app', () => {
+    renderView({ dialog: true }, 'es')
+
+    const dialog = screen.getByTestId('user.sign-in.device-limit-dialog')
+
+    expect(dialog.getAttribute('data-code')).toBe('device-limit')
+    expect(dialog.textContent).toContain(es['user.sign-in.device-limit.title'])
+    expect(dialog.textContent).toContain(es['user.sign-in.device-limit.body'])
+  })
+
+  it('confirms with the values typed', () => {
+    const handlers = renderView({ dialog: true, startEmail: 'ann@example.test' })
+
+    type('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    expect(handlers.onConfirmDeviceLimit).toHaveBeenCalledWith({
+      email: 'ann@example.test',
+      password: 'Pass-word-1',
+      confirmation: '',
+      name: '',
+    })
+  })
+
+  it('goes back to the form on cancel, confirming nothing', () => {
+    const handlers = renderView({ dialog: true })
+
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.cancel-button'))
+
+    expect(handlers.onCancelDeviceLimit).toHaveBeenCalled()
+    expect(handlers.onConfirmDeviceLimit).not.toHaveBeenCalled()
+  })
+
+  it('shows no dialog while the flow does not render it', () => {
+    renderView()
+
+    expect(screen.queryByTestId('user.sign-in.device-limit-dialog')).toBeNull()
+  })
+})
 
 /** The code the form's error keeps while the password typed again differs. */
 const PASSWORDS_DIFFER = 'sign-in:PASSWORDS_DIFFER'
@@ -318,13 +393,15 @@ describe('SignInView', () => {
     const props: SignInViewProps = {
       startEmail: '',
       mode: 'sign-up',
-      showResend: false,
+      renders: (anchor) => RENDERS['sign-up'].includes(anchor),
       can: () => true,
       onSubmit: () => Promise.resolve(true),
       onToggleMode: () => {},
       onTypePassword: () => {},
       onForgot: () => {},
       onResend: () => Promise.resolve(true),
+      onConfirmDeviceLimit: () => {},
+      onCancelDeviceLimit: () => {},
     }
     const describedBy = () =>
       input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
@@ -410,6 +487,24 @@ describe('SignInView', () => {
     )
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, offering no resend',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const error = screen.getByTestId('user.sign-in.error')
+
+      expect(error.getAttribute('data-code')).toBe('account-banned')
+      expect(error.textContent).toBe(texts['user.sign-in.error.account-banned'])
+      expect(error.textContent).not.toBe(texts['user.sign-in.error.email-not-verified'])
+      expect(screen.queryByTestId('user.sign-in.resend-button')).toBeNull()
+      expect(screen.queryByTestId('user.sign-in.notice-message')).toBeNull()
+    },
+  )
+
   it('asks to open the link of the mail sent to the address it went to, whatever the field holds', () => {
     renderView({ mail: 'check-your-mail', sentTo: 'ann@example.test' })
     type('user.sign-in.email-input', 'bob@example.test')
@@ -438,7 +533,7 @@ describe('SignInView', () => {
   })
 
   it('offers to send the mail again to the email typed', () => {
-    const { onResend, onSubmit } = renderView({ showResend: true })
+    const { onResend, onSubmit } = renderView({ resend: true })
 
     type('user.sign-in.email-input', 'ann@example.test')
 
@@ -455,7 +550,7 @@ describe('SignInView', () => {
 
   it('holds the resend while it cannot run', () => {
     const { onResend } = renderView({
-      showResend: true,
+      resend: true,
       can: (control) => control !== 'user.sign-in.resend-button',
     })
     const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
@@ -487,6 +582,21 @@ describe('SignInView', () => {
     expect(noticeWith('resend-after-sign-in').textContent).toBe(
       es['user.sign-in.notice.resend-after-sign-in'],
     )
+  })
+
+  it('says an operator banned the account, naming no reason', () => {
+    renderView({ notice: 'account-banned' })
+
+    expect(noticeWith('account-banned').textContent).toBe(
+      'Your account was banned, so you were signed out. You can sign in again once the ban is lifted.',
+    )
+  })
+
+  it('says the account was banned in Spanish', () => {
+    renderView({ notice: 'account-banned' }, 'es')
+
+    expect(noticeWith('account-banned').textContent).toBe(es['user.sign-in.notice.account-banned'])
+    expect(es['user.sign-in.notice.account-banned']).toBeTruthy()
   })
 
   it('says the device was signed out from another device', () => {
@@ -548,6 +658,14 @@ describe('SignInView', () => {
 
     expect(noticeWith('password-changed-elsewhere').textContent).toBe(
       'Your password was changed, so you were signed out. Sign in with the new password.',
+    )
+  })
+
+  it("says a sign-in on another device went past the account's limit and signed this one out", () => {
+    renderView({ notice: 'device-limit-elsewhere' })
+
+    expect(noticeWith('device-limit-elsewhere').textContent).toBe(
+      'You were signed out: your account was signed in on more devices than it may be at once, and this one was used least recently.',
     )
   })
 

@@ -10,6 +10,14 @@ export const TENANT_ROLES = ['member', 'admin'] as const
 
 export type TenantRole = (typeof TENANT_ROLES)[number]
 
+/**
+ * The roles an account holds on the platform itself, apart from its role in any organisation:
+ * `operator` runs the platform's console of accounts. An account holds none unless it is given one.
+ */
+export const PLATFORM_ROLES = ['operator'] as const
+
+export type PlatformRole = (typeof PLATFORM_ROLES)[number]
+
 export const ACTIONS = ['create', 'update', 'delete'] as const
 
 export type Action = (typeof ACTIONS)[number]

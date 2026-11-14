@@ -4,6 +4,7 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 
 import { linkToken } from '../mail/__fixtures__/outbox'
 
+import { setBanned } from './__fixtures__/account-ban'
 import { accountServicesOf, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
 import pendingChangeStatement from './__fixtures__/email-change-pending.surql'
 
@@ -55,7 +56,24 @@ async function harness() {
     return rows
   }
 
-  return { ...opened, ...services, identity, sessions, live, sessionOf, resetLink, pending }
+  const askDeletion = async () => {
+    const token = (await services.accountDeletions.ask(identity))._unsafeUnwrap()
+    const read = (await services.accountDeletions.read(token))._unsafeUnwrap()
+
+    return read.kind === 'deletion' ? read.claims : expect.unreachable('a deletion')
+  }
+
+  return {
+    ...opened,
+    ...services,
+    identity,
+    sessions,
+    live,
+    sessionOf,
+    resetLink,
+    pending,
+    askDeletion,
+  }
 }
 
 describe('AccountPasswords', () => {
@@ -65,6 +83,24 @@ describe('AccountPasswords', () => {
     expect((await passwords.requestReset(ANN))._unsafeUnwrap()).toBe('asked')
     expect((await passwords.requestReset('ghost@example.test'))._unsafeUnwrap()).toBe('asked')
     expect((await passwords.requestReset('not an email'))._unsafeUnwrap()).toBe('refused')
+  })
+
+  it("reads an email's account, in any case, with its hash, whether it is banned and its start, and none for an email no account has", async () => {
+    const { passwords, identity, local } = await harness()
+    const before = (await passwords.credentialOf('Ann@Example.test'))._unsafeUnwrap()
+
+    expect(before).toEqual({
+      identity,
+      hash: before?.hash,
+      banned: false,
+      start: { name: 'Ann', locale: 'en' },
+    })
+    expect(before?.hash).toMatch(/^\$argon2id\$/)
+
+    await setBanned(local, identity, true)
+
+    expect((await passwords.credentialOf(ANN))._unsafeUnwrap()).toEqual({ ...before, banned: true })
+    expect((await passwords.credentialOf('ghost@example.test'))._unsafeUnwrap()).toBeUndefined()
   })
 
   it("checks a password against the account's credential row", async () => {
@@ -101,6 +137,16 @@ describe('AccountPasswords', () => {
     expect(await pending()).toEqual([])
     expect((await passwords.matches(identity, NEW_PASSWORD))._unsafeUnwrap()).toBe(true)
     expect((await passwords.reset(identity, token, hash))._unsafeUnwrap()).toBe('link-invalid')
+  })
+
+  it('ends the pending deletion of the account when it resets the password', async () => {
+    const { passwords, accountDeletions, identity, resetLink, askDeletion } = await harness()
+    const token = await resetLink()
+    const deletion = await askDeletion()
+    const hash = (await passwords.hash(NEW_PASSWORD))._unsafeUnwrap()
+
+    expect((await passwords.reset(identity, token, hash))._unsafeUnwrap()).toBe('reset')
+    expect((await accountDeletions.claim(deletion))._unsafeUnwrap()).toBe(false)
   })
 
   it('answers link-expired for a link past its hour on the clock, changing nothing', async () => {
@@ -151,6 +197,18 @@ describe('AccountPasswords', () => {
     expect((await resets.read(token))._unsafeUnwrap()).toBeUndefined()
     expect(await pending()).toEqual([])
     expect((await passwords.matches(identity, NEW_PASSWORD))._unsafeUnwrap()).toBe(true)
+  })
+
+  it('ends the pending deletion of the account when it changes the password', async () => {
+    const { passwords, accountDeletions, identity, sessions, sessionOf, askDeletion } =
+      await harness()
+    const laptop = await sessionOf(sessions.laptop)
+    const deletion = await askDeletion()
+
+    expect(
+      (await passwords.change(identity, laptop, PASSWORD, NEW_PASSWORD))._unsafeUnwrap().kind,
+    ).toBe('changed')
+    expect((await accountDeletions.claim(deletion))._unsafeUnwrap()).toBe(false)
   })
 
   it('changes nothing for a session that is no longer live', async () => {

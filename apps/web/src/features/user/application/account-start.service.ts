@@ -24,24 +24,27 @@ export interface AccountStartFrom {
   readonly locale: Locale
 }
 
-/**
- * What a new account starts from: its identity, and the name and the language it signed up with;
- * `afterPull` while the device must first pull what the account already has (a start a sign-in
- * learnt of: another device may have started the account meanwhile).
- */
+/** What a new account starts from: its identity, and the name and the language it signed up with. */
 export interface AccountStart extends AccountStartFrom {
   readonly identity: IdentityId
-  readonly afterPull: boolean
+}
+
+/** A start this browser keeps, with the sign-in it is kept under (an id the session gives each sign-in). */
+export interface KeptStart extends AccountStart {
+  readonly signIn: string
 }
 
 /**
  * Where this browser keeps the start of an account until its settings and its profile both exist:
- * one at a time, as one account is signed in on a browser.
+ * under the sign-in that learnt of it, whose ending forgets it too.
  */
 export interface KeptStartPort {
-  keep(start: AccountStart): void
-  kept(): AccountStart | undefined
-  forget(): void
+  /** Keeps `start` under the sign-in `signIn`. */
+  keep(signIn: string, start: AccountStart): void
+  /** The start kept under the sign-in current on this browser, while it is of `identity`. */
+  kept(identity: IdentityId): KeptStart | undefined
+  /** Forgets `start` as `kept` answered it: under its own sign-in, whichever is current by then. */
+  forget(start: KeptStart): void
 }
 
 /**
@@ -96,21 +99,18 @@ const profileIdOf = (identity: IdentityId): ProfileId =>
   profileIdFactory.brand(`${profileIdFactory.prefix}_${bodyOf(identity)}`)
 
 /**
- * Makes a new account whole on the device that enters it first: its settings in the language it
- * signed up in and the theme this device shows as they are created, then its profile with the
- * name it signed up with (the settings first: a later commit of the region never arrives without
- * the earlier ones). Each is created only where the device holds none, under an id derived from
- * the identity. The device its first verification
- * signed in starts it at once: the gateway signs only that device in at the first verification,
- * so nothing of the account exists elsewhere. A device whose sign-in answered that the account has
- * not started (a reset verified its email, or the device that verified it has not synced its start
- * yet) keeps the start until it has pulled what the account has, then creates what is still
- * missing. The start is kept on this browser until both exist, so one that stopped half-way (a
- * write that failed, a page closed) is finished when the account's space opens here again, or
- * after the pull for one that waits for it. The browser's tabs take turns
- * (`StartTurns`): each reads the kept start and the account's records afresh in its turn, so a tab
- * never creates a record another tab created, whose later edits a second record under the same
- * key could hide.
+ * Makes a new account whole: its settings in the language it signed up in and the theme this
+ * device shows as they are created, then its profile with the name it signed up with (the settings
+ * first: a later commit of the region never arrives without the earlier ones). Each is created
+ * only where the device holds none, under an id derived from the identity. A device signed in to
+ * an account that has not started (its first verification, or a sign-in the gateway answered so)
+ * keeps the start until it has pulled what the account has, then creates what is still missing:
+ * another device may have started the account meanwhile, since the gateway marks the email
+ * verified before the verification signs this device in, and a record created before the pull
+ * would race the one at the same key, hiding its later edits. The start is kept on this browser
+ * until both exist, so one that stopped half-way (a write that failed, a page closed) is finished
+ * after a later pull. The browser's tabs take turns (`StartTurns`): each reads the kept start and
+ * the account's records afresh in its turn, so a tab never creates a record another tab created.
  */
 export class AccountStartService {
   constructor(
@@ -123,74 +123,30 @@ export class AccountStartService {
   ) {}
 
   /**
-   * Starts `user`'s account from the name and language it signed up with: a name the profile would
-   * refuse fails before anything is written or kept.
+   * Keeps the start of `user`'s account, which has no settings or profile at the gateway yet,
+   * under the sign-in `signIn` that learnt of it, to finish once this device has pulled what the
+   * account has (`resumeAfterPull`). A name the profile would refuse keeps nothing.
    */
-  start(user: AuthUser, from: AccountStartFrom): ResultAsync<void, SignInError> {
-    const kept = this.#keep(user, from, false)
-
-    return kept.isErr()
-      ? errAsync(kept.error)
-      : this.turns((projected) => this.#finish(user, kept.value, projected))
-  }
-
-  /**
-   * Keeps the start a sign-in of `user` learnt of, the account having no settings or profile at the
-   * gateway yet, to finish once this device has pulled what the account has (`resumeAfterPull`):
-   * another device may have started it meanwhile, and a record created before the pull would race
-   * the one at the same key. A name the profile would refuse keeps nothing.
-   */
-  keepAfterPull(user: AuthUser, from: AccountStartFrom): Result<void, SignInError> {
-    return this.#keep(user, from, true).map(() => undefined)
-  }
-
-  /**
-   * Finishes the start this browser kept for `user`, whose space opened here: what is missing is
-   * created. A start another tab finished meanwhile is no longer kept, and nothing is created; nor
-   * is one that waits for this device's first pull.
-   */
-  resume(user: AuthUser): ResultAsync<void, SignInError> {
-    return this.turns((projected) => {
-      const start = this.kept.kept()
-
-      return start?.identity === user.id && !start.afterPull
-        ? this.#finish(user, start, projected)
-        : okAsync(undefined)
-    })
+  keepAfterPull(signIn: string, user: AuthUser, from: AccountStartFrom): Result<void, SignInError> {
+    return profileName(from.name).map((name) =>
+      this.kept.keep(signIn, { identity: user.id, name, locale: from.locale }),
+    )
   }
 
   /**
    * Finishes the start this browser kept for `user` once this device has pulled what the account
-   * has: only what the pull left missing is created.
+   * has: only what the pull left missing is created. A start another tab finished meanwhile is no
+   * longer kept, and nothing is created.
    */
   resumeAfterPull(user: AuthUser): ResultAsync<void, SignInError> {
     return this.turns((projected) => {
-      const start = this.kept.kept()
+      const start = this.kept.kept(user.id)
 
-      return start?.identity === user.id ? this.#finish(user, start, projected) : okAsync(undefined)
+      return start ? this.#finish(user, start, projected) : okAsync(undefined)
     })
   }
 
-  /** Keeps the start of `user`, its name checked first. */
-  #keep(
-    user: AuthUser,
-    from: AccountStartFrom,
-    afterPull: boolean,
-  ): Result<AccountStart, SignInError> {
-    return profileName(from.name).map((name) => {
-      const start: AccountStart = { identity: user.id, name, locale: from.locale, afterPull }
-
-      this.kept.keep(start)
-
-      return start
-    })
-  }
-
-  #finish(
-    user: AuthUser,
-    start: AccountStart,
-    projected: Projected,
-  ): ResultAsync<void, SignInError> {
+  #finish(user: AuthUser, start: KeptStart, projected: Projected): ResultAsync<void, SignInError> {
     const owner = { identity: start.identity }
 
     return ensured(
@@ -218,7 +174,7 @@ export class AccountStartService {
           projected,
         ),
       )
-      .map(() => this.kept.forget())
+      .map(() => this.kept.forget(start))
   }
 }
 

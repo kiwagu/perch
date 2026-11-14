@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { ResultAsync } from 'neverthrow'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fakeGatewayAuth } from '../__fixtures__/gateway-auth'
-import { openTestWorld, type TestWorld } from '../__fixtures__/session'
-import { PASSWORD_RESET_KEY } from '../storage'
+import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
+import { signedIn as signedInOn } from '../__fixtures__/signed-in'
+import type { GatewayAuth } from '../gateway-auth'
+import { PASSWORD_RESET_KEY, savedIdentity, savedSession, savedToken } from '../storage'
 
 const worlds: TestWorld[] = []
 
@@ -57,5 +60,93 @@ describe('a password reset through the session', () => {
 
     expect((await world.session.resetPassword('reset-unknown', 'Secret-new1')).isErr()).toBe(true)
     expect(world.storage.get(PASSWORD_RESET_KEY)).toBeUndefined()
+  })
+})
+
+const ann = { email, password: 'Secret-ann1', name: 'Ann', locale: 'en' }
+
+/**
+ * A browser where Ann is signed in, with no channel to hear the gateway (offline); `gateway`, when
+ * given, stands between the browser and the fake gateway.
+ */
+async function signedIn(gateway?: (auth: ReturnType<typeof fakeGatewayAuth>) => GatewayAuth) {
+  const auth = fakeGatewayAuth()
+  const world = await openTestWorld({ auth: gateway?.(auth) ?? auth, online: false })
+
+  worlds.push(world)
+  expect((await signUpVerified(world.session, auth, ann)).isOk()).toBe(true)
+
+  return { auth, world }
+}
+
+describe('a password reset in a browser signed in', () => {
+  it('signs this browser out of its own account, with no channel to hear the gateway', async () => {
+    const { auth, world } = await signedIn()
+
+    expect((await auth.requestPasswordReset(email)).isOk()).toBe(true)
+    expect(
+      (await world.session.resetPassword(auth.resetLinkFor(email), 'Secret-new1')).isOk(),
+    ).toBe(true)
+
+    // As the channel's 4002 would have left it: nobody here, the token forgotten, the word set.
+    expect(world.session.current()).toBeUndefined()
+    expect(savedIdentity(world.storage)).toBeUndefined()
+    expect(savedSession(world.storage)).toBeUndefined()
+    expect(world.session.notice()).toBe('password-changed-elsewhere')
+  })
+
+  it('leaves another account signed in here alone', async () => {
+    const { auth, world } = await signedIn()
+    const me = world.session.current() ?? expect.unreachable('signed in')
+    const bob = { email: 'bob@example.test', password: 'Secret-bob1', name: 'Bob', locale: 'en' }
+
+    // Bob asks for his reset mail, and its link is opened in Ann's browser.
+    expect((await verifiedElsewhere(auth, bob)).isOk()).toBe(true)
+    expect((await auth.requestPasswordReset(bob.email)).isOk()).toBe(true)
+    expect(
+      (await world.session.resetPassword(auth.resetLinkFor(bob.email), 'Secret-new1')).isOk(),
+    ).toBe(true)
+
+    expect(world.session.current()?.id).toBe(me.id)
+    expect(savedIdentity(world.storage)?.id).toBe(me.id)
+    expect(savedToken(world.storage)).toBeDefined()
+    expect(world.session.notice()).toBeUndefined()
+  })
+
+  it('leaves the token another tab saved meanwhile, signed in with the new password', async () => {
+    let answer = () => {}
+    const heard = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const { auth, world } = await signedIn((gateway) => ({
+      ...gateway,
+      // The gateway resets at once; its answer reaches this tab only once `answer` is called.
+      resetPassword: (link, password, session) =>
+        gateway
+          .resetPassword(link, password, session)
+          .andThen((reset) => ResultAsync.fromSafePromise(heard).map(() => reset)),
+    }))
+    const me = world.session.current() ?? expect.unreachable('signed in')
+
+    expect((await auth.requestPasswordReset(email)).isOk()).toBe(true)
+
+    const resetting = world.session.resetPassword(auth.resetLinkFor(email), 'Secret-new1')
+
+    // Another tab, which heard the 4002, signed Ann in again with the new password and saved its
+    // token before this one heard the answer.
+    await vi.waitFor(() => expect(auth.requests.at(-1)?.kind).toBe('reset'))
+
+    const again = await auth.signIn(
+      { email, password: 'Secret-new1' },
+      { id: 'device-other-tab', label: 'Other tab' },
+    )
+
+    signedInOn(world.storage, { identity: me, token: again._unsafeUnwrap().token })
+    answer()
+    expect((await resetting).isOk()).toBe(true)
+
+    expect(world.session.current()?.id).toBe(me.id)
+    expect(savedToken(world.storage)).toBe(again._unsafeUnwrap().token)
+    expect(world.session.notice()).toBeUndefined()
   })
 })

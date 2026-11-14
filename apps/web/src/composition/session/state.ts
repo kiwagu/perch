@@ -1,14 +1,15 @@
 /**
  * The session's state, as its parts reach it (`SessionHost`): the space it has open, the saved
- * identity while the start opens that identity's space, the subscribers told of a change of
- * identity, and the work that outlives a space it ends.
+ * identity while the start opens that identity's space or once it did not, the subscribers told
+ * of a change of identity, and the work that outlives a space it ends.
  */
 
-import type { ResultAsync } from 'neverthrow'
+import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError } from '@workspace/data'
 
 import type { SyncState } from '../identity-space'
+import { savedIdentity } from '../storage'
 
 import type { SessionHost } from './host'
 import type { OpenSpace } from './open-space'
@@ -17,10 +18,15 @@ import type { SessionTransitions } from './transitions'
 
 const NOT_SYNCING: SyncState = { leader: false, channel: 'down' }
 
-/** The saved identity while the start opens its space, and the end of that open. */
+/**
+ * The saved identity while the start opens its space, the end of that open, and the space that
+ * open produced: the one open at the end of its own restore transition, none before `settled`
+ * or when the space did not open.
+ */
 export interface Opening {
   readonly user: AuthUser
   readonly settled: Promise<unknown>
+  readonly produced: () => OpenSpace | undefined
 }
 
 export class SessionState implements SessionHost {
@@ -31,6 +37,10 @@ export class SessionState implements SessionHost {
   readonly #listeners = new Set<(user: AuthUser | undefined) => void>()
   #open: OpenSpace | undefined
   #opening: Opening | undefined
+  /** The saved identity whose space the start could not open: the frame still shows it. */
+  #unopened: AuthUser | undefined
+  /** The start's opens this tab left before they ended (`leaveUnopened`). */
+  readonly #left = new WeakSet<Opening>()
   #retiring: Promise<unknown> = Promise.resolve()
 
   constructor(options: SessionOptions, transitions: SessionTransitions, told: () => void) {
@@ -79,6 +89,32 @@ export class SessionState implements SessionHost {
     this.emit(undefined)
   }
 
+  /**
+   * Another tab no longer keeps the identity this tab shows without its space: nobody is current
+   * from now on, and a start's open still running attaches nothing when it ends, which then ends
+   * with nobody signed in (`startOpening`). Nothing changes while a space is open, whose leaving
+   * is the follow's own turn, or while the browser still keeps that identity.
+   */
+  leaveUnopened(): void {
+    const opening = this.#opening
+    const shown = opening?.user ?? this.#unopened
+
+    if (
+      shown === undefined ||
+      this.#open !== undefined ||
+      savedIdentity(this.options.storage)?.id === shown.id
+    ) {
+      return
+    }
+
+    if (opening) {
+      this.#left.add(opening)
+      this.#transitions.supersede()
+    }
+
+    this.emit(undefined)
+  }
+
   /** Work that outlives the space it ends; `retired` waits for it. */
   retire(work: Promise<void>): void {
     this.#retiring = Promise.all([this.#retiring, work.catch(() => undefined)])
@@ -90,6 +126,9 @@ export class SessionState implements SessionHost {
       this.#opening = undefined
     }
 
+    // Any change of identity ends the one whose space did not open.
+    this.#unopened = undefined
+
     for (const listener of this.#listeners) {
       listener(user)
     }
@@ -97,9 +136,12 @@ export class SessionState implements SessionHost {
     this.#told()
   }
 
-  /** The identity of the space open now, else the saved one whose space the start is opening. */
+  /**
+   * The identity of the space open now, else the saved one whose space the start is opening or
+   * could not open.
+   */
   current(): AuthUser | undefined {
-    return this.#open?.space.identity ?? this.#opening?.user
+    return this.#open?.space.identity ?? this.#opening?.user ?? this.#unopened
   }
 
   subscribe(listener: (user: AuthUser | undefined) => void): () => void {
@@ -108,12 +150,25 @@ export class SessionState implements SessionHost {
     return () => this.#listeners.delete(listener)
   }
 
-  /** The start opens the space of the saved `user`; `restoring` ends that open, opened or not. */
-  startOpening(user: AuthUser, restoring: ResultAsync<AuthUser | undefined, DataError>): void {
-    const opening: Opening = { user, settled: Promise.resolve(restoring) }
+  /**
+   * The start opens the space of the saved `user`; `restoring` ends that open, opened or not,
+   * and `produced` reads the space its own transition left open. What it gives: `restoring`,
+   * but with nobody signed in once this tab left the open (`leaveUnopened`), whether it then
+   * failed or was dropped.
+   */
+  startOpening(
+    user: AuthUser,
+    restoring: ResultAsync<AuthUser | undefined, DataError>,
+    produced: () => OpenSpace | undefined,
+  ): ResultAsync<AuthUser | undefined, DataError> {
+    const opening: Opening = { user, settled: Promise.resolve(restoring), produced }
 
     this.#opening = opening
     void opening.settled.then(() => this.#opened(opening))
+
+    return restoring.orElse((error) =>
+      this.#left.has(opening) ? okAsync(undefined) : errAsync(error),
+    )
   }
 
   /** The start's open of the saved identity's space, while it runs. */
@@ -133,8 +188,15 @@ export class SessionState implements SessionHost {
 
   /** The start's open of the saved identity's space ended, opened or not. */
   #opened(opening: Opening): void {
-    if (this.#opening === opening) {
-      this.#opening = undefined
+    if (this.#opening !== opening) {
+      return
+    }
+
+    this.#opening = undefined
+
+    // A space that did not open leaves its identity the one this tab shows, saved still.
+    if (!this.openFor(opening)) {
+      this.#unopened = opening.user
     }
   }
 }

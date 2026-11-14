@@ -4,14 +4,17 @@
  * runs every flow in XState; this holds the app's own machines to theirs, through the
  * engine's comparison (`@workspace/ui-contract/machines`): the same initial state, states,
  * final states, parallel states with the same regions and initial states, events with their
- * targets and guard names, invoke sources, and the contract's effects on the same transitions.
+ * targets and guard names, invoke sources, the contract's effects on the same transitions, and
+ * what each state renders (`meta.renders`); an invoke's `read: false`, or a branch's, is a
+ * statement the contract check reads, not held here.
  * The app adds actions of its own (an `assign`), and its `input` is the app's, but no
  * mechanism the flow has no counterpart for. On a branch the pre-commit hook sets
  * `CONTRACT_AHEAD=1`: a business commit may change a flow before its implementation, so a
  * machine may lack what its flow added but does nothing the flow does not say, or is still
- * exactly its screen's flow at the branch's base (`CONTRACT_AHEAD_BASE`), so a business commit
- * may change a transition before its implementation; `bun run check` and a commit on `main`
- * hold every machine to its whole flow.
+ * exactly its screen's flow at the branch's base (`CONTRACT_AHEAD_BASE`) or at the branch's
+ * HEAD, the contract the app was built from (`CONTRACT_AHEAD_HEAD`,
+ * `__fixtures__/machine-flows.ts`); `bun run check` and a commit on `main` hold every machine
+ * to its whole flow.
  */
 
 import { join } from 'node:path'
@@ -20,14 +23,20 @@ import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
-import { contractAt, formatProblem, loadScreens } from '@workspace/ui-contract'
-import { beyondTheSubset, laggingOf, projected } from '@workspace/ui-contract/machines'
+import { identityIdFactory } from '@workspace/ids'
+import { formatProblem, loadScreens } from '@workspace/ui-contract'
+import { beyondTheSubset, projected } from '@workspace/ui-contract/machines'
 
 import { NOTHING_SEEN } from '../features/app-shell/application/setting-writes'
 import { createShellMachine } from '../features/app-shell/application/shell-machine'
+import { createAccountMachine } from '../features/console/application/account-machine/machine'
+import { AccountsService } from '../features/console/application/accounts.service'
+import { createUsersMachine } from '../features/console/application/users.machine'
 import { createDevicesMachine } from '../features/device/application/devices.machine'
-import { createOrganisationMachine } from '../features/organisation/application/organisation.machine'
+import { createInvitationMachine } from '../features/organisation/application/invitation.machine'
+import { createOrganisationMachine } from '../features/organisation/application/organisation-machine'
 import { createConfirmEmailMachine } from '../features/user/application/confirm-email.machine'
+import { createDeleteAccountMachine } from '../features/user/application/delete-account.machine'
 import { createForgotPasswordMachine } from '../features/user/application/forgot-password.machine'
 import { createProfileMachine } from '../features/user/application/profile.machine'
 import { createResetPasswordMachine } from '../features/user/application/reset-password.machine'
@@ -36,46 +45,24 @@ import { SignInService } from '../features/user/application/sign-in.service'
 import { createSignInMachine } from '../features/user/application/sign-in-machine'
 import { createVerifyEmailMachine } from '../features/user/application/verify-email.machine'
 
+import { FakeAccounts } from './__fixtures__/accounts'
+import { AHEAD, flowsAt, heldFlow } from './__fixtures__/machine-flows'
 import { fakeSession } from './__fixtures__/session'
 
 const ROOT = join(import.meta.dirname, '../../../..')
-const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
 /** The merge base of the branch with `main`, which the pre-commit hook names on a branch. */
 const BASE = process.env['CONTRACT_AHEAD_BASE']
 
 /**
- * The flows of the screens at the branch's base, by screen id (none outside the hook's ahead
- * mode, or where the base has no contract), or why the contract there does not load.
+ * The commit the branch is at, which the hook names too rather than this spec reading git's
+ * HEAD itself: the test cache keys on the name, so a pass never carries into a later state whose
+ * files are the same but whose HEAD holds another contract.
  */
-type AtBase = { readonly flows: ReadonlyMap<string, unknown> } | { readonly problem: string }
+const HEAD = process.env['CONTRACT_AHEAD_HEAD']
 
-function flowsAtBase(): AtBase {
-  if (!AHEAD || BASE === undefined || BASE === '') {
-    return { flows: new Map() }
-  }
-
-  let base: ReturnType<typeof contractAt>
-
-  try {
-    base = contractAt(BASE, ROOT)
-  } catch (error) {
-    return { problem: error instanceof Error ? error.message : String(error) }
-  }
-
-  return {
-    flows:
-      'missing' in base
-        ? new Map()
-        : new Map(
-            base.screens.screens.flatMap((screen) =>
-              screen.flow === undefined ? [] : [[screen.id, screen.flow] as const],
-            ),
-          ),
-  }
-}
-
-const AT_BASE = flowsAtBase()
+const AT_BASE = flowsAt(BASE, ROOT)
+const AT_HEAD = flowsAt(HEAD, ROOT)
 
 const { screens, problems } = loadScreens(ROOT)
 
@@ -96,6 +83,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       selfReloads: { done: () => false, mark: () => {} },
       install: { prompt: () => Promise.resolve(), postpone: () => {} },
     }),
+  'console.users': () => createUsersMachine(),
+  'console.account': () =>
+    createAccountMachine({
+      id: identityIdFactory.create(),
+      accounts: new AccountsService(new FakeAccounts()),
+    }),
   device: () =>
     createDevicesMachine({
       revoke: () => okAsync(undefined),
@@ -109,7 +102,21 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       editNote: () => okAsync(undefined),
       deleteNote: () => okAsync(undefined),
       invite: () => okAsync(undefined),
+      setRole: () => okAsync(undefined),
       remove: () => okAsync(undefined),
+      revoke: () => okAsync(undefined),
+      copy: () => okAsync(undefined),
+      accept: () => okAsync(undefined),
+      decline: () => okAsync(undefined),
+      account: () => undefined,
+      current: () => undefined,
+    }),
+  'organisation.invitation': () =>
+    createInvitationMachine({
+      token: 't',
+      read: () => errAsync({ code: 'not-in-this-spec', message: 'not in this spec' }),
+      accept: () => okAsync(undefined),
+      decline: () => okAsync(undefined),
       current: () => undefined,
     }),
   'user.sign-in': () => createSignInMachine(new SignInService(fakeSession().session)),
@@ -128,6 +135,8 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
   'user.forgot-password': () => createForgotPasswordMachine({ request: () => okAsync(undefined) }),
   'user.reset-password': () =>
     createResetPasswordMachine({ token: 't', reset: () => okAsync(undefined) }),
+  'user.delete-account': () =>
+    createDeleteAccountMachine({ token: 't', deleteAccount: () => okAsync(undefined) }),
   'user.settings': () =>
     createSettingsMachine({
       values: () => ({ held: true, account: undefined, storingFor: undefined }),
@@ -136,6 +145,7 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       storeLocale: () => okAsync(undefined),
       changePassword: () => okAsync(undefined),
       changeEmail: () => okAsync(undefined),
+      requestAccountDeletion: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({
@@ -149,32 +159,80 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
     }),
 }
 
+/** The flow of a sample screen whose save leads where `after` says once it succeeds. */
+const sample = (after: string) =>
+  projected({
+    initial: 'editing',
+    states: {
+      editing: { on: { 'sample.save-button': { target: 'saving' } } },
+      saving: { invoke: { src: 'sample.save', onDone: { target: after } } },
+      done: { type: 'final' },
+      checking: { on: { 'sample.save-button': { target: 'saving' } } },
+    },
+  })
+
+describe('the flow a machine is held to on a branch', () => {
+  // `done` at the base, `checking` at the branch's HEAD, `editing` in the business commit taken.
+  const atBase = sample('done')
+  const atHead = sample('checking')
+  const now = sample('editing')
+
+  it('is its flow now when the machine has built it', () => {
+    expect(heldFlow(now, now, [atHead, atBase])).toEqual(now)
+  })
+
+  it("is the flow at the branch's HEAD when the machine still is that one", () => {
+    expect(heldFlow(atHead, now, [atHead, atBase])).toEqual(atHead)
+    expect(heldFlow(atHead, now, [atHead, undefined])).toEqual(atHead)
+  })
+
+  it("is the flow at the branch's base when the machine still is that one", () => {
+    expect(heldFlow(atBase, now, [atHead, atBase])).toEqual(atBase)
+    expect(heldFlow(atBase, now, [undefined, atBase])).toEqual(atBase)
+  })
+
+  it('is something the machine does not equal when it is none of them', () => {
+    const elsewhere = sample('saving')
+
+    expect(heldFlow(elsewhere, now, [atHead, atBase])).not.toEqual(elsewhere)
+  })
+
+  it('is no earlier flow the machine does not name', () => {
+    expect(heldFlow(atHead, now, [undefined, atBase])).not.toEqual(atHead)
+    expect(heldFlow(atHead, now, [])).not.toEqual(atHead)
+  })
+})
+
 describe('the machines of the app', () => {
   it('read the screens of the contract', () => {
     expect(problems.map(formatProblem)).toEqual([])
   })
 
-  // A base that does not load fails here, once; the machines then wait for it.
+  // A base or a HEAD that does not load fails here, once; the machines then wait for it.
   it("the contract at the branch's base loads", () => {
     expect('problem' in AT_BASE ? AT_BASE.problem : undefined).toBeUndefined()
   })
 
-  it.skipIf('problem' in AT_BASE).each(Object.entries(APP_MACHINES))(
+  it("the contract at the branch's HEAD loads", () => {
+    expect('problem' in AT_HEAD ? AT_HEAD.problem : undefined).toBeUndefined()
+  })
+
+  it.skipIf('problem' in AT_BASE || 'problem' in AT_HEAD).each(Object.entries(APP_MACHINES))(
     '%s is the flow of its screen',
     (id, machine) => {
       const flow =
         screens?.screens.find((screen) => screen.id === id)?.flow ??
         expect.unreachable(`a flow of ${id}`)
-      const atBase = 'flows' in AT_BASE ? AT_BASE.flows.get(id) : expect.unreachable('a base')
+      const earlier = [AT_HEAD, AT_BASE].map((at) => {
+        const was = 'flows' in at ? at.flows.get(id) : expect.unreachable('an earlier contract')
+
+        return was === undefined ? undefined : projected(was)
+      })
       const { config } = machine()
       const app = projected(config)
 
       expect(beyondTheSubset(config), `what ${id} does beyond its flow`).toEqual([])
-      expect(app).toEqual(
-        AHEAD
-          ? laggingOf(app, projected(flow), atBase === undefined ? undefined : projected(atBase))
-          : projected(flow),
-      )
+      expect(app).toEqual(AHEAD ? heldFlow(app, projected(flow), earlier) : projected(flow))
     },
   )
 })

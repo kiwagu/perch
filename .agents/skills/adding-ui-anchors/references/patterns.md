@@ -72,7 +72,7 @@ When a part is not a derived piece of its composite but an element of the screen
 own name, the composite takes it as a named prop ending in `TestId`. `AppShell`
 (`packages/ui/src/components/platform/app-shell.tsx`) puts `navigationTestId` on its `<nav>`;
 the shell view passes the frame's anchor
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/frame.view.tsx`):
 
 ```tsx
 <AppShell
@@ -84,7 +84,8 @@ the shell view passes the frame's anchor
 ```
 
 The links of that navigation are static items, each with its literal under a `testId` key,
-which the view renders with `data-testid={item.testId}`:
+which `NavigationLinks` (`shell-view/navigation-links.view.tsx`) renders with
+`data-testid={item.testId}`:
 
 ```tsx
 { to: '/me', label: t('app.shell.nav.profile'), testId: 'app-shell.nav.profile-link' },
@@ -130,6 +131,27 @@ await expect(deviceBRow).toHaveAttribute('data-state', 'revoked')
 await expect(deviceBRow.getByTestId('device.list.revoked-cell')).toBeVisible()
 ```
 
+A control in the entry's part (`device.list.revoke-button` beside `device.list.session-item`;
+a button, a link, a tab or a field, never a cell or a sibling entry)
+is rendered in each entry and acts on the entry it is in: an action's parameter that names the
+item takes that entry's `data-id` (`params: { device: device.list.session-item }`). A row that
+opens the entity it shows does it the same way, with a link in the row whose transition puts
+the id into the address, so a reload or a copied link reaches the same entry:
+
+```yaml
+<screen>.list.open-link:
+  kind: link
+# flow, on the state that shows the list:
+<screen>.list.open-link:
+  target: opened
+  actions:
+    - navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }
+```
+
+The item declares its `dataId`, the target binding's `id` takes a string, and the navigate sits
+on the link's event, never in an `entry`, an `exit` or an invoke's outcome, where no entry was
+acted on (`contract:check` refuses each).
+
 ## 6. A choice with `data-value`
 
 A choice that is not an entity carries the key the code already uses, never its label, and
@@ -165,7 +187,7 @@ A button that switches a mode is one anchor whose value says the mode, never two
 ## 7. A notice with `data-code`
 
 The shell's notice carries the code of what it says
-(`apps/web/src/features/app-shell/presentation/shell/shell.view.tsx`):
+(`apps/web/src/features/app-shell/presentation/shell/shell-view/notice-line.view.tsx`):
 
 ```tsx
 <p
@@ -187,6 +209,19 @@ export const notice = (page: Page, code: string) =>
   page.locator(`[data-testid="app-shell.notice-message"][data-code="${code}"]`)
 ```
 
+A message whose codes more than one source may raise before it shows (an effect of the app
+and a flow's `show` on its way there) is declared `ranked: true`, its `codes` in rank order:
+the app shows the first of those raised and drops the others, a `clear` of it in any flow drops
+every code raised before it, and a spec of the app holds its own order to the anchor's `codes`
+(`contract:diff` lists the order as `<anchor> ranks <code> > <code>`).
+
+```yaml
+<screen>.<object>-message:
+  kind: message
+  ranked: true
+  codes: [ <the code that says the most>, <the next>, <the last> ]
+```
+
 ## 8. A container with `data-state`
 
 A container whose data arrives after the page says its state, computed from the same value
@@ -204,7 +239,7 @@ const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? '
 ```
 
 The app's own readiness works the same way: `app-shell.status` carries
-`data-state={props.status}` in `shell.view.tsx`.
+`data-state={props.status}` in `shell-view/status-line.view.tsx`.
 
 ## 9. One element drawn by two render paths
 
@@ -536,7 +571,7 @@ address. This example is illustrative, not a file of the app:
 
 ```yaml
 confirm-email-change:
-  # description, params (token), result, codes
+  # description, params (token), result, codes, changes
   notices:
     - name: email-changed
       to: account
@@ -587,6 +622,13 @@ region renders what it lists and what its parallel state lists; a region written
 pattern or by its button takes no `meta`, so an area whose anchors come and go is written in
 full. `contract:diff main` shows each entry, `sign-up renders user.sign-in.name-input`.
 
+Rendered means visible to the user: in a state that does not render it, an anchor is absent
+from the page or kept in it hidden, as a closed form that keeps what was typed. So a form that
+stays in the DOM while it is closed is still listed only in the states where it is open. The
+view asks the machine, `isRendered(renderedAt(snapshot.machine.config, snapshot.value),
+anchor)`, never a flag of its own, and an e2e run holds every settled state of a test to the
+list.
+
 ## 16. A guard by failure code
 
 A guard that tells the failures of an invoke apart names the codes it takes instead of a
@@ -624,3 +666,69 @@ each code is one the action fails with, listed once; a guard that says anything 
 sentence. The app implements it as any guard, by the failure the actor rejected with (pattern
 12's `emailNotVerified`). `contract:diff main` shows `guard emailNotVerified takes
 email-not-verified`.
+
+## 17. A paged list
+
+A list of many entries shows one page at a time, the page and the size the route names. The
+action pages, in `platform.yaml`:
+
+```yaml
+actions:
+  accounts.list:
+    description: Reads the accounts of the platform.
+    params:
+      q: { type: string, description: The text an account's name or email contains. }
+      page: { type: number, description: The page, from 1. }
+      size: { type: number, description: The entries a page holds. }
+    paged: { sizes: [ 10, 25, 50 ], default: 25 }
+    result: the page of accounts, the newest first, and how many the search finds
+    codes: [ failed ]
+    changes: []
+```
+
+A read changes no other read (`changes: []`); an action whose success changes the page this
+one answers names `accounts.list` under its own `changes`.
+
+Every route of the screen declares `page` and `size` as the list reads them, and the list
+takes its search from the route, never from a field:
+
+```yaml
+bindings:
+  - path: /console/users
+    search:
+      type: object
+      properties:
+        q: { type: string, maxLength: 254 }
+        page: { type: integer, minimum: 1, default: 1 }
+        size: { type: integer, enum: [ 10, 25, 50 ], default: 25 }
+      additionalProperties: false
+anchors:
+  console.users.list:
+    kind: list
+    source: { platform: accounts.list, params: { q: { search: q } }, paged: true }
+```
+
+The search form moves the route, and a new search starts at page 1:
+
+```yaml
+on:
+  console.users.search-button:
+    actions:
+      - navigate:
+          to: /console/users
+          search: { q: { anchor: console.users.search-input }, page: 1 }
+```
+
+The loader derives `console.users.list.range`, `.previous-link`, `.next-link` and
+`.size-select` (its options `.size-select.option`, one per size with `data-value`, the controls
+of `size`, which writes no `x-perch`: the check derives them and refuses one written); the file
+never writes them. The option is two segments past the list, and an anchor has five at most,
+so a paged list has at most three (`console.users.list`, never `a.b.c.list`: the check refuses
+it). The view renders the range with `data-from`, `data-to` and `data-total` once
+the read is in, each link only where there is such a page, and the select wherever the list is,
+each built with `testIdFor` and each moving with `pageSearchOf(search, { page, size },
+defaultSize)` of `@workspace/ui-contract/anchors`; `pagerOf({ page, size, shown, total })` says
+what the page shows. The wireframe sketches page 1 (`text: /\d+-\d+ of \d+/`, `link "Next"`);
+no check reads it. `contract:diff main` shows `console.users.list reads platform.accounts.list
+q=search:q paged`.
+

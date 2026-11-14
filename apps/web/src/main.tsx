@@ -3,11 +3,12 @@ import '@workspace/ui/styles/global.css'
 import { Outlet, RouterProvider } from '@tanstack/react-router'
 import { useMachine } from '@xstate/react'
 import type { ResultAsync } from 'neverthrow'
-import { StrictMode, useEffect, useMemo, useState } from 'react'
+import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import type { AppServices, BootFailure } from './composition/root'
 import { serviceWorkerReload } from './composition/service-worker'
@@ -17,13 +18,15 @@ import { CrashSignal } from './features/app-shell/presentation/crash/crash-signa
 import { LeaveGuard } from './features/app-shell/presentation/leave-guard/leave-guard.container'
 import { NOTICE_TEXTS } from './features/app-shell/presentation/shell/notice-texts'
 import { ShellContainer } from './features/app-shell/presentation/shell/shell.container'
-import { ShellView } from './features/app-shell/presentation/shell/shell.view'
 import {
   frameSettingsWrites,
   ShellFrameContext,
   type ShellLive,
   shellFrameMachine,
 } from './features/app-shell/presentation/shell/shell-frame'
+import { ShellView } from './features/app-shell/presentation/shell/shell-view'
+import { useSignedIn } from './features/app-shell/presentation/shell/signed-in'
+import { useSignedOut } from './features/app-shell/presentation/shell/signed-out'
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
@@ -33,8 +36,11 @@ import { NoticeProvider } from './platform/notices'
 import { PLATFORM_EVENTS } from './platform/platform-events.port'
 import { sendPlatformEvents } from './platform/platform-events-input'
 import { createAppRouter } from './platform/router'
+import { rendersIn } from './platform/screen-renders'
 import { ServicesProvider } from './platform/services'
 import { SettingsWritesContext } from './platform/settings-writes'
+import { useSettledReport } from './platform/settled-report'
+import { storesValue } from './platform/stored-fields'
 import { browserTheme, ThemeContext, useDeviceTheme } from './platform/theme'
 import { ToastProvider } from './platform/toasts'
 import { installUiHelper } from './platform/ui-contract'
@@ -52,17 +58,17 @@ interface Started {
 
 /**
  * How the start ended: started, with the open of the saved account's data still going on;
- * stopped because the browser keeps no site data; or failed, its code not loaded.
+ * stopped because the browser keeps no site data; or failed to start, its code not loaded or run.
  */
 type Boot =
   | ({ readonly status: 'started'; readonly opened: ResultAsync<void, BootFailure> } & Started)
-  | { readonly status: 'storage-blocked' | 'failed' }
+  | { readonly status: 'storage-blocked' | 'start-failed' }
 
 function Layout() {
   return (
     <NoticeProvider texts={NOTICE_TEXTS}>
       <ToastProvider texts={TOAST_TEXTS}>
-        <UnsavedInputScope>
+        <UnsavedInputScope stores={storesValue}>
           <LeaveGuard>
             <ConfirmGuard>
               <ShellContainer>
@@ -99,13 +105,11 @@ function bootOnce(): Promise<Boot> {
             crash: CrashSignal,
           }),
         }),
-        (failure) => ({
-          status: failure.kind === 'storage-blocked' ? 'storage-blocked' : 'failed',
-        }),
+        () => ({ status: 'storage-blocked' }),
       ),
     )
-    // A start that throws (its code did not load) failed too: it does not open any more.
-    .catch((): Boot => ({ status: 'failed' }))
+    // A start that throws, its code not loaded or run, failed to start: it opens nothing more.
+    .catch((): Boot => ({ status: 'start-failed' }))
 
   return booting
 }
@@ -116,6 +120,7 @@ const STATUS = {
   failed: 'failed',
   'signing-out': 'failed',
   'signed-out': 'failed',
+  'start-failed': 'start-failed',
   'storage-blocked': 'storage-blocked',
 } as const
 
@@ -149,6 +154,11 @@ function App(props: { readonly reload: () => void }) {
   })
   const [state, send, actor] = useMachine(made.machine)
   const frame = useMemo(() => ({ actor, live: made.live }), [actor, made])
+  // The account the frame shows, as the start and then the shell's container last saw it.
+  const shownAccount = useCallback(() => made.live.account, [made])
+
+  // Development and e2e builds report each state of the frame the page settles in.
+  useSettledReport('app-shell', state.value, () => actor.getSnapshot().value)
   // The settings screen's stores, kept by the frame to tell their echo from another tab's or device's.
   const settingsWrites = useMemo(() => frameSettingsWrites(made.live), [made])
 
@@ -174,7 +184,8 @@ function App(props: { readonly reload: () => void }) {
 
       if (boot.status !== 'started') {
         send({
-          type: boot.status === 'failed' ? 'platform.open-failed' : 'platform.storage-blocked',
+          type:
+            boot.status === 'start-failed' ? 'platform.start-failed' : 'platform.storage-blocked',
         })
 
         return
@@ -226,15 +237,24 @@ function App(props: { readonly reload: () => void }) {
     }
   }, [started, made])
 
-  // The frame's states with no screen: the start goes on, stopped, or the data did not open.
+  // The states with no screen: the start goes on, stopped or failed, or the data did not open.
   const unrouted: (typeof STATUS)[keyof typeof STATUS] | undefined =
-    STATUS[state.value as keyof typeof STATUS]
+    typeof state.value === 'string' && Object.hasOwn(STATUS, state.value)
+      ? STATUS[state.value as keyof typeof STATUS]
+      : undefined
+
+  // A sign-out of the account the frame shows reaches its flow from the session while no screen
+  // renders; the shell's container hears it once one does.
+  useSignedOut(started?.services.session, actor, unrouted !== undefined, shownAccount)
+  // A sign-in on this device reaches the frame's flow in every state.
+  useSignedIn(started?.services.session, actor, unrouted !== undefined)
 
   if (started === undefined || unrouted !== undefined) {
     return (
       <ShellView
         status={unrouted ?? 'opening'}
-        signedIn={false}
+        renders={rendersIn(made.machine.config, state.value)}
+        held={heldRoles(false)}
         activePath={window.location.pathname}
         canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}

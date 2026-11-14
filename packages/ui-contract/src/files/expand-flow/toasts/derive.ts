@@ -7,7 +7,8 @@
  * another such action (one Save running two) toasts nothing, and the toast of a chain names the
  * operation by the control that starts it (`operations.ts`). A branch that shows its own message
  * on the toast keeps it (a written message wins on its anchor, branch by branch; a notice or an
- * error written there leaves the toast on), and an invoke that says `toast: false`, the one ban,
+ * error written there leaves the toast on), a branch that says `read: false` keeps that key
+ * with the toast appended after its effects, and an invoke that says `toast: false`, the one ban,
  * gets none and loses the key, which the canonical flow does not know. It runs on the flow as
  * expanded, written and derived regions alike; without a toast anchor on the frame it derives
  * nothing. The codes the flow's own `show`s put on the toast anchor are written codes, reported

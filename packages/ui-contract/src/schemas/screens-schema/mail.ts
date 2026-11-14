@@ -15,23 +15,35 @@ import { z } from '@workspace/zod'
 import { kebabNameSchema, screenNameSchema } from '../../names.schema'
 
 /**
- * The account, as the recipient of a mail or a notice or the source of its language: a reserved
- * word, so an action that sends either has no parameter of that name (`check/mails.ts`).
+ * The account the action acts on, as the recipient of a mail or a notice or the source of its
+ * language: the signed-in account for an action on its own account, else, whoever is signed in,
+ * the account its parameters name (the email of a password reset's request, the token of a
+ * link). A reserved word, so an action that sends either has no parameter of that name
+ * (`check/mails.ts`).
  */
 export const ACCOUNT = 'account'
+
+/**
+ * The account a mail goes to, as the source of its language: the account whose email the mail's
+ * `to` names, and the signed-in account when no account has that email. A mail's language alone,
+ * never a notice's, and a reserved word on an action that sends a mail (`check/mails.ts`).
+ */
+export const RECIPIENT = 'recipient'
 
 const nameSchema = z.string().regex(/^[a-z][a-zA-Z0-9]*$/)
 
 const languageSchema = nameSchema.describe(
-  "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the account's settings once it has them, else the language it signed up in.",
+  "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in.",
 )
 
 export const platformMailSchema = z
   .strictObject({
     to: nameSchema.describe(
-      "The parameter of the action whose value the mail goes to, or `account`: the signed-in account's own email.",
+      'The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name.',
     ),
-    language: languageSchema,
+    language: nameSchema.describe(
+      "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's.",
+    ),
     link: z
       .strictObject({
         screen: screenNameSchema.describe('The screen the link opens, at the path of its route.'),
