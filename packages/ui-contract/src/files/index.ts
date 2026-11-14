@@ -19,6 +19,7 @@ export {
   requestsOf,
   TOAST_RULE_ROW,
   TYPE_PASSWORD,
+  withDerivedInputs,
 } from './derive'
 export type { DerivedToast } from './expand-flow'
 export { filesUnder } from './files-under'

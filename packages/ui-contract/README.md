@@ -38,8 +38,7 @@ for Bun.
     the file writes a problem (`paging.ts`); the failures of the actions; an error's codes, from
     the actions bound beside it, the actions its flow invokes whose failure shows on it and the
     codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
-    `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
-    input), its flow expanded from the shorter forms with the codes the anchors of every
+    `flow-errors.ts`); the buttons whose regions the flow leaves out), its flow expanded from the shorter forms with the codes the anchors of every
     screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
     that a guard by failure code guards shows that guard's codes, one on a later branch the
     failure's codes but those of the code-guarded branches before it, a problem when they
@@ -59,8 +58,12 @@ for Bun.
     destructive action, on its control (`asks`) and on the frame's confirmation, which
     carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
     then parsed through
-    `screenFileSchema`, each control whose flow moves to another screen then asking the leave
-    question, with the fields it loses (`leaves`, `files/derive/leaves.ts`);
+    `screenFileSchema`, each field then holding input unless its own change applies it at once
+    and nothing else applies it (it runs an action that takes the field and no other anchor of
+    its screen runs with it, or its own event moves its screen's search with it and no other
+    anchor's event does; `files/derive/inputs.ts`), and each control whose flow moves to
+    another screen asking the leave question, with the fields it loses (`leaves`,
+    `files/derive/leaves.ts`);
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;
@@ -313,10 +316,11 @@ for Bun.
     its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES`
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
-    element that carries a field's anchor as a literal; a prop passed through is let by, any
-    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`), its `colours`
-    (`marksState`, read like `holdsInput` by the same reader, a wrapper that carries the anchor as
-    `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
+    element that carries a field's anchor as a literal or as `testIdFor()` of two literals, an
+    entry of the latter with its `base`, as a paged list's size select is built; a prop passed
+    through is let by, any other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`),
+    its `colours` (`marksState`, read like `holdsInput` by the same reader, a wrapper that
+    carries the anchor as `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
     at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
@@ -330,8 +334,12 @@ for Bun.
     `{false}` on a field the contract says holds no input, never on another kind, and on every
     such field rendered (except with `ahead`), and a `marksState` written only as `{false}` on
     a field the contract says drops its state colour, never on a kind that is not an `input`, a
-    `textarea` or a `select` that holds input (a form included), and on every such field
-    rendered (except with `ahead`).
+    `textarea` or a `select` that holds input (a form, a paged list's size select included), and
+    on every such field rendered (except with `ahead`). The opt-outs sit in `sources/opt-outs.ts`:
+    a paged list's size select, `<list>.size-select` of a declared anchor whose `derived`
+    holds `size-select`, is a select that holds no input by its facet, so a `holdsInput={false}`
+    on it is no problem (it is not required on a rendered one), and a flag of a part a
+    `testIdFor()` derives that is no size select is a problem.
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
@@ -548,7 +556,8 @@ for Bun.
   `item` a control is in, which a navigate's `{ item }` search takes (it throws outside such an
   entry or for one without an id). A paged list: `PAGE` and `SIZE` (`page`, `size`, the
   search parameters it reads), `PAGING_PARTS` (`range`, `previous-link`, `next-link`,
-  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`),
+  `size-select`, as `RANGE`, `PREVIOUS_LINK`, `NEXT_LINK` and `SIZE_SELECT`; the size select
+  applies its choice at once, so it holds no input),
   `pagerOf({ page, size, shown, total })` (the `Pager` a page shows: its range from 1, `0` to
   `0` when it shows none, and the page before and after where there is one),
   `searchKeysOf(source)` (the search parameters a source reads, which read it again when one

@@ -9,7 +9,8 @@
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
  * while a `data-code` literal outside the grammar is a problem. And `holdsInput={false}` and
  * `marksState={false}` beside a field's anchor, for the opt-outs the contract decides: a
- * boolean literal on the element that carries the anchor as a literal, or a prop passed
+ * boolean literal on the element that carries the anchor as a literal or as `testIdFor()` of
+ * two literals (a paged list's size select, with the base it derives from), or a prop passed
  * through.
  */
 
@@ -21,6 +22,8 @@ import {
   type AnchorValue,
   anchorValue,
   attributeValue,
+  type CarriedAnchor,
+  carriedAnchor,
   isTestIdFor,
   keyName,
   staticText,
@@ -34,13 +37,13 @@ export const RUNTIME_SUFFIX =
   'the suffix of testIdFor() is built at runtime; pass a literal suffix of the vocabulary'
 
 export const HOLDS_INPUT_ANCHOR =
-  "holdsInput goes on the element that carries the field's anchor as a literal"
+  "holdsInput goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals"
 
 export const HOLDS_INPUT_VALUE =
   'holdsInput is {false} or left out; the contract decides it (a prop passed through is fine)'
 
 export const MARKS_STATE_ANCHOR =
-  "marksState goes on the element that carries the field's anchor as a literal"
+  "marksState goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals"
 
 export const MARKS_STATE_VALUE =
   'marksState is {false} or left out; the contract decides it (a prop passed through is fine)'
@@ -51,10 +54,10 @@ export interface Collected {
   /** The suffix of each `testIdFor()`, with its base when the call writes it as a literal. */
   derived: Array<{ suffix: string; base?: string; line: number }>
   codes: Array<{ code: string; form: 'attribute' | 'key' | 'map'; line: number }>
-  /** `holdsInput` written as a literal on the element of a field's anchor. */
-  inputs: Array<{ anchor: string; holdsInput: boolean; line: number }>
-  /** `marksState` written as a literal on the element of a field's anchor. */
-  colours: Array<{ anchor: string; marksState: boolean; line: number }>
+  /** `holdsInput` written as a literal on the element of an anchor, with the base of a derived one. */
+  inputs: Array<{ anchor: string; base?: string; holdsInput: boolean; line: number }>
+  /** `marksState` written as a literal on the element of an anchor, with the base of a derived one. */
+  colours: Array<{ anchor: string; base?: string; marksState: boolean; line: number }>
   problems: Problem[]
 }
 
@@ -154,13 +157,14 @@ export function collectFromSource(text: string, file: string): Collected {
   }
 
   /**
-   * A boolean literal prop of an element, with the anchor the element carries as a literal; a
-   * prop passed through is let by, any other value or an element with no such anchor a problem.
+   * A boolean literal prop of an element, with the anchor the element carries as a literal or as
+   * `testIdFor()` of two literals; a prop passed through is let by, any other value or an element
+   * with no such anchor a problem.
    */
   const flag = (
     attributes: readonly ElementAttribute[],
     { name, anchorMessage, valueMessage }: Flag,
-  ): { anchor: string; value: boolean; line: number } | undefined => {
+  ): (CarriedAnchor & { value: boolean; line: number }) | undefined => {
     const written = attributes.find((attribute) => attribute.name === name)
 
     if (written === undefined) {
@@ -181,15 +185,15 @@ export function collectFromSource(text: string, file: string): Collected {
     }
 
     const carrier = attributes.find((attribute) => isAnchorAttribute(attribute.name))
-    const value = carrier === undefined ? undefined : attributeValue(carrier.value)
+    const carried = carrier === undefined ? undefined : carriedAnchor(carrier.value)
 
-    if (value?.kind !== 'literal') {
+    if (carried === undefined) {
       collected.problems.push({ file, line: line(written.start), message: anchorMessage })
 
       return undefined
     }
 
-    return { anchor: value.text, value: expression.value, line: line(written.start) }
+    return { ...carried, value: expression.value, line: line(written.start) }
   }
 
   new Visitor({
@@ -216,11 +220,15 @@ export function collectFromSource(text: string, file: string): Collected {
       const marks = flag(attributes, MARKS_STATE)
 
       if (holds !== undefined) {
-        collected.inputs.push({ anchor: holds.anchor, holdsInput: holds.value, line: holds.line })
+        const { value: holdsInput, ...carried } = holds
+
+        collected.inputs.push({ ...carried, holdsInput })
       }
 
       if (marks !== undefined) {
-        collected.colours.push({ anchor: marks.anchor, marksState: marks.value, line: marks.line })
+        const { value: marksState, ...carried } = marks
+
+        collected.colours.push({ ...carried, marksState })
       }
     },
     ObjectExpression(node) {

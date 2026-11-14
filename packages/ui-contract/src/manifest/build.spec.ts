@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { VISIBILITY_VALUES } from '../anchors'
+import { withDerivedInputs } from '../files'
 import { manifestSchema } from '../schemas'
 
 import { buildManifest } from './build'
@@ -472,6 +473,41 @@ describe('the states a field carries', () => {
   })
   it('leaves a button without the key', () => {
     expect(withFields(states).ids['sample.save-button']).not.toHaveProperty('fieldStates')
+  })
+  it("leaves a select whose own change moves its screen's search without the key, holding no input", () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+    const editing = sample?.flow?.states['editing']
+
+    if (sample === undefined || editing === undefined || editing.type === 'parallel') {
+      expect.unreachable('the fixture has a sample screen whose flow edits')
+    }
+
+    sample.anchors['sample.kind-select'] = { kind: 'select', binding: { search: 'kind' } }
+    editing.on = {
+      ...editing.on,
+      'sample.kind-select': {
+        target: 'editing',
+        actions: [
+          {
+            type: 'navigate',
+            params: { to: '/sample/$key', search: { kind: { anchor: 'sample.kind-select' } } },
+          },
+        ],
+      },
+    }
+    sample.anchors = withDerivedInputs(sample).anchors
+
+    const built = buildManifest({
+      ...base,
+      vocabulary: { ...base.vocabulary, fieldStates: states },
+      product: PRODUCT,
+      now: NOW,
+    })
+
+    expect(built.ids['sample.kind-select']).toMatchObject({ kind: 'select', holdsInput: false })
+    expect(built.ids['sample.kind-select']).not.toHaveProperty('fieldStates')
+    expect(built.ids['sample.title-input']?.fieldStates).toEqual(['unsaved', 'saved'])
   })
   it('carries marksState: false only on the field that writes it, its states unchanged', () => {
     const quiet = withFields(states, true)
