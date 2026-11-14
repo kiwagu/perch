@@ -314,7 +314,9 @@ for Bun.
     maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the
     grammar is a problem), its `inputs` (`holdsInput` written as a boolean literal on the
     element that carries a field's anchor as a literal; a prop passed through is let by, any
-    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`) and an anchor built
+    other value or place is `HOLDS_INPUT_VALUE` or `HOLDS_INPUT_ANCHOR`), its `colours`
+    (`marksState`, read like `holdsInput` by the same reader, a wrapper that carries the anchor as
+    `testId` included; `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`) and an anchor built
     at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects
     the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`,
     `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots;
@@ -324,9 +326,12 @@ for Bun.
     contract (of the base itself when it is a literal), so a `visibility-button` no input
     declares is never rendered, and every code a code of the contract
     (`codesOf(vocabulary, screens)`: the vocabulary's rows without the rule row, and the toast
-    codes the loader derived), and a `holdsInput` written only as
+    codes the loader derived), a `holdsInput` written only as
     `{false}` on a field the contract says holds no input, never on another kind, and on every
-    such field rendered (except with `ahead`).
+    such field rendered (except with `ahead`), and a `marksState` written only as `{false}` on
+    a field the contract says drops its state colour, never on a kind that is not an `input`, a
+    `textarea` or a `select` that holds input (a form included), and on every such field
+    rendered (except with `ahead`).
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
