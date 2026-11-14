@@ -2,6 +2,9 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import es from '../../i18n/user.es.json'
@@ -148,5 +151,24 @@ describe('ResetPasswordView', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.reset-password.title'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it.each([PASSWORD, CONFIRMATION])('draws none on %s', (testId) => {
+    renderWithProviders(
+      <UnsavedInputScope>
+        <ResetPasswordView
+          renders={only('user.reset-password.form')}
+          canSubmit
+          onTypePassword={() => {}}
+          onSubmit={() => Promise.resolve(true)}
+        />
+      </UnsavedInputScope>,
+    )
+
+    type(testId, 'Abcdefghi1!')
+
+    expectNoStateColour(screen.getByTestId(testId))
   })
 })

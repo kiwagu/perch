@@ -482,6 +482,7 @@ by default), which a test talking to the gateway directly uses to name a client 
 accounts and the organisations they created are swept; it applies the directory schema as the
 gateway does, which leaves a stand that already has it alone. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
+`src/field-state-colour.test-support.ts` is the one assertion that a field the contract opts out draws no state colour.
 
 ## Commands
 

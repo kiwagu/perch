@@ -2,6 +2,9 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -163,5 +166,24 @@ describe('VerifyEmailView', () => {
     expect(screen.getByTestId('user.verify-email.error').textContent).toBe(
       es['user.verify-email.error.link-expired'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    renderWithProviders(
+      <UnsavedInputScope>
+        <VerifyEmailView
+          renders={only('user.verify-email.form')}
+          canResend
+          error="data:LINK_INVALID"
+          onResend={() => Promise.resolve(true)}
+        />
+      </UnsavedInputScope>,
+    )
+
+    type('user.verify-email.email-input', 'ann@example.test')
+
+    expectNoStateColour(screen.getByTestId('user.verify-email.email-input'))
   })
 })
