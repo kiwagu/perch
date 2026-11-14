@@ -434,7 +434,7 @@ describe('a composite a secret input opts into', () => {
 describe('the states a field carries', () => {
   const states = { unsaved: 'held, not yet saved', saved: 'what is stored' }
 
-  function withFields(fieldStates: Record<string, string>) {
+  function withFields(fieldStates: Record<string, string>, quiet = false) {
     const base = fixtureContract()
     const [sample] = base.screens.screens
 
@@ -451,6 +451,7 @@ describe('the states a field carries', () => {
       kind: 'input',
       holdsInput: true,
       binding: { action: 'thing.createThing' },
+      ...(quiet ? { marksState: false } : {}),
     }
     sample.anchors['sample.save-button'] = { kind: 'button' }
 
@@ -471,6 +472,15 @@ describe('the states a field carries', () => {
   })
   it('leaves a button without the key', () => {
     expect(withFields(states).ids['sample.save-button']).not.toHaveProperty('fieldStates')
+  })
+  it('carries marksState: false only on the field that writes it, its states unchanged', () => {
+    const quiet = withFields(states, true)
+
+    expect(quiet.ids['sample.note-input']?.marksState).toBe(false)
+    expect(quiet.ids['sample.note-input']?.fieldStates).toEqual(['unsaved'])
+    expect(quiet.ids['sample.title-input']).not.toHaveProperty('marksState')
+    expect(withFields(states).ids['sample.note-input']).not.toHaveProperty('marksState')
+    expect(manifestSchema.safeParse(quiet).error?.issues).toBeUndefined()
   })
   it("publishes the vocabulary's table in the contract", () => {
     expect(withFields(states).contract.fieldStates).toEqual(states)
