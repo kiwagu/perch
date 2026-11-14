@@ -2,8 +2,9 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { stateBorder, UnsavedInputScope } from '@workspace/ui/unsaved-input'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import es from '../../i18n/user.es.json'
@@ -153,19 +154,6 @@ describe('ResetPasswordView', () => {
   })
 })
 
-/** The classes that colour a field's border by its state: a field the contract opts out shows none. */
-const STATE_COLOURS = stateBorder(true).split(' ')
-
-/** Types into the field, then expects it unsaved (`data-state` stays) and drawn in no state colour. */
-function expectsNoStateColour(testId: string, value: string) {
-  type(testId, value)
-
-  const field = screen.getByTestId(testId)
-
-  expect(field.getAttribute('data-state')).toBe('unsaved')
-  expect([...field.classList].filter((name) => STATE_COLOURS.includes(name))).toEqual([])
-}
-
 describe('the state colour of the fields', () => {
   it.each([PASSWORD, CONFIRMATION])('draws none on %s', (testId) => {
     renderWithProviders(
@@ -179,6 +167,8 @@ describe('the state colour of the fields', () => {
       </UnsavedInputScope>,
     )
 
-    expectsNoStateColour(testId, 'Abcdefghi1!')
+    type(testId, 'Abcdefghi1!')
+
+    expectNoStateColour(screen.getByTestId(testId))
   })
 })
