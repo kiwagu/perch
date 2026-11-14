@@ -116,7 +116,7 @@ export function bootBrowser(
   const locks: LockManager | undefined = navigator.locks
   const visibility = documentVisibility(document)
   // The browser's network: the sync status reads it in every tab, and the leading tab's channel
-  // hears it come back to connect again at once.
+  // hears it come back and brings a waiting reconnect forward to within a second.
   const network: DeviceNetwork = {
     online: () => navigator.onLine,
     onOnlineChange: (listener) => {

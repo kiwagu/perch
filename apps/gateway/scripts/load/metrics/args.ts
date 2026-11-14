@@ -13,6 +13,8 @@ export interface LoadArgs {
   gatewayPass: string
   json?: string
   stopOnDegrade: boolean
+  /** Whether the run ends with the restart of its gateway; `--no-restart` leaves it out. */
+  restart: boolean
 }
 
 function numberFlag(flag: string, value: string | undefined): number {
@@ -87,6 +89,7 @@ export function parseArgs(
     gatewayUser: env['GATEWAY_SURREAL_USER'] ?? 'gateway',
     gatewayPass: env['GATEWAY_SURREAL_PASS'] ?? 'gateway-stand-password',
     stopOnDegrade: false,
+    restart: true,
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -94,6 +97,11 @@ export function parseArgs(
 
     if (flag === '--stop-on-degrade') {
       args.stopOnDegrade = true
+      continue
+    }
+
+    if (flag === '--no-restart') {
+      args.restart = false
       continue
     }
 
