@@ -6,7 +6,8 @@
  * adds or removes on the anchors both hold (written or derived, so a constraint added to the
  * model shows as the code it gives), who each route serves (its guard and its roles), the
  * platform action each list reads with its params and its paging, the fields that start or stop
- * holding input, the messages that
+ * holding input, the controls that start or stop asking before their flow leaves the screen,
+ * with the fields the leave loses, the messages that
  * rank their codes, with their order, the actions that
  * leave what the user typed behind and how each leave that would lose it asks, the notices the
  * platform actions declare, the transitions it adds or removes in each activity both contracts
@@ -49,6 +50,12 @@ export interface ContractChanges {
   inputs: Change
   /** As `<anchor> asks <code>`, the controls that ask before a destructive action. */
   questions: Change
+  /**
+   * As `<anchor> leaves losing <field>, <field>`, the controls whose flow moves to another screen
+   * and ask before it, with the fields the move loses: other fields show as the old line removed
+   * and the new one added.
+   */
+  leaveQuestions: Change
   /**
    * As `<anchor> ranks <code> > <code>`, the messages that rank their codes, each with its order:
    * a new order shows as the old line removed and the new one added.
@@ -238,6 +245,9 @@ export function diffContracts(
     ),
     questions: carriedChanges(before, after, anchors.renamed, (def) =>
       def.asks === undefined ? [] : [`asks ${def.asks.code}`],
+    ),
+    leaveQuestions: carriedChanges(before, after, anchors.renamed, (def) =>
+      def.leaves === undefined ? [] : [`leaves losing ${def.leaves.loses.join(', ')}`],
     ),
     ranks: carriedChanges(before, after, anchors.renamed, (def) =>
       def.ranked === true ? [`ranks ${(def.codes ?? []).join(' > ')}`] : [],

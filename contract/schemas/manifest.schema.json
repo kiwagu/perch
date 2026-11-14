@@ -270,6 +270,17 @@
           },
           "description": "The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`."
         },
+        "fieldStates": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "description": "What the state of a field means."
+          },
+          "description": "The data-state values of a field that holds input; `unsaved` and `saved`."
+        },
         "pageHelper": {
           "type": "string",
           "const": "__perch.ui",
@@ -364,6 +375,7 @@
         "screenNames",
         "reserved",
         "composites",
+        "fieldStates",
         "pageHelper",
         "instructions"
       ],
@@ -1240,6 +1252,31 @@
                   ],
                   "additionalProperties": false,
                   "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+                },
+                "leaves": {
+                  "type": "object",
+                  "properties": {
+                    "dialog": {
+                      "type": "string",
+                      "description": "The frame's dialog that asks whether to leave and lose what was typed."
+                    },
+                    "loses": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+                    }
+                  },
+                  "required": [
+                    "dialog",
+                    "loses"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
                 },
                 "composite": {
                   "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
@@ -6617,6 +6654,31 @@
             "additionalProperties": false,
             "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
           },
+          "leaves": {
+            "type": "object",
+            "properties": {
+              "dialog": {
+                "type": "string",
+                "description": "The frame's dialog that asks whether to leave and lose what was typed."
+              },
+              "loses": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+              }
+            },
+            "required": [
+              "dialog",
+              "loses"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
+          },
           "composite": {
             "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
             "type": "string",
@@ -6641,6 +6703,17 @@
             ],
             "additionalProperties": false,
             "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
+          },
+          "fieldStates": {
+            "description": "The data-state values the field takes about its input, `unsaved` and `saved`.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "unsaved",
+                "saved"
+              ]
+            }
           },
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
@@ -6972,7 +7045,7 @@
                 "question",
                 "never"
               ],
-              "description": "A change of screen the user starts: a link, Back, Forward."
+              "description": "A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward."
             },
             "actions": {
               "type": "string",
@@ -7006,7 +7079,7 @@
             "elsewhere": {
               "type": "string",
               "const": "cannot",
-              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed."
             }
           },
           "required": [

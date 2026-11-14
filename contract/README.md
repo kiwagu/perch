@@ -771,6 +771,15 @@ out, and the loader derives it, the same way every time:
   submit button also runs with it (the sign-in email) holds input. The loader sets
   `holdsInput` on every field; a written value wins. The manifest carries it, and
   `contract:diff` lists the fields that start or stop holding input.
+- **Which states a field carries.** A field of kind `input`, `textarea` or `select` that holds
+  input carries `data-state` `unsaved` while it holds input no save has taken. One whose
+  binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored
+  what it shows, for as long as it stays on the screen; a reload or leaving the screen clears
+  it. A field whose own change runs its action (`holdsInput: false`) carries no state. The
+  states come from the vocabulary's "Field states" section, and a vocabulary without it
+  declares none. The manifest lists each field's states under `fieldStates` in `ids`, and the
+  table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is
+  held to them.
 - **Which leaves ask first.** `platform.yaml` declares under `unsavedInput` every leave that
   would lose what was typed, and how the app asks first. `question` names the frame's dialog:
   a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and
@@ -783,6 +792,20 @@ out, and the loader derives it, the same way every time:
   the input) is always `never`, and `elsewhere` (another tab or device, a database that will
   not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of
   it.
+  A flow's `navigate` is one of these leaves by what moves it: after an invoke's outcome it is
+  `flow`; on a platform or data event, `elsewhere`; on a control's event, to the path of the
+  screen's one binding, `state`; on a control's event, to any other path, `screen`, a leave the
+  user starts as with a link. Such a control asks the frame's question before its event while
+  a change of screen asks, as long as a field it loses holds unsaved input: the fields of its
+  screen that hold input, but those the move carries in its search and the control itself. The
+  loader derives it on the control, `leaves: { dialog, loses }`, which a screen file never
+  writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`. For that
+  question to hold wherever the control is acted on, a navigate sits on a transition, never in
+  an entry or an exit; one transition moves once; a control's navigate names a control of the
+  flow's own screen, outside the frame, an anchor it declares or a part one derives, which has
+  no declaration to carry the question and so moves within its screen only; a move to a path
+  of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state
+  that handles it, losing the same fields, since its question comes before its event.
 - **What a failure shows.** In the `onError` of an invoke, `show: <anchor>` shows one of the
   codes the failure of the invoked action shows. In an `onError` list with a branch guarded
   by failure code, a bare `show` on that branch shows the guard's codes, and one on a later
@@ -1425,7 +1448,9 @@ gap is fixed in the contract files first, never worked around in a test.
   `main` compares the app it brings with the flows it brings) or at the commit the branch is at
   (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit,
   taken onto a branch whose app already follows its first, changes a flow the base may not have
-  at all), so a business commit may change a transition the app has not changed yet. The app's
+  at all; during a merge, the tip before it, unless the engine the merge brings cannot load that
+  tip's contract for any reason, a key it now requires among them, and then that tip gives no
+  flows to match), so a business commit may change a transition the app has not changed yet. The app's
   routes likewise: a binding may wait for its route, and a route that still reads as its
   binding did at the merge base (the same screen, the same path) is held to that binding as it
   was there. The hook names both commits, and the cache of the unit tests keys on them, so a

@@ -165,6 +165,7 @@ describe('diffContracts', () => {
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       questions: { added: [], removed: [] },
+      leaveQuestions: { added: [], removed: [] },
       ranks: { added: [], removed: [] },
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
@@ -754,6 +755,43 @@ describe('diffContracts and the questions before destructive actions', () => {
     expect(diffContracts(asking(), asking('thing-delete')).codes).toEqual({
       added: ['thing-delete'],
       removed: [],
+    })
+  })
+})
+
+describe('diffContracts and the questions before leaves', () => {
+  /** The fixture contract, `sample.save-button` leaving its screen losing `loses`, if given. */
+  const leaving = (loses?: string[]): Contract => {
+    const contract = fixtureContract()
+    const anchor = contract.screens.screens[0]?.anchors['sample.save-button']
+
+    if (loses !== undefined && anchor !== undefined) {
+      anchor.leaves = { dialog: 'app-shell.leave-dialog', loses }
+    }
+
+    return contract
+  }
+
+  it('lists a control that starts or stops asking before it leaves, with what it loses', () => {
+    expect(diffContracts(leaving(), leaving(['sample.title-input'])).leaveQuestions).toEqual({
+      added: ['sample.save-button leaves losing sample.title-input'],
+      removed: [],
+    })
+    expect(diffContracts(leaving(['sample.title-input']), leaving()).leaveQuestions).toEqual({
+      added: [],
+      removed: ['sample.save-button leaves losing sample.title-input'],
+    })
+  })
+
+  it('shows another set of lost fields as the old line removed and the new one added', () => {
+    expect(
+      diffContracts(
+        leaving(['sample.title-input']),
+        leaving(['sample.name-input', 'sample.title-input']),
+      ).leaveQuestions,
+    ).toEqual({
+      added: ['sample.save-button leaves losing sample.name-input, sample.title-input'],
+      removed: ['sample.save-button leaves losing sample.title-input'],
     })
   })
 })

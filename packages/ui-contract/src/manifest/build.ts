@@ -5,8 +5,8 @@
  * with an example link on each binding, the platform section and the activities verbatim,
  * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
- * the kind, meaning and values of the part it marks, the composites of the vocabulary, and the
- * model document. An anchor the screen file leaves undescribed carries the description the
+ * the kind, meaning and values of the part it marks, the composites and the field states of the
+ * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the description the
  * engine says of it.
  */
 
@@ -18,6 +18,7 @@ import {
   VISIBILITY_BUTTON,
   VISIBILITY_VALUES,
 } from '../anchors'
+import { fieldStatesOf } from '../check'
 import {
   type Activity,
   CONFIRM_RULE_ROW,
@@ -60,31 +61,32 @@ const mapValues = <T>(
 const located = ({ where, meaning }: { where: string; meaning: string }): string =>
   `${where}: ${meaning}`
 
-function idsOf(screens: readonly Screen[]): Manifest['ids'] {
+function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['ids'] {
   return Object.fromEntries(
     screens.flatMap((screen) =>
-      Object.entries(screen.anchors).map(
-        ([
-          anchor,
-          {
-            kind,
-            binding,
-            codes,
-            ranked,
-            fields,
-            dataId,
-            dataValue,
-            states,
-            derived,
-            roles,
-            own,
-            holdsInput,
-            secret,
-            asks,
-            composite,
-            derivedFrom,
-          },
-        ]) => [
+      Object.entries(screen.anchors).map(([anchor, def]) => {
+        const {
+          kind,
+          binding,
+          codes,
+          ranked,
+          fields,
+          dataId,
+          dataValue,
+          states,
+          derived,
+          roles,
+          own,
+          holdsInput,
+          secret,
+          asks,
+          leaves,
+          composite,
+          derivedFrom,
+        } = def
+        const fieldStates = fieldStatesOf(def, vocabulary)
+
+        return [
           anchor,
           {
             kind,
@@ -102,11 +104,13 @@ function idsOf(screens: readonly Screen[]): Manifest['ids'] {
             ...(holdsInput === undefined ? {} : { holdsInput }),
             ...(secret === undefined ? {} : { secret }),
             ...(asks === undefined ? {} : { asks }),
+            ...(leaves === undefined ? {} : { leaves }),
             ...(composite === undefined ? {} : { composite }),
             ...(derivedFrom === undefined ? {} : { derivedFrom }),
+            ...(fieldStates.length === 0 ? {} : { fieldStates: [...fieldStates] }),
           },
-        ],
-      ),
+        ]
+      }),
     ),
   )
 }
@@ -195,6 +199,7 @@ function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['con
     screenNames: vocabulary.screenNames,
     reserved: Object.keys(vocabulary.reserved),
     composites: vocabulary.composites,
+    fieldStates: vocabulary.fieldStates,
     pageHelper: PAGE_HELPER,
     instructions: instructionsOf(vocabulary, screens.platform, READY),
   }
@@ -221,7 +226,7 @@ export function buildManifest({
       failureOf: failuresOf(model, screens.platform.actions),
     }),
     routeParams: routeParamsOf(screens.screens),
-    ids: idsOf(screens.screens),
+    ids: idsOf(screens.screens, vocabulary),
     platform: screens.platform,
     activities,
     scenarios,

@@ -16,6 +16,9 @@ const ITEM = 'sample.thing-item'
 /** What a control of an entry carries, and what one outside it does not. */
 const NOT_ACTED =
   'where no entry was acted on: only the event of a control in its entries carries it'
+/** Where a navigate may sit, which the leaves of the flow hold (`leaves.ts`). */
+const IN_PLACE = 'a navigate sits on a transition, whose trigger says which leave it is:'
+const NO_CONTROL_ASKS = 'no control could ask before it'
 const OUTSIDE = `which is not in its part "sample": only a control in the item's part, rendered in each entry, carries it`
 
 const navigate = (search: Record<string, unknown>): Effect =>
@@ -92,14 +95,12 @@ describe("a navigate's search that takes the data-id of an entry", () => {
       'app-shell.thing-item': { kind: 'item', dataId: 'thing' },
     })
     Object.assign(flowStateIn(contract, 'editing').on ?? {}, {
-      'sample.open-link': {
-        actions: [
-          navigate({ id: { item: 'sample.gone-item' } }),
-          navigate({ id: { item: 'app-shell.thing-item' } }),
-          navigate({ id: { item: 'sample.list' } }),
-          navigate({ id: { item: 'sample.bare-item' } }),
-        ],
-      },
+      'sample.open-link': [
+        { guard: 'titleGiven', actions: [navigate({ id: { item: 'sample.gone-item' } })] },
+        { guard: 'titleGiven', actions: [navigate({ id: { item: 'app-shell.thing-item' } })] },
+        { guard: 'titleGiven', actions: [navigate({ id: { item: 'sample.list' } })] },
+        { actions: [navigate({ id: { item: 'sample.bare-item' } })] },
+      ],
       'sample.lone.open-link': {
         actions: [navigate({ id: { item: 'sample.lone.thing-item' } })],
       },
@@ -108,10 +109,10 @@ describe("a navigate's search that takes the data-id of an entry", () => {
     const on = `${AT}.states.editing.on`
 
     expect(printed(contract)).toEqual([
-      `${on}["sample.open-link"].actions[0].params.search.id.item: "sample.gone-item" is not a declared anchor of the screen`,
-      `${on}["sample.open-link"].actions[1].params.search.id.item: "app-shell.thing-item" is an anchor of another screen: a search takes the data-id of an entry of its own screen`,
-      `${on}["sample.open-link"].actions[2].params.search.id.item: "sample.list" is a list, not an item or a row: a search takes the data-id of an entry`,
-      `${on}["sample.open-link"].actions[3].params.search.id.item: "sample.bare-item" declares no dataId: a search takes the data-id of an entry, which its dataId says`,
+      `${on}["sample.open-link"][0].actions[0].params.search.id.item: "sample.gone-item" is not a declared anchor of the screen`,
+      `${on}["sample.open-link"][1].actions[0].params.search.id.item: "app-shell.thing-item" is an anchor of another screen: a search takes the data-id of an entry of its own screen`,
+      `${on}["sample.open-link"][2].actions[0].params.search.id.item: "sample.list" is a list, not an item or a row: a search takes the data-id of an entry`,
+      `${on}["sample.open-link"][3].actions[0].params.search.id.item: "sample.bare-item" declares no dataId: a search takes the data-id of an entry, which its dataId says`,
       `${on}["sample.lone.open-link"].actions[0].params.search.id.item: "sample.lone.thing-item" is an entry of no list, table or section of the screen: an entry is declared under its container or beside it in its part`,
     ])
   })
@@ -143,6 +144,8 @@ describe("a navigate's search that takes the data-id of an entry", () => {
       `${AT}.states.editing.entry[0].${item} in an entry, ${NOT_ACTED}`,
       `${AT}.states.editing.exit[0].${item} in an exit, ${NOT_ACTED}`,
       `${AT}.states.saving.invoke.onError.actions[0].${item} in the onError of thing.updateThing, ${NOT_ACTED}`,
+      `${AT}.states.editing.entry[0]: ${IN_PLACE} in an entry ${NO_CONTROL_ASKS}`,
+      `${AT}.states.editing.exit[0]: ${IN_PLACE} in an exit ${NO_CONTROL_ASKS}`,
     ])
   })
 
@@ -167,6 +170,7 @@ describe("a navigate's search that takes the data-id of an entry", () => {
       `${on}["app-shell.status"].${item} on "app-shell.status", ${noControl}`,
       `${on}["sample.thing-item"].${item} on the entry itself, which is no control: a control in it (a link) carries it`,
       `${on}["sample.form.go-link"].${item} on "sample.form.go-link", ${OUTSIDE}`,
+      `${on}["app-shell.status"].actions[0]: a navigate on the event of "app-shell.status", which this screen does not declare: a control's leave asks for the fields of its own screen`,
     ])
   })
 })

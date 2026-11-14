@@ -91,7 +91,10 @@ code and the tests follow; the checks hold them to the contract.
    `toast: false` on the invoke, or on a region `by` its button, to ban it, or a `show` on the
    toast for a message of its own), and the question before a destructive action (a control
    bound to a ban, delete, remove or revoke asks the frame's confirmation; write `confirm: false` on
-   its anchor to run it without asking). A list whose `source` is a platform action reads it
+   its anchor to run it without asking), and the question before a control's flow leaves its
+   screen (a `navigate` on its event to another path asks like a link, losing the fields the
+   move does not carry: `leaves`, derived; a navigate sits on a transition, one per transition,
+   on a control of the flow's own screen). A list whose `source` is a platform action reads it
    each time it starts to render after it did not and each time the organisation or account
    it reads for or a search parameter its source takes becomes another, and nothing says that
    (its `params` take a search parameter or a constant, never a field; `paged: true` pages it
@@ -211,7 +214,10 @@ code and the tests follow; the checks hold them to the contract.
    forms. A
    composite takes `testId` and derives its parts with `testIdFor`. Carry `data-code`,
    `data-state`, `data-id` or `data-value` as declared, with a domain code mapped to the
-   contract code in the presentation layer. An icon-only control also gets an `aria-label`.
+   contract code in the presentation layer. A field carries `data-state` `unsaved` while it
+   holds input no save has taken, and `saved` only when its manifest `fieldStates` lists it
+   and a save stored what it shows, while it stays on the screen; otherwise it carries no
+   state. An icon-only control also gets an `aria-label`.
    A control that is not a test target gets a coverage-ignore marker with its reason.
    `references/patterns.md` has one example per case.
 7. **The tests.** `bun run e2e:scaffold <id>` writes the failing test of a new scenario. The

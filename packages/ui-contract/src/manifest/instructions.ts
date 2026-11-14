@@ -36,6 +36,9 @@ const SESSION = [
   'One account per browser: a second account, or a second device of the same one, needs a browser context of its own.',
 ].join(' ')
 
+const FIELD_STATE_NOTE =
+  'A field carries `data-state` `unsaved` while it holds input no save has taken; one whose `fieldStates` lists `saved` carries `saved` once a save stored what it shows, while it stays on the screen; a field carries no `data-state` otherwise.'
+
 const SCREEN_MAP = [
   '`screens` lists every screen once. Its `id` is the screen name its anchors start with; its `title` is what a reader calls it and its `description` what it is for.',
   "`bindings` are its routes in the router's format (TanStack): `path` with static segments, `$param`, `{-$param}` (optional) and `$` (splat); `guard` (`guest` or `authenticated`: where an account the route is not for is sent, a guest to sign-in or a signed-in account to the profile); `roles` (the roles it serves: the router serves it only to an account that holds one, after its `guard` and before it reads the search, and opens the screen of the binding at `/$`, the not-found screen, at the same address for any other); `params` and `search` as flat JSON Schemas; `history` (`push` or `replace`); `retain` (search parameters kept across navigations); `example`, a deep link to the route with fake data, written as the router writes a link: each path parameter at its first `examples` value, every search key at its `default`, else its first `enum` value or example (the app's own links leave out a value equal to its default and reach the same state). `frame: true` marks the frame around every screen, which has no route.",
@@ -52,6 +55,7 @@ const SCREEN_MAP = [
   `A \`visibility-button\` (\`<input>.visibility-button\`, the eye of a secret input, in \`contract.derivedParts\`) shows what the input holds as typed, or hides it again: presentation only, it is never an event of a flow and always enabled, and its \`${VALUE}\` names what a click does, \`show\` or \`hide\`.`,
   `\`ids\` holds the same anchors flat, each with its screen. On a development or e2e build, \`window.${PAGE_HELPER}.anchors()\` lists the anchors the page renders now, with their attributes and visibility.`,
   "`composite` on a secret input names the platform composite it opts into (`platform.composites.<name>`): the screen's `anchors` then hold its list and items, each marked `derivedFrom` with the composite and, for an item, its name; they are declared anchors like any other.",
+  FIELD_STATE_NOTE,
 ].join(' ')
 
 const BINDINGS = [
@@ -62,6 +66,7 @@ const BINDINGS = [
   '`{ "search": "<name>" }` on a field starts it with the value of that search parameter of the route the screen was opened at and gives it that value again each time the parameter becomes another, which the user may change; it may sit in a list beside the action the field gives its value to.',
   'A list of bindings runs in its order, or one of them by the mode of the screen; the `flow` says which.',
   "An anchor with `asks` asks the frame's confirmation (`asks.dialog`, with `asks.code`) before its action runs: the app's platform gate opens it, confirm runs the action and cancel does not; a screen builds no dialog of its own for it.",
+  "An anchor with `leaves` is a control whose flow moves to another screen: the app's platform gate asks the frame's leave question (`leaves.dialog`) before its event while one of the fields of `leaves.loses` holds unsaved input, leave goes on and stay does not; the fields the move carries in its search are not among them.",
   "A button's action `params` are the union of the params the fields of its part pass for that action, a param the screen writes on the button winning; an error's `codes`, unless the screen writes them, are the failures of the actions bound beside it and invoked against it by the flow, plus the codes the flow shows on it, `failed` last; an invoke without `onError` whose action fails with codes clears its part's error on entry and, back in the one state that entered it on a control, shows the failure there (a start state, one several states enter, or one a platform or data event enters, writes its `onError`), and an `onError` written as its target alone still shows the failure on that error, on the screen's error when no control enters and the input names no field.",
 ].join(' ')
 

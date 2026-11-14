@@ -5,6 +5,7 @@
 
 /* Apps scan their own sources; the kit's components live outside them. */
 @source "../components";
+@source "../unsaved-input";
 
 /* Dark is a class on <html> the app sets, so a theme can be chosen apart from the system's. */
 @custom-variant dark (&:where(.dark, .dark *));

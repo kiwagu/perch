@@ -3,7 +3,7 @@
  * on it, and a spec changes one thing and asserts the one problem that follows.
  */
 
-import type { Activity, ActivityState, AnchorDef, Flow, FlowState, Screen } from '../files'
+import type { Activity, ActivityState, AnchorDef, Effect, Flow, FlowState, Screen } from '../files'
 
 import type { Contract } from './contract'
 
@@ -172,6 +172,7 @@ export function sampleContract(): Contract {
       appStates: meaning(['opening', 'ready']),
       containerStates: meaning(['loading', 'ready', 'empty']),
       rowStates: located(['current'], 'sample.thing-item'),
+      fieldStates: {},
       codes: located(['saved', 'failed', 'devices-read-failed'], 'sample.save-button'),
       choiceValues: {
         'sample.mode-select.option': meaning(['a', 'b']),
@@ -296,6 +297,25 @@ export function flowStateIn(contract: Contract, name: string): FlowState {
   }
 
   return state
+}
+
+/**
+ * The sample with each of `effects` on a branch of its own after the save (the `onDone` of
+ * `saving`, every branch but the last guarded), where a list of navigates is checked case by case:
+ * a move after an action asks nothing, and a transition moves the app once.
+ */
+export function afterSave(contract: Contract, effects: readonly Effect[]): void {
+  const invoke = flowStateIn(contract, 'saving').invoke
+
+  if (invoke === undefined) {
+    throw new Error('the sample saves in the state saving')
+  }
+
+  invoke.onDone = effects.map((effect, index) =>
+    index < effects.length - 1
+      ? { target: 'editing', guard: 'titleGiven', actions: [effect] }
+      : { target: 'editing', actions: [effect] },
+  )
 }
 
 /** The activity `id` of a contract, for a spec to change. */

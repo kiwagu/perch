@@ -49,7 +49,12 @@ from parts.
 Tests and agents assert codes, never text. A `message`, `error`, `toast` or `dialog` carries
 `data-code` with a code from "Codes": the stable name of what it says, while the wording
 changes with the language. A `status`, a `list`, a `section` and an `item` carry
-`data-state` with a state from "App states", "Container states" or "Row states". A choice
+`data-state` with a state from "App states", "Container states" or "Row states". A field
+(an `input`, a `textarea` or a `select`) carries `data-state` `unsaved` while it holds input
+no save has taken, and, when its binding is a model field, `saved` once a save stored what
+it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. A
+field carries no `data-state` otherwise, and never one when its own change runs its action.
+These states come from "Field states"; a vocabulary without that section declares none. A choice
 that is not an entity (an `option`, a `badge`, a `button` that switches a mode) carries
 `data-value` with a value from "Choice values". A `visibility-button`, the eye a password
 `input` renders, carries `data-value` `show` or `hide`, the values its suffix defines, never
@@ -117,7 +122,7 @@ state of one anchor, never a second anchor.
 | `data-testid` | the element | the anchor of the element |
 | `data-id` | an `item` or `row` | the id of the entity the entry shows (a note, a member's identity, a device session) |
 | `data-value` | an `option`, a `badge`, a `button` that switches a mode, a `visibility-button` | the stable key of a choice that is not an entity, one of the rows of "Choice values"; on a `visibility-button`, `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the page size it chooses |
-| `data-state` | a `status`, a `list`, a `section`, an `item` | an app, container or row state from the tables below |
+| `data-state` | a `status`, a `list`, a `section`, an `item`, an `input`, a `textarea`, a `select` | an app, container, row or field state from the tables below |
 | `data-code` | a `message`, `error`, `toast` or `dialog` | the stable code of what the element says, which tests assert instead of the wording |
 | `data-from` | the `range` of a paged list | the number of the first entry the page shows, from 1; `0` when it shows none |
 | `data-to` | the `range` of a paged list | the number of the last entry the page shows; `0` when it shows none |
@@ -161,6 +166,17 @@ container state.
 | `current` | `device.list.session-item` | the entry is the device this browser runs on |
 | `revoked` | `device.list.session-item` | the device was signed out and stays listed for a while |
 | `met` | each item of the composite `password-rules` | the password typed keeps this rule |
+
+## Field states
+
+The `data-state` of a field: an `input`, a `textarea` or a `select`. A field carries no
+`data-state` otherwise. These states belong only to fields that hold input. Only a field
+bound to a model field can carry `saved`.
+
+| State | Meaning |
+|---|---|
+| `unsaved` | the field holds input no save has taken |
+| `saved` | a save stored what the field shows, while the field stays on the screen |
 
 ## Codes
 
