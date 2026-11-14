@@ -7,8 +7,10 @@
  * import is the replica's own measure). `ops/s` is nominal, writers times the rate; `pushes`
  * is what was pushed. After the hold the step drains for up to 5 s: `unacked` pushes lack an
  * ack, `undelivered` counts the deliveries still missing to the region's other live devices.
- * Either one, an error, a close, a silent step or a fan-out without samples is degraded. The accounts and
- * organisations it signs up stay on the stand, for the sweep of `@example.test` accounts.
+ * Either one, an error, a close, a silent step or a fan-out without samples is degraded. After
+ * the last step, with every device still connected, the run restarts its gateway and prints a
+ * row of how the devices came back (see `restart.ts`). The accounts and organisations it signs
+ * up stay on the stand, for the sweep of `@example.test` accounts.
  */
 
 import { hostname } from 'node:os'
@@ -17,10 +19,11 @@ import { Mailbox } from '@workspace/mailbox'
 import { z } from '@workspace/zod'
 
 import { freshPassword } from '../../smoke'
-import { LatencyBook, parseArgs, type StepReport } from '../metrics'
+import { LatencyBook, parseArgs, type RestartReport, type StepReport } from '../metrics'
 
-import { closeDevices } from './devices'
+import { closeDevices, liveSims } from './devices'
 import { startGateway, stopGateway } from './gateway'
+import { runRestart } from './restart'
 import type { Run } from './state'
 import { runLoad } from './steps'
 
@@ -29,15 +32,15 @@ const SIGNAL_EXIT = 130
 /** The REST API of the stand's MailDev, where every sign-up's verification mail is read. */
 const mailboxUrl = z.url({ protocol: /^https?$/ })
 
-/** Closes every device and stops the gateway child: SIGTERM, then SIGKILL after 5 s. */
-async function teardown(run: Run, gateway: Bun.Subprocess | undefined): Promise<void> {
+/** Closes every device and stops the gateway child, the latest: SIGTERM, then SIGKILL after 5 s. */
+async function teardown(run: Run): Promise<void> {
   run.closing = true
   run.writing = false
   closeDevices(run)
 
-  if (!gateway) return
+  if (!run.gateway) return
 
-  await stopGateway(gateway)
+  await stopGateway(run.gateway)
 }
 
 /** Runs the load test; resolves to the process's exit code. */
@@ -73,20 +76,21 @@ export async function runLoadTest(
     organisations: 0,
     writing: false,
     closing: false,
+    gateway: undefined,
+    restart: undefined,
   }
 
   console.log(`load ${id}: stand ${args.surrealUrl}, gateway on port ${args.gatewayPort}`)
 
-  let child: Bun.Subprocess | undefined
   const onSignal = (): void => {
-    void teardown(run, child).then(() => process.exit(SIGNAL_EXIT))
+    void teardown(run).then(() => process.exit(SIGNAL_EXIT))
   }
 
   process.once('SIGINT', onSignal)
   process.once('SIGTERM', onSignal)
 
   const gateway = await startGateway(args, (spawned) => {
-    child = spawned
+    run.gateway = spawned
   }).catch((cause: unknown) => {
     console.error(`load: ${cause instanceof Error ? cause.message : String(cause)}`)
 
@@ -94,13 +98,14 @@ export async function runLoadTest(
   })
 
   if (!gateway) {
-    await teardown(run, child)
+    await teardown(run)
 
     return 1
   }
 
   let failed = false
   let reports: StepReport[] = []
+  let restart: RestartReport | undefined
 
   try {
     reports = await runLoad(run, gateway.pid)
@@ -109,12 +114,26 @@ export async function runLoadTest(
     console.error(`load: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
 
-  await teardown(run, gateway)
+  // A step that failed leaves the devices in no state to be measured; the restart needs one live.
+  if (!failed && args.restart && liveSims(run).length > 0) {
+    try {
+      restart = await runRestart(run)
+    } catch (cause) {
+      failed = true
+      console.error(`load: restart: ${cause instanceof Error ? cause.message : String(cause)}`)
+    }
+  }
+
+  await teardown(run)
 
   if (args.json) {
     await Bun.write(
       args.json,
-      JSON.stringify({ run: id, args, host: hostname(), startedAt, steps: reports }, null, 2),
+      JSON.stringify(
+        { run: id, args, host: hostname(), startedAt, steps: reports, restart },
+        null,
+        2,
+      ),
     )
   }
 

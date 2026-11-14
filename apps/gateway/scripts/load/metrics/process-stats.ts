@@ -1,5 +1,7 @@
 import { readFileSync } from 'node:fs'
 
+import { cpuStatPath, parseCpuStat } from './cpu-sampler'
+
 /** Clock ticks per second that `/proc/<pid>/stat` counts CPU time in. */
 const CLK_TCK = 100
 
@@ -44,4 +46,36 @@ export async function dockerStats(
   const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
 
   return code === 0 ? parseDockerStats(out) : undefined
+}
+
+/**
+ * A reader of a container's CPU seconds, from its cgroup's `cpu.stat`; the container is looked
+ * up in docker once. `undefined` when docker does not know the container or its cgroup cannot
+ * be read (docker without cgroup v2 and systemd), which skips the container's CPU.
+ */
+export async function containerCpuReader(container: string): Promise<(() => number) | undefined> {
+  const proc = Bun.spawn(['docker', 'inspect', '--format', '{{.Id}}', container], {
+    stdout: 'pipe',
+    stderr: 'pipe',
+  })
+  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited])
+
+  if (code !== 0) return undefined
+
+  try {
+    const path = cpuStatPath(out.trim())
+    const read = (): number => {
+      const seconds = parseCpuStat(readFileSync(path, 'utf8'))
+
+      if (seconds === undefined) throw new Error(`no usage_usec in ${path}`)
+
+      return seconds
+    }
+
+    read()
+
+    return read
+  } catch {
+    return undefined
+  }
 }

@@ -7,6 +7,7 @@
  *
  *   bun run load -- [--devices 100,500] [--members 20] [--writers 0.3] [--rate 0.1] [--hold 60]
  *     [--gateway-port 5197] [--surreal-container name] [--json report.json] [--stop-on-degrade]
+ *     [--no-restart]
  */
 
 import '@workspace/data/bun-plugin-surql'

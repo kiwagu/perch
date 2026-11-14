@@ -23,6 +23,21 @@ export interface Sim {
   timer: ReturnType<typeof setTimeout> | undefined
 }
 
+/** How a device that was live when the gateway was stopped stands once it is down. */
+export type Standing = 'waiting' | 'back' | 'ended'
+
+/** The gateway's restart, as the devices see it while it runs and after. */
+export interface Restart {
+  /** Where each device that was live when the gateway was stopped stands. */
+  readonly devices: Map<Sim, Standing>
+  /** Opens of the reconnect loops that were rejected. */
+  failedHellos: number
+  /** `performance.now()` of the latest welcome after the restart; `undefined` before the first. */
+  lastWelcomeAt: number | undefined
+  /** A device's socket closed with `code`: its reconnect loop starts, or the close ends it. */
+  readonly onClose: (sim: Sim, code: number) => void
+}
+
 /** What the devices count during a step, besides the latencies. */
 export interface Counters {
   errors: number
@@ -54,6 +69,13 @@ export interface Run {
   /** Whether the writers write; a step switches it on for its hold. */
   writing: boolean
   closing: boolean
+  /** The gateway child, the latest one after a restart; `undefined` before it is spawned. */
+  gateway: Bun.Subprocess | undefined
+  /**
+   * Set when the restart begins and kept: from then on a device's close starts its reconnect
+   * instead of retiring it, and what the devices receive no longer feeds the latency book.
+   */
+  restart: Restart | undefined
 }
 
 export function fail(message: string): never {

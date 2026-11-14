@@ -14,6 +14,8 @@ import {
   serverMessage,
 } from '@workspace/replica/protocol'
 
+import { ClosedBeforeWelcome } from './closed-before-welcome'
+
 export type Received<T extends ServerMessage['type']> = Extract<ServerMessage, { readonly type: T }>
 
 /** What a device does with the messages that follow its welcome. */
@@ -37,8 +39,9 @@ export class LoadDevice {
 
   /**
    * Opens the socket, says hello as `device` with its session `token` and resolves with the
-   * welcome, all within `timeoutMs`. When it rejects the socket is closed. After the welcome, a
-   * binary message, a message the protocol refuses and a socket error each reach
+   * welcome, all within `timeoutMs`. When it rejects the socket is closed, and a close before the
+   * welcome rejects with a `ClosedBeforeWelcome` that carries the close code. After the welcome,
+   * a binary message, a message the protocol refuses and a socket error each reach
    * `handlers.onError` once.
    */
   static async open(
@@ -68,7 +71,7 @@ export class LoadDevice {
         socket.addEventListener('error', () => problem(`socket error on ${url}`))
         socket.addEventListener('close', (event) => {
           if (welcomed) handlers.onClose(event.code)
-          else reject(new Error(`${url} closed with ${event.code} before it welcomed`))
+          else reject(new ClosedBeforeWelcome(url, event.code))
         })
         socket.addEventListener('message', (event) => {
           const at = performance.now()
@@ -136,9 +139,12 @@ export class LoadDevice {
     this.#socket.send(encodeMessage(clientMessage, message))
   }
 
-  /** Subscribes to `region` from nothing: the server answers with its snapshot. */
-  subscribe(region: string): void {
-    this.send({ type: 'subscribe', region, vv: null })
+  /**
+   * Subscribes to `region` with the version `vv` of the device's copy of it: the server answers
+   * with the updates the copy lacks. From nothing (`null`) it answers with its snapshot.
+   */
+  subscribe(region: string, vv: Uint8Array<ArrayBuffer> | null = null): void {
+    this.send({ type: 'subscribe', region, vv })
   }
 
   /** Pushes one update, as batch `batch`, into `region`. */

@@ -190,6 +190,7 @@ total. One table row is printed per step; a step's devices stay open for the nex
 | `--surreal-container` | by the stand's port | container `docker stats` reads for the surreal columns; the default is `perch-surrealdb-e2e` for port 8010 of `SURREAL_URL`, `perch-w<slot>-surrealdb-e2e` for port 8010 + 100 x slot, none (the columns show `-`) for any other port |
 | `--json <path>` | none | also writes the steps with the run id, arguments, host and start time |
 | `--stop-on-degrade` | off | stops after the first degraded step |
+| `--no-restart` | off | leaves out the restart of the gateway after the last step |
 
 Columns:
 
@@ -214,12 +215,46 @@ Columns:
   `undelivered` are not zero, pushes were made and no ack came, or no fan-out sample came
   though other devices were due one.
 
+After the last step's row, with every device still connected, the run restarts its gateway and
+measures how the devices come back (`--no-restart` leaves it out, and it does not run when a
+step failed or no device is live). No one writes meanwhile. `t0` is the moment the run stops the
+child gateway with SIGTERM, which closes every socket; as soon as that process has exited the run
+starts a new gateway on the same port and notes when its `/health` first answers 200 (polled every
+50 ms). The new gateway is the one the teardown and the signal handlers stop from then on, and one
+that does not start fails the run. A device whose socket closes is neither retired nor counted
+in `closes`: it reconnects as the client's `WebSocketTransport` does, with the replica's own
+`reconnectDelay` (not a copy of its schedule) before each attempt, counted from 0 at the close, and
+the transport's `WELCOME_TIMEOUT_MS` for each open. An open that is refused, closed before the
+welcome or not welcomed in time is a failed hello, and the next attempt waits the next delay; a
+close that `endingOf` maps to an ending (a revoked or signed-out device, for one) stops the
+device's loop for good and counts the device as `ended`. On its welcome a device subscribes its
+region again with its copy's version, as the engine's first subscription of a connection does,
+and what it receives from then on does not feed the latency figures. The step ends when every
+device live at `t0` is back or ended, or 120 s after `t0`; devices still trying then count as
+not back. Meanwhile a sampler reads CPU time every 250 ms, of the new gateway from its spawn and
+of the stand container from `t0` (the `usage_usec` of its cgroup v2 `cpu.stat`, found by the id
+`docker inspect` gives), and a peak is the largest CPU-seconds delta over wall-seconds delta
+between two consecutive samples, in percent, so it may pass 100 on several cores. The step prints
+a blank line, its own header and one row, and `--json` gains `restart` beside `steps`:
+
+- `devices`: live at `t0`. `back s`: from `t0` to the last welcome. `down s`: from `t0` to the
+  new gateway's first 200 on `/health`. `after health s`: from that 200 to the last welcome.
+  `back s` and `after health s` show `-` when no device came back.
+- `failed hellos`: opens that were rejected, over all the devices.
+- `gw CPU peak %`, `surreal CPU peak %`: the peaks over the new gateway and the stand container
+  (`-` when the container is not known or its cgroup cannot be read); `gw RSS MiB`: the new
+  gateway's resident memory at the step's end.
+- `not back`, `ended`: devices that were not welcomed again by the end of the step, and devices
+  the gateway ended with a close no reconnect follows. `degraded` is `yes` when either is not
+  zero.
+
 A device has 30 s to open its socket, say hello and be welcomed, and 30 s more to get its
 snapshot; one that fails is counted as an error and dropped. The arguments are checked: devices
 positive integers that grow, members a positive integer, writers from 0 to 1, rate and hold
 above 0, the port 1-65535; a violation names the flag.
 
-The run exits 0, or 1 when the setup or a step failed; SIGINT and SIGTERM stop the devices and
-the child gateway and exit 130. The load accounts live on the in-memory e2e stand and vanish
-when it restarts: afterwards `mcproc restart surrealdb-e2e`, then `mcproc restart gateway-e2e`.
-The seed sweep (`bun run seed:sweep`) targets the dev stand, not this one.
+The run exits 0, or 1 when the setup, a step or the restart failed; SIGINT and SIGTERM stop the
+devices and the child gateway, the latest one, and exit 130. The load accounts live on the
+in-memory e2e stand and vanish when it restarts: afterwards `mcproc restart surrealdb-e2e`, then
+`mcproc restart gateway-e2e`. The seed sweep (`bun run seed:sweep`) targets the dev stand, not
+this one.
