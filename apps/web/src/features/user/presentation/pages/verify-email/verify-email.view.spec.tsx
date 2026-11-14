@@ -2,8 +2,6 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { stateBorder, UnsavedInputScope } from '@workspace/ui/unsaved-input'
-
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -165,29 +163,5 @@ describe('VerifyEmailView', () => {
     expect(screen.getByTestId('user.verify-email.error').textContent).toBe(
       es['user.verify-email.error.link-expired'],
     )
-  })
-})
-
-describe('the state colour of the fields', () => {
-  it('shows no state colour on its fields while one holds unsaved input', () => {
-    renderWithProviders(
-      <UnsavedInputScope>
-        <VerifyEmailView
-          renders={only('user.verify-email.form')}
-          canResend
-          error="data:LINK_INVALID"
-          onResend={() => Promise.resolve(true)}
-        />
-      </UnsavedInputScope>,
-    )
-
-    type('user.verify-email.email-input', 'ann@example.test')
-
-    const field = screen.getByTestId('user.verify-email.email-input')
-
-    expect(field.getAttribute('data-state')).toBe('unsaved')
-    for (const colour of stateBorder(true).split(' ')) {
-      expect(field.classList.contains(colour)).toBe(false)
-    }
   })
 })

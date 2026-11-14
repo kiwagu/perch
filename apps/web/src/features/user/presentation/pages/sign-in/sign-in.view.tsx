@@ -193,11 +193,7 @@ export function SignInView(props: SignInViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Form
-          onSubmit={() => props.onSubmit(values)}
-          marksState={false}
-          data-testid="user.sign-in.form"
-        >
+        <Form onSubmit={() => props.onSubmit(values)} data-testid="user.sign-in.form">
           <FieldGroup>
             {props.notice ? (
               <Alert>

@@ -50,11 +50,7 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Form
-          onSubmit={() => props.onSend(props.email)}
-          marksState={false}
-          data-testid="user.forgot-password.form"
-        >
+        <Form onSubmit={() => props.onSend(props.email)} data-testid="user.forgot-password.form">
           <FieldGroup>
             <p className="text-sm text-muted-foreground">{t('user.forgot-password.hint')}</p>
             {props.message ? (
