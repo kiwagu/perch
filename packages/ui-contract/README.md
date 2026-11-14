@@ -187,7 +187,9 @@ for Bun.
     used, no choice values for a
     `visibility-button`, whose values its suffix defines, the platform's composites and the
     rows of "Composites" name each other, each item state a row state), `screensProblems` (anchors unique and
-    never named like a derived one, entry and names, `secret` on a field alone, a
+    never named like a derived one, entry and names, `secret` on a field alone, `marksState`
+    (`false`, the field shows no state colour) on an `input`, a `textarea` or a `select` that
+    holds input alone, a
     `visibility-button` derived by a secret `input` alone, `ranked` on a message of two codes
     or more alone, each listed once), `bindingsProblems` (model fields,
     actions and their params, each an anchor (never a `visibility-button`, which holds no
@@ -387,7 +389,8 @@ for Bun.
     `fieldStates` of a field (`fieldStatesOf`: only an `input`, `textarea` or `select` that holds
     input has any, `unsaved`, and `saved` too when its binding is a model field; each state
     must be declared in the vocabulary's "Field states" section, so none when it is absent;
-    listed only when not empty), a ranked
+    listed only when not empty), the `marksState: false` of a field that writes it (the app
+    leaves its border uncoloured; its `fieldStates` still hold), a ranked
     message's `ranked`, a secret
     input's `composite` and, on the anchors a composite derives, `derivedFrom`), `routeParams`
     and the model document.
@@ -417,7 +420,8 @@ for Bun.
     them), the codes as `<anchor> <code>`, the states as `<anchor> <state>`, the roles each is
     shown to as `<anchor> <role>` and an error's
     fields as `<error> <code> -> <field>`, written or derived, and the fields that hold input
-    as `<anchor> holds input`, the controls that ask before they leave their screen as
+    as `<anchor> holds input`, the fields that drop their state colour as
+    `<anchor> shows no state colour`, the controls that ask before they leave their screen as
     `<anchor> leaves losing <field>, <field>`, and the messages that rank their codes as
     `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added;
     who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added

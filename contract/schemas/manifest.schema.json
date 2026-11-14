@@ -1079,6 +1079,11 @@
                   "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
                   "type": "boolean"
                 },
+                "marksState": {
+                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it.",
+                  "type": "boolean",
+                  "const": false
+                },
                 "secret": {
                   "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
                   "type": "boolean",
@@ -6718,6 +6723,11 @@
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
+          },
+          "marksState": {
+            "description": "The field shows no state colour: the app leaves its border uncoloured; its `fieldStates` still hold.",
+            "type": "boolean",
+            "const": false
           },
           "secret": {
             "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",

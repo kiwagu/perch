@@ -97,6 +97,24 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].holdsInput: only a field holds input',
     ])
   })
+  it('lets only a field that holds input drop its state colour', () => {
+    const contract = sampleContract()
+
+    anchorIn(contract, 'sample.title-input').holdsInput = true
+    anchorIn(contract, 'sample.page').marksState = false
+    anchorIn(contract, 'sample.title-input').marksState = false
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.page"].marksState: only a field that holds input shows a state colour',
+    ])
+
+    anchorIn(contract, 'sample.page').marksState = undefined
+    anchorIn(contract, 'sample.title-input').holdsInput = false
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.title-input"].marksState: only a field that holds input shows a state colour',
+    ])
+  })
   it('takes a visibility-button on a secret input and refuses it on any other kind', () => {
     const contract = sampleContract()
 
