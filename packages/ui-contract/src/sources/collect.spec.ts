@@ -9,6 +9,8 @@ import {
   collectFromSource,
   HOLDS_INPUT_ANCHOR,
   HOLDS_INPUT_VALUE,
+  MARKS_STATE_ANCHOR,
+  MARKS_STATE_VALUE,
   RUNTIME_ANCHOR,
   RUNTIME_SUFFIX,
 } from './collect'
@@ -123,6 +125,7 @@ describe('collectFromSource', () => {
       derived: [],
       codes: [],
       inputs: [],
+      colours: [],
       problems: [],
     })
   })
@@ -156,6 +159,47 @@ describe('collectFromSource', () => {
       [1, HOLDS_INPUT_ANCHOR],
       [2, HOLDS_INPUT_VALUE],
     ])
+  })
+  it('collects marksState beside the anchor of its element, and lets a passed value through', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid="x.form.name-input" marksState={false} />',
+        'const b = <PasswordInput testId="x.form.password-input" marksState={false} />',
+        'const c = <Input data-testid="x.form.code-input" holdsInput={false} marksState={false} />',
+        'const d = <Input marksState={props.marksState} />',
+        'const e = <Textarea marksState={marksState} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.colours).toEqual([
+      { anchor: 'x.form.name-input', marksState: false, line: 1 },
+      { anchor: 'x.form.password-input', marksState: false, line: 2 },
+      { anchor: 'x.form.code-input', marksState: false, line: 3 },
+    ])
+    expect(found.inputs).toEqual([{ anchor: 'x.form.code-input', holdsInput: false, line: 3 }])
+    expect(found.problems).toEqual([])
+  })
+  it('reports marksState that is neither a boolean literal nor passed, or sits on no anchor', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input marksState={false} />',
+        'const b = <Input data-testid="x.form.name-input" marksState={1 > 0} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.colours).toEqual([])
+    expect(found.problems.map(({ line, message }) => [line, message])).toEqual([
+      [1, MARKS_STATE_ANCHOR],
+      [2, MARKS_STATE_VALUE],
+    ])
+    expect(MARKS_STATE_ANCHOR).toBe(
+      "marksState goes on the element that carries the field's anchor as a literal",
+    )
+    expect(MARKS_STATE_VALUE).toBe(
+      'marksState is {false} or left out; the contract decides it (a prop passed through is fine)',
+    )
   })
   it('reports a file it cannot parse', () => {
     const { problems } = collectFromSource('const X_TEST_ID = {', 'sources/broken.ts')

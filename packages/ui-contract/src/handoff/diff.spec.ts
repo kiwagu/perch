@@ -164,6 +164,7 @@ describe('diffContracts', () => {
       anchorRoles: { added: [], removed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
+      stateColours: { added: [], removed: [] },
       questions: { added: [], removed: [] },
       leaveQuestions: { added: [], removed: [] },
       ranks: { added: [], removed: [] },
@@ -247,6 +248,28 @@ describe('diffContracts', () => {
       removed: ['sample.title-input holds input'],
     })
     expect(formatChanges(changes)).toContain('anchor codes added: sample.store-button spare')
+  })
+  it('lists the fields that stop showing a state colour', () => {
+    const quiet = structuredClone(after)
+
+    Object.assign(quiet.screens.screens[0]?.anchors['sample.title-input'] ?? {}, {
+      marksState: false,
+    })
+
+    const changes = diffContracts(after, quiet)
+
+    expect(changes.stateColours).toEqual({
+      added: ['sample.title-input shows no state colour'],
+      removed: [],
+    })
+    expect(formatChanges(changes).split('\n')).toEqual([
+      'contract changes: 1 field without a state colour added',
+      'fields without a state colour added: sample.title-input shows no state colour',
+    ])
+    expect(diffContracts(quiet, after).stateColours).toEqual({
+      added: [],
+      removed: ['sample.title-input shows no state colour'],
+    })
   })
   it('lists the derived parts the anchors both contracts hold start or stop rendering', () => {
     const eye = structuredClone(after)
