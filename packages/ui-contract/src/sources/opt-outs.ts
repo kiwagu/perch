@@ -7,9 +7,9 @@
  *
  * A paged list's size select is no declared anchor: the list derives it, and by its facet it is a
  * select that holds no input. `holdsInput={false}` on it is no problem, `{true}` is the default,
- * and a `marksState` sits on a select that holds no input. The prop is not asked for: the check
- * for a missing opt-out reads the literal renders, which a derived part is not. A flag on any
- * other part a `testIdFor()` derives is a problem: that part is no field.
+ * and a `marksState` sits on a select that holds no input. A size select rendered with
+ * `testIdFor()` carries `holdsInput={false}` too, and is reported at that call without it. A flag
+ * on any other part a `testIdFor()` derives is a problem: that part is no field.
  */
 
 import { FIELD_KINDS, SIZE_SELECT, STATEFUL_FIELD_KINDS, testIdFor } from '../anchors'
@@ -127,7 +127,29 @@ function holdsInputProblems({
       ),
     )
 
-  return [...written, ...missing]
+  // A paged list's size select holds no input by its facet, and says so on its element once
+  // rendered. A derived part has no literal to point at: the problem sits at its `testIdFor()`.
+  const sizeSelectsMissing = collected.flatMap(({ file, derived }) =>
+    derived.flatMap(({ suffix, base, line }) => {
+      const anchor = base === undefined ? undefined : testIdFor(base, suffix)
+
+      return !ahead &&
+        suffix === SIZE_SELECT &&
+        anchor !== undefined &&
+        sizeSelects.has(anchor) &&
+        !optedOut.has(anchor)
+        ? [
+            {
+              file,
+              line,
+              message: `"${anchor}" holds no input by its paged list's facet; its element carries holdsInput={false}`,
+            },
+          ]
+        : []
+    }),
+  )
+
+  return [...written, ...missing, ...sizeSelectsMissing]
 }
 
 function marksStateProblems({

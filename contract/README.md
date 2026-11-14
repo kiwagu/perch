@@ -1449,11 +1449,11 @@ gap is fixed in the contract files first, never worked around in a test.
   anchor is a literal or `testIdFor()` of two literals, so a paged list's size select, which
   holds no input by its facet, may carry `holdsInput={false}` (`{true}` there is reported as
   the default, a `marksState` as one on a select that holds no input, and either flag on any
-  other part a `testIdFor()` derives as one on no field); the check does not require it on a
-  rendered size select. On a
+  other part a `testIdFor()` derives as one on no field), and a rendered size select without it
+  is reported at its `testIdFor()`. On a
   branch the pre-commit hook runs it as `contract:check:sources:ahead`, which lets the
   contract run ahead of the app (an anchor declared, not rendered yet, passes, and so does a
-  field's opt-out not written yet); a commit on
+  field's opt-out, a size select's included, not written yet); a commit on
   `main` and `bun run check` take the full check. The same holds for the app's machines: on a
   branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its
   flow added (a state, an event, a guarded branch, an effect) but does nothing the flow does

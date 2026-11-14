@@ -338,8 +338,9 @@ for Bun.
     on every such field rendered (except with `ahead`). The opt-outs sit in `sources/opt-outs.ts`:
     a paged list's size select, `<list>.size-select` of a declared anchor whose `derived`
     holds `size-select`, is a select that holds no input by its facet, so a `holdsInput={false}`
-    on it is no problem (it is not required on a rendered one), and a flag of a part a
-    `testIdFor()` derives that is no size select is a problem.
+    on it is no problem, and a rendered one without it is reported at its `testIdFor()` (except
+    with `ahead`), and a flag of a part a `testIdFor()` derives that is no size select is a
+    problem.
     `ignoreMarkers(text, { program, comments })` reads the coverage-ignore markers of a parsed
     file: `ui-contract-ignore: <reason>` (the element and its subtree) or
     `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code or as
