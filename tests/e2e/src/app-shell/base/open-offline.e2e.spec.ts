@@ -17,13 +17,17 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
         return signedUp
       })
 
-    await test.step('2. Reload the page and wait for [app-shell.status] to reach [state:ready]', async () => {
+    await test.step('2. Reload the page, wait for [app-shell.status] to reach [state:ready] and for [user.profile.heading] to show the name the account signed up with', async () => {
       await page.reload()
       await appReady(page)
       // The page loaded through the worker, which now holds the shell and the engines' WASM.
       await page.waitForFunction(() => navigator.serviceWorker.controller !== null)
       await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {
         timeout: 15_000,
+      })
+      // A new account is started (its profile written) only after the device's first pull, so going offline earlier leaves the device without a profile.
+      await expect(page.getByTestId('user.profile.heading')).toHaveText(account.name, {
+        timeout: 30_000,
       })
     })
 
