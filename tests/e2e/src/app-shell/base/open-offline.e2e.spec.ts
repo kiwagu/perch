@@ -8,6 +8,9 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
   test('A signed-in device that loaded the app once opens it again offline, with its own data', async ({
     page,
   }) => {
+    // The first pull and the account start that step 2 waits for may take up to 30 seconds.
+    test.slow()
+
     const account =
       await test.step('1. Sign up, open the link of [mail:sign-up] and wait for [app-shell.status] to reach [state:ready] on [/me]', async () => {
         const signedUp = await signUp(page)
