@@ -2,6 +2,8 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { stateBorder, UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -707,5 +709,52 @@ describe('SignInView', () => {
     expect(screen.getByTestId('user.sign-in.submit-button').textContent).toBe(
       es['user.sign-in.sign-in'],
     )
+  })
+})
+
+/** The classes that colour a field's border by its state: a field the contract opts out shows none. */
+const STATE_COLOURS = stateBorder(true).split(' ')
+
+/** Types into the field, then expects it unsaved (`data-state` stays) and drawn in no state colour. */
+function expectsNoStateColour(testId: string, value: string) {
+  type(testId, value)
+
+  const field = screen.getByTestId(testId)
+
+  expect(field.getAttribute('data-state')).toBe('unsaved')
+  expect([...field.classList].filter((name) => STATE_COLOURS.includes(name))).toEqual([])
+}
+
+/** Renders the view in `mode` inside a scope tracking unsaved input, as the app's pages are. */
+function renderTracked(mode: SignInViewProps['mode']) {
+  renderWithProviders(
+    <UnsavedInputScope>
+      <SignInView
+        startEmail=""
+        mode={mode}
+        renders={(anchor) => RENDERS[mode].includes(anchor)}
+        can={() => true}
+        onSubmit={() => Promise.resolve(true)}
+        onToggleMode={() => {}}
+        onTypePassword={() => {}}
+        onResend={() => Promise.resolve(true)}
+        onForgot={() => {}}
+        onConfirmDeviceLimit={() => {}}
+        onCancelDeviceLimit={() => {}}
+      />
+    </UnsavedInputScope>,
+  )
+}
+
+describe('the state colour of the fields', () => {
+  it.each([
+    ['sign-in', 'user.sign-in.email-input', 'ann@example.test'],
+    ['sign-in', 'user.sign-in.password-input', 'Abcdefghi1!'],
+    ['sign-up', 'user.sign-in.name-input', 'Ann'],
+    ['sign-up', 'user.sign-in.password-confirmation-input', 'Abcdefghi1!'],
+  ] as const)('draws none in %s mode on %s', (mode, testId, value) => {
+    renderTracked(mode)
+
+    expectsNoStateColour(testId, value)
   })
 })

@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+
+import { stateBorder, UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
@@ -80,5 +83,44 @@ describe('ForgotPasswordView', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.forgot-password.title'],
     )
+  })
+})
+
+const type = (testId: string, value: string) =>
+  fireEvent.change(screen.getByTestId(testId), { target: { value } })
+
+/** The classes that colour a field's border by its state: a field the contract opts out shows none. */
+const STATE_COLOURS = stateBorder(true).split(' ')
+
+/** Types into the field, then expects it unsaved (`data-state` stays) and drawn in no state colour. */
+function expectsNoStateColour(testId: string, value: string) {
+  type(testId, value)
+
+  const field = screen.getByTestId(testId)
+
+  expect(field.getAttribute('data-state')).toBe('unsaved')
+  expect([...field.classList].filter((name) => STATE_COLOURS.includes(name))).toEqual([])
+}
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    function Page() {
+      const [email, setEmail] = useState('')
+
+      return (
+        <UnsavedInputScope>
+          <ForgotPasswordView
+            email={email}
+            onEmailChange={setEmail}
+            canSend
+            onSend={() => Promise.resolve(true)}
+          />
+        </UnsavedInputScope>
+      )
+    }
+
+    renderWithProviders(<Page />)
+
+    expectsNoStateColour('user.forgot-password.email-input', 'ann@example.test')
   })
 })
