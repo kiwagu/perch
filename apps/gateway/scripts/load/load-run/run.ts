@@ -21,7 +21,7 @@ import { z } from '@workspace/zod'
 import { freshPassword } from '../../smoke'
 import { LatencyBook, parseArgs, type RestartReport, type StepReport } from '../metrics'
 
-import { closeDevices, liveSims } from './devices'
+import { closeDevices } from './devices'
 import { startGateway, stopGateway } from './gateway'
 import { runRestart } from './restart'
 import type { Run } from './state'
@@ -114,8 +114,9 @@ export async function runLoadTest(
     console.error(`load: ${cause instanceof Error ? cause.message : String(cause)}`)
   }
 
-  // A step that failed leaves the devices in no state to be measured; the restart needs one live.
-  if (!failed && args.restart && liveSims(run).length > 0) {
+  // A step that failed leaves the devices in no state to be measured. The restart itself leaves
+  // out a run with no live device.
+  if (!failed && args.restart) {
     try {
       restart = await runRestart(run)
     } catch (cause) {

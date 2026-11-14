@@ -29,8 +29,10 @@ function end(restart: Restart, sim: Sim, reason: EndReason): void {
  * What the transport does when its socket closes with `code`: a close that ends the channel for
  * good ends the device; any other starts its reconnect loop. The loop opens again by the
  * transport's own delay and welcome timeout. On the welcome the device records the time and
- * subscribes its region again with its copy's version, keeping the handlers it had. Resolves
- * once the device is back or ended, or the loop was stopped by `signal`.
+ * subscribes its region again with its copy's version, keeping the handlers it had. A welcome
+ * after the step's deadline does not count: the loop stops, and an open still waiting for its
+ * welcome when `signal` aborts is cancelled. Resolves once the device is back or ended, or the
+ * loop stopped.
  */
 export async function reconnectSim(
   run: Run,
@@ -50,13 +52,17 @@ export async function reconnectSim(
   restart.devices.set(sim, 'waiting')
 
   const outcome = await reconnect(
-    () =>
-      LoadDevice.open(syncUrl(run), sim.account.token, simHandlers(run, sim), {
-        timeoutMs: WELCOME_TIMEOUT_MS,
-        device: sim.account.device,
-      }),
+    async (cancel) =>
+      (
+        await LoadDevice.open(syncUrl(run), sim.account.token, simHandlers(run, sim), {
+          timeoutMs: WELCOME_TIMEOUT_MS,
+          device: sim.account.device,
+          signal: cancel,
+        })
+      ).device,
     {
       signal,
+      until: restart.deadlineAt,
       onFailed: () => {
         restart.failedHellos++
       },
@@ -66,16 +72,15 @@ export async function reconnectSim(
   if (outcome.kind === 'ended') {
     end(restart, sim, outcome.reason)
   } else if (outcome.kind === 'welcomed') {
-    const { device } = outcome.value
+    const device = outcome.value
 
-    // An open still in flight when the step ended or the run closed is welcomed too late.
-    if (signal.aborted || run.closing) {
+    if (run.closing) {
       device.close()
 
       return
     }
 
-    restart.lastWelcomeAt = performance.now()
+    restart.lastWelcomeAt = outcome.at
     restart.devices.set(sim, 'back')
     sim.device = device
     device.subscribe(sim.region, subscribedVersion(sim))

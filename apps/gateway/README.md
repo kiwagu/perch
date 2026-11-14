@@ -230,12 +230,14 @@ close that `endingOf` maps to an ending (a revoked or signed-out device, for one
 device's loop for good and counts the device as `ended`. On its welcome a device subscribes its
 region again with its copy's version, as the engine's first subscription of a connection does,
 and what it receives from then on does not feed the latency figures. The step ends when every
-device live at `t0` is back or ended, or 120 s after `t0`; devices still trying then count as
-not back. Meanwhile a sampler reads CPU time every 250 ms, of the new gateway from its spawn and
-of the stand container from `t0` (the `usage_usec` of its cgroup v2 `cpu.stat`, found by the id
-`docker inspect` gives), and a peak is the largest CPU-seconds delta over wall-seconds delta
-between two consecutive samples, in percent, so it may pass 100 on several cores. The step prints
-a blank line, its own header and one row, and `--json` gains `restart` beside `steps`:
+device live at `t0` is back or ended, or 120 s after `t0`, by a timer: a welcome after the
+deadline does not count, an open still waiting for its welcome is cancelled with its socket
+closed, and the devices still trying then count as not back. Meanwhile a sampler reads CPU time
+every 250 ms, of the new gateway from its spawn and of the stand container from `t0` (the
+`usage_usec` of its cgroup v2 `cpu.stat`, found by the id `docker inspect` gives), and a peak is
+the largest CPU-seconds delta over wall-seconds delta between two consecutive samples, in
+percent, so it may pass 100 on several cores. The step prints a blank line, its own header and
+one row, and `--json` gains `restart` beside `steps`:
 
 - `devices`: live at `t0`. `back s`: from `t0` to the last welcome. `down s`: from `t0` to the
   new gateway's first 200 on `/health`. `after health s`: from that 200 to the last welcome.

@@ -40,20 +40,29 @@ export class LoadDevice {
   /**
    * Opens the socket, says hello as `device` with its session `token` and resolves with the
    * welcome, all within `timeoutMs`. When it rejects the socket is closed, and a close before the
-   * welcome rejects with a `ClosedBeforeWelcome` that carries the close code. After the welcome,
-   * a binary message, a message the protocol refuses and a socket error each reach
-   * `handlers.onError` once.
+   * welcome rejects with a `ClosedBeforeWelcome` that carries the close code. An open whose
+   * `signal` aborts before the welcome rejects at once, closing its socket, and one given an
+   * aborted signal opens no socket. After the welcome, a binary message, a message the protocol
+   * refuses and a socket error each reach `handlers.onError` once.
    */
   static async open(
     url: string,
     token: string,
     handlers: DeviceHandlers,
-    { timeoutMs, device: deviceId }: { readonly timeoutMs: number; readonly device: string },
+    {
+      timeoutMs,
+      device: deviceId,
+      signal,
+    }: { readonly timeoutMs: number; readonly device: string; readonly signal?: AbortSignal },
   ): Promise<{ device: LoadDevice; welcome: Received<'welcome'> }> {
+    if (signal?.aborted) throw new Error(`open of ${url} aborted`)
+
     const socket = new WebSocket(url)
     const device = new LoadDevice(socket)
     let welcomed = false
     let deadline: ReturnType<typeof setTimeout> | undefined
+    /** Aborted when the open is over, which drops the listener it put on `signal`. */
+    const over = new AbortController()
 
     try {
       const welcome = await new Promise<Received<'welcome'>>((resolve, reject) => {
@@ -61,6 +70,11 @@ export class LoadDevice {
           () => reject(new Error(`no welcome from ${url} within ${timeoutMs / 1000} s`)),
           timeoutMs,
         )
+
+        signal?.addEventListener('abort', () => reject(new Error(`open of ${url} aborted`)), {
+          once: true,
+          signal: over.signal,
+        })
 
         /** Before the welcome a problem fails the open; after it the handler counts it. */
         const problem = (text: string): void => {
@@ -109,6 +123,7 @@ export class LoadDevice {
       throw cause
     } finally {
       clearTimeout(deadline)
+      over.abort()
     }
   }
 

@@ -30,6 +30,8 @@ export type Standing = 'waiting' | 'back' | 'ended'
 export interface Restart {
   /** Where each device that was live when the gateway was stopped stands. */
   readonly devices: Map<Sim, Standing>
+  /** The `performance.now()` after which a welcome no longer counts: the step's deadline. */
+  readonly deadlineAt: number
   /** Opens of the reconnect loops that were rejected. */
   failedHellos: number
   /** `performance.now()` of the latest welcome after the restart; `undefined` before the first. */
