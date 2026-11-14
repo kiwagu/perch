@@ -17,6 +17,7 @@ describe('parseArgs', () => {
       surrealContainer: 'perch-surrealdb-e2e',
       gatewayUser: 'gateway',
       stopOnDegrade: false,
+      restart: true,
     })
   })
 
@@ -67,6 +68,15 @@ describe('parseArgs', () => {
         surrealContainer: 'mine',
       },
     )
+  })
+
+  it('leaves the restart out on --no-restart, whatever its place among the flags', () => {
+    expect(parseArgs(['--no-restart'], env).restart).toBe(false)
+    expect(parseArgs(['--hold', '3', '--no-restart', '--devices', '5'], env)).toMatchObject({
+      restart: false,
+      hold: 3,
+      devices: [5],
+    })
   })
 
   it('reads the stop flag and the report path', () => {
