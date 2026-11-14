@@ -1076,7 +1076,7 @@
                   "type": "boolean"
                 },
                 "holdsInput": {
-                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
+                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
                   "type": "boolean"
                 },
                 "marksState": {

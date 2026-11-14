@@ -765,17 +765,22 @@ out, and the loader derives it, the same way every time:
 - **Whether a field holds input.** Every field (`input`, `textarea`, `select`, `checkbox`,
   `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a
   `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask
-  before such a leave. A field one of whose bindings runs an action that takes the field
-  itself as a parameter, an action no other anchor of its screen runs with it (the language
-  select, the organisation select), applies at once and holds none; a field whose action a
-  submit button also runs with it (the sign-in email) holds input. The loader sets
-  `holdsInput` on every field; a written value wins. The manifest carries it, and
+  before such a leave. A field whose own change applies it at once, and nothing else applies
+  it, holds none: one of its bindings runs an action that takes the field itself as a
+  parameter, an action no other anchor of its screen runs with it (the language select, the
+  organisation select), or its own event moves its screen's search with it, a `navigate` to a
+  path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's
+  event does (a filter applied on change). A field whose action a submit button also runs
+  with it (the sign-in email), or whose search a search button moves with it (the search box
+  of the accounts), holds input, and so does one whose event moves to another screen carrying
+  itself: that leaves rather than moves the search. The loader sets `holdsInput` on every
+  field, once the flow is parsed; a written value wins. The manifest carries it, and
   `contract:diff` lists the fields that start or stop holding input.
 - **Which states a field carries.** A field of kind `input`, `textarea` or `select` that holds
   input carries `data-state` `unsaved` while it holds input no save has taken. One whose
   binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored
   what it shows, for as long as it stays on the screen; a reload or leaving the screen clears
-  it. A field whose own change runs its action (`holdsInput: false`) carries no state. The
+  it. A field that holds no input (`holdsInput: false`) carries no state. The
   states come from the vocabulary's "Field states" section, and a vocabulary without it
   declares none. The manifest lists each field's states under `fieldStates` in `ids`, and the
   table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is

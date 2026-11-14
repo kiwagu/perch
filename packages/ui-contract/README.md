@@ -38,8 +38,7 @@ for Bun.
     the file writes a problem (`paging.ts`); the failures of the actions; an error's codes, from
     the actions bound beside it, the actions its flow invokes whose failure shows on it and the
     codes the flow shows on it, each once and `failed` last, and its fields (`errors.ts`,
-    `flow-errors.ts`); the buttons whose regions the flow leaves out; whether each field holds
-    input), its flow expanded from the shorter forms with the codes the anchors of every
+    `flow-errors.ts`); the buttons whose regions the flow leaves out), its flow expanded from the shorter forms with the codes the anchors of every
     screen carry and the failures of the actions (a bare `show` on a branch of an `onError`
     that a guard by failure code guards shows that guard's codes, one on a later branch the
     failure's codes but those of the code-guarded branches before it, a problem when they
@@ -59,8 +58,12 @@ for Bun.
     destructive action, on its control (`asks`) and on the frame's confirmation, which
     carries every code asked with (`files/derive/confirmations.ts`, `files/derive/questions.ts`),
     then parsed through
-    `screenFileSchema`, each control whose flow moves to another screen then asking the leave
-    question, with the fields it loses (`leaves`, `files/derive/leaves.ts`);
+    `screenFileSchema`, each field then holding input unless its own change applies it at once
+    and nothing else applies it (it runs an action that takes the field and no other anchor of
+    its screen runs with it, or its own event moves its screen's search with it and no other
+    anchor's event does; `files/derive/inputs.ts`), and each control whose flow moves to
+    another screen asking the leave question, with the fields it loses (`leaves`,
+    `files/derive/leaves.ts`);
     `loadScreensWith(root, model)` does the same with a model already loaded, as the contract
     check does; named by the path of its first binding: `/me` is
     `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`;

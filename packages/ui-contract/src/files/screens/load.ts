@@ -10,13 +10,13 @@
  * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
  * reads them as if written; the parts a paged list derives (`derive/paging.ts`); an error anchor's codes and fields from the failures of the actions
  * its part binds and its flow shows on it, as the model and the platform give them, and the codes
- * the flow shows on it (`derive/errors.ts`); whether a field holds input, from its kind and its
- * bindings; and, with a confirmation on the frame, the question each control of a destructive
- * action asks before it runs (`derive/questions.ts`), the confirmation carrying every code asked
- * with. Once a screen parses, its flow canonical, each control whose flow moves to another screen
- * asks the platform's leave question before its event while a change of screen asks, losing the
- * fields of its screen the move does not carry (`derive/leaves.ts`); a file never writes that
- * question. A file may author its flow in the shorter forms (a transition as its
+ * the flow shows on it (`derive/errors.ts`); and, with a confirmation on the frame, the question
+ * each control of a destructive action asks before it runs (`derive/questions.ts`), the
+ * confirmation carrying every code asked with. Once a screen parses, its flow canonical, whether a
+ * field holds input is derived from its kind, its bindings and the moves of its flow
+ * (`derive/inputs.ts`); then each control whose flow moves to another screen asks the platform's
+ * leave question before its event while a change of screen asks, losing the fields of its screen
+ * the move does not carry (`derive/leaves.ts`); a file never writes that question. A file may author its flow in the shorter forms (a transition as its
  * target, an effect by its name, a region by its pattern or its button, the region of a button
  * left out): each flow is expanded with the codes the anchors of all screens carry, the failures
  * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
@@ -114,7 +114,7 @@ function readScreenFiles(
         )
         read.push({
           file,
-          value: withDerivedInputs(withDerivedErrors(paged.value, failureOf)),
+          value: withDerivedErrors(paged.value, failureOf),
         })
       }
     } else {
@@ -190,7 +190,7 @@ function readScreenFiles(
       problems.push(...loaded.problems)
 
       if (loaded.screen !== undefined) {
-        screens.push(withDerivedLeaves(loaded.screen, unsavedInput))
+        screens.push(withDerivedLeaves(withDerivedInputs(loaded.screen), unsavedInput))
         files.push(file)
       }
     }

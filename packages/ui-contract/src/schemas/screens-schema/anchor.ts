@@ -167,7 +167,7 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.',
+        "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
       ),
     marksState: z
       .literal(false)
@@ -224,7 +224,7 @@ export const anchorDefSchema = z
 /**
  * One declared anchor as a screen file writes it: an error may leave its codes and fields out,
  * and the loader derives them from the actions its part binds; a field may leave `holdsInput`
- * out, and the loader derives it from its kind and its bindings; a control never writes `asks`,
+ * out, and the loader derives it from its kind, its bindings and its flow; a control never writes `asks`,
  * which the loader derives from its action, and may ban it with `confirm: false`; no anchor writes
  * `derivedFrom`, which the loader writes on the anchors it derives from a composite.
  */
@@ -246,7 +246,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .boolean()
       .optional()
       .describe(
-        'Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one of whose bindings runs an action that takes the field itself as a parameter and that no other anchor of the screen runs with it: a choice that applies at once. A field a submit button runs the action with holds input.',
+        "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one whose own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it, or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes the field) and no other anchor's event moves there with it. A field a submit button runs the action with, or a search button moves the search with, holds input.",
       ),
     confirm: z
       .literal(false)
