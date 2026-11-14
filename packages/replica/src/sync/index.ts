@@ -18,6 +18,7 @@ export {
   type EndReason,
   endingOf,
   RECONNECT_DELAYS_MS,
+  reconnectDelay,
   type SocketLike,
   type SyncTransport,
   WELCOME_TIMEOUT_MS,

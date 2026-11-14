@@ -15,6 +15,7 @@ import {
 
 import { endingOf } from './endings'
 import type { ChannelState, DeviceCredentials, EndReason, SyncTransport } from './port'
+import { reconnectDelay } from './reconnect-delay'
 
 /** The part of a WebSocket the transport uses. */
 export type SocketLike = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>
@@ -53,9 +54,6 @@ export interface WebSocketTransportOptions {
    */
   readonly network?: DeviceNetwork
 }
-
-/** How long the transport waits before each reconnect in a row; the last delay repeats. */
-export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
 
 /** How long an open socket waits for the gateway's welcome before it is given up. */
 export const WELCOME_TIMEOUT_MS = 10_000
@@ -309,7 +307,7 @@ export class WebSocketTransport implements SyncTransport {
   }
 
   #reconnect(): void {
-    const delay = RECONNECT_DELAYS_MS[Math.min(this.#attempt, RECONNECT_DELAYS_MS.length - 1)] ?? 0
+    const delay = reconnectDelay(this.#attempt)
 
     this.#endWelcomeWait()
 

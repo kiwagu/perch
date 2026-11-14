@@ -13,7 +13,8 @@ import {
 import { manualClock } from '../../testing'
 
 import type { DeviceCredentials } from './port'
-import { type DeviceNetwork, RECONNECT_DELAYS_MS, WebSocketTransport } from './web-socket'
+import { RECONNECT_DELAYS_MS } from './reconnect-delay'
+import { type DeviceNetwork, WebSocketTransport } from './web-socket'
 
 /** A socket the test opens, feeds and closes by hand; it keeps what the transport sent. */
 class FakeSocket extends EventTarget {

@@ -215,9 +215,9 @@ an inverse commit, and runs passes on a cadence that follows the tab and the cha
   Its parts:
   `WebSocketTransport` (hello with the session token its `credentials` give, `{ token }`, and
   the `device` it is given, ending as `unauthorized` when they give none; up after the
-  welcome, reconnect after
-  `RECONNECT_DELAYS_MS`, also when no welcome came within `WELCOME_TIMEOUT_MS` of the socket
-  opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
+  welcome, reconnect after `reconnectDelay(attempt)`, the delay of `RECONNECT_DELAYS_MS` for the
+  attempt (the last one repeating; the load test uses it too), also when no welcome came within
+  `WELCOME_TIMEOUT_MS` of the socket opening, and on `reconnect()`, which gives a welcomed connection up and connects again from
   the first delay, and leaves one not welcomed yet to the hello it says; with a `network`
   (`DeviceNetwork`: `online()` and `onOnlineChange`, the platform's word on the device's
   network), heard from `start` until a stop or an ending, the network coming back starts the
