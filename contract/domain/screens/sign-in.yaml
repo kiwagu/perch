@@ -38,6 +38,7 @@ anchors:
   user.sign-in.email-input:
     kind: input
     description: "The email of the account (type email); it starts with the email a page carried over, when there is one."
+    marksState: false
     binding:
       - search: email
       - action: platform.sign-in
@@ -52,6 +53,7 @@ anchors:
   user.sign-in.password-input:
     kind: input
     secret: true
+    marksState: false
     composite: password-rules
     description: The password of the account.
     binding:
@@ -65,11 +67,13 @@ anchors:
   user.sign-in.password-confirmation-input:
     kind: input
     secret: true
+    marksState: false
     description: The password typed again; never sent.
     derived: [ visibility-button ]
   user.sign-in.name-input:
     kind: input
     description: The name of the new account.
+    marksState: false
     binding:
       action: platform.sign-up
       params:
