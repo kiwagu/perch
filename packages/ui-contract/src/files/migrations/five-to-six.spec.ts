@@ -8,6 +8,7 @@ import { checkContract, loadContract } from '../../check'
 import { MODEL_FILE, PLATFORM_FILE } from '../paths'
 import { formatProblem } from '../problems'
 import { parseYamlDocument } from '../read-yaml-document'
+import { parameterValueOf } from '../values'
 import { writeDefaultsRepository } from '../values/defaults.fixture'
 import { writeYamlDocument } from '../write-yaml-document'
 
@@ -17,12 +18,15 @@ import { fiveToSix } from './five-to-six'
 /** The version this step writes, the engine's when it came: a later step is a spec of its own. */
 const SIX = 6
 
-/** A platform at version 5 that declares `defaults` (none for `null`) and the values `values`. */
-const platform = (defaults: number | null, values: string): string =>
+/**
+ * A platform at version 5 that declares `defaults` (none for `null`), the values `values` and the
+ * actions `actions`.
+ */
+const platform = (defaults: number | null, values: string, actions = ''): string =>
   `# yaml-language-server: $schema=../schemas/platform.schema.json
 version: 5
 ${defaults === null ? '' : `defaults:\n  maxLength: ${defaults}\n`}values:
-${values}reserved: [ app-shell.status ]
+${values}${actions}reserved: [ app-shell.status ]
 `
 
 const VALUES = `  name:
@@ -49,6 +53,23 @@ const VALUES = `  name:
     minLength: 1
     description: A password as the account has it now.
   token: { type: string, pattern: "^[a-z]+$" }
+`
+
+/** Actions whose parameters write their string inline: each shape a step must tell apart. */
+const ACTIONS = `actions:
+  sign-out:
+    params:
+      reason: { type: string, minLength: 1, optional: true, description: Why. }
+      note: { type: string, pattern: "^[a-z]+$", optional: true, description: A note. }
+      detail: { type: string, minLength: 1, maxLength: 20, optional: true, description: Detail. }
+      same: { type: string, minLength: 1, maxLength: 80, optional: true, description: The default. }
+      bare: { type: string, optional: true, description: Bare. }
+      kind: { type: string, enum: [ a, b ], optional: true, description: Kind. }
+      amount: { type: integer, minimum: 1, optional: true, description: Amount. }
+      title: { value: name, optional: true, description: Title. }
+  rename:
+    params:
+      label: { type: string, format: email, optional: true, description: A label. }
 `
 
 const MODEL = `{
@@ -122,6 +143,32 @@ describe('the migration from version 5 to 6', () => {
     expect(migrated(platform(80, VALUES)).manual).toEqual([
       `${MODEL_FILE}: $defs.thing.properties.text: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short`,
     ])
+  })
+
+  it('names each inline parameter that writes a constraint and no limit, with its path and the default', () => {
+    expect(migrated(platform(80, VALUES, ACTIONS)).manual).toEqual([
+      `${MODEL_FILE}: $defs.thing.properties.text: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short`,
+      `${PLATFORM_FILE}: actions["sign-out"].params.reason: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
+      `${PLATFORM_FILE}: actions["sign-out"].params.note: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
+      `${PLATFORM_FILE}: actions.rename.params.label: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
+    ])
+  })
+
+  it('names the default the platform declares, and no parameter of a contract with none', () => {
+    const named = (defaults: number | null) =>
+      migrated(platform(defaults, VALUES, ACTIONS)).manual.filter((line) =>
+        line.includes('.params.'),
+      )
+
+    expect(named(81)).toHaveLength(3)
+    expect(named(81).every((line) => line.includes('takes the default length, 81:'))).toBe(true)
+    expect(named(null)).toEqual([])
+  })
+
+  it('leaves every parameter as written', () => {
+    const text = platform(80, VALUES, ACTIONS)
+
+    expect(migrated(text).platform).toContain(ACTIONS)
   })
 
   it('drops from the model a limit equal to the default on a writable string field, its comma with it', () => {
@@ -201,13 +248,14 @@ describe('the migration from version 5 to 6', () => {
 describe('the migration from version 5 to 6 on a repository', () => {
   const roots: string[] = []
 
-  function repository(defaults?: number): string {
+  function repository(defaults?: number, reason?: string): string {
     const root = mkdtempSync(join(tmpdir(), 'ui-contract-five-to-six-'))
 
     roots.push(root)
     writeDefaultsRepository(root, {
       version: 5,
       ...(defaults === undefined ? {} : { defaults }),
+      ...(reason === undefined ? {} : { reason }),
       name: 80,
       title: 80,
     })
@@ -285,6 +333,100 @@ describe('the migration from version 5 to 6 on a repository', () => {
 
     expect(migrate(root, { write: true, current: SIX })).toEqual({ from: 6, to: 6, steps: [] })
     expect([read(root, PLATFORM_FILE), read(root, MODEL_FILE)]).toEqual(once)
+  })
+
+  describe('an inline parameter that gains the default', () => {
+    const INLINE = '{ type: string, minLength: 1, optional: true, description: Why. }'
+    const reasonOf = (root: string) => {
+      const { contract } = loadContract(root)
+
+      if (contract === undefined) {
+        throw new Error('the contract does not load')
+      }
+
+      return parameterValueOf(
+        'platform.sign-out',
+        'reason',
+        contract.screens.platform,
+        contract.model,
+      )
+    }
+
+    it('is named as manual work, and is the one the loaded contract bounds from version 6', () => {
+      const root = repository(80, INLINE)
+      const platformText = read(root, PLATFORM_FILE)
+
+      expect(reasonOf(root)).toEqual({ type: 'string', minLength: 1 })
+
+      const { steps } = migrate(root, { write: true, current: SIX })
+
+      expect(steps.map(({ manual }) => manual)).toEqual([
+        [
+          `${PLATFORM_FILE}: actions["sign-out"].params.reason: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
+        ],
+      ])
+      expect(read(root, PLATFORM_FILE)).toBe(
+        platformText
+          .replace('version: 5', 'version: 6')
+          .replace('    minLength: 1\n    maxLength: 80\n', '    minLength: 1\n')
+          .replace(
+            '    minLength: 1\n    description: A password',
+            '    minLength: 1\n    maxLength: null\n    description: A password',
+          ),
+      )
+      expect(reasonOf(root)).toEqual({ type: 'string', minLength: 1, maxLength: 80 })
+      expect(checkContract(root).map(formatProblem)).toEqual([])
+    })
+
+    it('is named by a dry run as well, and names nothing once the author writes the limit', () => {
+      expect(
+        migrate(repository(80, INLINE), { write: false, current: SIX }).steps[0]?.manual,
+      ).toHaveLength(1)
+
+      const limited = repository(
+        80,
+        '{ type: string, minLength: 1, maxLength: 20, optional: true, description: Why. }',
+      )
+
+      expect(migrate(limited, { write: true, current: SIX }).steps[0]?.manual).toEqual([])
+      expect(reasonOf(limited).maxLength).toBe(20)
+    })
+
+    it.each([
+      ['a `minLength`', '{ type: string, minLength: 1, optional: true, description: Why. }', true],
+      [
+        'a `pattern`',
+        '{ type: string, pattern: "^[a-z]+$", optional: true, description: Why. }',
+        true,
+      ],
+      ['a `format`', '{ type: string, format: email, optional: true, description: Why. }', true],
+      [
+        'its own limit',
+        '{ type: string, minLength: 1, maxLength: 20, optional: true, description: Why. }',
+        false,
+      ],
+      [
+        'the default as its limit',
+        '{ type: string, minLength: 1, maxLength: 80, optional: true, description: Why. }',
+        false,
+      ],
+      ['no constraint', '{ type: string, optional: true, description: Why. }', false],
+      ['an `enum`', '{ type: string, enum: [ a, b ], optional: true, description: Why. }', false],
+      ['a number', '{ type: integer, minimum: 1, optional: true, description: Why. }', false],
+      ['a value it refers to', '{ value: name, optional: true, description: Why. }', false],
+    ])(
+      'names a parameter with %s exactly when version 6 loads it with a limit version 5 did not',
+      (_shape, reason, gains) => {
+        const root = repository(80, reason)
+        const before = reasonOf(root).maxLength
+
+        const manual = migrate(root, { write: true, current: SIX }).steps[0]?.manual ?? []
+        const after = reasonOf(root).maxLength
+
+        expect(before === undefined && after !== undefined).toBe(gains)
+        expect(manual.filter((line) => line.includes('.params.reason'))).toHaveLength(gains ? 1 : 0)
+      },
+    )
   })
 
   it('only moves the version of a contract with no default, and the check keeps its limits', () => {

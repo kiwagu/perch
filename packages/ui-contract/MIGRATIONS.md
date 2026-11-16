@@ -125,12 +125,19 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   change of it had to be made in every place; a default with an override where a value needs
   another says it once.
 - What `contract:migrate --write` does: sets `version: 6` in `platform.yaml`, and where the
-  platform declares `defaults`, keeps every value at the limit it had: drops a `maxLength` equal
-  to the default from each value of `platform.values` and each field of the model that would
-  take it, and writes `maxLength: null` on each value of `platform.values` that would take it and
-  names no limit, before its `pattern`, `description` or `examples`. A limit of another number,
-  one on a value the default never reaches and every value of a contract with no `defaults` stay
-  as written. To state a default, write `defaults` in `platform.yaml` before running the step.
+  platform declares `defaults`, keeps every value at the limit it had, but for the fields and
+  parameters left by hand below: drops a `maxLength` equal to the default from each value of
+  `platform.values` and each field of the model that would take it, and writes `maxLength: null`
+  on each value of `platform.values` that would take it and names no limit, before its `pattern`,
+  `description` or `examples`. A limit of another number, one on a value the default never
+  reaches and every value of a contract with no `defaults` stay as written. To state a default,
+  write `defaults` in `platform.yaml` before running the step.
 - What is left by hand: each field of the model that would take the default and names no limit,
   named with its file and its place. Its JSON Schema allows no `null`, so it takes the default
-  from version 6: write its own `maxLength` where that is too short.
+  from version 6: write its own `maxLength` where that is too short. The same goes for each
+  parameter of a platform action that refers to no `value`, is a string with no `enum`, writes a
+  constraint (a `minLength`, a `pattern`) and no `maxLength`, named with its file, its path and the
+  default it takes. It cannot say `null` either, and the step leaves it as written, so the request
+  it takes would be bounded from version 6: write its own `maxLength` where that is too short, or
+  refer to a named value (`value: <name>`) that writes `maxLength: null`, which the parameter then
+  takes (a parameter may only narrow its value).

@@ -6,11 +6,13 @@
  * and a value of `platform.values` that would take it and names no limit gets `maxLength: null`,
  * before its `pattern`, `description` or `examples`. A field of the model that names no limit
  * cannot say `null` (its JSON Schema allows none) and takes the default: the step names it, left
- * to the author. A limit of another number, one on a value the default never reaches (no string,
- * an `enum`, a read-only field), and every value of a contract that declares no default stay as
- * written: the step never drops a limit the engine does not give back, nor gives one a value did
- * not have. The model is JSON, edited as text: the member goes with its comma, every other byte
- * stays.
+ * to the author. So does a parameter of a platform action that is a string of its own, writes a
+ * constraint and no limit (`gainsParameterLength`): it takes the default as well, and the step
+ * names it with its path, left to the author. A limit of another number, one on a value the
+ * default never reaches (no string, an `enum`, a read-only field), and every value of a contract
+ * that declares no default stay as written: the step never drops a limit the engine does not give
+ * back, nor gives one a value did not have. The model is JSON, edited as text: the member goes
+ * with its comma, every other byte stays.
  */
 
 import { isDeepStrictEqual } from 'node:util'
@@ -19,13 +21,13 @@ import { isMap, isNode, isScalar, type Range } from 'yaml'
 
 import { entriesOf, isRecord, recordOf } from '../../records'
 import type { PlatformDefaults } from '../../schemas'
-import { MODEL_FILE } from '../paths'
+import { MODEL_FILE, PLATFORM_FILE } from '../paths'
 import { jsonPath } from '../problems'
 import { parseYamlDocument } from '../read-yaml-document'
-import { givesBack, takesDefault } from '../values'
+import { gainsParameterLength, givesBack, takesDefault } from '../values'
 
 import type { Migration, MigrationFiles } from './migration'
-import { plainOf } from './screens'
+import { type Plain, plainOf } from './screens'
 
 /** What of a value's keywords decides whether the default gives its limit back. */
 const lengthedOf = (value: unknown) => {
@@ -129,17 +131,76 @@ function keepValueLimits(files: MigrationFiles, defaults: PlatformDefaults) {
   }
 }
 
+/** What the step tells the author about a place that names no limit and takes the default. */
+const gainedLine = (
+  file: string,
+  path: readonly string[],
+  defaults: PlatformDefaults,
+  or = '',
+): string =>
+  `${file}: ${jsonPath(path)}: names no limit, and from version 6 takes the default length, ${defaults.maxLength}: write its own \`maxLength\` where that is too short${or}`
+
 /** A line for each field of the model that names no limit and takes the default from version 6. */
 const gainedFields = (model: string, defaults: PlatformDefaults): string[] =>
   entriesOf(recordOf(model.trim() === '' ? {} : JSON.parse(model))['$defs']).flatMap(
     ([entity, definition]) =>
       entriesOf(recordOf(definition)['properties']).flatMap(([field, property]) =>
         gains(property, recordOf(recordOf(property)['x-perch'])['readonly'] === true)
-          ? [
-              `${MODEL_FILE}: ${jsonPath(['$defs', entity, 'properties', field])}: names no limit, and from version 6 takes the default length, ${defaults.maxLength}: write its own \`maxLength\` where that is too short`,
-            ]
+          ? [gainedLine(MODEL_FILE, ['$defs', entity, 'properties', field], defaults)]
           : [],
       ),
+  )
+
+/** `value` where it is a number. */
+const numberOf = (value: unknown): number | undefined =>
+  typeof value === 'number' ? value : undefined
+
+/** `value` where it is a text. */
+const textOf = (value: unknown): string | undefined =>
+  typeof value === 'string' ? value : undefined
+
+/** A parameter of a platform action as the default reads it: what it writes of a value. */
+function writtenOf(parameter: unknown) {
+  const {
+    type,
+    value,
+    enum: values,
+    minLength,
+    maxLength,
+    pattern,
+    format,
+    minimum,
+    maximum,
+  } = recordOf(parameter)
+
+  return {
+    type,
+    value,
+    enum: Array.isArray(values) ? values : undefined,
+    minLength: numberOf(minLength),
+    maxLength: numberOf(maxLength),
+    pattern: textOf(pattern),
+    format: textOf(format),
+    minimum: numberOf(minimum),
+    maximum: numberOf(maximum),
+  }
+}
+
+/** A line for each parameter of a platform action that takes the default length from version 6. */
+const gainedParameters = (platform: Plain, defaults: PlatformDefaults): string[] =>
+  entriesOf(platform['actions']).flatMap(([action, definition]) =>
+    entriesOf(recordOf(definition)['params']).flatMap(([name, parameter]) =>
+      gainsParameterLength(writtenOf(parameter))
+        ? [
+            gainedLine(
+              PLATFORM_FILE,
+              ['actions', action, 'params', name],
+              defaults,
+              ', or refer to a named value (`value: <name>`) that writes `maxLength: null`',
+            ),
+          ]
+        : [],
+    ),
   )
 
 /** The model's text without each field limit the default gives back. */
@@ -162,14 +223,15 @@ export const fiveToSix: Migration = {
   from: 5,
   note: 'a value that names no limit takes the default length: the files keep each value at the limit it had',
   run: (files) => {
-    const defaults = defaultsOf(plainOf(files.platform))
+    const platform = plainOf(files.platform)
+    const defaults = defaultsOf(platform)
 
     if (defaults === undefined) {
       return []
     }
 
     // Read before any limit is dropped: a field the step drops one from gains nothing.
-    const gained = gainedFields(files.model, defaults)
+    const gained = [...gainedFields(files.model, defaults), ...gainedParameters(platform, defaults)]
 
     keepValueLimits(files, defaults)
     files.model = withoutFieldLimits(files.model, defaults)

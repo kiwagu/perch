@@ -14,14 +14,13 @@
 
 import { isRecord, recordOf } from '../../records'
 import type { PlatformDefaults } from '../../schemas'
-import { constrains } from '../derive'
+import { constrains, type FieldConstraints } from '../derive'
 import type { Model, ModelEntity } from '../model'
 import { MODEL_FILE, PLATFORM_FILE } from '../paths'
 import { jsonPath, type Problem } from '../problems'
 import type { PlatformFile, PlatformValue } from '../screens'
 
 import { DEFAULTS_EDITION, givesBack, takesDefault, withDefaultLength } from './defaults'
-import { keywordsOf } from './keywords'
 
 type Actions = PlatformFile['actions']
 
@@ -120,17 +119,29 @@ function documentWith(
   }
 }
 
+/** What of a parameter, as written, decides whether it takes the default length. */
+interface WrittenParameter extends FieldConstraints {
+  readonly type?: unknown
+  readonly value?: unknown
+}
+
 /**
- * `parameter` with the default length when it is a string of its own that writes a constraint and
- * no limit; a parameter that refers to a value takes that value's, narrowed (`parameterValueOf`).
+ * Whether the platform's default is the limit of `parameter` from version 6: a string of its own,
+ * no `enum`, that writes a constraint and no limit. A parameter that refers to a value takes that
+ * value's limit, narrowed (`parameterValueOf`); one that writes no constraint takes none.
  */
+export const gainsParameterLength = (parameter: WrittenParameter): boolean =>
+  parameter.value === undefined &&
+  constrains(parameter) &&
+  parameter.maxLength === undefined &&
+  takesDefault(parameter, false)
+
+/** `parameter` with the default length when it gains it (`gainsParameterLength`). */
 const withParameterLength = (
   parameter: Actions[string]['params'][string],
   defaults: PlatformDefaults,
 ): Actions[string]['params'][string] =>
-  parameter.value === undefined && constrains(keywordsOf(parameter))
-    ? withDefaultLength(parameter, defaults)
-    : parameter
+  gainsParameterLength(parameter) ? withDefaultLength(parameter, defaults) : parameter
 
 /** The actions with the default length taken by every inline string parameter that names none. */
 const actionsWith = (actions: Actions, defaults: PlatformDefaults): Actions =>

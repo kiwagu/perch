@@ -1,4 +1,4 @@
-export { type DefaultLengths, withDefaultLengths } from './default-lengths'
+export { type DefaultLengths, gainsParameterLength, withDefaultLengths } from './default-lengths'
 export { DEFAULTS_EDITION, givesBack, takesDefault, withDefaultLength } from './defaults'
 export { fieldValueOf } from './field-value'
 export { keywordsOf, type ResolvedValue } from './keywords'
