@@ -4,7 +4,8 @@
  * it renames, the derived parts (a password input's visibility-button among them), the
  * composites the platform declares, the codes, the states, the roles and the error fields it
  * adds or removes on the anchors both hold (written or derived, so a constraint added to the
- * model shows as the code it gives), who each route serves (its guard and its roles), the
+ * model shows as the code it gives), who each route serves (its guard and its roles), the search
+ * parameters of each route (written or derived: a mail link's token with its key), the
  * platform action each list reads with its params and its paging, the fields that start or stop
  * holding input, the controls that start or stop asking before their flow leaves the screen,
  * with the fields the leave loses, the messages that
@@ -30,6 +31,7 @@ import { byName, type Change, changeOf } from './change'
 import { type DescriptionChange, descriptionChanges } from './description-changes'
 import { flowLines } from './flow-lines'
 import { routeAccessLines } from './route-access'
+import { type SearchChanges, searchChanges } from './search-changes'
 import { sourceLines } from './source-lines'
 import { type ValueChanges, valueChanges } from './value-changes'
 
@@ -74,6 +76,8 @@ export interface ContractChanges {
   screens: Change
   /** As `<path> guard <guard>` and `<path> serves <role>`, who each route serves (`routeAccessLines`). */
   routeAccess: Change
+  /** As `<path> search <name>: <keywords>`, the parameters of each route added and removed, and each keyword changed. */
+  routeSearch: SearchChanges
   /** As `<anchor> reads platform.<action> [<param>=...] [paged]`, each list's source (`sourceLines`). */
   sources: Change
   entities: Change
@@ -275,6 +279,7 @@ export function diffContracts(
       (after?.screens.screens ?? []).map(({ id }) => id),
     ),
     routeAccess: changeOf(routeAccessLines(before), routeAccessLines(after)),
+    routeSearch: searchChanges(before, after),
     sources: changeOf(sourceLines(before), sourceLines(after)),
     entities: changeOf(
       Object.keys(before?.model.entities ?? {}),

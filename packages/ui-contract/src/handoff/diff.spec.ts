@@ -173,6 +173,7 @@ describe('diffContracts', () => {
       notices: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       routeAccess: { added: [], removed: [] },
+      routeSearch: { added: [], removed: [], changed: [] },
       sources: { added: [], removed: [] },
       entities: { added: [], removed: [] },
       fields: { added: [], removed: ['thing.title'] },

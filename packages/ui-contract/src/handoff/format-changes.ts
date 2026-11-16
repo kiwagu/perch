@@ -8,6 +8,7 @@ import type { ContractChanges } from './diff'
 const LISTS = [
   ['screens', 'screen', 'screens'],
   ['routeAccess', 'route access line', 'route access lines'],
+  ['routeSearch', 'route search parameter', 'route search parameters'],
   ['anchors', 'anchor', 'anchors'],
   ['sources', 'list source', 'list sources'],
   ['derived', 'derived anchor', 'derived anchors'],
@@ -34,7 +35,11 @@ const LISTS = [
 
 /** The non-empty lists of one change: its count and its entries, after `where` when given. */
 function linesOf(
-  change: Change | ContractChanges['anchors'] | ContractChanges['values'],
+  change:
+    | Change
+    | ContractChanges['anchors']
+    | ContractChanges['values']
+    | ContractChanges['routeSearch'],
   one: string,
   many: string,
   where = '',
