@@ -11,8 +11,7 @@
 
 import { recordOf } from '../../../records'
 import { PAIR_GUARDS } from '../../derive'
-
-import { anchorsOf, fileOf, plainOf, type ScreenDocuments } from './screens'
+import { anchorsOf, fileOf, plainOf, type ScreenDocuments } from '../screens'
 
 const GUARDS = Object.keys(PAIR_GUARDS)
 

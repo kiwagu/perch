@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { parseYamlDocument } from '../../read-yaml-document'
+import { screensOf, writtenBy } from '../documents.fixture'
 
-import { screensOf, writtenBy } from './documents.fixture'
 import { dropMailLinkSearch } from './mail-links'
 
 const FILE = 'landing.yaml'

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { screensOf, writtenBy } from './documents.fixture'
+import { screensOf, writtenBy } from '../documents.fixture'
+
 import { dropLinkRoles } from './link-roles'
 
 /**

@@ -17,6 +17,9 @@ import { ACCOUNT_FILE, writeVersionThreeRepository } from './three-to-four.fixtu
 const KEY_BY_HAND =
   "write `x-perch.key: <code>` on a search parameter that is the screen's key, where no `mail.link` derives it"
 
+/** The version the step writes: the specs run the migration up to it, before the steps after it. */
+const FOUR = 4
+
 const roots: string[] = []
 
 /** A new repository at version 3, with the screens that write what version 4 derives. */
@@ -74,7 +77,7 @@ describe('the migration from version 3 to 4', () => {
     const root = repository()
     const before = snapshot(root)
 
-    expect(migrate(root, { write: false })).toEqual({
+    expect(migrate(root, { write: false, current: FOUR })).toEqual({
       from: 3,
       to: 4,
       steps: [
@@ -91,7 +94,7 @@ describe('the migration from version 3 to 4', () => {
   it('writes a contract at version 4 that loads and passes the check, writing nothing the engine derives', () => {
     const root = repository()
 
-    migrate(root, { write: true })
+    migrate(root, { write: true, current: FOUR })
 
     expect(loadContract(root).problems).toEqual([])
     expect(loadContract(root).contract?.screens.version).toBe(4)
@@ -101,7 +104,7 @@ describe('the migration from version 3 to 4', () => {
     const root = repository()
     const before = read(root, ACCOUNT_FILE)
 
-    migrate(root, { write: true })
+    migrate(root, { write: true, current: FOUR })
 
     const guards = [
       'passwordBreaksRules',
@@ -133,7 +136,7 @@ describe('the migration from version 3 to 4', () => {
     const platform = read(root, PLATFORM_FILE)
     const landing = read(root, LANDING_FILE)
 
-    migrate(root, { write: true })
+    migrate(root, { write: true, current: FOUR })
 
     expect(read(root, PLATFORM_FILE)).toBe(platform.replace('version: 3', 'version: 4'))
     expect(read(root, LANDING_FILE)).toBe(landing.replace(/ {4}search:\n( {6}.*\n)+/, ''))
@@ -141,18 +144,18 @@ describe('the migration from version 3 to 4', () => {
   it('finds nothing to do in a contract it moved', () => {
     const root = repository()
 
-    migrate(root, { write: true })
+    migrate(root, { write: true, current: FOUR })
 
     const moved = snapshot(root)
 
-    expect(migrate(root, { write: true })).toEqual({ from: 4, to: 4, steps: [] })
+    expect(migrate(root, { write: true, current: FOUR })).toEqual({ from: 4, to: 4, steps: [] })
     expect(snapshot(root)).toEqual(moved)
   })
   it('loads the migrated contract as it loaded before, but for the key, the guards and the confirmation the loader derives', () => {
     const written = repository()
     const moved = repository()
 
-    migrate(moved, { write: true })
+    migrate(moved, { write: true, current: FOUR })
 
     const asLoaded = (root: string): unknown =>
       JSON.parse(
@@ -172,7 +175,7 @@ describe('the migration from version 3 to 4', () => {
 
     writeFileSync(join(root, LANDING_FILE), landing)
 
-    const { steps } = migrate(root, { write: true })
+    const { steps } = migrate(root, { write: true, current: FOUR })
 
     expect(steps.flatMap(({ manual }) => manual)).toEqual([
       `${LANDING_FILE}: bindings[0].search.properties.token: it writes default, which the parameter the mail of invite derives from the platform value "token" does not carry (a screen's key has no default): decide by hand, then drop it`,
@@ -190,7 +193,7 @@ describe('the migration from version 3 to 4', () => {
 
     writeFileSync(join(root, ACCOUNT_FILE), unclear)
 
-    const { steps } = migrate(root, { write: true })
+    const { steps } = migrate(root, { write: true, current: FOUR })
     const moved = read(root, ACCOUNT_FILE)
 
     expect(steps.flatMap(({ manual }) => manual)).toEqual([

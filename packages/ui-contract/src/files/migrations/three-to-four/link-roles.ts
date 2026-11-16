@@ -9,8 +9,7 @@
 
 import { admitsAllOf, sameAdmission } from '../../../anchors'
 import { isRecord } from '../../../records'
-
-import { anchorsOf, type Plain, plainOf, type ScreenDocuments } from './screens'
+import { anchorsOf, type Plain, plainOf, type ScreenDocuments } from '../screens'
 
 /** The roles of a list written as strings; none when it is no such list. */
 const rolesIn = (value: unknown): string[] | undefined =>

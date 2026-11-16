@@ -108,7 +108,7 @@ export const controlRegionSchema = z
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.',
+        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.',
       ),
     onError: authoredTransitionsSchema
       .exactOptional()

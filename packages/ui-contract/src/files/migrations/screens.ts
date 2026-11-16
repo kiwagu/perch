@@ -1,9 +1,9 @@
-/** The screen documents a step of version 4 edits, and what its parts read of one. */
+/** The screen documents a step of a migration edits, and what its parts read of one. */
 
 import type { Document } from 'yaml'
 
-import { entriesOf, isRecord, recordOf } from '../../../records'
-import { SCREENS_DIR } from '../../paths'
+import { entriesOf, isRecord, recordOf } from '../../records'
+import { SCREENS_DIR } from '../paths'
 
 /** A map read from a document as plain data. */
 export type Plain = Readonly<Record<string, unknown>>

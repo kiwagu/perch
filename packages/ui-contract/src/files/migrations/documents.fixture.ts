@@ -1,7 +1,7 @@
-/** The screen documents a part of the step is run over, from their texts, and what they write. */
+/** The screen documents a step is run over, from their texts, and the texts they write. */
 
-import { parseYamlDocument } from '../../read-yaml-document'
-import { writeYamlDocument } from '../../write-yaml-document'
+import { parseYamlDocument } from '../read-yaml-document'
+import { writeYamlDocument } from '../write-yaml-document'
 
 import type { ScreenDocuments } from './screens'
 

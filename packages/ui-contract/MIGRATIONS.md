@@ -89,3 +89,20 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   by hand, then drop it. A mail whose `search` names no value a route can take. And always: write
   `x-perch.key: <code>` on a search parameter that is the screen's key, where no `mail.link`
   derives it.
+
+## Version 5
+
+- What changed: the success of a button's region clears its area's error. The region of a
+  button bound to one action, derived or written `by: <button>`, gets `clear: <part>.error` as
+  the first effect of every branch of its `onDone` that neither shows nor clears that error, when
+  the screen declares `<part>.error`. From version 5 a screen file never writes that clear in such
+  a branch, and the check refuses it. A region written in full and a clear of another anchor are
+  the screen's, as before.
+- Why: a region showed a refusal on its error and never forgot it, so a refused action's error
+  stayed after the next success, and the app forgot it on its own, which no flow said.
+- What `contract:migrate --write` does: sets `version: 5` in `platform.yaml`, and drops from a
+  region written `by: <button>` whose part has its error the `clear: <part>.error` that a branch
+  of its `onDone` writes first (in either form), with the branch's `actions` when it held nothing
+  else. A second run finds nothing to do.
+- What is left by hand: a `clear: <part>.error` written after another effect of such a branch,
+  named with its file and its place: version 5 refuses it, and dropping it moves the clear first.

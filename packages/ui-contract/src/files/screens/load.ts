@@ -176,6 +176,7 @@ function readScreenFiles(
     failureOf,
     toast: toastOfRead(values),
     platformToasts,
+    edition,
   }
   const expanded = asked.map(({ file, value }) => ({ file, ...expandedOf(file, value, lookups) }))
   const { toast } = lookups

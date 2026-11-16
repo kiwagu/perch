@@ -8,8 +8,7 @@
  */
 
 import { impliedByKind } from '../../derive'
-
-import { anchorsOf, fileOf, plainOf, type ScreenDocuments } from './screens'
+import { anchorsOf, fileOf, plainOf, type ScreenDocuments } from '../screens'
 
 /** The lines left to do by hand after the kind-implied parts of every screen are dropped. */
 export function dropKindParts(screens: ScreenDocuments): string[] {

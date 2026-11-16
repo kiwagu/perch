@@ -15,8 +15,7 @@ import type { Document } from 'yaml'
 
 import { entriesOf, isRecord, recordOf, sameValue } from '../../../records'
 import { PLATFORM_FILE } from '../../paths'
-
-import { fileOf, type Plain, plainOf, type ScreenDocuments } from './screens'
+import { fileOf, type Plain, plainOf, type ScreenDocuments } from '../screens'
 
 /** What a property and the value it is derived from must say alike for the derived one to replace it. */
 const CONSTRAINTS = ['type', 'enum', 'minLength', 'maxLength', 'pattern', 'minimum', 'maximum']

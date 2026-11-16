@@ -860,7 +860,7 @@ The button whose region this is: a button of the screen bound to one action. The
 ### `flow.states.<name>.states.<name>.onDone`
 
 <a id="screen-flow-states-name-states-name-ondone"></a>
-What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.
+What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.
 
 ### `flow.states.<name>.states.<name>.onError`
 
@@ -4527,6 +4527,15 @@ The states of a pattern and of a button's region are the machine's, named by the
 
 Keys it concerns: [`screen.flow.states.<name>.states.<name>.pattern`](#screen-flow-states-name-states-name-pattern), [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by).
 
+### The area of a button across its request
+
+<a id="rule-area-request"></a>
+The area of a button bound to one action is the button's part, and the area's error is `<part>.error`, when the screen declares it. The button's region, derived or written `by: <button>` (see the rule `button-region`), keeps that error while its action runs: entering `running` clears nothing, unlike a request that writes no `onError` (see the rule `request-outcome`). A refusal shown on the error replaces it with its own code. From version 5 a success clears it: every branch of the region's `onDone` that neither shows nor clears `<part>.error` starts with `clear: <part>.error`, derived, so `console.account.name` forgets a refused rename's error once a rename goes through. A screen file never writes that clear in such a branch: it is a problem at the clear (derived: a success clears its area's error; leave it out). A clear of another anchor stays the screen's, and so does a region written in full, whose outcomes say what they clear; an error a region shows outside its part (the members' removal of `organisation` shows on `organisation.invite.error`) is not its area's, and its success clears it only where the region writes so. Before version 5 a success clears only what the region writes.
+
+A list, a section or a table an outcome reads again (`read: <anchor>`) keeps its state and its entries while that read runs, and the answer replaces them, a failure included: `loading` shows only while nothing of its current search is read yet, at its first read or a read for another search, organisation or account (see the rule `list-reads`), never during the read after an action. In the area, a field keeps what was typed through the action and the read after it, until a `clear` of the flow empties it; a field that starts with what a read gives (`console.account.name.name-input`, the name as read) shows it only until something is typed into it, and no later read replaces what was typed.
+
+Keys it concerns: [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by), [`screen.flow.states.<name>.states.<name>.onDone`](#screen-flow-states-name-states-name-ondone).
+
 ### A flow run in XState, and an app held to it
 
 <a id="rule-flow-run"></a>
@@ -4882,7 +4891,7 @@ Keys it concerns: [`screen.flow.states.<name>.invoke.onError`](#screen-flow-stat
 ### The region of a button
 
 <a id="rule-button-region"></a>
-A button bound to one action that no state of the flow handles gets its region, when the root of the flow has one parallel state. The region is named by the button without its screen and its kind (`organisation.notes.add-button` gives `notes-add`) and comes after the regions written; it counts among the two regions or more of the parallel state, which may write fewer. It rests in `idle`; the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. A failure shows its codes on the error of the button's part; the success of an action of the model says what the controls do by the word its name starts with: `create` (`createNote`), the controls whose values it took are emptied; `update`, they show the stored value; `delete`, the entry leaves its list. A failure with codes and no error in the part is a problem: the screen declares the error, or writes the region by its button with its `onError`.
+A button bound to one action that no state of the flow handles gets its region, when the root of the flow has one parallel state. The region is named by the button without its screen and its kind (`organisation.notes.add-button` gives `notes-add`) and comes after the regions written; it counts among the two regions or more of the parallel state, which may write fewer. It rests in `idle`; the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. A failure shows its codes on the error of the button's part, which from version 5 a success clears (see the rule `area-request`); the success of an action of the model says what the controls do by the word its name starts with: `create` (`createNote`), the controls whose values it took are emptied; `update`, they show the stored value; `delete`, the entry leaves its list. A failure with codes and no error in the part is a problem: the screen declares the error, or writes the region by its button with its `onError`.
 
 A screen writes the region by its button, `by: <button>`, when it decides something of it: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`. The states of a button's region are the machine's, named by the loader (`idle`, `running`), and a scenario or a test reads them as it reads any state.
 

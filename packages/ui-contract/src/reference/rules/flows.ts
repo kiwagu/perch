@@ -1,8 +1,8 @@
 /**
  * The rules of a screen's flow: the XState subset it is written in, its states, events, guards and
  * effects, the invoke of an action, the address of a state, the shorter forms a screen file may
- * write, and how the flow is held to a machine. What a state renders is in `renders.ts`, the reads
- * in `reads.ts`.
+ * write, the area of a button across its request, and how the flow is held to a machine. What a
+ * state renders is in `renders.ts`, the reads in `reads.ts`.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -100,6 +100,19 @@ const flowShorterForms: ReferenceRule = {
   ],
 }
 
+const areaRequest: ReferenceRule = {
+  id: 'area-request',
+  title: 'The area of a button across its request',
+  text: [
+    "The area of a button bound to one action is the button's part, and the area's error is `<part>.error`, when the screen declares it. The button's region, derived or written `by: <button>` (see the rule `button-region`), keeps that error while its action runs: entering `running` clears nothing, unlike a request that writes no `onError` (see the rule `request-outcome`). A refusal shown on the error replaces it with its own code. From version 5 a success clears it: every branch of the region's `onDone` that neither shows nor clears `<part>.error` starts with `clear: <part>.error`, derived, so `console.account.name` forgets a refused rename's error once a rename goes through. A screen file never writes that clear in such a branch: it is a problem at the clear (derived: a success clears its area's error; leave it out). A clear of another anchor stays the screen's, and so does a region written in full, whose outcomes say what they clear; an error a region shows outside its part (the members' removal of `organisation` shows on `organisation.invite.error`) is not its area's, and its success clears it only where the region writes so. Before version 5 a success clears only what the region writes.",
+    'A list, a section or a table an outcome reads again (`read: <anchor>`) keeps its state and its entries while that read runs, and the answer replaces them, a failure included: `loading` shows only while nothing of its current search is read yet, at its first read or a read for another search, organisation or account (see the rule `list-reads`), never during the read after an action. In the area, a field keeps what was typed through the action and the read after it, until a `clear` of the flow empties it; a field that starts with what a read gives (`console.account.name.name-input`, the name as read) shows it only until something is typed into it, and no later read replaces what was typed.',
+  ].join('\n\n'),
+  keys: [
+    'screen.flow.states.<name>.states.<name>.by',
+    'screen.flow.states.<name>.states.<name>.onDone',
+  ],
+}
+
 const flowRun: ReferenceRule = {
   id: 'flow-run',
   title: 'A flow run in XState, and an app held to it',
@@ -117,5 +130,6 @@ export const FLOW_RULES: readonly ReferenceRule[] = [
   flowEffects,
   flowInvoke,
   flowShorterForms,
+  areaRequest,
   flowRun,
 ]

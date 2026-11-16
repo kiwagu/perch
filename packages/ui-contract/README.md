@@ -34,12 +34,13 @@ links to as `contract/REFERENCE.md#<slug>`.
       `composites.ts`, `form-params.ts`, `paging.ts`, `errors.ts`, `flow-errors.ts`, `inputs.ts`,
       `leaves.ts`, `toasts.ts`, `confirmations.ts`, `questions.ts`, `requests.ts`) and its flow
       expanded from the shorter forms (`files/expand-flow/`: `effects.ts`, `requests.ts`,
-      `toasts/`), then parsed through `screenFileSchema`
+      `area-error.ts`, `toasts/`), then parsed through `screenFileSchema`
       (`contract/REFERENCE.md#rule-what-stays`,
       `contract/REFERENCE.md#rule-composite-of-the-platform`,
       `contract/REFERENCE.md#rule-button-params`,
       `contract/REFERENCE.md#rule-error-codes-and-fields`,
       `contract/REFERENCE.md#rule-failure-show`, `contract/REFERENCE.md#rule-request-outcome`,
+      `contract/REFERENCE.md#rule-area-request`,
       `contract/REFERENCE.md#rule-success-toast`,
       `contract/REFERENCE.md#rule-destructive-question`,
       `contract/REFERENCE.md#rule-field-holds-input`,

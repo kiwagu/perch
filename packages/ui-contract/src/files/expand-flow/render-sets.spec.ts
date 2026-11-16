@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { parse, stringify } from 'yaml'
 
+import { CONTRACT_VERSION } from '../../anchors'
 import { flowSchema } from '../../schemas'
 import { loadScreens } from '../screens'
 
@@ -220,6 +221,7 @@ describe('expandFlow with sets', () => {
     screen: 'sample',
     toast: undefined,
     platformToasts: {},
+    edition: CONTRACT_VERSION,
   }
 
   it('expands the flow into the one written out, which the canonical schema takes', () => {
