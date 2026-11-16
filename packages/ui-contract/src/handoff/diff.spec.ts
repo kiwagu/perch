@@ -162,6 +162,7 @@ describe('diffContracts', () => {
       anchorCodes: { added: [], removed: [] },
       anchorStates: { added: [], removed: [] },
       anchorRoles: { added: [], removed: [] },
+      visibility: { added: [], removed: [], changed: [] },
       errorFields: { added: [], removed: [] },
       inputs: { added: [], removed: [] },
       stateColours: { added: [], removed: [] },

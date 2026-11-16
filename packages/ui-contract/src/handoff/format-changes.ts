@@ -23,6 +23,7 @@ const LISTS = [
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
   ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],
+  ['visibility', 'visibility entry', 'visibility entries'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
   ['values', 'platform value', 'platform values'],
