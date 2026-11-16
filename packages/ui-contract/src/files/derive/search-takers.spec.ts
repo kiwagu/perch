@@ -61,7 +61,7 @@ describe('searchTakersOf', () => {
 
     expect(actionsOf(screen)).toEqual(['platform.first token', 'platform.second token'])
   })
-  it('lists the states of the regions of an initial parallel state before the other states', () => {
+  it('lists the invoke of the initial state of each region of an initial parallel state before the other states', () => {
     const screen = screenOf('viewing', {
       first: invoking('platform.first'),
       viewing: {
@@ -69,7 +69,7 @@ describe('searchTakersOf', () => {
         states: {
           form: { initial: 'closed', states: { closed: {}, open: {} } },
           notes: {
-            initial: 'idle',
+            initial: 'adding',
             states: { idle: {}, adding: invoking('platform.add') },
           },
         },
@@ -77,6 +77,41 @@ describe('searchTakersOf', () => {
     })
 
     expect(actionsOf(screen)).toEqual(['platform.add token', 'platform.first token'])
+  })
+  it('lists the declared initial state of a region before one the file writes earlier in the region', () => {
+    const screen = screenOf('viewing', {
+      first: invoking('platform.first'),
+      viewing: {
+        type: 'parallel',
+        states: {
+          form: { initial: 'closed', states: { closed: {}, open: {} } },
+          notes: {
+            initial: 'opening',
+            states: { saving: invoking('platform.save'), opening: invoking('platform.open') },
+          },
+        },
+      },
+    })
+
+    expect(actionsOf(screen)).toEqual([
+      'platform.open token',
+      'platform.first token',
+      'platform.save token',
+    ])
+  })
+  it('lists a region state that is not initial with the other states, in the order of the file', () => {
+    const screen = screenOf('viewing', {
+      later: invoking('platform.later'),
+      viewing: {
+        type: 'parallel',
+        states: {
+          form: { initial: 'closed', states: { closed: {}, open: {} } },
+          notes: { initial: 'idle', states: { idle: {}, adding: invoking('platform.add') } },
+        },
+      },
+    })
+
+    expect(actionsOf(screen)).toEqual(['platform.later token', 'platform.add token'])
   })
   it('lists the sources of the lists after every invoke, and each parameter of an action once', () => {
     const screen = screenOf(

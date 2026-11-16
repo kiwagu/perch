@@ -361,6 +361,34 @@ describe('withDerivedMailLinks', () => {
 
       expect(tokenOf([landing({ flow: openingLast('late') })], platform)).toEqual(DERIVED)
     })
+    it('comes from the declared initial state of a region of the initial parallel state, not from one written before it', () => {
+      const platform = platformOf({ late: opening(['link-expired']) })
+      const taking = (src: string) => ({
+        invoke: {
+          src,
+          input: { token: { search: 'token' } },
+          onDone: { target: 'done' },
+        },
+      })
+      const flow = {
+        initial: 'viewing',
+        states: {
+          viewing: {
+            type: 'parallel',
+            states: {
+              form: { initial: 'closed', states: { closed: {}, open: {} } },
+              notes: {
+                initial: 'opening',
+                states: { saving: taking('platform.late'), opening: taking('platform.open') },
+              },
+            },
+          },
+          done: { type: 'final' },
+        },
+      }
+
+      expect(tokenOf([landing({ flow })], platform)).toEqual(DERIVED)
+    })
     it('is none when the action of the initial state lists no codes, however another written before it does', () => {
       const platform = platformOf({ open: opening(), late: opening(['link-expired']) })
 

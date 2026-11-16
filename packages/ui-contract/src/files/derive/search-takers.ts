@@ -3,9 +3,10 @@
  * invoke's `input` (a region written `by` its button included, as the loader expands it) or a
  * list's source `params`. The key of an address is held to them (`check/keys.ts`) and a mail
  * link's key is derived from the first (`derive/mail-links.ts`), so both read the screen the same
- * way: the invokes of the flow's initial state first (the regions of a parallel initial state
- * included), so the first action is the one the screen starts with whatever order the file writes
- * its states in; then the invokes of the other states in the order of the file; then the sources.
+ * way: the invokes of the states the screen starts in first (the flow's initial state, and the
+ * declared initial state of each region of a parallel initial state), so the first action is one
+ * the screen starts with whatever order the file writes its states in; then the invokes of the
+ * other states in the order of the file; then the sources.
  */
 
 import { type FlowNode, flowNodes } from '../flow-nodes'
@@ -31,15 +32,33 @@ const takersIn = (
       : [],
   )
 
-/** The invokes of `flow` that take `name`, those of its initial state first, then as the file writes them. */
+/**
+ * Whether the screen starts in `node`: the flow's initial state, or, when that is a parallel
+ * state, the declared initial state of each of its regions (a region holds plain states only).
+ */
+function starts(flow: Flow, node: FlowNode): boolean {
+  if (node.kind === 'root') {
+    return node.name === flow.initial
+  }
+
+  const parallel = flow.states[flow.initial]
+
+  return (
+    node.kind === 'region-state' &&
+    node.parallel === flow.initial &&
+    parallel?.type === 'parallel' &&
+    parallel.states[node.region]?.initial === node.name
+  )
+}
+
+/** The invokes of `flow` that take `name`, those of the states it starts in first, then as the file writes them. */
 function invokesTaking(flow: Flow, name: string): SearchTaker[] {
-  const initial = (node: FlowNode): boolean =>
-    node.kind === 'root'
-      ? node.name === flow.initial
-      : node.kind === 'region-state' && node.parallel === flow.initial
   const nodes = flowNodes(flow)
 
-  return [...nodes.filter(initial), ...nodes.filter((node) => !initial(node))].flatMap((node) => {
+  return [
+    ...nodes.filter((node) => starts(flow, node)),
+    ...nodes.filter((node) => !starts(flow, node)),
+  ].flatMap((node) => {
     const invoke =
       node.kind === 'root' || node.kind === 'region-state' ? node.state.invoke : undefined
 
