@@ -29,6 +29,7 @@ import { routePathSchema } from '../binding'
 
 import { flowSchemaOf, readOptOutSchema, toastOptOutSchema } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
+import { authoredGuardSchema } from './guards'
 import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
 
@@ -140,6 +141,7 @@ export const draftPatternSchema = z
 export const authoredFlowSchema = flowSchemaOf({
   transition: authoredTransitionSchema,
   effect: authoredEffectSchema,
+  guard: authoredGuardSchema,
   toastOptOut: true,
   region: (parts) =>
     z

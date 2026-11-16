@@ -38,7 +38,7 @@ const contractDiffLines: ReferenceRule = {
     "A screen's flow is listed as `flow lines added in <screen id>` and `flow lines removed in <screen id>`, one line per fact the flow says (`flowLines(flow)`, an internal helper of the hand-over). A state is named by its path (`viewing.form.open`) and descriptions are left out, as they change nothing that runs. A flow one side lacks has no lines, so a flow added or removed whole shows every line; a screen added or removed whole is a change of the screens alone. The lines:",
     [
       '- `initial <state>`, and `<path> initial <state>` for each region;',
-      "- `guard <name> takes <code>, <code>`, one per guard by failure code, its codes as written; a guard's sentence is prose and has no line;",
+      "- `guard <name> takes <code>, <code>`, one per guard by failure code, its codes as written, and `guard <name>: confirms <differs|strays|follows>` or `guard <name>: composite breaks`, one per guard a password pair derives; a guard's sentence is prose and has no line;",
       "- `<path> address <path> <search as JSON, keys sorted>`, those the state's address has;",
       '- `<path> renders <anchor>`, one per anchor of its `meta.renders` (`check-mail renders user.sign-in.resend-button`);',
       '- `<path> entry|exit <effect>`;',

@@ -1,7 +1,7 @@
 /**
- * Version 3 to 4: what an element's kind implies and the roles a route gives a link are derived,
- * and a screen file never writes them. No file changes but the version `migrate` sets: the step
- * leaves what the new rules refuse to the author, for now.
+ * Version 3 to 4: what an element's kind implies, the roles a route gives a link and the guards of
+ * a password pair are derived, and a screen file never writes them. No file changes but the
+ * version `migrate` sets: the step leaves what the new rules refuse to the author, for now.
  */
 
 import type { Migration } from './migration'
@@ -12,5 +12,6 @@ export const threeToFour: Migration = {
   run: () => [
     "drop a select's `dataValue` and `option`, a secret input's `visibility-button`, and the `confirm-button` and `cancel-button` of a dialog or a confirmation",
     "drop the `roles` of a link that admit what its route's roles admit",
+    'on a screen whose flow names the guards of a password pair, write `confirms` on the confirmation and drop the guards `passwordBreaksRules`, `passwordsDiffer`, `confirmationStrays` and `confirmationFollows`',
   ],
 }

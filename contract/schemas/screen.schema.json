@@ -862,6 +862,11 @@
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
+          "confirms": {
+            "description": "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
+          },
           "confirm": {
             "description": "The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation (an anchor of kind `confirmation` on the frame): an action of the model whose verb is `delete`, or an action of the platform whose verb (the first word of its last segment) is `ban`, `delete`, `remove` or `revoke`. On a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. See the rule `destructive-question`.",
             "type": "boolean",
@@ -909,7 +914,7 @@
           "type": "object",
           "properties": {
             "guards": {
-              "description": "The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.",
+              "description": "The guards by name, each with what it holds.",
               "type": "object",
               "propertyNames": {
                 "type": "string",

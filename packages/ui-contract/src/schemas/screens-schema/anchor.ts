@@ -237,6 +237,11 @@ export const anchorDefSchema = z
         "The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.",
       ),
     derivedFrom: derivedFromSchema.optional(),
+    confirms: baseAnchorSchema
+      .optional()
+      .describe(
+        "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
+      ),
   })
   .describe('One declared anchor.')
 

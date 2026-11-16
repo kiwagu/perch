@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { Screen } from '../screens'
 
 import { fieldValueOf } from './field-value'
-import { EMAIL, MODEL, PLATFORM } from './values.fixture'
+import { EMAIL, MODEL, NEW_PASSWORD, PLATFORM } from './values.fixture'
 
 const EMAIL_INPUT = 'user.sign-in.email-input'
 const PASSWORD_INPUT = 'user.sign-in.password-input'
@@ -89,5 +89,36 @@ describe('fieldValueOf', () => {
     expect(takenBy('user.sign-in.submit-button')).toBeUndefined()
     expect(takenBy('user.sign-in.account-item')).toBeUndefined()
     expect(takenBy('user.sign-in.missing-input')).toBeUndefined()
+  })
+  it('gives a confirmation the value of the input it confirms, which it has none of as written', () => {
+    const CONFIRMATION = 'user.sign-in.password-confirmation-input'
+    const NEW_PASSWORD_INPUT = 'user.sign-in.new-password-input'
+    const confirming = (confirms?: string) =>
+      fieldValueOf(
+        CONFIRMATION,
+        {
+          ...SCREEN,
+          anchors: {
+            ...SCREEN.anchors,
+            [NEW_PASSWORD_INPUT]: {
+              kind: 'input',
+              secret: true,
+              binding: { action: 'platform.sign-up', params: { password: NEW_PASSWORD_INPUT } },
+            },
+            [CONFIRMATION]: {
+              kind: 'input',
+              secret: true,
+              ...(confirms === undefined ? {} : { confirms }),
+            },
+          },
+        },
+        PLATFORM,
+        MODEL,
+      )
+
+    expect(confirming()).toBeUndefined()
+    expect(confirming(PASSWORD_INPUT)).toStrictEqual(takenBy(PASSWORD_INPUT))
+    expect(confirming(NEW_PASSWORD_INPUT)).toStrictEqual(NEW_PASSWORD)
+    expect(confirming('user.sign-in.missing-input')).toBeUndefined()
   })
 })

@@ -35,6 +35,7 @@ export {
 } from './leaves'
 export { type LoadedScreen, withDerivedLinkRoles } from './link-roles'
 export { withDerivedPaging } from './paging'
+export { PAIR_GUARDS, withDerivedPairGuards } from './pairs'
 export { type DerivedQuestion, withDerivedQuestions, withQuestionCodes } from './questions'
 export { isBare, type Request, requestsOf } from './requests'
 export { TOAST_RULE_ROW, toastCodesOf, withToastCodes } from './toasts'

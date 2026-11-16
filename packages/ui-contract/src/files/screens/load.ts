@@ -15,8 +15,9 @@
  * `platform.yaml` declares, and the codes the flow shows on it (`derive/errors.ts`); and, with a
  * confirmation on the frame, the question
  * each control of a destructive action asks before it runs (`derive/questions.ts`), the
- * confirmation carrying every code asked with. Once a screen parses, its flow canonical, whether a
- * field holds input is derived from its kind, its bindings and the moves of its flow
+ * confirmation carrying every code asked with. Once a screen parses, its flow canonical, the
+ * guards of its password pair (`derive/pairs.ts`) and whether a field holds input are derived,
+ * the latter from its kind, its bindings and the moves of its flow
  * (`derive/inputs.ts`); then each control whose flow moves to another screen asks the platform's
  * leave question before its event while a change of screen asks, losing the fields of its screen
  * the move does not carry (`derive/leaves.ts`); a file never writes that question. A file may author its flow in the shorter forms (a transition as its
@@ -200,6 +201,7 @@ function readScreenFiles(
       const loaded = parsedOf(
         file,
         dialog === undefined ? toasted : withQuestionCodes(toasted, dialog, [...asking.keys()]),
+        edition,
       )
 
       problems.push(...loaded.problems)

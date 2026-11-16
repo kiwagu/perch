@@ -8,7 +8,7 @@
 
 import { z } from '@workspace/zod'
 
-import { anchorSchema, codeSchema, kebabNameSchema } from '../../../names.schema'
+import { anchorSchema, kebabNameSchema } from '../../../names.schema'
 import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { actionNameSchema } from '../anchor'
 import { routePathSchema } from '../binding'
@@ -42,25 +42,6 @@ export const readOptOutSchema = z
   .describe(
     'Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused.',
   )
-
-/**
- * A guard by failure code: it holds when the action of the invoke whose `onError` it guards
- * failed with one of its codes, so a bare `show` on its branch shows exactly them.
- */
-export const codeGuardSchema = z
-  .strictObject({
-    codes: z
-      .array(codeSchema)
-      .min(1)
-      .describe('The codes it holds for: the action failed with one of them.'),
-  })
-  .describe(
-    'A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes.',
-  )
-
-const guardSchema = z
-  .union([z.string().describe(DESCRIPTION_PURPOSES.guard), codeGuardSchema])
-  .describe('What a guard holds: a sentence, or the failure codes it holds for.')
 
 /** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
 export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
@@ -174,10 +155,13 @@ export function flowSchemaOf<
   T extends z.ZodType,
   E extends z.ZodType,
   R extends z.ZodType,
+  G extends z.ZodType,
 >(options: {
   transition: T
   effect: E
   region: (parts: FlowParts<T, E>) => R
+  /** What a guard holds: as a screen file writes it, or as every reader takes it. */
+  guard: G
   regions: { min: number; description: string }
   description: string
   /** An invoke may say `toast: false` (the authored flow). */
@@ -220,11 +204,9 @@ export function flowSchemaOf<
       meta: z
         .strictObject({
           guards: z
-            .record(guardNameSchema, guardSchema)
+            .record(guardNameSchema, options.guard)
             .exactOptional()
-            .describe(
-              'The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.',
-            ),
+            .describe('The guards by name, each with what it holds.'),
         })
         .exactOptional()
         .describe('What the contract says of the flow beyond XState: its guards.'),

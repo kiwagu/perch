@@ -482,6 +482,11 @@ The list is a page of the action's entries: the action declares `paged: { sizes,
 <a id="screen-anchors-name-composite"></a>
 The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.
 
+### `anchors.<name>.confirms`
+
+<a id="screen-anchors-name-confirms"></a>
+The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.
+
 ### `anchors.<name>.confirm`
 
 <a id="screen-anchors-name-confirm"></a>
@@ -525,7 +530,7 @@ What the contract says of the flow beyond XState: its guards.
 ### `flow.meta.guards`
 
 <a id="screen-flow-meta-guards"></a>
-The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.
+The guards by name, each with what it holds.
 
 ### `flow.meta.guards.<name>`
 
@@ -2398,6 +2403,11 @@ The composite that derives the anchor.
 <a id="manifest-screens-anchors-name-derivedfrom-item"></a>
 The item of the composite the anchor stands for; absent: the list.
 
+### `screens.anchors.<name>.confirms`
+
+<a id="manifest-screens-anchors-name-confirms"></a>
+The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.
+
 ### `screens.states`
 
 <a id="manifest-screens-states"></a>
@@ -2436,17 +2446,27 @@ What the contract says of the flow beyond XState: its guards.
 ### `screens.flow.meta.guards`
 
 <a id="manifest-screens-flow-meta-guards"></a>
-The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.
+The guards by name, each with what it holds.
 
 ### `screens.flow.meta.guards.<name>`
 
 <a id="manifest-screens-flow-meta-guards-name"></a>
-What a guard holds: a sentence, or the failure codes it holds for.
+What a guard holds: a sentence, the failure codes it holds for, or a guard the loader derives from the screen's password pair.
 
 ### `screens.flow.meta.guards.<name>.codes`
 
 <a id="manifest-screens-flow-meta-guards-name-codes"></a>
 The codes it holds for: the action failed with one of them.
+
+### `screens.flow.meta.guards.<name>.confirms`
+
+<a id="manifest-screens-flow-meta-guards-name-confirms"></a>
+What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`.
+
+### `screens.flow.meta.guards.<name>.composite`
+
+<a id="manifest-screens-flow-meta-guards-name-composite"></a>
+The input the confirmation confirms breaks a rule of its composite.
 
 ### `screens.flow.states`
 
@@ -4383,7 +4403,7 @@ Keys it concerns: [`screen.flow`](#screen-flow), [`screen.flow.id`](#screen-flow
 
 XState resolves a target from the parent of its state: at the root it is a state of the flow, or a state of a region as `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the others at their `initial`); in a region it is a state of that region, or a state of the root by the machine's id, `#<flow id>.<state>` (`#organisation.viewing`), which leaves the parallel state and enters that state afresh, the parallel state itself with every region at its `initial`. Within a parallel state an event belongs to one area, one region or the state's own `on`, never two; the same event may appear in several states of one region.
 
-A guard is a camelCase name that the root `meta.guards` declares with what it holds: a sentence (`holdsUnsentChanges: this device holds changes the server has not received`), or the failure codes it takes, `{ codes: [ <code>, ... ] }`, when it tells the failures of an action apart: it holds when the action failed with one of them. A guard by failure code guards only branches of an invoke's `onError` (a region written `by` its button included), and each of its codes is one the invoked action fails with, listed once; the sign-in screen may write `emailNotVerified: { codes: [ email-not-verified ] }` for the branch of `signing-in` that leads to `unverified`. A bare `show` on such a branch shows the guard's codes (see the rule `failure-show`). An activity's guards are sentences. The app implements every guard.
+A guard is a camelCase name that the root `meta.guards` declares with what it holds: a sentence (`holdsUnsentChanges: this device holds changes the server has not received`), or the failure codes it takes, `{ codes: [ <code>, ... ] }`, when it tells the failures of an action apart: it holds when the action failed with one of them. A guard by failure code guards only branches of an invoke's `onError` (a region written `by` its button included), and each of its codes is one the invoked action fails with, listed once; the sign-in screen may write `emailNotVerified: { codes: [ email-not-verified ] }` for the branch of `signing-in` that leads to `unverified`. A bare `show` on such a branch shows the guard's codes (see the rule `failure-show`). The four guards of a password pair are the loader's: it derives them from the confirmation's `confirms` (see the rule `password-pair`). An activity's guards are sentences. The app implements every guard.
 
 A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no flag of its own. A password input's `visibility-button` is never an event of a flow, so the machine does not enable it: it is always enabled.
 
@@ -4519,7 +4539,7 @@ A value is a type with its constraints, said once where its policy lives, so a l
 
 A parameter of a platform action writes its `type` or the `value` it refers to, `value: <name>` or `value: <entity>.<field>`, and may write the keywords of a value beside it. A keyword written beside `value` only narrows the value: a `minLength` or a `minimum` no smaller than the value's, a `maxLength` or a `maximum` no larger, an `enum` among the value's members, a `type` or a `format` where the value has none or the same, a `pattern` where the value has none (one beside a value's own pattern is refused, the same one included); `contract:check` refuses one that would widen it or say other than it says, at the keyword (`{ value: email, maxLength: 500 }` over an email of at most 254 characters). What a parameter takes (`parameterValueOf`) is the value it refers to narrowed by those keywords (`{ value: email, maxLength: 100 }` takes at most 100 characters; a refused keyword is left out, so the value keeps its own); a paged action's `size` takes the action's sizes as its `enum`; a parameter that refers to nothing takes its own keywords, its `type` alone at least. A parameter of an action of the model takes the value of the field it sets. `optional: true` says the action runs without the parameter.
 
-The value a field takes (`fieldValueOf`) is the loosest of the values of its model binding and of every action parameter that takes it: its own action bindings and every binding of another anchor of its screen that passes it, a submit button's derived params included. So a field one form uses for two parameters (the password of a sign-in and the new one of a sign-up) accepts what either accepts, never only what the strictest does. Loosest: `minLength` and `minimum` the smallest, `maxLength` and `maximum` the largest, each kept only when every value has one; `type`, `pattern`, `format` and `enum` kept only when every value has the same; `readOnly` only when every value has it. A `{ search }` binding adds nothing, neither narrowing nor widening: the limit of a search parameter belongs to the address. An anchor that is no field, and a field with no model binding and no parameter that takes it, has no value. The manifest carries it on each `input` and `textarea` that has one, as `ids.<anchor>.value`.
+The value a field takes (`fieldValueOf`) is the loosest of the values of its model binding and of every action parameter that takes it: its own action bindings and every binding of another anchor of its screen that passes it, a submit button's derived params included. So a field one form uses for two parameters (the password of a sign-in and the new one of a sign-up) accepts what either accepts, never only what the strictest does. A confirmation, an input that writes `confirms`, takes the value of the input it confirms (see the rule `password-pair`). Loosest: `minLength` and `minimum` the smallest, `maxLength` and `maximum` the largest, each kept only when every value has one; `type`, `pattern`, `format` and `enum` kept only when every value has the same; `readOnly` only when every value has it. A `{ search }` binding adds nothing, neither narrowing nor widening: the limit of a search parameter belongs to the address. An anchor that is no field, and a field with no model binding and no parameter that takes it, has no value. The manifest carries it on each `input` and `textarea` that has one, as `ids.<anchor>.value`.
 
 `contract:check` refuses a `value` that names neither a value of `platform.values` nor a field of the model, at the parameter, and a keyword beside it that does not narrow it, and holds the description of each value to the budget; a paged action's `page` and `size` are numbers by the type they write or take from their value. `contract:diff` lists the values added and removed by name, and of each value both sides hold each keyword whose value changes, compared as data, as `platform values changed: <name> <keyword> <before> -> <after>`, each side its JSON (`none` on the side that lacks it: `kind enum [1] -> ["1"]`); the line of each parameter of an action names its type or its value and its constraints, each as JSON (see the rule `contract-diff-lines`).
 
@@ -4650,6 +4670,24 @@ Keys it concerns: [`screen.anchors.<name>.description`](#screen-anchors-name-des
 
 <a id="rule-what-stays"></a>
 What a screen would only repeat of the model, the platform and its own bindings, it leaves out, and the loader derives it, the same way every time. What stays in a screen is what a tester or a user can tell apart: the areas and their states, where each control leads, a success or a failure that goes elsewhere than the derived one or shows something else, guards, confirmations and chains of actions. A written value wins over a derived one. `bun run contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or derived, so a constraint added to the model shows on review as the codes it adds, and the lines of each screen's flow, its states' addresses, what they render and what each guard by failure code takes among them, and every line of a flow added to or removed from a screen, descriptions aside, so a screen written shorter that loads to the same flow shows no change but the descriptions it stops writing, each listed as `<n> -> gone`.
+
+### A password pair
+
+<a id="rule-password-pair"></a>
+A form that sets a new password asks for it twice: the new password, a secret `input` that opts into a composite (`composite: password-rules`), and its confirmation, a secret `input` with no binding, never sent, that names it: `confirms: user.reset-password.password-input`. The two are the screen's password pair, one per screen. The confirmation takes the value of the input it confirms (`fieldValueOf`; see the rule `declared-values`), so it is held to the same limits: where the password's value has a `maxLength`, the confirmation's element carries it too.
+
+The loader derives the guards of the pair, on the parsed screen, each under the name a flow uses (`derive/pairs.ts`):
+
+- `passwordBreaksRules`, `{ composite: breaks }`: the input the confirmation confirms breaks one of the rules of its composite's list;
+- `passwordsDiffer`, `{ confirms: differs }`: the confirmation is not the same as the input it confirms;
+- `confirmationStrays`, `{ confirms: strays }`: the confirmation is no longer how the input it confirms begins: a character differs, or it is longer;
+- `confirmationFollows`, `{ confirms: follows }`: the confirmation is how the input it confirms begins, all of it or a part, or is empty.
+
+Each is added to the flow's `meta.guards` only when a transition of the flow names it, so every guard declared stays used. The checks, the walk in XState, the manifest and an app's machine read it as any guard, by its name, and the app implements it. `contract:diff` lists each as `guard <name>: confirms <differs|strays|follows>` or `guard <name>: composite breaks`.
+
+Refused, each at its key: a `confirms` on anything but a secret input, on an input with a binding, or naming anything but another secret input of its screen with a composite; a second `confirms` on a screen, the first making the pair; and a guard of a pair a screen file writes, `{ confirms }` or `{ composite }`, at every version, since only the loader derives one. From version 4 a screen with a pair never writes one of the four names either: a guard written under one of them beside `confirms` is a problem (derived from the confirms; leave it out). Before version 4 a name the screen writes keeps its written guard, and the others are derived. A screen without a `confirms` writes its guards as sentences, these four names included.
+
+Keys it concerns: [`screen.anchors.<name>.confirms`](#screen-anchors-name-confirms), [`screen.flow.meta.guards`](#screen-flow-meta-guards).
 
 ### What a failure shows
 
@@ -4980,7 +5018,7 @@ An anchor removed and one added are a rename wherever a screen and a kind lost e
 A screen's flow is listed as `flow lines added in <screen id>` and `flow lines removed in <screen id>`, one line per fact the flow says (`flowLines(flow)`, an internal helper of the hand-over). A state is named by its path (`viewing.form.open`) and descriptions are left out, as they change nothing that runs. A flow one side lacks has no lines, so a flow added or removed whole shows every line; a screen added or removed whole is a change of the screens alone. The lines:
 
 - `initial <state>`, and `<path> initial <state>` for each region;
-- `guard <name> takes <code>, <code>`, one per guard by failure code, its codes as written; a guard's sentence is prose and has no line;
+- `guard <name> takes <code>, <code>`, one per guard by failure code, its codes as written, and `guard <name>: confirms <differs|strays|follows>` or `guard <name>: composite breaks`, one per guard a password pair derives; a guard's sentence is prose and has no line;
 - `<path> address <path> <search as JSON, keys sorted>`, those the state's address has;
 - `<path> renders <anchor>`, one per anchor of its `meta.renders` (`check-mail renders user.sign-in.resend-button`);
 - `<path> entry|exit <effect>`;

@@ -631,6 +631,37 @@ describe('diffContracts and the order and the inputs of a flow', () => {
       flowsBetween(guarded('the network address tried too often'), guarded('it tried too often')),
     ).toEqual({ sample: { added: [], removed: [] } })
   })
+  it('lists a guard a password pair derives, by what it holds', () => {
+    type Guard = NonNullable<NonNullable<Flow['meta']>['guards']>[string]
+    const guarded = (name: string, guard: Guard) => (flow: Flow) => {
+      flow.meta = { guards: { titleGiven: 'the title input holds a title', [name]: guard } }
+    }
+    const sentence = 'the password typed again is not the same as the password'
+
+    expect(
+      flowsBetween(
+        guarded('passwordsDiffer', sentence),
+        guarded('passwordsDiffer', { confirms: 'differs' }),
+      ),
+    ).toEqual({ sample: { added: ['guard passwordsDiffer: confirms differs'], removed: [] } })
+    expect(
+      flowsBetween(
+        guarded('passwordsDiffer', { confirms: 'differs' }),
+        guarded('passwordsDiffer', { confirms: 'strays' }),
+      ),
+    ).toEqual({
+      sample: {
+        added: ['guard passwordsDiffer: confirms strays'],
+        removed: ['guard passwordsDiffer: confirms differs'],
+      },
+    })
+    expect(
+      flowsBetween(
+        guarded('passwordBreaksRules', { composite: 'breaks' }),
+        guarded('passwordBreaksRules', 'the password breaks one of its rules'),
+      ),
+    ).toEqual({ sample: { added: [], removed: ['guard passwordBreaksRules: composite breaks'] } })
+  })
   it('lists two entry effects swapped, as the last one decides what shows', () => {
     expect(
       flowsBetween(

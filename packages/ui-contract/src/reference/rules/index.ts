@@ -11,6 +11,7 @@ import { LEAVES_OUT_RULES } from './leaves-out'
 import { MANIFEST_RULES } from './manifest'
 import { OUTCOME_RULES } from './outcomes'
 import { PAGING_RULES } from './paging'
+import { PAIR_RULES } from './pairs'
 import { READ_RULES } from './reads'
 import { RENDER_RULES } from './renders'
 import { ROUTE_RULES } from './routes'
@@ -22,8 +23,8 @@ export { INSTRUCTION_RULES } from './instructions'
 /**
  * Every rule of the engine that no key states, in the order the reference writes them: the
  * anchors and the routes, the flows and what they render and read, a paged list, the values,
- * what a screen leaves out, the scenarios, the checks, the commits, the manifest, the hand-over
- * and the coverage, and last the fixed texts of the manifest's instructions.
+ * what a screen leaves out, a password pair, the scenarios, the checks, the commits, the manifest,
+ * the hand-over and the coverage, and last the fixed texts of the manifest's instructions.
  */
 export const REFERENCE_RULES: readonly ReferenceRule[] = [
   ...ANCHOR_RULES,
@@ -34,6 +35,7 @@ export const REFERENCE_RULES: readonly ReferenceRule[] = [
   ...PAGING_RULES,
   ...VALUE_RULES,
   ...LEAVES_OUT_RULES,
+  ...PAIR_RULES,
   ...OUTCOME_RULES,
   ...SCENARIO_RULES,
   ...CHECK_RULES,

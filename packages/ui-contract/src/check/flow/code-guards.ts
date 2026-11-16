@@ -85,7 +85,7 @@ export function codeGuardProblems(inFlow: InFlow): Problem[] {
   const { flow, contract } = inFlow
   const guards: Guards = new Map(
     Object.entries(flow.meta?.guards ?? {}).flatMap(([name, guard]) =>
-      typeof guard === 'string' ? [] : [[name, guard.codes] as const],
+      typeof guard === 'string' || !('codes' in guard) ? [] : [[name, guard.codes] as const],
     ),
   )
 

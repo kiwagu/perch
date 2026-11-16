@@ -4,7 +4,9 @@
  * binding of another anchor, a submit button with its derived params among them, that passes it),
  * so a field one form uses for two parameters accepts what either accepts. A `{ search }` binding
  * adds nothing, neither narrowing nor widening: the limit of a search parameter belongs to the
- * address. An anchor that is no field, and a field with no such binding, take no value.
+ * address. A confirmation, an input that writes `confirms`, takes the value of the input it
+ * confirms, which it repeats and never sends. An anchor that is no field, and a field with no
+ * such binding, take no value.
  */
 
 import { FIELD_KINDS } from '../../anchors'
@@ -25,13 +27,17 @@ export function fieldValueOf(
   platform: Platform,
   model: Model | undefined,
 ): ResolvedValue | undefined {
-  const def = Object.hasOwn(screen.anchors, anchor) ? screen.anchors[anchor] : undefined
+  const defOf = (name: string) =>
+    Object.hasOwn(screen.anchors, name) ? screen.anchors[name] : undefined
+  const def = defOf(anchor)
 
   if (def === undefined || !FIELD_KINDS.has(def.kind)) {
     return undefined
   }
 
-  const own = refsOf(def.binding).flatMap((ref) => {
+  // A confirmation's value is the confirmed input's own: no further `confirms` is followed.
+  const field = def.confirms ?? anchor
+  const own = refsOf(defOf(field)?.binding).flatMap((ref) => {
     const value = 'model' in ref ? resolveValue(ref.model, platform, model) : undefined
 
     return value === undefined ? [] : [value]
@@ -40,7 +46,7 @@ export function fieldValueOf(
     refsOf(binding).flatMap((ref) =>
       'action' in ref
         ? Object.entries(ref.params ?? {}).flatMap(([param, value]) =>
-            value === anchor ? [parameterValueOf(ref.action, param, platform, model)] : [],
+            value === field ? [parameterValueOf(ref.action, param, platform, model)] : [],
           )
         : [],
     ),
