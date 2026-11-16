@@ -12,6 +12,10 @@
       "types": "./src/lib/*.ts",
       "import": "./src/lib/*.ts"
     },
+    "./field-facts": {
+      "types": "./src/field-facts/index.ts",
+      "import": "./src/field-facts/index.ts"
+    },
     "./unsaved-input": {
       "types": "./src/unsaved-input/index.ts",
       "import": "./src/unsaved-input/index.ts"
