@@ -32,9 +32,9 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    textarea, select, switch, tab), each with the `binding` it runs or shows.
 7. **The lists.** The container (`list` or `table`); every entry (`item` or `row`) with
    `dataId`, and its row states when an entry differs or changes in place; the controls of
-   an entry; the cells a test reads. A choice that is not an entity has `dataValue`, and each
-   fixed value is a row of "Choice values". A list read from a platform action says its
-   `source`: its `params` from the route's search or constants, and `paged: true` with the
+   an entry; the cells a test reads. A choice that is not an entity has `dataValue` (a select's
+   is derived from its kind from version 4), and each fixed value is a row of "Choice values".
+   A list read from a platform action says its `source`: its `params` from the route's search or constants, and `paged: true` with the
    action's `paged: { sizes, default }` and the route's `page` and `size` when it pages (the
    parts it derives are never written; pattern 17). Each action, of the platform or of the
    model, that changes what that source answers names it under its `changes`. Then every
@@ -43,7 +43,7 @@ and the tests. The rule: `.cursor/rules/ui-contract.mdc`; the examples: `pattern
    its `onDone` (`read: <list>`) or says `read: false`; `contract:check` refuses a branch that
    does neither.
 8. **The dialogs.** Each one a `ConfirmDialog` mounted with its own `testId` and `code`,
-   its buttons in `derived`.
+   its buttons, which its kind derives (before version 4 it lists them in `derived`).
 9. **The messages.** Every `error`, `message` and notice a test asserts, with its `codes`,
    each code a row of "Codes".
 10. **The states.** `data-state` on every container whose data arrives after the page; the

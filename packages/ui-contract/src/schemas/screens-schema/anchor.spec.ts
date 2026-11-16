@@ -146,3 +146,30 @@ describe('a source', () => {
     }
   })
 })
+
+describe('with and without', () => {
+  const shows = (key: 'with' | 'without', entries: unknown) => ({ kind: 'button', [key]: entries })
+
+  it('takes anchors and one anchor with its codes, on both schemas', () => {
+    const entries = ['app-shell.update-message', { 'app-shell.install-message': ['install-ready'] }]
+
+    for (const key of ['with', 'without'] as const) {
+      expect(anchorDefSchema.safeParse(shows(key, entries)).success).toBe(true)
+      expect(authoredAnchorDefSchema.safeParse(shows(key, entries)).success).toBe(true)
+    }
+  })
+  it('refuses an empty list, a code entry of two anchors or of no code, and a name no anchor has', () => {
+    for (const key of ['with', 'without'] as const) {
+      expect(anchorDefSchema.safeParse(shows(key, [])).success).toBe(false)
+      expect(
+        anchorDefSchema.safeParse(shows(key, [{ 'x.y.a-message': ['a'], 'x.y.b-message': ['b'] }]))
+          .success,
+      ).toBe(false)
+      expect(anchorDefSchema.safeParse(shows(key, [{ 'x.y.a-message': [] }])).success).toBe(false)
+      expect(anchorDefSchema.safeParse(shows(key, [{}])).success).toBe(false)
+      expect(
+        anchorDefSchema.safeParse(shows(key, ['x.y.name-input.visibility-button.extra'])).success,
+      ).toBe(false)
+    }
+  })
+})

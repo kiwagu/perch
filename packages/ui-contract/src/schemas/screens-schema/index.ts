@@ -3,6 +3,7 @@ export {
   anchorBindingSchema,
   anchorDefSchema,
   asksSchema,
+  authoredAnchorDefSchema,
   bindingRefSchema,
   derivedFromSchema,
   leavesSchema,
@@ -22,6 +23,7 @@ export {
   flowStateNameSchema,
   guardNameSchema,
   platformEventNameSchema,
+  renderSetsSchema,
   transitionSchema,
 } from './flow'
 export {
@@ -33,5 +35,14 @@ export {
   RECIPIENT,
 } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
-export { type PlatformComposite, platformCompositeSchema, platformSchema } from './platform'
+export {
+  type PlatformComposite,
+  type PlatformDefaults,
+  type PlatformParameter,
+  platformCompositeSchema,
+  platformDefaultsSchema,
+  platformSchema,
+} from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'
+export { resolvedValueSchema, VALUE_FORMATS, valueRefSchema, valueSchema } from './value'
+export { withEntrySchema, withoutSchema, withSchema } from './with'

@@ -16,11 +16,16 @@ import { jsonSchemaProblems } from './validator'
 export interface ModelField {
   type?: string
   enum?: readonly unknown[]
-  /** The JSON Schema constraints a value typed into the field must meet. */
+  /**
+   * The JSON Schema constraints a value typed into the field must meet, those a value has: a
+   * field's other keywords (`exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`) are not read.
+   */
   minLength?: number
   maxLength?: number
   pattern?: string
   format?: string
+  minimum?: number
+  maximum?: number
   readonly: boolean
   crdt?: 'text' | 'list' | 'counter' | 'none'
   record?: string
@@ -63,15 +68,20 @@ const documentSchema = z.looseObject({
   $defs: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.unknown()),
 })
 
-/** The constraints of a field's JSON Schema, which the meta-schema has checked already. */
+/**
+ * The constraints of a field's JSON Schema that a value has, which the meta-schema has checked
+ * already: its lengths, pattern, format and numeric bounds.
+ */
 function constraintsOf(field: Readonly<Record<string, unknown>>) {
-  const { minLength, maxLength, pattern, format } = field
+  const { minLength, maxLength, pattern, format, minimum, maximum } = field
 
   return {
     ...(typeof minLength === 'number' ? { minLength } : {}),
     ...(typeof maxLength === 'number' ? { maxLength } : {}),
     ...(typeof pattern === 'string' ? { pattern } : {}),
     ...(typeof format === 'string' ? { format } : {}),
+    ...(typeof minimum === 'number' ? { minimum } : {}),
+    ...(typeof maximum === 'number' ? { maximum } : {}),
   }
 }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VERSION } from '../../anchors'
 import { flowSchema } from '../../schemas'
 import { type Failure, flowSourcesOf } from '../derive'
 
@@ -22,6 +23,7 @@ const LOOKUPS: FlowLookups = {
   screen: 'sample',
   toast: undefined,
   platformToasts: {},
+  edition: CONTRACT_VERSION,
 }
 
 /** A flow of one plain state `idle` whose transition on `sample.form.save-button` is `on`. */

@@ -1,7 +1,7 @@
 /**
  * The contract check: loads the contract files, the activities and the scenarios (stopping at
- * their own problems), then runs every cross-check and the schema drift, and returns the
- * problems sorted by file and line.
+ * their own problems), then runs every cross-check, the schema drift, the reference's drift and the
+ * links of the guides into it, and returns the problems sorted by file and line.
  */
 
 import { readFileSync } from 'node:fs'
@@ -19,15 +19,18 @@ import {
   sortProblems,
   VOCABULARY_FILE,
 } from '../files'
+import { referenceDrift, referenceLinkProblems } from '../reference'
 
 import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
+import { attributionProblems } from './attribution'
 import { bindingsProblems } from './bindings'
 import { changesProblems } from './changes'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
+import { keyProblems } from './keys'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
 import { noticesProblems } from './notices'
@@ -39,8 +42,10 @@ import { screensProblems } from './screens'
 import { searchProblems } from './search'
 import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
+import { valueProblems } from './values'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
+import { withProblems } from './with'
 
 function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   let markdown: string
@@ -63,8 +68,9 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
  */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
-  const { model, problems: modelLoad } = loadModel(root)
-  const { screens, problems: screensLoad } = loadScreensWith(root, model)
+  const { model: written, problems: modelLoad } = loadModel(root)
+  // The model every rule reads is the one the screens were derived from: its lengths resolved.
+  const { screens, model, problems: screensLoad } = loadScreensWith(root, written)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
   const problems = [
@@ -111,7 +117,10 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   toastsProblems,
   confirmationsProblems,
   unsavedInputProblems,
+  valueProblems,
+  attributionProblems,
   searchProblems,
+  keyProblems,
   mailsProblems,
   noticesProblems,
   changesProblems,
@@ -119,7 +128,12 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   pagingProblems,
   scenariosProblems,
   descriptionsProblems,
+  withProblems,
 ]
+
+/** What every rule of the contract finds in a contract already loaded, sorted by file and line. */
+export const contractProblems = (contract: Contract): Problem[] =>
+  sortProblems(RULES.flatMap((rule) => rule(contract)))
 
 export function checkContract(root: string): Problem[] {
   const { contract, problems } = loadContract(root)
@@ -128,5 +142,10 @@ export function checkContract(root: string): Problem[] {
     return problems
   }
 
-  return sortProblems([...RULES.flatMap((rule) => rule(contract)), ...schemaDrift(root)])
+  return sortProblems([
+    ...contractProblems(contract),
+    ...schemaDrift(root),
+    ...referenceDrift(root),
+    ...referenceLinkProblems(root),
+  ])
 }

@@ -10,9 +10,9 @@ export {
   showAllSchema,
   showSomeSchema,
 } from './authored'
-export { codeGuardSchema } from './build'
 export { flowSchema, transitionSchema } from './canonical'
 export { effectSchema, navigateParamsSchema } from './effects'
+export { codeGuardSchema } from './guards'
 export {
   flowStateNameSchema,
   flowTargetSchema,
@@ -22,3 +22,4 @@ export {
   platformEventNameSchema,
   searchSchema,
 } from './names'
+export { renderSetsSchema } from './render-sets'

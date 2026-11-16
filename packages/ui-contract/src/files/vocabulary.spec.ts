@@ -152,13 +152,14 @@ describe('parseVocabulary', () => {
       },
     ])
   })
-  it('reports a missing contract version', () => {
-    const result = parseVocabulary(fixture.replace('Contract version: 1\n', ''))
+  it('reads a vocabulary without the contract version line as one that says no version', () => {
+    const markdown = fixture.replace('Contract version: 1\n\n', '')
 
-    expect(result.vocabulary.version).toBeUndefined()
-    expect(result.problems.map((problem) => problem.message)).toEqual([
-      'no "Contract version: N" line',
-    ])
+    expect(markdown).not.toContain('Contract version')
+    expect(parseVocabulary(markdown)).toMatchObject({
+      vocabulary: { version: undefined },
+      problems: [],
+    })
   })
   it('reports an empty mandatory cell by line, and leaves the Playwright cell optional', () => {
     const markdown = fixture

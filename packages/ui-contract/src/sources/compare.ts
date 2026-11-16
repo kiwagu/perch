@@ -144,13 +144,7 @@ export function compareWithContract(
       .map(({ code, line }) => at({ file, line }, `"${code}" is not a code of ${VOCABULARY_FILE}`)),
   )
 
-  const optOuts = optOutProblems({
-    collected,
-    contract,
-    inScreens,
-    rendered: new Set(first.keys()),
-    ahead: options.ahead === true,
-  })
+  const optOuts = optOutProblems({ collected, contract })
 
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
