@@ -3,10 +3,12 @@
  * derives it from version 4: each platform action's `mail.link: { screen, search }` gives every
  * route of that screen the parameter `search`, from the platform value of that name. A route's
  * written property of that name goes when it holds what the value does (`type`, `enum`, bounds,
- * `pattern`), and a `search` left as the bare wrapper the loader creates goes with it. A property
- * that holds something else would change the screen's constraint, so it stays and is named; so is
- * a mail whose `search` names no platform value a route can take. A description, examples and the
- * key a property wrote are the platform value's and the loader's from then on.
+ * `pattern`) and writes nothing the derived one lacks, and a `search` left as the bare wrapper the
+ * loader creates goes with it. A property that holds something else would change the screen's
+ * constraint, and one that writes a `default` or the controls of its page would lose what the
+ * route does with a missing value or which control sets it, so it stays and is named; so is a mail
+ * whose `search` names no platform value a route can take. A description, examples and the key a
+ * property wrote are the platform value's and the loader's from then on.
  */
 
 import type { Document } from 'yaml'
@@ -18,6 +20,9 @@ import { fileOf, type Plain, plainOf, type ScreenDocuments } from './screens'
 
 /** What a property and the value it is derived from must say alike for the derived one to replace it. */
 const CONSTRAINTS = ['type', 'enum', 'minLength', 'maxLength', 'pattern', 'minimum', 'maximum']
+
+/** What a written property says that the derived one says too: the constraints, the description and the examples. */
+const CARRIED = new Set([...CONSTRAINTS, 'description', 'examples'])
 
 /** What a `search` holds when the loader created it for the parameters alone. */
 const WRAPPER = new Set(['type', 'properties', 'additionalProperties'])
@@ -61,6 +66,14 @@ function parametersOf(platform: Document): {
   return { byScreen, manual }
 }
 
+/** What a written property says that the derived one does not: a `default`, the controls of its page. */
+const extrasOf = (property: Plain): string[] => [
+  ...Object.keys(property).filter((key) => key !== 'x-perch' && !CARRIED.has(key)),
+  ...Object.keys(recordOf(property['x-perch']))
+    .filter((key) => key !== 'key')
+    .map((key) => `x-perch.${key}`),
+]
+
 /** Whether `search` is what the loader creates for the parameters alone, once none is left. */
 const isWrapperOf = (search: Plain, left: number): boolean =>
   left === 0 &&
@@ -81,17 +94,28 @@ function dropFromRoute(
 
   for (const [name, { action, value }] of parameters) {
     const property = written[name]
-    const differs = CONSTRAINTS.filter((key) => !sameValue(recordOf(property)[key], value[key]))
 
     if (property === undefined) {
       continue
     }
 
-    if (differs.length === 0) {
+    const differs = CONSTRAINTS.filter((key) => !sameValue(recordOf(property)[key], value[key]))
+    const extras = extrasOf(recordOf(property))
+    const where = `${at.file}: bindings[${at.index}].search.properties.${name}`
+
+    if (differs.length === 0 && extras.length === 0) {
       dropped.push(name)
-    } else {
+    }
+
+    if (differs.length > 0) {
       manual.push(
-        `${at.file}: bindings[${at.index}].search.properties.${name}: it differs from the platform value "${name}" that the mail of ${action} derives it from, in ${differs.join(', ')}: make them agree and drop it by hand`,
+        `${where}: it differs from the platform value "${name}" that the mail of ${action} derives it from, in ${differs.join(', ')}: make them agree and drop it by hand`,
+      )
+    }
+
+    if (extras.length > 0) {
+      manual.push(
+        `${where}: it writes ${extras.join(', ')}, which the parameter the mail of ${action} derives from the platform value "${name}" does not carry${extras.includes('default') ? " (a screen's key has no default)" : ''}: decide by hand, then drop it`,
       )
     }
   }

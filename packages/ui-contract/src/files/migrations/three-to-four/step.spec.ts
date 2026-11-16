@@ -163,6 +163,27 @@ describe('the migration from version 3 to 4', () => {
 
     expect(asLoaded(moved)).toEqual(asLoaded(written))
   })
+  it('keeps a landing parameter that writes a default, names it, and moves the rest on', () => {
+    const root = repository()
+    const landing = read(root, LANDING_FILE).replace(
+      '          maxLength: 4096\n',
+      '          maxLength: 4096\n          default: none\n',
+    )
+
+    writeFileSync(join(root, LANDING_FILE), landing)
+
+    const { steps } = migrate(root, { write: true })
+
+    expect(steps.flatMap(({ manual }) => manual)).toEqual([
+      `${LANDING_FILE}: bindings[0].search.properties.token: it writes default, which the parameter the mail of invite derives from the platform value "token" does not carry (a screen's key has no default): decide by hand, then drop it`,
+      KEY_BY_HAND,
+    ])
+    expect(read(root, LANDING_FILE)).toBe(landing)
+    expect(read(root, ACCOUNT_FILE)).not.toContain('visibility-button')
+    expect(loadContract(root).problems.map(formatProblem)).toEqual([
+      `${LANDING_FILE}:1: bindings[0].search.properties.token: derived from the mail link of the platform action "invite"; leave it out`,
+    ])
+  })
   it('names a screen with a password pair it cannot tell, and leaves its guards, the rest of the screen moving on', () => {
     const root = repository()
     const unclear = read(root, ACCOUNT_FILE).replace('    composite: password-rules\n', '')

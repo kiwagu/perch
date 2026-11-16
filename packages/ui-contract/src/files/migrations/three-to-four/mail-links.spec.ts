@@ -118,6 +118,43 @@ describe('dropMailLinkSearch', () => {
       text: landingWith(stricter),
     })
   })
+  it('keeps a parameter that writes a default, which the derived one lacks, and names it', () => {
+    const defaulted = bindingWith(`${TOKEN}          default: none\n`)
+
+    expect(dropped(landingWith(defaulted))).toEqual({
+      manual: [
+        'contract/domain/screens/landing.yaml: bindings[0].search.properties.token: it writes default, which the parameter the mail of invite derives from the platform value "token" does not carry (a screen\'s key has no default): decide by hand, then drop it',
+      ],
+      text: landingWith(defaulted),
+    })
+  })
+  it('keeps a parameter that writes the controls of its page, and names each', () => {
+    const controlled = bindingWith(
+      `${TOKEN}          x-perch: { control: sample.landing.page, key: link-invalid, values: { a: { control: sample.landing.page } } }\n`,
+    )
+    const { manual, text } = dropped(landingWith(controlled))
+
+    expect(manual).toEqual([
+      'contract/domain/screens/landing.yaml: bindings[0].search.properties.token: it writes x-perch.control, x-perch.values, which the parameter the mail of invite derives from the platform value "token" does not carry: decide by hand, then drop it',
+    ])
+    expect(text).toBe(landingWith(controlled))
+  })
+  it('names what differs and what it writes beyond the value, each once, in the one parameter', () => {
+    const both = bindingWith(
+      `${TOKEN.replace('minLength: 1', 'minLength: 8')}          default: none\n`,
+    )
+
+    expect(dropped(landingWith(both)).manual).toHaveLength(2)
+    expect(dropped(landingWith(both)).text).toBe(landingWith(both))
+  })
+  it('drops a parameter whose only x-perch is the key, the loader deriving it', () => {
+    const keyed = bindingWith(`${TOKEN}          x-perch: { key: link-invalid }\n`)
+
+    expect(dropped(landingWith(keyed))).toEqual({
+      manual: [],
+      text: landingWith(WITHOUT_SEARCH),
+    })
+  })
   it('leaves a screen no mail links to, and one that names no parameter', () => {
     const elsewhere = landingWith(bindingWith(TOKEN)).replace('sample.landing', 'sample.other')
     const bare = landingWith(WITHOUT_SEARCH)

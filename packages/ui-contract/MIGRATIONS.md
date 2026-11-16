@@ -75,15 +75,17 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   a secret input's `visibility-button`, the two answers of a dialog or a confirmation (a
   `derived` left empty goes with its key). From a link: the `roles` that admit what its route's
   admit, where the loader derives them. From the routes of a screen a mail links to: the
-  parameter that mail names, when it holds what the platform value does, and the `search` it
-  leaves empty. On a screen whose flow declares the guards of a password pair and that holds
-  exactly one secret input with a composite and exactly one other secret input with no binding:
-  `confirms: <the input with the composite>` on the second, and the four guards gone. A second
-  run finds nothing to do.
+  parameter that mail names, when it holds what the platform value does and writes nothing the
+  derived one lacks, and the `search` it leaves empty. On a screen whose flow declares the guards
+  of a password pair and that holds exactly one secret input with a composite and exactly one
+  other secret input with no binding: `confirms: <the input with the composite>` on the second,
+  and the four guards gone. A second run finds nothing to do.
 - What is left by hand: what it cannot decide, each named with its file. A select's `dataValue`
   that is not `true`. A screen that declares the pair's guards and has no one confirmation to
   tell, or one of the four names that is not a sentence: write `confirms` on the confirmation and
   drop the guards. A mail's parameter that differs from the platform value's (the type, `enum`,
-  bounds or `pattern`), or whose `search` names no value a route can take. And always: write
+  bounds or `pattern`), or that writes a `default` or the controls of its page (`x-perch.control`,
+  `x-perch.values`), which the derived parameter lacks and a screen's key may not have: decide
+  by hand, then drop it. A mail whose `search` names no value a route can take. And always: write
   `x-perch.key: <code>` on a search parameter that is the screen's key, where no `mail.link`
   derives it.
