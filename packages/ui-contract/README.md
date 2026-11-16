@@ -23,7 +23,8 @@ for Bun.
   - Loaders of the contract files and of the scenarios, each returning problems
     (`file:line: message` through `formatProblem`): `parseVocabulary(markdown)` (the closed
     lists of `contract/vocabulary.md`, one `## ` section each, `VOCABULARY_SECTIONS`; a
-    vocabulary without its "Composites" section reads as an empty table),
+    vocabulary without its "Composites" section reads as an empty table, and its
+    `Contract version: N` line is read when there is one),
     `loadScreens(root)` (every `.yaml` file under `contract/domain/screens`, sorted by path, one screen
     each: what it leaves out derived from the model and the platform (`files/derive/`: the
     anchors of the platform's composites its secret inputs opt into with `composite: <name>`,
@@ -185,7 +186,9 @@ for Bun.
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
     scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
     sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
-    a function of the `Contract`: `versionProblems`, `vocabularyProblems` (every word of the
+    a function of the `Contract`: `versionProblems` (the version `platform.yaml` declares is
+    one this engine reads, at most `CONTRACT_VERSION`; at version 1 the vocabulary's
+    `Contract version` line is there and equal, from version 2 it is refused), `vocabularyProblems` (every word of the
     screens is in the vocabulary, every derived suffix ends with a kind of it, every code is
     used, no choice values for a
     `visibility-button`, whose values its suffix defines, the platform's composites and the
@@ -301,6 +304,26 @@ for Bun.
     past it is a problem at its line, `<path>: the description of <place> is <n> characters,
     past its budget of 200; its purpose: "<the purpose of its field>"`). A problem of an activity
     or a scenario is at the line of the deepest part of its path the file holds.
+  - Editions (`check/editions.ts`): a contract is read by the version its `platform.yaml`
+    declares, `editionOf(contract)`, and a rule a version brings applies from that version on,
+    `since(contract, N)` (the contract is at N or later), so a contract at an older version loads
+    and checks as before: a rule of version N starts with `if (!since(contract, N)) return []`.
+    `outdatedProblem(contract)`: a contract older than `CONTRACT_VERSION`, named with the command
+    that moves it, or undefined.
+  - Migrations (`files/migrations/`, written up in `MIGRATIONS.md`): `migrate(root, { write,
+    migrations?, current? })` runs each `Migration` (`from`, `note`, and `run(files)`, which
+    edits the `MigrationFiles` in place, the platform and the screen files as YAML documents and
+    the vocabulary as text, and returns the work left by hand) from the declared version up to
+    `current`, `CONTRACT_VERSION` by default, from `migrations`, the registry `MIGRATIONS` (one per
+    version, ordered by `from`) by default, setting `version` after each step; it returns the
+    `MigrationReport` (`from`, `to`, and per step its `from`, `note`, the files it changed and the
+    work by hand) and, with `write`, writes the files the steps changed, each document into the
+    text it was read from (`files/write-yaml-document/`): only the nodes a step edited change (a
+    scalar in place, a pair or an item by its lines, a flow collection whose parts changed as a
+    whole), every other byte stays as written. A contract newer than `current`, a platform file
+    without a version, a file that is not YAML and a version no migration reads throw.
+    `parseYamlDocument(text)`: the `yaml` package's `Document` of a text, its comments, the style
+    of every node and its range in the text kept.
   - `anchorCarries(contract)`: whether an anchor carries a code, a state or a value
     (`Carried`): one it declares or one an anchor under it, `<anchor>.<rest>`, declares (the
     items of a composite's list, the options of a select, the eye of an input). Codes are the
@@ -541,7 +564,8 @@ for Bun.
   `<list>.size-select.option`), `isSizeOption(anchor, paged)` (whether an anchor names those of
   one of the paged lists) and `isKnownAnchor(anchor, declared, suffixes, paged)` (a declared
   anchor, a declared base with a suffix, or a paged list's size options, as the engine's
-  `knownAnchors` tells them); `CONTRACT_VERSION`.
+  `knownAnchors` tells them); `CONTRACT_VERSION`, the newest version of the contract format the
+  engine reads.
   `isUnder(anchor, other)`: `other` is `anchor` or an anchor under it (`<anchor>.<rest>`);
   `partOf(anchor)`, the part it sits in (the anchor without its last segment);
   `CONTROL_KINDS`, the kinds a person acts on (a button, a link, a tab and the `FIELD_KINDS`),
@@ -603,16 +627,25 @@ for Bun.
 - `bun run test`: the anchor grammar, the loaders, the reader of the written descriptions, the
   scenario parser and formatter, the schema writer, the references, the contract check, the
   sources check, the consumers check, the coverage-ignore markers, the manifest, the hand-over
-  diff, the coverage note, the routes view, and the walk and comparison of machines.
+  diff, the coverage note, the routes view, the editions and the migrations, and the walk and
+  comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
   from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
-  other, every written description against its budget and the schema drift; prints
-  `file:line: message` per problem and exits 1, or a one-line summary; part of `bun run check`
-  and the pre-commit hook).
+  other, by the rules of the version the contract declares, every written description against
+  its budget and the schema drift; prints `file:line: message` per problem and exits 1, or a
+  one-line summary, followed for a contract older than the engine by
+  `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;
+  part of `bun run check` and the pre-commit hook). `ui-contract check --current` fails on such a
+  contract instead.
+- From the root: `bun run contract:migrate` (`ui-contract migrate [--write]`: each step from the
+  version the contract declares to the engine's, `<n> -> <n+1>: <note>`, with the files it
+  changes and the work it leaves by hand, `by hand: <work>`; `--write` rewrites those files,
+  the text outside the nodes a step edits unchanged, and a second run finds nothing to do).
+  Not part of `bun run check`: the check never migrates.
 - From the root: `bun run contract:check:sources` (`ui-contract check --sources`: the
   contract check, then the anchors and codes of `apps/web/src` and `packages/ui/src`
   against the contract; prints `file:line: message` per problem and exits 1, or

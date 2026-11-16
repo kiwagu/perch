@@ -114,8 +114,10 @@ The authored files, edited by hand or by a model in the modeling thread:
   prefix of its anchors, not its file name. The loader reads the folder sorted by path; a
   file that is not `.yaml`, or one named otherwise than its first binding says, is a problem
   of that file.
-- `domain/platform.yaml`: the contract version, which equals the vocabulary's `Contract version`
-  line and the tooling's `CONTRACT_VERSION`, and the platform section: the actions every
+- `domain/platform.yaml`: the contract version, said there once, the version of the format the
+  files are written in and the engine reads them by, at most the tooling's `CONTRACT_VERSION`
+  (only a contract at version 1 repeats it, in the vocabulary's `Contract version` line), and
+  the platform section: the actions every
   screen may run (signing up, in and out, organisations, devices), the events it raises
   in a flow (the local data opened, or could not be), `leaving`, the actions whose run
   leaves what the user typed behind, `unsavedInput`, how every leave that would lose it asks
@@ -1425,7 +1427,8 @@ gap is fixed in the contract files first, never worked around in a test.
   above it (its own `roles`, those of each anchor it is declared under, and its screen's, the
   frame aside) admits a device by the roles it holds together, so one restriction naming only
   roles the route serves is enough, wherever it sits on the chain, and the binding at `/$` names
-  `guest` and `identity` (see "Roles"); the versions agree; the generated schemas
+  `guest` and `identity` (see "Roles"); the version is one the tooling reads, which the
+  vocabulary repeats at version 1 alone; the generated schemas
   equal their Zod sources; every activity agrees with the screens it visits (see
   "Activities"); every bracket reference of a scenario resolves, each code, state or value
   one the anchor named last before it in its text carries (see "Scenarios"), the activity it
@@ -1493,6 +1496,10 @@ gap is fixed in the contract files first, never worked around in a test.
   `${}` or held in a name is a runtime anchor and a problem, while a code, a state or a value
   from an expression is a parameter of the test and passes. A helper such as
   `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
+
+`bun run contract:migrate` moves a contract at an older version to the tooling's, step by step
+(`--write` rewrites the files; `packages/ui-contract/MIGRATIONS.md` says what each version
+changed); `contract:check` passes an older contract and names it in one line.
 
 Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in
 `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook

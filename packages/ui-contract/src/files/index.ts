@@ -40,6 +40,14 @@ export {
   transitionsOf,
 } from './flow-nodes'
 export {
+  MIGRATIONS,
+  type Migration,
+  type MigrationFiles,
+  type MigrationReport,
+  type MigrationStep,
+  migrate,
+} from './migrations'
+export {
   loadModel,
   type Model,
   type ModelAction,
@@ -76,6 +84,7 @@ export {
 } from './problems'
 export { readJson } from './read-json'
 export { parseYaml } from './read-yaml'
+export { parseYamlDocument } from './read-yaml-document'
 export { loadScenarios } from './scenarios'
 export { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 export {

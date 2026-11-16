@@ -55,9 +55,10 @@
       "type": "object",
       "properties": {
         "version": {
-          "type": "number",
-          "const": 1,
-          "description": "The version of the contract format."
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The version of the contract format the contract declares."
         },
         "idAttribute": {
           "type": "string",

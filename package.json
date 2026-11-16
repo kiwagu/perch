@@ -29,6 +29,7 @@
     "contract:coverage:check": "ui-contract coverage --check",
     "contract:routes": "ui-contract routes",
     "contract:flow": "ui-contract flow",
+    "contract:migrate": "ui-contract migrate",
     "load": "mcproc exec -- bun apps/gateway/scripts/load/ws-clients.ts",
     "perf:measure": "mcproc exec --memory 3G --exclusive e2e --note perf -- bun tests/e2e/scripts/perf-measure.ts",
     "seed": "mcproc exec -- bun seed/src/cli.ts",

@@ -16,6 +16,7 @@ export {
   own,
 } from './contract'
 export { descriptionsProblems } from './descriptions'
+export { editionOf, since } from './editions'
 export { fieldStatesOf, showsStoredValue } from './field-states'
 export {
   type DeepTarget,
@@ -47,5 +48,5 @@ export { screensProblems } from './screens'
 export { searchProblems } from './search'
 export { toastsProblems } from './toasts'
 export { unsavedInputProblems } from './unsaved-input'
-export { versionProblems } from './version'
+export { outdatedProblem, versionProblems } from './version'
 export { vocabularyProblems } from './vocabulary'

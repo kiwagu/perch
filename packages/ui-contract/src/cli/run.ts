@@ -1,13 +1,19 @@
 /**
  * The contract tooling, run from the repository root.
  *
- *   ui-contract check [--sources [--ahead]] [--consumers [--tests=<dir>]]
+ *   ui-contract check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]
  *     checks the contract files under `contract/` (the activities included, and every
  *     description they write against its budget) and the scenario files under
- *     `tests/e2e/scenarios/` against each other; with `--sources`, then the anchors and codes
- *     of the web app and the UI kit against them (with `--ahead`, an anchor declared but not
- *     rendered yet is allowed: the contract runs ahead of the app on a branch); with `--consumers`, then the anchors, codes,
+ *     `tests/e2e/scenarios/` against each other, by the rules of the version the contract
+ *     declares (a version older than this engine's is said in one line; with `--current`, it
+ *     is a problem); with `--sources`, then the anchors and codes of the web app and the UI kit
+ *     against them (with `--ahead`, an anchor declared but not rendered yet is allowed: the
+ *     contract runs ahead of the app on a branch); with `--consumers`, then the anchors, codes,
  *     states and values the e2e tests under `tests/e2e/src` (or `<dir>`) name as literals.
+ *   ui-contract migrate [--write]
+ *     prints each step that moves the contract from the version `platform.yaml` declares to
+ *     the one this engine reads, `N -> N+1: <note>` with the files it changes and the work it
+ *     leaves by hand; with `--write`, rewrites those files.
  *   ui-contract schemas
  *     writes the JSON Schemas of the contract files under `contract/` from their Zod sources.
  *   ui-contract schemas --check
@@ -51,6 +57,7 @@ import { coverage } from './coverage'
 import { diff } from './diff'
 import { flow } from './flow'
 import { manifest } from './manifest'
+import { migrate } from './migrate'
 import { routes } from './routes'
 import { schemas } from './schemas'
 
@@ -60,6 +67,8 @@ function dispatch(argv: readonly string[]): number {
   switch (command) {
     case 'check':
       return check(rest)
+    case 'migrate':
+      return migrate(rest)
     case 'schemas':
       return schemas(rest)
     case 'manifest':
@@ -74,7 +83,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--sources [--ahead]] [--consumers [--tests=<dir>]]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

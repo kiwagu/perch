@@ -65,7 +65,7 @@ describe('checkContract', () => {
     expect(printed()).toEqual([
       'contract/domain/activities/thing.yaml:1: its id is "things", so its file is contract/domain/activities/things.yaml',
       'contract/domain/model.schema.json:1: cannot read the file',
-      'contract/domain/platform.yaml:1: version: Invalid input: expected 1',
+      'contract/domain/platform.yaml:1: version: Invalid input: expected number, received string',
       'contract/vocabulary.md:1: missing section "Kinds"',
       'contract/vocabulary.md:9: unknown section "Kind list"',
       'contract/vocabulary.md:77: section "Roles" appears twice',

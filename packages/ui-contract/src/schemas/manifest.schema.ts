@@ -58,7 +58,7 @@ const instructionsSchema = z
 
 const contractSchema = z
   .strictObject({
-    version: z.literal(1).describe('The version of the contract format.'),
+    version: z.int().min(1).describe('The version of the contract format the contract declares.'),
     idAttribute: z.literal('data-testid').describe('The attribute that carries an anchor.'),
     idPattern: z.string().min(1).describe('The regular expression every rendered anchor matches.'),
     kinds: tableOf(kebabNameSchema, 'What an element of the kind is.', 'The kinds of anchors.'),
