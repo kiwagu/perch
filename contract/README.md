@@ -558,8 +558,9 @@ vocabulary's closed table, and code builds it only with `testIdFor(base, suffix)
 `@workspace/ui-contract/anchors`.
 
 `visibility-button`, the eye a password input renders beside itself, is the one derived part
-that is presentation only: a secret `input` alone lists it in `derived`, and it is never an
-event of a flow ([the rule](REFERENCE.md#rule-visibility-button),
+that is presentation only: a secret `input` alone has it, derived from version 4
+([the rule](REFERENCE.md#rule-kind-parts); a file of version 3 or below may list it in `derived`),
+and it is never an event of a flow ([the rule](REFERENCE.md#rule-visibility-button),
 [`secret`](REFERENCE.md#screen-anchors-name-secret)). A paged list's `range`, `previous-link`,
 `next-link` and `size-select` are derived by the loader and never written
 ([the rule](REFERENCE.md#rule-paged-list)).

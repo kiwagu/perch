@@ -112,9 +112,10 @@ code and the tests follow; the checks hold them to the contract.
    `holdsInput={false}` (`contract/REFERENCE.md#rule-field-holds-input`); a field whose state
    colour the contract turns off (`marksState: false`) carries `marksState={false}`, never a
    form (`contract/REFERENCE.md#screen-anchors-name-marksstate`);
-   a field that holds a secret says `secret: true` and may list `derived: [ visibility-button ]`
-   (`contract/REFERENCE.md#rule-visibility-button`; `references/patterns.md`, "A password
-   input's eye").
+   a field that holds a secret says `secret: true`, and the loader derives its `visibility-button`
+   from version 4 (a file of version 3 or below may list `derived: [ visibility-button ]`;
+   `contract/REFERENCE.md#rule-kind-parts`, `contract/REFERENCE.md#rule-visibility-button`;
+   `references/patterns.md`, "A password input's eye").
    A new screen follows the checklist in `references/checklists.md`.
 5. **The scenario.** Write or change the file
    `tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md` from the contract alone, with
