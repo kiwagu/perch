@@ -4,12 +4,14 @@
  * so every route of that screen has that parameter, built from the platform value of the same
  * name: its type, bounds, enum, description and examples. It is the screen's key, `x-perch.key`
  * (the rule `address-key`), with the first of the `codes` of the parameter that the first action
- * the screen runs with it takes it into (`search-takers.ts`): a token missing or broken is that
- * failure; a parameter without `codes`, or an action of the model, gives no key. Two mails that
- * link to one screen with one name give it once. From version 4 a screen file never writes the
- * parameter, and a mail whose `search` names no value of the platform, or one a route cannot take
- * (no type, or a format), is a problem on its link. Before version 4 nothing is derived and a file
- * writes the parameter as before.
+ * the screen runs with it takes it into, the action of its initial state before any other
+ * (`search-takers.ts`): a token missing or broken is that failure; a parameter without `codes`,
+ * or an action of the model, gives no key. Two mails that link to one screen with one name give it
+ * once. No control of the page sets it, so the check wants none for its enum values
+ * (`mailSearchesOf`). From version 4 a screen file never writes the parameter, and a mail whose
+ * `search` names no value of the platform, or one a route cannot take (no type, or a format), is a
+ * problem on its link. Before version 4 nothing is derived and a file writes the parameter as
+ * before.
  */
 
 import { PLATFORM_FILE } from '../paths'
@@ -67,6 +69,25 @@ function parameterOf(search: string, value: PlatformValue | undefined): Paramete
     description: value.description,
     ...(examples.length === 0 ? {} : { examples }),
   }
+}
+
+/**
+ * The search parameters of the screen `screenId` that the loader derives from the mails linking
+ * to it: none before version 4, when a file writes them. No control of the page sets one, a link
+ * carries it, so what the check wants of the controls of a route's parameters does not reach it.
+ */
+export function mailSearchesOf(
+  platform: PlatformSource,
+  screenId: string,
+  edition: number,
+): ReadonlySet<string> {
+  return new Set(
+    edition < MAIL_LINK_EDITION
+      ? []
+      : Object.values(platform.actions).flatMap(({ mail }) =>
+          mail?.link.screen === screenId ? [mail.link.search] : [],
+        ),
+  )
 }
 
 /** The first of the codes of the parameter that the first action `screen` runs with `name` takes it into. */

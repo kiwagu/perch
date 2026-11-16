@@ -324,6 +324,48 @@ describe('withDerivedMailLinks', () => {
 
       expect(tokenOf([landing({ flow })], platform)).toEqual(WRITTEN)
     })
+    /** A flow that starts in `opening`, which the file writes last, after `states` that take the token too. */
+    const openingLast = (...states: readonly string[]) => ({
+      initial: 'opening',
+      states: {
+        ...Object.fromEntries(
+          states.map((src) => [
+            src,
+            {
+              invoke: {
+                src: `platform.${src}`,
+                input: { token: { search: 'token' } },
+                onDone: { target: 'done' },
+              },
+            },
+          ]),
+        ),
+        opening: {
+          invoke: {
+            src: 'platform.open',
+            input: { token: { search: 'token' } },
+            onDone: { target: 'done' },
+          },
+        },
+        done: { type: 'final' },
+      },
+    })
+
+    it('comes from the action of the initial state, not from one written before it with other codes', () => {
+      const platform = platformOf({ late: opening(['link-expired']) })
+
+      expect(tokenOf([landing({ flow: openingLast('late') })], platform)).toEqual(DERIVED)
+    })
+    it('is not lost to an action written before the initial state whose parameter lists no codes', () => {
+      const platform = platformOf({ late: opening() })
+
+      expect(tokenOf([landing({ flow: openingLast('late') })], platform)).toEqual(DERIVED)
+    })
+    it('is none when the action of the initial state lists no codes, however another written before it does', () => {
+      const platform = platformOf({ open: opening(), late: opening(['link-expired']) })
+
+      expect(tokenOf([landing({ flow: openingLast('late') })], platform)).toEqual(WRITTEN)
+    })
     it('comes from an invoke of the flow before a source of a list', () => {
       const platform = platformOf({
         read: {

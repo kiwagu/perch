@@ -20,6 +20,7 @@ export {
   type FieldCodeSuffix,
   failuresOf,
   isBare,
+  mailSearchesOf,
   ownControlsOf,
   type Request,
   requestsOf,

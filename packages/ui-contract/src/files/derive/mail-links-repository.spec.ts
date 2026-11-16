@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { checkContract, keyProblems, parameterSample } from '../../check'
 import { contractAt } from '../../manifest/manifest.fixture'
+import { PLATFORM_FILE } from '../paths'
 import { formatProblem } from '../problems'
 import { loadScreens } from '../screens'
 
@@ -19,6 +20,36 @@ function repositoryAt(version: number, written: boolean): string {
 
   roots.push(root)
   writeMailLinkRepository(root, version, written)
+
+  return root
+}
+
+/** `file` of the repository `root`, its `text` changed by `change`. */
+function rewrite(root: string, file: string, change: (text: string) => string): void {
+  writeFileSync(join(root, file), change(readFileSync(join(root, file), 'utf8')))
+}
+
+/**
+ * The version 4 sample whose token is a value that takes `a` or `b` alone, and whose landing, when
+ * `tab` is true, also writes a page choice of the same two values with no control.
+ */
+function enumRepository(tab: boolean): string {
+  const root = repositoryAt(4, false)
+
+  rewrite(root, PLATFORM_FILE, (text) =>
+    text
+      .replace('    minLength: 1\n    maxLength: 4096\n', '    enum: [ a, b ]\n')
+      .replace('examples: [ token-0123456789abcdef ]', 'examples: [ a ]'),
+  )
+
+  if (tab) {
+    rewrite(root, LANDING_FILE, (text) =>
+      text.replace(
+        '    roles: [ guest, identity ]\n',
+        '    roles: [ guest, identity ]\n    search:\n      type: object\n      properties:\n        tab: { type: string, enum: [ a, b ] }\n      additionalProperties: false\n',
+      ),
+    )
+  }
 
   return root
 }
@@ -63,6 +94,17 @@ describe('a screen a mail links to, on a repository', () => {
     expect(token === undefined ? undefined : parameterSample(token, 'search')).toBe(
       'token-0123456789abcdef',
     )
+  })
+  it('wants no control for the enum of a parameter a mail derives, and still one for a page choice beside it', () => {
+    const contract = contractAt(enumRepository(false))
+    const landing = contract.screens.screens.find(({ id }) => id === 'sample.landing')
+
+    expect(landing?.bindings[0]?.search?.properties['token']).toMatchObject({ enum: ['a', 'b'] })
+    expect(checkContract(enumRepository(false)).map(formatProblem)).toEqual([])
+    expect(checkContract(enumRepository(true)).map(({ message }) => message)).toEqual([
+      'bindings[0].search.properties.tab: the enum value "a" has no control under x-perch.values',
+      'bindings[0].search.properties.tab: the enum value "b" has no control under x-perch.values',
+    ])
   })
   it('refuses at version 4 the parameter the file still writes', () => {
     const problems = checkContract(repositoryAt(4, true)).map(formatProblem)
