@@ -23,6 +23,13 @@
  *     with its schema and the model's beside it, into `<dir>` (default `ui-manifest`,
  *     relative to the working directory; its last segment is `ui-manifest`). Runs from the
  *     root or any folder under it.
+ *   ui-contract emit values|fields --out <file>
+ *     writes the module of plain data a layer below the contract reads into `<file>`, relative
+ *     to the working directory: `values`, every value of the platform and every field of the
+ *     model as the contract resolves it (`CONTRACT_VALUES`); `fields`, what the element of each
+ *     field carries that the contract decides (`FIELD_FACTS`). The caller names the file; a
+ *     contract that fails the contract check is not emitted. Runs from the root or any folder
+ *     under it.
  *   ui-contract diff <ref> [--json]
  *     prints what the contract of the working tree adds, removes and renames against the
  *     contract at the git ref `<ref>` (all of it as added when the ref has no `contract/`),
@@ -61,6 +68,7 @@
 import { check } from './check'
 import { coverage } from './coverage'
 import { diff } from './diff'
+import { emit } from './emit'
 import { flow } from './flow'
 import { inflight } from './inflight'
 import { manifest } from './manifest'
@@ -80,6 +88,8 @@ function dispatch(argv: readonly string[]): number {
       return schemas(rest)
     case 'manifest':
       return manifest(rest)
+    case 'emit':
+      return emit(rest)
     case 'diff':
       return diff(rest)
     case 'inflight':
@@ -92,7 +102,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "emit values|fields --out <file>", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

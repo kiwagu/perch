@@ -206,6 +206,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     manifest (any `SettledContract`; `contract/REFERENCE.md#rule-settled-state`), an element's
     `with` and `without` and a list with no entries among them
     (`contract/REFERENCE.md#rule-with-without`, `contract/REFERENCE.md#rule-empty-list`).
+  - The emitted modules (`emit/`): `valuesModuleOf(contract)` is the text of a module of plain
+    data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
+    contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
+    element of each field carries that the contract decides, by its anchor
+    (`contract/REFERENCE.md#rule-emitted-modules`).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
     the `ContractChanges` (`contract/REFERENCE.md#rule-contract-diff`), among them the lines of a
@@ -275,8 +280,8 @@ links to as `contract/REFERENCE.md#<slug>`.
 - `bun run test`: the anchor grammar, the loaders, the reader of the written descriptions, the
   scenario parser and formatter, the schema writer, the reference, the references, the
   contract check, the sources check, the consumers check, the coverage-ignore markers, the
-  manifest, the hand-over diff, the coverage note, the routes view, the editions and the
-  migrations, and the walk and comparison of machines.
+  manifest, the emitted modules, the hand-over diff, the coverage note, the routes view, the
+  editions and the migrations, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
@@ -317,6 +322,12 @@ links to as `contract/REFERENCE.md#<slug>`.
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
+- `ui-contract emit values|fields --out <file>`, from the root or any folder under it: writes
+  the module of plain data `CONTRACT_VALUES` or `FIELD_FACTS` into `<file>`, relative to the
+  working directory, which the caller always names; prints the problems and exits 1, writing
+  nothing, when the contract check finds any. From the root, `bun run contract:emit`
+  (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of
+  `bun run check`.
 - From the root: `bun run contract:diff <ref>` (`ui-contract diff <ref> [--json]`: what the
   contract of the working tree adds, removes and renames against the contract at the git ref
   `<ref>`, all of it as added when that commit has no `contract/`, the composites, the derived

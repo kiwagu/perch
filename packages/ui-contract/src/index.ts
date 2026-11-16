@@ -82,6 +82,7 @@ export {
   RUNTIME_TEST_ANCHOR,
   scanConsumers,
 } from './consumers'
+export { fieldFactsModuleOf, valuesModuleOf } from './emit'
 export {
   ACCOUNT,
   ACTIVITIES_DIR,

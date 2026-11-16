@@ -5242,6 +5242,17 @@ Beside these, an anchor of the screen that says when it shows is held to its ent
 
 Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.anchors.<name>.roles`](#screen-anchors-name-roles), [`screen.anchors.<name>.own`](#screen-anchors-name-own), [`screen.anchors.<name>.with`](#screen-anchors-name-with), [`screen.anchors.<name>.without`](#screen-anchors-name-without).
 
+### The modules the engine emits for the layers below the contract
+
+<a id="rule-emitted-modules"></a>
+The engine emits modules of plain data for the layers below the contract (a server, a database schema, an app's kit) to read what the contract says of a value or a field instead of restating it. `ui-contract emit values --out <file>` and `ui-contract emit fields --out <file>` write one from the contract of the working tree, run from the root or any folder under it, into the file the caller names, relative to the folder it runs from: the engine knows no package and writes nowhere by default. A module is `export const <NAME> = { ... } as const` under a `GENERATED` header, with no import and no function, its entries sorted by their key, one key per line and the same text on every run, so a changed limit is a one-line diff (`valuesModuleOf(contract)`, `fieldFactsModuleOf(contract)`). As with the manifest, a contract that fails the contract check is not emitted: its problems are printed and nothing is written. `bun run contract:emit` (`turbo run emit`) runs the `emit` script of every package that keeps one.
+
+`CONTRACT_VALUES` holds every value of `platform.values` by its name and every field of the model as `<entity>.<field>`, each as `resolveValue` gives it: its keywords (`type`, `enum`, `minLength`, `maxLength`, `pattern`, `format`, `minimum`, `maximum`, `readOnly`), each length resolved, so a value that takes the default length carries it and one that writes `maxLength: null` carries none (see the rule `declared-values`). `FIELD_FACTS` holds, by anchor, what the element of a field carries that the contract decides: `maxLength`, the limit of a text field's value (`fieldValueOf`) unless the value is read-only; `type: "email"`, on an input that holds no secret and whose value has `format: email`, a read-only one included (see the rule `email-format`); `marksState: false`, where the field writes it; and `holdsInput: false`, on a field that holds no input (see the rule `field-holds-input`) and on the size select a paged list derives. A field none of these concerns has no entry.
+
+An emitted module is implementation: it is committed in the package that reads it and never in a business commit, which stages the business layer alone (see the rules `trunk-commits` and `take-form`), so the implementation that follows a change of the contract emits it again on its area branch. A package that commits one holds it with a spec of its own to what the engine emits for the contract of the working tree, or, while the contract runs ahead of the app (`CONTRACT_AHEAD`), for the contract at `CONTRACT_AHEAD_BASE` or `CONTRACT_AHEAD_HEAD` (`contractAt`), as the app's machines may lag their flows (see the rule `ahead-mode`); `turbo.json` passes those variables to the unit tests of `@workspace/kernel`, `@workspace/gateway` and `@workspace/database`, as it does to the web app's.
+
+Keys it concerns: [`platform.defaults`](#platform-defaults), [`platform.values`](#platform-values).
+
 ### What contract:diff lists of a change
 
 <a id="rule-contract-diff"></a>

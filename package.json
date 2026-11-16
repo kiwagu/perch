@@ -24,6 +24,7 @@
     "contract:check:sources:ahead": "ui-contract check --sources --ahead",
     "contract:check:consumers": "ui-contract check --consumers",
     "contract:manifest": "ui-contract manifest",
+    "contract:emit": "turbo run emit",
     "contract:diff": "ui-contract diff",
     "contract:inflight": "ui-contract inflight",
     "contract:coverage": "ui-contract coverage",
