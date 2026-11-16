@@ -210,7 +210,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
     element of each field carries that the contract decides, by its anchor
-    (`contract/REFERENCE.md#rule-emitted-modules`).
+    (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
+    is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
     the `ContractChanges` (`contract/REFERENCE.md#rule-contract-diff`), among them the lines of a
@@ -274,6 +275,14 @@ links to as `contract/REFERENCE.md#<slug>`.
   `projected(config)`, `beyondTheSubset(config)`, `aheadOf(app, flow)` and
   `laggingOf(app, flow, base)`, which a branch uses while a business commit runs ahead of the
   implementation (`contract/REFERENCE.md#rule-flow-run`, `contract/REFERENCE.md#rule-ahead-mode`).
+- `./testing`: what a package's specs take from the engine, never the code that runs in an app or
+  a server. `heldModule({ committed, emit, root, env })` gives the text the module `committed`
+  must equal: what `emit` (`valuesModuleOf`, `fieldFactsModuleOf`) makes of the contract of the
+  repository at `root` now, or, with `CONTRACT_AHEAD=1` in `env`, `committed` itself when it is
+  what `emit` made of the contract at `CONTRACT_AHEAD_BASE` or `CONTRACT_AHEAD_HEAD`; a module
+  equal to none is held to the contract now, so the spec asserts
+  `expect(committed).toBe(heldModule({ committed, emit, root, env: process.env }))`
+  (`contract/REFERENCE.md#rule-emitted-modules`).
 
 ## Commands
 
