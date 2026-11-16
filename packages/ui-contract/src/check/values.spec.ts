@@ -123,6 +123,40 @@ describe('valueProblems and the keywords written beside a value', () => {
   })
 })
 
+describe('valueProblems and the numeric bounds of a field of the model', () => {
+  /** The sample whose `thing` has a rank from 1 to 10, and sign-out's parameter. */
+  function ranked(parameter: Record<string, unknown>): Contract {
+    const contract = withParameter(parameter)
+    const thing = contract.model.entities['thing']
+
+    if (thing === undefined) {
+      throw new Error('the sample has no thing')
+    }
+
+    thing.fields['rank'] = {
+      type: 'integer',
+      minimum: 1,
+      maximum: 10,
+      readonly: false,
+      crdt: 'none',
+    }
+
+    return contract
+  }
+
+  it('passes bounds that narrow the field, and refuses a maximum or a minimum that widens it', () => {
+    expect(valueProblems(ranked({ value: 'thing.rank', minimum: 2, maximum: 5 }))).toEqual([])
+    expect(
+      valueProblems(ranked({ value: 'thing.rank', minimum: 0, maximum: 100 })).map(
+        ({ message }) => message,
+      ),
+    ).toEqual([
+      `${PARAM}.minimum: 0 does not narrow the value "thing.rank", whose minimum is 1: a keyword written beside \`value\` may only narrow it`,
+      `${PARAM}.maximum: 100 does not narrow the value "thing.rank", whose maximum is 10: a keyword written beside \`value\` may only narrow it`,
+    ])
+  })
+})
+
 const PLATFORM = {
   actions: {},
   reserved: ['app-shell.status'],

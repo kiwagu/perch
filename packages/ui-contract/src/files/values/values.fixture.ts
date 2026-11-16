@@ -45,6 +45,7 @@ export const PLATFORM: Platform = {
         email: { value: 'email', description: 'The email of the new account.' },
         password: { value: 'new-password', description: 'The password of the new account.' },
         name: { value: 'profile.name', description: 'The name of its profile.' },
+        age: { value: 'profile.age', maximum: 120, description: 'The age of its owner.' },
       },
       result: 'the account is created',
       codes: ['failed'],
@@ -75,11 +76,14 @@ export const MODEL: Model = {
       table: 'profile',
       region: 'private',
       id: 'prf',
-      actions: { updateProfile: { params: { id: '$id', name: 'name' }, changes: [] } },
+      actions: {
+        updateProfile: { params: { id: '$id', name: 'name', age: 'age' }, changes: [] },
+      },
       unique: [],
       index: [],
       fields: {
         name: { type: 'string', minLength: 1, maxLength: 80, readonly: false, crdt: 'text' },
+        age: { type: 'integer', minimum: 13, maximum: 130, readonly: false, crdt: 'none' },
         email: { type: 'string', format: 'email', readonly: true },
         created_at: { type: 'string', format: 'date-time', readonly: true },
         theme: { enum: ['light', 'dark'], readonly: false, crdt: 'none' },

@@ -54,7 +54,7 @@ export const valueRefSchema = z
   .string()
   .regex(/^([a-z][a-z0-9-]*|[a-z_]+\.[a-z_]+)$/)
   .describe(
-    'The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`.',
+    'The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`.',
   )
 
 export const resolvedValueSchema = z

@@ -14,6 +14,13 @@ describe('resolveValue', () => {
       maxLength: 80,
     })
   })
+  it('resolves a numeric field of the model to its type and both its bounds', () => {
+    expect(resolveValue('profile.age', PLATFORM, MODEL)).toStrictEqual({
+      type: 'integer',
+      minimum: 13,
+      maximum: 130,
+    })
+  })
   it('marks a read-only field of the model readOnly', () => {
     expect(resolveValue('profile.email', PLATFORM, MODEL)).toStrictEqual({
       type: 'string',
@@ -35,7 +42,7 @@ describe('resolveValue', () => {
     expect(resolveValue('profile.open', PLATFORM, MODEL)).toStrictEqual({})
   })
   it('is undefined for a ref that names no value and no field', () => {
-    for (const ref of ['phone', 'profile.age', 'team.name']) {
+    for (const ref of ['phone', 'profile.height', 'team.name']) {
       expect(resolveValue(ref, PLATFORM, MODEL), ref).toBeUndefined()
     }
     expect(resolveValue('profile.name', PLATFORM, undefined)).toBeUndefined()
@@ -76,6 +83,18 @@ describe('parameterValueOf', () => {
   it('gives a parameter with neither a value nor a constraint its type alone', () => {
     expect(parameterValueOf('platform.sign-in', 'remember', PLATFORM, MODEL)).toEqual({
       type: 'boolean',
+    })
+  })
+  it('keeps the numeric bounds of a field of the model, for a model action and a platform reference', () => {
+    expect(parameterValueOf('profile.updateProfile', 'age', PLATFORM, MODEL)).toStrictEqual({
+      type: 'integer',
+      minimum: 13,
+      maximum: 130,
+    })
+    expect(parameterValueOf('platform.sign-up', 'age', PLATFORM, MODEL)).toStrictEqual({
+      type: 'integer',
+      minimum: 13,
+      maximum: 120,
     })
   })
   it('gives a parameter of an action of the model the value of the field it sets', () => {

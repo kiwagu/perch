@@ -1,8 +1,8 @@
 /**
  * The value a ref names, and the value a parameter takes. A ref names a value of
- * `platform.values` by its name, or a field of the model as `<entity>.<field>`: the constraints
- * its JSON Schema writes, a format no value names left out, `readOnly` where the field is
- * `x-perch.readonly`. A parameter of a platform action takes the value it refers to narrowed by
+ * `platform.values` by its name, or a field of the model as `<entity>.<field>`: the keywords of
+ * its JSON Schema a value has (its type, enum, lengths, pattern, format and numeric bounds), a
+ * format no value names left out, `readOnly` where the field is `x-perch.readonly`. A parameter of a platform action takes the value it refers to narrowed by
  * each keyword it writes beside it (`narrowed`: one that would widen it is left out, and refused
  * by the check), a paged action's `size` the action's sizes as its `enum`, and a parameter that
  * refers to nothing its own keywords, its type alone at least; a parameter of an action of the
@@ -34,7 +34,7 @@ const isMember = (value: unknown): value is string | number =>
 
 /** The value of a field of the model: its constraints, an enum of other members left out whole. */
 function modelValueOf(field: ModelField): ResolvedValue {
-  const { type, enum: values, minLength, maxLength, pattern, format, readonly } = field
+  const { type, enum: values, minLength, maxLength, pattern, format, minimum, maximum } = field
 
   return keywordsOf({
     type,
@@ -43,7 +43,9 @@ function modelValueOf(field: ModelField): ResolvedValue {
     maxLength,
     pattern,
     format: isValueFormat(format) ? format : undefined,
-    readOnly: readonly ? true : undefined,
+    minimum,
+    maximum,
+    readOnly: field.readonly ? true : undefined,
   })
 }
 
