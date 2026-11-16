@@ -5,6 +5,7 @@ export {
   useFormScope,
   useMarksState,
 } from './form-scope'
+export { useHoldsInput } from './holds-input'
 export {
   type UnsavedFields,
   type UnsavedInputChannel,
