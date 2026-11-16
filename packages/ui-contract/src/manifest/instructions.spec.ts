@@ -87,7 +87,7 @@ describe('instructionsOf', () => {
       'A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event',
     )
     expect(instructions.screenMap).toContain(
-      "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid)",
+      "`fields` (an error's codes, each with the field it concerns, which the error shows under and marks invalid; every other code shows beside the controls of its part, rule `error-placement`)",
     )
   })
   it("says a password input's visibility-button is presentation only, held by the input itself", () => {

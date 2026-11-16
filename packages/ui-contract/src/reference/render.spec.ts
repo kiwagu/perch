@@ -228,6 +228,12 @@ describe('renderReference', () => {
     expect(home?.heading.endsWith(`${facet}\``)).toBe(true)
     expect(home?.text.length ?? 0).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
   })
+  it('says where an error shows each code, and the fields key names that rule', () => {
+    expect(entryAt('rule-error-placement')?.text).toContain('shows beside the controls of its part')
+    expect(entryAt(referenceSlug('screen', 'anchors', '<name>', 'fields'))?.text).toContain(
+      'error-placement',
+    )
+  })
   it('gives each rule an id of its own', () => {
     const ids = REFERENCE_RULES.map(({ id }) => id)
 

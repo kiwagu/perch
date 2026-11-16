@@ -91,11 +91,19 @@ const emptyCell: ReferenceRule = {
   keys: [],
 }
 
-/** The rules of what a state renders, and of when an element shows beside others. */
+const errorPlacement: ReferenceRule = {
+  id: 'error-placement',
+  title: 'Where an error shows each code',
+  text: 'An error shows each code it carries in its own element: a code its `fields` maps to a field shows under that field and marks it invalid; a code mapped to `form`, or not mapped, shows beside the controls of its part (`<part>.*`), or alone where the part has none.',
+  keys: ['screen.anchors.<name>.fields', 'screen.anchors.<name>.codes'],
+}
+
+/** The rules of what a state renders, of when an element shows beside others, and where an error shows. */
 export const RENDER_RULES: readonly ReferenceRule[] = [
   stateRenders,
   renderSets,
   withWithout,
   emptyList,
   emptyCell,
+  errorPlacement,
 ]

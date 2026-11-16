@@ -1180,7 +1180,7 @@
                   "const": true
                 },
                 "fields": {
-                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form.",
+                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).",
                   "type": "object",
                   "propertyNames": {
                     "type": "string",
