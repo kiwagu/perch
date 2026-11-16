@@ -86,6 +86,13 @@ describe('checkContract', () => {
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])
   })
+  it('holds each link of a guide into the reference to an anchor of it', () => {
+    writeFileSync(join(root, 'contract/README.md'), '# Guide\n\n[x](contract/REFERENCE.md#gone)\n')
+
+    expect(printed()).toEqual([
+      'contract/README.md:3: links to contract/REFERENCE.md#gone, which is no anchor of the reference',
+    ])
+  })
   it('holds the activities to the screens they visit', () => {
     edit(activityFile(ACTIVITY), (text) => lastReplaced(text, '/sample/$key', '/sample/$other'))
 

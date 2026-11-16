@@ -1,4 +1,5 @@
 export { referenceDrift } from './drift'
+export { referenceLinkProblems } from './links'
 export { renderReference } from './render'
 export type { ReferenceRule } from './rule'
 export { INSTRUCTION_RULES, REFERENCE_RULES } from './rules'

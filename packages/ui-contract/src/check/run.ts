@@ -1,7 +1,7 @@
 /**
  * The contract check: loads the contract files, the activities and the scenarios (stopping at
- * their own problems), then runs every cross-check, the schema drift and the reference's drift,
- * and returns the problems sorted by file and line.
+ * their own problems), then runs every cross-check, the schema drift, the reference's drift and the
+ * links of the guides into it, and returns the problems sorted by file and line.
  */
 
 import { readFileSync } from 'node:fs'
@@ -19,7 +19,7 @@ import {
   sortProblems,
   VOCABULARY_FILE,
 } from '../files'
-import { referenceDrift } from '../reference'
+import { referenceDrift, referenceLinkProblems } from '../reference'
 
 import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
@@ -133,5 +133,6 @@ export function checkContract(root: string): Problem[] {
     ...RULES.flatMap((rule) => rule(contract)),
     ...schemaDrift(root),
     ...referenceDrift(root),
+    ...referenceLinkProblems(root),
   ])
 }
