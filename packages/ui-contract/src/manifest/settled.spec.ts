@@ -54,8 +54,12 @@ const CONTRACT: SettledContract = {
       derived: ['confirm-button', 'cancel-button'],
     },
     'x.y.mode-select': { screen: 'x.y', kind: 'select', derived: ['option', 'toggle-button'] },
-    'x.y.rule-list': { screen: 'x.y', kind: 'list' },
-    'x.y.rule-list.length-item': { screen: 'x.y', kind: 'item' },
+    'x.y.rule-list': { screen: 'x.y', kind: 'list', derivedFrom: { composite: 'password-rules' } },
+    'x.y.rule-list.length-item': {
+      screen: 'x.y',
+      kind: 'item',
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    },
     'x.y.form': { screen: 'x.y', kind: 'form', roles: ['member'] },
     'x.y.form.key-input': { screen: 'x.y', kind: 'input' },
     'x.y.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
@@ -406,5 +410,119 @@ describe('a settled state held to what its elements show with and without', () =
     expect(onPage(ids, [shown('x.y.notes.list'), shown('x.y.notes.item')])).toEqual([])
     expect(onPage(ids, [hidden('x.y.notes.list')])).toEqual([])
     expect(onPage(ids, [shown('x.y.users.list'), shown('x.y.sent.list')])).toEqual([])
+  })
+})
+
+/** A flow whose open state lists elements whose own rules may keep them off the page. */
+const OPENING = {
+  initial: 'open',
+  states: {
+    open: {
+      meta: {
+        renders: [
+          'x.y.later-button',
+          'x.y.leave-dialog',
+          'x.y.ban-button',
+          'x.y.reason-cell',
+          'x.y.notes.list',
+          'x.y.page-list',
+        ],
+      },
+    },
+    shut: {},
+  },
+}
+
+const OPEN: SettledContract['ids'] = {
+  'x.y.heading': { screen: 'x.y', kind: 'heading' },
+  'x.y.later-button': { screen: 'x.y', kind: 'button', with: ['x.y.heading'] },
+  'x.y.leave-dialog': {
+    screen: 'x.y',
+    kind: 'dialog',
+    with: ['x.y.heading'],
+    derived: ['confirm-button', 'cancel-button'],
+  },
+  'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+  'x.y.ban-button': { screen: 'x.y', kind: 'button', without: ['x.y.banned-badge'] },
+  'x.y.reason-cell': { screen: 'x.y', kind: 'cell' },
+  'x.y.notes.list': { screen: 'x.y', kind: 'list' },
+  'x.y.notes.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+  'x.y.page-list': {
+    screen: 'x.y',
+    kind: 'list',
+    derived: ['range', 'previous-link', 'next-link', 'size-select'],
+  },
+}
+
+/** The problems of a page of `x.y` in its open state. */
+const whileOpen = (anchors: RenderedAnchor[]) =>
+  settledProblems({ screens: [{ id: 'x.y', flow: OPENING }], ids: OPEN }, settled('open', anchors))
+
+/** Every element the open state lists, on the page and visible, with what it shows with. */
+const ALL_OPEN = [
+  shown('x.y.heading'),
+  shown('x.y.later-button'),
+  shown('x.y.leave-dialog'),
+  shown('x.y.leave-dialog.confirm-button'),
+  shown('x.y.leave-dialog.cancel-button'),
+  shown('x.y.ban-button'),
+  shown('x.y.reason-cell'),
+  shown('x.y.notes.list'),
+  shown('x.y.notes.item'),
+  shown('x.y.page-list'),
+  shown('x.y.page-list.size-select'),
+]
+
+const others = (...left: string[]) => ALL_OPEN.filter(({ anchor }) => !left.includes(anchor))
+
+describe('a state that renders an element whose own rule may keep it off the page', () => {
+  it('passes the page that shows everything the state lists', () => {
+    expect(whileOpen(ALL_OPEN)).toEqual([])
+  })
+
+  it('lets a listed element and its parts stay away while a with entry does not show', () => {
+    expect(
+      whileOpen(
+        others(
+          'x.y.heading',
+          'x.y.later-button',
+          'x.y.leave-dialog',
+          'x.y.leave-dialog.confirm-button',
+          'x.y.leave-dialog.cancel-button',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  it('lets a listed element stay away while a without entry shows', () => {
+    expect(whileOpen([...others('x.y.ban-button'), shown('x.y.banned-badge')])).toEqual([])
+  })
+
+  it('lets a listed cell stay away: a cell with no value is not rendered', () => {
+    expect(whileOpen(others('x.y.reason-cell'))).toEqual([])
+  })
+
+  it('lets a listed list whose entries come from data, and its parts, stay away', () => {
+    expect(
+      whileOpen(
+        others('x.y.notes.list', 'x.y.notes.item', 'x.y.page-list', 'x.y.page-list.size-select'),
+      ),
+    ).toEqual([])
+  })
+
+  it('still wants a listed element its entries let show, and the parts of a shown base', () => {
+    expect(
+      whileOpen(others('x.y.later-button', 'x.y.ban-button', 'x.y.page-list.size-select')),
+    ).toEqual([
+      'x.y in open: "x.y.later-button" is not on the page, but the state renders it',
+      'x.y in open: "x.y.ban-button" is not on the page, but the state renders it',
+      'x.y in open: "x.y.page-list.size-select" is not on the page, but the state renders it',
+    ])
+    expect(
+      whileOpen([
+        ...others('x.y.leave-dialog.cancel-button'),
+        hidden('x.y.leave-dialog.cancel-button'),
+      ]),
+    ).toEqual(['x.y in open: "x.y.leave-dialog.cancel-button" is hidden, but the state renders it'])
   })
 })

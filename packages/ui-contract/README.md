@@ -236,8 +236,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     `FIELD_KINDS`), `ENTRY_KINDS`, `containersOf(entry, anchors)`, `inPartOf(entry, control)`,
     `entryOf(anchor, anchors)` (the entry an anchor is rendered in) and `itemIdOf(control, item)`
     (`contract/REFERENCE.md#rule-entries-of-a-list`).
-  - When an element shows beside others: `WithEntry`, `entryAnchorOf(entry)` and
-    `entryCodesOf(entry)` (`contract/REFERENCE.md#rule-with-without`).
+  - When an element shows beside others: `WithEntry`, `entryAnchorOf(entry)`,
+    `entryCodesOf(entry)`, and on a page as the helper reads it `entryShowsOn(entry, anchors)` and
+    `entriesShowOn(element, anchors)` (`ShowsWith`) (`contract/REFERENCE.md#rule-with-without`).
   - The roles a device holds: `GUEST`, `IDENTITY`, `heldRoles(signedIn, others)` and
     `admits(roles, held)` (`contract/REFERENCE.md#rule-roles`).
   - A paged list: `PAGE`, `SIZE`, `PAGING_PARTS` (`RANGE`, `PREVIOUS_LINK`, `NEXT_LINK`,

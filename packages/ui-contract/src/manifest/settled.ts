@@ -4,21 +4,23 @@
  * Only the anchors of the screen that render only where listed are held, with their derived
  * parts; those every state renders are not. Rendered means visible to the user: an anchor the
  * state does not render is not visible, absent from the page or hidden on it; one it renders is
- * on the page and visible, unless data decides whether it shows (an anchor with `roles` or
- * `own`, an entry of a list, `dataId`, or an anchor nested under one of these), where only the
- * first holds. A derived part the page shows on demand is held to the first only as well. An
- * anchor of the screen that says when it shows (`with`, `without`), unless it is rendered in each
- * entry of a list, is held to its entries (`withShownProblems`), and a visible list to having an
- * entry (`emptyListProblems`).
+ * on the page and visible, unless something besides the state decides whether it shows
+ * (`decidedBesidesState`: data, or its own rule or that of an anchor it is under, not visible),
+ * where only the first holds. A derived part the page shows on demand is held to the first only
+ * as well. An anchor of the screen that says when it shows (`with`, `without`), unless it is
+ * rendered in each entry of a list, is held to its entries (`withShownProblems`), and a visible
+ * list to having an entry (`emptyListProblems`).
  */
 
 import {
   CONTROL_KINDS,
   containersOf,
   ENTRY_KINDS,
+  entriesShowOn,
   entryAnchorOf,
   entryCodesOf,
   entryOf,
+  entryShowsOn,
   isListed,
   isRendered,
   isUnder,
@@ -43,7 +45,16 @@ export interface SettledContract {
       string,
       Pick<
         Manifest['ids'][string],
-        'screen' | 'kind' | 'derived' | 'roles' | 'own' | 'dataId' | 'states' | 'with' | 'without'
+        | 'screen'
+        | 'kind'
+        | 'derived'
+        | 'roles'
+        | 'own'
+        | 'dataId'
+        | 'states'
+        | 'with'
+        | 'without'
+        | 'derivedFrom'
       >
     >
   >
@@ -94,12 +105,6 @@ const screenOf = (contract: SettledContract, anchor: string): string | undefined
     undefined,
   )?.[1]
 
-/** Whether data decides if `anchor` shows: it or what it is under has roles, own or a data-id. */
-const decidedByData = (contract: SettledContract, anchor: string): boolean =>
-  declaredOver(contract, anchor).some(
-    ([, { roles, own, dataId }]) => roles !== undefined || own === true || dataId !== undefined,
-  )
-
 /** The anchors of `screen` a page shows with their base: each declared one, then its parts. */
 const anchorsOf = (contract: SettledContract, screen: string): string[] =>
   Object.entries(contract.ids)
@@ -108,6 +113,9 @@ const anchorsOf = (contract: SettledContract, screen: string): string[] =>
       anchor,
       ...(derived ?? []).filter((suffix) => !ON_DEMAND.has(suffix)).map((s) => `${anchor}.${s}`),
     ])
+
+/** One declared anchor, as the check reads it. */
+type SettledId = SettledContract['ids'][string]
 
 /** What a settled state's page is held to: the contract, the screen, what the state renders. */
 interface SettledPage {
@@ -131,34 +139,58 @@ const entryText = (entry: WithEntry): string => {
 }
 
 /**
- * Whether `entry` renders on the page: its anchor visible and, for a code entry, showing one of
- * its codes; undefined when the page does not say (a report without codes, the anchor visible).
+ * Whether the own rule of `name` may keep it off a page whose state renders it: a cell, shown
+ * with a value; a list whose entries come from data (any but a composite's), shown with one,
+ * unless its states show it waiting or empty; an anchor whose `with` and `without` do not say it
+ * shows on the page, or that is rendered in each entry of a list, which the report does not tell
+ * apart.
  */
-function entryShows(entry: WithEntry, anchors: readonly RenderedAnchor[]): boolean | undefined {
-  const codes = entryCodesOf(entry)
-  const visible = anchors.filter(
-    ({ anchor, visible: seen }) => seen && anchor === entryAnchorOf(entry),
-  )
-
-  if (visible.length === 0 || codes === undefined) {
-    return visible.length > 0
-  }
-  if (visible.some(({ code }) => code !== undefined && codes.includes(code))) {
+function mayStayAway({ contract, anchors }: SettledPage, name: string, def: SettledId): boolean {
+  if (def.kind === 'cell') {
     return true
   }
+  if (def.kind === 'list') {
+    return (
+      def.derivedFrom === undefined &&
+      !(def.states ?? []).some((state) => WAITING_OR_EMPTY.has(state))
+    )
+  }
 
-  return visible.every(({ code }) => code !== undefined) ? false : undefined
+  return (
+    (def.with !== undefined || def.without !== undefined) &&
+    (entryOf(name, idsOf(contract, def.screen)) !== undefined || !entriesShowOn(def, anchors))
+  )
+}
+
+/**
+ * Whether something besides its state decides if `anchor` shows, so a state that renders it does
+ * not require it on the page: data (`roles`, `own` or a `dataId` on it or on an anchor it is
+ * nested under), or the rule of it, or of an anchor it is nested under or derived from, that may
+ * keep that anchor away (`mayStayAway`) while it is not visible; the parts of a base that shows
+ * follow their base.
+ */
+function decidedBesidesState(page: SettledPage, anchor: string): boolean {
+  return declaredOver(page.contract, anchor).some(
+    ([name, def]) =>
+      def.roles !== undefined ||
+      def.own === true ||
+      def.dataId !== undefined ||
+      (mayStayAway(page, name, def) &&
+        !page.anchors.some((each) => each.anchor === name && each.visible)),
+  )
 }
 
 /**
  * Each anchor of the screen with `with` or `without`, unless it is rendered in each entry of a
  * list, which the report does not tell apart: visible only while each `with` entry renders and
- * no `without` entry does. A control the state renders and data does not decide is visible once
- * each `with` entry renders, one at least, and no `without` entry does; any other element shows
- * by its own data too (a cell its value, a list its entries, a message its code), and without a
+ * no `without` entry does. A control no state lists, which nothing besides its state decides, is
+ * visible once each `with` entry renders, one at least, and no `without` entry does (a listed one
+ * is held by the states that render it, which consult its entries); any other element shows by
+ * its own data too (a cell its value, a list its entries, a message its code), and without a
  * `with` entry nothing on the page says the area that holds it is shown.
  */
-function withShownProblems({ contract, screen, at, anchors, where }: SettledPage): string[] {
+function withShownProblems(page: SettledPage): string[] {
+  const { contract, screen, at, anchors, where } = page
   const ids = idsOf(contract, screen)
 
   return Object.entries(ids)
@@ -173,13 +205,13 @@ function withShownProblems({ contract, screen, at, anchors, where }: SettledPage
       if (anchors.some((each) => each.anchor === anchor && each.visible)) {
         return [
           ...withs
-            .filter((entry) => entryShows(entry, anchors) === false)
+            .filter((entry) => entryShowsOn(entry, anchors) === false)
             .map(
               (entry) =>
                 `${where}: "${anchor}" is visible, but ${entryText(entry)} does not show: it shows only with it`,
             ),
           ...withouts
-            .filter((entry) => entryShows(entry, anchors) === true)
+            .filter((entry) => entryShowsOn(entry, anchors) === true)
             .map(
               (entry) =>
                 `${where}: "${anchor}" is visible, but ${entryText(entry)} shows: it shows only without it`,
@@ -187,12 +219,9 @@ function withShownProblems({ contract, screen, at, anchors, where }: SettledPage
         ]
       }
 
-      const shows =
-        withs.length > 0 &&
-        withs.every((entry) => entryShows(entry, anchors) === true) &&
-        withouts.every((entry) => entryShows(entry, anchors) === false)
+      const shows = withs.length > 0 && entriesShowOn(def, anchors)
       const held =
-        CONTROL_KINDS.has(def.kind) && isRendered(at, anchor) && !decidedByData(contract, anchor)
+        CONTROL_KINDS.has(def.kind) && !isListed(at, anchor) && !decidedBesidesState(page, anchor)
 
       return shows && held
         ? [
@@ -247,10 +276,11 @@ export function settledProblems(contract: SettledContract, settled: SettledState
     .filter((anchor) => screenOf(contract, anchor) === settled.screen && !isRendered(at, anchor))
     .map((anchor) => `${where}: "${anchor}" is visible, but the state does not render it`)
 
+  const page = { contract, screen: settled.screen, at, anchors, where }
   const unshown = anchorsOf(contract, settled.screen)
     .filter(
       (anchor) =>
-        isListed(at, anchor) && isRendered(at, anchor) && !decidedByData(contract, anchor),
+        isListed(at, anchor) && isRendered(at, anchor) && !decidedBesidesState(page, anchor),
     )
     .flatMap((anchor) => {
       const elements = anchors.filter((each) => each.anchor === anchor)
@@ -263,8 +293,6 @@ export function settledProblems(contract: SettledContract, settled: SettledState
         ? []
         : [`${where}: "${anchor}" is hidden, but the state renders it`]
     })
-
-  const page = { contract, screen: settled.screen, at, anchors, where }
 
   return [...unrendered, ...unshown, ...withShownProblems(page), ...emptyListProblems(page)]
 }
