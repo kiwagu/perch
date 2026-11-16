@@ -235,7 +235,7 @@ What the route parameter means. Its type, bounds, default and examples say the r
 ### `bindings.search.properties.<name>.x-perch`
 
 <a id="screen-bindings-search-properties-name-x-perch"></a>
-The controls of the page that set the parameter.
+The controls of the page that set the parameter, and whether it is the screen's key.
 
 ### `bindings.search.properties.<name>.x-perch.control`
 
@@ -266,6 +266,11 @@ The data-value of that control which chooses this value.
 
 <a id="screen-bindings-search-properties-name-x-perch-values-name-note"></a>
 Anything a reader needs to know about the value.
+
+### `bindings.search.properties.<name>.x-perch.key`
+
+<a id="screen-bindings-search-properties-name-x-perch-key"></a>
+Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.
 
 ### `bindings.search.required`
 
@@ -2106,7 +2111,7 @@ What the route parameter means. Its type, bounds, default and examples say the r
 ### `screens.bindings.search.properties.<name>.x-perch`
 
 <a id="manifest-screens-bindings-search-properties-name-x-perch"></a>
-The controls of the page that set the parameter.
+The controls of the page that set the parameter, and whether it is the screen's key.
 
 ### `screens.bindings.search.properties.<name>.x-perch.control`
 
@@ -2137,6 +2142,11 @@ The data-value of that control which chooses this value.
 
 <a id="manifest-screens-bindings-search-properties-name-x-perch-values-name-note"></a>
 Anything a reader needs to know about the value.
+
+### `screens.bindings.search.properties.<name>.x-perch.key`
+
+<a id="manifest-screens-bindings-search-properties-name-x-perch-key"></a>
+Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.
 
 ### `screens.bindings.search.required`
 
@@ -4513,6 +4523,13 @@ The read after a success is mandatory where the action may change what a list sh
 Every action, of the platform or of the model, writes its `changes`: each name of it is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once, `[]` for none. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `contract:diff` lists the reads each action of the model comes to change or stops changing, as `model action lines added in <entity>.<action>: changes <read>`.
 
 Keys it concerns: [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.on.<name>.read`](#screen-flow-states-name-on-name-read), [`screen.flow.states.<name>.invoke.read`](#screen-flow-states-name-invoke-read), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
+
+### The key of an address
+
+<a id="rule-address-key"></a>
+A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared.
+
+Keys it concerns: [`screen.bindings.search.properties.<name>.x-perch.key`](#screen-bindings-search-properties-name-x-perch-key).
 
 ### A paged list
 

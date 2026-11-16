@@ -4,11 +4,13 @@
  * `pattern`) and its `examples` (fake values for the route's example link; the contract
  * check holds each one to the parameter), optionally tied to the control that sets it
  * (`x-perch.control`) and, per enum value, to the control and the `data-value` that choose it.
+ * A search parameter may also be the screen's key (`x-perch.key`), which a path parameter never
+ * is: an action takes a value of the address as `{ search: <name> }` alone.
  */
 
 import { z } from '@workspace/zod'
 
-import { anchorSchema } from '../names.schema'
+import { anchorSchema, codeSchema } from '../names.schema'
 
 import { DESCRIPTION_PURPOSES } from './description-purposes'
 
@@ -27,15 +29,29 @@ const valueControlSchema = z
   })
   .describe('How a page sets one enum value of the parameter.')
 
+/** The keys of `x-perch` every route parameter may write: the controls that set it. */
+const controlKeys = {
+  control: anchorSchema.optional().describe('The anchor of the control that sets the parameter.'),
+  values: z
+    .record(z.string(), valueControlSchema)
+    .optional()
+    .describe('Per enum value, the control that chooses it.'),
+}
+
 const parameterControlSchema = z
-  .strictObject({
-    control: anchorSchema.optional().describe('The anchor of the control that sets the parameter.'),
-    values: z
-      .record(z.string(), valueControlSchema)
-      .optional()
-      .describe('Per enum value, the control that chooses it.'),
-  })
+  .strictObject(controlKeys)
   .describe('The controls of the page that set the parameter.')
+
+const searchControlSchema = z
+  .strictObject({
+    ...controlKeys,
+    key: codeSchema
+      .optional()
+      .describe(
+        "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+      ),
+  })
+  .describe("The controls of the page that set the parameter, and whether it is the screen's key.")
 
 /**
  * The keywords of a flat parameter that say what values it takes, the one shape every schema of a
@@ -64,21 +80,34 @@ export const parameterKeywords = {
     .describe('A regular expression (ECMA-262) every value of a string matches.'),
 }
 
+const parameterFields = {
+  ...parameterKeywords,
+  description: z.string().optional().describe(DESCRIPTION_PURPOSES.parameter),
+}
+
 const parameterSchema = z
-  .strictObject({
-    ...parameterKeywords,
-    description: z.string().optional().describe(DESCRIPTION_PURPOSES.parameter),
-    'x-perch': parameterControlSchema.optional(),
-  })
+  .strictObject({ ...parameterFields, 'x-perch': parameterControlSchema.optional() })
   .describe('One flat parameter.')
 
-export const flatJsonSchema = z
-  .strictObject({
-    type: z.literal('object').describe('Always "object".'),
-    properties: z
-      .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), parameterSchema)
-      .describe('The parameters by name.'),
-    required: z.array(z.string()).optional().describe('The parameters the route needs.'),
-    additionalProperties: z.literal(false).describe('Always false: no other parameter.'),
-  })
-  .describe('A JSON Schema 2020-12 object of flat primitive parameters.')
+const searchParameterSchema = z
+  .strictObject({ ...parameterFields, 'x-perch': searchControlSchema.optional() })
+  .describe('One flat parameter.')
+
+/** A JSON Schema 2020-12 object whose parameters, by name, are each `parameter`. */
+const flatObjectOf = <Parameter extends z.ZodType>(parameter: Parameter) =>
+  z
+    .strictObject({
+      type: z.literal('object').describe('Always "object".'),
+      properties: z
+        .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), parameter)
+        .describe('The parameters by name.'),
+      required: z.array(z.string()).optional().describe('The parameters the route needs.'),
+      additionalProperties: z.literal(false).describe('Always false: no other parameter.'),
+    })
+    .describe('A JSON Schema 2020-12 object of flat primitive parameters.')
+
+/** A route's `params`, and any flat object of route parameters. */
+export const flatJsonSchema = flatObjectOf(parameterSchema)
+
+/** A route's `search`: its parameters may also name the screen's key. */
+export const searchJsonSchema = flatObjectOf(searchParameterSchema)

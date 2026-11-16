@@ -123,6 +123,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `bindingsProblems`, `searchProblems`, `routesProblems` with `parseRoutePath(path)` (the
       router's path syntax): model fields, actions and their params, routes and the search
       parameters (`contract/REFERENCE.md#rule-check-bindings`);
+    - `keyProblems`: the key of an address, a search parameter that writes `x-perch.key`: its code
+      one of an action the screen runs with it, whose parameter refers to a value, one key per
+      route, no `default` (`contract/REFERENCE.md#rule-address-key`);
     - `flowProblems` over the tree of a flow's states, with `flowNodes(flow)` (every state as a
       `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode`), `deepTargetOf`,
       `idTargetOf`, `rootOf`, `regionStartsOf` and `deepEnteredOf` (the parts of a `DeepTarget` and

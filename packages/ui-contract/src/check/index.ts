@@ -35,6 +35,7 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { keyProblems } from './keys'
 export { leavingProblems } from './leaving'
 export { mailsProblems } from './mails'
 export { noticesProblems, unknownNotice } from './notices'

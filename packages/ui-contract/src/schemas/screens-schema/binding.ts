@@ -3,7 +3,7 @@
 import { z } from '@workspace/zod'
 
 import { roleSchema } from '../../names.schema'
-import { flatJsonSchema } from '../flat-json-schema'
+import { flatJsonSchema, searchJsonSchema } from '../flat-json-schema'
 
 const SEGMENT =
   '([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)'
@@ -31,7 +31,7 @@ export const bindingSchema = z
         'The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other.',
       ),
     params: flatJsonSchema.optional().describe('The path parameters, as a flat JSON Schema.'),
-    search: flatJsonSchema.optional().describe('The search parameters, as a flat JSON Schema.'),
+    search: searchJsonSchema.optional().describe('The search parameters, as a flat JSON Schema.'),
     history: z
       .enum(['push', 'replace'])
       .default('push')

@@ -45,6 +45,7 @@ export {
   flowProblems,
   type IdTarget,
   idTargetOf,
+  keyProblems,
   loadContract,
   mailsProblems,
   noticesProblems,

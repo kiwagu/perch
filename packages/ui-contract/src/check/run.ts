@@ -30,6 +30,7 @@ import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
+import { keyProblems } from './keys'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
 import { noticesProblems } from './notices'
@@ -117,6 +118,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   valueProblems,
   attributionProblems,
   searchProblems,
+  keyProblems,
   mailsProblems,
   noticesProblems,
   changesProblems,

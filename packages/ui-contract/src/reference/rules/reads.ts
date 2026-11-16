@@ -1,6 +1,8 @@
 /**
  * The rules of what a list reads and when: the source of a list, the effect `read` that re-reads
- * it after an action, the opt-outs of a read and the reads an action holds.
+ * it after an action, the opt-outs of a read and the reads an action holds; and the key of an
+ * address, the search parameter whose missing value is a failure and whose new value starts the
+ * screen afresh.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -40,5 +42,12 @@ const readAfterAnAction: ReferenceRule = {
   ],
 }
 
-/** The rules of the reads of a list. */
-export const READ_RULES: readonly ReferenceRule[] = [listReads, readAfterAnAction]
+const addressKey: ReferenceRule = {
+  id: 'address-key',
+  title: 'The key of an address',
+  text: "A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared.",
+  keys: ['screen.bindings.search.properties.<name>.x-perch.key'],
+}
+
+/** The rules of the reads of a list, and the key of an address. */
+export const READ_RULES: readonly ReferenceRule[] = [listReads, readAfterAnAction, addressKey]

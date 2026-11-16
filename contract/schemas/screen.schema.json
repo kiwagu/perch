@@ -337,10 +337,15 @@
                             "additionalProperties": false,
                             "description": "How a page sets one enum value of the parameter."
                           }
+                        },
+                        "key": {
+                          "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                         }
                       },
                       "additionalProperties": false,
-                      "description": "The controls of the page that set the parameter."
+                      "description": "The controls of the page that set the parameter, and whether it is the screen's key."
                     }
                   },
                   "required": [
