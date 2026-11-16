@@ -1,6 +1,8 @@
 export { referenceDrift } from './drift'
 export { referenceLinkProblems } from './links'
+export { ruleIdsNamedIn } from './mentions'
 export { renderReference } from './render'
 export type { ReferenceRule } from './rule'
+export { ruleTextOf } from './rule-text'
 export { INSTRUCTION_RULES, REFERENCE_RULES } from './rules'
 export { referenceSlug } from './slug'

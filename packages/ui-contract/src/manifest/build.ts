@@ -9,7 +9,8 @@
  * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
  * description the engine says of it, and a text field the value it takes. The platform's values
  * and the model document are those the contract loads, each length resolved, and from version 6
- * the contract section names the default length they took.
+ * the contract section names the default length they took. Last, the text of each rule of the
+ * engine that the manifest or its schema names (`rulesOf`).
  */
 
 import {
@@ -43,6 +44,7 @@ import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
 import type { Manifest, Product } from './manifest.types'
+import { rulesOf } from './rules'
 
 /** The app state in which a test may start. */
 const READY = 'ready'
@@ -239,9 +241,9 @@ export function buildManifest({
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
-  return {
+  const document = {
     $schema: './manifest.schema.json',
-    manifestVersion: 1,
+    manifestVersion: 1 as const,
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
@@ -257,4 +259,6 @@ export function buildManifest({
     scenarios,
     model: model.document,
   }
+
+  return { ...document, rules: rulesOf(document) }
 }

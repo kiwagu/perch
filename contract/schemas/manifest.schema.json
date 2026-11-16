@@ -7917,6 +7917,35 @@
         "description": "A keyword of the model document."
       },
       "description": "`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`)."
+    },
+    "rules": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The title of the rule."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The rule as the reference writes it, ending with a line \"Keys it concerns\": its links point into the reference, which the manifest does not carry, so read each key by its name."
+          }
+        },
+        "required": [
+          "title",
+          "text"
+        ],
+        "additionalProperties": false,
+        "description": "One rule of the engine."
+      },
+      "description": "The rules of the engine that this manifest and its schema name, each under its id: wherever a description says \"see the rule\" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn."
     }
   },
   "required": [
@@ -7930,7 +7959,8 @@
     "platform",
     "activities",
     "scenarios",
-    "model"
+    "model",
+    "rules"
   ],
   "additionalProperties": false,
   "description": "The UI manifest: the contract of the application for tests and agents."

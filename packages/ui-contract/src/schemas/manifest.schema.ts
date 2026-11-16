@@ -6,7 +6,8 @@
  * each binding, every declared anchor with its screen (a field's composite opt-in and the
  * anchors a composite derives marked so, a text field with the value it takes), the platform, the
  * activities verbatim, the scenarios parsed and the model, the platform's values and the model's
- * fields with the default length taken, which the contract section names.
+ * fields with the default length taken, which the contract section names, and the text of each
+ * rule of the engine that the manifest or its schema names.
  */
 
 import { z } from '@workspace/zod'
@@ -301,6 +302,24 @@ export const manifestSchema = z
       .record(z.string(), z.unknown().describe('A keyword of the model document.'))
       .describe(
         '`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`).',
+      ),
+    rules: z
+      .record(
+        kebabNameSchema,
+        z
+          .strictObject({
+            title: z.string().min(1).describe('The title of the rule.'),
+            text: z
+              .string()
+              .min(1)
+              .describe(
+                'The rule as the reference writes it, ending with a line "Keys it concerns": its links point into the reference, which the manifest does not carry, so read each key by its name.',
+              ),
+          })
+          .describe('One rule of the engine.'),
+      )
+      .describe(
+        'The rules of the engine that this manifest and its schema name, each under its id: wherever a description says "see the rule" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn.',
       ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

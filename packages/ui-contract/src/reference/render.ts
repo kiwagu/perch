@@ -6,6 +6,7 @@
 
 import { type ReferenceSection, referenceSections } from './keys'
 import type { ReferenceRule } from './rule'
+import { ruleTextOf } from './rule-text'
 import { REFERENCE_RULES } from './rules'
 import { referenceSlug } from './slug'
 
@@ -28,13 +29,9 @@ const sectionOf = ({ file, description, keys }: ReferenceSection): string[] => [
   ),
 ]
 
-/** A rule's entry, with a link to each key it concerns. */
-function ruleOf({ id, title, text, keys }: ReferenceRule): string {
-  const written = entry(title, referenceSlug('rule', id), text)
-  const links = keys.map((key) => `[\`${key}\`](#${referenceSlug(key)})`)
-
-  return links.length === 0 ? written : `${written}\n\nKeys it concerns: ${links.join(', ')}.`
-}
+/** A rule's entry, its text ending with a link to each key it concerns (`ruleTextOf`). */
+const ruleOf = (rule: ReferenceRule): string =>
+  entry(rule.title, referenceSlug('rule', rule.id), ruleTextOf(rule))
 
 /** The text of `contract/REFERENCE.md`. */
 export function renderReference(): string {

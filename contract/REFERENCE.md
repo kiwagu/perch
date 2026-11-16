@@ -4328,6 +4328,26 @@ The expected results, with bracket references.
 <a id="manifest-model-name"></a>
 A keyword of the model document.
 
+### `rules`
+
+<a id="manifest-rules"></a>
+The rules of the engine that this manifest and its schema name, each under its id: wherever a description says "see the rule" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn.
+
+### `rules.<name>`
+
+<a id="manifest-rules-name"></a>
+One rule of the engine.
+
+### `rules.<name>.title`
+
+<a id="manifest-rules-name-title"></a>
+The title of the rule.
+
+### `rules.<name>.text`
+
+<a id="manifest-rules-name-text"></a>
+The rule as the reference writes it, ending with a line "Keys it concerns": its links point into the reference, which the manifest does not carry, so read each key by its name.
+
 ## Rules
 
 ### Anchors: the grammar and one literal per name
@@ -5214,7 +5234,7 @@ The check has limits. It sees a commit only where git runs the commit-msg hook f
 
 The web build writes it into `apps/web/dist/ui-manifest/` (`bun run build` runs `ui-contract manifest --out dist/ui-manifest` once Vite is done; the development watcher writes it into `apps/web/dist-dev/ui-manifest/` after every build, and a change of a contract file or of a scenario rebuilds), and both stands serve it at `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it and `Cache-Control: no-store`. `PERCH_UI_MANIFEST=0` on a stand answers 404 there; the default, `1`, serves it.
 
-It is what a tool outside the repository reads (its keys are the Manifest section of this reference): the vocabulary as tables with prose `instructions` for an agent (`instructionsOf`, its fixed texts read from the rules of this reference, the anchors and states taken from the vocabulary and the platform section); `derivedParts`, each derived suffix with the kind of the part it marks, the meaning of the suffix as its `description` and, for a `visibility-button`, its values; `composites`, the vocabulary's table of the platform's composites, whose declarations are under `platform.composites`; `fieldStates`, the table of field states, `{}` when the vocabulary has none; the screens verbatim, each binding with its `example` link and each anchor with its description, the written one (a secret input's with `(type password)` appended once) or else the one the engine says (see the rule `engine-descriptions`); the platform section and the activities verbatim, each value of the platform with its length resolved; the scenarios parsed; `routeParams`; the model document, each field's length resolved; from version 6 `contract.defaults`, the default length they took (see the rule `declared-values`); and `ids`.
+It is what a tool outside the repository reads (its keys are the Manifest section of this reference): the vocabulary as tables with prose `instructions` for an agent (`instructionsOf`, its fixed texts read from the rules of this reference, the anchors and states taken from the vocabulary and the platform section); `derivedParts`, each derived suffix with the kind of the part it marks, the meaning of the suffix as its `description` and, for a `visibility-button`, its values; `composites`, the vocabulary's table of the platform's composites, whose declarations are under `platform.composites`; `fieldStates`, the table of field states, `{}` when the vocabulary has none; the screens verbatim, each binding with its `example` link and each anchor with its description, the written one (a secret input's with `(type password)` appended once) or else the one the engine says (see the rule `engine-descriptions`); the platform section and the activities verbatim, each value of the platform with its length resolved; the scenarios parsed; `routeParams`; the model document, each field's length resolved; from version 6 `contract.defaults`, the default length they took (see the rule `declared-values`); `rules`, the text of each rule of this reference that the manifest or its schema names, as the reference writes it (`rulesOf`, taken from the registry the reference is written from), because a tool that reads the manifest alone never sees the reference; and `ids`.
 
 `ids` lists every declared anchor by name with its kind, its screen and its attributes: `holdsInput` of a field, the `fieldStates` of a field, the `marksState: false` of a field that writes it (the app leaves its border uncoloured; its `fieldStates` still hold), a ranked message's `ranked`, a secret input's `composite`, and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), one entry per line, so a search for an anchor in the manifest shows its facts. `fieldStatesOf` gives the states of a field: only an `input`, `textarea` or `select` that holds input has any, `unsaved`, and `saved` too when its binding is a model field; each state must be declared in the vocabulary's "Field states" table, so a vocabulary without it gives none; listed only when not empty.
 

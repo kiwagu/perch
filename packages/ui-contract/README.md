@@ -196,8 +196,10 @@ links to as `contract/REFERENCE.md#<slug>`.
     for an agent (`instructionsOf`), `fieldStates` (`fieldStatesOf`), `derivedParts`, `composites`,
     each binding's `example` link (`exampleOf`), each anchor's description (the written one, else
     the one the engine says, `files/derive/descriptions.ts`), `ids`, `routeParams`, the
-    platform's values and the model document with their lengths resolved, and from version 6
-    `contract.defaults`
+    platform's values and the model document with their lengths resolved, from version 6
+    `contract.defaults`, and last `rules`: the text of each rule the manifest or its schema names,
+    from the registry of the reference (`rulesOf`, `manifest/rules.ts`, naming found by
+    `ruleIdsNamedIn`, the text by `ruleTextOf`), so a reader of the manifest folder alone has it
     (`contract/REFERENCE.md#rule-manifest`, `contract/REFERENCE.md#rule-field-states-carried`,
     `contract/REFERENCE.md#rule-engine-descriptions`). `productInfo(root)` names the product.
     `writeManifest(root, outDir, manifest)` validates it against
