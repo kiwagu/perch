@@ -96,7 +96,7 @@ flow:
 `
 
 /** `markdown` with `rows` appended to the table of `section`. */
-function withRows(markdown: string, section: string, rows: string): string {
+export function withRows(markdown: string, section: string, rows: string): string {
   const start = markdown.indexOf(`## ${section}\n`)
   const next = markdown.indexOf('\n## ', start + 1)
   const end = next === -1 ? markdown.length : next

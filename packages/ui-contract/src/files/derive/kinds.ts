@@ -17,13 +17,13 @@ import { jsonPath, type Problem } from '../problems'
 const KIND_PARTS_EDITION = 4
 
 /** What a kind implies: the derived parts of the anchor, and whether it carries a `data-value`. */
-interface Implied {
+export interface Implied {
   readonly parts: readonly string[]
   readonly dataValue: boolean
 }
 
 /** What the anchor `def` implies by its kind, if it implies anything. */
-function impliedBy(def: Readonly<Record<string, unknown>>): Implied | undefined {
+export function impliedByKind(def: Readonly<Record<string, unknown>>): Implied | undefined {
   switch (def['kind']) {
     case 'select':
       return { parts: [OPTION], dataValue: true }
@@ -54,7 +54,7 @@ export function withDerivedKindParts(
     problems.push({ file, message: `${jsonPath(at)}: ${message}` })
   }
   const derived = entriesOf(anchors).map(([anchor, def]): [string, unknown] => {
-    const implied = isRecord(def) ? impliedBy(def) : undefined
+    const implied = isRecord(def) ? impliedByKind(def) : undefined
     const written = isRecord(def) ? (def['derived'] ?? []) : undefined
 
     if (!isRecord(def) || implied === undefined || !Array.isArray(written)) {

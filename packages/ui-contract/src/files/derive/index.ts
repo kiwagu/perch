@@ -25,7 +25,7 @@ export {
 export { type FlowSources, flowSourcesOf } from './flow-errors'
 export { withDerivedParams } from './form-params'
 export { withDerivedInputs } from './inputs'
-export { withDerivedKindParts } from './kinds'
+export { type Implied, impliedByKind, withDerivedKindParts } from './kinds'
 export {
   type ControlMove,
   controlMovesOf,
