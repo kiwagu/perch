@@ -139,27 +139,23 @@ const entryText = (entry: WithEntry): string => {
 }
 
 /**
- * Whether the own rule of `name` may keep it off a page whose state renders it: a cell, shown
- * with a value; a list whose entries come from data (any but a composite's), shown with one,
- * unless its states show it waiting or empty; an anchor whose `with` and `without` do not say it
- * shows on the page, or that is rendered in each entry of a list, which the report does not tell
- * apart.
+ * Whether the own rules of `name` may keep it off a page whose state renders it, either one: its
+ * kind's (a cell, shown with a value; a list whose entries come from data, any but a composite's,
+ * shown with one unless its states show it waiting or empty), or its `with` and `without`, which
+ * do not say it shows on the page, or which it says in each entry of a list, which the report does
+ * not tell apart.
  */
 function mayStayAway({ contract, anchors }: SettledPage, name: string, def: SettledId): boolean {
-  if (def.kind === 'cell') {
-    return true
-  }
-  if (def.kind === 'list') {
-    return (
+  const byKind =
+    def.kind === 'cell' ||
+    (def.kind === 'list' &&
       def.derivedFrom === undefined &&
-      !(def.states ?? []).some((state) => WAITING_OR_EMPTY.has(state))
-    )
-  }
-
-  return (
+      !(def.states ?? []).some((state) => WAITING_OR_EMPTY.has(state)))
+  const byEntries =
     (def.with !== undefined || def.without !== undefined) &&
     (entryOf(name, idsOf(contract, def.screen)) !== undefined || !entriesShowOn(def, anchors))
-  )
+
+  return byKind || byEntries
 }
 
 /**

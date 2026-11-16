@@ -526,3 +526,113 @@ describe('a state that renders an element whose own rule may keep it off the pag
     ).toEqual(['x.y in open: "x.y.leave-dialog.cancel-button" is hidden, but the state renders it'])
   })
 })
+
+/** A flow whose open state lists lists that say when they show. */
+const LISTING = {
+  initial: 'open',
+  states: {
+    open: { meta: { renders: ['x.y.users.list', 'x.y.sent.list', 'x.y.rule-list'] } },
+    shut: {},
+  },
+}
+
+const LISTS: SettledContract['ids'] = {
+  'x.y.heading': { screen: 'x.y', kind: 'heading' },
+  'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+  'x.y.users.list': {
+    screen: 'x.y',
+    kind: 'list',
+    states: ['loading', 'ready', 'empty'],
+    with: ['x.y.heading'],
+    derived: ['range', 'previous-link', 'next-link', 'size-select'],
+  },
+  'x.y.users.account-item': { screen: 'x.y', kind: 'item', dataId: 'account' },
+  'x.y.sent.list': {
+    screen: 'x.y',
+    kind: 'list',
+    states: ['loading'],
+    without: ['x.y.banned-badge'],
+  },
+  'x.y.sent.list.refresh-button': { screen: 'x.y', kind: 'button' },
+  'x.y.rule-list': {
+    screen: 'x.y',
+    kind: 'list',
+    derivedFrom: { composite: 'password-rules' },
+    with: ['x.y.heading'],
+  },
+  'x.y.rule-list.length-item': {
+    screen: 'x.y',
+    kind: 'item',
+    derivedFrom: { composite: 'password-rules', item: 'length' },
+  },
+}
+
+/** The problems of a page of `x.y` in the open state of `LISTING`. */
+const listsOn = (anchors: RenderedAnchor[]) =>
+  settledProblems({ screens: [{ id: 'x.y', flow: LISTING }], ids: LISTS }, settled('open', anchors))
+
+/** Every list the open state lists, on the page and visible, with what it shows with. */
+const ALL_LISTS = [
+  shown('x.y.heading'),
+  shown('x.y.users.list'),
+  shown('x.y.users.account-item'),
+  shown('x.y.users.list.size-select'),
+  shown('x.y.sent.list'),
+  shown('x.y.sent.list.refresh-button'),
+  shown('x.y.rule-list'),
+  shown('x.y.rule-list.length-item'),
+]
+
+const listsBut = (...left: string[]) => ALL_LISTS.filter(({ anchor }) => !left.includes(anchor))
+
+describe('a state that renders a list whose with or without keep it off the page', () => {
+  it('passes the page that shows every list the state lists', () => {
+    expect(listsOn(ALL_LISTS)).toEqual([])
+  })
+
+  it('lets a waiting or empty list, a composite one, their parts and what is under them stay away while a with entry does not show', () => {
+    expect(
+      listsOn(
+        listsBut(
+          'x.y.heading',
+          'x.y.users.list',
+          'x.y.users.account-item',
+          'x.y.users.list.size-select',
+          'x.y.rule-list',
+          'x.y.rule-list.length-item',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  it('lets a waiting list and what is under it stay away while a without entry shows', () => {
+    expect(
+      listsOn([
+        ...listsBut('x.y.sent.list', 'x.y.sent.list.refresh-button'),
+        shown('x.y.banned-badge'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('still wants a listed list its entries let show, and the parts of a shown list', () => {
+    expect(
+      listsOn(
+        listsBut(
+          'x.y.users.list',
+          'x.y.users.account-item',
+          'x.y.users.list.size-select',
+          'x.y.sent.list',
+          'x.y.sent.list.refresh-button',
+        ),
+      ),
+    ).toEqual([
+      'x.y in open: "x.y.users.list" is not on the page, but the state renders it',
+      'x.y in open: "x.y.users.list.size-select" is not on the page, but the state renders it',
+      'x.y in open: "x.y.sent.list" is not on the page, but the state renders it',
+      'x.y in open: "x.y.sent.list.refresh-button" is not on the page, but the state renders it',
+    ])
+    expect(listsOn(listsBut('x.y.users.list.size-select'))).toEqual([
+      'x.y in open: "x.y.users.list.size-select" is not on the page, but the state renders it',
+    ])
+  })
+})
