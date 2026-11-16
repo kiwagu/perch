@@ -25,6 +25,7 @@
     "contract:check:consumers": "ui-contract check --consumers",
     "contract:manifest": "ui-contract manifest",
     "contract:diff": "ui-contract diff",
+    "contract:inflight": "ui-contract inflight",
     "contract:coverage": "ui-contract coverage",
     "contract:coverage:check": "ui-contract coverage --check",
     "contract:routes": "ui-contract routes",

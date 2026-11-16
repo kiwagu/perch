@@ -29,6 +29,12 @@
  *     the codes and error fields of the anchors both hold, derived ones included, and the
  *     activities with the transitions changed in each: the hand-over block of a change, or the
  *     changes as JSON.
+ *   ui-contract inflight
+ *     loads the contract of `contract/trunk` and of every local branch named `feat/*`, `fix/*`,
+ *     `chore/*` or `refactor/*` with this engine, reading the refs only, and prints each branch
+ *     as OK or with the problems the rules find in it (a contract that does not load is its
+ *     problem; a branch without `contract/` has none to break); exits 1 when any branch has
+ *     one. A contract older than this engine passes while the engine reads that version.
  *   ui-contract coverage [--write | --check] [--json] [--unmarked] [--descriptions]
  *     prints the coverage block (the fields and actions of the model bound by anchors, the
  *     transitions of each activity its scenarios walk, the controls marked per module,
@@ -56,6 +62,7 @@ import { check } from './check'
 import { coverage } from './coverage'
 import { diff } from './diff'
 import { flow } from './flow'
+import { inflight } from './inflight'
 import { manifest } from './manifest'
 import { migrate } from './migrate'
 import { routes } from './routes'
@@ -75,6 +82,8 @@ function dispatch(argv: readonly string[]): number {
       return manifest(rest)
     case 'diff':
       return diff(rest)
+    case 'inflight':
+      return inflight(rest)
     case 'coverage':
       return coverage(rest)
     case 'routes':
@@ -83,7 +92,7 @@ function dispatch(argv: readonly string[]): number {
       return flow(rest)
     default:
       console.error(
-        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
+        'ui-contract: use "check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]", "migrate [--write]", "schemas [--check]", "manifest [--out <dir>]", "diff <ref> [--json]", "inflight", "coverage [--write | --check] [--json] [--unmarked] [--descriptions]", "routes [--json]" or "flow <screen> [--json]"',
       )
 
       return 1

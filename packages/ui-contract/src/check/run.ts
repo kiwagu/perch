@@ -130,6 +130,10 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   withProblems,
 ]
 
+/** What every rule of the contract finds in a contract already loaded, sorted by file and line. */
+export const contractProblems = (contract: Contract): Problem[] =>
+  sortProblems(RULES.flatMap((rule) => rule(contract)))
+
 export function checkContract(root: string): Problem[] {
   const { contract, problems } = loadContract(root)
 
@@ -138,7 +142,7 @@ export function checkContract(root: string): Problem[] {
   }
 
   return sortProblems([
-    ...RULES.flatMap((rule) => rule(contract)),
+    ...contractProblems(contract),
     ...schemaDrift(root),
     ...referenceDrift(root),
     ...referenceLinkProblems(root),
