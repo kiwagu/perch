@@ -33,3 +33,20 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
 - What `contract:migrate --write` does: removes the vocabulary's `Contract version: 1` line with
   the blank line after it, and sets `version: 2` in `platform.yaml`.
 - What is left by hand: nothing.
+
+## Version 3
+
+- What changed: a code of a platform action concerns the parameters it is attributed to, the one
+  it is named after (`<parameter>-<suffix>`) and each one whose `codes` list it, and an error
+  derives the field it shows the code under, as it does for a code of the model. A written
+  `fields` merges over the derived one, code by code, and may name `form`, the form as a whole.
+  From version 3 the check wants every string parameter bounded, every code of a field attributed
+  to a parameter whose value has the constraint the code names, every parameter's `codes` among
+  its action's, every code two fields pass written in `fields`, and no written entry the engine
+  derives.
+- Why: a code two controls passed was dropped silently, a written `fields` hid every derived
+  entry, and a platform code showed under no field at all.
+- What `contract:migrate --write` does: sets `version: 3` in `platform.yaml`, nothing else.
+- What is left by hand: declare `values` and refer every string parameter; attribute every
+  field-shaped code; write `form` or a field for each code two fields share; drop written
+  `fields` the engine derives.

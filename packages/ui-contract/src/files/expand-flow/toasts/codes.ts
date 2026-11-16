@@ -3,6 +3,7 @@
  * the platform's `toasts` map, and an operation of several actions by the control that starts it.
  */
 
+import { kebab } from '../../../kebab'
 import type { Expansion } from '../expansion'
 
 const PLATFORM = 'platform.'
@@ -11,10 +12,6 @@ const PAST: ReadonlyMap<string, string> = new Map([
   ['update', 'updated'],
   ['delete', 'deleted'],
 ])
-
-/** `camelCase` as `kebab-case`. */
-const kebab = (name: string): string =>
-  name.replace(/[A-Z]/g, (upper, at: number) => `${at === 0 ? '' : '-'}${upper.toLowerCase()}`)
 
 /** The past of a verb as a code writes it: `save` gives `saved`, `add` gives `added`. */
 const pastOf = (verb: string): string => (verb.endsWith('e') ? `${verb}d` : `${verb}ed`)

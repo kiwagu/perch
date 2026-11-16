@@ -9,11 +9,18 @@ export {
 } from './descriptions'
 export { withDerivedErrors } from './errors'
 export {
+  ATTRIBUTION_EDITION,
+  attributedCodes,
+  codeNamedAfter,
+  constrains,
   type Failure,
   type FailureOf,
+  FIELD_CODE_SUFFIXES,
+  type FieldCodeSuffix,
+  type FieldConstraints,
   failureCodes,
   failuresOf,
-  type PlatformCodes,
+  type PlatformFailures,
 } from './failures'
 export { type FlowSources, flowSourcesOf } from './flow-errors'
 export { withDerivedParams } from './form-params'

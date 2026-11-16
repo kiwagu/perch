@@ -69,6 +69,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     platform, model)` the one a parameter takes, and `fieldValueOf(anchor, screen, platform,
     model)` the one a field takes, the loosest of those of its bindings
     (`contract/REFERENCE.md#rule-declared-values`).
+  - `attributedCodes(action, platform)` (`files/derive/failures.ts`): per parameter of a platform
+    action, the codes that concern it, by the suffixes of `FIELD_CODE_SUFFIXES`
+    (`contract/REFERENCE.md#rule-attributed-codes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`

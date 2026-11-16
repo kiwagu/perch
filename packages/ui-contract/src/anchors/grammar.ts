@@ -29,6 +29,12 @@ export const FIELD_KINDS: ReadonlySet<string> = new Set([
 ])
 
 /**
+ * What an error's `fields` names for a code that concerns the form as a whole rather than one of
+ * its fields: never an anchor, which has two segments at least.
+ */
+export const WHOLE_FORM = 'form'
+
+/**
  * The kinds a person acts on, whose event a flow handles: a button, a link, a tab and the
  * field kinds. A cell, an entry or a container is no control, whatever it is nested in.
  */

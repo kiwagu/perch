@@ -15,6 +15,7 @@ import {
   anchorSchema,
   baseAnchorSchema,
   codeSchema,
+  errorFieldSchema,
   kebabNameSchema,
   roleSchema,
   screenNameSchema,
@@ -158,9 +159,11 @@ const idSchema = z
         'The message shows one of its codes: of those raised before it shows, the first in the order of `codes`; the others go with it, and a clear of it, in any flow, takes away every code raised before it.',
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
-      .describe("An error's codes, each with the field it concerns."),
+      .describe(
+        "An error's codes, each with the field it concerns, or `form`, the form as a whole.",
+      ),
     dataId: z.string().optional().describe('What the data-id of the element holds.'),
     dataValue: z
       .boolean()

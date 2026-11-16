@@ -13,6 +13,7 @@ import {
   REFERENCE_FILE,
   readDescriptions,
   SCREEN_SCHEMA_FILE,
+  SCREENS_DIR,
   scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
@@ -147,6 +148,38 @@ describe('checkContract', () => {
     expect(printed()).toEqual([
       'contract/domain/platform.yaml:1: actions["sign-out"].params.forgetUnsent.value: "flags" is no value of platform.values',
       `contract/domain/platform.yaml:6: values.flag.description: the description of platform value flag is 201 characters, past its budget of 200; its purpose: "${DESCRIPTION_PURPOSES.value}"`,
+    ])
+  })
+  it('holds a contract from version 3 to where its platform codes belong, and its errors to them', () => {
+    const toVersion = (version: number): void => {
+      edit(PLATFORM_FILE, (text) => text.replace(/^version: \d+$/m, `version: ${version}`))
+      edit(VOCABULARY_FILE, (text) => text.replace('Contract version: 1\n\n', ''))
+    }
+    const unbound = '        type: string\n        description: Drop'
+
+    edit(PLATFORM_FILE, (text) =>
+      text.replace('        type: boolean\n        description: Drop', unbound),
+    )
+    toVersion(3)
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].params.forgetUnsent: a string that refers to no value and writes no constraint: refer to a value (`value: <name>`) or write a constraint beside its type',
+    ])
+
+    toVersion(2)
+
+    expect(printed()).toEqual([])
+
+    edit(`${SCREENS_DIR}/sample/$key.yaml`, (text) =>
+      text.replace(
+        '  sample.list:\n',
+        '  sample.error:\n    kind: error\n    codes: [ title-too-long, failed ]\n    fields: { title-too-long: sample.title-input }\n  sample.list:\n',
+      ),
+    )
+    toVersion(3)
+
+    expect(printed()).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.error"].fields["title-too-long"]: "sample.title-input" is derived: leave it out',
     ])
   })
   it('holds the reads an action changes to the platform actions the lists read', () => {

@@ -9,8 +9,9 @@
  * (`derive/composites.ts`); the params of a form's button, from what the fields of its part pass
  * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
  * reads them as if written; the parts a paged list derives (`derive/paging.ts`); an error anchor's codes and fields from the failures of the actions
- * its part binds and its flow shows on it, as the model and the platform give them, and the codes
- * the flow shows on it (`derive/errors.ts`); and, with a confirmation on the frame, the question
+ * its part binds and its flow shows on it, as the model and the platform give them by the version
+ * `platform.yaml` declares, and the codes the flow shows on it (`derive/errors.ts`); and, with a
+ * confirmation on the frame, the question
  * each control of a destructive action asks before it runs (`derive/questions.ts`), the
  * confirmation carrying every code asked with. Once a screen parses, its flow canonical, whether a
  * field holds input is derived from its kind, its bindings and the moves of its flow
@@ -68,6 +69,7 @@ const SUFFIX = '.yaml'
 
 function readScreenFiles(
   root: string,
+  edition: number,
   failureOf: FailureOf,
   platformToasts: Readonly<Record<string, string>>,
   composites: Readonly<Record<string, PlatformComposite>>,
@@ -105,17 +107,16 @@ function readScreenFiles(
         const composed = withDerivedComposites(file, unwritten.value, composites)
         const bound = withDerivedParams(file, composed.value)
         const paged = withDerivedPaging(file, bound.value)
+        const errors = withDerivedErrors(file, paged.value, failureOf, edition)
 
         problems.push(
           ...unwritten.problems,
           ...composed.problems,
           ...bound.problems,
           ...paged.problems,
+          ...errors.problems,
         )
-        read.push({
-          file,
-          value: withDerivedErrors(paged.value, failureOf),
-        })
+        read.push({ file, value: errors.value })
       }
     } else {
       problems.push({
@@ -230,7 +231,9 @@ export function loadScreensWith(
   model: Model | undefined,
 ): { screens?: ScreensFile; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
-  const failureOf = failuresOf(model, platform?.actions)
+  // Without a platform file, whose own problem stops the load, no rule of a later version applies.
+  const edition = platform?.version ?? 1
+  const failureOf = failuresOf(model, platform?.actions, edition)
   const {
     screens,
     files,
@@ -239,6 +242,7 @@ export function loadScreensWith(
     questions,
   } = readScreenFiles(
     root,
+    edition,
     failureOf,
     platform?.toasts ?? {},
     platform?.composites ?? {},

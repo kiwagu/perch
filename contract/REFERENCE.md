@@ -400,12 +400,12 @@ A message whose codes are in rank order: of the codes raised before it shows, it
 ### `anchors.<name>.fields`
 
 <a id="screen-anchors-name-fields"></a>
-An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Left out, each code a field of the model gives goes to the control the binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. `contract:diff` lists them as `<error> <code> -> <field>`, written or derived. See the rule `error-codes-and-fields`.
+An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.
 
 ### `anchors.<name>.fields.<name>`
 
 <a id="screen-anchors-name-fields-name"></a>
-A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.
+A field of the screen, by its anchor, or `form`, the form as a whole.
 
 ### `anchors.<name>.dataId`
 
@@ -1089,7 +1089,7 @@ The action runs without the parameter: a field that passes it may stay empty.
 ### `actions.<name>.params.<name>.codes`
 
 <a id="platform-actions-name-params-name-codes"></a>
-The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.
+The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.
 
 ### `actions.<name>.params.<name>.description`
 
@@ -1104,7 +1104,7 @@ What holds once the action succeeds.
 ### `actions.<name>.codes`
 
 <a id="platform-actions-name-codes"></a>
-The codes a failure of the action shows.
+The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.
 
 ### `actions.<name>.roles`
 
@@ -2271,12 +2271,12 @@ A message whose codes are in rank order: of the codes raised before it shows, it
 ### `screens.anchors.<name>.fields`
 
 <a id="manifest-screens-anchors-name-fields"></a>
-An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.
+An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form.
 
 ### `screens.anchors.<name>.fields.<name>`
 
 <a id="manifest-screens-anchors-name-fields-name"></a>
-A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.
+A field of the screen, by its anchor, or `form`, the form as a whole.
 
 ### `screens.anchors.<name>.dataId`
 
@@ -3476,12 +3476,12 @@ The message shows one of its codes: of those raised before it shows, the first i
 ### `ids.<name>.fields`
 
 <a id="manifest-ids-name-fields"></a>
-An error's codes, each with the field it concerns.
+An error's codes, each with the field it concerns, or `form`, the form as a whole.
 
 ### `ids.<name>.fields.<name>`
 
 <a id="manifest-ids-name-fields-name"></a>
-A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.
+A field of the screen, by its anchor, or `form`, the form as a whole.
 
 ### `ids.<name>.dataId`
 
@@ -3776,7 +3776,7 @@ The action runs without the parameter: a field that passes it may stay empty.
 ### `platform.actions.<name>.params.<name>.codes`
 
 <a id="manifest-platform-actions-name-params-name-codes"></a>
-The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.
+The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.
 
 ### `platform.actions.<name>.params.<name>.description`
 
@@ -3791,7 +3791,7 @@ What holds once the action succeeds.
 ### `platform.actions.<name>.codes`
 
 <a id="manifest-platform-actions-name-codes"></a>
-The codes a failure of the action shows.
+The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.
 
 ### `platform.actions.<name>.roles`
 
@@ -4525,6 +4525,15 @@ The value a field takes (`fieldValueOf`) is the loosest of the values of its mod
 
 Keys it concerns: [`platform.values`](#platform-values), [`platform.actions.<name>.params.<name>`](#platform-actions-name-params-name), [`platform.actions.<name>.params.<name>.value`](#platform-actions-name-params-name-value), [`manifest.ids.<name>.value`](#manifest-ids-name-value).
 
+### A platform code on the parameter it concerns
+
+<a id="rule-attributed-codes"></a>
+From version 3 a code of a platform action concerns the parameters it is attributed to (`attributedCodes(action, platform)`, per parameter its codes in the action's order): the one it is named after, `<parameter>-<suffix>` with the parameter in kebab-case (`currentPassword` gives `current-password-rejected`), and each one whose `codes` list it (`codes: [ link-invalid ]` on a `token`); a code the action does not declare is never attributed. The suffixes are those of a field's codes (`FIELD_CODE_SUFFIXES`), each naming a constraint of the value: `required` a `minLength` of 1 or more, `too-short` a `minLength` above 1, `too-long` a `maxLength`, `invalid` a `pattern`, a `format` or an `enum`, `taken` none (any value may be taken), `rejected` any constraint. An error then derives the field a code is shown under from the control passed for its parameter, as it does for a code of the model (see the rule `error-codes-and-fields`). Before version 3 a platform code concerns no parameter.
+
+`contract:check` holds a contract from version 3 to four rules (`attributionProblems`): a parameter whose value is a string refers to a value or writes a constraint beside its `type`, at the parameter; a code that ends like the code of a field concerns a parameter, at the code; a code named after a parameter names a constraint the parameter's value has (see the rule `declared-values`), as the row of its suffix reads it, at the code; and the `codes` of a parameter are codes of its action, at the code.
+
+Keys it concerns: [`platform.actions.<name>.codes`](#platform-actions-name-codes), [`platform.actions.<name>.params.<name>.codes`](#platform-actions-name-params-name-codes).
+
 ### What an action fails with
 
 <a id="rule-failure-codes"></a>
@@ -4546,7 +4555,7 @@ Keys it concerns: [`screen.anchors.<name>.binding`](#screen-anchors-name-binding
 <a id="rule-error-codes-and-fields"></a>
 An error `<part>.error` that writes no `codes` carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>`, in the order they are declared); then the failures of the actions the flow invokes and shows on it, by a written `onError` in any form or by the request pattern (see the rule `request-outcome`), a region written `by` a button included; then the codes the flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. So `user.reset-password.error` may leave its codes out: the failures of `platform.reset-password`, which the anchors beside it bind, then `passwords-differ`, which its flow shows on it, then `failed`.
 
-One that writes no `fields` maps each code of a field to the control its binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>`.
+Its `fields` map each code that concerns a parameter to the control its binding or the invoke passes for that parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen: a code a field of the model gives, and from version 3 a code a platform action attributes to a parameter (see the rule `attributed-codes`). A written entry names a field of the screen or `form`, the form as a whole, which is no anchor. Before version 3 a written `fields` replaces the derived one whole, and a code that two sources pass from two controls concerns the form. From version 3 the written entries merge over the derived ones, code by code, and the loader refuses, at the error, a code it carries that two controls pass and the file does not write (it writes the field it concerns or `form`), and a written entry equal to the derived one (derived; leave it out). The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>` (`-> form`).
 
 Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.fields`](#screen-anchors-name-fields).
 
@@ -4804,7 +4813,7 @@ Every mail a platform action declares goes to a parameter of the action or the a
 
 Every action, of the platform or of the model, writes its `changes`, each name of which is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once; the schema refuses an action without them, as it refuses one without `codes` (`changesProblems`, a problem per name at its place in the platform file or the model).
 
-Every parameter of a platform action writes its `type` or its `value`, and a `value` names a value of `platform.values` or a field of the model (`valueProblems`, a problem at the parameter; see the rule `declared-values`).
+Every parameter of a platform action writes its `type` or its `value`, and a `value` names a value of `platform.values` or a field of the model (`valueProblems`, a problem at the parameter; see the rule `declared-values`). From version 3 every string parameter is bounded and every code of a field concerns a parameter whose value has the constraint the code names (`attributionProblems`; see the rule `attributed-codes`).
 
 Keys it concerns: [`platform.leaving`](#platform-leaving), [`platform.toasts`](#platform-toasts), [`platform.unsavedInput`](#platform-unsavedinput), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
 

@@ -714,7 +714,7 @@
             "const": true
           },
           "fields": {
-            "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Left out, each code a field of the model gives goes to the control the binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. `contract:diff` lists them as `<error> <code> -> <field>`, written or derived. See the rule `error-codes-and-fields`.",
+            "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -722,9 +722,18 @@
               "description": "A code of the vocabulary (data-code)."
             },
             "additionalProperties": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-              "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "string",
+                  "const": "form"
+                }
+              ],
+              "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
             }
           },
           "dataId": {

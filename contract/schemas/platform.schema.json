@@ -169,7 +169,7 @@
                   "const": true
                 },
                 "codes": {
-                  "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.",
+                  "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.",
                   "minItems": 1,
                   "type": "array",
                   "items": {
@@ -202,7 +202,7 @@
               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
               "description": "A code of the vocabulary (data-code)."
             },
-            "description": "The codes a failure of the action shows."
+            "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
           },
           "roles": {
             "description": "The roles that may run the action.",

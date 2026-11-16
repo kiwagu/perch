@@ -240,7 +240,7 @@ export function buildManifest({
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
-      failureOf: failuresOf(model, screens.platform.actions),
+      failureOf: failuresOf(model, screens.platform.actions, screens.version),
     }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens, vocabulary, model),

@@ -238,6 +238,16 @@ describe('diffContracts', () => {
       added: ['sample.page spare -> sample.title-input'],
       removed: [],
     })
+    screen.anchors['sample.page'] = {
+      ...screen.anchors['sample.page'],
+      kind: 'page',
+      fields: { spare: 'form' },
+    }
+
+    const toForm = diffContracts(before, more)
+
+    expect(toForm.errorFields).toEqual({ added: ['sample.page spare -> form'], removed: [] })
+    expect(formatChanges(toForm)).toContain('error fields added: sample.page spare -> form')
     screen.anchors['sample.title-input'] = {
       ...screen.anchors['sample.title-input'],
       kind: 'input',

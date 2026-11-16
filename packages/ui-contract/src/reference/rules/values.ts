@@ -1,4 +1,7 @@
-/** The rule of a value declared once: where it is declared, how a parameter takes it, what a field takes. */
+/**
+ * The rules of a value declared once (where it is declared, how a parameter takes it, what a
+ * field takes) and of a platform code on the parameter it concerns.
+ */
 
 import type { ReferenceRule } from '../rule'
 
@@ -19,5 +22,15 @@ const declaredValues: ReferenceRule = {
   ],
 }
 
+const attributedCodes: ReferenceRule = {
+  id: 'attributed-codes',
+  title: 'A platform code on the parameter it concerns',
+  text: [
+    "From version 3 a code of a platform action concerns the parameters it is attributed to (`attributedCodes(action, platform)`, per parameter its codes in the action's order): the one it is named after, `<parameter>-<suffix>` with the parameter in kebab-case (`currentPassword` gives `current-password-rejected`), and each one whose `codes` list it (`codes: [ link-invalid ]` on a `token`); a code the action does not declare is never attributed. The suffixes are those of a field's codes (`FIELD_CODE_SUFFIXES`), each naming a constraint of the value: `required` a `minLength` of 1 or more, `too-short` a `minLength` above 1, `too-long` a `maxLength`, `invalid` a `pattern`, a `format` or an `enum`, `taken` none (any value may be taken), `rejected` any constraint. An error then derives the field a code is shown under from the control passed for its parameter, as it does for a code of the model (see the rule `error-codes-and-fields`). Before version 3 a platform code concerns no parameter.",
+    "`contract:check` holds a contract from version 3 to four rules (`attributionProblems`): a parameter whose value is a string refers to a value or writes a constraint beside its `type`, at the parameter; a code that ends like the code of a field concerns a parameter, at the code; a code named after a parameter names a constraint the parameter's value has (see the rule `declared-values`), as the row of its suffix reads it, at the code; and the `codes` of a parameter are codes of its action, at the code.",
+  ].join('\n\n'),
+  keys: ['platform.actions.<name>.codes', 'platform.actions.<name>.params.<name>.codes'],
+}
+
 /** The rules of the values. */
-export const VALUE_RULES: readonly ReferenceRule[] = [declaredValues]
+export const VALUE_RULES: readonly ReferenceRule[] = [declaredValues, attributedCodes]

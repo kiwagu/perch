@@ -110,6 +110,17 @@ describe('buildManifest', () => {
       fields: { failed: 'sample.title-input' },
     })
     expect(manifestSchema.safeParse(built).success).toBe(true)
+
+    screen.anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['failed'],
+      fields: { failed: 'form' },
+    }
+
+    const toForm = buildManifest({ ...withFields, product: PRODUCT, now: NOW })
+
+    expect(toForm.ids['sample.save-error']?.fields).toEqual({ failed: 'form' })
+    expect(manifestSchema.safeParse(toForm).error?.issues).toBeUndefined()
   })
   it('writes the description the engine says where the file writes none, and keeps a written one', () => {
     const withSecret = fixtureContract()

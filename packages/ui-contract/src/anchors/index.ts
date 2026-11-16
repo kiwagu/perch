@@ -12,6 +12,7 @@ export {
   partOf,
   screenOf,
   segmentsOf,
+  WHOLE_FORM,
 } from './grammar'
 export { type InEntry, itemIdOf } from './item'
 export {

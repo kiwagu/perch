@@ -1105,7 +1105,7 @@
                   "const": true
                 },
                 "fields": {
-                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form.",
                   "type": "object",
                   "propertyNames": {
                     "type": "string",
@@ -1113,9 +1113,18 @@
                     "description": "A code of the vocabulary (data-code)."
                   },
                   "additionalProperties": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "string",
+                        "const": "form"
+                      }
+                    ],
+                    "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
                   }
                 },
                 "dataId": {
@@ -6589,7 +6598,7 @@
             "const": true
           },
           "fields": {
-            "description": "An error's codes, each with the field it concerns.",
+            "description": "An error's codes, each with the field it concerns, or `form`, the form as a whole.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -6597,9 +6606,18 @@
               "description": "A code of the vocabulary (data-code)."
             },
             "additionalProperties": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-              "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "string",
+                  "const": "form"
+                }
+              ],
+              "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
             }
           },
           "dataId": {
@@ -6968,7 +6986,7 @@
                       "const": true
                     },
                     "codes": {
-                      "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.",
+                      "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.",
                       "minItems": 1,
                       "type": "array",
                       "items": {
@@ -7001,7 +7019,7 @@
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                   "description": "A code of the vocabulary (data-code)."
                 },
-                "description": "The codes a failure of the action shows."
+                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
               },
               "roles": {
                 "description": "The roles that may run the action.",

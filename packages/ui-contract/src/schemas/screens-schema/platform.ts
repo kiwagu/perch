@@ -38,7 +38,7 @@ const actionParameterSchema = z
       .min(1)
       .optional()
       .describe(
-        'The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.',
+        'The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.',
       ),
     description: z.string().describe(DESCRIPTION_PURPOSES.actionParameter),
   })
@@ -58,7 +58,11 @@ const platformActionSchema = z
       .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), actionParameterSchema)
       .describe('The parameters by name.'),
     result: z.string().describe('What holds once the action succeeds.'),
-    codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
+    codes: z
+      .array(codeSchema)
+      .describe(
+        'The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.',
+      ),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
     paged: z
       .strictObject({

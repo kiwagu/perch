@@ -5,5 +5,6 @@
 
 import type { Migration } from './migration'
 import { oneToTwo } from './one-to-two'
+import { twoToThree } from './two-to-three'
 
-export const MIGRATIONS: ReadonlyArray<Migration> = [oneToTwo]
+export const MIGRATIONS: ReadonlyArray<Migration> = [oneToTwo, twoToThree]

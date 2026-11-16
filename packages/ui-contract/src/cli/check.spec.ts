@@ -4,6 +4,7 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_VERSION } from '../anchors'
 import { writeContractRepository } from '../contract-repository.fixture'
 import { MODEL_FILE, migrate } from '../files'
 
@@ -12,7 +13,7 @@ import { check } from './check'
 /** An e2e test naming an anchor the contract does not declare: an unresolved literal. */
 const UNKNOWN_ANCHOR = 'no-such-anchor'
 const TESTS = 'tests/e2e/src'
-const VERSION_NOTE = 'the contract is at version 1; this engine reads up to 2'
+const VERSION_NOTE = `the contract is at version 1; this engine reads up to ${CONTRACT_VERSION}`
 
 let root: string
 let out: string[]
@@ -28,7 +29,7 @@ function run(argv: readonly string[]): { code: number; out: string; err: string 
   return { code, out: out.join('\n'), err: err.join('\n') }
 }
 
-/** The fixture at version 2, migrated the way `ui-contract migrate --write` moves it. */
+/** The fixture at the current version, migrated the way `ui-contract migrate --write` moves it. */
 function writeCurrentRepository(): void {
   writeContractRepository(root)
   migrate(root, { write: true })

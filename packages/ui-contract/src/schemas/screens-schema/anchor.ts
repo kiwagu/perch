@@ -5,6 +5,7 @@ import { z } from '@workspace/zod'
 import {
   baseAnchorSchema,
   codeSchema,
+  errorFieldSchema,
   kebabNameSchema,
   roleSchema,
   stateSchema,
@@ -198,10 +199,10 @@ export const anchorDefSchema = z
         'A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.',
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
       .describe(
-        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form.",
       ),
     dataId: z
       .string()
@@ -255,10 +256,10 @@ export const authoredAnchorDefSchema = anchorDefSchema
         "The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. See the rule `error-codes-and-fields`.",
       ),
     fields: z
-      .record(codeSchema, baseAnchorSchema)
+      .record(codeSchema, errorFieldSchema)
       .optional()
       .describe(
-        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Left out, each code a field of the model gives goes to the control the binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. `contract:diff` lists them as `<error> <code> -> <field>`, written or derived. See the rule `error-codes-and-fields`.",
+        "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.",
       ),
     holdsInput: z
       .boolean()

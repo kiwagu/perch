@@ -8,16 +8,14 @@
  * `CONFIRM_RULE_ROW`.
  */
 
+import { kebab } from '../../kebab'
+
 const PLATFORM = 'platform.'
 const MODEL_VERBS: ReadonlySet<string> = new Set(['delete'])
 const PLATFORM_VERBS: ReadonlySet<string> = new Set(['ban', 'delete', 'remove', 'revoke'])
 
 /** The key of the vocabulary's row that stands for every derived question code. */
 export const CONFIRM_RULE_ROW = '<object>-<verb>'
-
-/** `camelCase` as `kebab-case`. */
-const kebab = (name: string): string =>
-  name.replace(/[A-Z]/g, (upper, at: number) => `${at === 0 ? '' : '-'}${upper.toLowerCase()}`)
 
 /** An action of the model as its entity, its verb and its object (empty when it names none). */
 function modelParts(action: string): { entity: string; verb: string; object: string } | undefined {
