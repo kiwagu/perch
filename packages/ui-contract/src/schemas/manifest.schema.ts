@@ -5,7 +5,8 @@
  * agent, the platform's composites among them, the screens verbatim with an example link on
  * each binding, every declared anchor with its screen (a field's composite opt-in and the
  * anchors a composite derives marked so, a text field with the value it takes), the platform, the
- * activities verbatim, the scenarios parsed and the model.
+ * activities verbatim, the scenarios parsed and the model, the platform's values and the model's
+ * fields with the default length taken, which the contract section names.
  */
 
 import { z } from '@workspace/zod'
@@ -31,6 +32,7 @@ import {
   bindingSchema,
   derivedFromSchema,
   leavesSchema,
+  platformDefaultsSchema,
   platformSchema,
   resolvedValueSchema,
   screenSchema,
@@ -62,6 +64,11 @@ const instructionsSchema = z
 const contractSchema = z
   .strictObject({
     version: z.int().min(1).describe('The version of the contract format the contract declares.'),
+    defaults: platformDefaultsSchema
+      .optional()
+      .describe(
+        "From version 6, what a value takes where it writes nothing of its own, `platform.defaults`: the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+      ),
     idAttribute: z.literal('data-testid').describe('The attribute that carries an anchor.'),
     idPattern: z.string().min(1).describe('The regular expression every rendered anchor matches.'),
     kinds: tableOf(kebabNameSchema, 'What an element of the kind is.', 'The kinds of anchors.'),
@@ -277,7 +284,9 @@ export const manifestSchema = z
     ids: z
       .record(baseAnchorSchema, idSchema)
       .describe('Every declared anchor by name; a derived one is its base plus a suffix.'),
-    platform: platformSchema,
+    platform: platformSchema.describe(
+      'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
+    ),
     activities: z
       .array(activitySchema)
       .describe(
@@ -291,7 +300,7 @@ export const manifestSchema = z
     model: z
       .record(z.string(), z.unknown().describe('A keyword of the model document.'))
       .describe(
-        '`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.',
+        '`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`).',
       ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

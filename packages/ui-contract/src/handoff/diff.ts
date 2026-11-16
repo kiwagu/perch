@@ -10,14 +10,14 @@
  * or stop holding input, the controls that start or stop asking before their flow leaves the
  * screen, with the fields the leave loses, the messages that rank their codes, with their order,
  * the actions that leave what the user typed behind and how each leave that would lose it asks, the
- * notices the platform actions declare, the transitions it adds or removes in each activity both
- * contracts hold, the lines of the flow it adds or removes in each screen both hold (a flow added
- * or removed whole, every line; so a contract written shorter that loads to the same flows shows no
- * change), the platform values it adds, removes or changes, the platform actions it adds or
- * removes, the lines of each platform action it adds, removes or changes (its parameters, result,
- * codes, roles, the reads it changes, mail and notices), the reads each action of the model comes
- * to change or stops changing, and each description the files write that it adds, removes or
- * changes, with its length on each side.
+ * notices the platform actions declare, the default length the platform declares, the transitions
+ * it adds or removes in each activity both contracts hold, the lines of the flow it adds or removes
+ * in each screen both hold (a flow added or removed whole, every line; so a contract written
+ * shorter that loads to the same flows shows no change), the platform values it adds, removes or
+ * changes, the platform actions it adds or removes, the lines of each platform action it adds,
+ * removes or changes (its parameters, result, codes, roles, the reads it changes, mail and
+ * notices), the reads each action of the model comes to change or stops changing, and each
+ * description the files write that it adds, removes or changes, with its length on each side.
  */
 
 import { type Contract, codesOf } from '../check'
@@ -33,6 +33,7 @@ import { routeAccessLines } from './route-access'
 import { type SearchChanges, searchChanges } from './search-changes'
 import { sourceLines } from './source-lines'
 import { type ValueChanges, valueChanges } from './value-changes'
+import { wordOf } from './value-words'
 import { type VisibilityChanges, visibilityChanges } from './visibility-changes'
 
 export interface ContractChanges {
@@ -74,6 +75,8 @@ export interface ContractChanges {
   unsavedInput: Change
   /** As `<action>.<name>`, the notices the platform actions declare. */
   notices: Change
+  /** As `<keyword> <value>` (`maxLength 80`), what the platform's `defaults` declares. */
+  defaults: Change
   screens: Change
   /** As `<path> guard <guard>` and `<path> serves <role>`, who each route serves (`routeAccessLines`). */
   routeAccess: Change
@@ -170,6 +173,12 @@ const unsavedInputOf = (contract: Contract | undefined): string[] =>
 const noticesOf = (contract: Contract | undefined): string[] =>
   Object.entries(contract?.screens.platform.actions ?? {}).flatMap(([action, { notices }]) =>
     (notices ?? []).map(({ name }) => `${action}.${name}`),
+  )
+
+/** What the platform's `defaults` declares, as `<keyword> <value>`; none when undeclared. */
+const defaultsOf = (contract: Contract | undefined): string[] =>
+  Object.entries(contract?.screens.platform.defaults ?? {}).map(
+    ([keyword, value]) => `${keyword} ${wordOf(value)}`,
   )
 
 const fieldsOf = (contract: Contract | undefined): string[] =>
@@ -276,6 +285,7 @@ export function diffContracts(
     ),
     unsavedInput: changeOf(unsavedInputOf(before), unsavedInputOf(after)),
     notices: changeOf(noticesOf(before), noticesOf(after)),
+    defaults: changeOf(defaultsOf(before), defaultsOf(after)),
     screens: changeOf(
       (before?.screens.screens ?? []).map(({ id }) => id),
       (after?.screens.screens ?? []).map(({ id }) => id),

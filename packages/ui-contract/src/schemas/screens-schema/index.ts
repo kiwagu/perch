@@ -37,8 +37,10 @@ export {
 export { actionParamsSchema, paramValueSchema } from './params'
 export {
   type PlatformComposite,
+  type PlatformDefaults,
   type PlatformParameter,
   platformCompositeSchema,
+  platformDefaultsSchema,
   platformSchema,
 } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'

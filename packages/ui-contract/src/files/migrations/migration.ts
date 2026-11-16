@@ -14,6 +14,8 @@ export interface MigrationFiles {
   readonly screens: ReadonlyMap<string, Document>
   /** The text of `contract/vocabulary.md`. */
   vocabulary: string
+  /** The text of `contract/domain/model.schema.json`, which a step edits as text. */
+  model: string
 }
 
 export interface Migration {
@@ -23,7 +25,7 @@ export interface Migration {
   readonly note: string
   /**
    * Edits the documents (values, keys, pairs and items; a comment changed on a node it keeps is not
-   * written) and the vocabulary in place; returns what is left to do by hand.
+   * written), the vocabulary and the model in place; returns what is left to do by hand.
    */
   readonly run: (files: MigrationFiles) => readonly string[]
 }

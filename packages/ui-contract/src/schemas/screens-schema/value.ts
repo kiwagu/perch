@@ -3,7 +3,9 @@
  * `platform.values`, or a field of the model) and referred to by name from the parameters of the
  * platform actions. Its bounds are those of a route's flat parameter (`parameterKeywords`), its
  * `enum` takes strings and numbers alone, its `examples` any list, and it may name a `format`,
- * which a route's search never takes; the value a field takes, derived, has the same keywords.
+ * which a route's search never takes; a value of `platform.values` may write `maxLength: null`,
+ * no limit, so it takes no default length; the value a field takes, derived, has the same
+ * keywords, its `maxLength` a number or none.
  */
 
 import { z } from '@workspace/zod'
@@ -40,6 +42,14 @@ export const valueSchema = z
   .strictObject({
     type: type.optional().describe('The primitive type of the value.'),
     ...valueKeywords,
+    maxLength: z
+      .int()
+      .min(0)
+      .nullable()
+      .optional()
+      .describe(
+        'The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.',
+      ),
     description: z.string().describe(DESCRIPTION_PURPOSES.value),
     examples: z
       .array(z.unknown())

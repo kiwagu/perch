@@ -26,6 +26,7 @@ const LISTS = [
   ['visibility', 'visibility entry', 'visibility entries'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
+  ['defaults', 'default', 'defaults'],
   ['values', 'platform value', 'platform values'],
   ['actions', 'platform action', 'platform actions'],
   ['notices', 'notice', 'notices'],

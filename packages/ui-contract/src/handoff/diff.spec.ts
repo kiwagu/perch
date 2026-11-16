@@ -172,6 +172,7 @@ describe('diffContracts', () => {
       leaving: { added: [], removed: [] },
       unsavedInput: { added: [], removed: [] },
       notices: { added: [], removed: [] },
+      defaults: { added: [], removed: [] },
       screens: { added: [], removed: [] },
       routeAccess: { added: [], removed: [] },
       routeSearch: { added: [], removed: [], changed: [] },
@@ -393,6 +394,27 @@ describe('diffContracts', () => {
     })
     expect(formatChanges(diffContracts(asking, quieter))).toContain(
       'unsaved-input entries added: unload: never',
+    )
+  })
+  it('lists the default length the platform declares, as it comes and changes', () => {
+    const defaulting = (maxLength: number): Contract => {
+      const contract = structuredClone(before)
+
+      contract.screens.platform.defaults = { maxLength }
+
+      return contract
+    }
+
+    expect(diffContracts(before, defaulting(80)).defaults).toEqual({
+      added: ['maxLength 80'],
+      removed: [],
+    })
+    expect(diffContracts(defaulting(80), defaulting(100)).defaults).toEqual({
+      added: ['maxLength 100'],
+      removed: ['maxLength 80'],
+    })
+    expect(formatChanges(diffContracts(before, defaulting(80)))).toContain(
+      'defaults added: maxLength 80',
     )
   })
   it('lists the notices each platform action declares, as they come and go', () => {

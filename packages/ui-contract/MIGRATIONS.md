@@ -13,7 +13,8 @@ a problem.
 `bun run contract:migrate --write` rewrites those files. A YAML file is edited through its
 document and written back into its own text: only the nodes a step edits change (a scalar in
 place, a pair or an item by its lines), and every other byte stays as written, spacing, quotes
-and comments included; a second run finds nothing to do. The check and the loader never migrate.
+and comments included; the model, JSON, is edited as text, a member dropped with its comma and
+every other byte kept; a second run finds nothing to do. The check and the loader never migrate.
 
 A new version comes with its step: a `Migration` in `src/files/migrations/`, named by the two
 versions in words (`one-to-two.ts`), added to `MIGRATIONS` (`src/files/migrations/registry.ts`),
@@ -106,3 +107,29 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   else. A second run finds nothing to do.
 - What is left by hand: a `clear: <part>.error` written after another effect of such a branch,
   named with its file and its place: version 5 refuses it, and dropping it moves the clear first.
+
+## Version 6
+
+- What changed: the platform may declare a default length, `defaults: { maxLength: <n> }`. Every
+  value that names no limit and would take one, a value of `platform.values` or a field of the
+  model with `type: string`, no `enum` and not read-only, takes it as the files load, before
+  anything is derived, so every reader (what a parameter and a field take, a field's
+  `<field>-too-long`, the keywords beside `value`, the manifest) takes the resolved value. A value
+  of `platform.values` may write `maxLength: null`: no limit, and it takes no default. From
+  version 6 the loader refuses a written `maxLength` equal to the default on a value that would
+  take it, and a `null` on one that would take none (no `defaults`, no string, or an `enum`). A
+  route's search parameter never takes the default. Before version 6 a written `defaults` is
+  read and takes no effect, and a `null` says what no limit says.
+- Why: the same limit (a name of 80 characters) was written on every value that has it, so a
+  change of it had to be made in every place; a default with an override where a value needs
+  another says it once.
+- What `contract:migrate --write` does: sets `version: 6` in `platform.yaml`, and where the
+  platform declares `defaults`, keeps every value at the limit it had: drops a `maxLength` equal
+  to the default from each value of `platform.values` and each field of the model that would
+  take it, and writes `maxLength: null` on each value of `platform.values` that would take it and
+  names no limit, before its `pattern`, `description` or `examples`. A limit of another number,
+  one on a value the default never reaches and every value of a contract with no `defaults` stay
+  as written. To state a default, write `defaults` in `platform.yaml` before running the step.
+- What is left by hand: each field of the model that would take the default and names no limit,
+  named with its file and its place. Its JSON Schema allows no `null`, so it takes the default
+  from version 6: write its own `maxLength` where that is too short.

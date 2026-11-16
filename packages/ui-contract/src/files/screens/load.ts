@@ -4,7 +4,9 @@
  * `contract/domain/platform.yaml` holds the contract version and the platform section. Each file
  * is YAML, then its Zod schema. A missing or empty folder, a file that is not `.yaml`, a file
  * named otherwise than its screen's first binding says and a missing platform file are problems
- * of the file or folder concerned. Once every file is read, what a file leaves to the contract is
+ * of the file or folder concerned. Before anything is derived, the platform's values and the model
+ * take their default length (from version 6, `values/default-lengths.ts`), and every step below
+ * reads them so. Once every file is read, what a file leaves to the contract is
  * derived (`derive/`): a composite a secret input opts into, derived as its list and items
  * (`derive/composites.ts`); from version 4 what an element's kind implies, a select's options and
  * data value, a secret input's visibility button and a dialog's answers (`derive/kinds.ts`); the
@@ -64,6 +66,7 @@ import { parseFile } from '../parse-file'
 import { PLATFORM_FILE, SCREENS_DIR } from '../paths'
 import { jsonPath, type Problem } from '../problems'
 import { readYaml } from '../read-yaml'
+import { withDefaultLengths } from '../values'
 
 import {
   codesOfRead,
@@ -258,16 +261,19 @@ function readPlatform(root: string): { platform?: PlatformFile; problems: Proble
 
 /**
  * The screens and the platform, what the screens leave out derived from the actions of `model`
- * (undefined when it does not load: an action of the model then has no failure to derive).
+ * (undefined when it does not load: an action of the model then has no failure to derive), and the
+ * model those derivations read: the platform's values and the model take their default length
+ * first (`withDefaultLengths`), so every reader of either takes the resolved value.
  */
 export function loadScreensWith(
   root: string,
   model: Model | undefined,
-): { screens?: ScreensFile; problems: Problem[] } {
+): { screens?: ScreensFile; model?: Model; problems: Problem[] } {
   const { platform, problems: platformProblems } = readPlatform(root)
   // Without a platform file, whose own problem stops the load, no rule of a later version applies.
   const edition = platform?.version ?? 1
-  const failureOf = failuresOf(model, platform?.actions, edition)
+  const lengths = withDefaultLengths(platform, model)
+  const failureOf = failuresOf(lengths.model, platform?.actions, edition)
   const {
     screens,
     files,
@@ -281,18 +287,28 @@ export function loadScreensWith(
     platform?.toasts ?? {},
     platform?.composites ?? {},
     platform?.unsavedInput,
-    { actions: platform?.actions ?? {}, values: platform?.values },
+    { actions: platform?.actions ?? {}, values: lengths.values },
   )
-  const problems = [...screenProblems, ...platformProblems]
+  const problems = [...screenProblems, ...platformProblems, ...lengths.problems]
 
   if (problems.length > 0 || platform === undefined) {
     return { problems }
   }
 
-  const { version, ...section } = platform
+  const { version, ...written } = platform
+  const { values: _written, ...section } = written
 
   return {
-    screens: { version, screens, files, platform: section, toasts, questions },
+    screens: {
+      version,
+      screens,
+      files,
+      // The values in their place, so the section keeps the order the schema gives it.
+      platform: lengths.values === undefined ? section : { ...written, values: lengths.values },
+      toasts,
+      questions,
+    },
+    ...(lengths.model === undefined ? {} : { model: lengths.model }),
     problems: [],
   }
 }
@@ -303,3 +319,19 @@ export function loadScreensWith(
  */
 export const loadScreens = (root: string): { screens?: ScreensFile; problems: Problem[] } =>
   loadScreensWith(root, loadModel(root).model)
+
+/**
+ * The model as every reader takes it: each field with its default length (`withDefaultLengths`),
+ * for a reader that needs the model alone; the problems of the model file and the platform file
+ * and of the lengths they write, the model left out while there are any.
+ */
+export function loadResolvedModel(root: string): { model?: Model; problems: Problem[] } {
+  const loaded = loadModel(root)
+  const { platform, problems: platformProblems } = readPlatform(root)
+  const lengths = withDefaultLengths(platform, loaded.model)
+  const problems = [...loaded.problems, ...platformProblems, ...lengths.problems]
+
+  return problems.length > 0 || lengths.model === undefined
+    ? { problems }
+    : { model: lengths.model, problems }
+}

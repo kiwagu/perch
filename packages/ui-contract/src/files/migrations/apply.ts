@@ -1,11 +1,11 @@
 /**
  * Moves a contract to the version this engine reads: reads the platform file and the screen files
- * as YAML documents with their comments (`parseYamlDocument`) and the vocabulary as text, runs
- * each migration from the version `platform.yaml` declares up to the engine's, setting `version`
- * after each step, and, with `write`, writes back every file a step changed. A document is written
- * into the text it was read from (`writeYamlDocument`): only the nodes the steps edited change, and
- * every other byte stays as written. Nothing is written when a step fails. Neither the check nor
- * the loader ever migrates: this runs on its command alone.
+ * as YAML documents with their comments (`parseYamlDocument`), and the vocabulary and the model as
+ * text, runs each migration from the version `platform.yaml` declares up to the engine's, setting
+ * `version` after each step, and, with `write`, writes back every file a step changed. A document
+ * is written into the text it was read from (`writeYamlDocument`): only the nodes the steps edited
+ * change, and every other byte stays as written. Nothing is written when a step fails. Neither the
+ * check nor the loader ever migrates: this runs on its command alone.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs'
@@ -15,7 +15,7 @@ import type { Document } from 'yaml'
 
 import { CONTRACT_VERSION } from '../../anchors'
 import { filesUnder } from '../files-under'
-import { PLATFORM_FILE, SCREENS_DIR, VOCABULARY_FILE } from '../paths'
+import { MODEL_FILE, PLATFORM_FILE, SCREENS_DIR, VOCABULARY_FILE } from '../paths'
 import { parseYamlDocument } from '../read-yaml-document'
 import { writeYamlDocument } from '../write-yaml-document'
 
@@ -62,9 +62,12 @@ function documentOf(file: string, text: string): Document {
 function readFiles(root: string): Read {
   const paths = (filesUnder(join(root, SCREENS_DIR)) ?? []).filter((path) => path.endsWith(SUFFIX))
   const sources = new Map(
-    [PLATFORM_FILE, VOCABULARY_FILE, ...paths.map((path) => `${SCREENS_DIR}/${path}`)].map(
-      (file) => [file, readFileSync(join(root, file), 'utf8')] as const,
-    ),
+    [
+      PLATFORM_FILE,
+      VOCABULARY_FILE,
+      MODEL_FILE,
+      ...paths.map((path) => `${SCREENS_DIR}/${path}`),
+    ].map((file) => [file, readFileSync(join(root, file), 'utf8')] as const),
   )
   const documentAt = (file: string): Document => documentOf(file, sources.get(file) ?? '')
 
@@ -73,6 +76,7 @@ function readFiles(root: string): Read {
       platform: documentAt(PLATFORM_FILE),
       screens: new Map(paths.map((path) => [path, documentAt(`${SCREENS_DIR}/${path}`)])),
       vocabulary: sources.get(VOCABULARY_FILE) ?? '',
+      model: sources.get(MODEL_FILE) ?? '',
     },
     sources,
   }
@@ -88,6 +92,7 @@ function textsOf({ files, sources }: Read): Map<string, string> {
   return new Map([
     written(PLATFORM_FILE, files.platform),
     [VOCABULARY_FILE, files.vocabulary],
+    [MODEL_FILE, files.model],
     ...[...files.screens].map(([path, document]) => written(`${SCREENS_DIR}/${path}`, document)),
   ])
 }

@@ -991,6 +991,16 @@ The version of the contract format and what the platform offers every screen.
 <a id="platform-version"></a>
 The version of the contract format the files are written in, said here alone from version 2.
 
+### `defaults`
+
+<a id="platform-defaults"></a>
+What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`.
+
+### `defaults.maxLength`
+
+<a id="platform-defaults-maxlength"></a>
+The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
+
 ### `values`
 
 <a id="platform-values"></a>
@@ -1019,7 +1029,7 @@ The fewest characters of a string.
 ### `values.<name>.maxLength`
 
 <a id="platform-values-name-maxlength"></a>
-The most characters of a string.
+The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.
 
 ### `values.<name>.pattern`
 
@@ -1667,6 +1677,16 @@ The vocabulary of the contract, with instructions for an agent.
 
 <a id="manifest-contract-version"></a>
 The version of the contract format the contract declares.
+
+### `contract.defaults`
+
+<a id="manifest-contract-defaults"></a>
+From version 6, what a value takes where it writes nothing of its own, `platform.defaults`: the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.
+
+### `contract.defaults.maxLength`
+
+<a id="manifest-contract-defaults-maxlength"></a>
+The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
 
 ### `contract.idAttribute`
 
@@ -3736,7 +3756,17 @@ The value is a field of the model that is read-only (`x-perch.readonly`).
 ### `platform`
 
 <a id="manifest-platform"></a>
-What the platform offers every screen.
+The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.
+
+### `platform.defaults`
+
+<a id="manifest-platform-defaults"></a>
+What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`.
+
+### `platform.defaults.maxLength`
+
+<a id="manifest-platform-defaults-maxlength"></a>
+The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
 
 ### `platform.values`
 
@@ -3766,7 +3796,7 @@ The fewest characters of a string.
 ### `platform.values.<name>.maxLength`
 
 <a id="manifest-platform-values-name-maxlength"></a>
-The most characters of a string.
+The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.
 
 ### `platform.values.<name>.pattern`
 
@@ -4291,7 +4321,7 @@ The expected results, with bracket references.
 ### `model`
 
 <a id="manifest-model"></a>
-`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12.
+`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`).
 
 ### `model.<name>`
 
@@ -4707,13 +4737,15 @@ Keys it concerns: [`screen.anchors.<name>.source.paged`](#screen-anchors-name-so
 <a id="rule-declared-values"></a>
 A value is a type with its constraints, said once where its policy lives, so a limit no longer lives in a parameter's prose. It is a name of `platform.values` (`email: { type: string, format: email, maxLength: 254, description }`), written in the bounds of a route's flat parameter (`type`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`), an `enum` of strings and numbers, `examples` (any list of fake values) and `format`, which a route's search never takes; or a field of the model, `<entity>.<field>`, whose JSON Schema keywords a value has it takes: `type`, `enum` (when every member is a string or a number), `minLength`, `maxLength`, `pattern`, `format` (one a value names), `minimum` and `maximum`, and `readOnly` when the field is `x-perch.readonly`; its other keywords (`exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`) no value has, so a reference does not take them.
 
+From version 6 the platform may declare a default length, `defaults: { maxLength: <n> }`, which each value that names no limit takes, a value of `platform.values` or a field of the model with `type: string`, no `enum` and not read-only, where the files load and before anything is derived from them (`withDefaultLengths`), so every reader takes the resolved value and none applies the default itself: what a parameter and a field take, a field's `<field>-too-long`, the keywords beside `value`, the manifest. A value that writes its own `maxLength` keeps it, and `maxLength: null` on a value of `platform.values` says it has no limit and takes none; the loader refuses from version 6 a written `maxLength` equal to the default on a value that would take it, and a `null` on one that would take none (no `defaults`, no string, or an `enum`); a route's search parameter never takes it.
+
 A parameter of a platform action writes its `type` or the `value` it refers to, `value: <name>` or `value: <entity>.<field>`, and may write the keywords of a value beside it. A keyword written beside `value` only narrows the value: a `minLength` or a `minimum` no smaller than the value's, a `maxLength` or a `maximum` no larger, an `enum` among the value's members, a `type` or a `format` where the value has none or the same, a `pattern` where the value has none (one beside a value's own pattern is refused, the same one included); `contract:check` refuses one that would widen it or say other than it says, at the keyword (`{ value: email, maxLength: 500 }` over an email of at most 254 characters). What a parameter takes (`parameterValueOf`) is the value it refers to narrowed by those keywords (`{ value: email, maxLength: 100 }` takes at most 100 characters; a refused keyword is left out, so the value keeps its own); a paged action's `size` takes the action's sizes as its `enum`; a parameter that refers to nothing takes its own keywords, its `type` alone at least. A parameter of an action of the model takes the value of the field it sets. `optional: true` says the action runs without the parameter.
 
 The value a field takes (`fieldValueOf`) is the loosest of the values of its model binding and of every action parameter that takes it: its own action bindings and every binding of another anchor of its screen that passes it, a submit button's derived params included. So a field one form uses for two parameters (the password of a sign-in and the new one of a sign-up) accepts what either accepts, never only what the strictest does. A confirmation, an input that writes `confirms`, takes the value of the input it confirms (see the rule `password-pair`). Loosest: `minLength` and `minimum` the smallest, `maxLength` and `maximum` the largest, each kept only when every value has one; `type`, `pattern`, `format` and `enum` kept only when every value has the same; `readOnly` only when every value has it. A `{ search }` binding adds nothing, neither narrowing nor widening: the limit of a search parameter belongs to the address. An anchor that is no field, and a field with no model binding and no parameter that takes it, has no value. The manifest carries it on each `input` and `textarea` that has one, as `ids.<anchor>.value`.
 
-`contract:check` refuses a `value` that names neither a value of `platform.values` nor a field of the model, at the parameter, and a keyword beside it that does not narrow it, and holds the description of each value to the budget; a paged action's `page` and `size` are numbers by the type they write or take from their value. `contract:diff` lists the values added and removed by name, and of each value both sides hold each keyword whose value changes, compared as data, as `platform values changed: <name> <keyword> <before> -> <after>`, each side its JSON (`none` on the side that lacks it: `kind enum [1] -> ["1"]`); the line of each parameter of an action names its type or its value and its constraints, each as JSON (see the rule `contract-diff-lines`).
+`contract:check` refuses a `value` that names neither a value of `platform.values` nor a field of the model, at the parameter, and a keyword beside it that does not narrow it, and holds the description of each value to the budget; a paged action's `page` and `size` are numbers by the type they write or take from their value. `contract:diff` lists the default length as `defaults added: maxLength <n>`, the values added and removed by name, and of each value both sides hold, as it loads, each keyword whose value changes, compared as data, as `platform values changed: <name> <keyword> <before> -> <after>`, each side its JSON (`none` on the side that lacks it: `kind enum [1] -> ["1"]`); the line of each parameter of an action names its type or its value and its constraints, each as JSON (see the rule `contract-diff-lines`).
 
-Keys it concerns: [`platform.values`](#platform-values), [`platform.actions.<name>.params.<name>`](#platform-actions-name-params-name), [`platform.actions.<name>.params.<name>.value`](#platform-actions-name-params-name-value), [`manifest.ids.<name>.value`](#manifest-ids-name-value).
+Keys it concerns: [`platform.defaults`](#platform-defaults), [`platform.values`](#platform-values), [`platform.actions.<name>.params.<name>`](#platform-actions-name-params-name), [`platform.actions.<name>.params.<name>.value`](#platform-actions-name-params-name-value), [`manifest.ids.<name>.value`](#manifest-ids-name-value).
 
 ### A platform code on the parameter it concerns
 
@@ -5128,7 +5160,7 @@ Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [
 <a id="rule-editions-and-migrations"></a>
 A contract is read by the version its `platform.yaml` declares, `editionOf(contract)`, and a rule a version brings applies from that version on, `since(contract, N)` (the contract is at N or later), so a contract at an older version loads and checks as before: a rule of version N starts with `if (!since(contract, N)) return []`. `outdatedProblem(contract)` is a contract older than `CONTRACT_VERSION`, named with the command that moves it, or undefined: `contract:check` passes an older contract and names it in one line.
 
-`migrate(root, { write, migrations?, current? })` runs each `Migration` (`from`, `note`, and `run(files)`, which edits the `MigrationFiles` in place, the platform and the screen files as YAML documents and the vocabulary as text, and returns the work left by hand) from the declared version up to `current`, `CONTRACT_VERSION` by default, from `migrations`, the registry `MIGRATIONS` (one per version, ordered by `from`) by default, setting `version` after each step. It returns the `MigrationReport` (`from`, `to`, and per step its `from`, `note`, the files it changed and the work by hand) and, with `write`, writes the files the steps changed, each document into the text it was read from (`files/write-yaml-document/`): only the nodes a step edited change (a scalar in place, a pair or an item by its lines, a flow collection whose parts changed as a whole), every other byte stays as written. A contract newer than `current`, a platform file without a version, a file that is not YAML and a version no migration reads throw. `parseYamlDocument(text)` is the `yaml` package's `Document` of a text, its comments, the style of every node and its range in the text kept. `packages/ui-contract/MIGRATIONS.md` says what each version changed.
+`migrate(root, { write, migrations?, current? })` runs each `Migration` (`from`, `note`, and `run(files)`, which edits the `MigrationFiles` in place, the platform and the screen files as YAML documents and the vocabulary and the model as text, and returns the work left by hand) from the declared version up to `current`, `CONTRACT_VERSION` by default, from `migrations`, the registry `MIGRATIONS` (one per version, ordered by `from`) by default, setting `version` after each step. It returns the `MigrationReport` (`from`, `to`, and per step its `from`, `note`, the files it changed and the work by hand) and, with `write`, writes the files the steps changed, each document into the text it was read from (`files/write-yaml-document/`): only the nodes a step edited change (a scalar in place, a pair or an item by its lines, a flow collection whose parts changed as a whole), every other byte stays as written. A contract newer than `current`, a platform file without a version, a file that is not YAML and a version no migration reads throw. `parseYamlDocument(text)` is the `yaml` package's `Document` of a text, its comments, the style of every node and its range in the text kept. `packages/ui-contract/MIGRATIONS.md` says what each version changed.
 
 ### The business and the meta layer: three kinds of commit
 
@@ -5182,7 +5214,7 @@ The check has limits. It sees a commit only where git runs the commit-msg hook f
 
 The web build writes it into `apps/web/dist/ui-manifest/` (`bun run build` runs `ui-contract manifest --out dist/ui-manifest` once Vite is done; the development watcher writes it into `apps/web/dist-dev/ui-manifest/` after every build, and a change of a contract file or of a scenario rebuilds), and both stands serve it at `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it and `Cache-Control: no-store`. `PERCH_UI_MANIFEST=0` on a stand answers 404 there; the default, `1`, serves it.
 
-It is what a tool outside the repository reads (its keys are the Manifest section of this reference): the vocabulary as tables with prose `instructions` for an agent (`instructionsOf`, its fixed texts read from the rules of this reference, the anchors and states taken from the vocabulary and the platform section); `derivedParts`, each derived suffix with the kind of the part it marks, the meaning of the suffix as its `description` and, for a `visibility-button`, its values; `composites`, the vocabulary's table of the platform's composites, whose declarations are under `platform.composites`; `fieldStates`, the table of field states, `{}` when the vocabulary has none; the screens verbatim, each binding with its `example` link and each anchor with its description, the written one (a secret input's with `(type password)` appended once) or else the one the engine says (see the rule `engine-descriptions`); the platform section and the activities verbatim; the scenarios parsed; `routeParams`; the model document; and `ids`.
+It is what a tool outside the repository reads (its keys are the Manifest section of this reference): the vocabulary as tables with prose `instructions` for an agent (`instructionsOf`, its fixed texts read from the rules of this reference, the anchors and states taken from the vocabulary and the platform section); `derivedParts`, each derived suffix with the kind of the part it marks, the meaning of the suffix as its `description` and, for a `visibility-button`, its values; `composites`, the vocabulary's table of the platform's composites, whose declarations are under `platform.composites`; `fieldStates`, the table of field states, `{}` when the vocabulary has none; the screens verbatim, each binding with its `example` link and each anchor with its description, the written one (a secret input's with `(type password)` appended once) or else the one the engine says (see the rule `engine-descriptions`); the platform section and the activities verbatim, each value of the platform with its length resolved; the scenarios parsed; `routeParams`; the model document, each field's length resolved; from version 6 `contract.defaults`, the default length they took (see the rule `declared-values`); and `ids`.
 
 `ids` lists every declared anchor by name with its kind, its screen and its attributes: `holdsInput` of a field, the `fieldStates` of a field, the `marksState: false` of a field that writes it (the app leaves its border uncoloured; its `fieldStates` still hold), a ranked message's `ranked`, a secret input's `composite`, and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), one entry per line, so a search for an anchor in the manifest shows its facts. `fieldStatesOf` gives the states of a field: only an `input`, `textarea` or `select` that holds input has any, `unsaved`, and `saved` too when its binding is a model field; each state must be declared in the vocabulary's "Field states" table, so a vocabulary without it gives none; listed only when not empty.
 
@@ -5223,7 +5255,7 @@ The lists, in the order of the block, each added and removed and sorted:
 - on the anchors both sides hold, the derived parts as `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input), the codes as `<anchor> <code>` and the states as `<anchor> <state>`, written or derived, so a constraint added to the model shows as the code it gives and a change of a composite's item state shows on each item it derives, the roles each is shown to as `<anchor> <role>`, an error's fields as `<error> <code> -> <field>`, the fields that hold input as `<anchor> holds input`, the fields that drop their state colour as `<anchor> shows no state colour`, the controls that ask before a destructive action as `<anchor> asks <code>`, the controls that ask before they leave their screen as `<anchor> leaves losing <field>, <field>` (other fields show as the old line removed and the new one added), and the messages that rank their codes as `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which the codes compared as a set do not show;
 - when each anchor shows, the entries of its `with` and `without` (see the rule `with-without`) as `<anchor> with <entry>` and `<anchor> without <entry>`, the entry being the anchor it names, with `: <code> or <code>` when it names codes (as a set, sorted: `device.list.revoke-button without device.list.current-badge`, `app-shell.install-button with app-shell.install-message: install-available`), and, for an entry both sides hold, `<anchor> with <entry> codes <before> -> <after>` when its codes change, `none` on the side that names none. An anchor added or removed whole lists every entry, and an anchor renamed holds its entries, also where an entry names a renamed anchor. The entries are those of the loaded contract;
 - the codes of the contract, the composites by name, the entities and their fields as `<entity>.<field>`, the activities by id;
-- the actions of `platform.leaving` added and removed, the entries of `platform.unsavedInput` as `<leave>: <how it asks>` (and `question: <dialog>`), the values of `platform.values` added, removed and changed (see the rule `declared-values`), and the notices of the platform actions as `<action>.<name>`;
+- the actions of `platform.leaving` added and removed, the entries of `platform.unsavedInput` as `<leave>: <how it asks>` (and `question: <dialog>`), what `platform.defaults` declares as `<keyword> <value>` (`maxLength 80`), the values of `platform.values` added, removed and changed (see the rule `declared-values`), and the notices of the platform actions as `<action>.<name>`;
 - per activity both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`;
 - per screen both sides hold with a flow on either side, the lines of its flow (see the rule `contract-diff-lines`);
 - the platform actions by name, and per platform action either side holds the lines of the action (see the rule `contract-diff-lines`);

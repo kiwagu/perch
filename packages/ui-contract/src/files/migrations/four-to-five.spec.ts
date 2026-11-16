@@ -16,6 +16,9 @@ import { PANEL_FILE, writeVersionFourRepository } from './four-to-five.fixture'
 
 const FILE = 'panel.yaml'
 
+/** The version this step writes, the engine's when it came: a later step is a spec of its own. */
+const FIVE = 5
+
 /** The screen of a panel with three parts, two of them with an error, and the regions `regions`. */
 const panel = (
   regions: string,
@@ -51,6 +54,7 @@ function migrated(text: string): { text: string; manual: readonly string[] } {
     platform: parseYamlDocument('version: 4\n'),
     screens,
     vocabulary: '',
+    model: '',
   })
 
   return { text: writtenBy(texts, screens)[FILE] ?? '', manual }
@@ -243,7 +247,7 @@ describe('the migration from version 4 to 5 on a repository', () => {
     const moved = repository()
     const panel = read(moved, PANEL_FILE)
 
-    expect(migrate(moved, { write: true })).toEqual({
+    expect(migrate(moved, { write: true, current: FIVE })).toEqual({
       from: 4,
       to: 5,
       steps: [
@@ -260,13 +264,13 @@ describe('the migration from version 4 to 5 on a repository', () => {
     expect(loadContract(moved).contract?.screens.version).toBe(5)
     expect(checkContract(moved).map(formatProblem)).toEqual([])
     expect(asLoaded(moved)).toEqual(asLoaded(written))
-    expect(migrate(moved, { write: true })).toEqual({ from: 5, to: 5, steps: [] })
+    expect(migrate(moved, { write: true, current: FIVE })).toEqual({ from: 5, to: 5, steps: [] })
   })
 
   it('keeps a clear after another effect, names it, and the check refuses it at its place', () => {
     const root = repository(true)
     const panel = read(root, PANEL_FILE)
-    const { steps } = migrate(root, { write: true })
+    const { steps } = migrate(root, { write: true, current: FIVE })
     const at = 'flow.states.viewing.states.mail.onDone.actions[1]'
 
     expect(steps.flatMap(({ manual }) => manual)).toEqual([

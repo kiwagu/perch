@@ -68,8 +68,9 @@ function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
  */
 export function loadContract(root: string): { contract?: Contract; problems: Problem[] } {
   const { vocabulary, problems: vocabularyLoad } = loadVocabulary(root)
-  const { model, problems: modelLoad } = loadModel(root)
-  const { screens, problems: screensLoad } = loadScreensWith(root, model)
+  const { model: written, problems: modelLoad } = loadModel(root)
+  // The model every rule reads is the one the screens were derived from: its lengths resolved.
+  const { screens, model, problems: screensLoad } = loadScreensWith(root, written)
   const { activities, lines: activityLines, problems: activitiesLoad } = loadActivities(root)
   const { scenarios, lines: scenarioLines, problems: scenariosLoad } = loadScenarios(root)
   const problems = [

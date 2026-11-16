@@ -7,7 +7,9 @@
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
  * the kind, meaning and values of the part it marks, the composites and the field states of the
  * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
- * description the engine says of it, and a text field the value it takes.
+ * description the engine says of it, and a text field the value it takes. The platform's values
+ * and the model document are those the contract loads, each length resolved, and from version 6
+ * the contract section names the default length they took.
  */
 
 import {
@@ -23,6 +25,7 @@ import { fieldStatesOf } from '../check'
 import {
   type Activity,
   CONFIRM_RULE_ROW,
+  DEFAULTS_EDITION,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
@@ -177,8 +180,11 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
   )
 
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
+  const { defaults } = screens.platform
+
   return {
     version: screens.version,
+    ...(screens.version < DEFAULTS_EDITION || defaults === undefined ? {} : { defaults }),
     idAttribute: ANCHOR_ATTRIBUTES.anchor,
     idPattern: ANCHOR_PATTERN.source,
     kinds: vocabulary.kinds,

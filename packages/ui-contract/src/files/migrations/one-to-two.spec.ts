@@ -19,6 +19,7 @@ const filesOf = (vocabulary: string): MigrationFiles => ({
   platform: parseYamlDocument(PLATFORM),
   screens: new Map(),
   vocabulary,
+  model: '',
 })
 
 describe('oneToTwo', () => {

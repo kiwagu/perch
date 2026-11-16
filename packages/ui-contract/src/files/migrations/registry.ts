@@ -3,10 +3,17 @@
  * version it reads: a bump of the version adds its step here.
  */
 
+import { fiveToSix } from './five-to-six'
 import { fourToFive } from './four-to-five'
 import type { Migration } from './migration'
 import { oneToTwo } from './one-to-two'
 import { threeToFour } from './three-to-four'
 import { twoToThree } from './two-to-three'
 
-export const MIGRATIONS: ReadonlyArray<Migration> = [oneToTwo, twoToThree, threeToFour, fourToFive]
+export const MIGRATIONS: ReadonlyArray<Migration> = [
+  oneToTwo,
+  twoToThree,
+  threeToFour,
+  fourToFive,
+  fiveToSix,
+]

@@ -114,6 +114,7 @@ export {
   jsonSchemaProblems,
   loadActivities,
   loadModel,
+  loadResolvedModel,
   loadScenarios,
   loadScreens,
   MANIFEST_SCHEMA_FILE,
@@ -157,6 +158,7 @@ export {
   type Vocabulary,
   validateAgainst,
   type WrittenDescription,
+  withDefaultLength,
   writeSchemas,
 } from './files'
 export {

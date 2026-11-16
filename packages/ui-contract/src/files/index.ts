@@ -111,6 +111,7 @@ export {
   type FlowRegionState,
   type FlowState,
   type FlowTransition,
+  loadResolvedModel,
   loadScreens,
   loadScreensWith,
   type ParamValue,
@@ -124,6 +125,8 @@ export {
 } from './screens'
 export { createValidator, jsonSchemaProblems, validateAgainst } from './validator'
 export {
+  DEFAULTS_EDITION,
+  type DefaultLengths,
   fieldValueOf,
   keywordsOf,
   loosest,
@@ -131,6 +134,8 @@ export {
   type ResolvedValue,
   resolveValue,
   wideningsOf,
+  withDefaultLength,
+  withDefaultLengths,
 } from './values'
 export {
   parseVocabulary,

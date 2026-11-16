@@ -57,6 +57,7 @@ describe('twoToThree', () => {
       platform: parseYamlDocument(PLATFORM),
       screens: new Map([['sample/$key.yaml', parseYamlDocument(SCREEN)]]),
       vocabulary: VOCABULARY,
+      model: '',
     }
 
     expect(twoToThree.from).toBe(2)

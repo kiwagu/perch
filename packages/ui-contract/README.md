@@ -29,8 +29,10 @@ links to as `contract/REFERENCE.md#<slug>`.
       section each (`VOCABULARY_SECTIONS`); a vocabulary without its "Composites" section reads
       as an empty table.
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
-      the contract check does): every `.yaml` file under `contract/domain/screens`, sorted by
-      path, with what it leaves out derived from the model and the platform (`files/derive/`:
+      the contract check does, which takes back the model with its lengths resolved): every
+      `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values and the
+      model first taking their default length (`files/values/default-lengths.ts`), with what it
+      leaves out derived from the model and the platform (`files/derive/`:
       `composites.ts`, `form-params.ts`, `paging.ts`, `errors.ts`, `flow-errors.ts`, `inputs.ts`,
       `leaves.ts`, `toasts.ts`, `confirmations.ts`, `questions.ts`, `requests.ts`) and its flow
       expanded from the shorter forms (`files/expand-flow/`: `effects.ts`, `requests.ts`,
@@ -52,7 +54,9 @@ links to as `contract/REFERENCE.md#<slug>`.
       keys are the `platform-*` keys of the reference.
     - `loadModel(root)`: `contract/domain/model.schema.json`, checked against the JSON Schema
       2020-12 meta-schema, then each `$defs` entity through `entityDefinitionSchema`, each action
-      a `ModelAction` (its `params` and its `changes`).
+      a `ModelAction` (its `params` and its `changes`), as the file writes it;
+      `loadResolvedModel(root)`: that model as every reader takes it, each field with its
+      default length, for a reader of the model alone.
     - `loadActivities(root)`: every `.yaml` file under `contract/domain/activities`, one activity
       each through `activitySchema`, its file named by its id; the folder is optional.
     - `loadScenarios(root)`: every `.md` file under `tests/e2e/scenarios`, its id the path
@@ -68,8 +72,10 @@ links to as `contract/REFERENCE.md#<slug>`.
   - The values (`files/values/`): `resolveValue(ref, platform, model)` gives the `ResolvedValue`
     a name of `platform.values` or a field of the model names, `parameterValueOf(action, param,
     platform, model)` the one a parameter takes, and `fieldValueOf(anchor, screen, platform,
-    model)` the one a field takes, the loosest of those of its bindings
-    (`contract/REFERENCE.md#rule-declared-values`).
+    model)` the one a field takes, the loosest of those of its bindings;
+    `withDefaultLength(value, defaults, readOnly?)` gives a value the platform's default length
+    where it names none, and `withDefaultLengths(platform, model)` does it once for the platform
+    and the model as they load (`contract/REFERENCE.md#rule-declared-values`).
   - `attributedCodes(action, platform)` (`files/derive/failures.ts`): per parameter of a platform
     action, the codes that concern it, by the suffixes of `FIELD_CODE_SUFFIXES`
     (`contract/REFERENCE.md#rule-attributed-codes`).
@@ -156,7 +162,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     (`contract/REFERENCE.md#rule-editions-and-migrations`).
   - Migrations (`files/migrations/`, written up in `MIGRATIONS.md`): `migrate(root, { write,
     migrations?, current? })` runs each `Migration` (`from`, `note`, `run(files)` over the
-    `MigrationFiles`) of the registry `MIGRATIONS` from the declared version up to `current`,
+    `MigrationFiles`: the platform and the screens as YAML documents, the vocabulary and the
+    model as text) of the registry `MIGRATIONS` from the declared version up to `current`,
     `CONTRACT_VERSION` by default, and returns the `MigrationReport`; with `write` it writes the
     files the steps changed (`files/write-yaml-document/`: only the nodes a step edited change).
     `parseYamlDocument(text)`: the `yaml` package's `Document` of a text, its comments and styles
@@ -187,8 +194,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     now? })` returns the `Manifest` (typed from `manifestSchema`), with the prose `instructions`
     for an agent (`instructionsOf`), `fieldStates` (`fieldStatesOf`), `derivedParts`, `composites`,
     each binding's `example` link (`exampleOf`), each anchor's description (the written one, else
-    the one the engine says, `files/derive/descriptions.ts`), `ids`, `routeParams` and the model
-    document
+    the one the engine says, `files/derive/descriptions.ts`), `ids`, `routeParams`, the
+    platform's values and the model document with their lengths resolved, and from version 6
+    `contract.defaults`
     (`contract/REFERENCE.md#rule-manifest`, `contract/REFERENCE.md#rule-field-states-carried`,
     `contract/REFERENCE.md#rule-engine-descriptions`). `productInfo(root)` names the product.
     `writeManifest(root, outDir, manifest)` validates it against

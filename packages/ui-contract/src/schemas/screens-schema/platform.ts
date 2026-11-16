@@ -1,8 +1,8 @@
 /**
- * What the platform offers every screen: the values its parameters refer to, its actions, the
- * events it raises in a flow, the actions that leave what the user typed behind and how every
- * leave that would lose it asks first, the composites it declares once for the screens that opt
- * in, its reserved anchors, its status line.
+ * What the platform offers every screen: the length a value takes where it names none, the values
+ * its parameters refer to, its actions, the events it raises in a flow, the actions that leave
+ * what the user typed behind and how every leave that would lose it asks first, the composites it
+ * declares once for the screens that opt in, its reserved anchors, its status line.
  */
 
 import { z } from '@workspace/zod'
@@ -129,6 +129,22 @@ const unsavedInputSchema = z
     'Every leave that would lose what the user typed and did not save, and how the app asks first: through the question, by the browser, never, or it cannot.',
   )
 
+/** What a value takes where it writes nothing of its own: from version 6, its length. */
+export const platformDefaultsSchema = z
+  .strictObject({
+    maxLength: z
+      .int()
+      .min(1)
+      .describe(
+        'The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
+      ),
+  })
+  .describe(
+    'What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`.',
+  )
+
+export type PlatformDefaults = z.infer<typeof platformDefaultsSchema>
+
 /** A composite the platform declares once, derived into every screen that opts in. */
 export const platformCompositeSchema = z
   .strictObject({
@@ -157,6 +173,7 @@ export type PlatformComposite = z.infer<typeof platformCompositeSchema>
 
 export const platformSchema = z
   .strictObject({
+    defaults: platformDefaultsSchema.optional(),
     values: z
       .record(kebabNameSchema, valueSchema)
       .optional()
