@@ -30,7 +30,7 @@ export const valueKeywords = {
     .enum(VALUE_FORMATS)
     .optional()
     .describe(
-      'The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.',
+      'The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.',
     ),
   minimum,
   maximum,

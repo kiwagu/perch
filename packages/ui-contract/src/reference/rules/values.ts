@@ -37,8 +37,8 @@ const emailFormat: ReferenceRule = {
   id: 'email-format',
   title: 'The browser refuses an email first',
   text: [
-    '`format: email`: the field is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs; where the action declares an `-invalid` code, it answers what passes the browser, which takes `a@b` for an email. A form that holds such a field never sets `noValidate`, which would let every text through to the action.',
-    'A control that does not submit its form (a `type=button` that runs its action on click) runs the action with no browser check: the same `-invalid` code, where the action declares one, answers a text that is no email there.',
+    '`format: email`: the field is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs; where the action declares an `-invalid` code, it answers what passes the browser, which takes `a@b` for an email. A form that holds such a field never sets `noValidate`, which would let every text through to the action.',
+    'A control that does not submit its form (a `type=button` that runs its action on click) runs the action with no browser check: the same `-invalid` code, where the action declares one, answers a text that is no email there. A read-only field of that format is `type=email` too and is submitted by no form.',
   ].join('\n\n'),
   keys: ['platform.values.<name>.format', 'manifest.ids.<name>.value.format'],
 }

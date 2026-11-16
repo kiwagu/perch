@@ -249,8 +249,11 @@ describe('renderReference', () => {
     ['screen-anchors-name-roles', 'whoever is signed in'],
     ['manifest-screens-anchors-name-asks', 'Enter in a field of the asking control'],
     ['manifest-ids-name-asks', 'Enter in a field of the asking control'],
-    ['platform-values-name-format', 'in a form without `noValidate`'],
-    ['manifest-ids-name-value-format', 'in a form without `noValidate`'],
+    ['platform-values-name-format', 'through a form without `noValidate`'],
+    ['manifest-ids-name-value-format', 'through a form without `noValidate`'],
+    ['rule-email-format', 'is submitted by no form'],
+    ['rule-clear-keeps', 'while its draft lives'],
+    ['rule-clear-keeps', "an entry's edit form closing because another entry is edited or deleted"],
   ])('answers a question builders asked, in the text of %s', (slug, answer) => {
     expect(entryAt(slug)?.text).toContain(answer)
   })

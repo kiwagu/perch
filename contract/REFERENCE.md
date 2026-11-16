@@ -1029,7 +1029,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `values.<name>.format`
 
 <a id="platform-values-name-format"></a>
-The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
+The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 ### `values.<name>.minimum`
 
@@ -1109,7 +1109,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `actions.<name>.params.<name>.format`
 
 <a id="platform-actions-name-params-name-format"></a>
-The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
+The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 ### `actions.<name>.params.<name>.minimum`
 
@@ -3716,7 +3716,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `ids.<name>.value.format`
 
 <a id="manifest-ids-name-value-format"></a>
-The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
+The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 ### `ids.<name>.value.minimum`
 
@@ -3776,7 +3776,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.values.<name>.format`
 
 <a id="manifest-platform-values-name-format"></a>
-The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
+The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 ### `platform.values.<name>.minimum`
 
@@ -3856,7 +3856,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.actions.<name>.params.<name>.format`
 
 <a id="manifest-platform-actions-name-params-name-format"></a>
-The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
+The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 ### `platform.actions.<name>.params.<name>.minimum`
 
@@ -4514,7 +4514,7 @@ Keys it concerns: [`screen.flow.states.<name>.entry`](#screen-flow-states-name-e
 ### What empties a field
 
 <a id="rule-clear-keeps"></a>
-Only a `clear` of the flow empties a field (see the rule `flow-effects`): one the flow never clears keeps what was typed in every state, and a state that stops rendering it hides it without emptying it.
+Only a `clear` of the flow empties a field while its draft lives (see the rule `flow-effects`): a field the flow never clears keeps what was typed in every state, and a state that stops rendering it hides it without emptying it. A draft lives with what it belongs to and starts afresh, from the stored value or empty, when that ends: with another organisation (the page's flow says every area starts afresh), another key of the screen's address (see the rule `address-key`), or an entry's edit form closing because another entry is edited or deleted (the flow says what was typed is dropped).
 
 Keys it concerns: [`screen.flow.states.<name>.entry.clear`](#screen-flow-states-name-entry-clear).
 
@@ -4727,9 +4727,9 @@ Keys it concerns: [`platform.actions.<name>.codes`](#platform-actions-name-codes
 ### The browser refuses an email first
 
 <a id="rule-email-format"></a>
-`format: email`: the field is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs; where the action declares an `-invalid` code, it answers what passes the browser, which takes `a@b` for an email. A form that holds such a field never sets `noValidate`, which would let every text through to the action.
+`format: email`: the field is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs; where the action declares an `-invalid` code, it answers what passes the browser, which takes `a@b` for an email. A form that holds such a field never sets `noValidate`, which would let every text through to the action.
 
-A control that does not submit its form (a `type=button` that runs its action on click) runs the action with no browser check: the same `-invalid` code, where the action declares one, answers a text that is no email there.
+A control that does not submit its form (a `type=button` that runs its action on click) runs the action with no browser check: the same `-invalid` code, where the action declares one, answers a text that is no email there. A read-only field of that format is `type=email` too and is submitted by no form.
 
 Keys it concerns: [`platform.values.<name>.format`](#platform-values-name-format), [`manifest.ids.<name>.value.format`](#manifest-ids-name-value-format).
 

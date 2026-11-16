@@ -77,7 +77,7 @@ const flowEffects: ReferenceRule = {
 const clearKeeps: ReferenceRule = {
   id: 'clear-keeps',
   title: 'What empties a field',
-  text: 'Only a `clear` of the flow empties a field (see the rule `flow-effects`): one the flow never clears keeps what was typed in every state, and a state that stops rendering it hides it without emptying it.',
+  text: "Only a `clear` of the flow empties a field while its draft lives (see the rule `flow-effects`): a field the flow never clears keeps what was typed in every state, and a state that stops rendering it hides it without emptying it. A draft lives with what it belongs to and starts afresh, from the stored value or empty, when that ends: with another organisation (the page's flow says every area starts afresh), another key of the screen's address (see the rule `address-key`), or an entry's edit form closing because another entry is edited or deleted (the flow says what was typed is dropped).",
   keys: ['screen.flow.states.<name>.entry.clear'],
 }
 
