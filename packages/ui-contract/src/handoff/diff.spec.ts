@@ -182,6 +182,7 @@ describe('diffContracts', () => {
         transitions: { thing: { added: [], removed: [] } },
       },
       flows: { sample: { added: [], removed: [] } },
+      values: { added: [], removed: [], changed: [] },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
       modelActionLines: {
@@ -1147,5 +1148,108 @@ describe('diffContracts and the reads an action changes', () => {
       'model action lines added in thing.renameThing: changes things.read',
       'model action lines added in thing.updateThing: changes things.list, changes things.read',
     ])
+  })
+})
+
+describe('diffContracts and the platform values', () => {
+  const EMAIL = {
+    type: 'string',
+    format: 'email',
+    maxLength: 254,
+    description: 'An address.',
+  } as const
+
+  /** The fixture contract declaring the platform values `values`. */
+  const declaring = (values: NonNullable<Contract['screens']['platform']['values']>): Contract => {
+    const contract = fixtureContract()
+
+    contract.screens.platform.values = values
+
+    return contract
+  }
+
+  it('lists a value added or removed by its name', () => {
+    expect(diffContracts(fixtureContract(), declaring({ email: EMAIL })).values).toEqual({
+      added: ['email'],
+      removed: [],
+      changed: [],
+    })
+    expect(diffContracts(declaring({ email: EMAIL }), fixtureContract()).values).toEqual({
+      added: [],
+      removed: ['email'],
+      changed: [],
+    })
+  })
+  it('lists one line naming a value whose maxLength changes, its description aside', () => {
+    const before = declaring({ email: EMAIL })
+    const after = declaring({ email: { ...EMAIL, maxLength: 100, description: 'Shorter.' } })
+
+    expect(diffContracts(before, after).values).toEqual({
+      added: [],
+      removed: [],
+      changed: ['email maxLength 254 -> 100'],
+    })
+  })
+  it('names a keyword a value gains or loses with none on the side that lacks it', () => {
+    const before = declaring({ email: EMAIL })
+    const after = declaring({
+      email: { type: 'string', maxLength: 254, pattern: '^.+@.+$', description: 'An address.' },
+    })
+
+    expect(diffContracts(before, after).values.changed).toEqual([
+      'email format "email" -> none',
+      'email pattern none -> "^.+@.+$"',
+    ])
+  })
+  it('prints the values added, removed and changed', () => {
+    const before = declaring({ email: EMAIL, name: { type: 'string', description: 'A name.' } })
+    const after = declaring({
+      email: { ...EMAIL, maxLength: 100 },
+      code: { type: 'string', pattern: '^[0-9]{6}$', description: 'A code.' },
+    })
+
+    expect(formatChanges(diffContracts(before, after)).split('\n')).toEqual([
+      'contract changes: 1 platform value added, 1 platform value removed, 1 platform value changed',
+      'platform values added: code',
+      'platform values removed: name',
+      'platform values changed: email maxLength 254 -> 100',
+    ])
+  })
+  it('tells apart enums that print alike as text: one member with a comma, a number and a string', () => {
+    const kind = (values: Array<string | number>) => ({ enum: values, description: 'A kind.' })
+
+    expect(
+      diffContracts(declaring({ kind: kind(['a, b']) }), declaring({ kind: kind(['a', 'b']) }))
+        .values.changed,
+    ).toEqual(['kind enum ["a, b"] -> ["a","b"]'])
+    expect(
+      diffContracts(declaring({ kind: kind([1]) }), declaring({ kind: kind(['1']) })).values
+        .changed,
+    ).toEqual(['kind enum [1] -> ["1"]'])
+  })
+  it('tells apart the inline enums of a parameter that print alike as text', () => {
+    const withKind = (values: Array<string | number>): Contract => {
+      const contract = fixtureContract()
+      const signOut = contract.screens.platform.actions['sign-out']
+
+      if (signOut === undefined) {
+        throw new Error('the fixture has no sign-out')
+      }
+
+      signOut.params = { kind: { type: 'string', enum: values, description: 'A kind.' } }
+
+      return contract
+    }
+
+    expect(diffContracts(withKind(['a, b']), withKind(['a', 'b'])).actionLines['sign-out']).toEqual(
+      {
+        added: ['param kind: string, enum ["a","b"]'],
+        removed: ['param kind: string, enum ["a, b"]'],
+      },
+    )
+    expect(diffContracts(withKind([1]), withKind(['1'])).actionLines['sign-out']).toEqual({
+      added: ['param kind: string, enum ["1"]'],
+      removed: ['param kind: string, enum [1]'],
+    })
   })
 })

@@ -40,6 +40,7 @@ import { screensProblems } from './screens'
 import { searchProblems } from './search'
 import { toastsProblems } from './toasts'
 import { unsavedInputProblems } from './unsaved-input'
+import { valueProblems } from './values'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
 
@@ -112,6 +113,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   toastsProblems,
   confirmationsProblems,
   unsavedInputProblems,
+  valueProblems,
   searchProblems,
   mailsProblems,
   noticesProblems,

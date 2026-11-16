@@ -13,9 +13,10 @@
  * platform actions declare, the transitions it adds or removes in each activity both contracts
  * hold, the lines of the flow it adds or removes in each screen both hold (a flow added or
  * removed whole, every line; so a contract written shorter that loads to the same flows shows no
- * change), the platform actions it adds or removes, the lines of each platform action it adds,
- * removes or changes (its parameters, result, codes, roles, the reads it changes, mail and
- * notices), the reads each action of the model comes to change or stops changing, and each
+ * change), the platform values it adds, removes or changes, the platform actions it adds or
+ * removes, the lines of each platform action it adds, removes or changes (its parameters, result,
+ * codes, roles, the reads it changes, mail and notices), the reads each action of the model comes
+ * to change or stops changing, and each
  * description the files write that it adds, removes or changes, with its length on each side.
  */
 
@@ -30,6 +31,7 @@ import { type DescriptionChange, descriptionChanges } from './description-change
 import { flowLines } from './flow-lines'
 import { routeAccessLines } from './route-access'
 import { sourceLines } from './source-lines'
+import { type ValueChanges, valueChanges } from './value-changes'
 
 export interface ContractChanges {
   anchors: Change & { renamed: Array<{ from: string; to: string }> }
@@ -87,6 +89,11 @@ export interface ContractChanges {
    * one side lacks having none.
    */
   flows: Record<string, Change>
+  /**
+   * By name, the platform values added and removed, and of each value both hold each keyword
+   * changed, as `<name> <keyword> <before> -> <after>` (`valueChanges`).
+   */
+  values: ValueChanges
   /** By name, the platform actions. */
   actions: Change
   /**
@@ -276,6 +283,7 @@ export function diffContracts(
     fields: changeOf(fieldsOf(before), fieldsOf(after)),
     activities: activityChanges(before, after),
     flows: flowChanges(before, after),
+    values: valueChanges(before, after),
     actions: changeOf(Object.keys(actionsOf(before)), Object.keys(actionsOf(after))),
     actionLines: actionLineChanges(before, after),
     modelActionLines: modelActionLineChanges(before, after),

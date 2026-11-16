@@ -15,13 +15,15 @@ import { READ_RULES } from './reads'
 import { RENDER_RULES } from './renders'
 import { ROUTE_RULES } from './routes'
 import { SCENARIO_RULES } from './scenarios'
+import { VALUE_RULES } from './values'
 
 export { INSTRUCTION_RULES } from './instructions'
 
 /**
  * Every rule of the engine that no key states, in the order the reference writes them: the
- * anchors and the routes, the flows and what they render and read, what a screen leaves out, the
- * scenarios, the checks, the commits, the manifest, the hand-over and the coverage, and last the fixed texts of the manifest's instructions.
+ * anchors and the routes, the flows and what they render and read, a paged list, the values,
+ * what a screen leaves out, the scenarios, the checks, the commits, the manifest, the hand-over
+ * and the coverage, and last the fixed texts of the manifest's instructions.
  */
 export const REFERENCE_RULES: readonly ReferenceRule[] = [
   ...ANCHOR_RULES,
@@ -30,6 +32,7 @@ export const REFERENCE_RULES: readonly ReferenceRule[] = [
   ...RENDER_RULES,
   ...READ_RULES,
   ...PAGING_RULES,
+  ...VALUE_RULES,
   ...LEAVES_OUT_RULES,
   ...OUTCOME_RULES,
   ...SCENARIO_RULES,

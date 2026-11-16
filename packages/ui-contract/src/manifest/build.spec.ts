@@ -73,6 +73,7 @@ describe('buildManifest', () => {
       screen: 'sample',
       binding: { model: 'thing.title' },
       holdsInput: true,
+      value: { type: 'string', minLength: 1, maxLength: 80 },
     })
     expect(manifest.ids['sample.save-button']).toMatchObject({
       kind: 'button',
@@ -357,6 +358,69 @@ describe('a field that starts with a search parameter', () => {
     expect(built.ids['sample.title-input']?.binding).toEqual(binding)
     expect(built.contract.instructions.bindings).toContain('`{ "search": "<name>" }` on a field')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+})
+
+describe('the value a field takes', () => {
+  it('carries on an input the value its bindings derive, and none on a button', () => {
+    const base = fixtureContract()
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(base.screens.screens[0]?.anchors['sample.title-input']).not.toHaveProperty('value')
+    expect(built.ids['sample.title-input']?.value).toStrictEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 80,
+    })
+    expect(built.ids['sample.save-button']).not.toHaveProperty('value')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('carries on a textarea the platform value its parameter refers to, narrowed', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    base.screens.platform.values = {
+      note: { type: 'string', maxLength: 500, description: 'A note.' },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: { reason: { value: 'note', minLength: 1, description: 'Why.' } },
+      result: 'the report is in',
+      codes: ['failed'],
+      changes: [],
+    }
+    sample.anchors['sample.reason-textarea'] = {
+      kind: 'textarea',
+      binding: { action: 'platform.report', params: { reason: 'sample.reason-textarea' } },
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.reason-textarea']?.value).toStrictEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 500,
+    })
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
+  it('gives no value to a select, which is no text field', () => {
+    const base = fixtureContract()
+    const [sample] = base.screens.screens
+
+    if (sample === undefined) {
+      expect.unreachable('the fixture has a sample screen')
+    }
+
+    sample.anchors['sample.size-select'] = { kind: 'select', binding: { model: 'thing.size' } }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.size-select']).toMatchObject({ kind: 'select' })
+    expect(built.ids['sample.size-select']).not.toHaveProperty('value')
   })
 })
 

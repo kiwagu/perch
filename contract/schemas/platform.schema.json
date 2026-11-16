@@ -8,6 +8,86 @@
       "maximum": 9007199254740991,
       "description": "The version of the contract format the files are written in, said here alone from version 2."
     },
+    "values": {
+      "description": "The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.",
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "description": "The primitive type of the value.",
+            "type": "string",
+            "enum": [
+              "string",
+              "integer",
+              "number",
+              "boolean"
+            ]
+          },
+          "enum": {
+            "description": "The values it takes, each a string or a number.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "description": "A string or a number.",
+              "type": [
+                "string",
+                "number"
+              ]
+            }
+          },
+          "minLength": {
+            "description": "The fewest characters of a string.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "maxLength": {
+            "description": "The most characters of a string.",
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "pattern": {
+            "description": "A regular expression (ECMA-262) every value of a string matches.",
+            "type": "string"
+          },
+          "format": {
+            "description": "The format every value of a string keeps: `email`, an address of mail.",
+            "type": "string",
+            "enum": [
+              "email"
+            ]
+          },
+          "minimum": {
+            "description": "The smallest value of a number or an integer.",
+            "type": "number"
+          },
+          "maximum": {
+            "description": "The largest value of a number or an integer.",
+            "type": "number"
+          },
+          "description": {
+            "type": "string",
+            "description": "What the value holds, for every parameter that refers to it. At most 200 characters."
+          },
+          "examples": {
+            "description": "Fake values the value accepts, for a test or an example to use: any list.",
+            "type": "array",
+            "items": {}
+          }
+        },
+        "required": [
+          "description"
+        ],
+        "additionalProperties": false,
+        "description": "A value declared once: its type and its constraints, which every parameter that refers to it by name takes. See the rule `declared-values`."
+      }
+    },
     "actions": {
       "type": "object",
       "propertyNames": {
@@ -32,20 +112,82 @@
               "type": "object",
               "properties": {
                 "type": {
+                  "description": "The type of the value: string, boolean, number; left out where `value` gives it.",
+                  "type": "string"
+                },
+                "value": {
                   "type": "string",
-                  "description": "The type of the value: string, boolean, number."
+                  "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
+                  "description": "The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`."
+                },
+                "enum": {
+                  "description": "The values it takes, each a string or a number.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "description": "A string or a number.",
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "minLength": {
+                  "description": "The fewest characters of a string.",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "maxLength": {
+                  "description": "The most characters of a string.",
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "pattern": {
+                  "description": "A regular expression (ECMA-262) every value of a string matches.",
+                  "type": "string"
+                },
+                "format": {
+                  "description": "The format every value of a string keeps: `email`, an address of mail.",
+                  "type": "string",
+                  "enum": [
+                    "email"
+                  ]
+                },
+                "minimum": {
+                  "description": "The smallest value of a number or an integer.",
+                  "type": "number"
+                },
+                "maximum": {
+                  "description": "The largest value of a number or an integer.",
+                  "type": "number"
+                },
+                "optional": {
+                  "description": "The action runs without the parameter: a field that passes it may stay empty.",
+                  "type": "boolean",
+                  "const": true
+                },
+                "codes": {
+                  "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.",
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                    "description": "A code of the vocabulary (data-code)."
+                  }
                 },
                 "description": {
                   "type": "string",
-                  "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
+                  "description": "What the parameter is for. Its type or the value it refers to, and its constraints, are written beside it. At most 200 characters."
                 }
               },
               "required": [
-                "type",
                 "description"
               ],
               "additionalProperties": false,
-              "description": "One parameter of a platform action."
+              "description": "One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`."
             },
             "description": "The parameters by name."
           },

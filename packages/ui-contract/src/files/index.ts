@@ -115,6 +115,15 @@ export {
 } from './screens'
 export { createValidator, jsonSchemaProblems, validateAgainst } from './validator'
 export {
+  fieldValueOf,
+  keywordsOf,
+  loosest,
+  parameterValueOf,
+  type ResolvedValue,
+  resolveValue,
+  wideningsOf,
+} from './values'
+export {
   parseVocabulary,
   VOCABULARY_SECTIONS,
   type Vocabulary,

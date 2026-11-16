@@ -6,8 +6,8 @@
  * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
  * the kind, meaning and values of the part it marks, the composites and the field states of the
- * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the description the
- * engine says of it.
+ * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
+ * description the engine says of it, and a text field the value it takes.
  */
 
 import {
@@ -26,7 +26,9 @@ import {
   derivedDescriptionOf,
   describedOf,
   failuresOf,
+  fieldValueOf,
   type Model,
+  type ResolvedValue,
   type Screen,
   type ScreensFile,
   TOAST_RULE_ROW,
@@ -40,6 +42,15 @@ import type { Manifest, Product } from './manifest.types'
 
 /** The app state in which a test may start. */
 const READY = 'ready'
+
+/** The kinds of a text field: each carries the value it takes (`fieldValueOf`). */
+const TEXT_FIELD_KINDS: ReadonlySet<string> = new Set(['input', 'textarea'])
+
+type WrittenValue = NonNullable<Manifest['ids'][string]['value']>
+
+/** A value as the manifest writes it: its enum a list of its own. */
+const writtenValue = ({ enum: values, ...rest }: ResolvedValue): WrittenValue =>
+  values === undefined ? rest : { ...rest, enum: [...values] }
 
 export interface ManifestInput {
   readonly vocabulary: Vocabulary
@@ -61,9 +72,9 @@ const mapValues = <T>(
 const located = ({ where, meaning }: { where: string; meaning: string }): string =>
   `${where}: ${meaning}`
 
-function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['ids'] {
+function idsOf(screens: ScreensFile, vocabulary: Vocabulary, model: Model): Manifest['ids'] {
   return Object.fromEntries(
-    screens.flatMap((screen) =>
+    screens.screens.flatMap((screen) =>
       Object.entries(screen.anchors).map(([anchor, def]) => {
         const {
           kind,
@@ -86,6 +97,9 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
           derivedFrom,
         } = def
         const fieldStates = fieldStatesOf(def, vocabulary)
+        const value = TEXT_FIELD_KINDS.has(kind)
+          ? fieldValueOf(anchor, screen, screens.platform, model)
+          : undefined
 
         return [
           anchor,
@@ -110,6 +124,7 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
             ...(composite === undefined ? {} : { composite }),
             ...(derivedFrom === undefined ? {} : { derivedFrom }),
             ...(fieldStates.length === 0 ? {} : { fieldStates: [...fieldStates] }),
+            ...(value === undefined ? {} : { value: writtenValue(value) }),
           },
         ]
       }),
@@ -228,7 +243,7 @@ export function buildManifest({
       failureOf: failuresOf(model, screens.platform.actions),
     }),
     routeParams: routeParamsOf(screens.screens),
-    ids: idsOf(screens.screens, vocabulary),
+    ids: idsOf(screens, vocabulary, model),
     platform: screens.platform,
     activities,
     scenarios,

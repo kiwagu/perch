@@ -16,6 +16,7 @@ import {
   scenarioFile,
   VOCABULARY_FILE,
 } from '../files'
+import { DESCRIPTION_PURPOSES } from '../schemas'
 
 import { checkContract, loadContract } from './run'
 
@@ -128,6 +129,24 @@ describe('checkContract', () => {
 
     expect(printed()).toEqual([
       'contract/domain/platform.yaml:1: actions["sign-out"].notices[0].link: Unrecognized key: "search"',
+    ])
+  })
+  it('holds a platform value to the budget, and a parameter to the values it may refer to', () => {
+    edit(PLATFORM_FILE, (text) =>
+      text
+        .replace(
+          'actions:\n',
+          `values:\n  flag:\n    type: boolean\n    description: ${'x'.repeat(201)}\nactions:\n`,
+        )
+        .replace(
+          '        type: boolean\n        description: Drop',
+          '        value: flags\n        description: Drop',
+        ),
+    )
+
+    expect(printed()).toEqual([
+      'contract/domain/platform.yaml:1: actions["sign-out"].params.forgetUnsent.value: "flags" is no value of platform.values',
+      `contract/domain/platform.yaml:6: values.flag.description: the description of platform value flag is 201 characters, past its budget of 200; its purpose: "${DESCRIPTION_PURPOSES.value}"`,
     ])
   })
   it('holds the reads an action changes to the platform actions the lists read', () => {

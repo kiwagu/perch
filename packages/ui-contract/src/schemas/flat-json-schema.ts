@@ -37,28 +37,36 @@ const parameterControlSchema = z
   })
   .describe('The controls of the page that set the parameter.')
 
+/**
+ * The keywords of a flat parameter that say what values it takes, the one shape every schema of a
+ * value is built from (a platform value, a parameter of a platform action).
+ */
+export const parameterKeywords = {
+  type: z
+    .enum(['string', 'integer', 'number', 'boolean'])
+    .describe('The primitive type of the parameter.'),
+  enum: z.array(primitiveSchema).min(1).optional().describe('The values the parameter takes.'),
+  default: primitiveSchema.optional().describe('The value when the URL leaves it out.'),
+  examples: z
+    .array(primitiveSchema)
+    .min(1)
+    .optional()
+    .describe(
+      'Fake values of the parameter, each one it accepts; the first fills the example link.',
+    ),
+  minimum: z.number().optional().describe('The smallest value of a number or an integer.'),
+  maximum: z.number().optional().describe('The largest value of a number or an integer.'),
+  minLength: z.int().min(0).optional().describe('The fewest characters of a string.'),
+  maxLength: z.int().min(0).optional().describe('The most characters of a string.'),
+  pattern: z
+    .string()
+    .optional()
+    .describe('A regular expression (ECMA-262) every value of a string matches.'),
+}
+
 const parameterSchema = z
   .strictObject({
-    type: z
-      .enum(['string', 'integer', 'number', 'boolean'])
-      .describe('The primitive type of the parameter.'),
-    enum: z.array(primitiveSchema).min(1).optional().describe('The values the parameter takes.'),
-    default: primitiveSchema.optional().describe('The value when the URL leaves it out.'),
-    examples: z
-      .array(primitiveSchema)
-      .min(1)
-      .optional()
-      .describe(
-        'Fake values of the parameter, each one it accepts; the first fills the example link.',
-      ),
-    minimum: z.number().optional().describe('The smallest value of a number or an integer.'),
-    maximum: z.number().optional().describe('The largest value of a number or an integer.'),
-    minLength: z.int().min(0).optional().describe('The fewest characters of a string.'),
-    maxLength: z.int().min(0).optional().describe('The most characters of a string.'),
-    pattern: z
-      .string()
-      .optional()
-      .describe('A regular expression (ECMA-262) every value of a string matches.'),
+    ...parameterKeywords,
     description: z.string().optional().describe(DESCRIPTION_PURPOSES.parameter),
     'x-perch': parameterControlSchema.optional(),
   })

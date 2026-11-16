@@ -4,8 +4,8 @@
  * scenario files of `tests/e2e/scenarios/`: the vocabulary as tables with instructions for an
  * agent, the platform's composites among them, the screens verbatim with an example link on
  * each binding, every declared anchor with its screen (a field's composite opt-in and the
- * anchors a composite derives marked so), the platform, the activities verbatim, the scenarios
- * parsed and the model.
+ * anchors a composite derives marked so, a text field with the value it takes), the platform, the
+ * activities verbatim, the scenarios parsed and the model.
  */
 
 import { z } from '@workspace/zod'
@@ -31,6 +31,7 @@ import {
   derivedFromSchema,
   leavesSchema,
   platformSchema,
+  resolvedValueSchema,
   screenSchema,
 } from './screens-schema'
 
@@ -204,6 +205,11 @@ const idSchema = z
       .optional()
       .describe(
         'The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.',
+      ),
+    value: resolvedValueSchema
+      .optional()
+      .describe(
+        'On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.',
       ),
   })
   .describe('One declared anchor, as a test looks it up.')

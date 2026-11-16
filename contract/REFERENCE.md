@@ -951,6 +951,66 @@ The version of the contract format and what the platform offers every screen.
 <a id="platform-version"></a>
 The version of the contract format the files are written in, said here alone from version 2.
 
+### `values`
+
+<a id="platform-values"></a>
+The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.
+
+### `values.<name>`
+
+<a id="platform-values-name"></a>
+A value declared once: its type and its constraints, which every parameter that refers to it by name takes. See the rule `declared-values`.
+
+### `values.<name>.type`
+
+<a id="platform-values-name-type"></a>
+The primitive type of the value.
+
+### `values.<name>.enum`
+
+<a id="platform-values-name-enum"></a>
+The values it takes, each a string or a number.
+
+### `values.<name>.minLength`
+
+<a id="platform-values-name-minlength"></a>
+The fewest characters of a string.
+
+### `values.<name>.maxLength`
+
+<a id="platform-values-name-maxlength"></a>
+The most characters of a string.
+
+### `values.<name>.pattern`
+
+<a id="platform-values-name-pattern"></a>
+A regular expression (ECMA-262) every value of a string matches.
+
+### `values.<name>.format`
+
+<a id="platform-values-name-format"></a>
+The format every value of a string keeps: `email`, an address of mail.
+
+### `values.<name>.minimum`
+
+<a id="platform-values-name-minimum"></a>
+The smallest value of a number or an integer.
+
+### `values.<name>.maximum`
+
+<a id="platform-values-name-maximum"></a>
+The largest value of a number or an integer.
+
+### `values.<name>.description`
+
+<a id="platform-values-name-description"></a>
+What the value holds, for every parameter that refers to it. At most 200 characters.
+
+### `values.<name>.examples`
+
+<a id="platform-values-name-examples"></a>
+Fake values the value accepts, for a test or an example to use: any list.
+
 ### `actions`
 
 <a id="platform-actions"></a>
@@ -974,17 +1034,67 @@ The parameters by name.
 ### `actions.<name>.params.<name>`
 
 <a id="platform-actions-name-params-name"></a>
-One parameter of a platform action.
+One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`.
 
 ### `actions.<name>.params.<name>.type`
 
 <a id="platform-actions-name-params-name-type"></a>
-The type of the value: string, boolean, number.
+The type of the value: string, boolean, number; left out where `value` gives it.
+
+### `actions.<name>.params.<name>.value`
+
+<a id="platform-actions-name-params-name-value"></a>
+The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`.
+
+### `actions.<name>.params.<name>.enum`
+
+<a id="platform-actions-name-params-name-enum"></a>
+The values it takes, each a string or a number.
+
+### `actions.<name>.params.<name>.minLength`
+
+<a id="platform-actions-name-params-name-minlength"></a>
+The fewest characters of a string.
+
+### `actions.<name>.params.<name>.maxLength`
+
+<a id="platform-actions-name-params-name-maxlength"></a>
+The most characters of a string.
+
+### `actions.<name>.params.<name>.pattern`
+
+<a id="platform-actions-name-params-name-pattern"></a>
+A regular expression (ECMA-262) every value of a string matches.
+
+### `actions.<name>.params.<name>.format`
+
+<a id="platform-actions-name-params-name-format"></a>
+The format every value of a string keeps: `email`, an address of mail.
+
+### `actions.<name>.params.<name>.minimum`
+
+<a id="platform-actions-name-params-name-minimum"></a>
+The smallest value of a number or an integer.
+
+### `actions.<name>.params.<name>.maximum`
+
+<a id="platform-actions-name-params-name-maximum"></a>
+The largest value of a number or an integer.
+
+### `actions.<name>.params.<name>.optional`
+
+<a id="platform-actions-name-params-name-optional"></a>
+The action runs without the parameter: a field that passes it may stay empty.
+
+### `actions.<name>.params.<name>.codes`
+
+<a id="platform-actions-name-params-name-codes"></a>
+The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.
 
 ### `actions.<name>.params.<name>.description`
 
 <a id="platform-actions-name-params-name-description"></a>
-What the value is and its limits; its type is written beside it. At most 200 characters.
+What the parameter is for. Its type or the value it refers to, and its constraints, are written beside it. At most 200 characters.
 
 ### `actions.<name>.result`
 
@@ -3473,10 +3583,120 @@ The field shows no state colour: the app leaves its border uncoloured; its `fiel
 <a id="manifest-ids-name-secret"></a>
 The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.
 
+### `ids.<name>.value`
+
+<a id="manifest-ids-name-value"></a>
+On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.
+
+### `ids.<name>.value.type`
+
+<a id="manifest-ids-name-value-type"></a>
+The type of the value: `string`, `integer`, `number`, `boolean`.
+
+### `ids.<name>.value.enum`
+
+<a id="manifest-ids-name-value-enum"></a>
+The values it takes, each a string or a number.
+
+### `ids.<name>.value.minLength`
+
+<a id="manifest-ids-name-value-minlength"></a>
+The fewest characters of a string.
+
+### `ids.<name>.value.maxLength`
+
+<a id="manifest-ids-name-value-maxlength"></a>
+The most characters of a string.
+
+### `ids.<name>.value.pattern`
+
+<a id="manifest-ids-name-value-pattern"></a>
+A regular expression (ECMA-262) every value of a string matches.
+
+### `ids.<name>.value.format`
+
+<a id="manifest-ids-name-value-format"></a>
+The format every value of a string keeps: `email`, an address of mail.
+
+### `ids.<name>.value.minimum`
+
+<a id="manifest-ids-name-value-minimum"></a>
+The smallest value of a number or an integer.
+
+### `ids.<name>.value.maximum`
+
+<a id="manifest-ids-name-value-maximum"></a>
+The largest value of a number or an integer.
+
+### `ids.<name>.value.readOnly`
+
+<a id="manifest-ids-name-value-readonly"></a>
+The value is a field of the model that is read-only (`x-perch.readonly`).
+
 ### `platform`
 
 <a id="manifest-platform"></a>
 What the platform offers every screen.
+
+### `platform.values`
+
+<a id="manifest-platform-values"></a>
+The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.
+
+### `platform.values.<name>`
+
+<a id="manifest-platform-values-name"></a>
+A value declared once: its type and its constraints, which every parameter that refers to it by name takes. See the rule `declared-values`.
+
+### `platform.values.<name>.type`
+
+<a id="manifest-platform-values-name-type"></a>
+The primitive type of the value.
+
+### `platform.values.<name>.enum`
+
+<a id="manifest-platform-values-name-enum"></a>
+The values it takes, each a string or a number.
+
+### `platform.values.<name>.minLength`
+
+<a id="manifest-platform-values-name-minlength"></a>
+The fewest characters of a string.
+
+### `platform.values.<name>.maxLength`
+
+<a id="manifest-platform-values-name-maxlength"></a>
+The most characters of a string.
+
+### `platform.values.<name>.pattern`
+
+<a id="manifest-platform-values-name-pattern"></a>
+A regular expression (ECMA-262) every value of a string matches.
+
+### `platform.values.<name>.format`
+
+<a id="manifest-platform-values-name-format"></a>
+The format every value of a string keeps: `email`, an address of mail.
+
+### `platform.values.<name>.minimum`
+
+<a id="manifest-platform-values-name-minimum"></a>
+The smallest value of a number or an integer.
+
+### `platform.values.<name>.maximum`
+
+<a id="manifest-platform-values-name-maximum"></a>
+The largest value of a number or an integer.
+
+### `platform.values.<name>.description`
+
+<a id="manifest-platform-values-name-description"></a>
+What the value holds, for every parameter that refers to it. At most 200 characters.
+
+### `platform.values.<name>.examples`
+
+<a id="manifest-platform-values-name-examples"></a>
+Fake values the value accepts, for a test or an example to use: any list.
 
 ### `platform.actions`
 
@@ -3501,17 +3721,67 @@ The parameters by name.
 ### `platform.actions.<name>.params.<name>`
 
 <a id="manifest-platform-actions-name-params-name"></a>
-One parameter of a platform action.
+One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`.
 
 ### `platform.actions.<name>.params.<name>.type`
 
 <a id="manifest-platform-actions-name-params-name-type"></a>
-The type of the value: string, boolean, number.
+The type of the value: string, boolean, number; left out where `value` gives it.
+
+### `platform.actions.<name>.params.<name>.value`
+
+<a id="manifest-platform-actions-name-params-name-value"></a>
+The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`.
+
+### `platform.actions.<name>.params.<name>.enum`
+
+<a id="manifest-platform-actions-name-params-name-enum"></a>
+The values it takes, each a string or a number.
+
+### `platform.actions.<name>.params.<name>.minLength`
+
+<a id="manifest-platform-actions-name-params-name-minlength"></a>
+The fewest characters of a string.
+
+### `platform.actions.<name>.params.<name>.maxLength`
+
+<a id="manifest-platform-actions-name-params-name-maxlength"></a>
+The most characters of a string.
+
+### `platform.actions.<name>.params.<name>.pattern`
+
+<a id="manifest-platform-actions-name-params-name-pattern"></a>
+A regular expression (ECMA-262) every value of a string matches.
+
+### `platform.actions.<name>.params.<name>.format`
+
+<a id="manifest-platform-actions-name-params-name-format"></a>
+The format every value of a string keeps: `email`, an address of mail.
+
+### `platform.actions.<name>.params.<name>.minimum`
+
+<a id="manifest-platform-actions-name-params-name-minimum"></a>
+The smallest value of a number or an integer.
+
+### `platform.actions.<name>.params.<name>.maximum`
+
+<a id="manifest-platform-actions-name-params-name-maximum"></a>
+The largest value of a number or an integer.
+
+### `platform.actions.<name>.params.<name>.optional`
+
+<a id="manifest-platform-actions-name-params-name-optional"></a>
+The action runs without the parameter: a field that passes it may stay empty.
+
+### `platform.actions.<name>.params.<name>.codes`
+
+<a id="manifest-platform-actions-name-params-name-codes"></a>
+The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those its name tells.
 
 ### `platform.actions.<name>.params.<name>.description`
 
 <a id="manifest-platform-actions-name-params-name-description"></a>
-What the value is and its limits; its type is written beside it. At most 200 characters.
+What the parameter is for. Its type or the value it refers to, and its constraints, are written beside it. At most 200 characters.
 
 ### `platform.actions.<name>.result`
 
@@ -4238,9 +4508,22 @@ A paged list derives four parts, which its `derived` lists and a screen file nev
 
 A part leaves out of the address a value equal to its default (page 1, the action's default size), as every link of the app does. A range or a link that does not apply is absent from the page, never disabled, so a state that lists the list in `meta.renders` does not require them; the size select it does. `pagerOf`, `searchKeysOf` and `pageSearchOf` of `@workspace/ui-contract/anchors` compute what a page shows, which search keys a list reads for and the search a part moves to, for the app and the tests alike (`PAGE` and `SIZE` name the search parameters, `PAGING_PARTS` the four parts).
 
-`contract:check` holds a paged source: its action pages, with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`; every route of its screen declares `page` and `size` as it reads them; no source's `params` names `page` or `size`; a screen pages one list; and a paged list has at most 3 segments. A range and the previous and next links are shown where the read decides, so the e2e run's settled check does not require them to be on the page where their list is rendered; the size select shows wherever the list does (see the rule `settled-state`). `contract:diff` lists `paged` on the line of a list that reads a platform action.
+`contract:check` holds a paged source: its action pages, with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`, each of type `number` or `integer` as it writes it or as the value it refers to says (see the rule `declared-values`); every route of its screen declares `page` and `size` as it reads them; no source's `params` names `page` or `size`; a screen pages one list; and a paged list has at most 3 segments. A range and the previous and next links are shown where the read decides, so the e2e run's settled check does not require them to be on the page where their list is rendered; the size select shows wherever the list does (see the rule `settled-state`). `contract:diff` lists `paged` on the line of a list that reads a platform action.
 
 Keys it concerns: [`screen.anchors.<name>.source.paged`](#screen-anchors-name-source-paged), [`screen.anchors.<name>.derived`](#screen-anchors-name-derived), [`platform.actions.<name>.paged`](#platform-actions-name-paged).
+
+### A value declared once
+
+<a id="rule-declared-values"></a>
+A value is a type with its constraints, said once where its policy lives, so a limit no longer lives in a parameter's prose. It is a name of `platform.values` (`email: { type: string, format: email, maxLength: 254, description }`), written in the bounds of a route's flat parameter (`type`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`), an `enum` of strings and numbers, `examples` (any list of fake values) and `format`, which a route's search never takes; or a field of the model, `<entity>.<field>`, whose JSON Schema constraints it is (a format no value names left out), `readOnly` when the field is `x-perch.readonly`.
+
+A parameter of a platform action writes its `type` or the `value` it refers to, `value: <name>` or `value: <entity>.<field>`, and may write the keywords of a value beside it. A keyword written beside `value` only narrows the value: a `minLength` or a `minimum` no smaller than the value's, a `maxLength` or a `maximum` no larger, an `enum` among the value's members, a `type` or a `format` where the value has none or the same, a `pattern` where the value has none (one beside a value's own pattern is refused, the same one included); `contract:check` refuses one that would widen it or say other than it says, at the keyword (`{ value: email, maxLength: 500 }` over an email of at most 254 characters). What a parameter takes (`parameterValueOf`) is the value it refers to narrowed by those keywords (`{ value: email, maxLength: 100 }` takes at most 100 characters; a refused keyword is left out, so the value keeps its own); a paged action's `size` takes the action's sizes as its `enum`; a parameter that refers to nothing takes its own keywords, its `type` alone at least. A parameter of an action of the model takes the value of the field it sets. `optional: true` says the action runs without the parameter.
+
+The value a field takes (`fieldValueOf`) is the loosest of the values of its model binding and of every action parameter that takes it: its own action bindings and every binding of another anchor of its screen that passes it, a submit button's derived params included. So a field one form uses for two parameters (the password of a sign-in and the new one of a sign-up) accepts what either accepts, never only what the strictest does. Loosest: `minLength` and `minimum` the smallest, `maxLength` and `maximum` the largest, each kept only when every value has one; `type`, `pattern`, `format` and `enum` kept only when every value has the same; `readOnly` only when every value has it. A `{ search }` binding adds nothing, neither narrowing nor widening: the limit of a search parameter belongs to the address. An anchor that is no field, and a field with no model binding and no parameter that takes it, has no value. The manifest carries it on each `input` and `textarea` that has one, as `ids.<anchor>.value`.
+
+`contract:check` refuses a `value` that names neither a value of `platform.values` nor a field of the model, at the parameter, and a keyword beside it that does not narrow it, and holds the description of each value to the budget; a paged action's `page` and `size` are numbers by the type they write or take from their value. `contract:diff` lists the values added and removed by name, and of each value both sides hold each keyword whose value changes, compared as data, as `platform values changed: <name> <keyword> <before> -> <after>`, each side its JSON (`none` on the side that lacks it: `kind enum [1] -> ["1"]`); the line of each parameter of an action names its type or its value and its constraints, each as JSON (see the rule `contract-diff-lines`).
+
+Keys it concerns: [`platform.values`](#platform-values), [`platform.actions.<name>.params.<name>`](#platform-actions-name-params-name), [`platform.actions.<name>.params.<name>.value`](#platform-actions-name-params-name-value), [`manifest.ids.<name>.value`](#manifest-ids-name-value).
 
 ### What an action fails with
 
@@ -4521,6 +4804,8 @@ Every mail a platform action declares goes to a parameter of the action or the a
 
 Every action, of the platform or of the model, writes its `changes`, each name of which is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once; the schema refuses an action without them, as it refuses one without `codes` (`changesProblems`, a problem per name at its place in the platform file or the model).
 
+Every parameter of a platform action writes its `type` or its `value`, and a `value` names a value of `platform.values` or a field of the model (`valueProblems`, a problem at the parameter; see the rule `declared-values`).
+
 Keys it concerns: [`platform.leaving`](#platform-leaving), [`platform.toasts`](#platform-toasts), [`platform.unsavedInput`](#platform-unsavedinput), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
 
 ### The check of who a route serves
@@ -4652,7 +4937,7 @@ The lists, in the order of the block, each added and removed and sorted:
 - the anchors, with the anchors renamed (below); the lists that read a platform action as `<anchor> reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged` when it pages: a list moved to another search or to paging shows as its old line removed and its new one added, and a list added whole shows its line;
 - on the anchors both sides hold, the derived parts as `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input), the codes as `<anchor> <code>` and the states as `<anchor> <state>`, written or derived, so a constraint added to the model shows as the code it gives and a change of a composite's item state shows on each item it derives, the roles each is shown to as `<anchor> <role>`, an error's fields as `<error> <code> -> <field>`, the fields that hold input as `<anchor> holds input`, the fields that drop their state colour as `<anchor> shows no state colour`, the controls that ask before a destructive action as `<anchor> asks <code>`, the controls that ask before they leave their screen as `<anchor> leaves losing <field>, <field>` (other fields show as the old line removed and the new one added), and the messages that rank their codes as `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which the codes compared as a set do not show;
 - the codes of the contract, the composites by name, the entities and their fields as `<entity>.<field>`, the activities by id;
-- the actions of `platform.leaving` added and removed, the entries of `platform.unsavedInput` as `<leave>: <how it asks>` (and `question: <dialog>`), and the notices of the platform actions as `<action>.<name>`;
+- the actions of `platform.leaving` added and removed, the entries of `platform.unsavedInput` as `<leave>: <how it asks>` (and `question: <dialog>`), the values of `platform.values` added, removed and changed (see the rule `declared-values`), and the notices of the platform actions as `<action>.<name>`;
 - per activity both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`;
 - per screen both sides hold with a flow on either side, the lines of its flow (see the rule `contract-diff-lines`);
 - the platform actions by name, and per platform action either side holds the lines of the action (see the rule `contract-diff-lines`);
@@ -4680,12 +4965,12 @@ A screen's flow is listed as `flow lines added in <screen id>` and `flow lines r
 
 An effect is written `show <anchor>: <codes>`, `clear <anchor>`, `read <anchor>` or `navigate <to> <search as JSON>`. Where order runs the machine (the guarded alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a sequence of more than one carries its position, `#<n>`, and the lines are compared as sets. So a screen file written shorter that loads to the same flow shows no flow line.
 
-A platform action is listed by its name, and its lines as `platform action lines added in <action>` and `platform action lines removed in <action>`, one per fact it declares (`actionLines(action)`, an internal helper): each parameter with its type (`param email: string`), its result (`result: <the text>`, the one prose that stays, since it says what holds once the action succeeds), each code its failure shows (`code rate-limited`), each role that may run it (`role <role>`), its page sizes when it pages (`paged by 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link opens and the search parameter that carries the token) and each notice (`notice password-changed to account language account link user.forgot-password`). An action added or removed whole shows every line, as nothing else in the summary says its mail.
+A platform action is listed by its name, and its lines as `platform action lines added in <action>` and `platform action lines removed in <action>`, one per fact it declares (`actionLines(action)`, an internal helper): each parameter with its type or the value it refers to, the constraints it writes, each as JSON, and `optional` when it may be left out (`param email: string`, `param login: value email, maxLength 100`, `param kind: string, enum ["a","b"]`), its result (`result: <the text>`, the one prose that stays, since it says what holds once the action succeeds), each code its failure shows (`code rate-limited`), each role that may run it (`role <role>`), its page sizes when it pages (`paged by 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link opens and the search parameter that carries the token) and each notice (`notice password-changed to account language account link user.forgot-password`). An action added or removed whole shows every line, as nothing else in the summary says its mail.
 
 ### Written descriptions: their place and their length in the diff
 
 <a id="rule-description-places"></a>
-`readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form: the screen files (a screen's own, its route parameters', its anchors', its container `states`, its flow's own, sentence guards, states, regions and transitions with the outcomes of invokes and of a region's button), the platform file (its actions and their parameters, its `events`, its composites' own and their items), the activities (their own, their data, sentence guards, visits and transitions) and the model (its own, each entity's, action's and field's, the subschemas of the document, an entity or a field included), each read as YAML, the model's JSON too, so each has its line. Each is a `WrittenDescription`: its `file`, `line`, JSON path `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The `Contract` carries them as `descriptions`, read by `loadContract`, so the contract at a git ref has those its files write there.
+`readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form: the screen files (a screen's own, its route parameters', its anchors', its container `states`, its flow's own, sentence guards, states, regions and transitions with the outcomes of invokes and of a region's button), the platform file (its values, its actions and their parameters, its `events`, its composites' own and their items), the activities (their own, their data, sentence guards, visits and transitions) and the model (its own, each entity's, action's and field's, the subschemas of the document, an entity or a field included), each read as YAML, the model's JSON too, so each has its line. Each is a `WrittenDescription`: its `file`, `line`, JSON path `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The `Contract` carries them as `descriptions`, read by `loadContract`, so the contract at a git ref has those its files write there.
 
 The place names a description alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`, `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`, `user.profile flow editing.save`, `user.delete-account flow deleting onError #2` (the second of its guarded alternatives), `user.profile guard nameChanged`, `user.sign-in binding /sign-in search email`, `platform action sign-up param email`, `platform event started`, `platform composite password-rules`, `model`, `model entity profile`, `model action profile.updateName`, `model field profile.name`, `activity session state profile on user.profile.sign-out-button`.
 

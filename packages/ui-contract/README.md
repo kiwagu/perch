@@ -64,6 +64,11 @@ links to as `contract/REFERENCE.md#<slug>`.
       `scenarioFile(id)`, `REFERENCE_FILE`, `COVERAGE_FILE`, the five schema files and
       `GUIDE_FILES` (the prose that links into the reference); `isBusinessFile(path)` says
       whether a file is one of the business layer's (`contract/REFERENCE.md#rule-layers-and-commits`).
+  - The values (`files/values/`): `resolveValue(ref, platform, model)` gives the `ResolvedValue`
+    a name of `platform.values` or a field of the model names, `parameterValueOf(action, param,
+    platform, model)` the one a parameter takes, and `fieldValueOf(anchor, screen, platform,
+    model)` the one a field takes, the loosest of those of its bindings
+    (`contract/REFERENCE.md#rule-declared-values`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`

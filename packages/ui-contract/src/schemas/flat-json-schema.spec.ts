@@ -41,6 +41,24 @@ describe('flatJsonSchema', () => {
 
     expect(parsed.success).toBe(false)
   })
+  it('refuses a format, which a value takes and a route parameter never does', () => {
+    const parsed = flatJsonSchema.safeParse({
+      type: 'object',
+      properties: { email: { type: 'string', format: 'email' } },
+      additionalProperties: false,
+    })
+
+    expect(parsed.success).toBe(false)
+  })
+  it('takes a boolean among the values of a route parameter, unlike a value of the platform', () => {
+    const parsed = flatJsonSchema.safeParse({
+      type: 'object',
+      properties: { open: { type: 'boolean', enum: [true, false] } },
+      additionalProperties: false,
+    })
+
+    expect(parsed.error?.issues).toBeUndefined()
+  })
   it('takes the examples of a parameter, one value at least', () => {
     const schema = (examples: unknown[]) => ({
       type: 'object',

@@ -34,5 +34,11 @@ export {
   RECIPIENT,
 } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
-export { type PlatformComposite, platformCompositeSchema, platformSchema } from './platform'
+export {
+  type PlatformComposite,
+  type PlatformParameter,
+  platformCompositeSchema,
+  platformSchema,
+} from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'
+export { resolvedValueSchema, VALUE_FORMATS, valueRefSchema, valueSchema } from './value'
