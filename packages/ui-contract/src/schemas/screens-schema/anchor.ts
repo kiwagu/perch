@@ -125,7 +125,7 @@ export const asksSchema = z
     code: codeSchema.describe('The code it asks with: what the action destroys.'),
   })
   .describe(
-    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform).",
+    "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way.",
   )
 
 /** The question a control asks before its flow moves to another screen, derived by the loader. */
@@ -166,7 +166,7 @@ export const anchorDefSchema = z
       .array(roleSchema)
       .optional()
       .describe(
-        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`).",
+        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.",
       ),
     own: z
       .boolean()
@@ -194,7 +194,12 @@ export const anchorDefSchema = z
       ),
     with: withSchema.optional(),
     without: withoutSchema.optional(),
-    codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
+    codes: z
+      .array(codeSchema)
+      .optional()
+      .describe(
+        'The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.',
+      ),
     ranked: z
       .literal(true)
       .optional()
@@ -261,7 +266,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .array(codeSchema)
       .optional()
       .describe(
-        "The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. See the rule `error-codes-and-fields`.",
+        "The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code. See the rule `error-codes-and-fields`.",
       ),
     fields: z
       .record(codeSchema, errorFieldSchema)

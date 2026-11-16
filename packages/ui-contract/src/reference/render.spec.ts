@@ -234,6 +234,26 @@ describe('renderReference', () => {
       'error-placement',
     )
   })
+  it.each(['enabling', 'clear-keeps', 'email-format', 'list-order'])(
+    'writes the rule %s under a heading of its own',
+    (id) => {
+      const entry = entryAt(`rule-${id}`)
+
+      expect(REFERENCE_RULES.map((rule) => rule.id)).toContain(id)
+      expect(entry?.heading).toBeTruthy()
+      expect(entry?.text.length ?? 0).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+    },
+  )
+  it.each([
+    ['screen-anchors-name-codes', 'for one with no code'],
+    ['screen-anchors-name-roles', 'whoever is signed in'],
+    ['manifest-screens-anchors-name-asks', 'Enter in a field of the asking control'],
+    ['manifest-ids-name-asks', 'Enter in a field of the asking control'],
+    ['platform-values-name-format', 'in a form without `noValidate`'],
+    ['manifest-ids-name-value-format', 'in a form without `noValidate`'],
+  ])('answers a question builders asked, in the text of %s', (slug, answer) => {
+    expect(entryAt(slug)?.text).toContain(answer)
+  })
   it('gives each rule an id of its own', () => {
     const ids = REFERENCE_RULES.map(({ id }) => id)
 

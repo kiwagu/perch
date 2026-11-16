@@ -27,7 +27,8 @@ const MEANINGS = [
     id: 'composite-breaks',
     name: 'passwordBreaksRules',
     shape: '`{ composite: breaks }`',
-    meaning: "the confirmed input breaks one of the rules of its composite's list",
+    meaning:
+      "the confirmed input breaks one of the rules of its composite's list. The composite's `items` are the judge: the input breaks the rules while one of them is not met",
   },
 ]
 

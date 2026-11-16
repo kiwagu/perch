@@ -1069,7 +1069,7 @@
                   "description": "What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares."
                 },
                 "roles": {
-                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`).",
+                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1166,7 +1166,7 @@
                   "description": "The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`."
                 },
                 "codes": {
-                  "description": "The data-code values the element carries.",
+                  "description": "The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1341,7 +1341,7 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
                 },
                 "leaves": {
                   "type": "object",
@@ -6858,7 +6858,7 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
           },
           "leaves": {
             "type": "object",
@@ -6972,7 +6972,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`, an address of mail.",
+                "description": "The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7056,7 +7056,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`, an address of mail.",
+                "description": "The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7148,7 +7148,7 @@
                       "type": "string"
                     },
                     "format": {
-                      "description": "The format every value of a string keeps: `email`, an address of mail.",
+                      "description": "The format every value of a string keeps: `email`, an address of mail. A field that takes it is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
                       "type": "string",
                       "enum": [
                         "email"

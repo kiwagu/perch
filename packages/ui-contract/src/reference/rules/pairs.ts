@@ -13,7 +13,8 @@ export const PAIR_MEANINGS = {
   strays:
     'the confirmation is no longer how the confirmed input begins: a character differs, or it is longer',
   follows: 'the confirmation is how the confirmed input begins, all of it or a part, or is empty',
-  breaks: "the confirmed input breaks one of the rules of its composite's list",
+  breaks:
+    "the confirmed input breaks one of the rules of its composite's list. The composite's `items` are the judge: the input breaks the rules while one of them is not met",
 } as const
 
 /** The rule of one meaning: the guard derived under `name` as `shape`, and what it holds. */

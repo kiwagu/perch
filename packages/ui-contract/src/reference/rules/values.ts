@@ -1,6 +1,7 @@
 /**
  * The rules of a value declared once (where it is declared, how a parameter takes it, what a
- * field takes) and of a platform code on the parameter it concerns.
+ * field takes) and of a platform code on the parameter it concerns, and of the email format, which
+ * the browser checks first.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -32,5 +33,15 @@ const attributedCodes: ReferenceRule = {
   keys: ['platform.actions.<name>.codes', 'platform.actions.<name>.params.<name>.codes'],
 }
 
+const emailFormat: ReferenceRule = {
+  id: 'email-format',
+  title: 'The browser refuses an email first',
+  text: [
+    '`format: email`: the field is `type=email` in a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs; where the action declares an `-invalid` code, it answers what passes the browser, which takes `a@b` for an email. A form that holds such a field never sets `noValidate`, which would let every text through to the action.',
+    'A control that does not submit its form (a `type=button` that runs its action on click) runs the action with no browser check: the same `-invalid` code, where the action declares one, answers a text that is no email there.',
+  ].join('\n\n'),
+  keys: ['platform.values.<name>.format', 'manifest.ids.<name>.value.format'],
+}
+
 /** The rules of the values. */
-export const VALUE_RULES: readonly ReferenceRule[] = [declaredValues, attributedCodes]
+export const VALUE_RULES: readonly ReferenceRule[] = [declaredValues, attributedCodes, emailFormat]

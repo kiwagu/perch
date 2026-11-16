@@ -1,8 +1,9 @@
 /**
  * The rules of a screen's flow: the XState subset it is written in, its states, events, guards and
- * effects, the invoke of an action, the address of a state, the shorter forms a screen file may
- * write, the area of a button across its request, and how the flow is held to a machine. What a
- * state renders is in `renders.ts`, the reads in `reads.ts`.
+ * effects, which controls its machine enables, what empties a field, the invoke of an action, the
+ * address of a state, the shorter forms a screen file may write, the area of a button across its
+ * request, and how the flow is held to a machine. What a state renders is in `renders.ts`, the
+ * reads in `reads.ts`.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -46,6 +47,13 @@ const flowEvents: ReferenceRule = {
   ],
 }
 
+const enabling: ReferenceRule = {
+  id: 'enabling',
+  title: 'Which controls the machine enables',
+  text: "A control of `ENABLED_BY_STATE_KINDS` (of `@workspace/ui-contract/anchors`: a button, a tab, a select, a checkbox, a radio, a switch) whose anchor is an event is enabled exactly while a state the machine is in handles that event, as XState's `snapshot.can` answers it: a transition whose guard fails does not handle it. A text field and a link are never disabled by state: typing goes on while a request runs.",
+  keys: ['screen.flow.states.<name>.on'],
+}
+
 const flowEffects: ReferenceRule = {
   id: 'flow-effects',
   title: 'The four effects of a flow',
@@ -64,6 +72,13 @@ const flowEffects: ReferenceRule = {
     'screen.flow.states.<name>.entry.navigate',
     'screen.flow.states.<name>.entry.navigate.search',
   ],
+}
+
+const clearKeeps: ReferenceRule = {
+  id: 'clear-keeps',
+  title: 'What empties a field',
+  text: 'Only a `clear` of the flow empties a field (see the rule `flow-effects`): one the flow never clears keeps what was typed in every state, and a state that stops rendering it hides it without emptying it.',
+  keys: ['screen.flow.states.<name>.entry.clear'],
 }
 
 const flowInvoke: ReferenceRule = {
@@ -127,7 +142,9 @@ const flowRun: ReferenceRule = {
 export const FLOW_RULES: readonly ReferenceRule[] = [
   flowStates,
   flowEvents,
+  enabling,
   flowEffects,
+  clearKeeps,
   flowInvoke,
   flowShorterForms,
   areaRequest,

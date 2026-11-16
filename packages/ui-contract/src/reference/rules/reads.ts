@@ -1,8 +1,8 @@
 /**
- * The rules of what a list reads and when: the source of a list, the effect `read` that re-reads
- * it after an action, the opt-outs of a read and the reads an action holds; and the key of an
- * address, the search parameter whose missing value is a failure and whose new value starts the
- * screen afresh.
+ * The rules of what a list reads and when: the source of a list, the order it shows its entries
+ * in, the effect `read` that re-reads it after an action, the opt-outs of a read and the reads an
+ * action holds; and the key of an address, the search parameter whose missing value is a failure
+ * and whose new value starts the screen afresh.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -23,6 +23,13 @@ const listReads: ReferenceRule = {
     'screen.anchors.<name>.source.entity',
     'platform.actions.<name>.changes',
   ],
+}
+
+const listOrder: ReferenceRule = {
+  id: 'list-order',
+  title: 'The order of a list',
+  text: 'A list shows its entries in the order its source gives them, never sorted again by the screen: an entity source by its `order` and `direction`, a platform source as its action answers, its `result` naming the order where the contract holds one. A description that names an order names the one the source gives.',
+  keys: ['screen.anchors.<name>.source', 'screen.anchors.<name>.source.entity'],
 }
 
 const readAfterAnAction: ReferenceRule = {
@@ -50,4 +57,9 @@ const addressKey: ReferenceRule = {
 }
 
 /** The rules of the reads of a list, and the key of an address. */
-export const READ_RULES: readonly ReferenceRule[] = [listReads, readAfterAnAction, addressKey]
+export const READ_RULES: readonly ReferenceRule[] = [
+  listReads,
+  listOrder,
+  readAfterAnAction,
+  addressKey,
+]
