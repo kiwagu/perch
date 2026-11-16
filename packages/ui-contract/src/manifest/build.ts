@@ -15,6 +15,7 @@ import {
   ANCHOR_PATTERN,
   kindOf,
   PAGE_HELPER,
+  TEXT_FIELD_KINDS,
   VISIBILITY_BUTTON,
   VISIBILITY_VALUES,
 } from '../anchors'
@@ -42,9 +43,6 @@ import type { Manifest, Product } from './manifest.types'
 
 /** The app state in which a test may start. */
 const READY = 'ready'
-
-/** The kinds of a text field: each carries the value it takes (`fieldValueOf`). */
-const TEXT_FIELD_KINDS: ReadonlySet<string> = new Set(['input', 'textarea'])
 
 type WrittenValue = NonNullable<Manifest['ids'][string]['value']>
 

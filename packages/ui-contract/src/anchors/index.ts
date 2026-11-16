@@ -4,6 +4,7 @@ export { FIELD_STATES, type FieldState, STATEFUL_FIELD_KINDS } from './field-sta
 export {
   ANCHOR_PATTERN,
   CONTROL_KINDS,
+  ENABLED_BY_STATE_KINDS,
   FIELD_KINDS,
   isAnchor,
   isUnder,
@@ -12,6 +13,7 @@ export {
   partOf,
   screenOf,
   segmentsOf,
+  TEXT_FIELD_KINDS,
   WHOLE_FORM,
 } from './grammar'
 export { type InEntry, itemIdOf } from './item'

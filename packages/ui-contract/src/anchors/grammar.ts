@@ -40,6 +40,17 @@ export const WHOLE_FORM = 'form'
  */
 export const CONTROL_KINDS: ReadonlySet<string> = new Set(['button', 'link', 'tab', ...FIELD_KINDS])
 
+/** The kinds a person types into: each takes the value its bindings give it (`fieldValueOf`). */
+export const TEXT_FIELD_KINDS: ReadonlySet<string> = new Set(['input', 'textarea'])
+
+/**
+ * The controls a press or a choice drives, enabled by their screen's machine: disabled in a state
+ * that renders one and does not handle its event. The `CONTROL_KINDS` but a link and a text field.
+ */
+export const ENABLED_BY_STATE_KINDS: ReadonlySet<string> = new Set(
+  [...CONTROL_KINDS].filter((kind) => kind !== 'link' && !TEXT_FIELD_KINDS.has(kind)),
+)
+
 /** The part an anchor sits in: the anchor without its last segment. */
 export const partOf = (anchor: string): string => anchor.slice(0, anchor.lastIndexOf('.'))
 
