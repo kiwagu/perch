@@ -13,6 +13,7 @@ import {
 import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionParamsSchema, sourceParamsSchema } from './params'
+import { withoutSchema, withSchema } from './with'
 
 const PLATFORM_ACTION = /^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)*$/
 
@@ -191,6 +192,8 @@ export const anchorDefSchema = z
       .describe(
         "A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
       ),
+    with: withSchema.optional(),
+    without: withoutSchema.optional(),
     codes: z.array(codeSchema).optional().describe('The data-code values the element carries.'),
     ranked: z
       .literal(true)

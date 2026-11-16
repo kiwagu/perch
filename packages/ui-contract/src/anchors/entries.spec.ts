@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { containersOf, ENTRY_KINDS, inPartOf } from './entries'
+import { containersOf, ENTRY_KINDS, entryOf, inPartOf } from './entries'
 
 const kinds = (anchors: Record<string, string>) =>
   Object.fromEntries(Object.entries(anchors).map(([anchor, kind]) => [anchor, { kind }]))
@@ -57,6 +57,37 @@ describe('inPartOf', () => {
     expect(
       inPartOf('console.users.list.account-item', 'console.users.list.account-item.open-link'),
     ).toBe(false)
+  })
+})
+
+describe('entryOf', () => {
+  const anchors = kinds({
+    'sample.things.section': 'section',
+    'sample.things.list': 'list',
+    'sample.things.item': 'item',
+    'sample.things.text-cell': 'cell',
+    'sample.things.delete-button': 'button',
+    'sample.page.heading': 'heading',
+    'device.list': 'list',
+    'device.list.session-item': 'item',
+    'device.list.session-item.label-cell': 'cell',
+    'device.list.revoke-button': 'button',
+  })
+
+  it('finds the entry an anchor of its part, or one declared under it, renders in', () => {
+    expect(entryOf('sample.things.text-cell', anchors)).toBe('sample.things.item')
+    expect(entryOf('sample.things.delete-button', anchors)).toBe('sample.things.item')
+    expect(entryOf('device.list.revoke-button', anchors)).toBe('device.list.session-item')
+    expect(entryOf('device.list.session-item.label-cell', anchors)).toBe('device.list.session-item')
+  })
+
+  it('finds none for the entry itself, its containers, another part or an unknown anchor', () => {
+    expect(entryOf('sample.things.item', anchors)).toBeUndefined()
+    expect(entryOf('sample.things.list', anchors)).toBeUndefined()
+    expect(entryOf('sample.things.section', anchors)).toBeUndefined()
+    expect(entryOf('device.list', anchors)).toBeUndefined()
+    expect(entryOf('sample.page.heading', anchors)).toBeUndefined()
+    expect(entryOf('sample.things.gone-button', anchors)).toBeUndefined()
   })
 })
 

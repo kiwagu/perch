@@ -38,13 +38,16 @@ const settledState: ReferenceRule = {
   id: 'settled-state',
   title: 'The check of a settled state',
   text: [
-    "`settledProblems(contract, settled)` is the e2e harness's check of a `SettledState` against the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids` with each anchor's `screen`, `derived`, `roles`, `own` and `dataId`): what the page shows once a screen's machine has settled in a state, held to what that state renders (`meta.renders`, read by `renderedAt`). One line per problem; a screen the contract lacks is one. Rendered means visible to the user: an anchor the state does not render is not visible, absent from the page or hidden on it; one it renders is on the page and visible.",
+    "`settledProblems(contract, settled)` is the e2e harness's check of a `SettledState` against the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids` with each anchor's `screen`, `kind`, `derived`, `roles`, `own`, `dataId`, `states`, `with` and `without`): what the page shows once a screen's machine has settled in a state, held to what that state renders (`meta.renders`, read by `renderedAt`). One line per problem; a screen the contract lacks is one. Rendered means visible to the user: an anchor the state does not render is not visible, absent from the page or hidden on it; one it renders is on the page and visible.",
     "Only the anchors of the screen that render only where listed are held, with their derived parts; the anchors every state renders are not (a message shows when it carries a code, and an error when there is one). Two directions are checked. A visible anchor of the screen that the state does not render is reported (`is visible, but the state does not render it`), whatever the anchor is: this one is never waived, so an anchor with `roles`, `own` or a `dataId` that is visible in a state that does not render it is reported. An anchor the state renders that is missing from the page, or hidden, is reported (`is not on the page, but the state renders it`, `is hidden, but the state renders it`), unless data decides whether it shows, where the requirement to be present and visible is waived: an anchor with `roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these. It is waived as well for the parts a page shows on demand: a select's `option`, a composite's `item`, a field's `error-message`, and a paged list's `range`, `previous-link` and `next-link`, which its read decides; the size select shows wherever the list does and is held.",
+    'Beside these, an anchor of the screen that says when it shows is held to its entries (`with`, `without`, see the rule `with-without`), and a visible list to its entries (see the rule `empty-list`).',
   ].join('\n\n'),
   keys: [
     'screen.flow.states.<name>.meta.renders',
     'screen.anchors.<name>.roles',
     'screen.anchors.<name>.own',
+    'screen.anchors.<name>.with',
+    'screen.anchors.<name>.without',
   ],
 }
 

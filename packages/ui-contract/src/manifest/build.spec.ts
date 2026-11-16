@@ -171,6 +171,33 @@ describe('buildManifest', () => {
     expect(built.ids['sample.page']).not.toHaveProperty('ranked')
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
+  it('carries when an element shows beside others, as written, and leaves it out elsewhere', () => {
+    const showing = fixtureContract()
+    const screen = showing.screens.screens.find(({ id }) => id === 'sample')
+
+    if (screen === undefined) {
+      throw new Error('the fixture has no sample screen')
+    }
+
+    screen.anchors['sample.status-message'] = { kind: 'message', codes: ['failed', 'saved'] }
+    screen.anchors['sample.retry-button'] = {
+      kind: 'button',
+      with: [{ 'sample.status-message': ['failed'] }],
+      without: ['sample.list'],
+    }
+
+    const built = buildManifest({ ...showing, product: PRODUCT, now: NOW })
+
+    expect(built.ids['sample.retry-button']).toEqual({
+      kind: 'button',
+      screen: 'sample',
+      with: [{ 'sample.status-message': ['failed'] }],
+      without: ['sample.list'],
+    })
+    expect(built.ids['sample.page']).not.toHaveProperty('with')
+    expect(built.ids['sample.page']).not.toHaveProperty('without')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
   it("names in an error's description the actions its flow invokes against it", () => {
     const withError = fixtureContract()
     const screen = withError.screens.screens.find(({ id }) => id === 'sample')

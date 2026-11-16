@@ -126,6 +126,10 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `keyProblems`: the key of an address, a search parameter that writes `x-perch.key`: its code
       one of an action the screen runs with it, whose parameter refers to a value, one key per
       route, no `default` (`contract/REFERENCE.md#rule-address-key`);
+    - `withProblems`: when an element shows beside others, its `with` and `without`: anchors of
+      its own screen, a code entry's codes among the anchor's, never itself, twice or in a cycle,
+      and under an entry of a list anchors of the same entry (`entryOf` of `./anchors`)
+      (`contract/REFERENCE.md#rule-with-without`);
     - `flowProblems` over the tree of a flow's states, with `flowNodes(flow)` (every state as a
       `FlowNode`: a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode`), `deepTargetOf`,
       `idTargetOf`, `rootOf`, `regionStartsOf` and `deepEnteredOf` (the parts of a `DeepTarget` and
@@ -190,7 +194,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     `contract/schemas/manifest.schema.json` and writes it into `outDir`, whose last segment must
     be `ui-manifest` (`MANIFEST_DIR`); `emitManifest(root, outDir)` runs the contract check first.
     `settledProblems(contract, settled)`: the e2e harness's check of a `SettledState` against the
-    manifest (any `SettledContract`; `contract/REFERENCE.md#rule-settled-state`).
+    manifest (any `SettledContract`; `contract/REFERENCE.md#rule-settled-state`), an element's
+    `with` and `without` and a list with no entries among them
+    (`contract/REFERENCE.md#rule-with-without`, `contract/REFERENCE.md#rule-empty-list`).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
     the `ContractChanges` (`contract/REFERENCE.md#rule-contract-diff`), among them the lines of a
@@ -227,8 +233,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     tells them; `contract/REFERENCE.md#rule-anchor-grammar`);
     `CONTRACT_VERSION`, the newest version of the contract format the engine reads.
   - The entries of a list: `isUnder(anchor, other)`, `partOf(anchor)`, `CONTROL_KINDS` (with
-    `FIELD_KINDS`), `ENTRY_KINDS`, `containersOf(entry, anchors)`, `inPartOf(entry, control)` and
-    `itemIdOf(control, item)` (`contract/REFERENCE.md#rule-entries-of-a-list`).
+    `FIELD_KINDS`), `ENTRY_KINDS`, `containersOf(entry, anchors)`, `inPartOf(entry, control)`,
+    `entryOf(anchor, anchors)` (the entry an anchor is rendered in) and `itemIdOf(control, item)`
+    (`contract/REFERENCE.md#rule-entries-of-a-list`).
+  - When an element shows beside others: `WithEntry`, `entryAnchorOf(entry)` and
+    `entryCodesOf(entry)` (`contract/REFERENCE.md#rule-with-without`).
   - The roles a device holds: `GUEST`, `IDENTITY`, `heldRoles(signedIn, others)` and
     `admits(roles, held)` (`contract/REFERENCE.md#rule-roles`).
   - A paged list: `PAGE`, `SIZE`, `PAGING_PARTS` (`RANGE`, `PREVIOUS_LINK`, `NEXT_LINK`,

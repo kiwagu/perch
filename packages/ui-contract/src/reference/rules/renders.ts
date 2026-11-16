@@ -1,4 +1,8 @@
-/** The rules of what a state renders: the lists of `meta.renders`, what rendered means, who reads it. */
+/**
+ * The rules of what a state renders: the lists of `meta.renders`, what rendered means, who reads
+ * it; when an element shows beside others (`with`, `without`); and the two elements that are not
+ * rendered by their data, a list with no entries and a cell with no value.
+ */
 
 import type { ReferenceRule } from '../rule'
 
@@ -36,5 +40,53 @@ const stateRenders: ReferenceRule = {
   ],
 }
 
-/** The rules of what a state renders. */
-export const RENDER_RULES: readonly ReferenceRule[] = [stateRenders]
+const withWithout: ReferenceRule = {
+  id: 'with-without',
+  title: 'When an element shows beside others: with and without',
+  text: [
+    "An element that shows only beside other elements of its screen, or only away from them, says so in its structure, never in its description: `with` lists the anchors each of which renders while it does, `without` those none of which renders while it does. An entry is an anchor of the element's own screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. The element renders only while every `with` entry renders and no `without` entry does: that says when it may show, and its state (see the rule `renders`) and its data (its roles, its owner, its value, its entries) still decide whether it does. For the frame's reminder to install the app:",
+    [
+      '```yaml',
+      'anchors:',
+      '  app-shell.install-later-button:',
+      '    kind: button',
+      '    with: [ app-shell.install-message ]',
+      '  app-shell.install-button:',
+      '    kind: button',
+      '    with: [ { app-shell.install-message: [ install-available ] } ]',
+      '```',
+    ].join('\n'),
+    'An anchor rendered in each entry of a list, in the part of its `item` or `row` (`<part>.<name>`, like the entry) or declared under it (see the rule `entries-of-a-list`), names anchors of the same entry and means the same entry: `device.list.revoke-button` with `without: [ device.list.current-badge, device.list.revoked-cell ]` shows on every entry but the one of this device and those signed out already. An anchor outside the entries may name one of them, and then means any entry.',
+    "`contract:check` refuses an entry that names the element itself; an anchor of another screen (a screen's element never names the frame's, nor the frame's a screen's) or one its screen does not declare; a code the named anchor does not carry, as loaded (the codes the loader derives included); an anchor named twice, in one list or in both; an anchor that names the element back, directly or through others, a cycle, which is said on one of its anchors only; and, under an entry, an anchor outside that entry. The manifest carries `with` and `without` in `ids`.",
+    "An e2e run holds them in every settled state of the element's screen (see the rule `settled-state`), unless the element is rendered in each entry of a list, which the report does not tell apart: it is not visible while a `with` entry does not render or a `without` entry does. A control the state renders and data does not decide is visible once each of its `with` entries renders, one at least, and no `without` entry does; any other element shows by its own data too (a cell its value, a list its entries, a message its code), and an element with no `with` entry has nothing on the page that says the area holding it is shown. A code entry reads the `data-code` the report carries; where the report carries none, it is judged only when its anchor is not visible, and then it does not render.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.with', 'screen.anchors.<name>.without'],
+}
+
+const emptyList: ReferenceRule = {
+  id: 'empty-list',
+  title: 'A list with no entries',
+  text: [
+    'A list with no entries is not rendered, so it is not rendered before its first read answers, unless it carries a data state (`loading`, `empty`) that shows it waiting or empty.',
+    'An e2e run holds it in every settled state (see the rule `settled-state`): a visible `list` none of whose entries is visible, an `item` or a `row` it contains (declared under it or beside it in its part, see the rule `entries-of-a-list`), is reported unless its `states` include `loading` or `empty`; a list that declares no entry is not judged.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.states'],
+}
+
+const emptyCell: ReferenceRule = {
+  id: 'empty-cell',
+  title: 'A cell with no value',
+  text: [
+    'A cell with no value is not rendered.',
+    'So an e2e run never requires a cell to be visible, and a `with` entry that renders does not require the cell that shows with it (see the rule `with-without`).',
+  ].join('\n\n'),
+  keys: [],
+}
+
+/** The rules of what a state renders, and of when an element shows beside others. */
+export const RENDER_RULES: readonly ReferenceRule[] = [
+  stateRenders,
+  withWithout,
+  emptyList,
+  emptyCell,
+]

@@ -34,6 +34,7 @@ import {
   platformSchema,
   resolvedValueSchema,
   screenSchema,
+  withEntrySchema,
 } from './screens-schema'
 
 /** A table of the vocabulary: its key, then what the key means. */
@@ -179,6 +180,18 @@ const idSchema = z
       .optional()
       .describe("The roles that see the element, among those its screen's bindings serve."),
     own: z.boolean().optional().describe('Shown to a member only on the entries it owns.'),
+    with: z
+      .array(withEntrySchema)
+      .optional()
+      .describe(
+        'It renders only while each of these renders (an anchor, or one showing these codes).',
+      ),
+    without: z
+      .array(withEntrySchema)
+      .optional()
+      .describe(
+        'It renders only while none of these renders (an anchor, or one showing these codes).',
+      ),
     asks: asksSchema.optional(),
     leaves: leavesSchema.optional(),
     composite: kebabNameSchema

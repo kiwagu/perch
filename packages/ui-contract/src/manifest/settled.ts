@@ -6,19 +6,31 @@
  * state does not render is not visible, absent from the page or hidden on it; one it renders is
  * on the page and visible, unless data decides whether it shows (an anchor with `roles` or
  * `own`, an entry of a list, `dataId`, or an anchor nested under one of these), where only the
- * first holds. A derived part the page shows on demand is held to the first only as well.
+ * first holds. A derived part the page shows on demand is held to the first only as well. An
+ * anchor of the screen that says when it shows (`with`, `without`), unless it is rendered in each
+ * entry of a list, is held to its entries (`withShownProblems`), and a visible list to having an
+ * entry (`emptyListProblems`).
  */
 
 import {
+  CONTROL_KINDS,
+  containersOf,
+  ENTRY_KINDS,
+  entryAnchorOf,
+  entryCodesOf,
+  entryOf,
   isListed,
   isRendered,
   isUnder,
   NEXT_LINK,
   PREVIOUS_LINK,
   RANGE,
+  type RenderedAnchor,
+  type RenderedAt,
   renderedAt,
   type SettledState,
   type SettledValue,
+  type WithEntry,
 } from '../anchors'
 
 import type { Manifest } from './manifest.types'
@@ -27,7 +39,13 @@ import type { Manifest } from './manifest.types'
 export interface SettledContract {
   readonly screens: readonly { readonly id: string; readonly flow?: unknown }[]
   readonly ids: Readonly<
-    Record<string, Pick<Manifest['ids'][string], 'screen' | 'derived' | 'roles' | 'own' | 'dataId'>>
+    Record<
+      string,
+      Pick<
+        Manifest['ids'][string],
+        'screen' | 'kind' | 'derived' | 'roles' | 'own' | 'dataId' | 'states' | 'with' | 'without'
+      >
+    >
   >
 }
 
@@ -46,6 +64,9 @@ const ON_DEMAND: ReadonlySet<string> = new Set([
   PREVIOUS_LINK,
   NEXT_LINK,
 ])
+
+/** The states a list shows itself in while it has no entry: waiting for its read, or empty. */
+const WAITING_OR_EMPTY: ReadonlySet<string> = new Set(['loading', 'empty'])
 
 /** `sign-up`, or `viewing (form: open, notes: idle)` for a parallel state. */
 const stateText = (value: SettledValue): string =>
@@ -88,6 +109,127 @@ const anchorsOf = (contract: SettledContract, screen: string): string[] =>
       ...(derived ?? []).filter((suffix) => !ON_DEMAND.has(suffix)).map((s) => `${anchor}.${s}`),
     ])
 
+/** What a settled state's page is held to: the contract, the screen, what the state renders. */
+interface SettledPage {
+  readonly contract: SettledContract
+  readonly screen: string
+  readonly at: RenderedAt
+  readonly anchors: readonly RenderedAnchor[]
+  /** `<screen> in <state>`, which each line starts with. */
+  readonly where: string
+}
+
+/** The declared anchors of `screen`, by name. */
+const idsOf = (contract: SettledContract, screen: string): SettledContract['ids'] =>
+  Object.fromEntries(Object.entries(contract.ids).filter(([, def]) => def.screen === screen))
+
+/** `"<anchor>"`, or `"<anchor>" (<code> or <code>)` for a code entry. */
+const entryText = (entry: WithEntry): string => {
+  const codes = entryCodesOf(entry)
+
+  return `"${entryAnchorOf(entry)}"${codes === undefined ? '' : ` (${codes.join(' or ')})`}`
+}
+
+/**
+ * Whether `entry` renders on the page: its anchor visible and, for a code entry, showing one of
+ * its codes; undefined when the page does not say (a report without codes, the anchor visible).
+ */
+function entryShows(entry: WithEntry, anchors: readonly RenderedAnchor[]): boolean | undefined {
+  const codes = entryCodesOf(entry)
+  const visible = anchors.filter(
+    ({ anchor, visible: seen }) => seen && anchor === entryAnchorOf(entry),
+  )
+
+  if (visible.length === 0 || codes === undefined) {
+    return visible.length > 0
+  }
+  if (visible.some(({ code }) => code !== undefined && codes.includes(code))) {
+    return true
+  }
+
+  return visible.every(({ code }) => code !== undefined) ? false : undefined
+}
+
+/**
+ * Each anchor of the screen with `with` or `without`, unless it is rendered in each entry of a
+ * list, which the report does not tell apart: visible only while each `with` entry renders and
+ * no `without` entry does. A control the state renders and data does not decide is visible once
+ * each `with` entry renders, one at least, and no `without` entry does; any other element shows
+ * by its own data too (a cell its value, a list its entries, a message its code), and without a
+ * `with` entry nothing on the page says the area that holds it is shown.
+ */
+function withShownProblems({ contract, screen, at, anchors, where }: SettledPage): string[] {
+  const ids = idsOf(contract, screen)
+
+  return Object.entries(ids)
+    .filter(
+      ([anchor, def]) =>
+        (def.with !== undefined || def.without !== undefined) && entryOf(anchor, ids) === undefined,
+    )
+    .flatMap(([anchor, def]) => {
+      const withs = def.with ?? []
+      const withouts = def.without ?? []
+
+      if (anchors.some((each) => each.anchor === anchor && each.visible)) {
+        return [
+          ...withs
+            .filter((entry) => entryShows(entry, anchors) === false)
+            .map(
+              (entry) =>
+                `${where}: "${anchor}" is visible, but ${entryText(entry)} does not show: it shows only with it`,
+            ),
+          ...withouts
+            .filter((entry) => entryShows(entry, anchors) === true)
+            .map(
+              (entry) =>
+                `${where}: "${anchor}" is visible, but ${entryText(entry)} shows: it shows only without it`,
+            ),
+        ]
+      }
+
+      const shows =
+        withs.length > 0 &&
+        withs.every((entry) => entryShows(entry, anchors) === true) &&
+        withouts.every((entry) => entryShows(entry, anchors) === false)
+      const held =
+        CONTROL_KINDS.has(def.kind) && isRendered(at, anchor) && !decidedByData(contract, anchor)
+
+      return shows && held
+        ? [
+            `${where}: "${anchor}" is not visible, but each entry of its with shows and none of its without`,
+          ]
+        : []
+    })
+}
+
+/**
+ * Each visible list of the screen that has entries (an `item` or a `row` it contains) and shows
+ * none of them, unless its states say it shows itself waiting or empty (`loading`, `empty`).
+ */
+function emptyListProblems({ contract, screen, anchors, where }: SettledPage): string[] {
+  const ids = idsOf(contract, screen)
+  const visible = new Set(anchors.filter((each) => each.visible).map(({ anchor }) => anchor))
+
+  return Object.entries(ids)
+    .filter(
+      ([list, { kind, states }]) =>
+        kind === 'list' &&
+        visible.has(list) &&
+        !(states ?? []).some((state) => WAITING_OR_EMPTY.has(state)),
+    )
+    .flatMap(([list]) => {
+      const entries = Object.entries(ids)
+        .filter(
+          ([entry, { kind }]) => ENTRY_KINDS.has(kind) && containersOf(entry, ids).includes(list),
+        )
+        .map(([entry]) => entry)
+
+      return entries.length === 0 || entries.some((entry) => visible.has(entry))
+        ? []
+        : [`${where}: "${list}" is visible with no entry: a list with none is not rendered`]
+    })
+}
+
 /** What the page of a settled state shows against what the state renders, one line each. */
 export function settledProblems(contract: SettledContract, settled: SettledState): string[] {
   const screen = contract.screens.find(({ id }) => id === settled.screen)
@@ -122,5 +264,7 @@ export function settledProblems(contract: SettledContract, settled: SettledState
         : [`${where}: "${anchor}" is hidden, but the state renders it`]
     })
 
-  return [...unrendered, ...unshown]
+  const page = { contract, screen: settled.screen, at, anchors, where }
+
+  return [...unrendered, ...unshown, ...withShownProblems(page), ...emptyListProblems(page)]
 }

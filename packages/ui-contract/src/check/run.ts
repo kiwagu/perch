@@ -45,6 +45,7 @@ import { unsavedInputProblems } from './unsaved-input'
 import { valueProblems } from './values'
 import { versionProblems } from './version'
 import { vocabularyProblems } from './vocabulary'
+import { withProblems } from './with'
 
 function loadVocabulary(root: string): ReturnType<typeof parseVocabulary> {
   let markdown: string
@@ -126,6 +127,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   pagingProblems,
   scenariosProblems,
   descriptionsProblems,
+  withProblems,
 ]
 
 export function checkContract(root: string): Problem[] {

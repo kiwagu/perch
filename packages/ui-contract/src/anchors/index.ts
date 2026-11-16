@@ -7,7 +7,7 @@ export {
   sizeOptionOf,
   testIdFor,
 } from './derive'
-export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
+export { containersOf, ENTRY_KINDS, entryOf, inPartOf } from './entries'
 export { FIELD_STATES, type FieldState, STATEFUL_FIELD_KINDS } from './field-states'
 export {
   ANCHOR_PATTERN,
@@ -53,3 +53,4 @@ export { isListed, isRendered, listedBy, type RenderedAt, renderedAt } from './r
 export { admits, admitsAllOf, GUEST, heldRoles, IDENTITY, sameAdmission } from './roles'
 export { CONTRACT_VERSION } from './version'
 export { VISIBILITY_BASE_KIND, VISIBILITY_BUTTON, VISIBILITY_VALUES } from './visibility'
+export { entryAnchorOf, entryCodesOf, type WithEntry } from './with'

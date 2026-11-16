@@ -41,19 +41,27 @@ const CONTRACT: SettledContract = {
     },
   ],
   ids: {
-    'x.y.email-input': { screen: 'x.y' },
-    'x.y.forgot-link': { screen: 'x.y' },
-    'x.y.name-input': { screen: 'x.y', derived: ['visibility-button', 'error-message'] },
-    'x.y.leave-dialog': { screen: 'x.y', derived: ['confirm-button', 'cancel-button'] },
-    'x.y.mode-select': { screen: 'x.y', derived: ['option', 'toggle-button'] },
-    'x.y.rule-list': { screen: 'x.y' },
-    'x.y.rule-list.length-item': { screen: 'x.y' },
-    'x.y.form': { screen: 'x.y', roles: ['member'] },
-    'x.y.form.key-input': { screen: 'x.y' },
-    'x.y.item': { screen: 'x.y', dataId: 'note' },
-    'x.y.item.edit-textarea': { screen: 'x.y' },
-    'x.y.edit-textarea': { screen: 'x.y', own: true },
-    'app-shell.nav': { screen: 'app-shell', roles: ['identity'] },
+    'x.y.email-input': { screen: 'x.y', kind: 'input' },
+    'x.y.forgot-link': { screen: 'x.y', kind: 'link' },
+    'x.y.name-input': {
+      screen: 'x.y',
+      kind: 'input',
+      derived: ['visibility-button', 'error-message'],
+    },
+    'x.y.leave-dialog': {
+      screen: 'x.y',
+      kind: 'dialog',
+      derived: ['confirm-button', 'cancel-button'],
+    },
+    'x.y.mode-select': { screen: 'x.y', kind: 'select', derived: ['option', 'toggle-button'] },
+    'x.y.rule-list': { screen: 'x.y', kind: 'list' },
+    'x.y.rule-list.length-item': { screen: 'x.y', kind: 'item' },
+    'x.y.form': { screen: 'x.y', kind: 'form', roles: ['member'] },
+    'x.y.form.key-input': { screen: 'x.y', kind: 'input' },
+    'x.y.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+    'x.y.item.edit-textarea': { screen: 'x.y', kind: 'textarea' },
+    'x.y.edit-textarea': { screen: 'x.y', kind: 'textarea', own: true },
+    'app-shell.nav': { screen: 'app-shell', kind: 'nav', roles: ['identity'] },
   },
 }
 
@@ -164,6 +172,7 @@ describe('a settled state held to what it renders', () => {
       ids: {
         'x.y.page-list': {
           screen: 'x.y',
+          kind: 'list',
           derived: ['range', 'previous-link', 'next-link', 'size-select'],
         },
       },
@@ -251,5 +260,151 @@ describe('a settled state held to what it renders', () => {
         page: { url: 'https://stand.example.test/sample/thg_01hzx9k2', anchors },
       }),
     ).toEqual([])
+  })
+})
+
+/** A flow whose busy state alone renders `x.y.later-button`. */
+const SHOWING = {
+  initial: 'idle',
+  states: { idle: {}, busy: { meta: { renders: ['x.y.later-button'] } } },
+}
+
+/** The problems of a page of `x.y` in `value`, its anchors declared as `ids`. */
+const onPage = (ids: SettledContract['ids'], anchors: RenderedAnchor[], value = 'idle') =>
+  settledProblems({ screens: [{ id: 'x.y', flow: SHOWING }], ids }, settled(value, anchors))
+
+/** A visible element that carries `code`, as a report with codes reads it. */
+const coded = (anchor: string, code: string): RenderedAnchor => ({ ...shown(anchor), code })
+
+describe('a settled state held to what its elements show with and without', () => {
+  const update: SettledContract['ids'] = {
+    'x.y.update-message': { screen: 'x.y', kind: 'message' },
+    'x.y.update-button': { screen: 'x.y', kind: 'button', with: ['x.y.update-message'] },
+  }
+  const install: SettledContract['ids'] = {
+    'x.y.install-message': { screen: 'x.y', kind: 'message' },
+    'x.y.install-button': {
+      screen: 'x.y',
+      kind: 'button',
+      with: [{ 'x.y.install-message': ['install-available'] }],
+    },
+  }
+
+  it('holds a control to show exactly while what it shows with shows', () => {
+    expect(onPage(update, [shown('x.y.update-button')])).toEqual([
+      'x.y in idle: "x.y.update-button" is visible, but "x.y.update-message" does not show: it shows only with it',
+    ])
+    expect(onPage(update, [shown('x.y.update-message'), hidden('x.y.update-button')])).toEqual([
+      'x.y in idle: "x.y.update-button" is not visible, but each entry of its with shows and none of its without',
+    ])
+    expect(onPage(update, [shown('x.y.update-message'), shown('x.y.update-button')])).toEqual([])
+    expect(onPage(update, [hidden('x.y.update-message'), hidden('x.y.update-button')])).toEqual([])
+  })
+
+  it('holds a code entry to the code the anchor shows, as a report with codes reads it', () => {
+    expect(
+      onPage(install, [
+        coded('x.y.install-message', 'install-by-steps'),
+        shown('x.y.install-button'),
+      ]),
+    ).toEqual([
+      'x.y in idle: "x.y.install-button" is visible, but "x.y.install-message" (install-available) does not show: it shows only with it',
+    ])
+    expect(onPage(install, [coded('x.y.install-message', 'install-available')])).toEqual([
+      'x.y in idle: "x.y.install-button" is not visible, but each entry of its with shows and none of its without',
+    ])
+    expect(
+      onPage(install, [
+        coded('x.y.install-message', 'install-available'),
+        shown('x.y.install-button'),
+      ]),
+    ).toEqual([])
+    expect(onPage(install, [coded('x.y.install-message', 'install-by-steps')])).toEqual([])
+  })
+
+  it('skips the code of a code entry on a report without codes, and still holds its anchor', () => {
+    expect(onPage(install, [shown('x.y.install-message'), shown('x.y.install-button')])).toEqual([])
+    expect(onPage(install, [shown('x.y.install-message')])).toEqual([])
+    expect(onPage(install, [shown('x.y.install-button')])).toEqual([
+      'x.y in idle: "x.y.install-button" is visible, but "x.y.install-message" (install-available) does not show: it shows only with it',
+    ])
+  })
+
+  it('holds an element with only without entries to hiding while one shows, never to showing', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.ban-button': { screen: 'x.y', kind: 'button', without: ['x.y.banned-badge'] },
+    }
+
+    expect(onPage(ids, [shown('x.y.banned-badge'), shown('x.y.ban-button')])).toEqual([
+      'x.y in idle: "x.y.ban-button" is visible, but "x.y.banned-badge" shows: it shows only without it',
+    ])
+    // Nothing on the page says the area that holds it shows: an account still read shows neither.
+    expect(onPage(ids, [])).toEqual([])
+    expect(onPage(ids, [shown('x.y.ban-button')])).toEqual([])
+  })
+
+  it('lets a cell, an element data decides and one the state does not render stay away', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.heading': { screen: 'x.y', kind: 'heading' },
+      'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.reason-cell': { screen: 'x.y', kind: 'cell', with: ['x.y.banned-badge'] },
+      'x.y.toggle-button': {
+        screen: 'x.y',
+        kind: 'button',
+        roles: ['member'],
+        with: ['x.y.heading'],
+      },
+      'x.y.later-button': { screen: 'x.y', kind: 'button', with: ['x.y.heading'] },
+      'x.y.status': { screen: 'x.y', kind: 'status', with: ['x.y.heading'] },
+    }
+
+    expect(onPage(ids, [shown('x.y.heading'), shown('x.y.banned-badge')])).toEqual([])
+    expect(onPage(ids, [shown('x.y.reason-cell'), shown('x.y.toggle-button')])).toEqual([
+      'x.y in idle: "x.y.reason-cell" is visible, but "x.y.banned-badge" does not show: it shows only with it',
+      'x.y in idle: "x.y.toggle-button" is visible, but "x.y.heading" does not show: it shows only with it',
+    ])
+  })
+
+  it('leaves an element of an entry to the entry, which the report does not tell apart', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.devices.list': { screen: 'x.y', kind: 'list' },
+      'x.y.devices.entry-item': { screen: 'x.y', kind: 'item', dataId: 'device' },
+      'x.y.devices.current-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.devices.end-button': {
+        screen: 'x.y',
+        kind: 'button',
+        without: ['x.y.devices.current-badge'],
+      },
+    }
+
+    expect(
+      onPage(ids, [
+        shown('x.y.devices.list'),
+        shown('x.y.devices.entry-item'),
+        shown('x.y.devices.current-badge'),
+        shown('x.y.devices.entry-item'),
+        shown('x.y.devices.end-button'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('refuses a visible list with no entry, unless it shows itself waiting or empty', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.notes.list': { screen: 'x.y', kind: 'list' },
+      'x.y.notes.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+      'x.y.users.list': { screen: 'x.y', kind: 'list', states: ['loading', 'ready', 'empty'] },
+      'x.y.users.account-item': { screen: 'x.y', kind: 'item', dataId: 'account' },
+      'x.y.sent.list': { screen: 'x.y', kind: 'list', states: ['loading'] },
+      'x.y.sent.item': { screen: 'x.y', kind: 'item', dataId: 'invitation' },
+    }
+    const empty =
+      'x.y in idle: "x.y.notes.list" is visible with no entry: a list with none is not rendered'
+
+    expect(onPage(ids, [shown('x.y.notes.list')])).toEqual([empty])
+    expect(onPage(ids, [shown('x.y.notes.list'), hidden('x.y.notes.item')])).toEqual([empty])
+    expect(onPage(ids, [shown('x.y.notes.list'), shown('x.y.notes.item')])).toEqual([])
+    expect(onPage(ids, [hidden('x.y.notes.list')])).toEqual([])
+    expect(onPage(ids, [shown('x.y.users.list'), shown('x.y.sent.list')])).toEqual([])
   })
 })

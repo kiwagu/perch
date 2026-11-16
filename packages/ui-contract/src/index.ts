@@ -71,6 +71,7 @@ export {
   unknownNotice,
   versionProblems,
   vocabularyProblems,
+  withProblems,
 } from './check'
 export {
   CONSUMER_ROOT,

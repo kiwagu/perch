@@ -42,3 +42,4 @@ export {
 } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'
 export { resolvedValueSchema, VALUE_FORMATS, valueRefSchema, valueSchema } from './value'
+export { withEntrySchema, withoutSchema, withSchema } from './with'
