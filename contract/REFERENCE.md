@@ -165,7 +165,7 @@ Always false: no other parameter.
 ### `bindings.search`
 
 <a id="screen-bindings-search"></a>
-The search parameters, as a flat JSON Schema.
+The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.
 
 ### `bindings.search.type`
 
@@ -1169,7 +1169,7 @@ The screen the link opens, at the path of its route.
 ### `actions.<name>.mail.link.search`
 
 <a id="platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in.
+The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`.
 
 ### `actions.<name>.notices`
 
@@ -2041,7 +2041,7 @@ Always false: no other parameter.
 ### `screens.bindings.search`
 
 <a id="manifest-screens-bindings-search"></a>
-The search parameters, as a flat JSON Schema.
+The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.
 
 ### `screens.bindings.search.type`
 
@@ -3876,7 +3876,7 @@ The screen the link opens, at the path of its route.
 ### `platform.actions.<name>.mail.link.search`
 
 <a id="manifest-platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in.
+The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`.
 
 ### `platform.actions.<name>.notices`
 
@@ -4527,7 +4527,7 @@ Keys it concerns: [`screen.flow.states.<name>.entry.read`](#screen-flow-states-n
 ### The key of an address
 
 <a id="rule-address-key"></a>
-A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared.
+A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared. The search parameter of a mail's link is the key of its screen, derived (see the rule `mail-link-search`).
 
 Keys it concerns: [`screen.bindings.search.properties.<name>.x-perch.key`](#screen-bindings-search-properties-name-x-perch-key).
 
@@ -4675,6 +4675,15 @@ A link bound to one route (`binding: { route: /me }`) is shown to the devices th
 Roles are read by the devices they admit, never as sets of names: a device holds `guest` alone, or `identity` with any of the other roles, so `[identity, member, admin]` and `[identity]` admit the same devices (`sameAdmission` of `@workspace/ui-contract/anchors`, over the roles the bindings of the screens serve). A screen file never writes the roles the route derives: written roles that admit exactly what the route's do are a problem at the key (derived from the route; leave them out), and roles that admit fewer devices stay as the link's own. Before version 4 nothing is derived and a file writes them as before. `contract:check` reads the loaded roles as it reads written ones (see the rule `roles`).
 
 Keys it concerns: [`screen.anchors.<name>.roles`](#screen-anchors-name-roles).
+
+### The search parameter of a mail's link
+
+<a id="rule-mail-link-search"></a>
+A platform action whose `mail` links to a screen names the search parameter that carries the token (`link: { screen: user.verify-email, search: token }`). From version 4 the loader gives every route of that screen that parameter, built from the platform value of the same name (`values.token`): its `type`, `enum`, bounds, `pattern`, `description` and `examples`. A screen file never writes it: a parameter of that name in a route's `search` is a problem at its key (derived from the mail link; leave it out). A mail whose `search` names no value of the platform, or a value a route cannot take (one without a `type`, or with a `format`), is a problem at its link. Before version 4 nothing is derived and a file writes the parameter as before.
+
+The parameter is the screen's key (see the rule `address-key`) when an action of the screen takes it: the first action the screen runs with `{ search: <name> }`, an invoke of its flow before a source of a list, gives the first of the `codes` of the parameter that takes it, so the `token` of `user.verify-email` carries `x-perch: { key: link-invalid }`, the first code `platform.verify-email` lists for its `token`. A parameter that lists no `codes`, and an action of the model, give no key.
+
+Keys it concerns: [`screen.bindings.search.properties.<name>`](#screen-bindings-search-properties-name), [`platform.actions.<name>.mail.link.search`](#platform-actions-name-mail-link-search).
 
 ### A description the engine can say
 

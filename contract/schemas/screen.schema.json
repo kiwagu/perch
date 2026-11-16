@@ -211,7 +211,7 @@
             "additionalProperties": false
           },
           "search": {
-            "description": "The search parameters, as a flat JSON Schema.",
+            "description": "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
             "type": "object",
             "properties": {
               "type": {

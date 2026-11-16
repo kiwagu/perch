@@ -45,7 +45,7 @@ const readAfterAnAction: ReferenceRule = {
 const addressKey: ReferenceRule = {
   id: 'address-key',
   title: 'The key of an address',
-  text: "A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared.",
+  text: "A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared. The search parameter of a mail's link is the key of its screen, derived (see the rule `mail-link-search`).",
   keys: ['screen.bindings.search.properties.<name>.x-perch.key'],
 }
 

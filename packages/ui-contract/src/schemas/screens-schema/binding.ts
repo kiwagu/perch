@@ -31,7 +31,11 @@ export const bindingSchema = z
         'The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other.',
       ),
     params: flatJsonSchema.optional().describe('The path parameters, as a flat JSON Schema.'),
-    search: searchJsonSchema.optional().describe('The search parameters, as a flat JSON Schema.'),
+    search: searchJsonSchema
+      .optional()
+      .describe(
+        "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
+      ),
     history: z
       .enum(['push', 'replace'])
       .default('push')

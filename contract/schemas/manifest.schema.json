@@ -597,7 +597,7 @@
                   "additionalProperties": false
                 },
                 "search": {
-                  "description": "The search parameters, as a flat JSON Schema.",
+                  "description": "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
                   "type": "object",
                   "properties": {
                     "type": {
@@ -7135,7 +7135,7 @@
                       "search": {
                         "type": "string",
                         "pattern": "^[a-z][a-zA-Z0-9]*$",
-                        "description": "The search parameter of that screen's route the link carries its token in."
+                        "description": "The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`."
                       }
                     },
                     "required": [

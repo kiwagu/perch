@@ -61,13 +61,18 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
   same. So are the guards of a password pair: a secret input that writes `confirms: <the new
   password input>` makes the two a pair, and the loader derives `passwordBreaksRules`,
   `passwordsDiffer`, `confirmationStrays` and `confirmationFollows` wherever its flow names them;
-  the confirmation takes the value of the input it confirms. From version 4 a screen file never
-  writes what is derived, and the check refuses it.
+  the confirmation takes the value of the input it confirms. So is the search parameter of a
+  mail's link: the screen a platform action's `mail.link` opens gets, on every route, the
+  parameter its `search` names, from the platform value of that name, as the screen's key
+  (`x-perch.key`: the first code of the parameter its landing action takes it into). From version
+  4 a screen file never writes what is derived, and the check refuses it.
 - Why: every select, secret input, dialog and confirmation wrote the same lines, a link wrote
-  the roles its route already serves, and every form setting a new password wrote the same four
-  guard sentences, its confirmation limited by nothing.
+  the roles its route already serves, every form setting a new password wrote the same four
+  guard sentences, its confirmation limited by nothing, and every screen a mail links to wrote
+  the token's parameter again, in its own words.
 - What `contract:migrate --write` does: sets `version: 4` in `platform.yaml`, nothing else.
 - What is left by hand: drop a select's `dataValue` and `option`, a secret input's
   `visibility-button`, the two answers of a dialog or a confirmation, and the `roles` of a link
   that admit what its route's roles admit; on a screen whose flow names the guards of a password
-  pair, write `confirms` on the confirmation and drop the four guards.
+  pair, write `confirms` on the confirmation and drop the four guards; drop from the routes of a
+  screen a mail links to the search parameter that mail names.

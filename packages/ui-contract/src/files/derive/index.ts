@@ -34,8 +34,10 @@ export {
   withoutWrittenLeaves,
 } from './leaves'
 export { type LoadedScreen, withDerivedLinkRoles } from './link-roles'
+export { withDerivedMailLinks } from './mail-links'
 export { withDerivedPaging } from './paging'
 export { PAIR_GUARDS, withDerivedPairGuards } from './pairs'
 export { type DerivedQuestion, withDerivedQuestions, withQuestionCodes } from './questions'
 export { isBare, type Request, requestsOf } from './requests'
+export { type SearchTaker, searchTakersOf } from './search-takers'
 export { TOAST_RULE_ROW, toastCodesOf, withToastCodes } from './toasts'

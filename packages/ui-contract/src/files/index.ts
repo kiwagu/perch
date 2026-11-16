@@ -23,6 +23,8 @@ export {
   ownControlsOf,
   type Request,
   requestsOf,
+  type SearchTaker,
+  searchTakersOf,
   TOAST_RULE_ROW,
   TYPE_PASSWORD,
   withDerivedInputs,

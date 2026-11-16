@@ -3,8 +3,8 @@
  * bindings, which the loader derives the same way every time. The derivations of an action's
  * failures, of a button's params, of an error's codes and fields, of the fields that hold input,
  * of their states, of the leaves that ask first, of a platform composite, of what an element's
- * kind implies, of a link's roles and of the descriptions the engine says itself; the derivations
- * that shape a flow are in `outcomes.ts`.
+ * kind implies, of a link's roles, of the search parameter of a mail's link and of the
+ * descriptions the engine says itself; the derivations that shape a flow are in `outcomes.ts`.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -128,6 +128,16 @@ const linkRoles: ReferenceRule = {
   keys: ['screen.anchors.<name>.roles'],
 }
 
+const mailLinkSearch: ReferenceRule = {
+  id: 'mail-link-search',
+  title: "The search parameter of a mail's link",
+  text: [
+    "A platform action whose `mail` links to a screen names the search parameter that carries the token (`link: { screen: user.verify-email, search: token }`). From version 4 the loader gives every route of that screen that parameter, built from the platform value of the same name (`values.token`): its `type`, `enum`, bounds, `pattern`, `description` and `examples`. A screen file never writes it: a parameter of that name in a route's `search` is a problem at its key (derived from the mail link; leave it out). A mail whose `search` names no value of the platform, or a value a route cannot take (one without a `type`, or with a `format`), is a problem at its link. Before version 4 nothing is derived and a file writes the parameter as before.",
+    "The parameter is the screen's key (see the rule `address-key`) when an action of the screen takes it: the first action the screen runs with `{ search: <name> }`, an invoke of its flow before a source of a list, gives the first of the `codes` of the parameter that takes it, so the `token` of `user.verify-email` carries `x-perch: { key: link-invalid }`, the first code `platform.verify-email` lists for its `token`. A parameter that lists no `codes`, and an action of the model, give no key.",
+  ].join('\n\n'),
+  keys: ['screen.bindings.search.properties.<name>', 'platform.actions.<name>.mail.link.search'],
+}
+
 const engineDescriptions: ReferenceRule = {
   id: 'engine-descriptions',
   title: 'A description the engine can say',
@@ -157,6 +167,7 @@ export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
   composite,
   kindParts,
   linkRoles,
+  mailLinkSearch,
   engineDescriptions,
   whatStays,
 ]

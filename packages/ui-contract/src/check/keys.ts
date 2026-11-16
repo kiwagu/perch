@@ -6,27 +6,22 @@
  * `params`; each such action whose code it is takes the parameter into one that refers to a value
  * (`value` on a platform action, the field it sets on an action of the model), which the address's
  * value is held to; a route has one key; and a key writes no `default`, which would fill the value
- * the key says is missing. A key is never derived here, and an older contract writes none.
+ * the key says is missing. The loader derives the key of a mail's link (`files/derive/mail-links.ts`),
+ * which this reads as it reads a written one, and an older contract writes none.
  */
 
 import {
   type Binding,
   failuresOf,
-  flowNodes,
-  type ParamValue,
   type Problem,
   parameterValueOf,
   type Screen,
+  type SearchTaker,
+  searchTakersOf,
 } from '../files'
 
 import { type Contract, type InScreens, locate, own, PLATFORM_ACTION } from './contract'
 import { editionOf } from './editions'
-
-/** An action the screen runs with a search parameter, and its parameter that takes it. */
-interface Taker {
-  readonly action: string
-  readonly param: string
-}
 
 /** A search parameter of a route that is the screen's key, with its code. */
 interface Key {
@@ -35,51 +30,12 @@ interface Key {
   readonly property: NonNullable<Binding['search']>['properties'][string]
 }
 
-/** The parameters of `action` that `params` give the search parameter `name`. */
-const takersIn = (
-  action: string,
-  params: Readonly<Record<string, ParamValue>> | undefined,
-  name: string,
-): Taker[] =>
-  Object.entries(params ?? {}).flatMap(([param, value]) =>
-    typeof value === 'object' && 'search' in value && value.search === name
-      ? [{ action, param }]
-      : [],
-  )
-
-/**
- * Each action `screen` runs with `{ search: <name> }`, its flow's invokes then its sources, each
- * parameter of an action once however many states run it.
- */
-function takersOf(screen: Screen, name: string): Taker[] {
-  const invokes =
-    screen.flow === undefined
-      ? []
-      : flowNodes(screen.flow).flatMap((node) => {
-          const invoke =
-            node.kind === 'root' || node.kind === 'region-state' ? node.state.invoke : undefined
-
-          return invoke === undefined ? [] : takersIn(invoke.src, invoke.input, name)
-        })
-  const sources = Object.values(screen.anchors).flatMap(({ source }) =>
-    source !== undefined && 'platform' in source
-      ? takersIn(`${PLATFORM_ACTION}${source.platform}`, source.params, name)
-      : [],
-  )
-
-  return [
-    ...new Map(
-      [...invokes, ...sources].map((taker) => [`${taker.action} ${taker.param}`, taker]),
-    ).values(),
-  ]
-}
-
 /**
  * Whether the parameter that takes the key refers to a value: a platform parameter writes its
  * `value`, a parameter of an action of the model takes that of the field it sets (a new id, `$id`,
  * sets none).
  */
-function refersToValue(contract: Contract, { action, param }: Taker): boolean {
+function refersToValue(contract: Contract, { action, param }: SearchTaker): boolean {
   const { platform } = contract.screens
 
   if (action.startsWith(PLATFORM_ACTION)) {
@@ -101,7 +57,7 @@ const keysOf = (binding: Binding): Key[] =>
 
 /** What a key's code needs of the actions that take its parameter: one of them fails with it. */
 function codeMessages(contract: Contract, screen: Screen, { name, code }: Key): string[] {
-  const takers = takersOf(screen, name)
+  const takers = searchTakersOf(screen, name)
 
   if (takers.length === 0) {
     return [

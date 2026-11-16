@@ -26,10 +26,11 @@
  * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
  * each model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
- * flow canonical. Once every screen is parsed, from version 4 a link takes the roles of the route
- * it leads to, which another file may bind (`derive/link-roles.ts`). Once every file loads, they
- * are assembled into one `ScreensFile`, each screen with its file, with the toasts and the
- * questions the loader derived.
+ * flow canonical. Once every screen is parsed, from version 4 the search parameter of a mail's
+ * link is derived on the screen it opens (`derive/mail-links.ts`) and a link takes the roles of
+ * the route it leads to, which another file may bind (`derive/link-roles.ts`). Once every file
+ * loads, they are assembled into one `ScreensFile`, each screen with its file, with the toasts
+ * and the questions the loader derived.
  */
 
 import { join } from 'node:path'
@@ -48,6 +49,7 @@ import {
   withDerivedKindParts,
   withDerivedLeaves,
   withDerivedLinkRoles,
+  withDerivedMailLinks,
   withDerivedPaging,
   withDerivedParams,
   withDerivedQuestions,
@@ -82,6 +84,7 @@ function readScreenFiles(
   platformToasts: Readonly<Record<string, string>>,
   composites: Readonly<Record<string, PlatformComposite>>,
   unsavedInput: Platform['unsavedInput'],
+  mails: Pick<Platform, 'actions' | 'values'>,
 ): {
   screens: Screen[]
   files: string[]
@@ -223,10 +226,11 @@ function readScreenFiles(
       ? []
       : [...derived.values()].filter(({ code }) => !written.has(code))
 
-  // A link's roles come from the routes of every screen, so they wait until every file is read.
-  const linked = withDerivedLinkRoles(parsed, edition)
+  // A mail's link and a link's roles read every screen, so they wait until every file is read.
+  const mailed = withDerivedMailLinks(parsed, mails, edition)
+  const linked = withDerivedLinkRoles(mailed.loaded, edition)
 
-  problems.push(...linked.problems)
+  problems.push(...mailed.problems, ...linked.problems)
 
   return {
     screens: linked.screens,
@@ -276,6 +280,7 @@ export function loadScreensWith(
     platform?.toasts ?? {},
     platform?.composites ?? {},
     platform?.unsavedInput,
+    { actions: platform?.actions ?? {}, values: platform?.values },
   )
   const problems = [...screenProblems, ...platformProblems]
 
