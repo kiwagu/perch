@@ -999,7 +999,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `defaults.maxLength`
 
 <a id="platform-defaults-maxlength"></a>
-The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
+The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
 
 ### `values`
 
@@ -1686,7 +1686,7 @@ From version 6, what a value takes where it writes nothing of its own, `platform
 ### `contract.defaults.maxLength`
 
 <a id="manifest-contract-defaults-maxlength"></a>
-The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
+The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
 
 ### `contract.idAttribute`
 
@@ -3766,7 +3766,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `platform.defaults.maxLength`
 
 <a id="manifest-platform-defaults-maxlength"></a>
-The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
+The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.
 
 ### `platform.values`
 
@@ -4737,7 +4737,7 @@ Keys it concerns: [`screen.anchors.<name>.source.paged`](#screen-anchors-name-so
 <a id="rule-declared-values"></a>
 A value is a type with its constraints, said once where its policy lives, so a limit no longer lives in a parameter's prose. It is a name of `platform.values` (`email: { type: string, format: email, maxLength: 254, description }`), written in the bounds of a route's flat parameter (`type`, `minLength`, `maxLength`, `pattern`, `minimum`, `maximum`), an `enum` of strings and numbers, `examples` (any list of fake values) and `format`, which a route's search never takes; or a field of the model, `<entity>.<field>`, whose JSON Schema keywords a value has it takes: `type`, `enum` (when every member is a string or a number), `minLength`, `maxLength`, `pattern`, `format` (one a value names), `minimum` and `maximum`, and `readOnly` when the field is `x-perch.readonly`; its other keywords (`exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`) no value has, so a reference does not take them.
 
-From version 6 the platform may declare a default length, `defaults: { maxLength: <n> }`, which each value that names no limit takes, a value of `platform.values` or a field of the model with `type: string`, no `enum` and not read-only, where the files load and before anything is derived from them (`withDefaultLengths`), so every reader takes the resolved value and none applies the default itself: what a parameter and a field take, a field's `<field>-too-long`, the keywords beside `value`, the manifest. A value that writes its own `maxLength` keeps it, and `maxLength: null` on a value of `platform.values` says it has no limit and takes none; the loader refuses from version 6 a written `maxLength` equal to the default on a value that would take it, and a `null` on one that would take none (no `defaults`, no string, or an `enum`); a route's search parameter never takes it.
+From version 6 the platform may declare a default length, `defaults: { maxLength: <n> }`, which each value that names no limit takes, a value of `platform.values`, a field of the model or a parameter of a platform action that refers to no `value` and writes a constraint (a `minLength`, a `pattern`; one that writes none is refused, and the default does not stand for it), with `type: string`, no `enum` and not read-only, where the files load and before anything is derived from them (`withDefaultLengths`), so every reader takes the resolved value and none applies the default itself: what a parameter and a field take, a field's `<field>-too-long`, the keywords beside `value`, the manifest. A value that writes its own `maxLength` keeps it, and `maxLength: null` on a value of `platform.values` says it has no limit and takes none; the loader refuses from version 6 a written `maxLength` equal to the default on a value that would take it, and a `null` on one that would take none (no `defaults`, no string, or an `enum`); a route's search parameter never takes it.
 
 A parameter of a platform action writes its `type` or the `value` it refers to, `value: <name>` or `value: <entity>.<field>`, and may write the keywords of a value beside it. A keyword written beside `value` only narrows the value: a `minLength` or a `minimum` no smaller than the value's, a `maxLength` or a `maximum` no larger, an `enum` among the value's members, a `type` or a `format` where the value has none or the same, a `pattern` where the value has none (one beside a value's own pattern is refused, the same one included); `contract:check` refuses one that would widen it or say other than it says, at the keyword (`{ value: email, maxLength: 500 }` over an email of at most 254 characters). What a parameter takes (`parameterValueOf`) is the value it refers to narrowed by those keywords (`{ value: email, maxLength: 100 }` takes at most 100 characters; a refused keyword is left out, so the value keeps its own); a paged action's `size` takes the action's sizes as its `enum`; a parameter that refers to nothing takes its own keywords, its `type` alone at least. A parameter of an action of the model takes the value of the field it sets. `optional: true` says the action runs without the parameter.
 

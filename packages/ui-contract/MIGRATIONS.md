@@ -111,8 +111,9 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
 ## Version 6
 
 - What changed: the platform may declare a default length, `defaults: { maxLength: <n> }`. Every
-  value that names no limit and would take one, a value of `platform.values` or a field of the
-  model with `type: string`, no `enum` and not read-only, takes it as the files load, before
+  value that names no limit and would take one, a value of `platform.values`, a field of the
+  model or a parameter of a platform action that refers to no `value` and writes a constraint,
+  with `type: string`, no `enum` and not read-only, takes it as the files load, before
   anything is derived, so every reader (what a parameter and a field take, a field's
   `<field>-too-long`, the keywords beside `value`, the manifest) takes the resolved value. A value
   of `platform.values` may write `maxLength: null`: no limit, and it takes no default. From

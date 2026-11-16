@@ -30,8 +30,9 @@ links to as `contract/REFERENCE.md#<slug>`.
       as an empty table.
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
       the contract check does, which takes back the model with its lengths resolved): every
-      `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values and the
-      model first taking their default length (`files/values/default-lengths.ts`), with what it
+      `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values, the
+      inline parameters of its actions and the model first taking their default length
+      (`files/values/default-lengths.ts`), with what it
       leaves out derived from the model and the platform (`files/derive/`:
       `composites.ts`, `form-params.ts`, `paging.ts`, `errors.ts`, `flow-errors.ts`, `inputs.ts`,
       `leaves.ts`, `toasts.ts`, `confirmations.ts`, `questions.ts`, `requests.ts`) and its flow
@@ -74,8 +75,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     platform, model)` the one a parameter takes, and `fieldValueOf(anchor, screen, platform,
     model)` the one a field takes, the loosest of those of its bindings;
     `withDefaultLength(value, defaults, readOnly?)` gives a value the platform's default length
-    where it names none, and `withDefaultLengths(platform, model)` does it once for the platform
-    and the model as they load (`contract/REFERENCE.md#rule-declared-values`).
+    where it names none, and `withDefaultLengths(platform, model)` does it once for the platform's
+    values and inline action parameters and the model as they load (`contract/REFERENCE.md#rule-declared-values`).
   - `attributedCodes(action, platform)` (`files/derive/failures.ts`): per parameter of a platform
     action, the codes that concern it, by the suffixes of `FIELD_CODE_SUFFIXES`
     (`contract/REFERENCE.md#rule-attributed-codes`).

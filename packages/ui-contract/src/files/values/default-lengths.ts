@@ -2,24 +2,34 @@
  * The default length, applied once where the platform and the model meet, before anything is
  * derived from either: from version 6 each value of `platform.values` and each field of the model,
  * in its entities and in its document alike, takes the platform's `defaults` (`withDefaultLength`),
- * so every reader takes the resolved value and none applies the default itself. A `null` limit is
- * left out at every version: before version 6 it says what no limit says. From version 6 a written
- * `maxLength` the default would give back is a problem where it is written, and so is a `null` on
- * a value that would take no default (no `defaults`, no string, or an `enum`).
+ * and so does each parameter of a platform action that is a string of its own: one that refers to
+ * no `value` and writes a constraint, `minLength` or `pattern`, and no limit (`withParameterLength`).
+ * A parameter that writes no constraint takes none: the check refuses it, and the default would
+ * stand for the constraint it lacks. So every reader takes the resolved value and none applies the
+ * default itself. A `null` limit is left out at every version: before version 6 it says what no
+ * limit says. From version 6 a written `maxLength` the default would give back is a problem where
+ * it is written, and so is a `null` on a value that would take no default (no `defaults`, no
+ * string, or an `enum`).
  */
 
 import { isRecord, recordOf } from '../../records'
 import type { PlatformDefaults } from '../../schemas'
+import { constrains } from '../derive'
 import type { Model, ModelEntity } from '../model'
 import { MODEL_FILE, PLATFORM_FILE } from '../paths'
 import { jsonPath, type Problem } from '../problems'
 import type { PlatformFile, PlatformValue } from '../screens'
 
 import { DEFAULTS_EDITION, givesBack, takesDefault, withDefaultLength } from './defaults'
+import { keywordsOf } from './keywords'
+
+type Actions = PlatformFile['actions']
 
 export interface DefaultLengths {
   /** The values of the platform, each with its length resolved; none where it declares none. */
   readonly values?: Record<string, PlatformValue> | undefined
+  /** The actions of the platform, each inline string parameter with its length resolved. */
+  readonly actions?: Actions | undefined
   /** The model with every field's length resolved, in its entities and its document. */
   readonly model?: Model | undefined
   readonly problems: Problem[]
@@ -110,6 +120,25 @@ function documentWith(
   }
 }
 
+/**
+ * `parameter` with the default length when it is a string of its own that writes a constraint and
+ * no limit; a parameter that refers to a value takes that value's, narrowed (`parameterValueOf`).
+ */
+const withParameterLength = (
+  parameter: Actions[string]['params'][string],
+  defaults: PlatformDefaults,
+): Actions[string]['params'][string] =>
+  parameter.value === undefined && constrains(keywordsOf(parameter))
+    ? withDefaultLength(parameter, defaults)
+    : parameter
+
+/** The actions with the default length taken by every inline string parameter that names none. */
+const actionsWith = (actions: Actions, defaults: PlatformDefaults): Actions =>
+  mapped(actions, (action) => ({
+    ...action,
+    params: mapped(action.params, (parameter) => withParameterLength(parameter, defaults)),
+  }))
+
 /** The model with the default length taken by every field that names none. */
 function modelWith(model: Model, defaults: PlatformDefaults): Model {
   const entities = mapped(model.entities, (entity) => ({
@@ -121,8 +150,8 @@ function modelWith(model: Model, defaults: PlatformDefaults): Model {
 }
 
 /**
- * The values of `platform` and `model` with their lengths resolved, and the problems of the lengths
- * they write.
+ * The values and the actions of `platform` and `model` with their lengths resolved, and the
+ * problems of the lengths they write.
  */
 export function withDefaultLengths(
   platform: PlatformFile | undefined,
@@ -136,6 +165,12 @@ export function withDefaultLengths(
     ...(written === undefined
       ? {}
       : { values: mapped(written, (value) => withDefaultLength(value, defaults)) }),
+    ...(platform === undefined
+      ? {}
+      : {
+          actions:
+            defaults === undefined ? platform.actions : actionsWith(platform.actions, defaults),
+        }),
     ...(model === undefined
       ? {}
       : { model: defaults === undefined ? model : modelWith(model, defaults) }),

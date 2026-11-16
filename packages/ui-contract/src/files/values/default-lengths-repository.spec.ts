@@ -164,6 +164,78 @@ describe('the default length of a contract at version 6', () => {
   })
 })
 
+describe('the default length of an inline parameter of a contract at version 6', () => {
+  const INLINE = '{ type: string, minLength: 1, optional: true, description: Why. }'
+  const reasonOf = (root: string, action = 'platform.sign-out') => {
+    const { screens, model } = loaded(root)
+
+    return parameterValueOf(action, 'reason', screens.platform, model)
+  }
+
+  it('is the limit of a parameter that constrains its string and names none, by the default', () => {
+    expect(reasonOf(repository({ ...SIX, reason: INLINE }))).toEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 80,
+    })
+    expect(reasonOf(repository({ ...SIX, defaults: 81, reason: INLINE }))).toEqual({
+      type: 'string',
+      minLength: 1,
+      maxLength: 81,
+    })
+  })
+
+  it('keeps the limit the parameter writes, whatever the default', () => {
+    const own = '{ type: string, minLength: 1, maxLength: 20, optional: true, description: Why. }'
+
+    expect(reasonOf(repository({ ...SIX, reason: own })).maxLength).toBe(20)
+    expect(reasonOf(repository({ ...SIX, defaults: 81, reason: own })).maxLength).toBe(20)
+  })
+
+  it('leaves the file as written and the check passing, the loaded platform taking the default', () => {
+    const root = repository({ ...SIX, reason: INLINE })
+    const { screens } = loaded(root)
+    const written = parse(readFileSync(join(root, PLATFORM_FILE), 'utf8')) as {
+      actions: Record<string, { params: Record<string, unknown> }>
+    }
+
+    expect(checkContract(root).map(formatProblem)).toEqual([])
+    expect(written.actions['sign-out']?.params['reason']).not.toHaveProperty('maxLength')
+    expect(screens.platform.actions['sign-out']?.params['reason']).toHaveProperty('maxLength', 80)
+  })
+
+  it('is in the manifest with the default taken, as the platform values are', () => {
+    const manifest = buildManifest({
+      ...loaded(repository({ ...SIX, reason: INLINE })),
+      product: { name: 'sample', version: '0.1.0', commit: null },
+    })
+
+    expect(manifest.platform.actions['sign-out']?.params['reason']?.maxLength).toBe(80)
+  })
+
+  it('does not let the default stand for the constraint a string that writes none lacks', () => {
+    const bare = '{ type: string, optional: true, description: Why. }'
+
+    expect(messages(repository({ ...SIX, reason: bare }))).toEqual([])
+    expect(checkContract(repository({ ...SIX, reason: bare })).map(formatProblem)).toEqual([
+      `${PLATFORM_FILE}:1: actions["sign-out"].params.reason: a string that refers to no value and writes no constraint: refer to a value (\`value: <name>\`) or write a constraint beside its type`,
+    ])
+    expect(reasonOf(repository({ ...SIX, reason: bare }))).toEqual({ type: 'string' })
+  })
+
+  it('holds a too-long code of a parameter that takes the default to a limit it has, as at version 5 it has none', () => {
+    const lacksLimit = (version: number) =>
+      checkContract(
+        repository({ version, defaults: 80, reason: INLINE, codes: ['reason-too-long'] }),
+      )
+        .map(formatProblem)
+        .filter((message) => message.endsWith('whose value has no maxLength'))
+
+    expect(lacksLimit(6)).toEqual([])
+    expect(lacksLimit(5)).toHaveLength(1)
+  })
+})
+
 describe('the default length of a contract at version 5', () => {
   const FIVE = { version: 5, title: undefined } as const
 
@@ -214,6 +286,20 @@ describe('the default length of a contract at version 5', () => {
     })
     expect(manifest.contract).not.toHaveProperty('defaults')
     expect(manifest.ids['sample.title-input']?.value).not.toHaveProperty('maxLength')
+  })
+
+  it('takes no default for an inline parameter either, as written', () => {
+    const root = repository({
+      ...FIVE,
+      defaults: 80,
+      reason: '{ type: string, minLength: 1, optional: true, description: Why. }',
+    })
+    const { screens, model } = loaded(root)
+
+    expect(parameterValueOf('platform.sign-out', 'reason', screens.platform, model)).toEqual({
+      type: 'string',
+      minLength: 1,
+    })
   })
 
   it('lets a parameter write a limit beside a value that names none', () => {

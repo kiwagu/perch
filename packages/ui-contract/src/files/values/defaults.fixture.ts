@@ -22,6 +22,8 @@ export interface DefaultsRepository {
   readonly title?: number | undefined
   /** What `sign-out`'s `reason` writes, a YAML flow map. */
   readonly reason?: string
+  /** The codes `sign-out` declares beyond `failed`. */
+  readonly codes?: readonly string[]
 }
 
 const valuesOf = ({ withNull = false, name }: DefaultsRepository): string => `values:
@@ -49,6 +51,7 @@ export function writeDefaultsRepository(root: string, options: DefaultsRepositor
     defaults,
     title,
     reason = '{ value: name, optional: true, description: Why. }',
+    codes = [],
   } = options
 
   writeContractRepository(root)
@@ -62,6 +65,10 @@ export function writeDefaultsRepository(root: string, options: DefaultsRepositor
       .replace(
         '        description: Drop the unsent changes.\n',
         `        description: Drop the unsent changes.\n      reason: ${reason}\n`,
+      )
+      .replace(
+        '      - failed\n',
+        `      - failed\n${codes.map((code) => `      - ${code}\n`).join('')}`,
       ),
   )
   writeFileSync(

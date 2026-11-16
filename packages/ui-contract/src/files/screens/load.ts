@@ -4,9 +4,10 @@
  * `contract/domain/platform.yaml` holds the contract version and the platform section. Each file
  * is YAML, then its Zod schema. A missing or empty folder, a file that is not `.yaml`, a file
  * named otherwise than its screen's first binding says and a missing platform file are problems
- * of the file or folder concerned. Before anything is derived, the platform's values and the model
- * take their default length (from version 6, `values/default-lengths.ts`), and every step below
- * reads them so. Once every file is read, what a file leaves to the contract is
+ * of the file or folder concerned. Before anything is derived, the platform's values, the inline
+ * parameters of its actions and the model take their default length (from version 6,
+ * `values/default-lengths.ts`), and every step below reads them so. Once every file is read, what a
+ * file leaves to the contract is
  * derived (`derive/`): a composite a secret input opts into, derived as its list and items
  * (`derive/composites.ts`); from version 4 what an element's kind implies, a select's options and
  * data value, a secret input's visibility button and a dialog's answers (`derive/kinds.ts`); the
@@ -262,8 +263,8 @@ function readPlatform(root: string): { platform?: PlatformFile; problems: Proble
 /**
  * The screens and the platform, what the screens leave out derived from the actions of `model`
  * (undefined when it does not load: an action of the model then has no failure to derive), and the
- * model those derivations read: the platform's values and the model take their default length
- * first (`withDefaultLengths`), so every reader of either takes the resolved value.
+ * model those derivations read: the platform's values and inline action parameters and the model
+ * take their default length first (`withDefaultLengths`), so every reader takes the resolved value.
  */
 export function loadScreensWith(
   root: string,
@@ -273,7 +274,7 @@ export function loadScreensWith(
   // Without a platform file, whose own problem stops the load, no rule of a later version applies.
   const edition = platform?.version ?? 1
   const lengths = withDefaultLengths(platform, model)
-  const failureOf = failuresOf(lengths.model, platform?.actions, edition)
+  const failureOf = failuresOf(lengths.model, lengths.actions, edition)
   const {
     screens,
     files,
@@ -287,7 +288,7 @@ export function loadScreensWith(
     platform?.toasts ?? {},
     platform?.composites ?? {},
     platform?.unsavedInput,
-    { actions: platform?.actions ?? {}, values: lengths.values },
+    { actions: lengths.actions ?? {}, values: lengths.values },
   )
   const problems = [...screenProblems, ...platformProblems, ...lengths.problems]
 
@@ -297,14 +298,18 @@ export function loadScreensWith(
 
   const { version, ...written } = platform
   const { values: _written, ...section } = written
+  const actions = lengths.actions ?? platform.actions
 
   return {
     screens: {
       version,
       screens,
       files,
-      // The values in their place, so the section keeps the order the schema gives it.
-      platform: lengths.values === undefined ? section : { ...written, values: lengths.values },
+      // The values and the actions in their place, so the section keeps the order the schema gives it.
+      platform:
+        lengths.values === undefined
+          ? { ...section, actions }
+          : { ...written, values: lengths.values, actions },
       toasts,
       questions,
     },

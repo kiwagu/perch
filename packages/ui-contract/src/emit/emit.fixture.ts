@@ -25,11 +25,15 @@ export interface EmitRepository {
   readonly version: number
   /** The default length the platform writes; none where it is undefined. */
   readonly defaults?: number
+  /** What the sign-out's `code` parameter writes, a YAML flow map; the `email` value by default. */
+  readonly code?: string
 }
 
 const SCREEN_FILE = 'contract/domain/screens/sample/$key.yaml'
 
 const REASON = '{ value: email, optional: true, description: Why. }'
+
+const CODE = '{ value: email, optional: true, description: A code. }'
 
 /** The sign-out button's last parameter, after which the fields are written. */
 const FORGET_UNSENT = '        forgetUnsent:\n          value: true\n'
@@ -85,7 +89,10 @@ function edit(root: string, file: string, from: string, to: string): void {
 }
 
 /** Writes the sample at `options.version` into the empty folder `root`. */
-export function writeEmitRepository(root: string, { version, defaults }: EmitRepository): void {
+export function writeEmitRepository(
+  root: string,
+  { version, defaults, code = CODE }: EmitRepository,
+): void {
   writeDefaultsRepository(root, {
     version,
     ...(defaults === undefined ? {} : { defaults, withNull: true }),
@@ -96,7 +103,7 @@ export function writeEmitRepository(root: string, { version, defaults }: EmitRep
     root,
     PLATFORM_FILE,
     `      reason: ${REASON}\n`,
-    `      reason: ${REASON}\n      code: { value: email, optional: true, description: A code. }\n`,
+    `      reason: ${REASON}\n      code: ${code}\n`,
   )
   edit(root, MODEL_FILE, '"created_at": {', `${EMAIL_FIELD}\n        "created_at": {`)
   edit(root, SCREEN_FILE, FORGET_UNSENT, `${FORGET_UNSENT}${FIELDS}`)

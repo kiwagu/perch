@@ -136,7 +136,7 @@ export const platformDefaultsSchema = z
       .int()
       .min(1)
       .describe(
-        'The most characters of a string value that names no limit: a value of `platform.values` and a field of the model, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
+        'The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
       ),
   })
   .describe(

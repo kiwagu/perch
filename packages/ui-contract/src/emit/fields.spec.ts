@@ -71,6 +71,26 @@ describe('fieldFactsModuleOf', () => {
     expect(factsOf(loaded({ version: 5 }).contract)).not.toHaveProperty('sample.title-input')
   })
 
+  it('gives a field an inline parameter passes the default length, and follows a change of it', () => {
+    const inline = '{ type: string, minLength: 1, optional: true, description: A code. }'
+    const own =
+      '{ type: string, minLength: 1, maxLength: 20, optional: true, description: A code. }'
+    const codeOf = (options: EmitRepository) =>
+      factsOf(loaded(options).contract)['sample.code-input']
+    const { root } = loaded({ ...SIX, code: inline })
+
+    const platform = parse(readFileSync(join(root, 'contract/domain/platform.yaml'), 'utf8')) as {
+      actions: Record<string, { params: Record<string, unknown> }>
+    }
+
+    expect(platform.actions['sign-out']?.params['code']).not.toHaveProperty('maxLength')
+    expect(codeOf({ ...SIX, code: inline })).toEqual({ maxLength: 80 })
+    expect(codeOf({ version: 6, defaults: 81, code: inline })).toEqual({ maxLength: 81 })
+    expect(codeOf({ ...SIX, code: own })).toEqual({ maxLength: 20 })
+    expect(codeOf({ version: 6, defaults: 81, code: own })).toEqual({ maxLength: 20 })
+    expect(codeOf({ version: 5, code: inline })).toBeUndefined()
+  })
+
   it('types an email input email, a read-only one without a limit, and never a secret one', () => {
     const facts = factsOf(loaded(SIX).contract)
 
