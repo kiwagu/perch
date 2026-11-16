@@ -13,6 +13,7 @@ export {
   actionParamsSchema,
   anchorBindingSchema,
   anchorDefSchema,
+  authoredAnchorDefSchema,
   authoredFlowSchema,
   authoredScreenFileSchema,
   bindingRefSchema,

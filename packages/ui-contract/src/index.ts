@@ -133,6 +133,7 @@ export {
   parseVocabulary,
   parseYamlDocument,
   RECIPIENT,
+  REFERENCE_FILE,
   readDescriptions,
   SCENARIOS_DIR,
   SCHEMA_OUTPUTS,
@@ -193,6 +194,13 @@ export {
   settledProblems,
   writeManifest,
 } from './manifest'
+export {
+  REFERENCE_RULES,
+  type ReferenceRule,
+  referenceDrift,
+  referenceSlug,
+  renderReference,
+} from './reference'
 export {
   exampleOf,
   type ReachedFrom,

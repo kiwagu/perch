@@ -3,6 +3,7 @@ export {
   anchorBindingSchema,
   anchorDefSchema,
   asksSchema,
+  authoredAnchorDefSchema,
   bindingRefSchema,
   derivedFromSchema,
   leavesSchema,

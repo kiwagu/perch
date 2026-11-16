@@ -10,6 +10,7 @@ import {
   formatProblem,
   MODEL_FILE,
   PLATFORM_FILE,
+  REFERENCE_FILE,
   readDescriptions,
   SCREEN_SCHEMA_FILE,
   scenarioFile,
@@ -72,13 +73,15 @@ describe('checkContract', () => {
       'tests/e2e/scenarios/sample/base/thing.md:5: devices.a: Invalid key in record',
     ])
   })
-  it('runs every rule and the schema drift once the files load', () => {
+  it("runs every rule, the schema drift and the reference's drift once the files load", () => {
     edit(VOCABULARY_FILE, (text) =>
       text.replace('| `saved` |', '| `spare` | `sample.save-button` | a spare code |\n| `saved` |'),
     )
     edit(SCREEN_SCHEMA_FILE, (text) => `${text}\n`)
+    edit(REFERENCE_FILE, (text) => `${text}\n`)
 
     expect(printed()).toEqual([
+      "contract/REFERENCE.md:1: differs from the engine's schemas; run `bun run contract:schemas`",
       'contract/schemas/screen.schema.json:1: differs from its Zod source; run `bun run contract:schemas`',
       'contract/vocabulary.md:1: code "spare" is documented but unused',
     ])

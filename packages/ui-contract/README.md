@@ -171,23 +171,39 @@ for Bun.
     `schemaDrift(root)` turn them into the committed `contract/schemas/screen.schema.json`,
     `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json` and
     `manifest.schema.json` (generated; Biome leaves them as written; `model.schema.json` is
-    authored). `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each
+    authored); `writeSchemas` writes the reference after them. `DESCRIPTION_PURPOSES` gives,
+    by its `DescriptionKind`, the purpose of each
     description field in one text: what it is for, what it leaves to others and its budget,
     `DESCRIPTION_BUDGET` (200 characters, for every one); each text is that field's
     `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint,
     the model's own description taking its text in the shape `loadModel` reads the document
     with, and the budget problem quotes it. `descriptionLength(text)` counts a description as
     the budget does, in characters.
+  - The reference: `renderReference()` is the text of `contract/REFERENCE.md`
+    (`REFERENCE_FILE`, generated, never edited), where a key's canonical text is its
+    `.describe()` text: one section per file (the screen file, the platform file, the activity
+    file, the model's `x-perch` and the derived manifest), with what its schema says the file is
+    and each key the schema describes, by its path from the file's root (a map's value written
+    `<name>`), walked through `properties`, `additionalProperties`, `items`, the branches of
+    `anyOf` and `oneOf` and each `$ref` into `$defs`, the first occurrence of a path winning;
+    then `REFERENCE_RULES`, the engine's rules that no key states (`ReferenceRule`: a
+    kebab-case `id`, a `title`, its `text` and the `keys` it concerns, each its file and its
+    path, dotted), among them the fixed texts of the manifest's `instructions`. Each entry
+    carries an explicit anchor, `referenceSlug(...parts)` of its file and path
+    (`screen-anchors-name-secret`) or `rule-<id>`, which a guide links to as
+    `contract/REFERENCE.md#<slug>`. `referenceDrift(root)`: the committed reference missing,
+    or other than what the engine renders.
   - Ajv for JSON Schema 2020-12: `createValidator()`, `jsonSchemaProblems(file, schema)`,
     `validateAgainst(file, schema, data)`.
   - `referencesIn(text)`: the bracket references of a scenario's text (`[anchor]`,
     `[/route]`, `[code:x]`, `[state:x]`, `[value:x]`, `[mail:<action>]`,
     `[notice:<action>.<name>]`), in the order the text writes them.
   - The contract check: `checkContract(root)` loads the contract files, the activities and the
-    scenarios (stopping at their own problems), then runs the cross-checks and `schemaDrift`,
-    sorted by file and line; `loadContract(root)` returns the loaded `Contract`. Each rule is
-    a function of the `Contract`: `versionProblems` (the version `platform.yaml` declares is
-    one this engine reads, at most `CONTRACT_VERSION`; at version 1 the vocabulary's
+    scenarios (stopping at their own problems), then runs the cross-checks, `schemaDrift` and
+    `referenceDrift`, sorted by file and line; `loadContract(root)` returns the loaded
+    `Contract`. Each rule is a function of the `Contract`: `versionProblems` (the version
+    `platform.yaml` declares is one this engine reads, at most `CONTRACT_VERSION`; at version
+    1 the vocabulary's
     `Contract version` line is there and equal, from version 2 it is refused), `vocabularyProblems` (every word of the
     screens is in the vocabulary, every derived suffix ends with a kind of it, every code is
     used, no choice values for a
@@ -408,8 +424,9 @@ for Bun.
   - `sortProblems(problems)`: by file and line, stable.
   - The manifest: `buildManifest({ vocabulary, screens, model, activities, scenarios, product,
     now? })` returns the `Manifest` (typed from `manifestSchema`): the vocabulary as tables in
-    `contract` with the prose `instructions` for an agent (`instructionsOf`, the anchors and
-    states taken from the vocabulary and the platform section), the table of field states as
+    `contract` with the prose `instructions` for an agent (`instructionsOf`, its fixed texts
+    read from the reference's rules, the anchors and states taken from the vocabulary and the
+    platform section), the table of field states as
     `fieldStates` (`{}` when the vocabulary has none) and `derivedParts` (each derived
     suffix with the kind of the part it marks, the meaning of the suffix as its `description`
     and, for a `visibility-button`, its values) and
@@ -625,19 +642,21 @@ for Bun.
 ## Commands
 
 - `bun run test`: the anchor grammar, the loaders, the reader of the written descriptions, the
-  scenario parser and formatter, the schema writer, the references, the contract check, the
-  sources check, the consumers check, the coverage-ignore markers, the manifest, the hand-over
-  diff, the coverage note, the routes view, the editions and the migrations, and the walk and
-  comparison of machines.
+  scenario parser and formatter, the schema writer, the reference, the references, the
+  contract check, the sources check, the consumers check, the coverage-ignore markers, the
+  manifest, the hand-over diff, the coverage note, the routes view, the editions and the
+  migrations, and the walk and comparison of machines.
 - `bun run typecheck`, `bun run lint`.
 - The commands below are the package's `ui-contract` bin: `src/cli/index.ts` runs `run(argv)`
   of `src/cli/run.ts` (the usage and the dispatch), one file per command beside them.
 - From the root: `bun run contract:schemas` (writes the JSON Schemas of the contract files
-  from their Zod sources; `bun run contract:schemas -- --check` fails on drift).
+  from their Zod sources, then `contract/REFERENCE.md` from their describe texts and the
+  engine's rules; `bun run contract:schemas -- --check` fails on the schemas' drift, and
+  `bun run contract:check` on both).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
   other, by the rules of the version the contract declares, every written description against
-  its budget and the schema drift; prints `file:line: message` per problem and exits 1, or a
-  one-line summary, followed for a contract older than the engine by
+  its budget, the schema drift and the reference's drift; prints `file:line: message` per
+  problem and exits 1, or a one-line summary, followed for a contract older than the engine by
   `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;
   part of `bun run check` and the pre-commit hook). `ui-contract check --current` fails on such a
   contract instead.
