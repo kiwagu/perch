@@ -131,6 +131,40 @@ function withRows(markdown: string, section: string, rows: string): string {
   return `${markdown.slice(0, end).trimEnd()}\n${rows}\n${markdown.slice(end)}`
 }
 
+/** The sign-in of the kinds' proof, written in full or leaving out what its kinds imply. */
+const kindsScreenText = (written: boolean): string => `id: sample.sign-in
+title: Sign in
+description: Where the sample signs in.
+flag: null
+bindings: [ { path: /sign-in, roles: [ guest, identity, member ] } ]
+entry: [ sample.sign-in.page ]
+anchors:
+  sample.sign-in.page:
+    kind: page
+    description: The root of the screen.
+  sample.sign-in.password-input:
+    kind: input
+    secret: true
+    description: The password (type password).
+${written ? '    derived: [ visibility-button ]\n' : ''}  sample.sign-in.language-select:
+    kind: select
+    description: The language of the screen.
+${written ? '    dataValue: true\n    derived: [ option ]\n' : ''}  sample.sign-in.leave-dialog:
+    kind: dialog
+    description: Asks whether to leave.
+${written ? '    derived: [ confirm-button, cancel-button ]\n' : ''}  sample.sign-in.thing-link:
+    kind: link
+    description: Opens the thing.
+    binding: { route: /sample/$key }
+${written ? '    roles: [ member ]\n' : ''}`
+
+const KINDS_ROWS: Record<string, string> = {
+  Kinds: '| `dialog` | a question | |\n| `link` | a link | |\n| `select` | a choice | |',
+  'Derived suffixes':
+    '| `cancel-button` | the other answer of a dialog |\n| `visibility-button` | the eye of a password input |',
+  'Screen names in use': '| `sample.sign-in` | the sign-in of the sample (`/sign-in`) |',
+}
+
 const roots: string[] = []
 
 function repositoryWith(written: boolean): string {
@@ -154,6 +188,32 @@ function repositoryWith(written: boolean): string {
 
   writeFileSync(join(root, VOCABULARY_FILE), vocabulary)
   writeFileSync(join(root, SCREEN_FILE), screenText(written))
+
+  return root
+}
+
+/** The sample at `version` whose sign-in is written in full (`written`) or leaves out what its kinds imply. */
+function kindsRepositoryAt(version: number, written: boolean): string {
+  const root = mkdtempSync(join(tmpdir(), 'ui-contract-kinds-'))
+
+  roots.push(root)
+  writeContractRepository(root)
+  writeFileSync(
+    join(root, PLATFORM_FILE),
+    readFileSync(join(root, PLATFORM_FILE), 'utf8').replace('version: 1', `version: ${version}`),
+  )
+
+  let vocabulary = readFileSync(join(root, VOCABULARY_FILE), 'utf8').replace(
+    'Contract version: 1\n\n',
+    '',
+  )
+
+  for (const [section, rows] of Object.entries(KINDS_ROWS)) {
+    vocabulary = withRows(vocabulary, section, rows)
+  }
+
+  writeFileSync(join(root, VOCABULARY_FILE), vocabulary)
+  writeFileSync(join(root, SCREEN_FILE), kindsScreenText(written))
 
   return root
 }
@@ -242,5 +302,87 @@ describe('a screen compacted by the derivations', () => {
       'contract changes: 3 descriptions changed',
       'descriptions changed: sample.sign-in.password-rule-list 31 -> gone, sample.sign-in.password-rule-list.digit-item 19 -> gone, sample.sign-in.password-rule-list.length-item 20 -> gone',
     ])
+  })
+})
+
+describe('a screen compacted by what its kinds imply', () => {
+  const screenOf = (loaded: ReturnType<typeof loadScreens>) =>
+    loaded.screens?.screens.find(({ id }) => id === 'sample.sign-in')
+
+  /** What the sign-in as the screen file at `root` writes it says of its kinds' parts. */
+  function writtenKindsAt(root: string): Record<string, unknown> {
+    const anchors = recordOf(
+      recordOf(parse(readFileSync(join(root, SCREEN_FILE), 'utf8')))['anchors'],
+    )
+    const of = (name: string) => recordOf(anchors[`sample.sign-in.${name}`])
+
+    return {
+      password: of('password-input')['derived'],
+      select: [of('language-select')['dataValue'], of('language-select')['derived']],
+      dialog: of('leave-dialog')['derived'],
+      link: of('thing-link')['roles'],
+    }
+  }
+
+  it('leaves out what the screen written in full writes', () => {
+    expect(writtenKindsAt(kindsRepositoryAt(3, true))).toStrictEqual({
+      password: ['visibility-button'],
+      select: [true, ['option']],
+      dialog: ['confirm-button', 'cancel-button'],
+      link: ['member'],
+    })
+    expect(writtenKindsAt(kindsRepositoryAt(4, false))).toStrictEqual({
+      password: undefined,
+      select: [undefined, undefined],
+      dialog: undefined,
+      link: undefined,
+    })
+  })
+
+  it('loads at version 4 as the screen written in full loads at version 3', () => {
+    const written = loadScreens(kindsRepositoryAt(3, true))
+    const compact = loadScreens(kindsRepositoryAt(4, false))
+
+    expect(written.problems).toEqual([])
+    expect(compact.problems).toEqual([])
+    expect(written.screens?.version).toBe(3)
+    expect(compact.screens?.version).toBe(4)
+    expect(screenOf(written)?.anchors['sample.sign-in.language-select']).toMatchObject({
+      dataValue: true,
+      derived: ['option'],
+    })
+    expect(screenOf(compact)).toEqual(screenOf(written))
+  })
+
+  it('reads the compact screen at version 3 as it is written, deriving nothing', () => {
+    const anchors = screenOf(loadScreens(kindsRepositoryAt(3, false)))?.anchors
+
+    expect(anchors?.['sample.sign-in.language-select']?.derived).toBeUndefined()
+    expect(anchors?.['sample.sign-in.language-select']?.dataValue).toBeUndefined()
+    expect(anchors?.['sample.sign-in.leave-dialog']?.derived).toBeUndefined()
+    expect(anchors?.['sample.sign-in.password-input']?.derived).toBeUndefined()
+    expect(anchors?.['sample.sign-in.thing-link']?.roles).toBeUndefined()
+  })
+
+  it('refuses at version 4 what the screen written in full writes, one problem for each', () => {
+    expect(loadScreens(kindsRepositoryAt(4, true)).problems.map(({ message }) => message)).toEqual([
+      'anchors["sample.sign-in.password-input"].derived[0]: "visibility-button" is derived from its kind; leave it out',
+      'anchors["sample.sign-in.language-select"].derived[0]: "option" is derived from its kind; leave it out',
+      'anchors["sample.sign-in.language-select"].dataValue: dataValue is derived from its kind; leave it out',
+      'anchors["sample.sign-in.leave-dialog"].derived[0]: "confirm-button" is derived from its kind; leave it out',
+      'anchors["sample.sign-in.leave-dialog"].derived[1]: "cancel-button" is derived from its kind; leave it out',
+      'anchors["sample.sign-in.thing-link"].roles: roles are derived from the route "/sample/$key"; leave them out',
+    ])
+  })
+
+  it('passes the contract check both ways, with the same manifest of the sign-in', () => {
+    const written = kindsRepositoryAt(3, true)
+    const compact = kindsRepositoryAt(4, false)
+
+    expect(checkContract(written)).toEqual([])
+    expect(checkContract(compact)).toEqual([])
+    expect(formatChanges(diffContracts(contractAt(written), contractAt(compact)))).toBe(
+      'contract changes: none',
+    )
   })
 })

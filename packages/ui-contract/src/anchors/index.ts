@@ -1,4 +1,12 @@
-export { baseOf, isKnownAnchor, isSizeOption, sizeOptionOf, testIdFor } from './derive'
+export {
+  ANSWERS,
+  baseOf,
+  isKnownAnchor,
+  isSizeOption,
+  OPTION,
+  sizeOptionOf,
+  testIdFor,
+} from './derive'
 export { containersOf, ENTRY_KINDS, inPartOf } from './entries'
 export { FIELD_STATES, type FieldState, STATEFUL_FIELD_KINDS } from './field-states'
 export {
@@ -42,6 +50,6 @@ export {
   searchKeysOf,
 } from './paging'
 export { isListed, isRendered, listedBy, type RenderedAt, renderedAt } from './rendered'
-export { admits, GUEST, heldRoles, IDENTITY } from './roles'
+export { admits, admitsAllOf, GUEST, heldRoles, IDENTITY, sameAdmission } from './roles'
 export { CONTRACT_VERSION } from './version'
 export { VISIBILITY_BASE_KIND, VISIBILITY_BUTTON, VISIBILITY_VALUES } from './visibility'

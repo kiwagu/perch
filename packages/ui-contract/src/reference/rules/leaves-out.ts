@@ -2,8 +2,9 @@
  * What a screen leaves out: what it would only repeat of the model, the platform and its own
  * bindings, which the loader derives the same way every time. The derivations of an action's
  * failures, of a button's params, of an error's codes and fields, of the fields that hold input,
- * of their states, of the leaves that ask first, of a platform composite and of the descriptions
- * the engine says itself; the derivations that shape a flow are in `outcomes.ts`.
+ * of their states, of the leaves that ask first, of a platform composite, of what an element's
+ * kind implies, of a link's roles and of the descriptions the engine says itself; the derivations
+ * that shape a flow are in `outcomes.ts`.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -100,12 +101,31 @@ const composite: ReferenceRule = {
       '    action: platform.reset-password',
       '    params:',
       '      password: user.reset-password.password-input',
-      '  derived: [ visibility-button ]',
       '```',
     ].join('\n'),
     "A composite's anchors are declared anchors the loader derives, not derived parts (`user.settings.password-rule-list.digit-item` is screen `user.settings`, kind `item`); they follow the anchor grammar, and no screen file writes them. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. An unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor and a `derivedFrom` a screen file writes are problems. The platform's composites and the rows of the vocabulary's \"Composites\" table name each other, each item state a row state: the table names each composite with what it is for. The manifest lists them in `contract.composites`, the declarations under `platform.composites`, a secret input's `composite` and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), and `contract:diff` reports a composite added or removed. A composite declared and used by no screen is no problem: `contract:coverage` notes it (`composite <name> is declared and used by no screen`).",
   ].join('\n\n'),
   keys: ['screen.anchors.<name>.composite', 'platform.composites', 'platform.composites.<name>'],
+}
+
+const kindParts: ReferenceRule = {
+  id: 'kind-parts',
+  title: "What an element's kind implies",
+  text: [
+    "From version 4 an anchor's kind says what a file would only repeat, and the loader derives it: a `select` carries a `data-value` on each choice (`dataValue: true`) and renders its `option`s, a secret `input` renders its `visibility-button`, and a `dialog` and a `confirmation` render their two answers, `confirm-button` and `cancel-button`. Each part is listed in the anchor's `derived`, once, after the suffixes the file writes, so every reader of `derived` and `dataValue` (the checks, the manifest, the hand-over diff, the sources check) takes the anchor as if the file wrote them.",
+    'A screen file never writes one of them: `dataValue` on a select, whatever its value, and each of `option`, `visibility-button`, `confirm-button` and `cancel-button` that the kind implies, is a problem at its key (derived from its kind; leave it out). Before version 4 nothing is derived and a file writes them as before. A paged list derives its own parts by its facet (see the rule `paged-list`).',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.derived', 'screen.anchors.<name>.dataValue'],
+}
+
+const linkRoles: ReferenceRule = {
+  id: 'link-roles',
+  title: 'The roles of a link',
+  text: [
+    "A link bound to one route (`binding: { route: /me }`) is shown to the devices that route opens. From version 4 the loader gives it the `roles` of the route's binding when the route admits fewer devices than the link's own screen serves (the frame serves every role). A link to a route that admits every device its screen serves, a link of several bindings and a link to a route no screen binds get none.",
+    "Roles are read by the devices they admit, never as sets of names: a device holds `guest` alone, or `identity` with any of the other roles, so `[identity, member, admin]` and `[identity]` admit the same devices (`sameAdmission` of `@workspace/ui-contract/anchors`, over the roles the bindings of the screens serve). A screen file never writes the roles the route derives: written roles that admit exactly what the route's do are a problem at the key (derived from the route; leave them out), and roles that admit fewer devices stay as the link's own. Before version 4 nothing is derived and a file writes them as before. `contract:check` reads the loaded roles as it reads written ones (see the rule `roles`).",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.roles'],
 }
 
 const engineDescriptions: ReferenceRule = {
@@ -135,6 +155,8 @@ export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
   fieldStatesCarried,
   leaveQuestions,
   composite,
+  kindParts,
+  linkRoles,
   engineDescriptions,
   whatStays,
 ]

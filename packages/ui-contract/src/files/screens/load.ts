@@ -6,7 +6,9 @@
  * named otherwise than its screen's first binding says and a missing platform file are problems
  * of the file or folder concerned. Once every file is read, what a file leaves to the contract is
  * derived (`derive/`): a composite a secret input opts into, derived as its list and items
- * (`derive/composites.ts`); the params of a form's button, from what the fields of its part pass
+ * (`derive/composites.ts`); from version 4 what an element's kind implies, a select's options and
+ * data value, a secret input's visibility button and a dialog's answers (`derive/kinds.ts`); the
+ * params of a form's button, from what the fields of its part pass
  * to the actions it binds, a written param winning (`derive/form-params.ts`), so what follows
  * reads them as if written; the parts a paged list derives (`derive/paging.ts`); an error anchor's codes and fields from the failures of the actions
  * its part binds and its flow shows on it, as the model and the platform give them by the version
@@ -23,8 +25,10 @@
  * of the actions, the screen's buttons and the frame's toast anchor, which says the success of
  * each model action a flow invokes (`expand-flow/toasts/`); that anchor then carries every code a
  * flow shows on it (`derive/toasts.ts`), and each screen is parsed as every reader takes it, its
- * flow canonical. Once every file loads, they are assembled into one `ScreensFile`, each screen
- * with its file, with the toasts and the questions the loader derived.
+ * flow canonical. Once every screen is parsed, from version 4 a link takes the roles of the route
+ * it leads to, which another file may bind (`derive/link-roles.ts`). Once every file loads, they
+ * are assembled into one `ScreensFile`, each screen with its file, with the toasts and the
+ * questions the loader derived.
  */
 
 import { join } from 'node:path'
@@ -35,11 +39,14 @@ import {
   type DerivedQuestion,
   type FailureOf,
   failuresOf,
+  type LoadedScreen,
   toastCodesOf,
   withDerivedComposites,
   withDerivedErrors,
   withDerivedInputs,
+  withDerivedKindParts,
   withDerivedLeaves,
+  withDerivedLinkRoles,
   withDerivedPaging,
   withDerivedParams,
   withDerivedQuestions,
@@ -81,14 +88,19 @@ function readScreenFiles(
   toasts: DerivedToast[]
   questions: DerivedQuestion[]
 } {
-  const screens: Screen[] = []
-  const files: string[] = []
+  const parsed: LoadedScreen[] = []
   const paths = filesUnder(join(root, SCREENS_DIR))
 
   if (paths === undefined || paths.length === 0) {
     const message = paths === undefined ? 'cannot read the folder' : 'holds no screen file'
 
-    return { screens, files, problems: [{ file: SCREENS_DIR, message }], toasts: [], questions: [] }
+    return {
+      screens: [],
+      files: [],
+      problems: [{ file: SCREENS_DIR, message }],
+      toasts: [],
+      questions: [],
+    }
   }
 
   const problems: Problem[] = []
@@ -105,13 +117,15 @@ function readScreenFiles(
       if (yaml.problems.length === 0) {
         const unwritten = withoutWrittenLeaves(file, yaml.value)
         const composed = withDerivedComposites(file, unwritten.value, composites)
-        const bound = withDerivedParams(file, composed.value)
+        const kinded = withDerivedKindParts(file, composed.value, edition)
+        const bound = withDerivedParams(file, kinded.value)
         const paged = withDerivedPaging(file, bound.value)
         const errors = withDerivedErrors(file, paged.value, failureOf, edition)
 
         problems.push(
           ...unwritten.problems,
           ...composed.problems,
+          ...kinded.problems,
           ...bound.problems,
           ...paged.problems,
           ...errors.problems,
@@ -191,8 +205,10 @@ function readScreenFiles(
       problems.push(...loaded.problems)
 
       if (loaded.screen !== undefined) {
-        screens.push(withDerivedLeaves(withDerivedInputs(loaded.screen), unsavedInput))
-        files.push(file)
+        parsed.push({
+          file,
+          screen: withDerivedLeaves(withDerivedInputs(loaded.screen), unsavedInput),
+        })
       }
     }
   }
@@ -205,7 +221,18 @@ function readScreenFiles(
       ? []
       : [...derived.values()].filter(({ code }) => !written.has(code))
 
-  return { screens, files, problems, toasts, questions: [...asking.values()] }
+  // A link's roles come from the routes of every screen, so they wait until every file is read.
+  const linked = withDerivedLinkRoles(parsed, edition)
+
+  problems.push(...linked.problems)
+
+  return {
+    screens: linked.screens,
+    files: parsed.map(({ file }) => file),
+    problems,
+    toasts,
+    questions: [...asking.values()],
+  }
 }
 
 function readPlatform(root: string): { platform?: PlatformFile; problems: Problem[] } {

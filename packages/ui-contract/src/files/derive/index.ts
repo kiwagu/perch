@@ -25,6 +25,7 @@ export {
 export { type FlowSources, flowSourcesOf } from './flow-errors'
 export { withDerivedParams } from './form-params'
 export { withDerivedInputs } from './inputs'
+export { withDerivedKindParts } from './kinds'
 export {
   type ControlMove,
   controlMovesOf,
@@ -32,6 +33,7 @@ export {
   withDerivedLeaves,
   withoutWrittenLeaves,
 } from './leaves'
+export { type LoadedScreen, withDerivedLinkRoles } from './link-roles'
 export { withDerivedPaging } from './paging'
 export { type DerivedQuestion, withDerivedQuestions, withQuestionCodes } from './questions'
 export { isBare, type Request, requestsOf } from './requests'

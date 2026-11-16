@@ -50,3 +50,18 @@ The first format. `platform.yaml` declares `version: 1`, and the vocabulary repe
 - What is left by hand: declare `values` and refer every string parameter; attribute every
   field-shaped code; write `form` or a field for each code two fields share; drop written
   `fields` the engine derives.
+
+## Version 4
+
+- What changed: what an element's kind implies is derived: a select's `dataValue` and `option`, a
+  secret input's `visibility-button`, the `confirm-button` and `cancel-button` of a dialog and a
+  confirmation. So is the `roles` of a link bound to one route, which takes those of the route when
+  the route admits fewer devices than the link's screen serves (the frame serves every role); roles
+  are compared by the devices they admit, so `[identity, member, admin]` and `[identity]` are the
+  same. From version 4 a screen file never writes what is derived, and the check refuses it.
+- Why: every select, secret input, dialog and confirmation wrote the same lines, and a link wrote
+  the roles its route already serves.
+- What `contract:migrate --write` does: sets `version: 4` in `platform.yaml`, nothing else.
+- What is left by hand: drop a select's `dataValue` and `option`, a secret input's
+  `visibility-button`, the two answers of a dialog or a confirmation, and the `roles` of a link
+  that admit what its route's roles admit.
