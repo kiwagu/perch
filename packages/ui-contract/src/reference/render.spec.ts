@@ -18,12 +18,111 @@ interface Entry {
 
 const reference = renderReference()
 
-/** Each `### ` heading of the reference with the anchor under it and the text that follows. */
-const entries: readonly Entry[] = [
-  ...reference.matchAll(/^### (.+)\n\n<a id="([^"]+)"><\/a>\n(.+)$/gm),
-].map(([, heading = '', slug = '', text = '']) => ({ heading, slug, text }))
+/** The line that lists the keys a rule concerns, under its text. */
+const KEYS_LINE = 'Keys it concerns: '
+
+/** A heading of the reference: its level, its title and the lines under it. */
+interface Block {
+  readonly level: number
+  readonly title: string
+  readonly lines: string[]
+}
+
+/**
+ * The headings of the reference with the lines under each, those inside a fenced code block read
+ * as the text they are: a `## ` at the start of a line of an example is no heading.
+ */
+function blocksOf(text: string): Block[] {
+  const blocks: Block[] = []
+  let fenced = false
+
+  for (const line of text.split('\n')) {
+    fenced = line.startsWith('```') ? !fenced : fenced
+
+    const heading = fenced ? null : /^(##+) (.+)$/.exec(line)
+
+    if (heading !== null) {
+      blocks.push({ level: heading[1]?.length ?? 0, title: heading[2] ?? '', lines: [] })
+    } else {
+      blocks.at(-1)?.lines.push(line)
+    }
+  }
+
+  return blocks
+}
+
+const blocks = blocksOf(reference)
+
+/**
+ * Each `### ` heading of the reference with the anchor under it and the text that follows, up to
+ * the line that lists the keys a rule concerns.
+ */
+const entries: readonly Entry[] = blocks
+  .filter(({ level }) => level === 3)
+  .map(({ title, lines }) => {
+    const anchor = /^<a id="([^"]+)"><\/a>$/.exec(lines[1] ?? '')
+    const end = lines.findIndex((line) => line.startsWith(KEYS_LINE))
+    const text = lines.slice(2, end === -1 ? undefined : end).join('\n')
+
+    return { heading: title, slug: anchor?.[1] ?? '', text: text.trimEnd() }
+  })
 
 const entryAt = (slug: string): Entry | undefined => entries.find((entry) => entry.slug === slug)
+
+/** The facets of the screen file, each a key name: the reference says every one of them in full. */
+const FACET_KEYS = [
+  'binding',
+  'roles',
+  'own',
+  'holdsInput',
+  'marksState',
+  'secret',
+  'codes',
+  'ranked',
+  'fields',
+  'dataId',
+  'dataValue',
+  'states',
+  'derived',
+  'source',
+  'composite',
+  'confirm',
+  'paged',
+  'renders',
+  'pattern',
+] as const
+
+type Facet = (typeof FACET_KEYS)[number]
+
+/**
+ * The key where each facet is declared, by its slug: the facets of an anchor are keys of
+ * `anchors.<name>`; a name such as `states`, `roles` or `pattern` also names keys elsewhere in the
+ * file, whose longer texts must not stand for it.
+ */
+const FACET_HOMES: Readonly<Record<Facet, string>> = {
+  binding: 'screen-anchors-name-binding',
+  roles: 'screen-anchors-name-roles',
+  own: 'screen-anchors-name-own',
+  holdsInput: 'screen-anchors-name-holdsinput',
+  marksState: 'screen-anchors-name-marksstate',
+  secret: 'screen-anchors-name-secret',
+  codes: 'screen-anchors-name-codes',
+  ranked: 'screen-anchors-name-ranked',
+  fields: 'screen-anchors-name-fields',
+  dataId: 'screen-anchors-name-dataid',
+  dataValue: 'screen-anchors-name-datavalue',
+  states: 'screen-anchors-name-states',
+  derived: 'screen-anchors-name-derived',
+  source: 'screen-anchors-name-source',
+  composite: 'screen-anchors-name-composite',
+  confirm: 'screen-anchors-name-confirm',
+  paged: 'screen-anchors-name-source-paged',
+  renders: 'screen-flow-states-name-meta-renders',
+  pattern: 'screen-flow-states-name-states-name-pattern',
+}
+
+/** The shortest text that says a facet: what it is and how the engine treats it, not a label. */
+const FACET_TEXT_LENGTH = 80
 
 /** The describe text of a key's schema, through the optional that wraps it. */
 const describeText = (schema: z.core.$ZodType): string | undefined =>
@@ -60,7 +159,7 @@ describe('renderReference', () => {
     expect(generated).toContain('never edit it')
   })
   it('gives each file a section, then the rules', () => {
-    expect([...reference.matchAll(/^## (.+)$/gm)].map(([, title]) => title)).toEqual([
+    expect(blocks.filter(({ level }) => level === 2).map(({ title }) => title)).toEqual([
       'Screen file',
       'Platform file',
       'Activity file',
@@ -122,5 +221,28 @@ describe('renderReference', () => {
     expect(guard).toBeTruthy()
     expect(withoutDefs.filter((key) => referenceSlug(key.file, ...key.path) === slug)).toEqual([])
     expect(entryAt(slug)?.text).toBe(guard)
+  })
+  it.each(FACET_KEYS)('writes the facet %s under its key, with its rule in full', (facet) => {
+    const home = entryAt(FACET_HOMES[facet])
+
+    expect(home?.heading.endsWith(`${facet}\``)).toBe(true)
+    expect(home?.text.length ?? 0).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+  })
+  it('gives each rule an id of its own', () => {
+    const ids = REFERENCE_RULES.map(({ id }) => id)
+
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+  it('refers only to rules the reference writes, and links only to anchors it holds', () => {
+    const anchors = new Set(entries.map(({ slug }) => slug))
+    const ruleIds = new Set(REFERENCE_RULES.map(({ id }) => id))
+    const mentioned = [...reference.matchAll(/\brules? `([a-z][a-z0-9-]*)`/g)].map(
+      ([, id = '']) => id,
+    )
+    const linked = [...reference.matchAll(/\]\(#([^)]+)\)/g)].map(([, slug = '']) => slug)
+
+    expect(mentioned.length).toBeGreaterThan(0)
+    expect(mentioned.filter((id) => !ruleIds.has(id))).toEqual([])
+    expect(linked.filter((slug) => !anchors.has(slug))).toEqual([])
   })
 })

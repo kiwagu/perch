@@ -1,0 +1,140 @@
+/**
+ * What a screen leaves out: what it would only repeat of the model, the platform and its own
+ * bindings, which the loader derives the same way every time. The derivations of an action's
+ * failures, of a button's params, of an error's codes and fields, of the fields that hold input,
+ * of their states, of the leaves that ask first, of a platform composite and of the descriptions
+ * the engine says itself; the derivations that shape a flow are in `outcomes.ts`.
+ */
+
+import type { ReferenceRule } from '../rule'
+
+const failureCodes: ReferenceRule = {
+  id: 'failure-codes',
+  title: 'What an action fails with',
+  text: [
+    "A platform action fails with the codes `platform.yaml` declares for it. An action of the model fails with `forbidden` first when its entity says who may change it (`x-perch.can`), then with the codes of the fields its parameters set, then with `failed`. A field gives, from its JSON Schema: `<field>-required` for a `minLength` of 1, `<field>-too-short` for a larger one, `<field>-too-long` for a `maxLength`, `<field>-invalid` for a `pattern` or a `format`, and `<field>-taken` when the field alone is unique (`x-perch.unique`); a new id and a read-only field give none, and a field's name is kebab-case in a code. So `note.createNote` fails with `forbidden`, `text-required`, `text-too-long` and `failed`, and a `maxLength` added to a field adds its code wherever an action sets the field.",
+    '`contract:diff` lists the codes the anchors gain or lose, written or derived, so a constraint added to the model shows on review as the codes it adds.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.codes', 'screen.anchors.<name>.fields'],
+}
+
+const buttonParams: ReferenceRule = {
+  id: 'button-params',
+  title: "A button's params",
+  text: [
+    'A `button` whose binding names an action gets, for that action, every param the fields of its part (`<part>.<name>`: an input, a textarea, a select, a checkbox, a radio or a switch) pass in their own bindings of it. The email and password inputs of `user.sign-in` pass `email` and `password` to `platform.sign-in`, so `user.sign-in.submit-button` binds it as `action: platform.sign-in` alone. A param the button writes wins, key by key, so a value no field of its part passes stays written: its binding of `platform.sign-up` keeps `locale: app-shell.locale-select`, an anchor of the frame. Two fields that pass one param with different values are a problem of the button until it writes that param.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.binding', 'screen.anchors.<name>.binding.params'],
+}
+
+const errorCodes: ReferenceRule = {
+  id: 'error-codes-and-fields',
+  title: "An error's codes and fields",
+  text: [
+    'An error `<part>.error` that writes no `codes` carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>`, in the order they are declared); then the failures of the actions the flow invokes and shows on it, by a written `onError` in any form or by the request pattern (see the rule `request-outcome`), a region written `by` a button included; then the codes the flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. So `user.reset-password.error` may leave its codes out: the failures of `platform.reset-password`, which the anchors beside it bind, then `passwords-differ`, which its flow shows on it, then `failed`.',
+    'One that writes no `fields` maps each code of a field to the control its binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>`.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.codes', 'screen.anchors.<name>.fields'],
+}
+
+const fieldHoldsInput: ReferenceRule = {
+  id: 'field-holds-input',
+  title: 'Whether a field holds input',
+  text: [
+    "Every field (`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave (see the rule `leave-questions`). A field whose own change applies it at once, and nothing else applies it, holds none: one of its bindings runs an action that takes the field itself as a parameter, an action no other anchor of its screen runs with it (the language select, the organisation select), or its own event moves its screen's search with it, a `navigate` to a path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's event does (a filter applied on change).",
+    "A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it (the search box of the accounts), holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` is such a field by its facet: its choice sets the route's `size` at once. The loader sets `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input.",
+    "In the JSX a field that holds none carries `holdsInput={false}` on the element with its anchor, and a field that holds input carries nothing: `holdsInput={true}` is the default and is reported by the sources check, and so is a `holdsInput={false}` on a field that holds input or on an anchor that is not a field; a rendered field that holds no input without its opt-out is reported at its anchor. A flag's anchor is a literal or `testIdFor()` of two literals, so a paged list's size select, which holds no input by its facet, may carry `holdsInput={false}` (`{true}` there is reported as the default, a `marksState` as one on a select that holds no input, and either flag on any other part a `testIdFor()` derives as one on no field), and a rendered size select without it is reported at its `testIdFor()`.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.holdsInput', 'screen.anchors.<name>.marksState'],
+}
+
+const fieldStatesCarried: ReferenceRule = {
+  id: 'field-states-carried',
+  title: 'Which states a field carries',
+  text: [
+    'A field of kind `input`, `textarea` or `select` that holds input carries `data-state` `unsaved` while it holds input no save has taken. One whose binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. A field that holds no input (`holdsInput: false`) carries no state. The states come from the vocabulary\'s "Field states" section, and a vocabulary without it declares none. The manifest lists each field\'s states under `fieldStates` in `ids`, and the table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is held to them. The implementation carries `unsaved` on a field while it holds input no save has taken, and `saved` only when its manifest `fieldStates` lists it and a save stored what it shows, while it stays on the screen; otherwise no state. `marksState: false` turns off the colour a field shows for its state; its `fieldStates` still hold.',
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.states',
+    'screen.anchors.<name>.holdsInput',
+    'screen.anchors.<name>.marksState',
+  ],
+}
+
+const leaveQuestions: ReferenceRule = {
+  id: 'leave-questions',
+  title: 'Which leaves ask first',
+  text: [
+    "`platform.yaml` declares under `unsavedInput` every leave that would lose what was typed, and how the app asks first. `question` names the frame's dialog: a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or `question`; `flow` (a navigation a flow makes after its action completed: the action took the input) is always `never`, and `elsewhere` (another tab or device, a database that will not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of it. `leaving` comes with `unsavedInput`, and the question is a reserved dialog with a code and both answers that runs no action of its own.",
+    "A flow's `navigate` is one of these leaves by what moves it: after an invoke's outcome it is `flow`; on a platform or data event, `elsewhere`; on a control's event, to the path of the screen's one binding, `state`; on a control's event, to any other path, `screen`, a leave the user starts as with a link. Such a control asks the frame's question before its event while a change of screen asks, as long as a field it loses holds unsaved input: the fields of its screen that hold input, but those the move carries in its search and the control itself. The loader derives it on the control, `leaves: { dialog, loses }`, which a screen file never writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`.",
+    "For that question to hold wherever the control is acted on, a navigate sits on a transition, never in an entry or an exit; one transition moves once; a control's navigate names a control of the flow's own screen, outside the frame, an anchor it declares or a part one derives, which has no declaration to carry the question and so moves within its screen only; a move to a path of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state that handles it, losing the same fields, since its question comes before its event.",
+  ].join('\n\n'),
+  keys: ['platform.unsavedInput', 'platform.leaving', 'screen.anchors.<name>.holdsInput'],
+}
+
+const composite: ReferenceRule = {
+  id: 'composite-of-the-platform',
+  title: 'A composite of the platform',
+  text: [
+    "A list with its items that several screens show, where the policy behind it lives in the platform, is declared once in `platform.yaml` under `composites`: its `description`, its `list` (the last segment of the list, ending in `-list`), its `itemState` (a row state each item takes once what it says holds) and its `items`, each by name with its description. A secret input opts in with `composite: <name>`, and the loader declares on its screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. The rules a new password keeps, which `user.sign-in`, `user.reset-password` and `user.settings` each show under their new password, in `domain/platform.yaml`:",
+    [
+      '```yaml',
+      'composites:',
+      '  password-rules:',
+      '    description: The rules a new password keeps, each marked once the password typed keeps it.',
+      '    list: password-rule-list',
+      '    itemState: met',
+      '    items:',
+      '      length: 10 to 35 characters.',
+      '      digit: At least one digit.',
+      '```',
+    ].join('\n'),
+    'The new password of `domain/screens/reset-password.yaml` opts in, and its screen gets `user.reset-password.password-rule-list`, `user.reset-password.password-rule-list.length-item` and `user.reset-password.password-rule-list.digit-item`, none of them written:',
+    [
+      '```yaml',
+      'user.reset-password.password-input:',
+      '  kind: input',
+      '  secret: true',
+      '  composite: password-rules',
+      '  binding:',
+      '    action: platform.reset-password',
+      '    params:',
+      '      password: user.reset-password.password-input',
+      '  derived: [ visibility-button ]',
+      '```',
+    ].join('\n'),
+    "A composite's anchors are declared anchors the loader derives, not derived parts (`user.settings.password-rule-list.digit-item` is screen `user.settings`, kind `item`); they follow the anchor grammar, and no screen file writes them. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. An unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor and a `derivedFrom` a screen file writes are problems. The platform's composites and the rows of the vocabulary's \"Composites\" table name each other, each item state a row state: the table names each composite with what it is for. The manifest lists them in `contract.composites`, the declarations under `platform.composites`, a secret input's `composite` and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), and `contract:diff` reports a composite added or removed. A composite declared and used by no screen is no problem: `contract:coverage` notes it (`composite <name> is declared and used by no screen`).",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.composite', 'platform.composites', 'platform.composites.<name>'],
+}
+
+const engineDescriptions: ReferenceRule = {
+  id: 'engine-descriptions',
+  title: 'A description the engine can say',
+  text: [
+    "An anchor's `description` may be left out where the engine says it: a `heading` names its screen by its title; a `link` whose one binding is a route to a screen's path leads to that screen; a secret `input` holds a secret the user types and never shows; an `error` says why the actions bound beside it, then those its flow invokes against it, did not go through, each of its codes with its meaning from the vocabulary's \"Codes\" table, the one place a code's meaning lives; and a composite's anchors carry the platform's descriptions. The manifest carries the written description, a secret input's with `(type password)` appended once, else the derived one, and gives each derived part in `contract.derivedParts` the meaning of its suffix. `bun run contract:coverage --descriptions` lists the written descriptions the engine would say itself, for the developer to drop (an anchor a composite derives is never listed).",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.description'],
+}
+
+const whatStays: ReferenceRule = {
+  id: 'what-stays',
+  title: 'What stays in a screen',
+  text: [
+    "What a screen would only repeat of the model, the platform and its own bindings, it leaves out, and the loader derives it, the same way every time. What stays in a screen is what a tester or a user can tell apart: the areas and their states, where each control leads, a success or a failure that goes elsewhere than the derived one or shows something else, guards, confirmations and chains of actions. A written value wins over a derived one. `bun run contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or derived, so a constraint added to the model shows on review as the codes it adds, and the lines of each screen's flow, its states' addresses, what they render and what each guard by failure code takes among them, and every line of a flow added to or removed from a screen, descriptions aside, so a screen written shorter that loads to the same flow shows no change but the descriptions it stops writing, each listed as `<n> -> gone`.",
+  ].join('\n\n'),
+  keys: [],
+}
+
+/** The rules of what a screen leaves out. */
+export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
+  failureCodes,
+  buttonParams,
+  errorCodes,
+  fieldHoldsInput,
+  fieldStatesCarried,
+  leaveQuestions,
+  composite,
+  engineDescriptions,
+  whatStays,
+]

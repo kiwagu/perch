@@ -1,0 +1,131 @@
+/**
+ * The checks the contract is held to: the files and their cross-references, the sources of the
+ * app, the e2e tests that consume the contract, and the editions and migrations that let a
+ * contract at an older version load and check as before.
+ */
+
+import type { ReferenceRule } from '../rule'
+
+const checksOverview: ReferenceRule = {
+  id: 'checks',
+  title: 'The three contract checks',
+  text: [
+    '`bun run check` and the pre-commit hook run three contract checks. Each prints `file:line: message` per problem and exits 1, or a one-line summary. A commit on `main` also checks that the contract is at the version the engine reads (`contract:check --current`). `bun run contract:check`: the files on their own and against each other (the rules `check-files`, `check-bindings`, `check-flows`, `check-platform` and `check-access`). `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against the contract (the rule `check-sources`). `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the contract (the rule `check-consumers`).',
+    "Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook leaves it out, so a scenario may wait for its test. `bun run contract:coverage:check` runs where it runs and holds the block of `COVERAGE.md` to what `contract:coverage --write` writes. The web app's tests hold the module routes and the real router to the bindings, and XState and the app's machines to the flows. `checkContract(root)` loads the contract files, the activities and the scenarios (stopping at their own problems), then runs the cross-checks, `schemaDrift` and `referenceDrift`, sorted by file and line; each rule is a function of the loaded `Contract`.",
+    "`bun run contract:migrate` moves a contract at an older version to the tooling's, step by step (`--write` rewrites the files; `packages/ui-contract/MIGRATIONS.md` says what each version changed); `contract:check` passes an older contract and names it in one line (see the rule `editions-and-migrations`).",
+  ].join('\n\n'),
+  keys: [],
+}
+
+const checkFiles: ReferenceRule = {
+  id: 'check-files',
+  title: 'The check of the files and the vocabulary',
+  text: [
+    "Each file parses and holds its shape, and each screen file is named by its first binding. Every anchor follows the grammar, starts with its screen's id and is declared once, and is never named like another anchor plus a derived suffix. Every kind, suffix, state, code, role and choice value is in the vocabulary, every derived suffix ends with a kind of it (the kind of the part it marks), and every code of the vocabulary is used; there are no choice values for a `visibility-button`, whose values its suffix defines. The platform's composites and the rows of the vocabulary's \"Composites\" table name each other, each item state a row state. The version is one the tooling reads (`versionProblems`): at most `CONTRACT_VERSION`, and from version 2 declared in `platform.yaml` alone, the vocabulary repeating it at version 1 only (its `Contract version` line is there and equal at version 1, refused from version 2). The generated schemas equal their Zod sources, and so does the reference (`schemaDrift`, `referenceDrift`).",
+    '`secret` is on a field alone, and a `visibility-button` on a secret input alone; `marksState` (`false`) is on an `input`, a `textarea` or a `select` that holds input alone; `ranked` is on a message of two codes or more alone, each code listed once; a `composite` is on a secret input alone, names a composite of the platform, is opted into once per screen and derives no anchor the file writes or another composite derives, and no file writes `derivedFrom`.',
+    "Every description the domain files write, the maps of meanings included (a screen's `states`, the platform's `events`, the sentence guards of a `meta.guards`), says what its element is for and leaves to the structure, another element, the platform, the model, the vocabulary and the flow what they say, as the schema text of its field puts it; each keeps 200 characters at most, whatever it describes (`descriptionsProblems`): one past it is a problem at its line, `<path>: the description of <place> is <n> characters, past its budget of 200; its purpose: \"<the purpose of its field>\"`, naming the purpose of its field. `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each description field in one text (what it is for, what it leaves to others and its budget), which is that field's `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint, the model's own description taking its text in the shape `loadModel` reads the document with; `DESCRIPTION_BUDGET` is the 200 characters, for every one; `descriptionLength(text)` counts a description in characters. `readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form.",
+    "Every activity agrees with the screens it visits (`activitiesProblems`): every state's screen exists and its address is a binding of that screen; every event is a declared anchor (a derived one through its base's `derived`, never a `visibility-button`) of that screen or of the frame; every transition from a state on an anchor to a target is backed by the screens, the flow of the anchor's screen (the frame's, for an anchor of the frame) reaching a `navigate` to the target's path, in the transition's actions, on leaving its state or entering its target (the `exit` and `entry` effects XState runs on a move) or after an invoke's `onDone` or `onError`, or the anchor being a link to that path (`binding: { route: ... }`); the roles are of the vocabulary and every `data` model is a field of the model; `initial` and every target are states; every state is reachable from `initial` and every state that is not final leaves; every guard is declared in `meta.guards` and every declared one is used. `contract:check` builds each activity in XState as written, with the walk of the flows, reaches every state and takes every transition and every guarded branch to its target (`runsProblems`: a machine XState will not build is a problem, never a crash). Every bracket reference of a scenario resolves, each code, state or value one the anchor named last before it in its text carries (see the rule `scenario-brackets`), the activity it names exists, and every device acts as a role of the vocabulary. A problem of an activity or a scenario is at the line of the deepest part of its path the file holds.",
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.secret',
+    'screen.anchors.<name>.ranked',
+    'screen.anchors.<name>.marksState',
+  ],
+}
+
+const checkBindings: ReferenceRule = {
+  id: 'check-bindings',
+  title: 'The check of the bindings and the routes',
+  text: [
+    "Every binding points at a field, an action or a route that exists, or at a search parameter every route of the screen declares, which only a field that holds no secret starts with, and never on another kind than a field (`bindingsProblems`). Each parameter of an action takes a declared anchor (never a `visibility-button`, which holds no input), a constant or a search parameter, an item or a row of its own screen with a `dataId`, of a list, a table or a section, from a control (a button, a link, a tab or a field) in its part (in an invoke's `input`, a state only such controls enter); a parameter two fields of a button's part pass with different values is written by the button. Each param of a platform source is a parameter of its action taking a constant or a search parameter every route of the screen declares, never `page` or `size`.",
+    "A paged source's action pages with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`; every route of its screen declares `page` and `size` as it reads them; a screen pages one list; and a paged list has at most 3 segments, as its size options add two to its name (`pagingProblems`). Every path parses in the router's syntax (`parseRoutePath`), every example of a route parameter matches that parameter (Ajv's reasons at `bindings[i].params.properties.<name>.examples[j]`), an empty example of a path parameter is a problem, and a `$param` without an example has a value its schema accepts, else `needs an example` at its property (`routesProblems`, `searchProblems`: the enum controls, save the `size` of a screen with a paged list, whose control is the derived `<list>.size-select.option` and which writes no `x-perch`; `retain`).",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.binding', 'screen.bindings'],
+}
+
+const checkFlows: ReferenceRule = {
+  id: 'check-flows',
+  title: 'The check of the flows',
+  text: [
+    "Every flow names states, events (never a `visibility-button`, which is presentation only), guards, actions, and anchors with their codes and bindings that exist (`flowProblems`): a clear's anchor one that carries codes, which then shows none, whatever its kind and screen, else a field of the flow's own screen, which it empties (a secret one included, never a `visibility-button`); a read's anchor a list, section or table of the flow's own screen whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`); an invoke's `input` taken from no `visibility-button` either; an invoke that says `read: false` reading in none of its outcomes, and a branch that says `read: false` an outcome of an invoke, never the transition of an event, reading nothing itself, under no invoke that says it already; every branch of an invoke's `onDone`, unless the invoke says `read: false`, reading each list, section or table of its own screen with a platform source that the invoke holds (one whose entry its `input` takes, whose source's `params` take a value its `input` takes, or whose source its action's `changes` names; `containersOf`, `flow/held-reads.ts`), or saying `read: false` itself (see the rule `read-after-an-action`).",
+    "A navigate's search keys are keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen that holds no secret (never a `visibility-button`), each `{ item }` an entry with a `dataId` of a list, a table or a section of the flow's own screen, taken on the event of a control (`CONTROL_KINDS`) in its part into a key that takes a string (`flow/items.ts`), and `page: 1` beside any key a paged list of the screen it moves to reads (`flow/pages.ts`); an invoke's input that takes an entry is run in a state only such controls enter. Each navigate sits on a transition, one to a transition, a control's on a control of its own screen outside the frame (a derived part within its screen only), to its own path only on a screen of one binding, and leaving its screen, losing the same fields, everywhere its control is handled or nowhere (`flow/leaves.ts`).",
+    "Every target resolves as XState does (a state of the root or a deep target `<parallel>.<region>.<state>` from the root, a state of its own region or an id target `#<flow id>.<state>` of its own flow in a region); each event of a parallel state is handled in one area; the flow reaches each of its states and leaves each plain state that is not final; the one transition without a guard comes last. `meta.renders` lists anchors its own screen declares (a derived part's base, never the part), each once and never beside an anchor it is declared under; a plain state of the root or a state of a region renders every anchor it handles that a state lists (a derived part, or an anchor declared under a listed one, through the anchor it is under). A guard by failure code guards only branches of an invoke's `onError`, each of its codes one its action fails with and listed once; and every invoke whose action fails with codes writes its `onError` in full or has what the request pattern needs: the one way back and an error when it writes none, an error when it writes its target alone (see the rule `request-outcome`). `flowNodes(flow)` lists every state in the order of the file as a `FlowNode` (a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode`, with its path of names and its place in the flow); `deepTargetOf`, `idTargetOf`, `rootOf`, `regionStartsOf` and `deepEnteredOf` read the parts of a `DeepTarget` and an `IdTarget`: the state of the root a target lands in, each region at its starting state.",
+  ].join('\n\n'),
+  keys: ['screen.flow', 'screen.flow.states.<name>.invoke', 'screen.flow.states.<name>.on'],
+}
+
+const checkPlatform: ReferenceRule = {
+  id: 'check-platform',
+  title: 'The check of the platform file',
+  text: [
+    "Every action of `leaving` exists and is listed once, every action of `toasts` is an action of the platform (`leavingProblems`, `toastsProblems`), the frame's confirmation is declared by the frame alone, once, reserved, with both answers and no action of its own, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a code and both answers that runs no action of its own, and an action that asks needs an action under `leaving` (`unsavedInputProblems`).",
+    "Every mail a platform action declares goes to a parameter of the action or the account, takes its language from a parameter, the account or, sent to a parameter by an action no guest runs, its recipient's, and links to a screen whose every route declares the search parameter that carries its token (`mailsProblems`); an action that sends a mail or a notice has no parameter named `account`, and one that sends a mail none named `recipient`. Scenarios name a mail `[mail:<action>]` and a notice `[notice:<action>.<name>]`, and a test holds a mail it reads to what the action declares. Every notice it declares has a name no other notice of the action has, goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose every route needs no parameter: no `$param`, no splat, no required search key (`noticesProblems`). `platformMailSchema` is the mail (`to` and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts on: the signed-in account for an action on its own account, else the one its parameters name, whoever is signed in; the language also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's; and the `link` with the `screen` it opens and the `search` parameter carrying its token) and `platformNoticeSchema` a notice of the action's `notices`, a mail that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, never `RECIPIENT`, `to: account` being the account's email as it was before the action changed anything, and an optional plain `link` to a `screen`, never a `search`.",
+    'Every action, of the platform or of the model, writes its `changes`, each name of which is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once; the schema refuses an action without them, as it refuses one without `codes` (`changesProblems`, a problem per name at its place in the platform file or the model).',
+  ].join('\n\n'),
+  keys: [
+    'platform.leaving',
+    'platform.toasts',
+    'platform.unsavedInput',
+    'platform.actions.<name>.changes',
+  ],
+}
+
+const checkAccess: ReferenceRule = {
+  id: 'check-access',
+  title: 'The check of who a route serves',
+  text: [
+    "No binding's `guard` sends away an account its `roles` name (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among those its screen's bindings serve (the frame aside), a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses: every restriction above it (its own `roles`, those of each anchor it is declared under, and its screen's, the frame aside) admits a device by the roles it holds together, so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and the binding at `/$` names `guest` and `identity` (`accessProblems`; see the rule `roles`).",
+  ].join('\n\n'),
+  keys: ['screen.bindings.roles', 'screen.anchors.<name>.roles'],
+}
+
+const checkSources: ReferenceRule = {
+  id: 'check-sources',
+  title: 'The check of the sources',
+  text: [
+    '`bun run contract:check:sources` holds the JSX of `apps/web/src` and `packages/ui/src` against the contract. `collectFromSource(text, file)` reads one file with oxc-parser and returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes, `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each with its base when the call writes it as a literal), its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES` maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the grammar is a problem) and an anchor built at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`, `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots.',
+    '`compareWithContract(collected, screens, vocabulary)` wants each literal written once, the literals equal to the anchors of the screen files (an anchor no source renders is a problem too), no literal equal to another plus a derived suffix, every `testIdFor()` suffix in the vocabulary and listed in the `derived` of an anchor of the contract (of the base itself, when the call writes it as a literal), so a part no anchor declares, a `visibility-button` no input lists, is never rendered, and every code a code of the contract: a row of the vocabulary, or a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself; `codesOf(vocabulary, screens)`).',
+    "A field the contract says holds no input (a choice that applies at once) carries `holdsInput={false}` on the element with its anchor, and a field the contract says drops its state colour carries `marksState={false}`; each flag is read as a boolean literal on the element that carries a field's anchor as a literal or as `testIdFor()` of two literals (an entry of the latter with its `base`, as a paged list's size select is built; a prop passed through is let by, any other value or place is `HOLDS_INPUT_VALUE`, `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`, and for `marksState` a wrapper that carries the anchor as `testId` is read too). A field that holds input carries nothing (`holdsInput={true}` is the default and is reported, and so is a `holdsInput={false}` on a field that holds input or on an anchor that is not a field), a `marksState` is written only as `{false}`, never on a kind that is not an `input`, a `textarea` or a `select` that holds input (a form, a paged list's size select included), and a rendered field that holds no input, or drops its colour, without its opt-out is reported at its anchor (except in ahead mode). The opt-outs sit in `sources/opt-outs.ts`: a paged list's size select, `<list>.size-select` of a declared anchor whose `derived` holds `size-select`, is a select that holds no input by its facet, so a `holdsInput={false}` on it is no problem, and a rendered one without it is reported at its `testIdFor()` (except in ahead mode), and a flag of a part a `testIdFor()` derives that is no size select is a problem.",
+    'Coverage markers are read by `ignoreMarkers(text, { program, comments })`: `ui-contract-ignore: <reason>` (the element and its subtree) or `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code (`// ui-contract-ignore: <reason>`) or as the only content of a JSX comment container among JSX children (`{/* ui-contract-ignore: <reason> */}`), with only white space before the element; each `IgnoreMarker` points at the element after it, and a marker whose own reason is shorter than three characters, or in another form, is a fault (`IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element starts where it points, `IGNORE_NO_CONTROL` when its element, and its subtree for the plain form, holds no control), which makes `contract:coverage` fail and write nothing.',
+    'On a branch the pre-commit hook runs the sources check as `contract:check:sources:ahead`, which lets the contract run ahead of the app (see the rule `ahead-mode`); a commit on `main` and `bun run check` take the full check.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.holdsInput', 'screen.anchors.<name>.marksState'],
+}
+
+const checkConsumers: ReferenceRule = {
+  id: 'check-consumers',
+  title: 'The check of the e2e tests',
+  text: [
+    '`bun run contract:check:consumers` holds the e2e tests under `tests/e2e/src` against the contract. `collectFromTest(text, file)` reads one file with oxc-parser and returns what it names of the contract (`Consumed`, its `ConsumedLiteral`s): the anchor of a `getByTestId(\'<anchor>\')` call; in any string or template literal the `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` selectors, in double or single quotes; and the value a `toHaveAttribute(\'data-<testid|code|state|value>\', \'<value>\')` assertion expects, `.not` included; each argument a plain string or a template literal without `${}`, or a `+` chain of them read as the one string it folds to (a TypeScript wrapper such as `as const` changes nothing), each selector at its line in the source. `scanConsumers(root, tests?)` collects the `.ts` files under `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given.',
+    "`compareConsumers(consumed, contract)` wants every anchor known (declared, or derived from a declared base with a suffix it lists in `derived`), every code a code of the contract (a row of the vocabulary or a derived toast code), and every state and value in the vocabulary, or `show` and `hide` once an input renders a `visibility-button`, as the scenarios check resolves its bracket references. A code, a state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor carries, as `anchorCarries` reads it, as in a scenario: in a selector string, `[data-testid=\"app-shell.leave-dialog\"][data-code=\"unsaved-input\"]`, the attribute selectors of one element pair with its `data-testid`, before or after it (`elementAnchors` in `elements.ts`), attribute selectors written one after another are of one element, and a `:not(`, `:is(` or `:where(` of one compound is that element too (a `data-testid` in a `:not(` naming none); a `:has(`, any other parenthesised argument, or a `:not(` holding a combinator or a list speaks of elements of its own, which pair among themselves, and after its `)` the element before it goes on; a space, a combinator, a list, an expression or other text leads to another element. A `toHaveAttribute('data-code', 'text-required')` pairs with the last `getByTestId('<anchor>')` of the receiver of its `expect(...)` (`assertedAnchor` in `receiver.ts`), `page.getByTestId('organisation.notes.error')`, when every step after it narrows what it found (`first`, `last`, `nth`, `filter`, `and`). A receiver held in a variable or built by a helper pairs with nothing and is held to the contract alone.",
+    "A plain string or a template without `${}` is a literal; an anchor built with `${}` or held in a name is a runtime anchor and a problem (`RUNTIME_TEST_ANCHOR`), while a code, a state or a value from an expression is a parameter of the test and passes. A helper such as `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.",
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.codes',
+    'screen.anchors.<name>.states',
+    'screen.anchors.<name>.dataValue',
+  ],
+}
+
+const editionsAndMigrations: ReferenceRule = {
+  id: 'editions-and-migrations',
+  title: 'Editions and migrations of a contract',
+  text: [
+    'A contract is read by the version its `platform.yaml` declares, `editionOf(contract)`, and a rule a version brings applies from that version on, `since(contract, N)` (the contract is at N or later), so a contract at an older version loads and checks as before: a rule of version N starts with `if (!since(contract, N)) return []`. `outdatedProblem(contract)` is a contract older than `CONTRACT_VERSION`, named with the command that moves it, or undefined: `contract:check` passes an older contract and names it in one line.',
+    "`migrate(root, { write, migrations?, current? })` runs each `Migration` (`from`, `note`, and `run(files)`, which edits the `MigrationFiles` in place, the platform and the screen files as YAML documents and the vocabulary as text, and returns the work left by hand) from the declared version up to `current`, `CONTRACT_VERSION` by default, from `migrations`, the registry `MIGRATIONS` (one per version, ordered by `from`) by default, setting `version` after each step. It returns the `MigrationReport` (`from`, `to`, and per step its `from`, `note`, the files it changed and the work by hand) and, with `write`, writes the files the steps changed, each document into the text it was read from (`files/write-yaml-document/`): only the nodes a step edited change (a scalar in place, a pair or an item by its lines, a flow collection whose parts changed as a whole), every other byte stays as written. A contract newer than `current`, a platform file without a version, a file that is not YAML and a version no migration reads throw. `parseYamlDocument(text)` is the `yaml` package's `Document` of a text, its comments, the style of every node and its range in the text kept. `packages/ui-contract/MIGRATIONS.md` says what each version changed.",
+  ].join('\n\n'),
+  keys: [],
+}
+
+/** The rules of the checks. */
+export const CHECK_RULES: readonly ReferenceRule[] = [
+  checksOverview,
+  checkFiles,
+  checkBindings,
+  checkFlows,
+  checkPlatform,
+  checkAccess,
+  checkSources,
+  checkConsumers,
+  editionsAndMigrations,
+]

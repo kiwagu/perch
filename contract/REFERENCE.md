@@ -320,7 +320,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `anchors.<name>.binding`
 
 <a id="screen-anchors-name-binding"></a>
-What the anchor is bound to: one binding, or several in a non-empty list.
+What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
 
 ### `anchors.<name>.binding.model`
 
@@ -365,42 +365,42 @@ The name of a search parameter every route of the screen declares.
 ### `anchors.<name>.roles`
 
 <a id="screen-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.
+The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there.
 
 ### `anchors.<name>.own`
 
 <a id="screen-anchors-name-own"></a>
-Shown to a member only on the entries the member owns.
+Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.
 
 ### `anchors.<name>.holdsInput`
 
 <a id="screen-anchors-name-holdsinput"></a>
-Left out, every field (input, textarea, select, checkbox, radio, switch) holds input, except one whose own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it, or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes the field) and no other anchor's event moves there with it. A field a submit button runs the action with, or a search button moves the search with, holds input.
+Left out, every field (input, textarea, select, checkbox, radio, switch) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave. It holds none when its own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it (the language select), or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes `{ anchor: <the field> }`) and no other anchor's event moves there with it (a filter applied on change). A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it, holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` holds none by its facet: its choice sets the route's `size` at once. The loader sets it on every field once the flow is parsed, and a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input. The element of a field that holds none carries `holdsInput={false}` in the JSX, which the sources check holds to the contract. See the rules `field-holds-input` and `leave-questions`.
 
 ### `anchors.<name>.marksState`
 
 <a id="screen-anchors-name-marksstate"></a>
-The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it.
+The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The element carries `marksState={false}` in the JSX, which the sources check holds to the contract (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.
 
 ### `anchors.<name>.secret`
 
 <a id="screen-anchors-name-secret"></a>
-A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.
+A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.
 
 ### `anchors.<name>.codes`
 
 <a id="screen-anchors-name-codes"></a>
-The data-code values the element carries. An error that leaves them out carries the codes of the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`), each once, `failed` last.
+The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. See the rule `error-codes-and-fields`.
 
 ### `anchors.<name>.ranked`
 
 <a id="screen-anchors-name-ranked"></a>
-A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.
+A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.
 
 ### `anchors.<name>.fields`
 
 <a id="screen-anchors-name-fields"></a>
-An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form. Left out, each code a field of the model gives goes to the control the binding passes for that field, unless two bindings pass two controls.
+An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Left out, each code a field of the model gives goes to the control the binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. `contract:diff` lists them as `<error> <code> -> <field>`, written or derived. See the rule `error-codes-and-fields`.
 
 ### `anchors.<name>.fields.<name>`
 
@@ -410,27 +410,27 @@ A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.
 ### `anchors.<name>.dataId`
 
 <a id="screen-anchors-name-dataid"></a>
-What the data-id of the element holds: the id of the entity it shows.
+What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.
 
 ### `anchors.<name>.dataValue`
 
 <a id="screen-anchors-name-datavalue"></a>
-The element carries a data-value from the choice values.
+The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries.
 
 ### `anchors.<name>.states`
 
 <a id="screen-anchors-name-states"></a>
-The data-state values the element takes.
+The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).
 
 ### `anchors.<name>.derived`
 
 <a id="screen-anchors-name-derived"></a>
-The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.
+The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks): `confirm-button`, `option`. The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`, and the base lists the suffix here; a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). Only a secret `input` lists `visibility-button`, the eye of a password input, which is presentation only (see the rule `visibility-button`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`).
 
 ### `anchors.<name>.source`
 
 <a id="screen-anchors-name-source"></a>
-Where the entries of a list, a section or a table come from; no other kind has one.
+Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
 
 ### `anchors.<name>.source.entity`
 
@@ -475,22 +475,22 @@ The name of a search parameter every route of the screen declares.
 ### `anchors.<name>.source.paged`
 
 <a id="screen-anchors-name-source-paged"></a>
-The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`, which holds no input: its element carries `holdsInput={false}`.
+The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, so its element carries `holdsInput={false}`. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.
 
 ### `anchors.<name>.composite`
 
 <a id="screen-anchors-name-composite"></a>
-The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.
+The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.
 
 ### `anchors.<name>.confirm`
 
 <a id="screen-anchors-name-confirm"></a>
-The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation.
+The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation (an anchor of kind `confirmation` on the frame): an action of the model whose verb is `delete`, or an action of the platform whose verb (the first word of its last segment) is `ban`, `delete`, `remove` or `revoke`. On a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. See the rule `destructive-question`.
 
 ### `states`
 
 <a id="screen-states"></a>
-The container states of the screen, each with what is visible in it.
+The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.
 
 ### `states.<name>`
 
@@ -585,7 +585,7 @@ A string, a number or a boolean.
 ### `flow.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.
+Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
 
 ### `flow.states.<name>.entry`
 
@@ -790,7 +790,7 @@ A region written in full, by its pattern (`draft`), or as the region of a button
 ### `flow.states.<name>.states.<name>.pattern`
 
 <a id="screen-flow-states-name-states-name-pattern"></a>
-A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it.
+A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.
 
 ### `flow.states.<name>.states.<name>.description`
 
@@ -815,7 +815,7 @@ The guard that holds when what was typed is the stored value, a guard of `meta.g
 ### `flow.states.<name>.states.<name>.by`
 
 <a id="screen-flow-states-name-states-name-by"></a>
-The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`.
+The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. It carries what the screen decides of the button: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one.
 
 ### `flow.states.<name>.states.<name>.onDone`
 
@@ -865,7 +865,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.
+Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
 
 ### `flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -940,7 +940,7 @@ No toast says the success of this action: the flow shows its outcome itself, or 
 ### `wireframe`
 
 <a id="screen-wireframe"></a>
-A text sketch of the layout.
+A text sketch of the layout: the default state of the screen in Playwright's aria snapshot grammar.
 
 ## Platform file
 
@@ -2081,7 +2081,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `screens.anchors.<name>.binding`
 
 <a id="manifest-screens-anchors-name-binding"></a>
-What the anchor is bound to: one binding, or several in a non-empty list.
+What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
 
 ### `screens.anchors.<name>.binding.model`
 
@@ -2126,12 +2126,12 @@ The name of a search parameter every route of the screen declares.
 ### `screens.anchors.<name>.roles`
 
 <a id="manifest-screens-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.
+The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there.
 
 ### `screens.anchors.<name>.own`
 
 <a id="manifest-screens-anchors-name-own"></a>
-Shown to a member only on the entries the member owns.
+Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.
 
 ### `screens.anchors.<name>.holdsInput`
 
@@ -2141,12 +2141,12 @@ A field holds input: what is typed into it stays until an action takes it, so a 
 ### `screens.anchors.<name>.marksState`
 
 <a id="manifest-screens-anchors-name-marksstate"></a>
-The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it.
+The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The element carries `marksState={false}` in the JSX, which the sources check holds to the contract (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.
 
 ### `screens.anchors.<name>.secret`
 
 <a id="manifest-screens-anchors-name-secret"></a>
-A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.
+A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.
 
 ### `screens.anchors.<name>.codes`
 
@@ -2156,7 +2156,7 @@ The data-code values the element carries.
 ### `screens.anchors.<name>.ranked`
 
 <a id="manifest-screens-anchors-name-ranked"></a>
-A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.
+A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.
 
 ### `screens.anchors.<name>.fields`
 
@@ -2171,27 +2171,27 @@ A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.
 ### `screens.anchors.<name>.dataId`
 
 <a id="manifest-screens-anchors-name-dataid"></a>
-What the data-id of the element holds: the id of the entity it shows.
+What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.
 
 ### `screens.anchors.<name>.dataValue`
 
 <a id="manifest-screens-anchors-name-datavalue"></a>
-The element carries a data-value from the choice values.
+The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries.
 
 ### `screens.anchors.<name>.states`
 
 <a id="manifest-screens-anchors-name-states"></a>
-The data-state values the element takes.
+The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).
 
 ### `screens.anchors.<name>.derived`
 
 <a id="manifest-screens-anchors-name-derived"></a>
-The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.
+The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks): `confirm-button`, `option`. The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`, and the base lists the suffix here; a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). Only a secret `input` lists `visibility-button`, the eye of a password input, which is presentation only (see the rule `visibility-button`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`).
 
 ### `screens.anchors.<name>.source`
 
 <a id="manifest-screens-anchors-name-source"></a>
-Where the entries of a list, a section or a table come from; no other kind has one.
+Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
 
 ### `screens.anchors.<name>.source.entity`
 
@@ -2236,7 +2236,7 @@ The name of a search parameter every route of the screen declares.
 ### `screens.anchors.<name>.source.paged`
 
 <a id="manifest-screens-anchors-name-source-paged"></a>
-The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`, which holds no input: its element carries `holdsInput={false}`.
+The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, so its element carries `holdsInput={false}`. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.
 
 ### `screens.anchors.<name>.asks`
 
@@ -2271,7 +2271,7 @@ The fields of its screen that hold input and that the move does not carry in its
 ### `screens.anchors.<name>.composite`
 
 <a id="manifest-screens-anchors-name-composite"></a>
-The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.
+The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.
 
 ### `screens.anchors.<name>.derivedFrom`
 
@@ -2291,7 +2291,7 @@ The item of the composite the anchor stands for; absent: the list.
 ### `screens.states`
 
 <a id="manifest-screens-states"></a>
-The container states of the screen, each with what is visible in it.
+The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.
 
 ### `screens.states.<name>`
 
@@ -2386,7 +2386,7 @@ A string, a number or a boolean.
 ### `screens.flow.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.
+Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
 
 ### `screens.flow.states.<name>.entry`
 
@@ -2796,7 +2796,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.
+Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -3166,7 +3166,7 @@ Nothing reads after this action: it changes nothing a list of the screen shows. 
 ### `screens.wireframe`
 
 <a id="manifest-screens-wireframe"></a>
-A text sketch of the layout.
+A text sketch of the layout: the default state of the screen in Playwright's aria snapshot grammar.
 
 ### `routeParams`
 
@@ -3311,7 +3311,7 @@ The id of the screen that declares the anchor.
 ### `ids.<name>.binding`
 
 <a id="manifest-ids-name-binding"></a>
-What the anchor is bound to: one binding, or several in a non-empty list.
+What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
 
 ### `ids.<name>.binding.model`
 
@@ -3929,6 +3929,807 @@ The expected results, with bracket references.
 A keyword of the model document.
 
 ## Rules
+
+### Anchors: the grammar and one literal per name
+
+<a id="rule-anchor-grammar"></a>
+An anchor is the value of `data-testid`: 2 to 4 dot-separated kebab-case segments, the screen name first (`user.sign-in`, `organisation`) and the kind last, as the last dash-separated word of the last segment. Each segment is a kebab-case word group (`[a-z][a-z0-9]*(-[a-z0-9]+)*`); the first one or two segments are a screen name from the vocabulary's "Screen names in use" (the longest match on segment boundaries wins), and the last is `<object>-<kind>` or just `<kind>`. `user.sign-in.email-input` is an `input` of the sign-in screen, `organisation.notes.item` an `item` of the organisation screen. The kinds are a closed list in the vocabulary, each with the Playwright role it maps to. An anchor names what the element is for: never its text, its colour, its position or an entity's id.
+
+A derived anchor adds one suffix from the vocabulary's closed table for a part a composite renders itself: `user.profile.sign-out-dialog.confirm-button`, `app-shell.locale-select.option`. Code builds it only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`, and the base lists the suffix in its `derived`. A rendered anchor, base or derived, has up to 5 segments and matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`. Every derived suffix ends with a kind of the vocabulary, the kind of the part it marks. A known anchor is a declared anchor, a declared base with a suffix it lists, or a paged list's size options (`isKnownAnchor(anchor, declared, suffixes, paged)`, `baseOf(anchor, suffixes)`, `sizeOptionOf(list)`, `isSizeOption(anchor, paged)`); `ANCHOR_PATTERN` and `isAnchor(text)` hold the grammar, `segmentsOf(anchor)` splits an anchor, `kindOf(anchor)` is the last dash-separated word of its last segment, and `screenOf(anchor, screenNames)` the longest screen name on segment boundaries.
+
+One literal per rendered name:
+
+- every anchor is declared once, in one screen file, and written once in the sources;
+- no anchor equals another one plus a derived suffix: the entries of `device.list` are `device.list.session-item`, never `device.list.item`, which would read as a part the list renders itself;
+- an `item`, `row` or `option` is the one anchor that marks many elements: every entry of its container, told apart by `data-id` or `data-value`.
+
+So a search finds every place a name lives. A grep for the full name of a derived anchor finds every explicit reference to it: the scenarios and tests that use it, a `flow` event or a choice value that names it, a view's unit test that writes it as a literal. Its declaration is found by the base, which lists the suffix in its `derived`, and so is the view that renders the part, which passes the base to the composite:
+
+```sh
+git grep -nF 'user.profile.sign-out-dialog.cancel-button'   # the explicit references
+git grep -nF 'user.profile.sign-out-dialog'                 # the declaration and the view too
+```
+
+A derived name may have no reference in the screens, the scenarios or the tests at all: `app-shell.locale-select.option` is named only by the vocabulary (its choice values and the reserved row of its base), and `app-shell.locale-select` with `derived: [ option ]` declares it.
+
+In code an anchor is a literal in one of four forms, the only ones the sources check reads:
+
+```tsx
+<h1 data-testid="user.profile.heading">{profile.name}</h1>  // the attribute
+<ConfirmDialog testId="user.profile.sign-out-dialog" />      // a testId prop
+<AppShell navigationTestId="app-shell.nav" />                // a prop named <part>TestId
+{ to: '/me', testId: 'app-shell.nav.profile-link' }          // a static testId key
+const NOTES_ITEM_TEST_ID = 'organisation.notes.item'         // a <NAME>_TEST_ID constant
+```
+
+The first four are in the views today; the constant is the form for one element that two render paths draw, and no view needs it yet. A name, a member such as `props.testId` or a `testIdFor()` call passes on a literal written elsewhere. An anchor built at runtime (a template with `${}`, `+`, a conditional between strings) is a problem: choose between two literals, pass a prop, or derive the part.
+
+Keys it concerns: [`screen.anchors`](#screen-anchors), [`screen.anchors.<name>`](#screen-anchors-name), [`screen.anchors.<name>.kind`](#screen-anchors-name-kind), [`screen.anchors.<name>.derived`](#screen-anchors-name-derived).
+
+### The visibility button of a password input
+
+<a id="rule-visibility-button"></a>
+One derived part is presentation only: `visibility-button`, the eye a password input renders beside itself, which shows what the input holds as typed or hides it again. The input declares it, `derived: [ visibility-button ]`, and only a secret `input` may (`secret: true`): on any other field there is nothing hidden for it to show.
+
+Its `data-value` names what a click does: `show` while the input hides its value, `hide` while it shows it; the two values are the suffix's own (`VISIBILITY_VALUES`), never rows of the vocabulary's Choice values. Whether the field shows its value is held by the field itself, the one transient state a flow never holds, so the button is never an event of a flow or an activity, it is not one of the controls the machine enables, it is always enabled, and it holds no input, so no binding's `params` and no invoke's `input` takes it (`contract:check` refuses each of these, and a `clear` or a `read` naming it). A test locates it as `<input>.visibility-button` and asserts `show` or `hide` on it; the manifest lists it in `contract.derivedParts` with its kind and its values. A scenario may name the values `show` and `hide` once an input renders it.
+
+Keys it concerns: [`screen.anchors.<name>.secret`](#screen-anchors-name-secret), [`screen.anchors.<name>.derived`](#screen-anchors-name-derived).
+
+### Attributes: data-id, data-value, data-state, data-code
+
+<a id="rule-attributes"></a>
+- `data-id` on an `item` or `row`: the id of the entity the entry shows.
+- `data-value` on an `option`, a `badge` or a `button` that switches a mode: the stable key of a choice that is not an entity, the key the code already uses and never its label. Each fixed value is a row of "Choice values" with its meaning. On a `visibility-button` it is `show` or `hide`, the values of its suffix; on an option of a paged list's `size-select`, the page size it chooses.
+- `data-from`, `data-to` and `data-total` on the `range` of a paged list: the first and the last entry the page shows, from 1 (`0` and `0` when it shows none), and how many the search finds in all.
+- `data-state` on a `status`, `list`, `section` or `item`: an app, container or row state; on a field (an `input`, `textarea` or `select`), `unsaved` or `saved`, from the vocabulary's "Field states".
+- `data-code` on a `message`, `error`, `toast` or `dialog`: the stable code of what it says.
+
+The page speaks the user's language, so tests and agents never assert its words. They assert the anchor with its code, state, id or value. A behaviour that varies is a code or a state of one anchor, never a second anchor: the sign-in form has one `user.sign-in.toggle-button` whose `data-value` says which way it switches, and one `user.sign-in.error` whose code says what went wrong. A dialog's code names what it asks (`unsent-changes`), since every dialog looks alike. A domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`.
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.dataId`](#screen-anchors-name-dataid), [`screen.anchors.<name>.dataValue`](#screen-anchors-name-datavalue).
+
+### The entries of a list and the controls that act on them
+
+<a id="rule-entries-of-a-list"></a>
+An `item` or a `row` (`ENTRY_KINDS`) marks every entry of its list, table or section (`LISTING_KINDS`), which `data-id` tells apart. The container an entry belongs to is a list, a table or a section of its screen that it is declared under (`device.list.session-item` under `device.list`), the nearest first, then one declared beside it in its part (`organisation.notes.item` beside `organisation.notes.list`): `containersOf(entry, anchors)`.
+
+A control in the entry's part (`<part>.<name>`, like the entry, and never the entry itself: `inPartOf(entry, control)`) is rendered in each entry and acts on the entry it is in, whose `data-id` it gives. `CONTROL_KINDS` are the kinds a person acts on: a button, a link, a tab and the `FIELD_KINDS` (`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`). `itemIdOf(control, item)` is the `data-id` of the entry of `item` the control is in, the closest element whose anchor is `item`, which a navigate's `{ item }` search takes: the app reads it off the page, so the id that reaches the address is the attribute a test reads, never one the view passes beside it. A control outside such an entry, or an entry without an id, is a defect of the view, never guessed: it throws.
+
+`isUnder(anchor, other)` says `other` is `anchor` or an anchor under it (`<anchor>.<rest>`), and `partOf(anchor)` is the part it sits in, the anchor without its last segment.
+
+Keys it concerns: [`screen.anchors.<name>.dataId`](#screen-anchors-name-dataid), [`screen.anchors.<name>.binding`](#screen-anchors-name-binding).
+
+### Marking a page and locating an element
+
+<a id="rule-marking-a-page"></a>
+**Placement.** The anchor goes on the semantic element whose role its kind maps to: the button, the input, the `li` of an entry, the dialog's own box. Never on a layout wrapper, a fragment, a portal or a backdrop: those change when a component is rewritten, the semantic element stays. `ConfirmDialog` puts its anchor on the dialog's popup, not on the portal or the overlay around it. A leaf kit component spreads its props, so the call site writes the literal.
+
+**What needs an anchor.**
+
+- A container that scopes a test: a page `status`, a `form`, a `list`, a `section`, a `dialog`, a `panel`.
+- Every entry of a list (`item`, `row`, `option`).
+- Every control a test or an agent drives. Every label is translated, so no visible label is a stable locator.
+- A value a test reads (`heading`, `cell`, `badge`), and every state and message (`status`, `message`, `error`).
+
+What does not: decorative elements, layout wrappers, a `div` that scopes nothing, an icon inside a marked control. A control that is not a test target is declared so with a coverage-ignore marker and its reason (`// ui-contract-ignore: <reason>`), never given a made-up anchor.
+
+**Icon-only controls** also carry an `aria-label` from a translation key, so a screen reader and an agent reading the accessibility tree can name them.
+
+**Repeated items.** One static anchor marks every entry, and the entity's id goes into `data-id`: `device.list.session-item` with `data-id` = the device session. An entry whose entity differs from the others, or changes while it stays listed, carries a row state; an entry in its normal state carries none (`current` for this device, `revoked` for one signed out, nothing for the others).
+
+**Composites and the shell's anchors.** A composite takes one `testId` and derives its parts. A composite that can be mounted on its own is not a singleton: the shell's instance owns a reserved anchor, and every other mount passes its own `testId`. `OptionSelect` is the shell's language select, which owns the reserved `app-shell.locale-select`, and the organisation page's choice of organisation, which passes `organisation.page.current-select`. Each `ConfirmDialog` is mounted by its view with an anchor of that view's screen (`user.profile.sign-out-dialog`, `device.everywhere.dialog`). A feature never declares or renders a reserved anchor.
+
+**Locating an element**, in this order, stopping at the first that works:
+
+1. `getByTestId('<anchor>')`.
+2. `getByRole('<role>')` without a name, inside the container found by its anchor.
+3. `getByLabel(...)`.
+4. `getByPlaceholder(...)`.
+
+Text is used only for text the test itself entered (a note it wrote, an email it invited). Never a CSS class or the shape of the DOM; a selector over the contract's attributes is fine: `[data-testid="organisation.notes.item"][data-id="..."]`. When a test has to fall back to steps 3 or 4, the element needs an anchor: ask for one.
+
+Keys it concerns: [`screen.anchors.<name>.kind`](#screen-anchors-name-kind), [`screen.anchors.<name>.dataId`](#screen-anchors-name-dataid).
+
+### Readiness and container states
+
+<a id="rule-readiness"></a>
+Wait for `app-shell.status` to reach the state `ready` (`[data-testid="app-shell.status"][data-state="ready"]`): the frame and the screen are rendered. Its other states, and what each means, are the vocabulary's table "App states". Then wait for the screen's container to leave `loading`: a `list`, a `section` or a page `status` carries one of the vocabulary's "Container states".
+
+Keys it concerns: [`screen.anchors.<name>.states`](#screen-anchors-name-states).
+
+### Notices and ranked messages
+
+<a id="rule-notices"></a>
+`app-shell.notice-message` shows one notice at a time, the latest, and it outlives the page that raised it (a notice an action raises just before its flow navigates shows on the page it navigates to). Find it by its anchor and its code together, right after the action that raises it.
+
+A message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there) says which one it shows in its structure: `ranked: true`, with its `codes` in rank order. Of the codes raised before it shows, it shows the first, and the others go with it. A code raised waits until the message shows or a flow clears it: a `clear` of the message, in any flow, takes away every code raised before it. `contract:check` takes `ranked` on a message of two codes or more, each listed once, and `contract:diff` lists each ranked message with its order.
+
+Keys it concerns: [`screen.anchors.<name>.ranked`](#screen-anchors-name-ranked), [`screen.anchors.<name>.codes`](#screen-anchors-name-codes).
+
+### Routes: the bindings of a screen
+
+<a id="rule-route-bindings"></a>
+A screen's `bindings` are its routes in the router's format: `path` (static segments, `$param`, `{-$param}` for an optional one, `$` for a splat), `guard` (`guest`: only a visitor; `authenticated`: only a signed-in account), the `roles` it serves, `params` and `search` as flat JSON Schemas, `history` (`push` or `replace`) and `retain`. The frame (`app-shell`, `frame: true`) has no route: it is around every screen.
+
+Every binding `path` is a TanStack Router path in the router's own syntax, `params` are its path parameters and `search` its search parameters, and a route is a state address: the same path with the same search reaches the same state after a reload. The application's router builds and matches every binding (`apps/web/src/platform/routes-router.spec.ts`, a parameter's first example its sample), and the module routes equal the bindings (`routes-contract.spec.ts` beside it); the same folder's `routes-examples.spec.ts` holds every example link and the route tree to the real router. `contract:check` wants every path to parse in the router's syntax, every example of a route parameter to match that parameter, and a `$param` without one to have a value its schema accepts.
+
+A screen is named by the path of its first binding: `/me` is `me.yaml`, `/org/$org` is `org/$org.yaml`, the frame without a binding is `__root.yaml`.
+
+Keys it concerns: [`screen.bindings`](#screen-bindings), [`screen.bindings.path`](#screen-bindings-path), [`screen.bindings.history`](#screen-bindings-history), [`screen.bindings.retain`](#screen-bindings-retain), [`screen.frame`](#screen-frame).
+
+### Roles and who a route serves
+
+<a id="rule-roles"></a>
+A role is a row of the vocabulary's Roles table. A device holds a set of roles: `guest` when nobody is signed in on it, else `identity` and, beside it, every other role that applies to the signed-in account (its role in the current organisation, a role of the platform, any role a later row adds: the rows of the table other than the two). `guest` and `identity` are the two roles of which a device holds exactly one; every other role is held beside `identity`, never alone. The contract names the roles; how a device learns the ones beside `identity` is the app's. `GUEST`, `IDENTITY`, `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read them for the app and the checks alike: `heldRoles(signedIn, others)` is the set a device holds (`guest` alone, else `identity` and each of `others` but `guest`), and `admits(roles, held)` says whether a binding's or an anchor's `roles` admit a device that holds one of them.
+
+A binding's `roles` are the roles it serves: the router serves it only to an account that holds at least one of them. An account that holds none gets the screen of the binding at `/$` (the not-found screen) at the same address, as an address no route takes does: the URL and the history entry stay as they are, and nothing on the page, the tab's title included, says there is a route there. The router decides in this order: the binding's `guard` (`authenticated` sends a guest to `/sign-in`, `guest` sends a signed-in account to `/me`), then its `roles`, and only then reads the search, so a search the screen would refuse shows an account its roles miss the not-found screen, never the screen's refusal. A route that must not show itself to a guest leaves its `guard` out and names no `guest`: a guest gets not-found, as any account the roles miss does. The binding at `/$` serves every account: its `roles` name `guest` and `identity`.
+
+The roles of a device change while a screen is open: an account signs in or out, another organisation becomes the current one, a role is granted or taken back. The router decides again when the app learns of it. A screen whose binding no longer serves the account is replaced by the not-found screen and its state is dropped, as when another screen opens (a read of its in flight is dropped with it); a not-found screen at an address whose binding now serves the account is replaced by that screen, which opens as a screen opens (a list with a platform source reads it, see the rule `list-reads`). An app that learns of a change late decides again when it learns; no check sees the interval.
+
+`contract:check` holds who a route serves: no binding's `guard` sends away an account its `roles` name (`authenticated` with `guest`, or `guest` with any other role); an anchor's `roles` are among those its screen's bindings serve (the frame aside); a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses, every restriction above it (its own `roles`, those of each anchor it is declared under, and its screen's, the frame aside) admitting a device by the roles it holds together, so one restriction naming only roles the route serves is enough, wherever it sits on the chain; and the binding at `/$` names `guest` and `identity`. `contract:diff` lists who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added whole with every line, and each role an anchor both sides hold is shown to as `<anchor> <role>`.
+
+Keys it concerns: [`screen.bindings.roles`](#screen-bindings-roles), [`screen.bindings.guard`](#screen-bindings-guard), [`screen.anchors.<name>.roles`](#screen-anchors-name-roles).
+
+### The example link of a route
+
+<a id="rule-route-example"></a>
+A parameter of `params` or `search` may carry `examples`: fake values it accepts, of its type (`key: { type: string, examples: [ thg_01hzx9k2 ] }`); `contract:check` holds each one to the parameter's schema. `bun run contract:routes` (`ui-contract routes [--json]`) prints the routes of the screen files in four sections: the table (path, screen, guard, roles, history, params, search, file), one example link per binding, where each route is reached from (the anchors linking to it with `binding.route`, the screens whose flow navigates to it, the activity states at that address) and the tree as the router holds it, `__root (app-shell)` with each route under it, a route under the binding whose path is the longest proper prefix of its own on whole segments.
+
+The example link is built from the binding:
+
+- the path: each `$param` at its parameter's first example, else its `default`, else its first `enum` value, else a value built within its bounds and a `pattern` of a literal prefix and at most one repeated class (`^thg_[a-z0-9]+$` gives `thg_a`), the first of them not empty that the parameter's schema accepts; a parameter none of whose values can be built needs an example, and `contract:check` says so (`a path segment cannot be empty` for a schema that allows only the empty string); a `{-$param}` at its first example, or its segment left out without one; an empty example of a path parameter is a problem; a splat `$` left out with its segment (no parameter can be named `_splat`, so it takes no example); each value through `encodeURIComponent`;
+- the search: every key in its declared order at its `default`, else its first `enum` value, else its first example, a key with none left out; written as TanStack Router's default `stringifySearch` writes it: a string bare unless it parses as JSON, then quoted (`"123"` is `%22123%22`), a number or a boolean as JSON, the whole form-encoded the way `URLSearchParams` encodes it (a space is `+`).
+
+So a binding `/things/$thing` whose `thing` has `examples: [ thg_01hzx9k2 ]` and whose `search` has `view` (default `read`) and `page` (default `1`) has the example `/things/thg_01hzx9k2?view=read&page=1`. The example shows every search key with its default on purpose; the app's own links leave out a value equal to its default, and both forms reach the same state. The manifest carries the link as `example` on each binding, and `apps/web/src/platform/routes-examples.spec.ts` holds every example to the real router (the path it builds, the search string it writes, and the route, parameters and search it matches for the link) and the router's route tree to the tree of the screen folder.
+
+Keys it concerns: [`screen.bindings.params.properties.<name>.examples`](#screen-bindings-params-properties-name-examples), [`screen.bindings.search.properties.<name>.examples`](#screen-bindings-search-properties-name-examples).
+
+### The anchors a test starts from
+
+<a id="rule-screen-entry"></a>
+A screen's `entry` lists the anchors a test starts from on the screen. Some of them are alternatives by state, so a test waits for the one its state shows, never for all of them: `user.profile` lists `user.profile.heading`, `user.profile.form` and `user.profile.save-button` once the profile is read (`ready`); until then, and when the account has no profile, `user.profile.status` shows instead (`loading`, `empty`). A screen whose data arrives after the page lists its status and its list the same way: the status while the data is read (`loading`), the list once it is (`ready`).
+
+A screen's `states` say what is visible in each container state, each state a row of the vocabulary's Container states table; the `wireframe` is the default state in Playwright's aria snapshot grammar.
+
+Keys it concerns: [`screen.entry`](#screen-entry), [`screen.states`](#screen-states), [`screen.wireframe`](#screen-wireframe).
+
+### A flow: its states and regions
+
+<a id="rule-flow-states"></a>
+A screen's `flow` is an XState v5 machine config, in the subset `createMachine` takes as written: `contract:check` runs it in `setup({ guards, actions, actors }).createMachine(flow)`, with a stub per guard, effect and invoked actor, and an app that builds its own machine for the screen holds it to the flow with the engine's comparison (`@workspace/ui-contract/machines`), as it holds its router to the bindings. The route owns the addressable state, what a link or a reload restores; the machine owns the transient one (signing in, confirming, failed). A screen's transient state comes from its flow run as its machine, never from a component's own flags.
+
+- `initial` and `states`. A state has a `description`, `type: final` where the flow ends (the app has left the screen, or stops), `entry` and `exit` effects, `on` and `invoke`.
+- A state of the root may be a parallel state, `type: parallel`, for the independent areas of a screen (the organisation page's create form, new note, notes' items, invitation and members): its `states` are its regions, two or more, all active at once. A region has a `description`, an `initial` and its `states`, plain states that never end, carry no `meta.address` (the address is the screen's state; their `meta` holds `renders` alone) and hold no states of their own. The parallel state has a `description`, `on`, `entry`, `exit`, `meta.address` and `meta.renders`, never an `initial` or an `invoke`; its own `on` applies whichever state each region is in. Entering it starts every region at its `initial`; leaving it leaves every region.
+- The flow's `id` is a one-segment name the flow declares, which the app gives its machine and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.
+
+Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested deeper than a parallel state's regions, history states, targets by `.child` or by an id from anywhere but a region's state, or actions named by a string. A state of a region is the area's own: where the app keeps one per item (each note's edit form), the region follows the item acted on last and says so. The flow's states are the machine's; the screen's `states` stay the container states.
+
+Keys it concerns: [`screen.flow`](#screen-flow), [`screen.flow.id`](#screen-flow-id), [`screen.flow.initial`](#screen-flow-initial), [`screen.flow.states`](#screen-flow-states), [`screen.flow.states.<name>.type`](#screen-flow-states-name-type).
+
+### Events, targets and guards
+
+<a id="rule-flow-events"></a>
+`on` maps an event to one transition, or to a list of guarded ones in XState's order, the one without a guard last. An event is the user acting on a declared anchor (a derived one through its base's `derived`; typing, for a field), a platform event of `platform.yaml` `events` (`platform.opened`), or a data event `model.<entity>.<field>`: the stored value of a field that an anchor of the screen shows changed, here or on another device (`model.profile.name`). A transition has a `target` (absent: the machine stays where it is), a `guard`, `actions` and a `description`.
+
+XState resolves a target from the parent of its state: at the root it is a state of the flow, or a state of a region as `<parallel>.<region>.<state>` (`viewing.create-form.open`: that region starts there, the others at their `initial`); in a region it is a state of that region, or a state of the root by the machine's id, `#<flow id>.<state>` (`#organisation.viewing`), which leaves the parallel state and enters that state afresh, the parallel state itself with every region at its `initial`. Within a parallel state an event belongs to one area, one region or the state's own `on`, never two; the same event may appear in several states of one region.
+
+A guard is a camelCase name that the root `meta.guards` declares with what it holds: a sentence (`holdsUnsentChanges: this device holds changes the server has not received`), or the failure codes it takes, `{ codes: [ <code>, ... ] }`, when it tells the failures of an action apart: it holds when the action failed with one of them. A guard by failure code guards only branches of an invoke's `onError` (a region written `by` its button included), and each of its codes is one the invoked action fails with, listed once; the sign-in screen may write `emailNotVerified: { codes: [ email-not-verified ] }` for the branch of `signing-in` that leads to `unverified`. A bare `show` on such a branch shows the guard's codes (see the rule `failure-show`). An activity's guards are sentences. The app implements every guard.
+
+A control whose anchor is an event of the flow (a button, a select, a switch) is enabled exactly while a state the machine is in handles that event (`snapshot.can` in XState), and disabled otherwise: the profile's Save is disabled while it saves because neither `saving-name` nor `saving-bio` handles it. The app reads it from its machine and keeps no flag of its own. A password input's `visibility-button` is never an event of a flow, so the machine does not enable it: it is always enabled.
+
+Keys it concerns: [`screen.flow.states.<name>.on`](#screen-flow-states-name-on), [`screen.flow.states.<name>.on.<name>.target`](#screen-flow-states-name-on-name-target), [`screen.flow.states.<name>.on.<name>.guard`](#screen-flow-states-name-on-name-guard), [`screen.flow.meta.guards`](#screen-flow-meta-guards), [`screen.flow.meta.guards.<name>.codes`](#screen-flow-meta-guards-name-codes).
+
+### The four effects of a flow
+
+<a id="rule-flow-effects"></a>
+The effects, in `actions`, `entry` and `exit`, are four: `{ type: show, params: { anchor, codes } }`, the anchor shows one of the codes it carries; `{ type: clear, params: { anchor } }`, an anchor that carries codes shows none until one is shown again, and a field is emptied; `{ type: read, params: { anchor } }`, a list of the flow's own screen whose `source` is a platform action reads that action again (see the rule `read-after-an-action`); and `{ type: navigate, params: { to, search } }`, the app moves to that binding. The app implements all four.
+
+The codes come first: a `clear` of an anchor that carries codes, whatever its kind and its screen, a field included, means it shows none until one is shown again. A field that carries none (an input, a textarea, a select, a checkbox, a radio or a switch, a `secret` one included) is emptied, and only on the flow's own screen: it returns to its empty or initial value and holds no input any more, as if nothing was typed; a form empties its passwords this way once the action that takes them succeeds. A `clear` never names a `visibility-button`, nor a button, a list, a link or any other anchor unless it carries codes.
+
+Each value of a navigate's `search` is a search key of the binding it moves to, given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose value would stay in the address, the browser's history and the logs). A link that carries the email typed so far to the page that asks for a password reset: `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.
+
+A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item` or `row` whose control the user acted on, so that the selection is in the address and a reload or a copied link reaches the same entry. Only the event of a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry, carries it, so the navigate sits in the actions of that event's transition, never in an `entry`, an `exit` or the outcome of an invoke, where no entry was acted on. The item is an entry of a list, a table or a section of the flow's own screen, declared under it or beside it in its part, and declares its `dataId`; the search key it fills takes a string. A row that opens the entity it shows: `navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }` on `<screen>.list.open-link`. A navigate that sets a search key a paged list of the screen it moves to reads says `page: 1` (see the rule `paged-list`).
+
+The scope of each effect differs. A `show` names a declared anchor, of any screen (the frame's toast and notice included), and codes that anchor carries. A `clear` names a declared anchor that carries codes, of any kind and any screen, which then shows none, or else a field of the flow's own screen, never a `visibility-button`. A `read` names a list, a section or a table of the flow's own screen whose `source` is a platform action. A `navigate` names the path of a binding of some screen and search keys of that binding, and sits on a transition, never in an `entry` or an `exit`, moving once (see the rule `leave-questions`). An address, `meta.address`, is a binding of the flow's own screen (its first one when the path is left out) with search parameters of that binding.
+
+Keys it concerns: [`screen.flow.states.<name>.entry`](#screen-flow-states-name-entry), [`screen.flow.states.<name>.entry.show`](#screen-flow-states-name-entry-show), [`screen.flow.states.<name>.entry.clear`](#screen-flow-states-name-entry-clear), [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.entry.navigate`](#screen-flow-states-name-entry-navigate), [`screen.flow.states.<name>.entry.navigate.search`](#screen-flow-states-name-entry-navigate-search).
+
+### An invoke and a state that has an address
+
+<a id="rule-flow-invoke"></a>
+An `invoke` runs a model or a platform action while the machine is in its state: `src` names it as a binding does, `input` maps each parameter as a binding's `params` do: to the anchor whose value it takes, a constant `{ value: ... }`, or a search parameter of the route `{ search: <name> }`, and `onDone` and `onError` say what follows its success and its failure. Every `input` key is a parameter of the action; a parameter left out is the implementation's to compute (a minted `$id`, the `author`). An invoke may say `read: false`: its action changes nothing a list of the screen shows, so nothing reads after it (the copy of an invitation link); one branch of its `onDone` or `onError` may say `read: false` instead, where another branch reads: nothing reads after that outcome (see the rule `read-after-an-action`). An event that runs an action is a transition into such a state, named for what it does (`signing-in`, `saving-name`, `deleting`), or `running` in the region of a button.
+
+A state that a route reaches says so in `meta.address`: its `path`, a binding of the screen, and its `search`. The route owns the addressable state, what a link or a reload restores; the machine owns the transient one (signing in, confirming, failed). One transient state is exempt and no flow holds it: whether a password input shows what it holds, which the input keeps itself and its `visibility-button` toggles (see the rule `visibility-button`).
+
+Keys it concerns: [`screen.flow.states.<name>.invoke`](#screen-flow-states-name-invoke), [`screen.flow.states.<name>.invoke.input`](#screen-flow-states-name-invoke-input), [`screen.flow.states.<name>.invoke.read`](#screen-flow-states-name-invoke-read), [`screen.flow.states.<name>.meta.address`](#screen-flow-states-name-meta-address).
+
+### The shorter forms of a flow
+
+<a id="rule-flow-shorter-forms"></a>
+A screen file may write its flow shorter, and leave out what the contract says elsewhere (see the rules of what a screen leaves out); the loader expands it into the config above before anything reads it, so the checks, the walk in XState, the manifest and an app's machine see the full config, and `bun run contract:flow <screen>` prints it. The shorter forms are four:
+
+- A transition written as its target alone, as XState itself allows: `onDone: idle` is `onDone: { target: idle }`.
+- An effect written by its name: `show: <anchor>`, the anchor shows one of the codes it carries, in its order (in the `onError` of an invoke, one of the codes the failure of its action shows, narrowed by a guard by failure code; see the rule `failure-show`); `show: { <anchor>: [codes] }`, one of these; `clear: <anchor>`; `read: <anchor>`; `navigate: <path>` or `navigate: { to, search }`.
+- A region written by its pattern, a shape that two regions or more of the screens share, named by what the area does. A shape that one region has is written in full until a second one shares it. `draft`: a control that follows a stored value or holds what was typed. In `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, which goes back to `following` when what was typed is the stored value again, by typing it back or by the data event `stored`, both under `guard`.
+- A region written by its button, `by: <button>`: the region of a button bound to one action (see the rule `button-region`) with what the screen decides of it, its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`.
+
+The states of a pattern and of a button's region are the machine's, named by the loader (`idle`, `running`, `following`, `edited`), and a scenario or a test reads them as it reads any state. What the shorter forms leave out is mechanics a tester or a user cannot tell apart; a `description` belongs to a decision (where a success leads, what a failure shows, what restarts what), not to every state. The states of a region written by its pattern or by its button list nothing in `meta.renders`.
+
+Keys it concerns: [`screen.flow.states.<name>.states.<name>.pattern`](#screen-flow-states-name-states-name-pattern), [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by).
+
+### A flow run in XState, and an app held to it
+
+<a id="rule-flow-run"></a>
+`contract:check` holds the flow to the contract and runs it in XState (the engine's `machines/walk`): a pure walk with `initialTransition` and `transition` reaches every state, a parallel state's regions each on its own with the others at their `initial`, and takes every transition and every guarded branch to its target with its effects. An app that builds its own machine for a screen holds it to the flow with the engine's comparison (`@workspace/ui-contract/machines`; the web app's `apps/web/src/platform/machines.spec.ts`): the machine has the config of its flow, what each state renders included (on a branch, the flow less what it added and the machine has not built yet), an invoke's or a branch's `read: false` aside, which is a promise the checks read and nothing a machine runs. The comparison reads the contract at the branch's merge base with `main`, and at the commit the branch is at, in ahead mode (see the rule `ahead-mode`).
+
+Carry the flow into `setup({ guards, actions, actors }).createMachine(flow)` unchanged: implement every guard it names, the four effects and an actor per `invoke.src`. `projected(config)` is what the comparison reads of a machine config (initial state, states, final states, what each state renders as a set, regions, events with their targets and guards, invoke sources, the contract's effects, `read` among them; the app's own actions and an invoke's or a branch's `read: false` left out), and `beyondTheSubset(config)` what a machine does that the flow subset has no counterpart for.
+
+Keys it concerns: [`screen.flow`](#screen-flow).
+
+### What a state renders
+
+<a id="rule-renders"></a>
+An anchor that only some states render, those states list in `meta.renders`: a plain state of the root, a parallel state or a state of a region. An anchor no state of the flow lists is rendered in every state. An anchor a state lists is rendered only where it is listed: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, as a scenario's codes and states speak of them): `user.sign-in.password-rule-list` brings the six items of the composite with it, so a state lists the list alone, never the list and one of its items in one list, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself.
+
+A plain state of the root or a state of a region that handles an event on an anchor only some states render renders that anchor (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. For the modes of the sign-in screen (the rest of its flow left out):
+
+```yaml
+flow:
+  initial: sign-in
+  states:
+    sign-in:
+      meta:
+        renders: [ user.sign-in.forgot-link ]
+    sign-up:
+      meta:
+        renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ]
+    check-mail:
+      meta:
+        renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ]
+    # signing-in as sign-in; password-weak, passwords-differ and signing-up as sign-up;
+    # unverified and resending as check-mail
+```
+
+The form, the email and password inputs and the submit and toggle buttons are listed by no state, so every state renders them; the forgot link is rendered only in the states that list it, and the password rule list with its items only in the states of the mode sign-up. `passwords-differ` handles `user.sign-in.password-confirmation-input`; without its list, `contract:check` would say `"user.sign-in.password-confirmation-input" is handled here but not rendered: only the states that list it in meta.renders render it`. A state that runs an action lists what stays on the page while it runs: `signing-up` lists the rule list, the confirmation and the name input, or they would go while the account is created. `contract:diff` lists each entry as a line `<state path> renders <anchor>`.
+
+Rendered means visible to the user. An anchor a state renders is on the page and seen; one it does not render is not seen: absent from the page, or kept in it hidden (`hidden`, `display: none` or `visibility: hidden`, as the page helper's `visible` reads it), as a form that keeps what was typed into it while it is closed. The app reads what a state renders from its machine, whose states carry the flow's `meta.renders`, through the engine's `renderedAt` and `isRendered` (`@workspace/ui-contract/anchors`; `isListed` says whether an anchor is rendered only where listed, and `listedBy(state)` is how all of them read one state's list), never from a flag of its own, as it reads which controls are enabled; the engine's comparison holds those lists to the flow's, and an e2e run holds the page to them in every settled state a test passes through (see the rule `settled-state`).
+
+`contract:check` holds `meta.renders`: it lists anchors its own screen declares (a derived part's base, never the part), each once and never beside an anchor it is declared under, and a plain state of the root or a state of a region renders every anchor only some states render that it handles (one declared under a listed anchor, through that anchor).
+
+Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.flow.states.<name>.states.<name>.states.<name>.meta.renders`](#screen-flow-states-name-states-name-states-name-meta-renders).
+
+### When a list reads its source
+
+<a id="rule-list-reads"></a>
+A `source` says where the entries of a list, a section or a table come from, and with it when they are read; no other kind carries one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not: the screen opening, a state entered that renders it (`meta.renders`) after one that did not, the account's role becoming one its `roles` admit; and, while it renders, each time the organisation or account it reads for becomes another, or a search parameter its source takes does (a `{ search: <name> }` of its `params`, and `page` and `size` when it is paged). The list shows none of the entries of the earlier search once the search is another, and a read still in flight when what it reads for becomes another is dropped: its answer is shown nowhere. A state entered after another that rendered it too reads nothing, so an anchor no state lists, rendered in every state, is read only at those moments.
+
+Every other read is said by the flow, with the effect `read: <anchor>` (see the rule `read-after-an-action`): a read after an action that changed what the list shows, never prose in a description. The `changes` of an action names the sources whose answer it changes, so it tells which lists of a screen that runs it show something else once it succeeds, and the flow holds a read of each of them after that success. `{ entity: <entity>, order, direction }`: the entries are the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read.
+
+A platform source's `params` give the action's parameters their values: each a search parameter of the route, `{ search: <name> }`, one every route of the screen declares, or a constant, `{ value: ... }`; never a field, since what a list shows is a state of the address and what is typed is not, so a search box moves the route with a navigate and the list reads the new search. A parameter left out is the implementation's to compute, as in a binding. Each param of a platform source is a parameter of its action taking a constant or a search parameter every route of the screen declares, never `page` or `size`.
+
+`searchKeysOf(source)` of `@workspace/ui-contract/anchors` computes the search parameters a source reads, which read it again when one changes: those its params take, then `page` and `size` when it pages. `contract:diff` lists a list that reads a platform action as `<anchor> reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged` when it pages: a list moved to another search or to paging shows as its old line removed and its new one added, and a list added whole shows its line.
+
+Keys it concerns: [`screen.anchors.<name>.source`](#screen-anchors-name-source), [`screen.anchors.<name>.source.platform`](#screen-anchors-name-source-platform), [`screen.anchors.<name>.source.params`](#screen-anchors-name-source-params), [`screen.anchors.<name>.source.entity`](#screen-anchors-name-source-entity), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
+
+### The read after an action, and its opt-out
+
+<a id="rule-read-after-an-action"></a>
+`{ type: read, params: { anchor } }`, written `read: <anchor>`, names a list, a section or a table the flow's own screen declares whose `source` is a platform action (see the rule `list-reads`): it reads that action again and shows its entries once the read is in, and the app may take them from the answer of the action that just ran, when that action returns them (a sign-out of another device answers with the account's devices when they could be read after it, else without them). A `read` never names an anchor of another screen, one with no `source`, nor one whose source is an entity of the model, which follows the stored data as it changes and is never read.
+
+A read after an action is written on the outcome of its invoke (`onDone`, or an `onError` after which the list may have changed); an action that changes nothing a list of the screen shows says so on its invoke, `read: false`, and an invoke that says it and reads in one of its outcomes is refused. An action after which one outcome reads and another does not says it on that branch of its `onDone` or `onError`, `read: false` beside the branch's `guard` (the role change that demotes the account itself, after which the members list goes): only a branch of an invoke's outcome may say it, never the transition of an event; a branch that says it and reads itself is refused, once per read, and so is one under an invoke that says `read: false` already. XState ignores the key in both places, the checks and `contract:diff` read it, and the machine comparison leaves it out. `contract:diff` lists an invoke's `read: false` after its input and a branch's after its guard (`viewing.member-roles.changing onDone #1 -> idle [ownDemotion] read: false`).
+
+The read after a success is mandatory where the action may change what a list shows. An invoke holds each list, section or table of its own screen whose `source` is a platform action when its `input` takes an entry of it (an `item` or a `row` it contains, as a role change takes the members list's item), when a value of its `input` equals one its source's `params` take (the removal of an account takes `{ search: id }`, which the account's section reads its action with), or when its action's `changes` names that source (`organisations.invite` changes `organisations.invitations`, which a sent-invitations list reads); a region written `by` its button is held as its invoke. Every branch of its `onDone`, a single transition being one, then reads each list it holds, `read: <list>`, or says `read: false`: the check refuses each list a branch leaves unread, at that branch, saying why the invoke holds it. A failure holds no read, so an `onError` reads where it says, and an invoke that says `read: false` holds nothing.
+
+Every action, of the platform or of the model, writes its `changes`: each name of it is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once, `[]` for none. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `contract:diff` lists the reads each action of the model comes to change or stops changing, as `model action lines added in <entity>.<action>: changes <read>`.
+
+Keys it concerns: [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.on.<name>.read`](#screen-flow-states-name-on-name-read), [`screen.flow.states.<name>.invoke.read`](#screen-flow-states-name-invoke-read), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
+
+### A paged list
+
+<a id="rule-paged-list"></a>
+`paged: true` makes the list a page of the action's entries. The action says it pages and which page sizes it answers, `paged: { sizes: [ 10, 25, 50 ], default: 25 }` in `platform.yaml` (each size once, the smallest first, the default one of them): it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers the entries of that page, in the order its `result` says, with the number of entries the other parameters find in all. The page and the size are the route's search parameters `page`, an integer with a minimum of 1 and a default of 1, and `size`, an integer whose `enum` is the action's sizes and whose default is its default, which every route of the screen declares; the source takes them from there, so no `params` names them, and a screen pages one list. A new search starts at page 1: a navigate that sets a search parameter the list reads, or `size`, says `page: 1`.
+
+A paged list derives four parts, which its `derived` lists and a screen file never writes (the loader lists them in the `derived` of the list whose source says `paged: true`). Its name has at most 3 segments (`console.users.list`, never `a.b.c.list`): its size options add two (`<list>.size-select.option`), and an anchor has 5 at most, so the check refuses a longer paged list.
+
+- `<list>.range`, once the read is in: the numbers of the first and the last entry of the page and the number of entries in all (`51-100 of 312`), carried as `data-from`, `data-to` and `data-total`, with `0` and `0` where the page holds no entry (`0 of 312`: a page past the last).
+- `<list>.previous-link`: a link to the same route, the same search and `page` one less, on every page but the first.
+- `<list>.next-link`: the same with `page` one more, on every page that does not hold the last entry.
+- `<list>.size-select`: a select of the page size, shown wherever the list is, whose options (`<list>.size-select.option`) carry the action's sizes as `data-value` (the values of the action, never rows of the vocabulary's Choice values) and are the controls of `size`, which therefore writes no `x-perch` (the check derives them and refuses one written); choosing one moves to the same route and search with that `size` and page 1, at once, so the select holds no input and its element carries `holdsInput={false}` (see the rule `field-holds-input`): the sources write `holdsInput={false}` beside `testIdFor(<list>, 'size-select')`.
+
+A part leaves out of the address a value equal to its default (page 1, the action's default size), as every link of the app does. A range or a link that does not apply is absent from the page, never disabled, so a state that lists the list in `meta.renders` does not require them; the size select it does. `pagerOf`, `searchKeysOf` and `pageSearchOf` of `@workspace/ui-contract/anchors` compute what a page shows, which search keys a list reads for and the search a part moves to, for the app and the tests alike (`PAGE` and `SIZE` name the search parameters, `PAGING_PARTS` the four parts).
+
+`contract:check` holds a paged source: its action pages, with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`; every route of its screen declares `page` and `size` as it reads them; no source's `params` names `page` or `size`; a screen pages one list; and a paged list has at most 3 segments. A range and the previous and next links are shown where the read decides, so the e2e run's settled check does not require them to be on the page where their list is rendered; the size select shows wherever the list does (see the rule `settled-state`). `contract:diff` lists `paged` on the line of a list that reads a platform action.
+
+Keys it concerns: [`screen.anchors.<name>.source.paged`](#screen-anchors-name-source-paged), [`screen.anchors.<name>.derived`](#screen-anchors-name-derived), [`platform.actions.<name>.paged`](#platform-actions-name-paged).
+
+### What an action fails with
+
+<a id="rule-failure-codes"></a>
+A platform action fails with the codes `platform.yaml` declares for it. An action of the model fails with `forbidden` first when its entity says who may change it (`x-perch.can`), then with the codes of the fields its parameters set, then with `failed`. A field gives, from its JSON Schema: `<field>-required` for a `minLength` of 1, `<field>-too-short` for a larger one, `<field>-too-long` for a `maxLength`, `<field>-invalid` for a `pattern` or a `format`, and `<field>-taken` when the field alone is unique (`x-perch.unique`); a new id and a read-only field give none, and a field's name is kebab-case in a code. So `note.createNote` fails with `forbidden`, `text-required`, `text-too-long` and `failed`, and a `maxLength` added to a field adds its code wherever an action sets the field.
+
+`contract:diff` lists the codes the anchors gain or lose, written or derived, so a constraint added to the model shows on review as the codes it adds.
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.fields`](#screen-anchors-name-fields).
+
+### A button's params
+
+<a id="rule-button-params"></a>
+A `button` whose binding names an action gets, for that action, every param the fields of its part (`<part>.<name>`: an input, a textarea, a select, a checkbox, a radio or a switch) pass in their own bindings of it. The email and password inputs of `user.sign-in` pass `email` and `password` to `platform.sign-in`, so `user.sign-in.submit-button` binds it as `action: platform.sign-in` alone. A param the button writes wins, key by key, so a value no field of its part passes stays written: its binding of `platform.sign-up` keeps `locale: app-shell.locale-select`, an anchor of the frame. Two fields that pass one param with different values are a problem of the button until it writes that param.
+
+Keys it concerns: [`screen.anchors.<name>.binding`](#screen-anchors-name-binding), [`screen.anchors.<name>.binding.params`](#screen-anchors-name-binding-params).
+
+### An error's codes and fields
+
+<a id="rule-error-codes-and-fields"></a>
+An error `<part>.error` that writes no `codes` carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>`, in the order they are declared); then the failures of the actions the flow invokes and shows on it, by a written `onError` in any form or by the request pattern (see the rule `request-outcome`), a region written `by` a button included; then the codes the flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. So `user.reset-password.error` may leave its codes out: the failures of `platform.reset-password`, which the anchors beside it bind, then `passwords-differ`, which its flow shows on it, then `failed`.
+
+One that writes no `fields` maps each code of a field to the control its binding or the invoke passes for that field (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen; a code that two sources pass from two controls concerns the form. What the file writes wins. The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>`.
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.fields`](#screen-anchors-name-fields).
+
+### Whether a field holds input
+
+<a id="rule-field-holds-input"></a>
+Every field (`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave (see the rule `leave-questions`). A field whose own change applies it at once, and nothing else applies it, holds none: one of its bindings runs an action that takes the field itself as a parameter, an action no other anchor of its screen runs with it (the language select, the organisation select), or its own event moves its screen's search with it, a `navigate` to a path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's event does (a filter applied on change).
+
+A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it (the search box of the accounts), holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` is such a field by its facet: its choice sets the route's `size` at once. The loader sets `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input.
+
+In the JSX a field that holds none carries `holdsInput={false}` on the element with its anchor, and a field that holds input carries nothing: `holdsInput={true}` is the default and is reported by the sources check, and so is a `holdsInput={false}` on a field that holds input or on an anchor that is not a field; a rendered field that holds no input without its opt-out is reported at its anchor. A flag's anchor is a literal or `testIdFor()` of two literals, so a paged list's size select, which holds no input by its facet, may carry `holdsInput={false}` (`{true}` there is reported as the default, a `marksState` as one on a select that holds no input, and either flag on any other part a `testIdFor()` derives as one on no field), and a rendered size select without it is reported at its `testIdFor()`.
+
+Keys it concerns: [`screen.anchors.<name>.holdsInput`](#screen-anchors-name-holdsinput), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
+
+### Which states a field carries
+
+<a id="rule-field-states-carried"></a>
+A field of kind `input`, `textarea` or `select` that holds input carries `data-state` `unsaved` while it holds input no save has taken. One whose binding is a model field (`binding: { model: ... }`) also carries `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. A field that holds no input (`holdsInput: false`) carries no state. The states come from the vocabulary's "Field states" section, and a vocabulary without it declares none. The manifest lists each field's states under `fieldStates` in `ids`, and the table of them under `contract.fieldStates`. A scenario pair `[field] carries [state:x]` is held to them. The implementation carries `unsaved` on a field while it holds input no save has taken, and `saved` only when its manifest `fieldStates` lists it and a save stored what it shows, while it stays on the screen; otherwise no state. `marksState: false` turns off the colour a field shows for its state; its `fieldStates` still hold.
+
+Keys it concerns: [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.holdsInput`](#screen-anchors-name-holdsinput), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
+
+### Which leaves ask first
+
+<a id="rule-leave-questions"></a>
+`platform.yaml` declares under `unsavedInput` every leave that would lose what was typed, and how the app asks first. `question` names the frame's dialog: a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or `question`; `flow` (a navigation a flow makes after its action completed: the action took the input) is always `never`, and `elsewhere` (another tab or device, a database that will not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of it. `leaving` comes with `unsavedInput`, and the question is a reserved dialog with a code and both answers that runs no action of its own.
+
+A flow's `navigate` is one of these leaves by what moves it: after an invoke's outcome it is `flow`; on a platform or data event, `elsewhere`; on a control's event, to the path of the screen's one binding, `state`; on a control's event, to any other path, `screen`, a leave the user starts as with a link. Such a control asks the frame's question before its event while a change of screen asks, as long as a field it loses holds unsaved input: the fields of its screen that hold input, but those the move carries in its search and the control itself. The loader derives it on the control, `leaves: { dialog, loses }`, which a screen file never writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`.
+
+For that question to hold wherever the control is acted on, a navigate sits on a transition, never in an entry or an exit; one transition moves once; a control's navigate names a control of the flow's own screen, outside the frame, an anchor it declares or a part one derives, which has no declaration to carry the question and so moves within its screen only; a move to a path of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state that handles it, losing the same fields, since its question comes before its event.
+
+Keys it concerns: [`platform.unsavedInput`](#platform-unsavedinput), [`platform.leaving`](#platform-leaving), [`screen.anchors.<name>.holdsInput`](#screen-anchors-name-holdsinput).
+
+### A composite of the platform
+
+<a id="rule-composite-of-the-platform"></a>
+A list with its items that several screens show, where the policy behind it lives in the platform, is declared once in `platform.yaml` under `composites`: its `description`, its `list` (the last segment of the list, ending in `-list`), its `itemState` (a row state each item takes once what it says holds) and its `items`, each by name with its description. A secret input opts in with `composite: <name>`, and the loader declares on its screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. The rules a new password keeps, which `user.sign-in`, `user.reset-password` and `user.settings` each show under their new password, in `domain/platform.yaml`:
+
+```yaml
+composites:
+  password-rules:
+    description: The rules a new password keeps, each marked once the password typed keeps it.
+    list: password-rule-list
+    itemState: met
+    items:
+      length: 10 to 35 characters.
+      digit: At least one digit.
+```
+
+The new password of `domain/screens/reset-password.yaml` opts in, and its screen gets `user.reset-password.password-rule-list`, `user.reset-password.password-rule-list.length-item` and `user.reset-password.password-rule-list.digit-item`, none of them written:
+
+```yaml
+user.reset-password.password-input:
+  kind: input
+  secret: true
+  composite: password-rules
+  binding:
+    action: platform.reset-password
+    params:
+      password: user.reset-password.password-input
+  derived: [ visibility-button ]
+```
+
+A composite's anchors are declared anchors the loader derives, not derived parts (`user.settings.password-rule-list.digit-item` is screen `user.settings`, kind `item`); they follow the anchor grammar, and no screen file writes them. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. An unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor and a `derivedFrom` a screen file writes are problems. The platform's composites and the rows of the vocabulary's "Composites" table name each other, each item state a row state: the table names each composite with what it is for. The manifest lists them in `contract.composites`, the declarations under `platform.composites`, a secret input's `composite` and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), and `contract:diff` reports a composite added or removed. A composite declared and used by no screen is no problem: `contract:coverage` notes it (`composite <name> is declared and used by no screen`).
+
+Keys it concerns: [`screen.anchors.<name>.composite`](#screen-anchors-name-composite), [`platform.composites`](#platform-composites), [`platform.composites.<name>`](#platform-composites-name).
+
+### A description the engine can say
+
+<a id="rule-engine-descriptions"></a>
+An anchor's `description` may be left out where the engine says it: a `heading` names its screen by its title; a `link` whose one binding is a route to a screen's path leads to that screen; a secret `input` holds a secret the user types and never shows; an `error` says why the actions bound beside it, then those its flow invokes against it, did not go through, each of its codes with its meaning from the vocabulary's "Codes" table, the one place a code's meaning lives; and a composite's anchors carry the platform's descriptions. The manifest carries the written description, a secret input's with `(type password)` appended once, else the derived one, and gives each derived part in `contract.derivedParts` the meaning of its suffix. `bun run contract:coverage --descriptions` lists the written descriptions the engine would say itself, for the developer to drop (an anchor a composite derives is never listed).
+
+Keys it concerns: [`screen.anchors.<name>.description`](#screen-anchors-name-description).
+
+### What stays in a screen
+
+<a id="rule-what-stays"></a>
+What a screen would only repeat of the model, the platform and its own bindings, it leaves out, and the loader derives it, the same way every time. What stays in a screen is what a tester or a user can tell apart: the areas and their states, where each control leads, a success or a failure that goes elsewhere than the derived one or shows something else, guards, confirmations and chains of actions. A written value wins over a derived one. `bun run contract:diff <ref>` lists the codes and the error fields the anchors gain or lose, written or derived, so a constraint added to the model shows on review as the codes it adds, and the lines of each screen's flow, its states' addresses, what they render and what each guard by failure code takes among them, and every line of a flow added to or removed from a screen, descriptions aside, so a screen written shorter that loads to the same flow shows no change but the descriptions it stops writing, each listed as `<n> -> gone`.
+
+### What a failure shows
+
+<a id="rule-failure-show"></a>
+In the `onError` of an invoke, `show: <anchor>` shows one of the codes the failure of the invoked action shows. In an `onError` list with a branch guarded by failure code, a bare `show` on that branch shows the guard's codes, and one on a later branch, unguarded or guarded by a sentence, the failure's codes but those the branches guarded by code before it take; a branch before the first one guarded by code shows the whole failure, and a `show` that names its codes keeps them. So where the state `signing-in` of `user.sign-in` writes `show: user.sign-in.error` on both of its branches, with `emailNotVerified: { codes: [ email-not-verified ] }`, the first shows `email-not-verified` and the second `invalid-credentials`, `rate-limited`, `other-account` and `failed`; a screen may write the codes out instead, and what it writes wins. The error's own codes are not narrowed: it carries every code of the failure, whichever branch shows it. A bare `show` after branches guarded by code that take every code of the failure is refused: that branch names the codes it shows.
+
+Keys it concerns: [`screen.flow.states.<name>.on.<name>.guard`](#screen-flow-states-name-on-name-guard), [`screen.flow.meta.guards.<name>.codes`](#screen-flow-meta-guards-name-codes).
+
+### The outcome of a request
+
+<a id="rule-request-outcome"></a>
+An invoke whose action fails with codes and that writes no `onError` follows the pattern of a request: entering its state clears the error its failure shows on (unless the state's `entry` clears it already), and a failure goes back the one way it came, showing its codes on that error. The way back is the one sibling state whose transitions on controls enter the invoking state: only a control makes one, so a state a platform event or a data event enters has none. The error is `<part>.error` of the part those controls sit in (of the fields the invoke's `input` names, when no control enters it), else `<screen>.error`; with no part at all, no control entering it and its `input` naming no field (a request a link starts, its input a search parameter), it is `<screen>.error`.
+
+So the state `changing` of `user.settings` may leave out its `entry` and its `onError`: the loader clears `user.settings.password.error` on entry and adds the `onError` back to `kept`, the one state whose `user.settings.password.save-button` enters it, showing the failure of `platform.change-password` on that error. An `onError` written as its target alone (a `description` beside it changes nothing) keeps that target and still gets the show, with no clear on entry; one with actions, or a guarded list (the state `resetting` of `user.reset-password`), is written in full and wins.
+
+A state with no single way back writes its `onError`, and the check names the reason when it does not: one where its flow or its region starts (even when a sibling enters it too), one two states enter, one an invoke's outcome enters, one a platform event or a data event enters, one entered from outside its area. So does a state whose failure finds no error, its target alone written or not. A state with no way back may write its `onError` as its target alone, which still gets the show: a request a link starts where its flow starts writes `onError: <state>`, and its failure shows on `<screen>.error`. An action that fails with no code gets nothing.
+
+Keys it concerns: [`screen.flow.states.<name>.invoke.onError`](#screen-flow-states-name-invoke-onerror), [`screen.flow.states.<name>.invoke.onDone`](#screen-flow-states-name-invoke-ondone), [`screen.flow.states.<name>.entry`](#screen-flow-states-name-entry).
+
+### The region of a button
+
+<a id="rule-button-region"></a>
+A button bound to one action that no state of the flow handles gets its region, when the root of the flow has one parallel state. The region is named by the button without its screen and its kind (`organisation.notes.add-button` gives `notes-add`) and comes after the regions written; it counts among the two regions or more of the parallel state, which may write fewer. It rests in `idle`; the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. A failure shows its codes on the error of the button's part; the success of an action of the model says what the controls do by the word its name starts with: `create` (`createNote`), the controls whose values it took are emptied; `update`, they show the stored value; `delete`, the entry leaves its list. A failure with codes and no error in the part is a problem: the screen declares the error, or writes the region by its button with its `onError`.
+
+A screen writes the region by its button, `by: <button>`, when it decides something of it: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`. The states of a button's region are the machine's, named by the loader (`idle`, `running`), and a scenario or a test reads them as it reads any state.
+
+Keys it concerns: [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by).
+
+### The toast of a success
+
+<a id="rule-success-toast"></a>
+With a toast anchor on the frame (`app-shell.toast`), every mutation says its success there, with a standard message: each invoke of an action of the model, written or in a derived region, gets on each branch of its `onDone` `show: { app-shell.toast: [<code>] }`, the code being the action's object in kebab case and the past of its verb (`note.createNote` gives `note-created`, `profile.updateBio` gives `bio-updated`), or `<action>-done` for a verb other than create, update and delete; a platform action toasts when `platform.yaml` lists it under `toasts`, with the code listed (`organisations.create: organisation-created`), and an unlisted one never does.
+
+The toast says an operation's outcome once, where it ends: an operation starts with an event that enters a state running such an action and goes on along the branches of its `onDone` that enter another (one Save running `updateName`, then `updateBio`); such a step toasts nothing, and a branch that targets its own state re-enters nothing. An operation of one action says that action's code; one of several says the operation, `<object>-<verb>ed` from the control whose event starts it: the verb is the control's name without its kind, in the past (`save-button` gives `saved`), the object the part the control sits in, or the screen's last segment for a control of the screen itself (`user.profile.save-button` gives `profile-saved`). An operation of several that no control starts (a platform event), or that controls with different codes start, is refused until the screen writes its own message on the toast or bans it; so is one event that starts several such operations at once (the regions of a parallel state it enters, or two regions handling one press with transitions that stay in them), until the screen writes `toast: false` on every action of all but one. One press gives one toast.
+
+The toast stays on unless the screen says otherwise: a branch of the `onDone` that shows its own message on the toast keeps it (a written message wins on its anchor, branch by branch; the other branches still get the standard one), and the one ban is `toast: false` on the invoke, or on a region written `by` its button (the language select's store: the change is visible by itself); a notice or an error written on the outcome says nothing about the toast. `read: false` sits beside it on the same invoke or region, a different statement: the action changes nothing a list of the screen shows, so nothing reads after it; on one branch of the `onDone`, nothing reads after that outcome, and the branch keeps its toast (see the rule `read-after-an-action`). A failure never toasts: it shows on the part's error.
+
+The toast anchor carries every code a flow shows on it; the vocabulary documents the derived ones by one rule row, `<object>-<verb>ed`, the manifest lists each with its action, and `contract:diff` reports a new one. A code a flow writes on the toast itself (a warning of its own), or the frame lists on it, has its own row, even where a derivation gives the same code. The rule row is no code itself: the sources and consumers checks take a toast code the loader derived, never the row, and only the words of a derived toast code are written, in the frame's map.
+
+Keys it concerns: [`platform.toasts`](#platform-toasts), [`screen.flow.states.<name>.invoke.toast`](#screen-flow-states-name-invoke-toast).
+
+### The question before a destructive action
+
+<a id="rule-destructive-question"></a>
+With a confirmation on the frame (an anchor of kind `confirmation`, `app-shell.confirmation`), every control whose binding names a destructive action asks it before the action runs: an action of the model whose verb is `delete`, an action of the platform whose verb (the first word of its last segment) is `ban`, `delete`, `remove` or `revoke`. The manifest writes it on the control, `asks: { dialog, code }`, the code `<object>-<verb>` for the model (`note.deleteNote` gives `note-delete`) or the platform action's name with `.` as `-` (`organisations.remove` gives `organisations-remove`); the confirmation carries every code asked with, which the vocabulary documents by one rule row, `<object>-<verb>`. Both are derived only: a screen file never writes `asks`, nor the frame the confirmation's codes.
+
+The flow says nothing of it: the press still leads to the state that runs the action, and the app's gate asks in front of the event, its confirm-button letting the event through and its cancel-button dropping it. The one line a screen writes is `confirm: false` on the control, which runs the action without asking; on a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. The frame's confirmation is declared by the frame alone, once, reserved, with both answers and no action of its own.
+
+Keys it concerns: [`screen.anchors.<name>.confirm`](#screen-anchors-name-confirm).
+
+### Scenario files and their ids
+
+<a id="rule-scenario-files"></a>
+A scenario is an instruction a person could follow by hand, one Markdown file each, in the e2e tree beside its test:
+
+```text
+tests/e2e/scenarios/<entity>/<layer>/[<area>/]<slug>.md
+tests/e2e/src/<entity>/<layer>/[<area>/]<slug>.e2e.spec.ts
+```
+
+The id is the file's path under `tests/e2e/scenarios/` without `.md`, never written inside the file: `user/base/edit-profile-name`. Its segments go from the general to the specific:
+
+- the entity the scenario checks: `user`, `device`, `organisation`, and `contract` for the contract itself;
+- the layer: `base` (the entity works on its own; an area such as `crud` or `list` when it helps), `flows` (several roles or devices meet) or `features` (how one function behaves);
+- an optional area, then a kebab-case slug.
+
+No numbers: the tree orders the scenarios and the tags select them. The role is a property of the scenario, in its front matter, never a folder. A path that does not match `^[a-z][a-z0-9-]*(\/[a-z][a-z0-9-]*){2,3}$`, or whose layer is not one of the three, is a problem of its file. The scenarios are sorted by id, an id before the ids that extend it (`user/base/sign-up` before `user/base/sign-up-taken-email`).
+
+### The header and the body of a scenario
+
+<a id="rule-scenario-format"></a>
+The file opens with a YAML front matter that holds only the structured header:
+
+- `tags`: a list holding `smoke` or `full`;
+- `activity`, when the scenario walks one: the id of an activity of `contract/domain/activities/`;
+- `devices`: a letter per browser with the role it acts as by the end of the scenario; every device starts as `guest` until a step signs it in;
+- `data`: the test data by name, `generate` or a fixed string; `{}` when there is none.
+
+Then the body, with fixed sections in any order: `# <title>`, a line `Where: <text>`, `## Scenario: <sentence>`, `### Steps` with a numbered list and `### Expected result` with a bullet list. An unknown heading, a line outside a section, a missing section or a list item of the wrong shape is a problem, with a line number where the parser knows it (a missing section has none). The whole of `tests/e2e/scenarios/user/base/edit-profile-name.md`:
+
+```markdown
+---
+tags:
+  - smoke
+devices:
+  A: identity
+data:
+  New name: generate
+---
+# Rename yourself on the profile page
+
+Where: [/me] then [user.profile.save-button]
+
+## Scenario: A signed-in user changes their name and keeps it after a reload
+
+### Steps
+1. Open [/me] and wait for [app-shell.status] to reach [state:ready]
+2. Clear [user.profile.name-input]
+3. Enter the new name into [user.profile.name-input]
+4. Click [user.profile.save-button]
+
+### Expected result
+- After step 4 [app-shell.notice-message] carries [code:profile-saved]
+- [user.profile.heading] shows the new name
+- Reloading the page keeps the new name
+```
+
+A scenario that walks an activity names it in its front matter (`activity: session`), and the coverage note counts, per activity, the scenarios that name it and the transitions they walk. `parseScenario(id, markdown)` reads one into a `Scenario` with `lines`, the line of each key of the front matter (`devices.A`), each section (`where`) and each list item (`steps[0]`), or returns its problems with their lines; `formatScenario(scenario)` writes one, its inverse.
+
+### The brackets of a scenario and what they pair with
+
+<a id="rule-scenario-brackets"></a>
+Brackets reference the contract, and the contract check resolves each one: `[<anchor>]` (a declared anchor, or one derived from a declared base with a suffix it lists), `[/path]` (the path of a binding), `[code:<code>]`, `[state:<state>]`, `[value:<value>]` and `[mail:<action>]` (a platform action that declares the mail it sends) and `[notice:<action>.<name>]` (a notice of that name the platform action declares). A value `show` or `hide` is one of the contract once an input renders a `visibility-button`.
+
+In one text (the `Where` line, the scenario sentence, a step or an expected result), a `[code:…]`, a `[state:…]` or a `[value:…]` speaks of the anchor the text names last before it, and the check wants it to be one that anchor carries: a code of its codes, written or derived, a state of its `states`, a value of its choice values, its own or those of an anchor declared under it (`<anchor>.<rest>`: the items of a composite's list, the options of a select, the eye of an input). So `[user.sign-in.mail-message] carries [code:check-your-mail]` holds, and `every item of [user.sign-in.password-rule-list] carries [state:met]` holds through the list's items, while `[user.confirm-email.error] carries [code:welcome]` is a problem, `user.confirm-email.error never carries code welcome`.
+
+A route is read past: in `wait for [app-shell.status] to reach [state:ready] on [/me]` the state is the status's. A `[mail:…]` or a `[notice:…]` ends the pairing until the text names an anchor again, since what follows speaks of the mail or the notice (its language, its link). With no anchor before it in its text, a code, a state or a value need only be one of the contract. Write the anchor first, then its code, its state or its value: a value written before its anchor pairs with an anchor the text named earlier, if any. `Choose [value:dark] in [user.settings.theme-select]` holds the value to the contract alone, and `[user.settings.theme-select] shows [value:dark]` holds it to the select. `referencesIn(text)` reads the bracket references of a text in the order it writes them, `anchorCarries(contract)` says whether an anchor carries a code, a state or a value (one it declares or one an anchor under it declares: codes are the loaded `codes`, derived ones included; states the anchor's `states`; values the rows of its choice values and its options', a pattern row matching, or `show` and `hide` on a `visibility-button`), and `pairingResolver(contract)` says why a value does not pair with its anchor, for the scenarios and the consumers check alike.
+
+The check also holds each device to a role of the vocabulary, the activity a scenario names to exist, a mail to the platform action that declares it and a notice to its action and its name (`unknownNotice`).
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.dataValue`](#screen-anchors-name-datavalue).
+
+### The test of a scenario, and the feedback loop
+
+<a id="rule-scenario-tests"></a>
+The test pairs with the scenario by its path and names it on its first line, `// scenario: user/base/edit-profile-name`, with one `test.step` per step. `bun run e2e:scaffold <id>` writes a failing test from a new scenario, and `bun run e2e:coverage` checks the pairs, step for step: it runs in `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook leaves it out, so a scenario may wait for its test. The test of the scenario locates by anchors and asserts codes, states and values, never wording.
+
+The scenarios are the contract's feedback loop. A scenario is written from the contract alone: when it needs an anchor, a code, a state, a route or a role the contract lacks, that gap is fixed in the contract files first, never worked around in a test. A gap the contract cannot close in the change is signalled, never emulated.
+
+### The three contract checks
+
+<a id="rule-checks"></a>
+`bun run check` and the pre-commit hook run three contract checks. Each prints `file:line: message` per problem and exits 1, or a one-line summary. A commit on `main` also checks that the contract is at the version the engine reads (`contract:check --current`). `bun run contract:check`: the files on their own and against each other (the rules `check-files`, `check-bindings`, `check-flows`, `check-platform` and `check-access`). `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against the contract (the rule `check-sources`). `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the contract (the rule `check-consumers`).
+
+Beside them, `bun run e2e:coverage` pairs every scenario with its test, step for step: in `bun run check` and in the pre-commit hook on a commit on `main`, while on a branch the hook leaves it out, so a scenario may wait for its test. `bun run contract:coverage:check` runs where it runs and holds the block of `COVERAGE.md` to what `contract:coverage --write` writes. The web app's tests hold the module routes and the real router to the bindings, and XState and the app's machines to the flows. `checkContract(root)` loads the contract files, the activities and the scenarios (stopping at their own problems), then runs the cross-checks, `schemaDrift` and `referenceDrift`, sorted by file and line; each rule is a function of the loaded `Contract`.
+
+`bun run contract:migrate` moves a contract at an older version to the tooling's, step by step (`--write` rewrites the files; `packages/ui-contract/MIGRATIONS.md` says what each version changed); `contract:check` passes an older contract and names it in one line (see the rule `editions-and-migrations`).
+
+### The check of the files and the vocabulary
+
+<a id="rule-check-files"></a>
+Each file parses and holds its shape, and each screen file is named by its first binding. Every anchor follows the grammar, starts with its screen's id and is declared once, and is never named like another anchor plus a derived suffix. Every kind, suffix, state, code, role and choice value is in the vocabulary, every derived suffix ends with a kind of it (the kind of the part it marks), and every code of the vocabulary is used; there are no choice values for a `visibility-button`, whose values its suffix defines. The platform's composites and the rows of the vocabulary's "Composites" table name each other, each item state a row state. The version is one the tooling reads (`versionProblems`): at most `CONTRACT_VERSION`, and from version 2 declared in `platform.yaml` alone, the vocabulary repeating it at version 1 only (its `Contract version` line is there and equal at version 1, refused from version 2). The generated schemas equal their Zod sources, and so does the reference (`schemaDrift`, `referenceDrift`).
+
+`secret` is on a field alone, and a `visibility-button` on a secret input alone; `marksState` (`false`) is on an `input`, a `textarea` or a `select` that holds input alone; `ranked` is on a message of two codes or more alone, each code listed once; a `composite` is on a secret input alone, names a composite of the platform, is opted into once per screen and derives no anchor the file writes or another composite derives, and no file writes `derivedFrom`.
+
+Every description the domain files write, the maps of meanings included (a screen's `states`, the platform's `events`, the sentence guards of a `meta.guards`), says what its element is for and leaves to the structure, another element, the platform, the model, the vocabulary and the flow what they say, as the schema text of its field puts it; each keeps 200 characters at most, whatever it describes (`descriptionsProblems`): one past it is a problem at its line, `<path>: the description of <place> is <n> characters, past its budget of 200; its purpose: "<the purpose of its field>"`, naming the purpose of its field. `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each description field in one text (what it is for, what it leaves to others and its budget), which is that field's `.describe()` in the schemas, so it reaches the generated JSON Schemas as an editor's hint, the model's own description taking its text in the shape `loadModel` reads the document with; `DESCRIPTION_BUDGET` is the 200 characters, for every one; `descriptionLength(text)` counts a description in characters. `readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form.
+
+Every activity agrees with the screens it visits (`activitiesProblems`): every state's screen exists and its address is a binding of that screen; every event is a declared anchor (a derived one through its base's `derived`, never a `visibility-button`) of that screen or of the frame; every transition from a state on an anchor to a target is backed by the screens, the flow of the anchor's screen (the frame's, for an anchor of the frame) reaching a `navigate` to the target's path, in the transition's actions, on leaving its state or entering its target (the `exit` and `entry` effects XState runs on a move) or after an invoke's `onDone` or `onError`, or the anchor being a link to that path (`binding: { route: ... }`); the roles are of the vocabulary and every `data` model is a field of the model; `initial` and every target are states; every state is reachable from `initial` and every state that is not final leaves; every guard is declared in `meta.guards` and every declared one is used. `contract:check` builds each activity in XState as written, with the walk of the flows, reaches every state and takes every transition and every guarded branch to its target (`runsProblems`: a machine XState will not build is a problem, never a crash). Every bracket reference of a scenario resolves, each code, state or value one the anchor named last before it in its text carries (see the rule `scenario-brackets`), the activity it names exists, and every device acts as a role of the vocabulary. A problem of an activity or a scenario is at the line of the deepest part of its path the file holds.
+
+Keys it concerns: [`screen.anchors.<name>.secret`](#screen-anchors-name-secret), [`screen.anchors.<name>.ranked`](#screen-anchors-name-ranked), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
+
+### The check of the bindings and the routes
+
+<a id="rule-check-bindings"></a>
+Every binding points at a field, an action or a route that exists, or at a search parameter every route of the screen declares, which only a field that holds no secret starts with, and never on another kind than a field (`bindingsProblems`). Each parameter of an action takes a declared anchor (never a `visibility-button`, which holds no input), a constant or a search parameter, an item or a row of its own screen with a `dataId`, of a list, a table or a section, from a control (a button, a link, a tab or a field) in its part (in an invoke's `input`, a state only such controls enter); a parameter two fields of a button's part pass with different values is written by the button. Each param of a platform source is a parameter of its action taking a constant or a search parameter every route of the screen declares, never `page` or `size`.
+
+A paged source's action pages with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`; every route of its screen declares `page` and `size` as it reads them; a screen pages one list; and a paged list has at most 3 segments, as its size options add two to its name (`pagingProblems`). Every path parses in the router's syntax (`parseRoutePath`), every example of a route parameter matches that parameter (Ajv's reasons at `bindings[i].params.properties.<name>.examples[j]`), an empty example of a path parameter is a problem, and a `$param` without an example has a value its schema accepts, else `needs an example` at its property (`routesProblems`, `searchProblems`: the enum controls, save the `size` of a screen with a paged list, whose control is the derived `<list>.size-select.option` and which writes no `x-perch`; `retain`).
+
+Keys it concerns: [`screen.anchors.<name>.binding`](#screen-anchors-name-binding), [`screen.bindings`](#screen-bindings).
+
+### The check of the flows
+
+<a id="rule-check-flows"></a>
+Every flow names states, events (never a `visibility-button`, which is presentation only), guards, actions, and anchors with their codes and bindings that exist (`flowProblems`): a clear's anchor one that carries codes, which then shows none, whatever its kind and screen, else a field of the flow's own screen, which it empties (a secret one included, never a `visibility-button`); a read's anchor a list, section or table of the flow's own screen whose `source` is a platform action, never one with an entity source or none (`flow/reads.ts`); an invoke's `input` taken from no `visibility-button` either; an invoke that says `read: false` reading in none of its outcomes, and a branch that says `read: false` an outcome of an invoke, never the transition of an event, reading nothing itself, under no invoke that says it already; every branch of an invoke's `onDone`, unless the invoke says `read: false`, reading each list, section or table of its own screen with a platform source that the invoke holds (one whose entry its `input` takes, whose source's `params` take a value its `input` takes, or whose source its action's `changes` names; `containersOf`, `flow/held-reads.ts`), or saying `read: false` itself (see the rule `read-after-an-action`).
+
+A navigate's search keys are keys of the binding it moves to, each `{ anchor }` a field of the flow's own screen that holds no secret (never a `visibility-button`), each `{ item }` an entry with a `dataId` of a list, a table or a section of the flow's own screen, taken on the event of a control (`CONTROL_KINDS`) in its part into a key that takes a string (`flow/items.ts`), and `page: 1` beside any key a paged list of the screen it moves to reads (`flow/pages.ts`); an invoke's input that takes an entry is run in a state only such controls enter. Each navigate sits on a transition, one to a transition, a control's on a control of its own screen outside the frame (a derived part within its screen only), to its own path only on a screen of one binding, and leaving its screen, losing the same fields, everywhere its control is handled or nowhere (`flow/leaves.ts`).
+
+Every target resolves as XState does (a state of the root or a deep target `<parallel>.<region>.<state>` from the root, a state of its own region or an id target `#<flow id>.<state>` of its own flow in a region); each event of a parallel state is handled in one area; the flow reaches each of its states and leaves each plain state that is not final; the one transition without a guard comes last. `meta.renders` lists anchors its own screen declares (a derived part's base, never the part), each once and never beside an anchor it is declared under; a plain state of the root or a state of a region renders every anchor it handles that a state lists (a derived part, or an anchor declared under a listed one, through the anchor it is under). A guard by failure code guards only branches of an invoke's `onError`, each of its codes one its action fails with and listed once; and every invoke whose action fails with codes writes its `onError` in full or has what the request pattern needs: the one way back and an error when it writes none, an error when it writes its target alone (see the rule `request-outcome`). `flowNodes(flow)` lists every state in the order of the file as a `FlowNode` (a `RootNode`, `ParallelNode`, `RegionNode` or `RegionStateNode`, with its path of names and its place in the flow); `deepTargetOf`, `idTargetOf`, `rootOf`, `regionStartsOf` and `deepEnteredOf` read the parts of a `DeepTarget` and an `IdTarget`: the state of the root a target lands in, each region at its starting state.
+
+Keys it concerns: [`screen.flow`](#screen-flow), [`screen.flow.states.<name>.invoke`](#screen-flow-states-name-invoke), [`screen.flow.states.<name>.on`](#screen-flow-states-name-on).
+
+### The check of the platform file
+
+<a id="rule-check-platform"></a>
+Every action of `leaving` exists and is listed once, every action of `toasts` is an action of the platform (`leavingProblems`, `toastsProblems`), the frame's confirmation is declared by the frame alone, once, reserved, with both answers and no action of its own, and `leaving` comes with `unsavedInput`, whose question is a reserved dialog with a code and both answers that runs no action of its own, and an action that asks needs an action under `leaving` (`unsavedInputProblems`).
+
+Every mail a platform action declares goes to a parameter of the action or the account, takes its language from a parameter, the account or, sent to a parameter by an action no guest runs, its recipient's, and links to a screen whose every route declares the search parameter that carries its token (`mailsProblems`); an action that sends a mail or a notice has no parameter named `account`, and one that sends a mail none named `recipient`. Scenarios name a mail `[mail:<action>]` and a notice `[notice:<action>.<name>]`, and a test holds a mail it reads to what the action declares. Every notice it declares has a name no other notice of the action has, goes and takes its language as a mail does, never its recipient's, and links, when it does, to a screen whose every route needs no parameter: no `$param`, no splat, no required search key (`noticesProblems`). `platformMailSchema` is the mail (`to` and `language`, each a parameter of the action or `ACCOUNT`, the account the action acts on: the signed-in account for an action on its own account, else the one its parameters name, whoever is signed in; the language also `RECIPIENT`, the account whose email the mail goes to, else the signed-in account's; and the `link` with the `screen` it opens and the `search` parameter carrying its token) and `platformNoticeSchema` a notice of the action's `notices`, a mail that only tells, with no token: its kebab-case `name`, `to` and `language` as a mail's, never `RECIPIENT`, `to: account` being the account's email as it was before the action changed anything, and an optional plain `link` to a `screen`, never a `search`.
+
+Every action, of the platform or of the model, writes its `changes`, each name of which is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once; the schema refuses an action without them, as it refuses one without `codes` (`changesProblems`, a problem per name at its place in the platform file or the model).
+
+Keys it concerns: [`platform.leaving`](#platform-leaving), [`platform.toasts`](#platform-toasts), [`platform.unsavedInput`](#platform-unsavedinput), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
+
+### The check of who a route serves
+
+<a id="rule-check-access"></a>
+No binding's `guard` sends away an account its `roles` name (`authenticated` with `guest`, or `guest` with any other role), an anchor's `roles` are among those its screen's bindings serve (the frame aside), a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses: every restriction above it (its own `roles`, those of each anchor it is declared under, and its screen's, the frame aside) admits a device by the roles it holds together, so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and the binding at `/$` names `guest` and `identity` (`accessProblems`; see the rule `roles`).
+
+Keys it concerns: [`screen.bindings.roles`](#screen-bindings-roles), [`screen.anchors.<name>.roles`](#screen-anchors-name-roles).
+
+### The check of the sources
+
+<a id="rule-check-sources"></a>
+`bun run contract:check:sources` holds the JSX of `apps/web/src` and `packages/ui/src` against the contract. `collectFromSource(text, file)` reads one file with oxc-parser and returns its `Collected` anchors (`data-testid`, `testId` and `*TestId` attributes, `testId:` keys, `<NAME>_TEST_ID` constants), the suffixes of its `testIdFor()` calls (each with its base when the call writes it as a literal), its codes (`data-code`, and the kebab-case values of `code:` keys and `<NAME>_CODES` maps; a domain code such as `note:TEXT_REQUIRED` is left out, a `data-code` outside the grammar is a problem) and an anchor built at runtime as a problem (`RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`); `scanSources(root)` collects the tracked and untracked sources under `SOURCE_ROOTS` (`apps/web/src`, `packages/ui/src`) except tests, declarations, generated files, fixtures and snapshots.
+
+`compareWithContract(collected, screens, vocabulary)` wants each literal written once, the literals equal to the anchors of the screen files (an anchor no source renders is a problem too), no literal equal to another plus a derived suffix, every `testIdFor()` suffix in the vocabulary and listed in the `derived` of an anchor of the contract (of the base itself, when the call writes it as a literal), so a part no anchor declares, a `visibility-button` no input lists, is never rendered, and every code a code of the contract: a row of the vocabulary, or a toast code the loader derived (the rule row `<object>-<verb>ed` is no code itself; `codesOf(vocabulary, screens)`).
+
+A field the contract says holds no input (a choice that applies at once) carries `holdsInput={false}` on the element with its anchor, and a field the contract says drops its state colour carries `marksState={false}`; each flag is read as a boolean literal on the element that carries a field's anchor as a literal or as `testIdFor()` of two literals (an entry of the latter with its `base`, as a paged list's size select is built; a prop passed through is let by, any other value or place is `HOLDS_INPUT_VALUE`, `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` or `MARKS_STATE_ANCHOR`, and for `marksState` a wrapper that carries the anchor as `testId` is read too). A field that holds input carries nothing (`holdsInput={true}` is the default and is reported, and so is a `holdsInput={false}` on a field that holds input or on an anchor that is not a field), a `marksState` is written only as `{false}`, never on a kind that is not an `input`, a `textarea` or a `select` that holds input (a form, a paged list's size select included), and a rendered field that holds no input, or drops its colour, without its opt-out is reported at its anchor (except in ahead mode). The opt-outs sit in `sources/opt-outs.ts`: a paged list's size select, `<list>.size-select` of a declared anchor whose `derived` holds `size-select`, is a select that holds no input by its facet, so a `holdsInput={false}` on it is no problem, and a rendered one without it is reported at its `testIdFor()` (except in ahead mode), and a flag of a part a `testIdFor()` derives that is no size select is a problem.
+
+Coverage markers are read by `ignoreMarkers(text, { program, comments })`: `ui-contract-ignore: <reason>` (the element and its subtree) or `ui-contract-ignore-self: <reason>` (the element alone), as a line comment in code (`// ui-contract-ignore: <reason>`) or as the only content of a JSX comment container among JSX children (`{/* ui-contract-ignore: <reason> */}`), with only white space before the element; each `IgnoreMarker` points at the element after it, and a marker whose own reason is shorter than three characters, or in another form, is a fault (`IGNORE_WITHOUT_REASON`, `IGNORE_MALFORMED`; `IGNORE_WITHOUT_ELEMENT` when no element starts where it points, `IGNORE_NO_CONTROL` when its element, and its subtree for the plain form, holds no control), which makes `contract:coverage` fail and write nothing.
+
+On a branch the pre-commit hook runs the sources check as `contract:check:sources:ahead`, which lets the contract run ahead of the app (see the rule `ahead-mode`); a commit on `main` and `bun run check` take the full check.
+
+Keys it concerns: [`screen.anchors.<name>.holdsInput`](#screen-anchors-name-holdsinput), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
+
+### The check of the e2e tests
+
+<a id="rule-check-consumers"></a>
+`bun run contract:check:consumers` holds the e2e tests under `tests/e2e/src` against the contract. `collectFromTest(text, file)` reads one file with oxc-parser and returns what it names of the contract (`Consumed`, its `ConsumedLiteral`s): the anchor of a `getByTestId('<anchor>')` call; in any string or template literal the `[data-testid="..."]`, `[data-code="..."]`, `[data-state="..."]` and `[data-value="..."]` selectors, in double or single quotes; and the value a `toHaveAttribute('data-<testid|code|state|value>', '<value>')` assertion expects, `.not` included; each argument a plain string or a template literal without `${}`, or a `+` chain of them read as the one string it folds to (a TypeScript wrapper such as `as const` changes nothing), each selector at its line in the source. `scanConsumers(root, tests?)` collects the `.ts` files under `CONSUMER_ROOT` (`tests/e2e/src`) or the folder given.
+
+`compareConsumers(consumed, contract)` wants every anchor known (declared, or derived from a declared base with a suffix it lists in `derived`), every code a code of the contract (a row of the vocabulary or a derived toast code), and every state and value in the vocabulary, or `show` and `hide` once an input renders a `visibility-button`, as the scenarios check resolves its bracket references. A code, a state or a value asserted on an anchor (`ConsumedLiteral.of`) must be one that anchor carries, as `anchorCarries` reads it, as in a scenario: in a selector string, `[data-testid="app-shell.leave-dialog"][data-code="unsaved-input"]`, the attribute selectors of one element pair with its `data-testid`, before or after it (`elementAnchors` in `elements.ts`), attribute selectors written one after another are of one element, and a `:not(`, `:is(` or `:where(` of one compound is that element too (a `data-testid` in a `:not(` naming none); a `:has(`, any other parenthesised argument, or a `:not(` holding a combinator or a list speaks of elements of its own, which pair among themselves, and after its `)` the element before it goes on; a space, a combinator, a list, an expression or other text leads to another element. A `toHaveAttribute('data-code', 'text-required')` pairs with the last `getByTestId('<anchor>')` of the receiver of its `expect(...)` (`assertedAnchor` in `receiver.ts`), `page.getByTestId('organisation.notes.error')`, when every step after it narrows what it found (`first`, `last`, `nth`, `filter`, `and`). A receiver held in a variable or built by a helper pairs with nothing and is held to the contract alone.
+
+A plain string or a template without `${}` is a literal; an anchor built with `${}` or held in a name is a runtime anchor and a problem (`RUNTIME_TEST_ANCHOR`), while a code, a state or a value from an expression is a parameter of the test and passes. A helper such as `notice(page, 'profile-saved')` is not followed, and a `data-id` is data, not contract.
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.dataValue`](#screen-anchors-name-datavalue).
+
+### Editions and migrations of a contract
+
+<a id="rule-editions-and-migrations"></a>
+A contract is read by the version its `platform.yaml` declares, `editionOf(contract)`, and a rule a version brings applies from that version on, `since(contract, N)` (the contract is at N or later), so a contract at an older version loads and checks as before: a rule of version N starts with `if (!since(contract, N)) return []`. `outdatedProblem(contract)` is a contract older than `CONTRACT_VERSION`, named with the command that moves it, or undefined: `contract:check` passes an older contract and names it in one line.
+
+`migrate(root, { write, migrations?, current? })` runs each `Migration` (`from`, `note`, and `run(files)`, which edits the `MigrationFiles` in place, the platform and the screen files as YAML documents and the vocabulary as text, and returns the work left by hand) from the declared version up to `current`, `CONTRACT_VERSION` by default, from `migrations`, the registry `MIGRATIONS` (one per version, ordered by `from`) by default, setting `version` after each step. It returns the `MigrationReport` (`from`, `to`, and per step its `from`, `note`, the files it changed and the work by hand) and, with `write`, writes the files the steps changed, each document into the text it was read from (`files/write-yaml-document/`): only the nodes a step edited change (a scalar in place, a pair or an item by its lines, a flow collection whose parts changed as a whole), every other byte stays as written. A contract newer than `current`, a platform file without a version, a file that is not YAML and a version no migration reads throw. `parseYamlDocument(text)` is the `yaml` package's `Document` of a text, its comments, the style of every node and its range in the text kept. `packages/ui-contract/MIGRATIONS.md` says what each version changed.
+
+### The business and the meta layer: three kinds of commit
+
+<a id="rule-layers-and-commits"></a>
+The contract has a business layer and a meta layer. The business layer is the entry point of every business feature: `contract/domain/` (the screens, the activities, the platform, the model), the scenarios of `tests/e2e/scenarios/`, and the content tables of `contract/vocabulary.md` (the codes, the states, the choice values, the screen names, the roles, the shell's reserved anchors): a row of them travels with the screen file that first uses it. The meta layer is the engine that keeps the contract working: `@workspace/ui-contract` (its schemas, checks, manifest, runtime helpers, and `./machines`, the walk that runs every flow and activity in XState inside `contract:check` and the comparison an app holds its own machines to their flows with), the generated `contract/schemas/` and `contract/REFERENCE.md`, the grammar of `contract/vocabulary.md` (its Grammar section, the kinds, the derived suffixes, the attributes), `contract/README.md`, the rules and skills about the contract, the contract steps of the pre-commit hook, the prose of `COVERAGE.md` and the contract's rows of `docs/agents/context-smoke-test.md`.
+
+An app is one consumer of the engine, a particular case: its code and its tests are the implementation, its runtime of the contract (`window.__perch.ui`, the served manifest) and the specs that hold it to the contract included (the web app's `apps/web/src/platform/machines.spec.ts` with its `APP_MACHINES`, `routes-*.spec.ts`, the e2e spec of the manifest), and so is an example in a meta doc that quotes the app's code, which changes in the implementation commit that changes that code. A meta commit touches an app only where the app consumes what the engine changed (an import path, a call), never what the app does. On a branch a commit holds one of the three kinds, never two. A feature that needs a new facet lands the meta change first (the engine learns it), then commits the business change that uses it. The generated block of `COVERAGE.md` goes with whichever commit changed what it measures, on an area branch: it measures the code too, so the contract trunk leaves it to the implementation that follows the take; `contract:coverage:check` fails a block that is not what `contract:coverage --write` writes, in `bun run check` and in the hook on `main`.
+
+The files are of two kinds. Authored: `contract/vocabulary.md`, `contract/domain/screens/<pathname>.yaml` (`__root.yaml` for the frame), `contract/domain/platform.yaml`, `contract/domain/model.schema.json`, `contract/domain/activities/<id>.yaml`. Generated, never edited by hand: `screen.schema.json`, `platform.schema.json`, `activity.schema.json`, `x-perch.schema.json`, `manifest.schema.json` and `contract/REFERENCE.md` (`bun run contract:schemas`) and the block of `contract/COVERAGE.md`. A word the vocabulary lacks is added to it in the same change. `isBusinessFile(path)` says whether a file is one of the business layer's (a domain file, the vocabulary or a scenario): the only files a commit on the contract trunk may stage.
+
+### Ahead mode: the contract runs ahead of the app on a branch
+
+<a id="rule-ahead-mode"></a>
+On a branch the pre-commit hook runs the sources check as `contract:check:sources:ahead`, which lets the contract run ahead of the app: an anchor declared, not rendered yet, passes, and so does a field's opt-out (`holdsInput={false}`, `marksState={false}`), a size select's included, not written yet; the app uses only what the contract declares. A commit on `main` and `bun run check` take the full check, `e2e:coverage` and `contract:coverage:check` included, so nothing lands unrendered, half-built, untested or with its coverage block behind.
+
+The same holds for the app's machines: on a branch the hook runs the unit tests with `CONTRACT_AHEAD=1`, and a machine may lack what its flow added (a state, an event, a guarded branch, an effect, an anchor a state renders) but does nothing the flow does not say, or is still exactly its screen's flow at the branch's merge base with `main` (`CONTRACT_AHEAD_BASE`; during a merge, the base the merge's commit will have, so a merge of `main` compares the app it brings with the flows it brings) or at the commit the branch is at (`CONTRACT_AHEAD_HEAD`, the contract the app was built from: a card's second business commit, taken onto a branch whose app already follows its first, changes a flow the base may not have at all; during a merge, the tip before it, unless the engine the merge brings cannot load that tip's contract for any reason, a key it now requires among them, and then that tip gives no flows to match), so a business commit may change a transition the app has not changed yet. `aheadOf(app, flow)` is the flow as far as a machine that lags it has come (equal to the machine's projection exactly when it does nothing the flow does not say) and `laggingOf(app, flow, base)` the flow at the branch's base when the machine is still exactly that, else `aheadOf`.
+
+The app's routes likewise: a binding may wait for its route, and a route that still reads as its binding did at the merge base (the same screen, the same path) is held to that binding as it was there. A scenario may wait for its test, as the hook leaves `e2e:coverage` out on a branch. The hook names both commits, and the cache of the unit tests keys on them, so a pass never carries into another branch state with the same files. A branch whose merge base with a local `main` cannot be found fails the hook; on `main`, on a detached HEAD and in `bun run check` every machine is its whole flow. A contract at an older version, as the hook's ahead mode reads main's (`CONTRACT_AHEAD_BASE`) with the new engine, loads and checks as before (see the rule `editions-and-migrations`).
+
+A rename or a removal keeps the old name declared until the implementation has switched to the new name or stopped rendering the removed element, then a last business commit drops it. It therefore goes in three commits: the business commit adds the new name and keeps the old one (on the trunk, or with the review stop on an area branch), the implementation switches to it, a last business commit on the area branch drops the old one, approved with the first. The ahead mode cannot drop a name the app still renders.
+
+Keys it concerns: [`screen.anchors.<name>.holdsInput`](#screen-anchors-name-holdsinput), [`screen.anchors.<name>.marksState`](#screen-anchors-name-marksstate).
+
+### The contract trunk holds a commit to the business layer
+
+<a id="rule-trunk-commits"></a>
+On `contract/trunk` the pre-commit hook first holds each commit to the business layer (`scripts/contract-trunk.ts`): a commit that stages a file outside `contract/domain/`, `contract/vocabulary.md` and `tests/e2e/scenarios/`, added, changed or deleted, a move counted by both its paths, fails, naming each such file and the branch it belongs on. The vocabulary counts whole, so an edit of its grammar there is the review's to see in the trunk's diff; a merge passes, as it brings `main` in with every layer.
+
+The pre-commit hook first refuses a commit while a hook `lefthook.yml` names is not installed (`scripts/hooks-installed.ts`): lefthook installs the hooks on `bunx lefthook install` (or `bun install`), and by itself on a hook run that notices `lefthook.yml` changed (an edit in the same second as the last install can pass unnoticed), unless told not to (`--no-auto-install`), but a hook whose file went while `lefthook.yml` stayed the same stays missing.
+
+### A take: the form of a business commit on a branch
+
+<a id="rule-take-form"></a>
+On any other branch but `main` and `feat/contract-first-pass` (an experiment's aside), the commit-msg hook holds a commit that changes the business layer to a take's form (`scripts/contract-take.ts`): its subject `<type>(contract): <the card's goal>`, the business layer alone, and as its last paragraph `Taken-from: contract/trunk <first>^..<last> <card>`, each commit or run of them oldest first, on the trunk's own line, changing every file it stages; a business commit the rules let the branch write itself (the last one of a rename or a removal, a feature begun there before the trunk, an amendment allowed there) names its cards in `Written-on-branch: <card>` instead. Nothing else there names the `contract` scope, so `git log main..<branch> -E --grep='^[a-z]*\(contract\):'` lists the branch's contract changes (`main..` leaves out the meta rounds `main` brings in) and `--grep='^Taken-from:'` its takes. A plain cherry-pick or rebase runs no hook and a revert of a take fails it.
+
+The check reads the `git commit` that runs the hook from `/proc`, its options parsed as git parses them: an amend is judged as the whole commit it leaves, and the message as git records it, cut at its scissors line under `--verbose` and its comment lines stripped or kept by the cleanup mode; where git's default mode leaves that to whether an editor opened, a message its comment lines change fails, and so does one the comment characters git may pick under `core.commentChar=auto` read differently. Without `/proc` (another system), an amend is judged by what it adds and the message is cut at a scissors line it holds. A take is checked against `main` and `contract/trunk` as the clone knows them, the remote's when it has no branch of its own.
+
+### A landing on main: the squash of one branch
+
+<a id="rule-landing-form"></a>
+On `main` the same hook judges every commit as a landing (`scripts/contract-take.ts`), the squash of one branch, against its parent: `main`'s HEAD, or, for an amend, the commit under the one it replaces. A merge into `main` is refused, as `main` takes only squashes; any other commit carries exactly one `Squashed-from: <branch> (<tip>) [<cards>]` trailer as its last paragraph, the cards optional for the hook (the landing procedure still names the card). The branch must exist by its exact ref, `refs/heads/<branch>`, so a revision such as `feat/me~0` names none; the tip, 7 to 40 hex digits, must be that branch's tip or one of its ancestors, and a short id git cannot tell from another commit is refused. The parent must lie under the tip, and the committed tree must equal the tip's tree and differ from the parent's, so a landing is `git merge --squash <branch>` and nothing more or less.
+
+Then the branch's round is judged: the commits of the tip that are neither on the parent nor under the tip of an earlier landing's trailer, merges left out, each against the take rules above as git recorded it, its message and the files it changes. A recorded commit of the round that breaks the take rules stops the squash even when its own hook was skipped (a plain cherry-pick, a `--no-verify` commit). The refusal names each commit that fails and how to rewrite it; the check grants no waiver. `contract/trunk` and an experiment never land, an experiment being split into area branches first. The engine's branch, `feat/contract-first-pass`, is bound by the trailer like any other branch, but its round is not judged, as its meta commits carry the `contract` scope with the engine's own files. `bun run scripts/contract-take.ts --round [<branch>]` prints that verdict for a branch (the checked-out one by default) without writing anything, so it runs before the gates; it ends with `contract take: every commit of <branch> since its last landing (<n>) is in its form` when every commit of the round is.
+
+The check has limits. It sees a commit only where git runs the commit-msg hook for it: a change of `main` that runs none is not seen, a fast-forward, a plain cherry-pick or revert, a rebase, or a commit made with `--no-verify`, the squash's own included. `main` changes only by a squash commit, by procedure, and the check cannot force it. A merge's own resolution is not judged, as a merge of the round is left out. Without `/proc` (another system) an amend is not detected, so the commit is judged against HEAD, and an amend that adds no change to `main` is refused as not changing it. An earlier landing's tip that the clone lacks cannot bound the round: its commits are judged again, and a refusal names those tips, so that the branch which landed them can be fetched. An amend of a landing is made before its merge back into the branch: after it, the replaced landing falls into the round and is judged there.
+
+### The manifest: what it holds, how it is built and where it is served
+
+<a id="rule-manifest"></a>
+`bun run contract:manifest` (`ui-contract manifest --out <folder>/ui-manifest`) builds `ui-manifest/manifest.json` from the contract files and the scenarios of `tests/e2e/scenarios/` alone, only after the contract check passes: `emitManifest(root, outDir)` runs the contract check, writes nothing and returns its problems when it finds any, else loads the contract and builds, validates and writes the manifest. `buildManifest` takes only the vocabulary, the screens, the model, the activities, the scenarios and the product. `writeManifest(root, outDir, manifest)` validates it against `contract/schemas/manifest.schema.json` with Ajv and returns the problems without writing anything, or empties `outDir` (its last segment must be `ui-manifest`, `MANIFEST_DIR`, else a problem) and writes `manifest.json` (two spaces deep, each entry of `ids` on one line, so a search for an anchor shows its facts), `manifest.schema.json` and `model.schema.json` beside it. `productInfo(root)` names the product: the root package's version and the commit checked out, or null.
+
+The web build writes it into `apps/web/dist/ui-manifest/` (`bun run build` runs `ui-contract manifest --out dist/ui-manifest` once Vite is done; the development watcher writes it into `apps/web/dist-dev/ui-manifest/` after every build, and a change of a contract file or of a scenario rebuilds), and both stands serve it at `/ui-manifest/manifest.json`, with `manifest.schema.json` and `model.schema.json` beside it and `Cache-Control: no-store`. `PERCH_UI_MANIFEST=0` on a stand answers 404 there; the default, `1`, serves it.
+
+It is what a tool outside the repository reads (its keys are the Manifest section of this reference): the vocabulary as tables with prose `instructions` for an agent (`instructionsOf`, its fixed texts read from the rules of this reference, the anchors and states taken from the vocabulary and the platform section); `derivedParts`, each derived suffix with the kind of the part it marks, the meaning of the suffix as its `description` and, for a `visibility-button`, its values; `composites`, the vocabulary's table of the platform's composites, whose declarations are under `platform.composites`; `fieldStates`, the table of field states, `{}` when the vocabulary has none; the screens verbatim, each binding with its `example` link and each anchor with its description, the written one (a secret input's with `(type password)` appended once) or else the one the engine says (see the rule `engine-descriptions`); the platform section and the activities verbatim; the scenarios parsed; `routeParams`; the model document; and `ids`.
+
+`ids` lists every declared anchor by name with its kind, its screen and its attributes: `holdsInput` of a field, the `fieldStates` of a field, the `marksState: false` of a field that writes it (the app leaves its border uncoloured; its `fieldStates` still hold), a ranked message's `ranked`, a secret input's `composite`, and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), one entry per line, so a search for an anchor in the manifest shows its facts. `fieldStatesOf` gives the states of a field: only an `input`, `textarea` or `select` that holds input has any, `unsaved`, and `saved` too when its binding is a model field; each state must be declared in the vocabulary's "Field states" table, so a vocabulary without it gives none; listed only when not empty.
+
+A contract change hands over `bun run contract:diff main` with the reason for each rename or removal (see the rule `hand-over`).
+
+### The page helper and the report of a settled state
+
+<a id="rule-page-helper"></a>
+On a development build, and on a production build made with `PERCH_UI_HOOKS=1` (the e2e stand's), `window.__perch.ui.anchors()` (`PAGE_HELPER`, `__perch.ui`) lists the anchors the page renders now, in document order, each with its kind (the last dash-separated word of its last segment), `data-state`, `data-code`, `data-id`, `data-value` and visibility (`visible` is false when the element or one of its ancestors is hidden), with the page's URL (`RenderedPage`, `RenderedAnchor`). `ANCHOR_ATTRIBUTES` names the attributes (`data-testid`, `data-state`, `data-code`, `data-id`, `data-value`), and `window.__perch` is declared on `Window` for any code that imports the types. Without the helper, the names a page renders are still there:
+
+```js
+;[...document.querySelectorAll('[data-testid]')].map((element) => element.dataset.testid)
+```
+
+An e2e run exposes the binding `window.__perchSettledState` (`SETTLED_STATE`, declared on `Window`), and such a build reports to it each settled state of a screen's machine, once the page has rendered it: the screen (`app-shell` for the frame), the state value (XState's, `SettledValue`) and the page as the helper reads it then (`SettledState`). The harness holds every report to the manifest the stand serves (`settledProblems`, see the rule `settled-state`), and a test fails at its end when a state it passed through broke it.
+
+### The check of a settled state
+
+<a id="rule-settled-state"></a>
+`settledProblems(contract, settled)` is the e2e harness's check of a `SettledState` against the manifest (any `SettledContract`: each screen's `id` and `flow`, and `ids` with each anchor's `screen`, `derived`, `roles`, `own` and `dataId`): what the page shows once a screen's machine has settled in a state, held to what that state renders (`meta.renders`, read by `renderedAt`). One line per problem; a screen the contract lacks is one. Rendered means visible to the user: an anchor the state does not render is not visible, absent from the page or hidden on it; one it renders is on the page and visible.
+
+Only the anchors of the screen that render only where listed are held, with their derived parts; the anchors every state renders are not (a message shows when it carries a code, and an error when there is one). Two directions are checked. A visible anchor of the screen that the state does not render is reported (`is visible, but the state does not render it`), whatever the anchor is: this one is never waived, so an anchor with `roles`, `own` or a `dataId` that is visible in a state that does not render it is reported. An anchor the state renders that is missing from the page, or hidden, is reported (`is not on the page, but the state renders it`, `is hidden, but the state renders it`), unless data decides whether it shows, where the requirement to be present and visible is waived: an anchor with `roles` or `own`, an entry of a list (`dataId`), or an anchor nested under one of these. It is waived as well for the parts a page shows on demand: a select's `option`, a composite's `item`, a field's `error-message`, and a paged list's `range`, `previous-link` and `next-link`, which its read decides; the size select shows wherever the list does and is held.
+
+Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.anchors.<name>.roles`](#screen-anchors-name-roles), [`screen.anchors.<name>.own`](#screen-anchors-name-own).
+
+### What contract:diff lists of a change
+
+<a id="rule-contract-diff"></a>
+`contractAt(ref, root)` reads the contract files, the screen files, the activities and the scenarios at a git ref (`git ls-tree`, `git show`) and loads them, or returns `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns the `ContractChanges`, and `bun run contract:diff <ref>` prints them as `formatChanges(changes)` does (see the rule `hand-over`). A contract left undefined is an empty one. The diff lists what both sides write or derive, so a screen written shorter that loads to the same contract shows no change but the descriptions it stops writing.
+
+The lists, in the order of the block, each added and removed and sorted:
+
+- the screens, and the route access lines: who each route serves as `<path> guard <guard>` and `<path> serves <role>`, a route added whole with every line;
+- the anchors, with the anchors renamed (below); the lists that read a platform action as `<anchor> reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged` when it pages: a list moved to another search or to paging shows as its old line removed and its new one added, and a list added whole shows its line;
+- on the anchors both sides hold, the derived parts as `<anchor>.<suffix>` (`<input>.visibility-button` for the eye of a password input), the codes as `<anchor> <code>` and the states as `<anchor> <state>`, written or derived, so a constraint added to the model shows as the code it gives and a change of a composite's item state shows on each item it derives, the roles each is shown to as `<anchor> <role>`, an error's fields as `<error> <code> -> <field>`, the fields that hold input as `<anchor> holds input`, the fields that drop their state colour as `<anchor> shows no state colour`, the controls that ask before a destructive action as `<anchor> asks <code>`, the controls that ask before they leave their screen as `<anchor> leaves losing <field>, <field>` (other fields show as the old line removed and the new one added), and the messages that rank their codes as `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which the codes compared as a set do not show;
+- the codes of the contract, the composites by name, the entities and their fields as `<entity>.<field>`, the activities by id;
+- the actions of `platform.leaving` added and removed, the entries of `platform.unsavedInput` as `<leave>: <how it asks>` (and `question: <dialog>`), and the notices of the platform actions as `<action>.<name>`;
+- per activity both sides hold, the transitions added and removed as `<state> on <anchor> -> <target>`;
+- per screen both sides hold with a flow on either side, the lines of its flow (see the rule `contract-diff-lines`);
+- the platform actions by name, and per platform action either side holds the lines of the action (see the rule `contract-diff-lines`);
+- per action of the model either side holds, by `<entity>.<action>`, the reads its `changes` names, as `changes <read>`, added and removed (an action one side lacks names none), listed as `model action lines added in <entity>.<action>` (`model action lines added in profile.updateName: changes accounts.list, changes accounts.read`); an action added or removed whole shows each read it changes;
+- last, the descriptions changed (see the rule `description-places`).
+
+An anchor removed and one added are a rename wherever a screen and a kind lost exactly one anchor and gained exactly one: with more on either side the pairing would be a guess, so they stay removed and added. What the anchors both sides hold carry (derived parts, codes, states, roles, error fields, input, colour, questions, ranks, descriptions) is compared under a renamed anchor's new name.
+
+`formatChanges(changes)` prints the block a change hands over: `contract changes: none` when nothing changed, else a summary line (`contract changes: 1 anchor renamed`), then one line per list that is not empty (`anchors renamed: device.list.revoke-button -> device.list.sign-out-button`), the transitions as `transitions added in <activity>`, the lines of a flow as `flow lines added in <screen>`, those of a platform action as `platform action lines added in <action>` and those of an action of the model as `model action lines added in <entity>.<action>`, and last `descriptions changed: <place> <before> -> <after>, ...`.
+
+### The lines of a flow and of a platform action in the diff
+
+<a id="rule-contract-diff-lines"></a>
+A screen's flow is listed as `flow lines added in <screen id>` and `flow lines removed in <screen id>`, one line per fact the flow says (`flowLines(flow)`, an internal helper of the hand-over). A state is named by its path (`viewing.form.open`) and descriptions are left out, as they change nothing that runs. A flow one side lacks has no lines, so a flow added or removed whole shows every line; a screen added or removed whole is a change of the screens alone. The lines:
+
+- `initial <state>`, and `<path> initial <state>` for each region;
+- `guard <name> takes <code>, <code>`, one per guard by failure code, its codes as written; a guard's sentence is prose and has no line;
+- `<path> address <path> <search as JSON, keys sorted>`, those the state's address has;
+- `<path> renders <anchor>`, one per anchor of its `meta.renders` (`check-mail renders user.sign-in.resend-button`);
+- `<path> entry|exit <effect>`;
+- `<path> on <event> -> <target> [<guard>] <effects>`;
+- `<path> invoke <action> <input as JSON, keys sorted> [read: false]`;
+- `<path> onDone|onError [#<n>] -> <target> [<guard>] [read: false] <effects>`, a branch's `read: false` after its guard (`viewing.member-roles.changing onDone #1 -> idle [ownDemotion] read: false`);
+- `<path> final`.
+
+An effect is written `show <anchor>: <codes>`, `clear <anchor>`, `read <anchor>` or `navigate <to> <search as JSON>`. Where order runs the machine (the guarded alternatives of an event or an outcome, the effects of an `entry` or an `exit`), an item of a sequence of more than one carries its position, `#<n>`, and the lines are compared as sets. So a screen file written shorter that loads to the same flow shows no flow line.
+
+A platform action is listed by its name, and its lines as `platform action lines added in <action>` and `platform action lines removed in <action>`, one per fact it declares (`actionLines(action)`, an internal helper): each parameter with its type (`param email: string`), its result (`result: <the text>`, the one prose that stays, since it says what holds once the action succeeds), each code its failure shows (`code rate-limited`), each role that may run it (`role <role>`), its page sizes when it pages (`paged by 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link opens and the search parameter that carries the token) and each notice (`notice password-changed to account language account link user.forgot-password`). An action added or removed whole shows every line, as nothing else in the summary says its mail.
+
+### Written descriptions: their place and their length in the diff
+
+<a id="rule-description-places"></a>
+`readDescriptions(root)` reads every description the domain files write, as they write them, never one the engine derives or the loader fills in as it expands a shorter form: the screen files (a screen's own, its route parameters', its anchors', its container `states`, its flow's own, sentence guards, states, regions and transitions with the outcomes of invokes and of a region's button), the platform file (its actions and their parameters, its `events`, its composites' own and their items), the activities (their own, their data, sentence guards, visits and transitions) and the model (its own, each entity's, action's and field's, the subschemas of the document, an entity or a field included), each read as YAML, the model's JSON too, so each has its line. Each is a `WrittenDescription`: its `file`, `line`, JSON path `at`, `kind` (the field it is, a `DescriptionKind`), `place` and `text`. The `Contract` carries them as `descriptions`, read by `loadContract`, so the contract at a git ref has those its files write there.
+
+The place names a description alike at any ref, by what holds it, never by the depth of its path: `app-shell.theme-select`, `user.profile` (the screen's own), `user.profile state loading`, `user.profile flow`, `user.profile flow editing.save`, `user.delete-account flow deleting onError #2` (the second of its guarded alternatives), `user.profile guard nameChanged`, `user.sign-in binding /sign-in search email`, `platform action sign-up param email`, `platform event started`, `platform composite password-rules`, `model`, `model entity profile`, `model action profile.updateName`, `model field profile.name`, `activity session state profile on user.profile.sign-out-button`.
+
+`descriptionChanges(before, after, renamed)` lists, sorted by place, each description that one side adds, removes or changes, a `DescriptionChange { place, before?, after? }` with its length in characters on each side it has, a renamed anchor's under its new name: `app-shell.theme-select 191 -> 340` (a shrink alike, `340 -> 191`), `new -> 120` for one added, `340 -> gone` for one removed, and the same length on both sides for a text changed at its length. It prints last, as `descriptions changed: <place> <before> -> <after>, ...`, so a description that grows clause by clause shows on review even where nothing that runs changed. Each description keeps the budget of its field (see the rule `check-files`).
+
+### Handing over a change
+
+<a id="rule-hand-over"></a>
+A change to the contract goes with the output of `bun run contract:diff main` in its description (the screens, anchors, codes, entities, fields and activities added, removed or renamed, the composites added or removed, the derived parts, the codes, the states, the roles and the error fields the anchors both sides hold gain or lose, the messages among them that rank their codes, with their order, who each route serves, the platform action each list reads with its params and its paging, the platform actions added or removed and the notices they declare, the transitions added or removed in each activity both sides hold, the lines of the flow added or removed in each screen both sides hold with a flow, the lines of each platform action added, removed or changed, the reads each action of the model comes to change or stops changing, and each written description added, removed or changed with its length before and after), and below it, by hand, the reason for each rename or removal, since those break whoever reads the old name:
+
+```text
+<the output of bun run contract:diff main>
+
+Why:
+- <each anchor, code, screen, entity, field, activity or transition renamed or removed>: <the reason>
+Scenarios and tests changed with it: <scenario ids>
+```
+
+For example, renaming the revoke button of the devices page:
+
+```text
+contract changes: 1 anchor renamed
+anchors renamed: device.list.revoke-button -> device.list.sign-out-button
+
+Why:
+- device.list.revoke-button: the button signs the device out, and the anchor now says so
+Scenarios and tests changed with it: device/base/my-devices
+```
+
+The tests are in this repository, so the same change updates them, and the consumers check fails until it does. This is the delivery of a finished change; the review before the code is the owner's process of work.
+
+### Coverage: how far the contract reaches
+
+<a id="rule-coverage"></a>
+`bun run contract:coverage` (`ui-contract coverage [--write | --check] [--json] [--unmarked] [--descriptions]`) prints how far the contract reaches, and `--write` puts the same block into `COVERAGE.md`, between the markers `<!-- coverage:start -->` and `<!-- coverage:end -->` (`COVERAGE_START`, `COVERAGE_END`): the text outside them is written by hand, and `replaceCoverageBlock(note, block)` throws when the note lacks one marker of each, in that order. It is a report, not a gate: no measure fails a commit. The block stays current, though: `bun run contract:coverage:check` (`ui-contract coverage --check`, `coverageDrift(note, block)`) fails when the block in `COVERAGE.md` is not what `--write` would write, naming that command at the line of its start marker, and says so in one line when it is. It runs in `bun run check` and in the pre-commit hook on a commit on `main`; on a branch, the contract trunk included, the hook leaves it out, so a block left behind fails `bun run check` before a landing, and the squash on `main`.
+
+1. **The model**, the measure of completeness (`modelCoverage`): per entity of `model.schema.json`, each field and each action with the anchors whose `binding` (one or a list) names it, or `unbound`. A field may be internal (an id, a creation time), so an unbound one is a question, not an error. Then per activity (`activityCoverage`), the scenarios that name it in their `activity` and the transitions they walk, one per branch of each `on`: a scenario is read in the order of its file (`where`, the steps and the expected results, each text's references left to right), with an address per device, a text that opens with `On device X` or `Device X:` speaking for device X, any other for the scenario's only device or for the device last named (`A` at first); a route moves its device to that address, and an anchor named in a step walks the transition on it from every state at its device's address, or from the initial state while that device has named no route. The totals line adds `activities n, transitions walked x/y`.
+2. **The controls**, the secondary measure (`countControls(text, file)`): per feature module of the web app (`FEATURES_DIR`) and for the UI kit (`UI_KIT_DIR`, `UI_KIT_MODULE`), how many controls carry an anchor, which are left unmarked and which are declared off the coverage. A control is a JSX element named like one (`CONTROL_TAGS`) or any element with an `onClick`; it is marked when it carries a `data-testid`, `testId` or `*TestId` prop, or sits inside a `<label>`; an element inside a marked control without an action of its own is a part of that control and is not counted, and neither is one that passes on the props it receives. `--unmarked` lists the unmarked and the ignored ones as `file:line: <element>`. The count is an indicator read from the source text, not a rule of the contract.
+
+The block also lists, per screen, its anchors and the scenarios that reach it. Its totals line reads `fields bound x/y, actions bound x/y`, then `activities n, transitions walked x/y` when the contract has any, with a table of them after the model, before the controls marked and ignored. After the totals, a note names each composite the platform declares and no screen opts into (`Note: composite <name> is declared and used by no screen.`, `unusedComposites`), which fails nothing.
+
+A control that is not a test target is declared off the coverage by a marker right before its element, with only white space between, and its reason on the marker line itself, at least three characters long (`// ui-contract-ignore-self: no screen renders a sheet yet; the first one anchors it`). In code it is a line comment, `// ui-contract-ignore: <reason>`; among JSX children it is the only content of a comment container, `{/* ui-contract-ignore: <reason> */}`. `ui-contract-ignore` covers the element and everything inside it, `ui-contract-ignore-self` the element alone. A marker without a reason, in another form, not right before an element, or that ignores no control (its element, and for `ui-contract-ignore` everything inside it, holds none) makes the command fail and write nothing (see the rule `check-sources`).
+
+`bun run contract:coverage --descriptions` (`listDescriptions(contract)`) lists as `<anchor>: <description>` every written description equal to the one the engine says itself, for the developer to drop; an anchor a composite derives is never listed (see the rule `engine-descriptions`).
 
 ### Language
 
