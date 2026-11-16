@@ -23,6 +23,7 @@ export {
   flowStateNameSchema,
   guardNameSchema,
   platformEventNameSchema,
+  renderSetsSchema,
   transitionSchema,
 } from './flow'
 export {

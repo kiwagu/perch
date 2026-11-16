@@ -35,6 +35,7 @@ export {
   platformNoticeSchema,
   platformSchema,
   RECIPIENT,
+  renderSetsSchema,
   resolvedValueSchema,
   screenFileSchema,
   screenSchema,

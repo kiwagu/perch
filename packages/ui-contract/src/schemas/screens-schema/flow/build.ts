@@ -21,6 +21,7 @@ import {
   platformEventNameSchema,
   searchSchema,
 } from './names'
+import { renderSetNameSchema, renderSetsSchema } from './render-sets'
 import { transitionsSchemaOf } from './transitions'
 
 /** The opt-out of a derived toast, which only an authored flow writes and the loader takes away. */
@@ -49,6 +50,8 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
   effect: E
   /** The authored flow's invoke may say `toast: false`; the canonical one has no such key. */
   toastOptOut?: boolean
+  /** The authored flow's `meta.renders` may name a set of `flow.meta.renders` beside the anchors. */
+  renderSets?: boolean
 }) {
   const transitions = transitionsSchemaOf(parts.transition)
   const effects = z.array(parts.effect).min(1).describe('The effects, in order.')
@@ -76,7 +79,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
     )
   const renders = z
-    .array(anchorSchema)
+    .array(parts.renderSets === true ? z.union([anchorSchema, renderSetNameSchema]) : anchorSchema)
     .min(1)
     .exactOptional()
     .describe(
@@ -166,12 +169,15 @@ export function flowSchemaOf<
   description: string
   /** An invoke may say `toast: false` (the authored flow). */
   toastOptOut?: boolean
+  /** The flow may name sets of anchors several states render (the authored flow). */
+  renderSets?: boolean
 }) {
   const { min, description: regionsDescription } = options.regions
   const parts = flowPartsOf({
     transition: options.transition,
     effect: options.effect,
     ...(options.toastOptOut === undefined ? {} : { toastOptOut: options.toastOptOut }),
+    ...(options.renderSets === undefined ? {} : { renderSets: options.renderSets }),
   })
   const parallel = z
     .strictObject({
@@ -207,9 +213,14 @@ export function flowSchemaOf<
             .record(guardNameSchema, options.guard)
             .exactOptional()
             .describe('The guards by name, each with what it holds.'),
+          ...(options.renderSets === true ? { renders: renderSetsSchema.exactOptional() } : {}),
         })
         .exactOptional()
-        .describe('What the contract says of the flow beyond XState: its guards.'),
+        .describe(
+          options.renderSets === true
+            ? 'What the contract says of the flow beyond XState: its guards and the sets of anchors its states render.'
+            : 'What the contract says of the flow beyond XState: its guards.',
+        ),
       states: z
         .record(flowStateNameSchema, z.discriminatedUnion('type', [parts.state, parallel]))
         .describe('The states by name: plain states, and parallel states of regions.'),

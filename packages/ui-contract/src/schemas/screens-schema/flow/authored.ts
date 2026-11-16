@@ -143,6 +143,7 @@ export const authoredFlowSchema = flowSchemaOf({
   effect: authoredEffectSchema,
   guard: authoredGuardSchema,
   toastOptOut: true,
+  renderSets: true,
   region: (parts) =>
     z
       .union([draftPatternSchema, controlRegionSchema, parts.region])

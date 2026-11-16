@@ -22,3 +22,4 @@ export {
   platformEventNameSchema,
   searchSchema,
 } from './names'
+export { renderSetsSchema } from './render-sets'

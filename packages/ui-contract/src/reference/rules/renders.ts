@@ -1,7 +1,8 @@
 /**
  * The rules of what a state renders: the lists of `meta.renders`, what rendered means, who reads
- * it; when an element shows beside others (`with`, `without`); and the two elements that are not
- * rendered by their data, a list with no entries and a cell with no value.
+ * it; a list several states share, named once; when an element shows beside others (`with`,
+ * `without`); and the two elements that are not rendered by their data, a list with no entries and
+ * a cell with no value.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -38,6 +39,13 @@ const stateRenders: ReferenceRule = {
     'screen.flow.states.<name>.meta.renders',
     'screen.flow.states.<name>.states.<name>.states.<name>.meta.renders',
   ],
+}
+
+const renderSets: ReferenceRule = {
+  id: 'render-sets',
+  title: 'Anchors several states render, named once',
+  text: "A flow may name a list of anchors several states render (`flow.meta.renders: { <set>: [anchors] }`); a state that lists the set's name in its `meta.renders` renders those anchors. A set serves two states or more.",
+  keys: ['screen.flow.meta.renders'],
 }
 
 const withWithout: ReferenceRule = {
@@ -86,6 +94,7 @@ const emptyCell: ReferenceRule = {
 /** The rules of what a state renders, and of when an element shows beside others. */
 export const RENDER_RULES: readonly ReferenceRule[] = [
   stateRenders,
+  renderSets,
   withWithout,
   emptyList,
   emptyCell,

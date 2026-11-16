@@ -550,7 +550,7 @@ The state the screen opens in.
 ### `flow.meta`
 
 <a id="screen-flow-meta"></a>
-What the contract says of the flow beyond XState: its guards.
+What the contract says of the flow beyond XState: its guards and the sets of anchors its states render.
 
 ### `flow.meta.guards`
 
@@ -566,6 +566,16 @@ What a guard holds: a sentence, or the failure codes it holds for.
 
 <a id="screen-flow-meta-guards-name-codes"></a>
 The codes it holds for: the action failed with one of them.
+
+### `flow.meta.renders`
+
+<a id="screen-flow-meta-renders"></a>
+Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors, as if it listed them; the loader writes them in. A set serves two states or more. See the rule `render-sets`.
+
+### `flow.meta.renders.<name>`
+
+<a id="screen-flow-meta-renders-name"></a>
+The anchors of the set, which each state that lists it renders.
 
 ### `flow.states`
 
@@ -4557,6 +4567,13 @@ Rendered means visible to the user. An anchor a state renders is on the page and
 `contract:check` holds `meta.renders`: it lists anchors its own screen declares (a derived part's base, never the part), each once and never beside an anchor it is declared under, and a plain state of the root or a state of a region renders every anchor only some states render that it handles (one declared under a listed anchor, through that anchor).
 
 Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.flow.states.<name>.states.<name>.states.<name>.meta.renders`](#screen-flow-states-name-states-name-states-name-meta-renders).
+
+### Anchors several states render, named once
+
+<a id="rule-render-sets"></a>
+A flow may name a list of anchors several states render (`flow.meta.renders: { <set>: [anchors] }`); a state that lists the set's name in its `meta.renders` renders those anchors. A set serves two states or more.
+
+Keys it concerns: [`screen.flow.meta.renders`](#screen-flow-meta-renders).
 
 ### When an element shows beside others: with and without
 

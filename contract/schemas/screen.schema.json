@@ -985,7 +985,7 @@
           "description": "The state the screen opens in."
         },
         "meta": {
-          "description": "What the contract says of the flow beyond XState: its guards.",
+          "description": "What the contract says of the flow beyond XState: its guards and the sets of anchors its states render.",
           "type": "object",
           "properties": {
             "guards": {
@@ -1025,6 +1025,24 @@
                 ],
                 "description": "What a guard holds: a sentence, or the failure codes it holds for."
               }
+            },
+            "renders": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+              },
+              "additionalProperties": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                  "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                },
+                "description": "The anchors of the set, which each state that lists it renders."
+              },
+              "description": "Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors, as if it listed them; the loader writes them in. A set serves two states or more. See the rule `render-sets`."
             }
           },
           "additionalProperties": false
@@ -1086,9 +1104,18 @@
                         "minItems": 1,
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                          "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                              "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                              "description": "A set of `flow.meta.renders`, by name."
+                            }
+                          ]
                         }
                       }
                     },
@@ -1309,9 +1336,18 @@
                         "minItems": 1,
                         "type": "array",
                         "items": {
-                          "type": "string",
-                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                          "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                          "anyOf": [
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                              "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                            },
+                            {
+                              "type": "string",
+                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                              "description": "A set of `flow.meta.renders`, by name."
+                            }
+                          ]
                         }
                       }
                     },
@@ -1514,9 +1550,18 @@
                                         "minItems": 1,
                                         "type": "array",
                                         "items": {
-                                          "type": "string",
-                                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                                          "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                                          "anyOf": [
+                                            {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
+                                              "description": "An anchor (a data-testid): 2 to 5 dot-separated kebab-case segments."
+                                            },
+                                            {
+                                              "type": "string",
+                                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                                              "description": "A set of `flow.meta.renders`, by name."
+                                            }
+                                          ]
                                         }
                                       }
                                     },
