@@ -15,7 +15,7 @@
 
 import { isDeepStrictEqual } from 'node:util'
 
-import { isMap, isScalar, type Range } from 'yaml'
+import { isMap, isNode, isScalar, type Range } from 'yaml'
 
 import { entriesOf, isRecord, recordOf } from '../../records'
 import type { PlatformDefaults } from '../../schemas'
@@ -64,8 +64,9 @@ function parsedWithout(text: string, path: readonly string[], key: string): unkn
 
 /**
  * `text` without the member `key` of the object at `path`: from its key to the next member's key,
- * or, for the last one, from the end of the member before it, so its comma goes with it. The text
- * is read back and must hold the same JSON less that member, else this throws.
+ * or, for the last one, from the end of the member before it, whatever its value is (a scalar, an
+ * object or an array), so its comma goes with it. The text is read back and must hold the same JSON
+ * less that member, else this throws.
  */
 function withoutMember(text: string, path: readonly string[], key: string): string {
   const object = parseYamlDocument(text).getIn(path, true)
@@ -84,7 +85,7 @@ function withoutMember(text: string, path: readonly string[], key: string): stri
   const [from, to] =
     next !== undefined && isScalar(next.key)
       ? [start, spanOf(next.key.range)[0]]
-      : previous !== undefined && isScalar(previous.value) && previous.value.range
+      : isNode(previous?.value)
         ? [spanOf(previous.value.range)[1], end]
         : [start, end]
 

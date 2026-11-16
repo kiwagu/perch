@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -133,6 +133,57 @@ describe('the migration from version 5 to 6', () => {
     )
   })
 
+  it.each([
+    ['an object', '"x-perch": { "crdt": "text", "tags": { "kinds": [1, 2] } }'],
+    ['a one-line array', '"examples": ["a", "b"]'],
+    ['a multi-line array', '"examples": [\n            "a",\n            "b"\n          ]'],
+    ['a multi-line object', '"x-perch": {\n            "crdt": "text"\n          }'],
+  ])(
+    'drops a limit that is the last member after %s, its comma with it, and a second run changes nothing',
+    (_after, member) => {
+      const model = `{
+  "$defs": {
+    "thing": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          ${member},
+          "maxLength": 80
+        },
+        "note": { "type": "string", ${member.replace(/\n\s*/g, ' ')}, "maxLength": 80 },
+        "body": { "type": "string", "maxLength": 2000 }
+      }
+    }
+  }
+}
+`
+      const once = migrated(platform(80, VALUES), model).model
+
+      expect(once).toBe(
+        model.replace(
+          /,(\s*)"maxLength": 80(\s*)\}/g,
+          (_match, _gap, close: string) => `${close}}`,
+        ),
+      )
+      const kept: unknown = JSON.parse(`{ "type": "string", ${member} }`)
+
+      expect(JSON.parse(once)).toEqual({
+        $defs: {
+          thing: {
+            type: 'object',
+            properties: {
+              title: kept,
+              note: kept,
+              body: { type: 'string', maxLength: 2000 },
+            },
+          },
+        },
+      })
+      expect(migrated(platform(80, VALUES), once).model).toBe(once)
+    },
+  )
+
   it('changes nothing without a default', () => {
     const text = platform(null, VALUES)
 
@@ -214,6 +265,26 @@ describe('the migration from version 5 to 6 on a repository', () => {
 
     expect(migrate(moved, { write: true, current: SIX })).toEqual({ from: 6, to: 6, steps: [] })
     expect([read(moved, PLATFORM_FILE), read(moved, MODEL_FILE)]).toEqual(once)
+  })
+
+  it('migrates a model whose limit is the last member of a field after an object', () => {
+    const root = repository(80)
+    const ordered = read(root, MODEL_FILE).replace(
+      '"maxLength": 80,\n          "x-perch": { "crdt": "text" }',
+      '"x-perch": { "crdt": "text" },\n          "maxLength": 80',
+    )
+
+    expect(ordered).not.toBe(read(root, MODEL_FILE))
+    writeFileSync(join(root, MODEL_FILE), ordered)
+
+    expect(migrate(root, { write: true, current: SIX }).steps).toHaveLength(1)
+    expect(read(root, MODEL_FILE)).toBe(ordered.replace(',\n          "maxLength": 80', ''))
+    expect(checkContract(root).map(formatProblem)).toEqual([])
+
+    const once = [read(root, PLATFORM_FILE), read(root, MODEL_FILE)]
+
+    expect(migrate(root, { write: true, current: SIX })).toEqual({ from: 6, to: 6, steps: [] })
+    expect([read(root, PLATFORM_FILE), read(root, MODEL_FILE)]).toEqual(once)
   })
 
   it('only moves the version of a contract with no default, and the check keeps its limits', () => {
