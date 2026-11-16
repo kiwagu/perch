@@ -1102,7 +1102,7 @@
                   "type": "boolean"
                 },
                 "marksState": {
-                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The element carries `marksState={false}` in the JSX, which the sources check holds to the contract (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
+                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The kit takes it from the generated field facts, so a view may leave `marksState={false}` out; one it writes is held to the contract (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
                   "type": "boolean",
                   "const": false
                 },
@@ -1325,7 +1325,7 @@
                           "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
                         },
                         "paged": {
-                          "description": "The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, so its element carries `holdsInput={false}`. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.",
+                          "description": "The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the generated field facts carry for the kit, so a view may leave `holdsInput={false}` out. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.",
                           "type": "boolean",
                           "const": true
                         }

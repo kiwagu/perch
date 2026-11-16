@@ -1,19 +1,19 @@
 /**
- * The opt-outs the sources write against the contract. A `holdsInput` is `{false}`, on a field
- * the contract says holds no input, never on an anchor that is not a field, and every such field
- * rendered carries it; a `marksState` is `{false}` too, on a field the contract says drops its
- * state colour, never on an anchor that is not an input, a textarea or a select that holds input,
- * and every such field rendered carries it.
+ * The opt-outs the sources write against the contract. The kit takes a field's opt-outs from the
+ * generated field facts, so a view may leave them out, and nothing is wanted of a field rendered.
+ * One a view does write is held to the contract: a `holdsInput` is `{false}`, on a field the
+ * contract says holds no input, never on an anchor that is not a field; a `marksState` is
+ * `{false}` too, on a field the contract says drops its state colour, never on an anchor that is
+ * not an input, a textarea or a select that holds input.
  *
  * A paged list's size select is no declared anchor: the list derives it, and by its facet it is a
  * select that holds no input. `holdsInput={false}` on it is no problem, `{true}` is the default,
- * and a `marksState` sits on a select that holds no input. A size select rendered with
- * `testIdFor()` carries `holdsInput={false}` too, and is reported at that call without it. A flag
- * on any other part a `testIdFor()` derives is a problem: that part is no field.
+ * and a `marksState` sits on a select that holds no input. A flag on any other part a
+ * `testIdFor()` derives is a problem: that part is no field.
  */
 
 import { FIELD_KINDS, SIZE_SELECT, STATEFUL_FIELD_KINDS, testIdFor } from '../anchors'
-import type { DeclaredAnchor, InScreens } from '../check'
+import type { DeclaredAnchor } from '../check'
 import type { Problem } from '../files'
 
 import type { Collected } from './collect'
@@ -21,11 +21,6 @@ import type { Collected } from './collect'
 interface OptOuts {
   readonly collected: readonly Collected[]
   readonly contract: readonly DeclaredAnchor[]
-  readonly inScreens: InScreens
-  /** The anchors a source renders as a literal. */
-  readonly rendered: ReadonlySet<string>
-  /** The contract runs ahead of the app: a field not carrying its opt-out yet is allowed. */
-  readonly ahead: boolean
 }
 
 /** What the state colour check knows of an anchor a `marksState` can sit on. */
@@ -33,41 +28,33 @@ interface Colour {
   readonly kind: string
   readonly shows: boolean
   readonly dropped: boolean
-  readonly path: readonly PropertyKey[]
 }
 
-/** The size select each paged list of the contract derives, with where its list is declared. */
-const sizeSelectsOf = (
-  contract: readonly DeclaredAnchor[],
-): Map<string, { readonly path: readonly PropertyKey[] }> =>
-  new Map(
+/** The size select each paged list of the contract derives. */
+const sizeSelectsOf = (contract: readonly DeclaredAnchor[]): ReadonlySet<string> =>
+  new Set(
     contract
       .filter(({ def }) => def.derived?.includes(SIZE_SELECT) === true)
-      .map(({ anchor, at: path }) => [testIdFor(anchor, SIZE_SELECT), { path }]),
+      .map(({ anchor }) => testIdFor(anchor, SIZE_SELECT)),
   )
 
 /** The base of a part is declared when an anchor of the contract carries that name. */
 const isDeclared = (contract: readonly DeclaredAnchor[], base: string): boolean =>
   contract.some(({ anchor }) => anchor === base)
 
-function holdsInputProblems({
-  collected,
-  contract,
-  inScreens,
-  rendered,
-  ahead,
-}: OptOuts): Problem[] {
+function holdsInputProblems({ collected, contract }: OptOuts): Problem[] {
   const sizeSelects = sizeSelectsOf(contract)
-  const fields = new Map(
+  const holding = new Set(
     contract
-      .filter(({ def }) => FIELD_KINDS.has(def.kind))
-      .map(({ anchor, def, at: path }) => [anchor, { holds: def.holdsInput !== false, path }]),
+      .filter(({ def }) => FIELD_KINDS.has(def.kind) && def.holdsInput !== false)
+      .map(({ anchor }) => anchor),
   )
   const kinds = new Map<string, string>([
     ...contract.map(({ anchor, def }): [string, string] => [anchor, def.kind]),
-    ...[...sizeSelects.keys()].map((anchor): [string, string] => [anchor, 'select']),
+    ...[...sizeSelects].map((anchor): [string, string] => [anchor, 'select']),
   ])
-  const written = collected.flatMap(({ file, inputs }) =>
+
+  return collected.flatMap(({ file, inputs }) =>
     inputs.flatMap(({ anchor, base, holdsInput, line }) => {
       const kind = kinds.get(anchor)
       const place = { file, line }
@@ -98,7 +85,7 @@ function holdsInputProblems({
         ]
       }
 
-      return fields.get(anchor)?.holds === true
+      return holding.has(anchor)
         ? [
             {
               ...place,
@@ -108,77 +95,29 @@ function holdsInputProblems({
         : []
     }),
   )
-
-  // A field that holds no input (a choice that applies at once) says so on its element, once
-  // rendered; on a branch the contract may run ahead of that element, as of an anchor not rendered.
-  const optedOut = new Set(
-    collected.flatMap(({ inputs }) =>
-      inputs.filter(({ holdsInput }) => !holdsInput).map(({ anchor }) => anchor),
-    ),
-  )
-  const missing = [...fields]
-    .filter(
-      ([anchor, { holds }]) => !ahead && !holds && rendered.has(anchor) && !optedOut.has(anchor),
-    )
-    .map(([, { path }]) =>
-      inScreens(
-        path,
-        'does not hold input by the contract; its element carries holdsInput={false}',
-      ),
-    )
-
-  // A paged list's size select holds no input by its facet, and says so on its element once
-  // rendered. A derived part has no literal to point at: the problem sits at its `testIdFor()`.
-  const sizeSelectsMissing = collected.flatMap(({ file, derived }) =>
-    derived.flatMap(({ suffix, base, line }) => {
-      const anchor = base === undefined ? undefined : testIdFor(base, suffix)
-
-      return !ahead &&
-        suffix === SIZE_SELECT &&
-        anchor !== undefined &&
-        sizeSelects.has(anchor) &&
-        !optedOut.has(anchor)
-        ? [
-            {
-              file,
-              line,
-              message: `"${anchor}" holds no input by its paged list's facet; its element carries holdsInput={false}`,
-            },
-          ]
-        : []
-    }),
-  )
-
-  return [...written, ...missing, ...sizeSelectsMissing]
 }
 
-function marksStateProblems({
-  collected,
-  contract,
-  inScreens,
-  rendered,
-  ahead,
-}: OptOuts): Problem[] {
+function marksStateProblems({ collected, contract }: OptOuts): Problem[] {
   const sizeSelects = sizeSelectsOf(contract)
 
   // The state colour is shown by an input, a textarea or a select that holds input, the same test
-  // as the screens check; the contract may drop it, and the element says so once it is rendered.
+  // as the screens check; the contract may drop it.
   const shown = new Map<string, Colour>([
-    ...contract.map(({ anchor, def, at: path }): [string, Colour] => [
+    ...contract.map(({ anchor, def }): [string, Colour] => [
       anchor,
       {
         kind: def.kind,
         shows: STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true,
         dropped: def.marksState === false,
-        path,
       },
     ]),
-    ...[...sizeSelects].map(([anchor, { path }]): [string, Colour] => [
+    ...[...sizeSelects].map((anchor): [string, Colour] => [
       anchor,
-      { kind: 'select', shows: false, dropped: false, path },
+      { kind: 'select', shows: false, dropped: false },
     ]),
   ])
-  const written = collected.flatMap(({ file, colours }) =>
+
+  return collected.flatMap(({ file, colours }) =>
     colours.flatMap(({ anchor, base, marksState, line }) => {
       const colour = shown.get(anchor)
       const place = { file, line }
@@ -222,24 +161,6 @@ function marksStateProblems({
         : []
     }),
   )
-  const droppedOnElement = new Set(
-    collected.flatMap(({ colours }) =>
-      colours.filter(({ marksState }) => !marksState).map(({ anchor }) => anchor),
-    ),
-  )
-  const missing = [...shown]
-    .filter(
-      ([anchor, { shows, dropped }]) =>
-        !ahead && shows && dropped && rendered.has(anchor) && !droppedOnElement.has(anchor),
-    )
-    .map(([, { path }]) =>
-      inScreens(
-        path,
-        'shows no state colour by the contract; its element carries marksState={false}',
-      ),
-    )
-
-  return [...written, ...missing]
 }
 
 export const optOutProblems = (optOuts: OptOuts): Problem[] => [

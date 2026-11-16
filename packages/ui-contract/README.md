@@ -176,7 +176,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`) and `colours`
     (`marksState`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
-    `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the size select's opt-out); the
+    `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the opt-outs a view writes: the
+    kit takes them from the generated field facts, so a view may leave them out); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
     `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).

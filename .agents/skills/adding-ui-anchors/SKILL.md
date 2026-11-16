@@ -108,10 +108,12 @@ code and the tests follow; the checks hold them to the contract.
    `contract/REFERENCE.md#rule-flow-shorter-forms` and `contract/REFERENCE.md#rule-renders`
    (`references/patterns.md`, "What a state renders" and "A guard by failure code"). A toast
    code the contract derives is written only in the frame's map (`contract/REFERENCE.md#rule-success-toast`).
-   Whether a field holds input is derived, and the element of a field that holds none carries
-   `holdsInput={false}` (`contract/REFERENCE.md#rule-field-holds-input`); a field whose state
-   colour the contract turns off (`marksState: false`) carries `marksState={false}`, never a
-   form (`contract/REFERENCE.md#screen-anchors-name-marksstate`);
+   Whether a field holds input is derived (`contract/REFERENCE.md#rule-field-holds-input`), and a
+   field's state colour is turned off with `marksState: false`, never on a form
+   (`contract/REFERENCE.md#screen-anchors-name-marksstate`); the kit takes both from the
+   generated field facts, so a view may leave `holdsInput={false}` and `marksState={false}` out,
+   and one it writes is held to the contract (`contract/REFERENCE.md#rule-check-sources`,
+   `contract/REFERENCE.md#rule-emitted-modules`);
    a field that holds a secret says `secret: true`, and the loader derives its `visibility-button`
    from version 4 (a file of version 3 or below may list `derived: [ visibility-button ]`;
    `contract/REFERENCE.md#rule-kind-parts`, `contract/REFERENCE.md#rule-visibility-button`;
