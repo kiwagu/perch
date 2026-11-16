@@ -81,6 +81,7 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
                 type="email"
                 autoComplete="email"
                 required
+                marksState={false}
                 data-testid="user.forgot-password.email-input"
               />
             </Field>

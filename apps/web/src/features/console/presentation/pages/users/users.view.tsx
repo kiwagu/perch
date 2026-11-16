@@ -227,6 +227,7 @@ export function UsersView(props: UsersViewProps) {
                     props.onSize(size)
                   }
                 }}
+                holdsInput={false}
                 testId={testIdFor('console.users.list', 'size-select')}
               />
             </div>

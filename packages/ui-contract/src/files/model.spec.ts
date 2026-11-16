@@ -114,6 +114,31 @@ describe('loadModel', () => {
       '$defs.thing.properties.size: a string field that is not readonly needs x-perch.crdt ("none" for last-writer-wins)',
     ])
   })
+  it('carries the numeric bounds of a field, and no keyword a value never has', () => {
+    writeModel((document) => {
+      const properties = document.$defs['thing']?.['properties'] as Record<string, unknown>
+
+      properties['rank'] = {
+        type: 'integer',
+        minimum: 1,
+        maximum: 10,
+        exclusiveMaximum: 11,
+        multipleOf: 1,
+        'x-perch': { crdt: 'none' },
+      }
+    })
+
+    const { model, problems } = loadModel(root)
+
+    expect(problems).toEqual([])
+    expect(model?.entities['thing']?.fields['rank']).toStrictEqual({
+      type: 'integer',
+      minimum: 1,
+      maximum: 10,
+      readonly: false,
+      crdt: 'none',
+    })
+  })
   it('carries the reads an action says it changes, and none where it says none', () => {
     writeModel((document) => {
       const actions = thingActions(document)

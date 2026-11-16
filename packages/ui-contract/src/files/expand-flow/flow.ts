@@ -17,6 +17,7 @@ import { controlRegionOf, withDerivedRegions } from './controls'
 import { effectsOf, transitionsOf } from './effects'
 import type { DerivedToast, Expansion, ExpansionIssue, FlowLookups } from './expansion'
 import { patternOf } from './patterns'
+import { withRenderSets } from './render-sets'
 import { withDefaultOutcomes } from './requests'
 import { withDerivedToasts } from './toasts'
 
@@ -108,12 +109,14 @@ function codeGuardsOf(flow: Readonly<Record<string, unknown>>): Map<string, read
 
 /**
  * `flow` expanded, with the issues that kept a part of it from expanding (that part is left as
- * written), the toasts it derived and the codes it writes on the toast anchor itself. `lookups` give the codes an anchor carries and an action's
- * failure shows, for `show: <anchor>`, the screen's buttons bound to one action and the frame's
- * toast anchor; `at` is where the flow sits in its file.
+ * written), the toasts it derived and the codes it writes on the toast anchor itself. The sets of
+ * anchors its states list are written out before any other step (`render-sets.ts`). `lookups`
+ * give the codes an anchor carries and an action's failure shows, for `show: <anchor>`, the
+ * screen's buttons bound to one action and the frame's toast anchor; `at` is where the flow sits
+ * in its file.
  */
 export function expandFlow(
-  flow: unknown,
+  written: unknown,
   lookups: FlowLookups,
   at: readonly PropertyKey[] = ['flow'],
 ): {
@@ -122,20 +125,22 @@ export function expandFlow(
   toasts: DerivedToast[]
   writtenToasts: string[]
 } {
-  if (!isRecord(flow) || !isRecord(flow['states'])) {
-    return { flow, issues: [], toasts: [], writtenToasts: [] }
+  if (!isRecord(written) || !isRecord(written['states'])) {
+    return { flow: written, issues: [], toasts: [], writtenToasts: [] }
   }
 
+  const sets = withRenderSets(written, at)
+  const flow = sets.flow
   const expansion: Expansion = {
     ...lookups,
     codeGuards: codeGuardsOf(flow),
-    issues: [],
+    issues: [...sets.issues],
     toasts: [],
     writtenToasts: [],
   }
 
   const states = Object.fromEntries(
-    Object.entries(flow['states']).map(([name, state]) => [
+    Object.entries(recordOf(flow['states'])).map(([name, state]) => [
       name,
       stateOf(state, expansion, [...at, 'states', name]),
     ]),

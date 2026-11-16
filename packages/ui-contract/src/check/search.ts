@@ -6,6 +6,8 @@
  * knows already: on a screen with a paged list, the `size` of its `search` is chosen by the
  * derived `<list>.size-select.option` (`derive/paging.ts`), so its enum values name none, and
  * an `x-perch` written on it is refused (a screen file never writes a derived part's facts).
+ * A search parameter a mail's link derives (`mailSearchesOf`) has no control either, and needs
+ * none: a link carries it, no control of the page sets it, so its enum values name none.
  * That the schemas are flat objects of primitives is the Zod schema's job (`flatJsonSchema`);
  * that each is a valid JSON Schema (a `pattern` that compiles, `required` without repeats) is
  * Ajv's, and so, once it is, is that every one of a property's `examples` matches that property
@@ -19,6 +21,7 @@ import {
   type Binding,
   createValidator,
   jsonSchemaProblems,
+  mailSearchesOf,
   type Problem,
   SCREENS_DIR,
   type Vocabulary,
@@ -33,6 +36,7 @@ import {
   locate,
   own,
 } from './contract'
+import { editionOf } from './editions'
 import { pagedListOf } from './lookups'
 import { parameterSample } from './parameter-sample'
 import { parseRoutePath } from './routes'
@@ -176,6 +180,7 @@ function routeSchemaProblems(
   path: string | undefined,
   at: readonly PropertyKey[],
   derived?: DerivedControl,
+  mailed?: ReadonlySet<string>,
 ): Problem[] {
   const validity = validityProblems(lookups, screen, schema, at)
   const filled = path === undefined ? [] : requiredParameters(path)
@@ -187,7 +192,7 @@ function routeSchemaProblems(
           ...exampleProblems(lookups, schema, path !== undefined, at),
           ...unsampledProblems(lookups, schema, filled, at),
         ]),
-    ...schemaProblems(lookups, schema, at, derived),
+    ...schemaProblems(lookups, schema, at, derived, mailed),
   ]
 }
 
@@ -207,6 +212,7 @@ function schemaProblems(
   schema: FlatSchema | undefined,
   at: readonly PropertyKey[],
   derived?: DerivedControl,
+  mailed: ReadonlySet<string> = new Set(),
 ): Problem[] {
   const { known, inScreens } = lookups
 
@@ -228,7 +234,7 @@ function schemaProblems(
     return [
       ...control(perch?.control, [...here, 'x-perch', 'control']),
       ...enumValues
-        .filter((value) => !has(values, value))
+        .filter((value) => !mailed.has(name) && !has(values, value))
         .map((value) =>
           inScreens(here, `the enum value "${value}" has no control under x-perch.values`),
         ),
@@ -261,6 +267,7 @@ export function searchProblems(contract: Contract): Problem[] {
     const paged = pagedListOf(screen)
     const derived =
       paged === undefined ? undefined : { property: SIZE, control: sizeOptionOf(paged.anchor) }
+    const mailed = mailSearchesOf(contract.screens.platform, screen.id, editionOf(contract))
 
     return screen.bindings.flatMap((binding, number) => {
       const at = ['screens', index, 'bindings', number]
@@ -275,6 +282,7 @@ export function searchProblems(contract: Contract): Problem[] {
           undefined,
           [...at, 'search'],
           derived,
+          mailed,
         ),
         ...(binding.retain ?? []).flatMap((name, position) =>
           searchNames.includes(name)

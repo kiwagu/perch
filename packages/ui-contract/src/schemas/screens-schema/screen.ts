@@ -39,9 +39,16 @@ const screenSchemaOf = <F extends z.ZodType, A extends z.ZodType>(flow: F, ancho
       states: z
         .record(z.string(), z.string().describe(DESCRIPTION_PURPOSES.containerState))
         .optional()
-        .describe('The container states of the screen, each with what is visible in it.'),
+        .describe(
+          "The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
+        ),
       flow: flow.optional(),
-      wireframe: z.string().optional().describe('A text sketch of the layout.'),
+      wireframe: z
+        .string()
+        .optional()
+        .describe(
+          "A text sketch of the layout: the default state of the screen in Playwright's aria snapshot grammar.",
+        ),
     })
     .superRefine((screen, context) => {
       if (screen.frame !== true && screen.bindings.length === 0) {

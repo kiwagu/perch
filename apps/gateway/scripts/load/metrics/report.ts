@@ -1,3 +1,5 @@
+import { oneDecimal as one, tableLine } from './table'
+
 /** What one step measured. */
 export interface StepReport {
   devices: number
@@ -39,10 +41,7 @@ const COLUMNS = [
   'degraded',
 ] as const
 
-const line = (cells: readonly string[]): string =>
-  cells.map((cell, i) => cell.padEnd(COLUMNS[i]?.length ?? 0)).join('  ')
-
-const one = (value: number): string => (Number.isNaN(value) ? '-' : value.toFixed(1))
+const line = (cells: readonly string[]): string => tableLine(COLUMNS, cells)
 
 /** The header line of the report table. */
 export const TABLE_HEADER = line(COLUMNS)

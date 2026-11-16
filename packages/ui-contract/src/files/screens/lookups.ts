@@ -14,6 +14,7 @@ export interface Lookups {
   readonly failureOf: FailureOf
   readonly toast: string | undefined
   readonly platformToasts: Readonly<Record<string, string>>
+  readonly edition: number
 }
 
 /** The codes each anchor of the screens as read carries, for `show: <anchor>`. */

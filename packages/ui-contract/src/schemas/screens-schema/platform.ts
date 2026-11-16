@@ -1,8 +1,8 @@
 /**
- * What the platform offers every screen: its actions, the events it raises in a flow, the
- * actions that leave what the user typed behind and how every leave that would lose it asks
- * first, the composites it declares once for the screens that opt in, its reserved anchors, its
- * status line.
+ * What the platform offers every screen: the length a value takes where it names none, the values
+ * its parameters refer to, its actions, the events it raises in a flow, the actions that leave
+ * what the user typed behind and how every leave that would lose it asks first, the composites it
+ * declares once for the screens that opt in, its reserved anchors, its status line.
  */
 
 import { z } from '@workspace/zod'
@@ -19,13 +19,37 @@ import { DESCRIPTION_PURPOSES } from '../description-purposes'
 
 import { actionNameSchema, platformActionNameSchema } from './anchor'
 import { platformMailSchema, platformNoticeSchema } from './mail'
+import { valueKeywords, valueRefSchema, valueSchema } from './value'
 
 const actionParameterSchema = z
   .strictObject({
-    type: z.string().describe('The type of the value: string, boolean, number.'),
+    type: z
+      .string()
+      .optional()
+      .describe('The type of the value: string, boolean, number; left out where `value` gives it.'),
+    value: valueRefSchema.optional(),
+    ...valueKeywords,
+    optional: z
+      .literal(true)
+      .optional()
+      .describe('The action runs without the parameter: a field that passes it may stay empty.'),
+    codes: z
+      .array(codeSchema)
+      .min(1)
+      .optional()
+      .describe(
+        'The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.',
+      ),
     description: z.string().describe(DESCRIPTION_PURPOSES.actionParameter),
   })
-  .describe('One parameter of a platform action.')
+  .refine((parameter) => parameter.type !== undefined || parameter.value !== undefined, {
+    message: 'a parameter writes its `type` or its `value`',
+  })
+  .describe(
+    'One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`.',
+  )
+
+export type PlatformParameter = z.infer<typeof actionParameterSchema>
 
 const platformActionSchema = z
   .strictObject({
@@ -34,7 +58,11 @@ const platformActionSchema = z
       .record(z.string().regex(/^[a-z][a-zA-Z0-9]*$/), actionParameterSchema)
       .describe('The parameters by name.'),
     result: z.string().describe('What holds once the action succeeds.'),
-    codes: z.array(codeSchema).describe('The codes a failure of the action shows.'),
+    codes: z
+      .array(codeSchema)
+      .describe(
+        'The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.',
+      ),
     roles: z.array(roleSchema).optional().describe('The roles that may run the action.'),
     paged: z
       .strictObject({
@@ -101,6 +129,22 @@ const unsavedInputSchema = z
     'Every leave that would lose what the user typed and did not save, and how the app asks first: through the question, by the browser, never, or it cannot.',
   )
 
+/** What a value takes where it writes nothing of its own: from version 6, its length. */
+export const platformDefaultsSchema = z
+  .strictObject({
+    maxLength: z
+      .int()
+      .min(1)
+      .describe(
+        'The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
+      ),
+  })
+  .describe(
+    'What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`.',
+  )
+
+export type PlatformDefaults = z.infer<typeof platformDefaultsSchema>
+
 /** A composite the platform declares once, derived into every screen that opts in. */
 export const platformCompositeSchema = z
   .strictObject({
@@ -129,6 +173,13 @@ export type PlatformComposite = z.infer<typeof platformCompositeSchema>
 
 export const platformSchema = z
   .strictObject({
+    defaults: platformDefaultsSchema.optional(),
+    values: z
+      .record(kebabNameSchema, valueSchema)
+      .optional()
+      .describe(
+        'The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.',
+      ),
     actions: z
       .record(platformActionNameSchema, platformActionSchema)
       .describe('The platform actions by name: `platform.<name>` in a binding.'),
