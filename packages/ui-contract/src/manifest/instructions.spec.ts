@@ -173,10 +173,20 @@ describe('instructionsOf', () => {
       "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists is rendered in every state, one that a state lists is rendered only in the states that list it, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user: an anchor a state does not render is absent from the page or hidden on it.",
     )
   })
-  it('says a guard is a sentence or the failure codes it holds for, on an onError only', () => {
+  it('says a guard is a sentence, the failure codes it holds for, on an onError only, or one of a password pair', () => {
     expect(instructions.screenMap).toContain(
-      'A guard of `meta.guards` is a sentence saying when it holds, or `{ "codes": [<code>, …] }`, which guards only a branch of an invoke\'s `onError` and holds when its action failed with one of those codes.',
+      'A guard of `meta.guards` is a sentence saying when it holds; `{ "codes": [<code>, …] }`, which guards only a branch of an invoke\'s `onError` and holds when its action failed with one of those codes; or one the contract derives for a password pair, whose confirmation, a secret input, names in `confirms` the input it repeats: ',
     )
+  })
+  it('says what each guard of a password pair holds, by its shape', () => {
+    for (const shape of [
+      '`{ "confirms": "differs" }`, the confirmation is not the same as the confirmed input',
+      '`{ "confirms": "strays" }`, the confirmation is no longer how the confirmed input begins: a character differs, or it is longer',
+      '`{ "confirms": "follows" }`, the confirmation is how the confirmed input begins, all of it or a part, or is empty',
+      '`{ "composite": "breaks" }`, the confirmed input breaks one of the rules of its composite\'s list',
+    ]) {
+      expect(instructions.screenMap).toContain(shape)
+    }
   })
   it('says an activity is a machine of visits to screens, which the flows of the screens do', () => {
     expect(instructions.activities).toContain('a state is a visit to a screen')

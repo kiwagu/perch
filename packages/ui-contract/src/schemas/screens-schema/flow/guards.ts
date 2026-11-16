@@ -35,7 +35,7 @@ export const pairGuardSchema = z
     confirms: z
       .enum(PAIR_RELATIONS)
       .describe(
-        'What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`.',
+        'What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`, each the meaning of the rule `pair-differs`, `pair-strays` or `pair-follows`.',
       ),
   })
   .describe(
@@ -47,7 +47,9 @@ export const compositeGuardSchema = z
   .strictObject({
     composite: z
       .literal('breaks')
-      .describe('The input the confirmation confirms breaks a rule of its composite.'),
+      .describe(
+        'The input the confirmation confirms breaks a rule of its composite: the meaning of the rule `composite-breaks`.',
+      ),
   })
   .describe(
     `Derived: a guard on the composite of the input the screen's password pair confirms; a screen file never writes it. ${PAIR_RULE}`,

@@ -1483,7 +1483,7 @@
                                 "strays",
                                 "follows"
                               ],
-                              "description": "What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`."
+                              "description": "What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`, each the meaning of the rule `pair-differs`, `pair-strays` or `pair-follows`."
                             }
                           },
                           "required": [
@@ -1498,7 +1498,7 @@
                             "composite": {
                               "type": "string",
                               "const": "breaks",
-                              "description": "The input the confirmation confirms breaks a rule of its composite."
+                              "description": "The input the confirmation confirms breaks a rule of its composite: the meaning of the rule `composite-breaks`."
                             }
                           },
                           "required": [
