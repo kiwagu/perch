@@ -1,6 +1,6 @@
 /** What a seed client is given, what it answers, and what its steps use of its device. */
 
-import type { ResultAsync } from 'neverthrow'
+import type { Result, ResultAsync } from 'neverthrow'
 
 import type { BusError } from '@workspace/cqrs'
 import type { AuthUser, DataError, SignInInput } from '@workspace/data'
@@ -9,11 +9,17 @@ import type { ProfileId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { NoteRow, NotesService } from '../../features/organisation/application/notes.service'
+import type {
+  AccountStartFrom,
+  AccountStartService,
+} from '../../features/user/application/account-start.service'
 import type { ProfileRow, ProfileService } from '../../features/user/application/profile.service'
 import type {
   SettingsRow,
   SettingsService,
 } from '../../features/user/application/settings/settings.service'
+import type { SignInError } from '../../features/user/application/sign-in.service'
+import type { InvitationsPort } from '../../platform/invitations.port'
 import type { OrganisationsPort } from '../../platform/organisations.port'
 import type { SessionPort } from '../../platform/session.port'
 import type { CommandLogger } from '../commands'
@@ -72,6 +78,14 @@ export interface OrganisationView {
 export type SeedError = DataError | BusError
 
 /**
+ * What the invite of a member answers: the id of the invitation the member accepts, or that the
+ * account is a member already, which leaves nothing to accept.
+ */
+export type Invited =
+  | { readonly kind: 'invited'; readonly invitation: string }
+  | { readonly kind: 'already-member' }
+
+/**
  * One device, signed in as one account at a time: signing in as the next account leaves the
  * previous one, and closing leaves the last one. Leaving closes the account's space and drops
  * its in-memory database, but never signs the account out, which would end its session.
@@ -95,8 +109,17 @@ export interface SeedClient {
     readonly key: string
     readonly name: string
   }): ResultAsync<Membership, SeedError>
-  /** Invites the existing account at `email` into the organisation as the signed-in administrator; a member already in it is found. */
-  ensureMember(key: string, email: string): ResultAsync<void, SeedError>
+  /**
+   * Invites the existing account at `email` into the organisation as a member, as the signed-in
+   * administrator: answers the invitation's id; an account that is a member already is found
+   * (`already-member`). The account is a member once it accepts (`ensureJoined`).
+   */
+  ensureInvited(key: string, email: string): ResultAsync<Invited, SeedError>
+  /**
+   * Accepts the invitation by its id as the signed-in account, which becomes a member of its
+   * organisation, and waits until the gateway acknowledged everything.
+   */
+  ensureJoined(invitation: string): ResultAsync<Membership, SeedError>
   /** Signs in, makes the organisation current and reads its notes once the gateway's copy has arrived; writes nothing. */
   readOrganisation(key: string, input: SignInInput): ResultAsync<OrganisationView, SeedError>
   /** Signs in and reads the profile and the settings once the gateway's copy of the account's region has arrived; writes nothing. */
@@ -104,11 +127,23 @@ export interface SeedClient {
   close(): Promise<void>
 }
 
+/** The app's starts of new accounts, as the seed runs them for the account its device is signed in as. */
+export interface SeedStarts {
+  /**
+   * Keeps the start of `user`'s account under the sign-in current on the device, to finish after
+   * its pull (`AccountStartService.keepAfterPull`); with nobody signed in it keeps nothing and fails.
+   */
+  keepAfterPull(user: AuthUser, from: AccountStartFrom): Result<void, SignInError>
+  readonly resumeAfterPull: AccountStartService['resumeAfterPull']
+}
+
 /** The seed client's device as its account steps use it: its session, services and mailbox. */
 export interface SeedDevice {
   readonly session: Pick<SessionPort, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
-  readonly profiles: Pick<ProfileService, 'read' | 'createProfile' | 'updateBio'>
-  readonly settings: Pick<SettingsService, 'read' | 'createSettings' | 'updateLocale'>
+  readonly profiles: Pick<ProfileService, 'read' | 'updateBio'>
+  readonly settings: Pick<SettingsService, 'read' | 'updateLocale'>
+  /** The app's starts of new accounts, which create an account's settings and profile. */
+  readonly starts: SeedStarts
   readonly inbox: Inbox
   /**
    * Signs in through `signIn` and waits for the first catch-up, which brings what the gateway
@@ -123,6 +158,7 @@ export interface SeedDevice {
 export interface SeedOrganisationDevice {
   readonly session: Pick<SessionPort, 'signIn' | 'memberships' | 'selectTenant' | 'currentTenant'>
   readonly organisations: Pick<OrganisationsPort, 'create' | 'invite'>
+  readonly invitations: Pick<InvitationsPort, 'accept'>
   readonly notes: Pick<NotesService, 'read'>
   enter(signIn: () => ResultAsync<AuthUser, SeedError>): ResultAsync<AuthUser, SeedError>
   settle(): ResultAsync<void, SeedError>

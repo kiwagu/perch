@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 
 import { useT } from '@workspace/i18n'
-import type { IdentityId, NoteId } from '@workspace/ids'
+import type { IdentityId, InvitationId, NoteId } from '@workspace/ids'
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -9,8 +9,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/componen
 import type {
   OrganisationErrors,
   OrganisationEvent,
-} from '../../../application/organisation.machine'
+  TenantRole,
+} from '../../../application/organisation-machine'
 import { OrganisationCreate } from '../../components/organisation-create/organisation-create.view'
+import {
+  type InviteDraft,
+  OrganisationInvite,
+} from '../../components/organisation-invite/organisation-invite.view'
 import {
   type MemberItem,
   OrganisationMembers,
@@ -19,8 +24,17 @@ import {
   type NoteItem,
   OrganisationNotes,
 } from '../../components/organisation-notes/organisation-notes.view'
+import {
+  OrganisationReceived,
+  type ReceivedItem,
+} from '../../components/organisation-received/organisation-received.view'
+import {
+  OrganisationSent,
+  type SentItem,
+} from '../../components/organisation-sent/organisation-sent.view'
+import { roleLabel } from '../../components/role-words'
 
-export type { MemberItem, NoteItem, OrganisationErrors }
+export type { InviteDraft, MemberItem, NoteItem, OrganisationErrors, ReceivedItem, SentItem }
 
 /** An organisation the signed-in identity belongs to, with its role there. */
 export interface OrganisationChoice {
@@ -37,6 +51,10 @@ export interface OrganisationViewProps {
   readonly notes: readonly NoteItem[] | undefined
   /** The current organisation's members, shown to an administrator; undefined until they are read. */
   readonly members?: readonly MemberItem[] | undefined
+  /** The current organisation's invitations not accepted yet, shown to an administrator; undefined until read. */
+  readonly sent?: readonly SentItem[] | undefined
+  /** The invitations to the account's email, in every state; undefined until they are read. */
+  readonly received?: readonly ReceivedItem[] | undefined
   readonly errors?: OrganisationErrors
   /** Whether the page's flow takes the event now: a control is enabled exactly while it does. */
   readonly can: (event: OrganisationEvent) => boolean
@@ -52,8 +70,16 @@ export interface OrganisationViewProps {
   readonly onOpenEdit: (id: NoteId) => void
   readonly onEditNote: (input: { readonly id: NoteId; readonly text: string }) => Promise<boolean>
   readonly onDeleteNote: (id: NoteId) => void
-  readonly onInvite: (email: string) => Promise<boolean>
+  /** What the invitation form's fields hold, and a change of them. */
+  readonly invite: InviteDraft
+  readonly onInviteChange: (draft: InviteDraft) => void
+  readonly onInvite: (email: string, role: TenantRole) => Promise<boolean>
+  readonly onSetRole: (id: IdentityId, role: TenantRole) => void
   readonly onRemoveMember: (id: IdentityId) => void
+  readonly onCopy: (id: InvitationId) => void
+  readonly onRevoke: (id: InvitationId) => void
+  readonly onAccept: (id: InvitationId) => void
+  readonly onDecline: (id: InvitationId) => void
 }
 
 function OrganisationHeader(props: {
@@ -78,7 +104,7 @@ function OrganisationHeader(props: {
           data-testid="organisation.page.role-badge"
           data-value={current.role}
         >
-          {t(current.role === 'admin' ? 'organisation.role.admin' : 'organisation.role.member')}
+          {roleLabel(t, current.role)}
         </p>
         {props.organisations.length > 1 ? (
           <OptionSelect
@@ -101,8 +127,9 @@ function OrganisationHeader(props: {
 
 /**
  * The organisation page: without memberships, a way to create the first organisation; with
- * them, the current organisation's notes for every member, and its members for an administrator;
- * with memberships none of whose databases opened on this device, a line that says so.
+ * them, the current organisation's notes for every member, and its members and invitations for
+ * an administrator; with memberships none of whose databases opened on this device, a line that
+ * says so. The invitations for the account show in every state, above the create form.
  */
 export function OrganisationView(props: OrganisationViewProps) {
   const t = useT()
@@ -132,25 +159,30 @@ export function OrganisationView(props: OrganisationViewProps) {
               onDelete={props.onDeleteNote}
             />
             {current.role === 'admin' ? (
-              <OrganisationMembers
-                members={props.members}
-                error={props.errors?.members}
-                can={props.can}
-                onInvite={props.onInvite}
-                onRemove={props.onRemoveMember}
-              />
+              <>
+                <OrganisationMembers
+                  members={props.members}
+                  can={props.can}
+                  onSetRole={props.onSetRole}
+                  onRemove={props.onRemoveMember}
+                >
+                  <OrganisationInvite
+                    draft={props.invite}
+                    error={props.errors?.members}
+                    can={props.can}
+                    onChange={props.onInviteChange}
+                    onInvite={props.onInvite}
+                  />
+                </OrganisationMembers>
+                <OrganisationSent
+                  invitations={props.sent}
+                  can={props.can}
+                  onCopy={props.onCopy}
+                  onRevoke={props.onRevoke}
+                />
+              </>
             ) : null}
           </Fragment>
-          <Button
-            type="button"
-            variant="outline"
-            aria-expanded={props.creating}
-            disabled={!props.can({ type: 'organisation.create.toggle-button' })}
-            onClick={props.onToggleCreate}
-            data-testid="organisation.create.toggle-button"
-          >
-            {t('organisation.create.toggle')}
-          </Button>
         </>
       ) : (
         // No membership, or memberships none of whose databases opened on this device.
@@ -163,6 +195,25 @@ export function OrganisationView(props: OrganisationViewProps) {
           {unavailable ? t('organisation.unavailable') : t('organisation.none')}
         </p>
       )}
+      <OrganisationReceived
+        invitations={props.received}
+        error={props.errors?.received}
+        can={props.can}
+        onAccept={props.onAccept}
+        onDecline={props.onDecline}
+      />
+      {current ? (
+        <Button
+          type="button"
+          variant="outline"
+          aria-expanded={props.creating}
+          disabled={!props.can({ type: 'organisation.create.toggle-button' })}
+          onClick={props.onToggleCreate}
+          data-testid="organisation.create.toggle-button"
+        >
+          {t('organisation.create.toggle')}
+        </Button>
+      ) : null}
       {/* Closed, the create form is hidden and keeps what was typed; another organisation starts it afresh. */}
       <div key={current?.key ?? ''} hidden={current !== undefined && !props.creating}>
         <OrganisationCreate

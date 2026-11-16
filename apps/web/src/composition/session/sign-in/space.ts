@@ -7,11 +7,11 @@
 import { err, errAsync, ok, ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, dataError } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
 import { leadership, lockName } from '@workspace/replica/sync'
 
 import type { openIdentitySpace } from '../../identity-space'
 import { spaceCode } from '../../space-code'
+import type { KeptSession, SavedSignIn } from '../../storage'
 import type { SessionHost } from '../host'
 import type { SpaceStatus } from '../open-space'
 import type { SessionOptions, TransportContext } from '../options'
@@ -26,20 +26,21 @@ export interface OpenSpaceDeps {
   readonly host: SessionHost
   readonly organisations: SessionOrganisations
   readonly barrier: WriteBarrier
-  /** What the channel of an identity's space tells the session (`SessionElsewhere`). */
-  readonly transportContext: (identity: IdentityId) => TransportContext
+  /** What the channel of a sign-in's space tells the session (`SessionElsewhere`). */
+  readonly transportContext: (session: KeptSession) => TransportContext
 }
 
 /**
- * Opens the space of `identity` and makes it the session's, unless the session was closed
- * meanwhile (`generation` is no longer the latest): then the space closes again and the open fails.
- * A space whose code does not load closes the database it opened for it.
+ * Opens the space of the sign-in `signedIn` and makes it the session's, unless the session was
+ * closed meanwhile (`generation` is no longer the latest): then the space closes again and the
+ * open fails. A space whose code does not load closes the database it opened for it.
  */
 export function openSpaceOf(
   deps: OpenSpaceDeps,
-  identity: AuthUser,
+  signedIn: SavedSignIn,
   generation: number,
 ): ResultAsync<AuthUser, DataError> {
+  const identity = signedIn.user
   const options = deps.host.options
   // The identity's database opens while the space's code loads: its engine in its worker, beside
   // Loro's on the page.
@@ -59,16 +60,17 @@ export function openSpaceOf(
         ),
       ).andThen(() => errAsync(error)),
     )
-    .andThen((code) => openSpaceWith(deps, code.openIdentitySpace, identity, generation, openLocal))
+    .andThen((code) => openSpaceWith(deps, code.openIdentitySpace, signedIn, generation, openLocal))
 }
 
 function openSpaceWith(
   deps: OpenSpaceDeps,
   open: typeof openIdentitySpace,
-  identity: AuthUser,
+  signedIn: SavedSignIn,
   generation: number,
   openLocal: SessionOptions['openLocal'],
 ): ResultAsync<AuthUser, DataError> {
+  const identity = signedIn.user
   const host = deps.host
   const options = host.options
   const status: SpaceStatus = { live: true }
@@ -85,9 +87,9 @@ function openSpaceWith(
     openTenantLocal: options.openTenantLocal,
     deleteTenantLocal: options.deleteTenantLocal,
     tenantDatabases: deps.organisations.databases(identity.id),
-    ...deps.organisations.saved(identity.id),
+    ...deps.organisations.saved(signedIn.session),
     schema: options.schema,
-    transport: () => options.transport(deps.transportContext(identity.id)),
+    transport: () => options.transport(deps.transportContext(signedIn.session)),
     leadership: lead,
     hints,
     clock: options.clock,
@@ -111,7 +113,7 @@ function openSpaceWith(
         return err(closedDuringSignIn())
       }
 
-      host.opened({ space, leadership: lead, status, hints, heard })
+      host.opened({ space, signIn: signedIn.session, leadership: lead, status, hints, heard })
       space.visibility(options.visibility.current())
       options.onStep?.('ready')
       host.emit(identity)

@@ -15,6 +15,8 @@ export type DataErrorCode =
   | 'data:REGION_RELOADED'
   | 'data:OTHER_ACCOUNT'
   | 'data:EMAIL_NOT_VERIFIED'
+  | 'data:ACCOUNT_BANNED'
+  | 'data:DEVICE_LIMIT'
   | 'data:LINK_INVALID'
   | 'data:LINK_EXPIRED'
   | 'data:PASSWORD_REJECTED'

@@ -2,14 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
+import { signedIn, signedOut } from '../__fixtures__/signed-in'
+
 import { memoryStorage } from './key-value'
-import { forgetDevice, saveDevice } from './signed-in'
+import { savedSession } from './signed-in'
 import { savedTenantDatabases, saveTenantDatabases, TENANT_DATABASES_KEY } from './tenant-databases'
 
 const ann = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
   token: 'token-1',
-  memberships: [],
 }
 
 describe('the tenant databases on this device', () => {
@@ -100,13 +101,14 @@ describe('the tenant databases on this device', () => {
     expect(storage.get(TENANT_DATABASES_KEY)).toBeUndefined()
   })
 
-  it('outlives forgetDevice: databases kept for the next sign-in stay counted', () => {
+  it('outlives the sign-out: databases kept for the next sign-in stay counted', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
     saveTenantDatabases(storage, ann.identity.id, ['acme'])
-    forgetDevice(storage)
+    signedOut(storage)
 
+    expect(savedSession(storage)).toBeUndefined()
     expect(savedTenantDatabases(storage, ann.identity.id)).toEqual(['acme'])
   })
 })

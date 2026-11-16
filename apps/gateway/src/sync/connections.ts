@@ -1,6 +1,8 @@
 import { type DataError, dataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
-import type { Membership } from '@workspace/replica/protocol'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
+
+import type { EndCode } from './sync-connection'
 
 /** A device's open connection, as far as its identity's memberships and sessions go. */
 export interface MembershipsListener {
@@ -15,11 +17,17 @@ export interface MembershipsListener {
    */
   revoke(region: string): Promise<void>
   /**
+   * The identity's role in the organisation of `region` is now `role`: the device's next pushes
+   * there are judged by it at once, whatever it is doing, the ones it has queued already
+   * included. Nothing is sent: the memberships follow. Resolves once that holds; never rejects.
+   */
+  rerole(region: string, role: TenantRole): Promise<void>
+  /**
    * The device was signed out, from another device or over one of its sockets, or signed in
    * again into a new session: its socket closes with `code` at once, whatever it is doing.
    * Resolves once it closed.
    */
-  end(code: number): Promise<void>
+  end(code: EndCode): Promise<void>
   /**
    * Another connection of the device took over: the socket closes at once, without signing the
    * device out; the device connects again after such a close.
@@ -135,12 +143,20 @@ export class ConnectionRegistry {
   }
 
   /**
+   * Judges the pushes of every live connection of `identity` into `region` by `role` from now
+   * on; resolves once each does.
+   */
+  async rerole(identity: IdentityId, region: string, role: TenantRole): Promise<void> {
+    await Promise.all(this.forIdentity(identity).map((each) => each.rerole(region, role)))
+  }
+
+  /**
    * Closes with `code` every live connection of `device` of `identity`, or of every device of
    * the identity when `device` is undefined, and moves the epoch, recorded against what it names;
    * resolves once each closed. A connection that fails to close is reported and the others are
    * closed all the same. Never rejects.
    */
-  async close(identity: IdentityId, device: string | undefined, code: number): Promise<void> {
+  async close(identity: IdentityId, device: string | undefined, code: EndCode): Promise<void> {
     this.#epoch += 1
 
     if (device === undefined) {
@@ -156,7 +172,7 @@ export class ConnectionRegistry {
     )
   }
 
-  async #end(entry: Entry, code: number): Promise<void> {
+  async #end(entry: Entry, code: EndCode): Promise<void> {
     try {
       await entry.connection.end(code)
     } catch (cause) {

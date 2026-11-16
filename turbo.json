@@ -19,7 +19,8 @@
     "MAILBOX_DEV_URL",
     "GATEWAY_URL",
     "LOG_LEVEL",
-    "LOG_FORMAT"
+    "LOG_FORMAT",
+    "VITEST_MAX_WORKERS"
   ],
   "tasks": {
     "build": {
@@ -42,8 +43,23 @@
       "dependsOn": ["^build"],
       "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
     },
+    "@workspace/kernel#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/gateway#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/database#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
     "model": {
       "dependsOn": ["^build"],
+      "cache": false
+    },
+    "emit": {
       "cache": false
     },
     "model:check": {
@@ -79,6 +95,9 @@
       "cache": false
     },
     "//#e2e:coverage": {
+      "cache": false
+    },
+    "//#contract:coverage:check": {
       "cache": false
     },
     "//#contract:check": {

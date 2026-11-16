@@ -1,9 +1,16 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { OptionSelect } from '@workspace/ui/components/platform/option-select'
-import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
+import {
+  type UnsavedFields,
+  UnsavedInputScope,
+  useUnsavedFields,
+  useUnsavedInput,
+} from '@workspace/ui/unsaved-input'
 
 const options = [
   { value: 'en', label: 'English' },
@@ -122,5 +129,156 @@ describe('OptionSelect', () => {
     await screen.findAllByRole('option')
 
     expect(document.querySelector('[data-testid]')).toBeNull()
+  })
+})
+
+let reader: (() => UnsavedFields) | undefined
+
+function Reader() {
+  reader = useUnsavedFields()
+
+  return null
+}
+
+/** An option select as the app renders one: what is chosen is kept, as the app keeps it. */
+function Chosen() {
+  const [value, setValue] = useState<'en' | 'es'>('en')
+
+  return (
+    <OptionSelect
+      label="Language"
+      value={value}
+      options={options}
+      onChange={setValue}
+      testId="x.y.language-select"
+    />
+  )
+}
+
+describe('the anchor an option select reports', () => {
+  it('is its testId, on its trigger, while another option is chosen and not saved', async () => {
+    render(
+      <UnsavedInputScope>
+        <Chosen />
+        <Reader />
+      </UnsavedInputScope>,
+    )
+
+    await userEvent.click(screen.getByTestId('x.y.language-select'))
+
+    const spanish = (await screen.findAllByTestId('x.y.language-select.option')).find(
+      (item) => item.getAttribute('data-value') === 'es',
+    ) as HTMLElement
+
+    await vi.waitFor(() => expect(getComputedStyle(spanish).pointerEvents).not.toBe('none'))
+    await userEvent.click(spanish)
+
+    expect({ anchors: [...(reader?.().anchors ?? [])], unnamed: reader?.().unnamed }).toEqual({
+      anchors: ['x.y.language-select'],
+      unnamed: false,
+    })
+  })
+})
+
+describe('OptionSelect marksState', () => {
+  it('passes marksState to its trigger, which keeps data-state either way', async () => {
+    const Unmarked = () => {
+      const [value, setValue] = useState<'en' | 'es'>('en')
+
+      return (
+        <OptionSelect
+          label="Language"
+          value={value}
+          options={options}
+          onChange={setValue}
+          testId="x.y.locale-select"
+          marksState={false}
+        />
+      )
+    }
+
+    render(<Unmarked />)
+
+    const trigger = screen.getByTestId('x.y.locale-select')
+
+    expect(trigger.className).not.toContain('border-warning')
+
+    await userEvent.click(trigger)
+    await userEvent.click(await screen.findByRole('option', { name: 'Spanish' }))
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).not.toContain('border-warning')
+
+    cleanup()
+    render(
+      <OptionSelect
+        label="Language"
+        value="en"
+        options={options}
+        onChange={() => {}}
+        testId="x.y.locale-select"
+      />,
+    )
+    expect(screen.getByTestId('x.y.locale-select').className).toContain('border-warning')
+  })
+})
+
+describe('an OptionSelect inside a provider of facts', () => {
+  const FACTS = {
+    'x.y.once-select': { holdsInput: false },
+    'x.y.plain-select': { marksState: false },
+  }
+
+  /** An option select as the app renders one, its says left to the facts of its testId. */
+  const Bare = (props: { readonly testId: string }) => {
+    const [value, setValue] = useState<'en' | 'es'>('en')
+
+    return (
+      <FieldFactsProvider facts={FACTS}>
+        <UnsavedInputScope>
+          <OptionSelect
+            label="Language"
+            value={value}
+            options={options}
+            onChange={setValue}
+            testId={props.testId}
+          />
+          <Reader />
+        </UnsavedInputScope>
+      </FieldFactsProvider>
+    )
+  }
+
+  const chooseSpanish = async (testId: string) => {
+    await userEvent.click(screen.getByTestId(testId))
+    await userEvent.click(await screen.findByRole('option', { name: 'Spanish' }))
+  }
+
+  it('holds no input when the facts of its testId say it holds none', async () => {
+    render(<Bare testId="x.y.once-select" />)
+    await chooseSpanish('x.y.once-select')
+
+    expect(screen.getByTestId('x.y.once-select').hasAttribute('data-state')).toBe(false)
+    expect(reader?.().anchors.size).toBe(0)
+  })
+
+  it('holds input, and loses its colours, when the facts of its testId say only the latter', async () => {
+    render(<Bare testId="x.y.plain-select" />)
+    await chooseSpanish('x.y.plain-select')
+
+    const trigger = screen.getByTestId('x.y.plain-select')
+
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).not.toContain('border-warning')
+    expect([...(reader?.().anchors ?? [])]).toEqual(['x.y.plain-select'])
+  })
+
+  it('takes nothing for a testId its facts say nothing of', async () => {
+    render(<Bare testId="x.y.other-select" />)
+    await chooseSpanish('x.y.other-select')
+
+    const trigger = screen.getByTestId('x.y.other-select')
+
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).toContain('border-warning')
   })
 })

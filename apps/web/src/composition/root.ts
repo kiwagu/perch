@@ -5,9 +5,8 @@
  * ports only. Nothing is opened while nobody is signed in.
  */
 
-import { okAsync, type ResultAsync } from 'neverthrow'
+import type { ResultAsync } from 'neverthrow'
 
-import { EventBus } from '@workspace/cqrs'
 import {
   type DataError,
   type LocalDb,
@@ -31,9 +30,12 @@ import {
   SETTINGS_SERVICE,
   SettingsService,
 } from '../features/user/application/settings/settings.service'
+import { ACCOUNTS, type AccountsPort } from '../platform/accounts.port'
+import { CLIPBOARD, type ClipboardPort } from '../platform/clipboard.port'
 import { COMMANDS, type CommandsPort } from '../platform/commands.port'
 import { DEVICES, type DevicesPort } from '../platform/devices.port'
-import { type AppEvent, EVENTS } from '../platform/events.port'
+import { EVENTS } from '../platform/events.port'
+import { INVITATIONS, type InvitationsPort } from '../platform/invitations.port'
 import { ORGANISATIONS, type OrganisationsPort } from '../platform/organisations.port'
 import { PLATFORM_EVENTS } from '../platform/platform-events.port'
 import { SERVED_BUILD, type ServedBuildPort } from '../platform/served-build.port'
@@ -42,15 +44,18 @@ import { SYNC_STATUS } from '../platform/sync-status.port'
 import type { Theme } from '../platform/theme'
 
 import { accountStarts } from './account-starts'
+import type { AccountsDeps, Credentials } from './accounts-api'
+import { appEvents } from './app-events'
 import { type CommandLogger, createCommandBus } from './commands'
 import type { GatewayAuth } from './gateway-auth'
 import type { BearerDeps } from './gateway-bearer'
 import type { IdentitySpace, SyncState } from './identity-space'
+import { createInvitations } from './invitations'
 import { createOrganisations } from './organisations'
 import type { OrganisationsApi } from './organisations-api'
 import { platformEvents } from './platform-events'
 import { SessionService, type TransportContext, type VisibilitySource } from './session'
-import { deviceIdFrom, type KeyValueStorage, savedIdentity, savedToken } from './storage'
+import { deviceIdFrom, type KeyValueStorage, savedSession } from './storage'
 import { syncStatus } from './sync-status'
 
 /** Where a start stopped: restoring the session, opening the identity's database, or ready. */
@@ -76,8 +81,13 @@ export interface AppRootOptions {
   readonly onOnlineChange: (listener: () => void) => () => void
   /** The gateway's organisation routes, called with the device's session token and id. */
   readonly organisationsApi: (deps: BearerDeps) => OrganisationsApi
-  /** The gateway's device routes, called the same way. */
+  /** The gateway's device and invitation routes, called the same way. */
   readonly devicesApi: (deps: BearerDeps) => DevicesPort
+  readonly invitationsApi: (deps: BearerDeps) => InvitationsPort
+  /** The gateway's console routes, asked with the credentials a request starts with. */
+  readonly accountsApi: (deps: AccountsDeps) => AccountsPort
+  /** The clipboard of the device, which an invitation's link is copied to. */
+  readonly clipboard: ClipboardPort
   /** The channel to the gateway for the tab that leads an identity's sync. */
   readonly transport: (context: TransportContext) => SyncTransport
   /**
@@ -102,7 +112,7 @@ export interface AppRootOptions {
 /**
  * Why the application did not start: the browser keeps no site data (`storage-blocked`), or the
  * session could not be restored (`open-failed`), with the error each time. When the saved
- * identity's space did not open, `signOutHere` signs it out on this device without it
+ * identity's space did not open, `signOutHere` signs that identity out on this device without it
  * (`SessionService.signOutUnopened`), so a database that will never open is no dead end.
  */
 export type BootFailure =
@@ -146,19 +156,21 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   }
   // The facts of the app, after they happened: the commands' outcomes, the changes the gateway
   // refused. Only the root publishes; the features hear them through `EVENTS`.
-  const events = new EventBus<AppEvent>()
+  const events = appEvents(options)
 
-  if (options.logEvents === true) {
-    events.onAny((event) => {
-      options.logger.info({ event: event.name })
+  // The routes that act for the signed-in device present the token saved on this browser, only
+  // while it is the session of the account this tab shows: never one another tab saved since.
+  // The account and its token are read in one step.
+  const credentials = (): Credentials | undefined => {
+    const here = session.current()
+    const saved = savedSession(options.storage)
 
-      return okAsync(undefined)
-    })
+    return here !== undefined && saved?.identity === here.id
+      ? { identity: here.id, token: saved.token, signIn: saved.signIn }
+      : undefined
   }
-
-  // The routes that act for the signed-in device present the token saved on this browser.
   const bearer: BearerDeps = {
-    token: () => savedToken(options.storage),
+    token: () => credentials()?.token,
     device: () => deviceIdFrom(options.storage),
   }
   const organisationsApi = options.organisationsApi(bearer)
@@ -186,8 +198,8 @@ export function createAppRoot(options: AppRootOptions): AppStart {
       sync.syncState(state)
       starts.syncState(state)
     },
-    // The start of an account a sign-in learnt of waits for this device's first pull.
-    keepAccountStart: (user, from) => starts.keepAfterPull(user, from),
+    // The start of an account a sign-in or a first verification learnt of waits for the first pull.
+    keepAccountStart: (signIn, user, from) => starts.keepAfterPull(signIn, user, from),
     onError: options.onError,
     publish: (event) => {
       void events.publish([event]).match(
@@ -217,6 +229,12 @@ export function createAppRoot(options: AppRootOptions): AppStart {
   })
   const organisations = createOrganisations(organisationsApi, session)
   const devices = options.devicesApi(bearer)
+  // A console request refused as no operator's takes the role off the account that asked.
+  const accounts = options.accountsApi({
+    credentials,
+    device: bearer.device,
+    dropRole: (asker, role) => session.dropRole(asker, role),
+  })
   // The account's settings, which the frame reads and stores as well as the account's pages.
   const settings = new SettingsService(session.runner, commands, {
     shape: settingsShape,
@@ -245,7 +263,10 @@ export function createAppRoot(options: AppRootOptions): AppStart {
     .singleton(SETTINGS_SERVICE, () => settings)
     .singleton(ACCOUNT_START_SERVICE, () => starts.service)
     .singleton(ORGANISATIONS, () => organisations)
+    .singleton(INVITATIONS, () => createInvitations(options.invitationsApi(bearer), session))
+    .singleton(CLIPBOARD, () => options.clipboard)
     .singleton(DEVICES, () => devices)
+    .singleton(ACCOUNTS, () => accounts)
     .singleton(SERVED_BUILD, () => options.servedBuild)
     .singleton(SYNC_STATUS, () => sync)
     // The facts another tab of the browser sets, which the screens' flows hear.
@@ -253,16 +274,20 @@ export function createAppRoot(options: AppRootOptions): AppStart {
 
   step('restore-session')
 
+  // The sign-in whose space the start opens: a sign-out offered when it does not open is of it.
+  const restoring = savedSession(options.storage)
+  // The sync's state is heard on after a start whose space did not open: once another tab signs
+  // that identity out, this tab goes on as a guest's, who may sign in again.
   const opened = session
     .restore()
-    .mapErr((error): BootFailure => {
-      // No frame reads the state of the sync of a start that failed.
-      sync.stop()
-
-      return savedIdentity(options.storage)
-        ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened() }
-        : { kind: 'open-failed', error }
-    })
+    .mapErr(
+      (error): BootFailure =>
+        // Offered only while that sign-in is still the saved one: another tab may have signed it
+        // out, and another in, before this tab heard of it (it follows once it does).
+        restoring !== undefined && savedSession(options.storage)?.signIn === restoring.signIn
+          ? { kind: 'open-failed', error, signOutHere: () => session.signOutUnopened(restoring) }
+          : { kind: 'open-failed', error },
+    )
     .map(() => step('ready'))
 
   return {

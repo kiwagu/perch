@@ -20,9 +20,8 @@ const arrivedIn = (writes: FrameWrites, setting: FollowedSetting, stored: string
 /**
  * Hands the frame's machine the stored value of one setting as its data event. A value this tab
  * neither stored nor has seen yet goes to the machine, and counts as seen, only while the state
- * the frame is in takes the event; in any other (the data still opening, the app being installed,
- * the page loading again) it waits unseen, and the caller hands it again once the frame's state
- * changes. A value this tab saw or stored itself applies nothing: it is only noted as arrived, so
+ * the frame is in takes the event; in any other (the data still opening) it waits unseen, and
+ * the caller hands it again once the frame's state changes. A value this tab saw or stored itself applies nothing: it is only noted as arrived, so
  * a write of this tab that came back is no longer on its way.
  */
 export function deliverStored(

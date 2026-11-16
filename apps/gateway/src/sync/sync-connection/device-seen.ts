@@ -1,6 +1,6 @@
 /**
- * When a connection's device was last marked seen: at its hello, then at most every five minutes
- * while it keeps talking. A mark never holds the connection up.
+ * When a connection's device was last marked seen: at its hello, before its welcome, then at most
+ * every five minutes while it keeps talking, which a mark never holds up.
  */
 
 import type { IdentityId } from '@workspace/ids'
@@ -33,20 +33,21 @@ export class DeviceSeen {
     this.#log = deps.log
   }
 
-  /** Marks the device seen when it was not for five minutes. */
+  /** Marks the device seen when it was not for five minutes, without holding up what it said. */
   talked(device: ConnectedDevice): void {
     if (this.#clock.now() - this.#seenAt >= SEEN_EVERY_MS) {
-      this.mark(device.identity.id, device.id)
+      void this.mark(device.identity.id, device.id)
     }
   }
 
   /**
-   * Marks the device seen now, without waiting: a failure is logged, with the identity and the
-   * code only, and changes nothing for the device.
+   * Marks the device seen now, waiting for nothing but the write: a failure is logged, with the
+   * identity and the code only, and changes nothing for the device, so the answer never fails.
    */
-  mark(identity: IdentityId, device: string): void {
+  mark(identity: IdentityId, device: string): Promise<void> {
     this.#seenAt = this.#clock.now()
-    void this.#devices.seen({ identity, device }).match(
+
+    return this.#devices.seen({ identity, device }).match(
       () => undefined,
       (error) => {
         this.#log.warn({ identity, code: error.code }, 'the device could not be marked seen')

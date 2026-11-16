@@ -4,8 +4,9 @@
  * end-to-end suites have passed on exactly the tree being committed.
  * `bun run test:db` and `CI=1 bun run test:e2e`, run without arguments, record
  * one receipt per tree under `.gates/` (a run given a spec or a filter records
- * none); this check looks the index tree up there. On any other branch it does
- * nothing.
+ * none); this check looks the index tree up there. On any other branch, or on a
+ * detached HEAD, it does nothing. The branch is told by its full ref, so a tag
+ * named `main` changes nothing, and a commit git cannot tell the branch of fails.
  *
  * Usage: bun run scripts/gates/check-main-gates.ts [--branch <name>]
  */
@@ -13,24 +14,38 @@
 import { existsSync } from 'node:fs'
 
 import { FULL_RUN_SCRIPT } from './full-run.ts'
-import { currentBranch, GATES, indexTreeId, receiptPath } from './tree.ts'
+import { GATES, headRef, indexTreeId, receiptPath } from './tree.ts'
 
 const LANDING_BRANCH = 'main'
 
-function branchFrom(argv: readonly string[]): string | undefined {
+const LANDING_REF = `refs/heads/${LANDING_BRANCH}`
+
+/**
+ * Whether the commit lands: on the branch `--branch` names, or else on the branch HEAD is on,
+ * told by its full ref; undefined when git cannot tell.
+ */
+function landing(argv: readonly string[]): boolean | undefined {
   const index = argv.indexOf('--branch')
 
-  if (index === -1) {
-    return currentBranch()
+  if (index !== -1) {
+    return argv[index + 1] === LANDING_BRANCH
   }
 
-  return argv[index + 1]
+  const ref = headRef()
+
+  return ref === undefined ? undefined : ref === LANDING_REF
 }
 
 function main(argv: readonly string[]): number {
-  const branch = branchFrom(argv)
+  const lands = landing(argv)
 
-  if (branch !== LANDING_BRANCH) {
+  if (lands === undefined) {
+    console.error('gates: git cannot tell the branch this commit is on.')
+
+    return 1
+  }
+
+  if (!lands) {
     return 0
   }
 

@@ -24,17 +24,22 @@ commands compile into and write paths interpret.
   them all, checked by the sign-up form as it is typed and by the gateway's sign-up. A sign-in
   checks none of them.
 - `defineAbilityFor(member, schema)`, `OWNER_ABILITY`, `NO_ABILITY`: see Abilities below.
+- `PLATFORM_ROLES` (`operator`) and `PlatformRole`: the roles an account holds on the platform
+  itself, apart from its role in any organisation; see Abilities below.
 
 ## Abilities
 
 `TENANT_ROLES` (`member`, `admin`) and `ACTIONS` (`create`, `update`, `delete`) are the one
-source of the roles; the replica protocol builds its role enum from them. What a role may do
-to the records of a table is data: each table declares `@owner` (the field naming the member
-a record belongs to) and `@can` (per role and action, scope `any` or `own`), and the modeling
-stage emits them as an `AbilitySchema`. `defineAbilityFor(member, schema)` returns an
-`Ability` whose `can(action, table, record?)` the browser asks before a command and the
-gateway before importing a batch. An `own` scope compares the owner field with the member id
-by key (`member:idn_a` and `idn_a` both name `idn_a`, see `ownerKeyOf`); a table or role
+source of the roles; the replica protocol builds its role enum from them. `PLATFORM_ROLES` is the
+one source of the roles on the platform: `operator`, who runs the platform's console of accounts,
+is the only one, and an account holds none until it is given one. They grant nothing on an
+organisation's records: an operator's console is judged by the gateway, not by an `Ability`.
+What a role may do to the records of a table is data: each table declares `@owner` (the field
+naming the member a record belongs to) and `@can` (per role and action, scope `any` or `own`),
+and the modeling stage emits them as an `AbilitySchema`. `defineAbilityFor(member, schema)`
+returns an `Ability` whose `can(action, table, record?)` the browser asks before a command and
+the gateway before importing a batch. An `own` scope compares the owner field with the member
+id by key (`member:idn_a` and `idn_a` both name `idn_a`, see `ownerKeyOf`); a table or role
 without rules allows nothing. `OWNER_ABILITY` allows everything (the owner of a private
 region), `NO_ABILITY` nothing (nobody signed in). Reading is not an ability.
 

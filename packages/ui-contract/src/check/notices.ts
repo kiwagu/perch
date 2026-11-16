@@ -8,7 +8,7 @@
  * action that sends one is rule 15's (`mails.ts`).
  */
 
-import { ACCOUNT, type Binding, type Platform, type Problem } from '../files'
+import { ACCOUNT, type Binding, type Platform, type Problem, RECIPIENT } from '../files'
 
 import { type Contract, locate, own } from './contract'
 import { parseRoutePath } from './routes'
@@ -54,14 +54,21 @@ export function noticesProblems(contract: Contract): Problem[] {
                 `"${notice.to}" is neither a parameter of "${name}" nor account`,
               ),
             ]),
-        ...(named(notice.language)
-          ? []
-          : [
+        ...(notice.language === RECIPIENT && !Object.hasOwn(action.params, RECIPIENT)
+          ? [
               inScreens(
                 [...at, 'language'],
-                `"${notice.language}" is neither a parameter of "${name}" nor account`,
+                `"${RECIPIENT}" is the language of a mail alone; a notice speaks a parameter's or the account's`,
               ),
-            ]),
+            ]
+          : named(notice.language)
+            ? []
+            : [
+                inScreens(
+                  [...at, 'language'],
+                  `"${notice.language}" is neither a parameter of "${name}" nor account`,
+                ),
+              ]),
         ...(link === undefined
           ? []
           : screen === undefined

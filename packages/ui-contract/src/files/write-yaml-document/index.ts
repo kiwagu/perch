@@ -1,0 +1,1 @@
+export { writeYamlDocument } from './write'

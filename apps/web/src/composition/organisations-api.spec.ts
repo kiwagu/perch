@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { identityIdFactory, invitationIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { fakeFetch, noContent, respond, respondText } from './__fixtures__/gateway-fetch'
@@ -161,12 +161,12 @@ describe('organisationsApi', () => {
     expect(failed.message).not.toMatch(/hunter2/)
   })
 
-  it('lists, invites and removes members on the organisation paths', async () => {
+  it('lists and removes members on the organisation paths, and changes a role by a PATCH answered 204', async () => {
     const ann = identityIdFactory.create()
     const member = { identity: { id: ann, email: 'ann@example.test' }, role: 'member' }
     const { fetcher, sent } = fakeFetch(
       respond(200, { members: [member] }),
-      respond(200, { member }),
+      noContent(),
       noContent(),
     )
     const api = organisationsApi('/backend', {
@@ -176,14 +176,116 @@ describe('organisationsApi', () => {
     })
 
     expect((await api.members('acme'))._unsafeUnwrap()).toEqual([member])
-    expect((await api.invite('acme', 'ann@example.test'))._unsafeUnwrap()).toEqual(member)
+    expect((await api.setRole('acme', ann, 'admin')).isOk()).toBe(true)
     expect((await api.remove('acme', ann)).isOk()).toBe(true)
     expect(sent.map((request) => [request.method, request.url])).toEqual([
       ['GET', '/backend/organisations/acme/members'],
-      ['POST', '/backend/organisations/acme/members'],
+      ['PATCH', `/backend/organisations/acme/members/${ann}`],
       ['DELETE', `/backend/organisations/acme/members/${ann}`],
     ])
-    expect(sent[1]?.body).toEqual({ email: 'ann@example.test' })
+    expect(sent[1]?.body).toEqual({ role: 'admin' })
     expect(sent.map((request) => request.device)).toEqual(['device-1', 'device-1', 'device-1'])
   })
+
+  it('invites an email with a role on the invitations path (201) and parses the invitation with its link', async () => {
+    const id = invitationIdFactory.create()
+    const invitation = {
+      id,
+      email: 'ann@example.test',
+      role: 'admin',
+      link: 'https://perch.example.test/invitation?token=abc',
+    }
+    const { fetcher, sent } = fakeFetch(respond(201, { invitation }))
+    const api = organisationsApi('/backend', {
+      token: () => 'token-1',
+      device: () => 'device-1',
+      fetcher,
+    })
+
+    expect((await api.invite('acme', 'ann@example.test', 'admin'))._unsafeUnwrap()).toEqual(
+      invitation,
+    )
+    expect(sent).toEqual([
+      {
+        url: '/backend/organisations/acme/invitations',
+        method: 'POST',
+        authorization: 'Bearer token-1',
+        device: 'device-1',
+        body: { email: 'ann@example.test', role: 'admin' },
+      },
+    ])
+  })
+
+  it('lists the pending invitations newest first as the gateway sends them, and revokes one by its id', async () => {
+    const [first, second] = [invitationIdFactory.create(), invitationIdFactory.create()]
+    const pending = [
+      {
+        id: first,
+        email: 'bea@example.test',
+        role: 'member',
+        link: 'https://perch.example.test/invitation?token=b',
+      },
+      {
+        id: second,
+        email: 'ann@example.test',
+        role: 'admin',
+        link: 'https://perch.example.test/invitation?token=a',
+      },
+    ]
+    const { fetcher, sent } = fakeFetch(respond(200, { invitations: pending }), noContent())
+    const api = organisationsApi('/backend', {
+      token: () => 'token-1',
+      device: () => 'device-1',
+      fetcher,
+    })
+
+    expect((await api.invitations('acme'))._unsafeUnwrap()).toEqual(pending)
+    expect((await api.revokeInvitation('acme', first)).isOk()).toBe(true)
+    expect(sent.map((request) => [request.method, request.url])).toEqual([
+      ['GET', '/backend/organisations/acme/invitations'],
+      ['DELETE', `/backend/organisations/acme/invitations/${first}`],
+    ])
+  })
+
+  it('never posts to the members path to add one: an invite goes to the invitations', async () => {
+    const { fetcher, sent } = fakeFetch(() => Promise.reject(new TypeError('Failed to fetch')))
+    const api = organisationsApi('/backend', {
+      token: () => 'token-1',
+      device: () => 'device-1',
+      fetcher,
+    })
+
+    expect((await api.invite('acme', 'ann@example.test', 'member')).isErr()).toBe(true)
+    expect(sent.map((request) => `${request.method} ${request.url}`)).toEqual([
+      'POST /backend/organisations/acme/invitations',
+    ])
+  })
+
+  it.each([
+    ['invite', 400, 'email-invalid'],
+    ['invite', 409, 'already-member'],
+    ['invite', 429, 'rate-limited'],
+    ['setRole', 409, 'last-admin'],
+    ['setRole', 404, 'no-such-member'],
+    ['setRole', 403, 'not-admin'],
+  ] as const)(
+    'maps the %s refusal %i %s to data:WRITE_REJECTED with the code as message',
+    async (call, status, code) => {
+      const { fetcher } = fakeFetch(respond(status, { code }))
+      const api = organisationsApi('/backend', {
+        token: () => 'token-1',
+        device: () => 'device-1',
+        fetcher,
+      })
+      const refused =
+        call === 'invite'
+          ? await api.invite('acme', 'ann@example.test', 'member')
+          : await api.setRole('acme', identityIdFactory.create(), 'member')
+
+      expect(refused._unsafeUnwrapErr()).toMatchObject({
+        code: 'data:WRITE_REJECTED',
+        message: code,
+      })
+    },
+  )
 })

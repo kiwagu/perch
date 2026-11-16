@@ -5,7 +5,7 @@
 
 import { z } from '@workspace/zod'
 
-import { entityDefinitionSchema, type entityFieldSchema } from '../schemas'
+import { DESCRIPTION_PURPOSES, entityDefinitionSchema, type entityFieldSchema } from '../schemas'
 
 import { parseFile } from './parse-file'
 import { MODEL_FILE } from './paths'
@@ -16,15 +16,29 @@ import { jsonSchemaProblems } from './validator'
 export interface ModelField {
   type?: string
   enum?: readonly unknown[]
-  /** The JSON Schema constraints a value typed into the field must meet. */
+  /**
+   * The JSON Schema constraints a value typed into the field must meet, those a value has: a
+   * field's other keywords (`exclusiveMinimum`, `exclusiveMaximum`, `multipleOf`) are not read.
+   */
   minLength?: number
   maxLength?: number
   pattern?: string
   format?: string
+  minimum?: number
+  maximum?: number
   readonly: boolean
   crdt?: 'text' | 'list' | 'counter' | 'none'
   record?: string
   ref?: string
+}
+
+/** An action of an entity, under `x-perch.actions`. */
+export interface ModelAction {
+  description?: string
+  /** Per parameter, the field it sets (`$id` for a new id). */
+  params: Record<string, string>
+  /** The platform actions whose answer differs once it succeeds, written on every action; `[]`: none. */
+  changes: string[]
 }
 
 export interface ModelEntity {
@@ -34,7 +48,7 @@ export interface ModelEntity {
   id: string
   owner?: string
   can?: Record<string, Record<string, 'any' | 'own'>>
-  actions: Record<string, { description?: string; params: Record<string, string> }>
+  actions: Record<string, ModelAction>
   unique: readonly (readonly string[])[]
   index: readonly (readonly string[])[]
   fields: Record<string, ModelField>
@@ -45,19 +59,29 @@ export interface Model {
   entities: Record<string, ModelEntity>
 }
 
+/**
+ * The document around the entities: a JSON Schema whose own keywords pass through, so its
+ * `description`, the model's own, takes its purpose here, where the engine defines its shape.
+ */
 const documentSchema = z.looseObject({
+  description: z.string().optional().describe(DESCRIPTION_PURPOSES.model),
   $defs: z.record(z.string().regex(/^[a-z][a-z0-9_]*$/), z.unknown()),
 })
 
-/** The constraints of a field's JSON Schema, which the meta-schema has checked already. */
+/**
+ * The constraints of a field's JSON Schema that a value has, which the meta-schema has checked
+ * already: its lengths, pattern, format and numeric bounds.
+ */
 function constraintsOf(field: Readonly<Record<string, unknown>>) {
-  const { minLength, maxLength, pattern, format } = field
+  const { minLength, maxLength, pattern, format, minimum, maximum } = field
 
   return {
     ...(typeof minLength === 'number' ? { minLength } : {}),
     ...(typeof maxLength === 'number' ? { maxLength } : {}),
     ...(typeof pattern === 'string' ? { pattern } : {}),
     ...(typeof format === 'string' ? { format } : {}),
+    ...(typeof minimum === 'number' ? { minimum } : {}),
+    ...(typeof maximum === 'number' ? { maximum } : {}),
   }
 }
 
@@ -86,9 +110,13 @@ function entityOf(name: string, entity: z.output<typeof entityDefinitionSchema>)
     ...(owner === undefined ? {} : { owner }),
     ...(can === undefined ? {} : { can }),
     actions: Object.fromEntries(
-      Object.entries(perch.actions).map(([action, { description, params }]) => [
+      Object.entries(perch.actions).map(([action, { description, params, changes }]) => [
         action,
-        { ...(description === undefined ? {} : { description }), params },
+        {
+          ...(description === undefined ? {} : { description }),
+          params,
+          changes,
+        },
       ]),
     ),
     unique: perch.unique,

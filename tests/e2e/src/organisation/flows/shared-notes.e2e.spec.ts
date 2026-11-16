@@ -1,7 +1,7 @@
 // scenario: organisation/flows/shared-notes
 import { generate } from '../../support/data'
 import { expect, pageLoads, signUp, test, toast } from '../../support/fixtures'
-import { createOrganisation, inviteMember } from '../../support/organisation'
+import { acceptOnOrg, createOrganisation, inviteEmail } from '../../support/organisation'
 
 test.describe('Share notes inside an organisation and keep private data private', {
   tag: '@full',
@@ -46,8 +46,8 @@ test.describe('Share notes inside an organisation and keep private data private'
 
     await test.step('3. On device A, enter the email of user B into [organisation.invite.email-input] and click [organisation.invite.submit-button]', async () => {
       // Expected: After step 3 device A shows [app-shell.toast] carrying [code:invited]
-      //   and user B in [organisation.members.list]
-      await inviteMember(page, userB.email)
+      //   and user B's email in [organisation.sent.list]
+      await inviteEmail(page, userB.email)
     })
 
     await test.step('4. On device A, enter the note by A into [organisation.notes.new-textarea] and click [organisation.notes.add-button]', async () => {
@@ -70,11 +70,11 @@ test.describe('Share notes inside an organisation and keep private data private'
       ).toHaveText([data.noteByA])
     })
 
-    await test.step('6. On device B, open [/org]', async () => {
-      await deviceB.getByTestId('app-shell.nav.organisation-link').click()
+    await test.step("6. On device B, open [/org] and click [organisation.received.accept-button] on the organisation's [organisation.received.item]", async () => {
+      await acceptOnOrg(deviceB, data.name)
       // Expected: After step 6 device B shows the organisation name in [organisation.page.heading],
       //   [organisation.page.role-badge] with [value:member] and the note by A in
-      //   [organisation.notes.list], without an invitation page or a reload
+      //   [organisation.notes.list], without a reload
       await expect(deviceB).toHaveURL(/\/org$/)
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(data.name, {
         timeout: 10_000,

@@ -155,18 +155,19 @@ export async function deleteAccount(
  * when it expired while the deletion waited for the account). The rest runs in the turns of the
  * account's memberships (`AccountDepartures.leave`), whose check decides: an account that is the
  * only admin of an organisation with other members answers 409 `last-admin` with nothing changed,
- * its link still pending and its sessions alive, so the same link deletes the account once those
- * members are removed. Only once the departure is allowed, and before it writes anything, does
- * the deletion take effect (`spend`): the pending deletion is spent (401 `link-invalid` when it
- * was not pending: used before, replaced by a newer one, or ended by a change of the password or
- * of the email, nothing changed), whom the notice goes to is read while the account exists, every
- * session of the account ends and every socket of it closes with 4001. Then the account leaves
- * its organisations and its own rows are removed, while no invite of it and no creation by it can
- * land, and its sockets close with 4001 once more: a sign-in takes no turn of the account, so a
- * device may sign in while the departure runs and say hello before the rows go, and the second
- * close ends its socket and refuses a hello still under way (the registry's epoch moves). Once the account is gone the notice starts to the email it had, and it answers 200
- * `{ identity }`: the account that was deleted, so the page can tell whether this device was
- * signed in to it.
+ * its link still pending and its sessions alive, so the same link deletes the account once another
+ * member is made an admin or those members are removed. Only once the departure is allowed, and
+ * before it writes anything, does the deletion take effect (`spend`): the pending deletion is spent
+ * (401 `link-invalid` when it was not pending: used before, replaced by a newer one, or ended by a
+ * change of the password or of the email, nothing changed), whom the notice goes to is read while
+ * the account exists, every session of the account ends and every socket of it closes with 4001.
+ * Then the account leaves its organisations and its own rows are removed, while no invite of it and
+ * no creation by it can land, and its sockets close with 4001 once more: a sign-in takes no turn of
+ * the account, so a device may sign in while the departure runs and say hello before the rows go,
+ * and the second close ends its socket and refuses a hello still under way (the registry's epoch
+ * moves). Once the account is gone the notice starts to the email it had, and it answers 200
+ * `{ identity }`: the account that was deleted, so the page can tell whether this device was signed
+ * in to it.
  */
 async function deleted(deps: AuthMountDeps, token: string): Promise<Response> {
   const claims = await judged(deps, token)

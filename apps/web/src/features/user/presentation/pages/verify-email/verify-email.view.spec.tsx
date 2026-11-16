@@ -2,6 +2,9 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -85,6 +88,25 @@ describe('VerifyEmailView', () => {
     expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
   })
 
+  it.each([
+    ['en', en],
+    ['es', es],
+  ] as const)(
+    'says the account is banned in the error, in %s, with no form, no status and no way to sign in',
+    (locale, texts) => {
+      renderView({ error: 'data:ACCOUNT_BANNED' }, locale)
+
+      const shown = screen.getByTestId('user.verify-email.error')
+
+      expect(shown.getAttribute('data-code')).toBe('account-banned')
+      expect(shown.textContent).toBe(texts['user.verify-email.error.account-banned'])
+      expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.message')).toBeNull()
+      expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    },
+  )
+
   it('sends a new link to the email typed', () => {
     const { onResend } = renderView({
       error: 'data:LINK_INVALID',
@@ -144,5 +166,24 @@ describe('VerifyEmailView', () => {
     expect(screen.getByTestId('user.verify-email.error').textContent).toBe(
       es['user.verify-email.error.link-expired'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    renderWithProviders(
+      <UnsavedInputScope>
+        <VerifyEmailView
+          renders={only('user.verify-email.form')}
+          canResend
+          error="data:LINK_INVALID"
+          onResend={() => Promise.resolve(true)}
+        />
+      </UnsavedInputScope>,
+    )
+
+    type('user.verify-email.email-input', 'ann@example.test')
+
+    expectNoStateColour(screen.getByTestId('user.verify-email.email-input'))
   })
 })

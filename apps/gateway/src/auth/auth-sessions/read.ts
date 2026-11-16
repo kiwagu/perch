@@ -2,12 +2,17 @@ import { isAPIError } from 'better-auth/api'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type DeviceSessionId, type IdentityId, idSchemas } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import type { AuthInstance } from '../auth-instance'
+import { rolesOf } from '../platform-roles'
 
-/** Who a live session belongs to: the identity, its email, the device and the session's row. */
+/**
+ * Who a live session belongs to: the identity, its email, the device, the session's row and the
+ * account's platform roles.
+ */
 export interface SessionCaller {
   readonly identity: IdentityId
   readonly email: string
@@ -15,18 +20,34 @@ export interface SessionCaller {
   readonly device: string
   /** The session's `device_session` row. */
   readonly session: DeviceSessionId
+  /**
+   * The account's platform roles as this read found its role: read with the session every time,
+   * never kept, so a role granted or taken back counts from the next read.
+   */
+  readonly roles: readonly PlatformRole[]
 }
 
-/** What a session token reads as: a live session and who it belongs to, none, or a failed read. */
+/**
+ * What a session token reads as: a live session and who it belongs to, none (a session waiting for
+ * its admission among them), or a failed read.
+ */
 export type SessionRead =
   | { readonly kind: 'session'; readonly caller: SessionCaller }
   | { readonly kind: 'none' }
   | { readonly kind: 'failed'; readonly error: DataError }
 
-/** What Better Auth answers for a live session, as far as the caller is read from it. */
+/**
+ * What Better Auth answers for a live session, as far as the caller is read from it: `pending`, the
+ * gateway's own field of the session, which Better Auth answers with the rest of its row, and the
+ * account's `role`, the admin plugin's field of the user (none on a row written without it).
+ */
 const sessionAnswer = z.object({
-  session: z.object({ id: idSchemas.device_session.schema, device: deviceId }),
-  user: z.object({ id: idSchemas.identity.schema, email: z.string() }),
+  session: z.object({
+    id: idSchemas.device_session.schema,
+    device: deviceId,
+    pending: z.boolean(),
+  }),
+  user: z.object({ id: idSchemas.identity.schema, email: z.string(), role: z.string().nullish() }),
 })
 
 const NONE: SessionRead = { kind: 'none' }
@@ -66,9 +87,12 @@ function failed(cause: unknown): SessionRead {
 
 /**
  * Who the live session that holds `token` belongs to, read through Better Auth, or none: a token
- * nobody holds, one not in its raw form, or one whose session ended or expired. A session whose
- * row is not of the gateway's shape (its key not a device session id, its identity not an
- * identity id, no device) fails as `data:AUTH_FAILED`.
+ * nobody holds, one not in its raw form, one whose session ended or expired, or one whose session
+ * still waits for its admission (`pending`: a sign-in's or a verification's that the gateway has
+ * not admitted, so never handed out, whoever holds its token). The admissions read such a session by
+ * their own statements, never here. A session whose row is not of the gateway's shape (its key not
+ * a device session id, its identity not an identity id, no device, no `pending`) fails as
+ * `data:AUTH_FAILED`.
  */
 export async function readSession(auth: AuthInstance, token: string): Promise<SessionRead> {
   const headers = bearerHeaders(token)
@@ -100,8 +124,18 @@ export async function readSession(auth: AuthInstance, token: string): Promise<Se
 
   const { session, user } = parsed.data
 
+  if (session.pending) {
+    return NONE
+  }
+
   return {
     kind: 'session',
-    caller: { identity: user.id, email: user.email, device: session.device, session: session.id },
+    caller: {
+      identity: user.id,
+      email: user.email,
+      device: session.device,
+      session: session.id,
+      roles: rolesOf(user.role),
+    },
   }
 }

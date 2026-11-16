@@ -6,7 +6,15 @@ import { device_sessionIdFactory, type IdentityId, idSchemas } from '@workspace/
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import { AUTH_SECRET, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import { linkToken } from '../mail/__fixtures__/outbox'
+
+import {
+  AUTH_SECRET,
+  betterAuthToken,
+  deviceHeaders,
+  openAuth,
+  signUpOn,
+} from './__fixtures__/auth-instance'
 import { AuthSessions } from './auth-sessions'
 import { deviceRoutes } from './device.routes'
 import { DeviceSessions } from './device-sessions'
@@ -115,7 +123,7 @@ function failsOnce<T extends object>(service: T, method: keyof T & string): void
  * close are recorded, not closed.
  */
 async function harness() {
-  const { auth, local, clock, close } = await openAuth()
+  const { auth, local, clock, outbox, close } = await openAuth()
 
   cleanups.push(close)
 
@@ -172,6 +180,8 @@ async function harness() {
   const live = async (token: string) => (await sessions.read(token)).kind === 'session'
 
   return {
+    auth,
+    outbox,
     routes,
     clock,
     sessions,
@@ -371,6 +381,38 @@ describe('deviceRoutes', () => {
 
     expect(await live(annOnPhone.token)).toBe(true)
     expect(closed).toEqual([])
+  })
+
+  it('answers 401 to the token of a session a verification wrote until the gateway admits it, and serves it once admitted', async () => {
+    const { auth, outbox, sessions, ask } = await harness()
+
+    await auth.api.signUpEmail({
+      body: { name: 'Cleo', email: 'cleo@example.test', password: PASSWORD },
+      headers: deviceHeaders(phone.id, phone.label),
+    })
+
+    const { headers } = await auth.api.verifyEmail({
+      query: { token: betterAuthToken(linkToken(await outbox.next('cleo@example.test'))) },
+      headers: deviceHeaders(phone.id, phone.label),
+      returnHeaders: true,
+    })
+    const read =
+      (
+        await sessions.signedIn(headers.get('set-auth-token') ?? expect.unreachable('a token'))
+      )._unsafeUnwrap() ?? expect.unreachable('a session')
+    const cleo: Caller = { identity: read.user.id, token: read.token, device: phone.id }
+
+    expect(await ask('GET', '/devices', { as: cleo })).toEqual(unauthorized)
+    expect((await sessions.admitVerified(cleo.identity, cleo.token))._unsafeUnwrap()).toEqual({
+      kind: 'admitted',
+    })
+
+    const { status, body } = await ask('GET', '/devices', { as: cleo })
+
+    expect(status).toBe(200)
+    expect(listed.parse(body).devices.map(({ label, current }) => [label, current])).toEqual([
+      [phone.label, true],
+    ])
   })
 
   it('answers 401 with the Bearer scheme to a call without a token that holds a live session', async () => {

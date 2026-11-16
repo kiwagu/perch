@@ -12,7 +12,7 @@ import { createVerifyEmailMachine } from './verify-email.machine'
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
-const signedIn: EmailVerified = { kind: 'signed-in', user: ann, name: 'Ann', locale: 'en' }
+const signedIn: EmailVerified = { kind: 'signed-in', user: ann }
 
 const verifiedBefore: EmailVerified = { kind: 'verified-before' }
 
@@ -107,6 +107,16 @@ describe('verify-email machine', () => {
       expect(emitted).toEqual([])
     },
   )
+
+  it('ends in banned when the link is the one of a banned account, with no new link to send and nothing welcomed', async () => {
+    const { actor, emitted } = page({ verify: () => refused('data:ACCOUNT_BANNED') })
+    const ended = await waitFor(actor, (state) => state.status === 'done')
+
+    expect(ended.value).toBe('banned')
+    expect(ended.context).toEqual({ error: 'data:ACCOUNT_BANNED', message: undefined })
+    expect(ended.can({ type: RESEND, email: ann.email })).toBe(false)
+    expect(emitted).toEqual([])
+  })
 
   it('keeps an unknown code for a failure that carries none', async () => {
     const { actor } = page({

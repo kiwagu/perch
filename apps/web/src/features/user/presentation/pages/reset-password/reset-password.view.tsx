@@ -140,6 +140,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                 <FieldLabel htmlFor={ids.password}>{t('user.reset-password.password')}</FieldLabel>
                 <PasswordInput
                   {...password('password')}
+                  marksState={false}
                   testId="user.reset-password.password-input"
                 />
                 <PasswordRuleList
@@ -156,6 +157,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                 </FieldLabel>
                 <PasswordInput
                   {...password('confirmation')}
+                  marksState={false}
                   testId="user.reset-password.password-confirmation-input"
                 />
                 {underField('confirmation')}

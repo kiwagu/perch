@@ -23,8 +23,9 @@ const ROOT = join(import.meta.dirname, '../../../../../../..')
 const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
 
 /**
- * What the notice's line holds without growing (`shell.view.tsx`): three lines on a 360px phone,
- * about 44 characters each at the notice's size; wider up it holds two longer ones.
+ * What the notice's line holds without growing (`shell-view/notice-line.view.tsx`): three lines
+ * on a 360px phone, about 44 characters each at the notice's size; wider up it holds two longer
+ * ones.
  */
 const NOTICE_LINE_CHARACTERS = 132
 

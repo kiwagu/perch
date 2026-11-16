@@ -8,6 +8,9 @@ import { z } from '@workspace/zod'
 
 import { roleSchema } from '../names.schema'
 
+import { DESCRIPTION_PURPOSES } from './description-purposes'
+import { platformActionNameSchema } from './screens-schema'
+
 const fieldNameSchema = z.string().regex(/^[a-z][a-z0-9_]*$/)
 
 const fieldPerchSchema = z
@@ -25,7 +28,7 @@ const fieldPerchSchema = z
 export const entityFieldSchema = z
   .looseObject({
     type: z.string().optional().describe('The JSON Schema type of the field.'),
-    description: z.string().optional().describe('What the field holds.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.field),
     enum: z.array(z.unknown()).optional().describe('The values the field takes.'),
     'x-perch': fieldPerchSchema.optional(),
   })
@@ -33,10 +36,15 @@ export const entityFieldSchema = z
 
 const actionSchema = z
   .strictObject({
-    description: z.string().optional().describe('What the action does.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.modelAction),
     params: z
       .record(z.string(), z.string())
       .describe('Per parameter, the field it sets (`$id` for a new id).'),
+    changes: z
+      .array(platformActionNameSchema)
+      .describe(
+        'Written on every action: the reads of the platform whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`. What another account reads for itself is never named. `[]`: it changes none.',
+      ),
   })
   .describe('One action on the entity.')
 
@@ -73,7 +81,7 @@ const isStringField = (field: z.output<typeof entityFieldSchema>): boolean =>
 export const entityDefinitionSchema = z
   .looseObject({
     type: z.literal('object').describe('Always "object".'),
-    description: z.string().optional().describe('What the entity is.'),
+    description: z.string().optional().describe(DESCRIPTION_PURPOSES.entity),
     'x-perch': entityPerchSchema,
     properties: z.record(fieldNameSchema, entityFieldSchema).describe('The fields by name.'),
     required: z.array(fieldNameSchema).describe('The fields every entry has.'),

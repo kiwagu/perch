@@ -32,6 +32,7 @@ function sharing(codes: string[] = ['not-allowed']): Contract {
     params: {},
     result: 'the thing is shared',
     codes: ['not-allowed', 'rate-limited', 'failed'],
+    changes: [],
   }
   flowIn(contract).meta = {
     guards: { titleGiven: 'the title input holds a title', refused: { codes } },

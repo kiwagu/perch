@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { memoryStorage, saveDevice } from '../storage'
+import { signedIn } from '../__fixtures__/signed-in'
+import { memoryStorage } from '../storage'
 
 import { otherAccountSaved, otherIdentitySaved } from './one-account'
 
@@ -23,7 +24,7 @@ describe('one account per browser', () => {
   it('tells another account by its email, whatever its case and spaces', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     expect(otherAccountSaved(storage, 'bob@example.test')).toBe(true)
     expect(otherAccountSaved(storage, ' Ann@Example.TEST ')).toBe(false)
@@ -32,7 +33,7 @@ describe('one account per browser', () => {
   it('tells another identity by its id', () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     expect(otherIdentitySaved(storage, identityIdFactory.create())).toBe(true)
     expect(otherIdentitySaved(storage, ann.identity.id)).toBe(false)

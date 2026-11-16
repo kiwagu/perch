@@ -6,9 +6,11 @@
   installs the git hooks.
 - Docker with Compose v2 or later (`docker compose`): the stands run SurrealDB, MailDev and Caddy
   in containers.
-- mcproc 0.13.0 or later (`npm i -g mcproc`): it starts and stops the stands from
-  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees. `bun run
-  dev` needs it too: it reads this checkout's stand from `mcproc --json describe`.
+- mcproc 0.19.0 or later (`npm i -g mcproc`): it starts and stops the stands from
+  `.mcproc/mcproc.yaml`, with the manifest's variables, memory leases and worktrees, and runs the
+  e2e suites one at a time on the host (`mcproc exec --exclusive`, an option an older mcproc
+  refuses). `bun run dev` needs it too: it reads this checkout's stand from
+  `mcproc --json describe`.
 - mkcert with `mkcert -install`, so the browser trusts the stands' https front; without it a
   self-signed certificate is made, and the browser asks to accept it once.
 - `bunx playwright install` for the browsers the e2e specs run in, and pasta (package `passt`,

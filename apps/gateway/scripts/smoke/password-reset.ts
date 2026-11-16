@@ -101,7 +101,7 @@ export async function passwordResetSteps(
   )
 
   await step(
-    `the reset link sets a new password: 200 signing out no session of its own, the phone closed with ${CLOSE.passwordChanged} and its token refused, the old password refused, the notice mailed`,
+    `the reset link sets a new password: 200 signing out no session of its own, the phone closed with ${CLOSE.passwordChanged} and its token's hello closed with it again, the old password refused, the notice mailed`,
     async () => {
       const answer = await reset(base, token, password, laptop.id)
 
@@ -117,7 +117,7 @@ export async function passwordResetSteps(
 
       const again = await refusedHello(base, opened, signedIn)
 
-      check(again.code === CLOSE.unauthorized, `the phone's hello closed with ${again.code}`)
+      check(again.code === CLOSE.passwordChanged, `the phone's hello closed with ${again.code}`)
 
       const old = await signIn(base, account.email, account.password, laptop.id)
 

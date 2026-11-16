@@ -13,11 +13,11 @@
  *   the button's binding (`controls.ts`).
  */
 
+import { partOf } from '../../anchors'
 import { isRecord, listOf, recordOf } from '../../records'
 
 import { controlsOf } from './controls'
 import { type FailureOf, failureCodes, unionOf } from './failures'
-import { partOf } from './form-params'
 import { isBare, type Request, requestsOf } from './requests'
 
 /** An action whose failure the flow shows on an error, with the parameters it passes. */

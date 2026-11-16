@@ -34,6 +34,9 @@ const FAILED = {
   codes: ['device-sign-out-failed'],
 }
 
+/** The read of the devices the flow asks for after a sign-out. */
+const READ = { type: 'read', anchor: 'device.list' }
+
 describe('devices machine', () => {
   it('signs another device out with its toast, holding the sign-out buttons while it runs', async () => {
     const { actor, revoke, snapshot, emitted } = page()
@@ -47,11 +50,23 @@ describe('devices machine', () => {
 
     expect(revoke).toHaveBeenCalledWith(phone)
     expect(emitted).toEqual([
+      READ,
       { type: 'show', anchor: 'app-shell.toast', codes: ['device-signed-out'] },
     ])
   })
 
-  it('says so on the shell when a sign-out fails', async () => {
+  it('says so on the shell when the gateway refuses a sign-out, and reads the devices again', async () => {
+    const { actor, emitted } = page({
+      revoke: () => errAsync(dataError('data:WRITE_REJECTED', 'device-sign-out-failed')),
+    })
+
+    actor.send({ type: 'device.list.revoke-button', device: phone })
+    await waitFor(actor, (state) => state.matches('viewing'))
+
+    expect(emitted).toEqual([FAILED, READ])
+  })
+
+  it('says so on the shell when the gateway is out of reach, and reads nothing: that read would fail too', async () => {
     const { actor, emitted } = page({ revoke: refused })
 
     actor.send({ type: 'device.list.revoke-button', device: phone })

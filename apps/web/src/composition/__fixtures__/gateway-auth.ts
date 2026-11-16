@@ -26,7 +26,13 @@ export type FakeAuthRequest =
       readonly name: string
       readonly locale: string
     }
-  | { readonly kind: 'sign-in'; readonly email: string; readonly device: NamedDevice }
+  | {
+      readonly kind: 'sign-in'
+      readonly email: string
+      readonly device: NamedDevice
+      /** Present on a sign-in that confirmed signing out the device seen least recently. */
+      readonly signOutOldest?: true
+    }
   | { readonly kind: 'verify'; readonly token: string; readonly device: NamedDevice }
   | { readonly kind: 'resend'; readonly email: string }
   | { readonly kind: 'request-reset'; readonly email: string }
@@ -61,6 +67,19 @@ export interface FakeGatewayAuth extends GatewayAuth {
    * refused as `data:LAST_ADMIN` and change nothing.
    */
   blockDeletion(email: string, blocked?: boolean): void
+  /**
+   * Puts the account of `email` at its limit of devices (`at`, by default) or takes it off: a
+   * sign-in of it that does not confirm signing out its device seen least recently is then refused
+   * as `data:DEVICE_LIMIT`, nothing signed in, and one that confirms signs in.
+   */
+  atDeviceLimit(email: string, at?: boolean): void
+  /**
+   * Has an operator ban the account of `email` (or lift it, with `false`): a sign-in of it with
+   * the right password, its email verified, is then refused as `data:ACCOUNT_BANNED`, nothing
+   * signed in; the first exchange of a link of it verifies its email, signs nothing in and is
+   * refused alike.
+   */
+  ban(email: string, banned?: boolean): void
 }
 
 /** One of the app's languages, as the gateway takes a sign-up's: anything else is refused. */
@@ -73,8 +92,10 @@ const isLocale = (locale: string): locale is Locale =>
  * answer that signs a device in carries a new session token. A sign-up signs nothing in: a new
  * email makes an account not verified yet and a verification link, as its mail would carry; one
  * that has an account changes nothing; both answer alike. A sign-in with the right password of an
- * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`. The first exchange of any of
- * the account's links verifies it and signs the device in, a later one signs nothing in.
+ * account not verified yet is refused as `data:EMAIL_NOT_VERIFIED`, and one of an account an
+ * operator banned (`ban`) as `data:ACCOUNT_BANNED`, once the email is verified. The first
+ * exchange of any of the account's links verifies it and signs the device in, a later one signs
+ * nothing in; one of a banned account verifies it and is refused as `data:ACCOUNT_BANNED`.
  */
 export function fakeGatewayAuth(): FakeGatewayAuth {
   const accounts = new Map<string, Account>()
@@ -90,6 +111,10 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
   const deletions = new Map<string, string>()
   /** The emails of the accounts that are the only administrator of an organisation with others. */
   const onlyAdmins = new Set<string>()
+  /** The emails of the accounts at their limit of devices. */
+  const atLimit = new Set<string>()
+  /** The emails of the accounts an operator banned. */
+  const banned = new Set<string>()
   /** The email of the account each session token was given for. */
   const sessions = new Map<string, string>()
   const requests: FakeAuthRequest[] = []
@@ -137,6 +162,20 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       return link
     },
+    atDeviceLimit: (email, at = true) => {
+      if (at) {
+        atLimit.add(email.toLowerCase())
+      } else {
+        atLimit.delete(email.toLowerCase())
+      }
+    },
+    ban: (email, on = true) => {
+      if (on) {
+        banned.add(email.toLowerCase())
+      } else {
+        banned.delete(email.toLowerCase())
+      }
+    },
     blockDeletion: (email, blocked = true) => {
       if (blocked) {
         onlyAdmins.add(email.toLowerCase())
@@ -182,7 +221,12 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       return okAsync(undefined)
     },
     signIn: (input, device) => {
-      requests.push({ kind: 'sign-in', email: input.email, device })
+      requests.push({
+        kind: 'sign-in',
+        email: input.email,
+        device,
+        ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+      })
 
       const account = accounts.get(input.email.toLowerCase())
 
@@ -192,6 +236,19 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
 
       if (!account.verified) {
         return errAsync(dataError('data:EMAIL_NOT_VERIFIED', 'the email is not verified yet'))
+      }
+
+      if (banned.has(input.email.toLowerCase())) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      if (atLimit.has(input.email.toLowerCase()) && input.signOutOldest !== true) {
+        return errAsync(
+          dataError(
+            'data:DEVICE_LIMIT',
+            'the account is signed in on as many devices as it may be',
+          ),
+        )
       }
 
       const given = token()
@@ -215,6 +272,10 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
       }
 
       accounts.set(email, { ...account, verified: true })
+
+      if (banned.has(email)) {
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
 
       const given = token()
 

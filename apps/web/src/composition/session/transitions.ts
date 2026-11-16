@@ -32,6 +32,14 @@ export class SessionTransitions {
     this.#begin()
   }
 
+  /**
+   * Drops the transition running now: a new generation starts, so it attaches nothing when it
+   * ends; the queued ones still run after it.
+   */
+  supersede(): void {
+    this.#begin()
+  }
+
   serially<T>(run: (generation: number) => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
     // A closed session runs nothing more, transitions queued before the close included.
     const result = this.#queue.then(() =>

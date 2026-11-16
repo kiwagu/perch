@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Theme } from '../../../../platform/theme'
+import { FRAME_STATES } from '../../application/shell-machine'
 
 import { openedFrame } from './__fixtures__/frame'
 import { frameSettingsWrites } from './shell-frame'
@@ -49,7 +50,7 @@ function frameOfAnn() {
 }
 
 describe('deliverStored', () => {
-  it('applies a language and a theme stored elsewhere while the app installs, once the frame is back', async () => {
+  it('applies a language and a theme stored elsewhere while the app installs, at once', async () => {
     const ann = frameOfAnn()
 
     ann.hold('en', 'light')
@@ -60,17 +61,14 @@ describe('deliverStored', () => {
     ann.install()
     ann.hold('es', 'dark')
 
-    expect(ann.frame.actor.getSnapshot().matches('installing')).toBe(true)
-    expect(ann.spoken).toEqual(['en'])
-    expect(ann.setTheme.mock.calls).toEqual([['light']])
-
-    ann.endPrompt()
-    await vi.waitFor(() => expect(ann.frame.actor.getSnapshot().matches('ready')).toBe(true))
-    ann.moved()
-
+    expect(ann.frame.actor.getSnapshot().matches(FRAME_STATES.installing)).toBe(true)
     expect(ann.spoken).toEqual(['en', 'es'])
     expect(ann.setTheme.mock.calls).toEqual([['light'], ['dark']])
 
+    ann.endPrompt()
+    await vi.waitFor(() =>
+      expect(ann.frame.actor.getSnapshot().matches(FRAME_STATES.offering)).toBe(true),
+    )
     // Handed again on a later move, it is seen: nothing applies twice.
     ann.moved()
 
@@ -89,7 +87,9 @@ describe('deliverStored', () => {
     writes.locale.writing('es')
     ann.hold('es', 'dark')
     ann.endPrompt()
-    await vi.waitFor(() => expect(ann.frame.actor.getSnapshot().matches('ready')).toBe(true))
+    await vi.waitFor(() =>
+      expect(ann.frame.actor.getSnapshot().matches(FRAME_STATES.offering)).toBe(true),
+    )
     ann.moved()
 
     expect(ann.spoken).toEqual(['en'])

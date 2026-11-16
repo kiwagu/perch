@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { z } from '@workspace/zod'
 
-import { flatJsonSchema } from './flat-json-schema'
+import { flatJsonSchema, searchJsonSchema } from './flat-json-schema'
 
 /** What `z.toJSONSchema` writes for a router's search schema, without its dialect. */
 const written = (schema: z.ZodType): unknown => {
@@ -41,6 +41,24 @@ describe('flatJsonSchema', () => {
 
     expect(parsed.success).toBe(false)
   })
+  it('refuses a format, which a value takes and a route parameter never does', () => {
+    const parsed = flatJsonSchema.safeParse({
+      type: 'object',
+      properties: { email: { type: 'string', format: 'email' } },
+      additionalProperties: false,
+    })
+
+    expect(parsed.success).toBe(false)
+  })
+  it('takes a boolean among the values of a route parameter, unlike a value of the platform', () => {
+    const parsed = flatJsonSchema.safeParse({
+      type: 'object',
+      properties: { open: { type: 'boolean', enum: [true, false] } },
+      additionalProperties: false,
+    })
+
+    expect(parsed.error?.issues).toBeUndefined()
+  })
   it('takes the examples of a parameter, one value at least', () => {
     const schema = (examples: unknown[]) => ({
       type: 'object',
@@ -53,5 +71,27 @@ describe('flatJsonSchema', () => {
     ).toEqual({ type: 'string', examples: ['thg_01hzx9k2', 'thg_01hzxa7q'] })
     expect(flatJsonSchema.safeParse(schema([])).success).toBe(false)
     expect(flatJsonSchema.safeParse(schema([{ id: 1 }])).success).toBe(false)
+  })
+})
+
+describe('the key of an address', () => {
+  const keyed = (perch: Record<string, unknown>) => ({
+    type: 'object',
+    properties: { token: { type: 'string', minLength: 1, 'x-perch': perch } },
+    additionalProperties: false,
+  })
+
+  it('takes a code as the key of a search parameter, beside its controls', () => {
+    expect(searchJsonSchema.safeParse(keyed({ key: 'link-invalid' })).error?.issues).toBeUndefined()
+    expect(
+      searchJsonSchema.parse(keyed({ key: 'link-invalid', control: 'sample.token-input' }))
+        .properties['token']?.['x-perch'],
+    ).toEqual({ key: 'link-invalid', control: 'sample.token-input' })
+  })
+  it('refuses a key that is no code', () => {
+    expect(searchJsonSchema.safeParse(keyed({ key: 'Link invalid' })).success).toBe(false)
+  })
+  it('refuses a key on a path parameter, which no action takes as `{ search }`', () => {
+    expect(flatJsonSchema.safeParse(keyed({ key: 'link-invalid' })).success).toBe(false)
   })
 })

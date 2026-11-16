@@ -1,36 +1,26 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { isTenantKey } from '@workspace/kernel'
-import type { Membership } from '@workspace/replica/protocol'
-import type { RegionHub } from '@workspace/replica/server'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import { AccountDeparture, type DepartureError, type DepartureSteps } from '../account-departure'
 import { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
-import type { Member, Tenant } from '../organisation-rows'
-import type { TenantDatabases } from '../tenant-databases'
+import type { Member } from '../organisation-rows'
 import { TenantMembers } from '../tenant-members'
 
+import { AdminTurn } from './admin-turn'
+import { OrganisationAdmission } from './admission'
 import { OrganisationCreation } from './creation'
-import { OrganisationInvitation } from './invitation'
+import { OrganisationInvitations } from './invitations'
 import { type MembershipListener, MembershipListeners } from './listeners'
+import { MembersList } from './members-list'
+import type { OrganisationsOptions } from './options'
 import { OrganisationRemoval } from './removal'
+import { OrganisationRoleChange } from './role-change'
 import { MembershipTurns } from './turns'
-
-export interface OrganisationsOptions {
-  /** The directory database, opened as the gateway's namespace user. */
-  readonly directory: LocalDb
-  readonly databases: Pick<TenantDatabases, 'acquire' | 'evict'>
-  /**
-   * Takes the region of an organisation an identity was removed from from that identity's open
-   * connections at once; resolves once none of them may name it any more.
-   */
-  readonly revoke: (identity: IdentityId, region: string) => Promise<void>
-  /** The region hub, which lets go of the region of an organisation a departure takes whole. */
-  readonly hub: Pick<RegionHub, 'retire'>
-}
 
 /** The longest name an organisation may have, in characters. */
 const MAX_NAME = 80
@@ -40,41 +30,60 @@ const MAX_NAME = 80
  * organisation and every membership; each organisation's own database holds its members, the
  * word its data is checked against. A command that fails with a `DataError` after some of its
  * rows were written leaves those rows in place, and asking again completes it: a creation by its
- * creator, an invite, a removal. Each change of memberships but a departure resolves once the
- * listeners heard the identity's new memberships.
+ * creator, a role change, a removal. Each change of memberships but a departure resolves once
+ * its tell settled: the listeners heard the identity's new memberships, or the telling failed
+ * and is retold later (`MembershipListeners`); no change fails for the telling.
  *
- * The changes of one identity's memberships (its creations, the invites of it, its removals
- * and its departure) run one after the other, each once the one before it, its notification
- * included, has settled: the directory and the organisation's database end as the last one left
- * them, and the listeners hear the lists in that order. An invite, a removal and a departure run
- * in the turn of each organisation they change too (`MembershipTurns`), and decide there from
- * the rows as they are then: an invite or a removal is refused when its organisation is gone or
- * its admin no longer one, a departure when it would leave the others without an admin. This
+ * The changes of one identity's memberships (its creations, its acceptances of invitations, its
+ * role changes, its removals and its departure) run one after the other, each once the one before
+ * it, its notification included, has settled: the directory and the organisation's database end
+ * as the last one left them, and the listeners hear the lists in that order. An acceptance, a
+ * role change, a removal and a departure run in the turn of each organisation they change too
+ * (`MembershipTurns`; `AdminTurn` for those an admin asks), and decide there from the rows as they
+ * are then: a role change or a removal is refused when its organisation is gone or its admin no
+ * longer one, a departure or a demotion when it would leave the others without an admin. This
  * orders them within one gateway process only; gateways running in several processes would need
  * a durable revision of the memberships.
+ *
+ * The invitations to join an organisation are `invitations` (`OrganisationInvitations`): they
+ * share the turns, the lookup, the listeners and the admission of this class, so an accepted
+ * invitation is a change of memberships like any other.
  */
 export class Organisations {
   readonly #lookup: OrganisationLookup
-  readonly #members: TenantMembers
   readonly #listeners: MembershipListeners
   readonly #creation: OrganisationCreation
-  readonly #invitation: OrganisationInvitation
+  readonly #roleChange: OrganisationRoleChange
   readonly #removal: OrganisationRemoval
+  readonly #membersList: MembersList
   readonly #departure: AccountDeparture
   readonly #turns = new MembershipTurns()
+  readonly #adminTurn: AdminTurn
+  /** The invitations of organisations: invited, revoked, read, accepted and declined. */
+  readonly invitations: OrganisationInvitations
 
   constructor(options: OrganisationsOptions) {
-    const { directory, databases, revoke, hub } = options
+    const { directory, databases, revoke, rerole, hub } = options
     const lookup = new OrganisationLookup(directory)
     const members = new TenantMembers(databases)
-    const listeners = new MembershipListeners(lookup)
+    const listeners = new MembershipListeners(lookup, this.#turns, options.retell)
+    const admission = new OrganisationAdmission({ directory, lookup, members })
 
+    this.#adminTurn = new AdminTurn(this.#turns, lookup)
     this.#lookup = lookup
-    this.#members = members
     this.#listeners = listeners
     this.#creation = new OrganisationCreation({ directory, databases, lookup, members })
-    this.#invitation = new OrganisationInvitation({ directory, lookup, members })
+    this.invitations = new OrganisationInvitations({
+      ...options.invitations,
+      lookup,
+      turns: this.#turns,
+      adminTurn: this.#adminTurn,
+      admission,
+      listeners,
+    })
+    this.#roleChange = new OrganisationRoleChange({ directory, lookup, members, rerole })
     this.#removal = new OrganisationRemoval({ directory, members, listeners, revoke })
+    this.#membersList = new MembersList({ lookup, members })
     this.#departure = new AccountDeparture({ directory, databases, hub })
   }
 
@@ -117,40 +126,32 @@ export class Organisations {
   }
 
   /**
-   * An admin of the organisation adds the identity that signs in with `email` as a member
-   * (`OrganisationInvitation`), and the invited identity's listeners hear it. In the identity's
-   * turn the email is looked up again: an identity whose account went while the invite waited for
-   * its departure (`leaveAll`), or whose email names another identity now, is refused
-   * `no-such-identity`, so no membership is written for an identity that is gone.
+   * An admin of the organisation sets the role of `identity` in it (`OrganisationRoleChange`), and
+   * the identity's listeners hear it, in the identity's turn and the organisation's: decided from
+   * the rows as they are in that turn, so two admins demoting each other at once leave one admin
+   * (the second is no admin by its turn and is refused `not-admin`), and a demotion races a
+   * departure without leaving the organisation none (`last-admin`, which first writes the member
+   * row of the only admin again as the directory has it). Asking again completes a change that
+   * failed; a failure of the telling alone fails nothing and is retold.
    */
-  invite(input: {
+  setRole(input: {
     actor: IdentityId
     key: string
-    email: string
-  }): ResultAsync<Member, OrganisationError> {
-    const { actor, key, email } = input
+    identity: IdentityId
+    role: TenantRole
+  }): ResultAsync<void, OrganisationError> {
+    const { actor, key, identity, role } = input
 
     return this.#lookup
       .tenantOf(key)
       .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
       .andThen((tenant) =>
-        this.#lookup.identityByEmail(email).map((identity) => ({ tenant, identity })),
-      )
-      .andThen(({ tenant, identity }) =>
-        this.#turns.ofIdentity(identity.id, () =>
-          this.#lookup
-            .identityByEmail(email)
-            .andThen((current) =>
-              current.id === identity.id ? okAsync(tenant) : errAsync(refused('no-such-identity')),
-            )
-            .andThen(() =>
-              this.#asAdmin(actor, tenant, (current) =>
-                this.#invitation
-                  .admit(current, identity.id)
-                  .andThen(() => this.#listeners.tell(identity.id))
-                  .map((): Member => ({ identity, role: 'member' })),
-              ),
-            ),
+        this.#turns.ofIdentity(identity, () =>
+          this.#adminTurn.run(actor, tenant, (current) =>
+            this.#roleChange
+              .set(current, identity, role)
+              .andThen(() => this.#listeners.tell(identity)),
+          ),
         ),
       )
   }
@@ -172,7 +173,7 @@ export class Organisations {
       .andThen((tenant) => (identity === actor ? errAsync(refused('self')) : okAsync(tenant)))
       .andThen((tenant) =>
         this.#turns.ofIdentity(identity, () =>
-          this.#asAdmin(actor, tenant, (current) => this.#removal.remove(current, identity)),
+          this.#adminTurn.run(actor, tenant, (current) => this.#removal.remove(current, identity)),
         ),
       )
   }
@@ -215,7 +216,12 @@ export class Organisations {
     )
   }
 
-  /** The members of the organisation with their emails, for its admins, the earliest first. */
+  /**
+   * The members of the organisation with their emails, for its admins, the earliest membership
+   * first: the directory's, once the organisation's member rows are settled to them
+   * (`MembersList`), in the organisation's turn, where no change of its memberships is between
+   * its two writes.
+   */
   membersOf(input: {
     actor: IdentityId
     key: string
@@ -225,8 +231,9 @@ export class Organisations {
     return this.#lookup
       .tenantOf(key)
       .andThen((tenant) => this.#lookup.adminOf(actor, tenant))
-      .andThen(() => this.#members.list(key))
-      .andThen((rows) => this.#lookup.withEmails(key, rows))
+      .andThen((tenant) =>
+        this.#adminTurn.run(actor, tenant, (current) => this.#membersList.list(current)),
+      )
   }
 
   /** Hears that an identity's memberships changed, with the new list. */
@@ -235,25 +242,11 @@ export class Organisations {
   }
 
   /**
-   * Runs `work`, a change of the organisation's memberships `actor` asked, in the organisation's
-   * turn, once it found that the organisation is still the one asked of and `actor` still one of
-   * its admins: a change that settled meanwhile (a departure that took the organisation whole,
-   * or `actor` out of it) refuses it as the checks before the turn would have.
+   * Stops the re-tells of failed tells for good, and resolves once the one running, if any,
+   * settled; the changes under way are not waited for. Closed before what the re-tells read and
+   * tell.
    */
-  #asAdmin<T>(
-    actor: IdentityId,
-    tenant: Tenant,
-    work: (tenant: Tenant) => ResultAsync<T, OrganisationError>,
-  ): ResultAsync<T, OrganisationError> {
-    return this.#turns.ofTenants([tenant.id], () =>
-      this.#lookup
-        .tenantOf(tenant.key)
-        .andThen((current) =>
-          current.id === tenant.id
-            ? this.#lookup.adminOf(actor, current)
-            : errAsync(refused('no-such-tenant')),
-        )
-        .andThen(work),
-    )
+  close(): Promise<void> {
+    return this.#listeners.close()
   }
 }

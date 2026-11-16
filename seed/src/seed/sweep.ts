@@ -90,6 +90,7 @@ const sweepCommand: Command<SweepParams> = {
     'settings',
     'tenant',
     'membership',
+    'invitation',
     '_replica_head',
     '_replica_snapshot',
     '_replica_update',

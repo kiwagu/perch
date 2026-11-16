@@ -8,6 +8,8 @@ export {
   NO_ABILITY,
   OWNER_ABILITY,
   ownerKeyOf,
+  PLATFORM_ROLES,
+  type PlatformRole,
   type Scope,
   type TableAbilities,
   TENANT_ROLES,

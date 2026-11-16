@@ -8,7 +8,8 @@ import type { AccountSession, GatewayAuth } from '../gateway-auth'
 import {
   deviceIdFrom,
   type KeyValueStorage,
-  savedToken,
+  savedSession,
+  savedTokenOf,
   saveIdentityEmail,
   savePasswordReset,
 } from '../storage'
@@ -17,8 +18,11 @@ import {
 export interface SessionAccountDeps {
   readonly auth: GatewayAuth
   readonly storage: KeyValueStorage
-  /** Whether a session is open on this device now. */
-  readonly signedIn: () => boolean
+  /**
+   * The account signed in here: its space open, or opening at the start. Its calls present the
+   * session this browser keeps for it, never one another tab saved for another account since.
+   */
+  readonly signedInAs: () => IdentityId | undefined
   /**
    * Signs this device out of the account `identity` if it is the one signed in here, as the
    * channel's 4001 does; resolves once done, and never rejects.
@@ -93,9 +97,14 @@ export class SessionAccount {
    * account's.
    */
   confirmEmail(token: string): ResultAsync<EmailConfirmed, DataError> {
+    // The session the confirmation is asked in: its answer changes the email of that one alone.
+    const asked = savedSession(this.#deps.storage)
+
     return this.#deps.auth
       .confirmEmail(token)
-      .andTee(({ identity, email }) => saveIdentityEmail(this.#deps.storage, identity, email))
+      .andTee(({ identity, email }) =>
+        saveIdentityEmail(this.#deps.storage, identity, email, asked),
+      )
   }
 
   /** Asks the gateway with this device's session; the account stays as it is until the link is used. */
@@ -127,12 +136,11 @@ export class SessionAccount {
       : okAsync(session)
   }
 
-  /** The session this device is signed in with, if one is open. */
+  /** The session this device is signed in with, its account's space open or opening; none without. */
   #openSession(): AccountSession | undefined {
-    const token = savedToken(this.#deps.storage)
+    const here = this.#deps.signedInAs()
+    const token = here === undefined ? undefined : savedTokenOf(this.#deps.storage, here)
 
-    return token === undefined || !this.#deps.signedIn()
-      ? undefined
-      : { token, device: deviceIdFrom(this.#deps.storage) }
+    return token === undefined ? undefined : { token, device: deviceIdFrom(this.#deps.storage) }
   }
 }

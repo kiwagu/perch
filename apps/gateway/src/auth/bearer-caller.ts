@@ -1,5 +1,6 @@
 import type { DataError } from '@workspace/data'
 import type { DeviceSessionId, IdentityId } from '@workspace/ids'
+import type { PlatformRole } from '@workspace/kernel'
 import { deviceId } from '@workspace/replica/protocol'
 
 import type { AuthSessions } from './auth-sessions'
@@ -13,8 +14,9 @@ const BEARER = /^Bearer +(\S+)$/i
 
 /**
  * Who a call with a session token comes from: the identity whose live session the token holds,
- * its email, the device it names, which the session was opened on, the session's row and the
- * token; or why the call is refused.
+ * its email, the device it names, which the session was opened on, the session's row, the
+ * account's platform roles read with that session for this call, and the token; or why the call
+ * is refused.
  */
 export type BearerCaller =
   | {
@@ -23,6 +25,7 @@ export type BearerCaller =
       readonly email: string
       readonly device: string
       readonly session: DeviceSessionId
+      readonly roles: readonly PlatformRole[]
       readonly token: string
     }
   | { readonly kind: 'unauthorized' }
@@ -70,6 +73,7 @@ export async function bearerCaller(
         email: read.caller.email,
         device: device.data,
         session: read.caller.session,
+        roles: read.caller.roles,
         token,
       }
     : { kind: 'unauthorized' }

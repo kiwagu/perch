@@ -116,11 +116,11 @@ describe('DeleteAccountView', () => {
     expect((screen.getByTestId(BUTTON) as HTMLButtonElement).disabled).toBe(false)
   })
 
-  it('tells the last admin to remove the other members, then press again', () => {
+  it('tells the last admin to make another member an administrator or remove the others, then press again', () => {
     renderView({ error: 'data:LAST_ADMIN' })
 
     expect(screen.getByTestId('user.delete-account.error').textContent).toBe(
-      'This account is the only admin of an organisation that has other members. Remove them first, then press again.',
+      'This account is the only admin of an organisation that has other members. Make another member an administrator, or remove the others, then press again.',
     )
   })
 

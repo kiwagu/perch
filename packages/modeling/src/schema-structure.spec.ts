@@ -171,6 +171,7 @@ describe('loadSchemaModel', () => {
       'account',
       'device_session',
       'identity',
+      'invitation',
       'membership',
       'profile',
       'settings',

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: its theme (light, dark, or the device's own setting) and its language, which follow it across its tabs and devices, its password and email, and the request that deletes the account."
+description: "The signed-in account's settings: its theme and language, its password and email, and the request that deletes the account."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.deletion.form ]
@@ -289,7 +289,7 @@ flow:
                 onError:
                   - target: idle
                     guard: deletionBlocked
-                    description: "The password was right, but the account is the only admin of an organisation with other members: nothing more can be done here, so the password is emptied and leaving for the organisation page asks nothing."
+                    description: The password was right, but the account is the only admin of an organisation with other members, so the password is emptied and leaving for the organisation page asks nothing.
                     actions:
                       - clear: user.settings.deletion.message
                       - show: user.settings.deletion.error

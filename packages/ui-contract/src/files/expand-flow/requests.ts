@@ -19,13 +19,15 @@ import type { Expansion } from './expansion'
 
 type State = Readonly<Record<string, unknown>>
 
-const clearOf = (anchor: string) => ({ type: 'clear', params: { anchor } })
+/** The effect that clears `anchor`. */
+export const clearOf = (anchor: string) => ({ type: 'clear', params: { anchor } })
 const showOf = (anchor: string, codes: readonly string[]) => ({
   type: 'show',
   params: { anchor, codes: [...codes] },
 })
 
-const clears = (effect: unknown, anchor: string): boolean =>
+/** Whether `effect`, as expanded, clears `anchor`. */
+export const clears = (effect: unknown, anchor: string): boolean =>
   recordOf(effect)['type'] === 'clear' && recordOf(recordOf(effect)['params'])['anchor'] === anchor
 
 /** `states` with the state at `names` (a region's state through its region) replaced by `update(state)`. */

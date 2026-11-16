@@ -26,7 +26,7 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
-const signedIn: EmailVerified = { kind: 'signed-in', user: ann, name: 'Ann', locale: 'en' }
+const signedIn: EmailVerified = { kind: 'signed-in', user: ann }
 
 const verifiedBefore: EmailVerified = { kind: 'verified-before' }
 
@@ -34,7 +34,7 @@ type Exchange = ReturnType<SessionPort['verifyEmail']>
 
 /**
  * A verification service over a session that answers each exchange of a token in turn, the last
- * answer again for any later one, and counts them; the accounts it starts are counted too.
+ * answer again for any later one, and counts them.
  */
 function verifying(answers: readonly (() => Exchange)[]) {
   const exchange = vi.fn((_token: string): Exchange => {
@@ -43,19 +43,9 @@ function verifying(answers: readonly (() => Exchange)[]) {
     return answer ? answer() : expect.unreachable('an answer')
   })
   const resend = vi.fn((_email: string) => okAsync(undefined))
-  const started: string[] = []
-  const service = new VerifyEmailService(
-    { verifyEmail: exchange, resendVerification: resend },
-    {
-      start: (user) => {
-        started.push(user.id)
+  const service = new VerifyEmailService({ verifyEmail: exchange, resendVerification: resend })
 
-        return okAsync(undefined)
-      },
-    },
-  )
-
-  return { service, exchange, resend, started }
+  return { service, exchange, resend }
 }
 
 /** The notice the frame shows, by its code. */
@@ -80,10 +70,11 @@ function renderPage(service: VerifyEmailService, path = '/verify-email?token=the
         path: '/verify-email',
         page: 'VerifyEmail',
         guard: 'guest',
+        roles: ['guest'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
-      { path: '/me', page: 'Me' },
-      { path: '/sign-in', page: 'SignIn' },
+      { path: '/me', page: 'Me', roles: ['guest', 'identity'] },
+      { path: '/sign-in', page: 'SignIn', roles: ['guest', 'identity'] },
     ],
   })
   const { session } = fakeSession()
@@ -115,7 +106,7 @@ const noticeCode = () => document.querySelector('p[data-code]')?.getAttribute('d
 
 describe('VerifyEmailContainer', () => {
   it('exchanges the token of the address once, though StrictMode starts its machine again, and lands on the profile with the welcome', async () => {
-    const { service, exchange, started } = verifying([() => okAsync(signedIn)])
+    const { service, exchange } = verifying([() => okAsync(signedIn)])
     const { router } = renderPage(service)
 
     await screen.findByText('profile')
@@ -123,11 +114,10 @@ describe('VerifyEmailContainer', () => {
     expect(router.state.location.pathname).toBe('/me')
     expect(noticeCode()).toBe('welcome')
     expect(exchange).toHaveBeenCalledExactlyOnceWith('the-token')
-    expect(started).toEqual([ann.id])
   })
 
   it('asks afresh when the page is opened again with the same token, after a visit that ended', async () => {
-    const { service, exchange, started } = verifying([
+    const { service, exchange } = verifying([
       () => okAsync(signedIn),
       () => okAsync(verifiedBefore),
     ])
@@ -145,7 +135,6 @@ describe('VerifyEmailContainer', () => {
       '/sign-in',
     )
     expect(exchange).toHaveBeenCalledTimes(2)
-    expect(started).toEqual([ann.id])
   })
 
   it('keeps no failed exchange: opened again, the page asks again and shows the new answer', async () => {
@@ -221,6 +210,22 @@ describe('VerifyEmailContainer', () => {
     expect(screen.getByTestId('user.verify-email.message').textContent).not.toContain(
       'someone-else@example.test',
     )
+  })
+
+  it('says the link of a banned account verified the email and signed nothing in: no form, no welcome, no move', async () => {
+    const { service } = verifying([
+      () => errAsync({ code: 'data:ACCOUNT_BANNED', message: 'the account is banned' }),
+    ])
+    const { router } = renderPage(service)
+
+    expect((await screen.findByTestId('user.verify-email.error')).getAttribute('data-code')).toBe(
+      'account-banned',
+    )
+    expect(screen.queryByTestId('user.verify-email.form')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
+    expect(screen.queryByTestId('user.verify-email.sign-in-link')).toBeNull()
+    expect(router.state.location.pathname).toBe('/verify-email')
+    expect(noticeCode()).toBeUndefined()
   })
 
   it('exchanges an empty token when the address carries none', async () => {

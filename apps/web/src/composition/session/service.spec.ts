@@ -3,7 +3,13 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { identityIdFactory, noteIdFactory, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import {
+  type IdentityId,
+  identityIdFactory,
+  noteIdFactory,
+  profileIdFactory,
+  tenantIdFactory,
+} from '@workspace/ids'
 import { CLOSE, type Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { type FakeHintChannel, FakeLocks, interceptRegionResets } from '@workspace/replica/testing'
@@ -20,17 +26,27 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import { elsewhere, signedIn, signedOutElsewhere } from '../__fixtures__/signed-in'
 import type { GatewayAuth, SignedInDevice } from '../gateway-auth'
 import {
   addPendingRevoke,
+  CURRENT_KEY,
   type KeptDevice,
+  type KeyValueStorage,
+  membershipsKeyOf,
   memoryStorage,
+  newSignInId,
   pendingRevokes,
+  type SignInOwner,
   saveDevice,
+  savedIdentity,
   savedMemberships,
+  savedSession,
+  savedTenant,
   savedTenantDatabases,
   savedToken,
   saveMemberships,
+  signedInKeyOf,
   TENANT_DATABASES_KEY,
 } from '../storage'
 
@@ -93,6 +109,11 @@ async function world(options: TestWorldOptions = {}): Promise<TestWorld> {
   return opened
 }
 
+/** The sign-in of `identity` that `storage` keeps now, as the owner of what it keeps. */
+function signInOf(storage: KeyValueStorage, identity: IdentityId): SignInOwner {
+  return { signIn: savedSession(storage)?.signIn ?? expect.unreachable('a sign-in kept'), identity }
+}
+
 /** A device database on which every region reset fails, as on a broken database. */
 const refuseResets = (local: LocalDb) =>
   interceptRegionResets(local, () => {
@@ -109,7 +130,7 @@ async function bootSession(options: {
   const storage = memoryStorage()
 
   if (options.saved) {
-    saveDevice(storage, options.saved)
+    signedIn(storage, options.saved)
   }
 
   const booted = await world({
@@ -185,7 +206,7 @@ async function twoTabs(options: {
     ...(options.hints ? { hints: new Set<FakeHintChannel>() } : {}),
   }
 
-  saveDevice(storage, ann)
+  const kept = signedIn(storage, ann)
 
   const a = await world({ ...shared, storage })
 
@@ -196,8 +217,9 @@ async function twoTabs(options: {
 
   const storageOfB = options.ownStorageOfB ? memoryStorage() : storage
 
+  // Tab b's own copy holds the same sign-in.
   if (options.ownStorageOfB) {
-    saveDevice(storageOfB, ann)
+    saveDevice(storageOfB, kept.signIn, ann)
   }
 
   const b = await world({
@@ -317,8 +339,8 @@ describe('SessionService', () => {
     expect((await session.signOut())._unsafeUnwrap()).toBe('signed-out')
     expect(gateway.signOuts()).toBe(1)
     expect(destroyed()).toEqual([ann.identity.id])
-    expect(storage.get('perch.session.token')).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     // The gateway signed the token out: nothing waits to be signed out.
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
     expect(session.current()).toBeUndefined()
@@ -337,14 +359,14 @@ describe('SessionService', () => {
 
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('needs-confirmation')
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
+    expect(savedToken(storage)).toBe(ann.token)
     expect(destroyed()).toEqual([])
 
     expect((await driveClock(session.signOut({ forgetUnsent: true })))._unsafeUnwrap()).toBe(
       'signed-out',
     )
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(destroyed()).toEqual([ann.identity.id])
   })
 
@@ -397,7 +419,7 @@ describe('SessionService', () => {
       let failAppend = false
       const storage = memoryStorage()
 
-      saveDevice(storage, ann)
+      signedIn(storage, ann)
 
       const booted = await world({
         storage,
@@ -450,7 +472,7 @@ describe('SessionService', () => {
     expect(stub.signOuts()).toBe(1)
     expect(destroyed()).toEqual([])
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
+    expect(savedToken(storage)).toBe(ann.token)
     expect(session.notice()).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
   })
@@ -607,8 +629,8 @@ describe('SessionService', () => {
     expect(a.stub.signOuts()).toBe(1)
     expect(a.destroyed()).toEqual([])
     expect(a.session.current()).toBeUndefined()
-    expect(a.storage.get('perch.session.identity')).toBeUndefined()
-    expect(a.storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(a.storage)).toBeUndefined()
+    expect(savedSession(a.storage)).toBeUndefined()
     expect(a.session.notice()).toBe('resend-after-sign-in')
     expect(a.storage.get('perch.session.signing-out')).toBeUndefined()
   })
@@ -647,7 +669,7 @@ describe('SessionService', () => {
     expect((await signingOut)._unsafeUnwrap()).toBe('signed-out')
     expect(a.destroyed()).toEqual([])
     expect(a.session.current()).toBeUndefined()
-    expect(a.storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(a.storage)).toBeUndefined()
     expect(a.session.notice()).toBe('resend-after-sign-in')
   })
 
@@ -663,7 +685,7 @@ describe('SessionService', () => {
     })
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({
       storage,
@@ -710,7 +732,7 @@ describe('SessionService', () => {
     const locks = new FakeLocks()
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({ storage, locks, online: false })
     const { session, clock } = booted
@@ -743,7 +765,7 @@ describe('SessionService', () => {
     const late = session.writePath.run(createProfile, aProfile())
 
     await vi.waitFor(() => expect(locks.waiting(lock, 'shared')).toBe(true))
-    storage.changeElsewhere('perch.session.identity', undefined)
+    signedOutElsewhere(storage)
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     letGoAgain()
 
@@ -757,7 +779,7 @@ describe('SessionService', () => {
     const locks = new FakeLocks()
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({ storage, locks, online: true })
     const { session, stub, destroyed, driveClock } = booted
@@ -776,7 +798,7 @@ describe('SessionService', () => {
     expect(stub.signOuts()).toBe(1)
     expect(destroyed()).toEqual([])
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
     // The gateway signed the token out before the database was kept: nothing waits to be signed out.
@@ -884,7 +906,7 @@ describe('SessionService', () => {
     const storage = memoryStorage()
     const locks = new FakeLocks()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const leading = await world({ storage, locks })
 
@@ -910,8 +932,7 @@ describe('SessionService', () => {
     // The outbox is read first: it decides whether the database goes.
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(session.notice()).toBeUndefined()
     expect(gateway.signOuts()).toBe(0)
     // A refused token is dead: nothing waits to be signed out.
@@ -929,9 +950,9 @@ describe('SessionService', () => {
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     expect(session.space()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBe('resend-after-sign-in')
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
+    expect(storage.get('perch.session.notice.0.resend-after-sign-in')).toBe('resend-after-sign-in')
     expect(session.notice()).toBe('resend-after-sign-in')
     await settle()
     expect(destroyed()).toEqual([])
@@ -940,7 +961,7 @@ describe('SessionService', () => {
     session.clearNotice()
 
     expect(session.notice()).toBeUndefined()
-    expect(storage.get('perch.session.notice')).toBeUndefined()
+    expect(storage.get('perch.session.notice.0.resend-after-sign-in')).toBeUndefined()
   })
 
   it('keeps the database when the gateway refuses the token and the outbox cannot be read', async () => {
@@ -956,7 +977,7 @@ describe('SessionService', () => {
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     expect(session.notice()).toBe('resend-after-sign-in')
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     await settle()
     expect(destroyed()).toEqual([])
     expect(failures.splice(0)).toEqual([unreadable])
@@ -972,8 +993,8 @@ describe('SessionService', () => {
     await settle()
 
     expect(session.current()?.id).toBe(ann.identity.id)
-    expect(storage.get('perch.session.token')).toBe(ann.token)
-    expect(storage.get('perch.session.identity')).toContain(ann.identity.id)
+    expect(savedToken(storage)).toBe(ann.token)
+    expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
     expect(session.notice()).toBeUndefined()
     expect(destroyed()).toEqual([])
     expect(states.at(-1)).toEqual({ leader: true, channel: 'down' })
@@ -986,20 +1007,18 @@ describe('SessionService', () => {
 
     expect(context?.credentials()).toEqual({ token: ann.token })
 
-    // Another identity's token is not this channel's to present.
-    saveDevice(storage, {
-      identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
-      token: 'token-bob',
-      memberships: [],
-    })
+    // Another sign-in's token is not this channel's to present, even read while the identity
+    // saved is still its own: another tab signed the identity in again, unheard here yet.
+    signedIn(storage, { identity: ann.identity, token: 'token-ann-again' })
 
+    expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
     expect(context?.credentials()).toBeUndefined()
   })
 
   it('closes its space, deleting nothing, when another tab signs the identity out', async () => {
     const { session, storage, destroyed, states } = await bootSession({ saved: ann })
 
-    storage.changeElsewhere('perch.session.identity', undefined)
+    signedOutElsewhere(storage)
     await settle()
 
     expect(session.current()).toBeUndefined()
@@ -1010,15 +1029,19 @@ describe('SessionService', () => {
 
   it('stays signed out of a saved identity the stored value does not describe', async () => {
     const storage = memoryStorage()
+    const signIn = newSignInId()
 
-    storage.set('perch.session.identity', '{"id":"not-an-identity","email":"x"}')
-    storage.set('perch.session.token', 'token-x')
+    storage.set(CURRENT_KEY, signIn)
+    storage.set(
+      signedInKeyOf(signIn),
+      JSON.stringify({ identity: 'not-an-identity', email: 'x', token: 'token-x' }),
+    )
 
     const { session, opened } = await world({ storage })
 
     expect((await session.restore())._unsafeUnwrap()).toBeUndefined()
     expect(opened()).toEqual([])
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(storage.get(signedInKeyOf(signIn))).toBeUndefined()
   })
 
   it('signs out even when the local database cannot be deleted, and reports it', async () => {
@@ -1038,7 +1061,7 @@ describe('SessionService', () => {
     expect(result._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(session.current()).toBeUndefined()
     expect(session.space()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(seen).toEqual([undefined])
   })
 
@@ -1080,12 +1103,12 @@ describe('SessionService', () => {
 
     await vi.waitFor(() => expect(holding.state.waiting).toBe(1))
 
-    const bobsToken = storage.get('perch.session.token')
+    const bobsToken = savedToken(storage)
     const second = session.signIn(annSignUp)
 
     // Ann's sign-in waits for Bob's: it has not touched the saved token.
     await new Promise((resolve) => setTimeout(resolve, 100))
-    expect(storage.get('perch.session.token')).toBe(bobsToken)
+    expect(savedToken(storage)).toBe(bobsToken)
     holding.release()
 
     // One account per browser: Bob is signed in once Ann's turn comes.
@@ -1093,8 +1116,8 @@ describe('SessionService', () => {
     expect((await second)._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
     expect(session.current()?.email).toBe(bobSignUp.email)
     expect(session.space()?.identity.email).toBe(bobSignUp.email)
-    expect(storage.get('perch.session.identity')).toContain(bobSignUp.email)
-    expect(storage.get('perch.session.token')).toBe(bobsToken)
+    expect(savedIdentity(storage)?.email).toBe(bobSignUp.email)
+    expect(savedToken(storage)).toBe(bobsToken)
   })
 
   it('attaches nothing after close, neither the transition running nor those waiting behind it', async () => {
@@ -1183,7 +1206,7 @@ describe('SessionService memberships', () => {
 
     expect(session.memberships()).toEqual([globex, acme])
     expect(session.currentTenant()).toEqual(acme)
-    expect(savedMemberships(storage, user.id)).toEqual([globex, acme])
+    expect(savedMemberships(storage, signInOf(storage, user.id))).toEqual([globex, acme])
     expect([...tenantsOpened()].sort()).toEqual(['acme', 'globex'])
     expect(session.space()?.tenants()).toEqual(['acme', 'globex'])
     expect(heard).toContain('acme')
@@ -1201,16 +1224,14 @@ describe('SessionService memberships', () => {
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(session.memberships()).toEqual([acme])
     expect(session.currentTenant()).toEqual(acme)
-    expect(savedMemberships(storage, ann.identity.id)).toEqual([acme])
+    expect(savedMemberships(storage, signInOf(storage, ann.identity.id))).toEqual([acme])
     expect(tenantsOpened()).toEqual(['acme'])
   })
 
   it("another tab's memberships change (storage event) updates the space", async () => {
     const { session, storage } = await bootSession({ saved: ann })
-    const elsewhere = memoryStorage()
 
-    saveMemberships(elsewhere, ann.identity.id, [acme])
-    storage.changeElsewhere('perch.session.memberships', elsewhere.get('perch.session.memberships'))
+    saveMemberships(elsewhere(storage), signInOf(storage, ann.identity.id), [acme])
 
     await vi.waitFor(() => expect(session.space()?.tenants()).toEqual(['acme']))
     expect(session.memberships()).toEqual([acme])
@@ -1220,7 +1241,7 @@ describe('SessionService memberships', () => {
   it('selectTenant is kept across restore', async () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, annIn([acme, globex]))
+    signedIn(storage, annIn([acme, globex]))
 
     const first = await world({ storage, online: false })
 
@@ -1254,7 +1275,7 @@ describe('SessionService memberships', () => {
   it('a tenant database retained across a refused-token sign-out is destroyed at the next sign-in when the membership is gone', async () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, annIn([acme]))
+    signedIn(storage, annIn([acme]))
 
     // Ann is removed from Acme while signed out: her next sign-in reads her memberships without it.
     const booted = await world({
@@ -1315,7 +1336,7 @@ describe('SessionService memberships', () => {
       signOut: () => okAsync(undefined),
     }
 
-    saveDevice(storage, annIn([acme]))
+    signedIn(storage, annIn([acme]))
 
     const booted = await world({
       storage,
@@ -1375,7 +1396,7 @@ describe('SessionService memberships', () => {
     const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
     const holding = holdingRegionLoads()
 
-    saveDevice(storage, annIn([acme]))
+    signedIn(storage, annIn([acme]))
 
     const a = await world(shared)
 
@@ -1424,7 +1445,7 @@ describe('SessionService memberships', () => {
     const shared = { storage, locks: new FakeLocks(), databases: browserDatabases(), online: false }
     const holding = holdingRegionLoads()
 
-    saveDevice(storage, annIn([acme]))
+    signedIn(storage, annIn([acme]))
 
     const a = await world(shared)
 
@@ -1460,7 +1481,7 @@ describe('SessionService memberships', () => {
   it('sign-out asks before it deletes an inventoried tenant database that did not open, and deletes it once told to forget', async () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
     const { session, contexts, tenantsDestroyed, tenantsDeleted, driveClock, failures } = booted
@@ -1492,7 +1513,7 @@ describe('SessionService memberships', () => {
   it('asks before an online sign-out while an inventoried tenant database did not open, without asking the gateway', async () => {
     const storage = memoryStorage()
 
-    saveDevice(storage, annIn([acme, globex]))
+    signedIn(storage, annIn([acme, globex]))
 
     const booted = await world({
       storage,
@@ -1520,8 +1541,7 @@ describe('SessionService memberships', () => {
 
   it('keeps the chosen organisation when the one picked did not open on this device', async () => {
     const storage = memoryStorage()
-
-    saveDevice(storage, annIn([acme, globex]))
+    const kept = signedIn(storage, annIn([acme, globex]))
 
     const booted = await world({ storage, online: false, refusedTenants: ['globex'] })
     const { session, failures } = booted
@@ -1533,12 +1553,13 @@ describe('SessionService memberships', () => {
 
     // Globex is unavailable here: acme stays current, and stays the choice the next start opens with.
     expect(session.currentTenant()?.tenant.key).toBe('acme')
-    expect(storage.get('perch.session.tenant')).toBe('acme')
+    expect(savedTenant(storage, kept.signIn)).toBe('acme')
     expect(failures.splice(0).map(({ code }) => code)).toEqual(['data:OPEN_FAILED'])
   })
 
   it('the sign-in page keeps nothing of the memberships after sign-out', async () => {
     const { session, storage, driveClock } = await bootSession({ saved: annIn([acme, globex]) })
+    const kept = signInOf(storage, ann.identity.id)
     let heard = 0
 
     session.selectTenant('globex')
@@ -1549,8 +1570,8 @@ describe('SessionService memberships', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(session.memberships()).toEqual([])
     expect(session.currentTenant()).toBeUndefined()
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
-    expect(storage.get('perch.session.tenant')).toBeUndefined()
+    expect(storage.get(membershipsKeyOf(kept.signIn))).toBeUndefined()
+    expect(savedTenant(storage, kept.signIn)).toBeUndefined()
     expect(heard).toBeGreaterThan(0)
   })
 
@@ -1625,9 +1646,9 @@ describe('SessionService devices', () => {
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
+    expect(savedToken(storage)).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
     // The token is dead, so nothing waits to be signed out; the browser keeps its id.
@@ -1646,8 +1667,8 @@ describe('SessionService devices', () => {
     gateway.endWith('revoked')
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
     await settle()
@@ -1659,7 +1680,7 @@ describe('SessionService devices', () => {
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
 
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([{ token: ann.token, device: id }])
 
     // Still offline at the next start: the token waits.
@@ -1684,7 +1705,7 @@ describe('SessionService devices', () => {
     const locks = new FakeLocks()
     const storage = memoryStorage()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({ storage, locks, online: false })
     const { session, destroyed, driveClock } = booted
@@ -1702,7 +1723,7 @@ describe('SessionService devices', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(destroyed()).toEqual([])
     expect(session.notice()).toBe('resend-after-sign-in')
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(pendingRevokes(storage)).toEqual([
       { token: ann.token, device: storage.get('perch.device.id') },
     ])
@@ -1712,7 +1733,7 @@ describe('SessionService devices', () => {
     const storage = memoryStorage()
     const auth = fakeGatewayAuth()
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const booted = await world({ storage, auth, online: true, wrap: refuseResets })
     const { session, stub, failures } = booted
@@ -1849,8 +1870,8 @@ describe('SessionService devices', () => {
     // The gateway answered: every device of the identity is signed out, this one included.
     expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(storage.get('perch.session.signing-out')).toBeUndefined()
     expect(session.notice()).toBe('signed-out-elsewhere')
     expect(destroyed()).toEqual([ann.identity.id])
@@ -1882,7 +1903,7 @@ describe('SessionService devices', () => {
 
     expect((await signOutHere()).isOk()).toBe(true)
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('resend-after-sign-in')
     expect(pendingRevokes(storage)).toEqual([])
     await settle()

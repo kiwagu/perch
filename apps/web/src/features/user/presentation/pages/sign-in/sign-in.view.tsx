@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -44,6 +45,7 @@ export type SignInListed =
   | 'user.sign-in.password-confirmation-input'
   | 'user.sign-in.name-input'
   | 'user.sign-in.resend-button'
+  | 'user.sign-in.device-limit-dialog'
 
 /** A password field: the password, or the password typed again. */
 export type PasswordField = keyof Passwords
@@ -59,7 +61,9 @@ export interface SignInViewProps {
    * Why the last session ended, when the person should know: `resend-after-sign-in` once the
    * device was signed out while it held changes it had not sent, `signed-out-elsewhere` once
    * another device signed it out, `password-changed-elsewhere` once a change of the account's
-   * password did, `password-reset-elsewhere` once another tab set a new password through a reset
+   * password did, `device-limit-elsewhere` once a sign-in on another device went past the
+   * account's limit of devices and signed out this one, seen least recently,
+   * `password-reset-elsewhere` once another tab set a new password through a reset
    * link, `delete-pending` while another tab still holds the data of the account signed out.
    */
   readonly notice?: SessionNotice | undefined
@@ -81,6 +85,13 @@ export interface SignInViewProps {
   readonly onResend: (email: string) => Promise<boolean>
   /** Moves to asking for a reset mail, carrying the email as typed. */
   readonly onForgot: (email: string) => void
+  /**
+   * Signs in all the same past the account's limit of devices, with the values as typed: the
+   * account's device seen least recently is signed out.
+   */
+  readonly onConfirmDeviceLimit: (values: SignInValues) => void
+  /** Goes back to the form from the dialog past the limit of devices, signing nothing in. */
+  readonly onCancelDeviceLimit: () => void
 }
 
 /** The contract code of a refusal, with its text. */
@@ -90,6 +101,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
       return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
     case 'data:EMAIL_NOT_VERIFIED':
       return { code: 'email-not-verified', text: t('user.sign-in.error.email-not-verified') }
+    case 'data:ACCOUNT_BANNED':
+      return { code: 'account-banned', text: t('user.sign-in.error.account-banned') }
     case 'data:SIGN_UP_REJECTED':
       return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
     case 'data:RATE_LIMITED':
@@ -118,12 +131,16 @@ function noticeText(
   notice: NonNullable<SignInViewProps['notice']>,
 ): string {
   switch (notice) {
+    case 'account-banned':
+      return t('user.sign-in.notice.account-banned')
     case 'resend-after-sign-in':
       return t('user.sign-in.notice.resend-after-sign-in')
     case 'signed-out-elsewhere':
       return t('user.sign-in.notice.signed-out-elsewhere')
     case 'password-changed-elsewhere':
       return t('user.sign-in.notice.password-changed-elsewhere')
+    case 'device-limit-elsewhere':
+      return t('user.sign-in.notice.device-limit-elsewhere')
     case 'password-reset-elsewhere':
       return t('user.sign-in.notice.password-reset-elsewhere')
     case 'delete-pending':
@@ -209,6 +226,7 @@ export function SignInView(props: SignInViewProps) {
                 type="email"
                 autoComplete="email"
                 required
+                marksState={false}
                 data-testid="user.sign-in.email-input"
               />
             </Field>
@@ -223,6 +241,7 @@ export function SignInView(props: SignInViewProps) {
                 }
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
+                marksState={false}
                 testId="user.sign-in.password-input"
               />
               {props.renders('user.sign-in.password-rule-list') ? (
@@ -261,6 +280,7 @@ export function SignInView(props: SignInViewProps) {
                   aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
                   showLabel={t('user.password.show')}
                   hideLabel={t('user.password.hide')}
+                  marksState={false}
                   testId="user.sign-in.password-confirmation-input"
                 />
                 {error && concerns === 'confirmation' ? (
@@ -281,6 +301,7 @@ export function SignInView(props: SignInViewProps) {
                   {...field('name')}
                   autoComplete="name"
                   required
+                  marksState={false}
                   data-testid="user.sign-in.name-input"
                 />
               </Field>
@@ -316,6 +337,18 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
           </FieldGroup>
         </Form>
+        <ConfirmDialog
+          open={props.renders('user.sign-in.device-limit-dialog')}
+          title={t('user.sign-in.device-limit.title')}
+          description={t('user.sign-in.device-limit.body')}
+          confirmLabel={t('user.sign-in.device-limit.confirm')}
+          cancelLabel={t('user.sign-in.device-limit.cancel')}
+          destructive
+          onConfirm={() => props.onConfirmDeviceLimit(values)}
+          onCancel={() => props.onCancelDeviceLimit()}
+          testId="user.sign-in.device-limit-dialog"
+          code="device-limit"
+        />
       </CardContent>
     </Card>
   )

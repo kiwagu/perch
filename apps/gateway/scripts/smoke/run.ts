@@ -2,9 +2,10 @@
  * The smoke test behind `cli.ts`: the gateway runs in this process in front of a SurrealDB
  * stand and serves a new identity's two devices over HTTP and WebSocket, through sign-up and the
  * verification of its email through the mail in the stand's mailbox, sign-in, push, fan-out and
- * sign-out, then the reset of a password through its mail. It prints one line per step and stops at the first step that fails or takes longer
- * than 5 s. The identities it signs up stay on the stand, for the sweep of `@example.test`
- * accounts.
+ * sign-out, then the reset of a password through its mail, and last an operator's ban, lift and
+ * sign-out everywhere of another account. It prints one line per step and stops at the first step
+ * that fails or takes longer than 5 s. The identities it signs up stay on the stand, for the sweep
+ * of `@example.test` accounts.
  */
 
 import { remoteEngines, wsRpcUrl } from '@workspace/data/engines/remote'
@@ -25,6 +26,7 @@ import {
 } from '../../src/sync/__fixtures__/profile'
 
 import { accessSteps } from './access'
+import { consoleSteps } from './console'
 import type { SmokeDevice } from './device'
 import { deviceSessionSteps } from './device-sessions'
 import { freshPassword } from './fresh-password'
@@ -217,6 +219,7 @@ async function steps(config: SmokeConfig, opened: Opened): Promise<void> {
   await passwordResetSteps(base, mailbox, opened)
   await deviceSessionSteps(base, mailbox, opened)
   await organisationSteps(base, mailbox, opened, second, credentials)
+  await consoleSteps(base, mailbox, opened, second, credentials.email)
 }
 
 /** Runs the smoke test; resolves to the process's exit code. */

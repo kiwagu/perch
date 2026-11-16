@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { DataError } from '@workspace/data'
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
-import type { Membership } from '@workspace/replica/protocol'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import { ConnectionRegistry } from './connections'
 
@@ -12,18 +12,21 @@ const acme: Membership = {
 }
 
 /**
- * A connection that keeps what it is told of its identity's memberships and the regions taken
- * from it; with `answered`, each call resolves only once that does, as a device still busy would.
+ * A connection that keeps what it is told of its identity's memberships, the regions taken from it
+ * and the roles it was given; with `answered`, each call resolves only once that does, as a
+ * device still busy would.
  */
 function connection(answered: Promise<void> = Promise.resolve()) {
   const heard: Array<readonly Membership[]> = []
   const revoked: string[] = []
+  const reroled: Array<readonly [string, TenantRole]> = []
   const ended: number[] = []
   const superseded = { count: 0 }
 
   return {
     heard,
     revoked,
+    reroled,
     ended,
     superseded,
     supersede: () => {
@@ -35,6 +38,10 @@ function connection(answered: Promise<void> = Promise.resolve()) {
     },
     revoke: async (region: string) => {
       revoked.push(region)
+      await answered
+    },
+    rerole: async (region: string, role: TenantRole) => {
+      reroled.push([region, role])
       await answered
     },
     end: async (code: number) => {
@@ -174,6 +181,37 @@ describe('ConnectionRegistry', () => {
     await expect(registry.revoke(identityIdFactory.create(), 'tenant:acme')).resolves.toBe(
       undefined,
     )
+  })
+
+  it('re-judges on every live connection of the identity, and resolves once each has', async () => {
+    const registry = registryHeard()
+    const ann = identityIdFactory.create()
+    const busy = deferred()
+    const laptop = connection()
+    const phone = connection(busy.promise)
+    const bobs = connection()
+
+    registry.add(ann, 'device-laptop', laptop, registry.epoch())
+    registry.add(ann, 'device-phone', phone, registry.epoch())
+    registry.add(identityIdFactory.create(), 'device-bobs', bobs, registry.epoch())
+
+    const reroled = registry.rerole(ann, 'tenant:acme', 'admin')
+    const rerolling = watch(reroled)
+
+    // Both connections were reached at once, but the call resolves only once the busy one has.
+    await settle()
+    expect(laptop.reroled).toEqual([['tenant:acme', 'admin']])
+    expect(phone.reroled).toEqual([['tenant:acme', 'admin']])
+    expect(rerolling.resolved).toBe(false)
+
+    busy.resolve()
+    await reroled
+
+    expect(bobs.reroled).toEqual([])
+    // An identity without connections has nothing to wait for.
+    await expect(
+      registry.rerole(identityIdFactory.create(), 'tenant:acme', 'member'),
+    ).resolves.toBe(undefined)
   })
 
   it('ends the connections of the named device of the identity only, and resolves once each has', async () => {

@@ -1,30 +1,168 @@
 import { describe, expect, it } from 'vitest'
 
-import { memoryStorage } from './key-value'
-import { forgetNotice, savedNotice, saveNotice } from './notice'
+import { SESSION_NOTICES } from '../../platform/session.port'
 
-describe('the word for the sign-in page', () => {
-  it('keeps each notice it knows, and reads none from a value it does not', () => {
+import { type KeyValueStorage, memoryStorage } from './key-value'
+import { forgetNotice, markSignIn, savedNotice, saveNotice, signInMark } from './notice'
+
+const PAIRS = SESSION_NOTICES.flatMap((first) =>
+  SESSION_NOTICES.map((then) => [first, then] as const),
+)
+
+/**
+ * `storage` as this tab uses it while another tab acts (`elsewhere`) between this tab's check of
+ * the sign-in mark and its write: two tabs of one browser share the storage, not a lock.
+ */
+function racedBy(storage: KeyValueStorage, elsewhere: () => void): KeyValueStorage {
+  let pending: (() => void) | undefined = elsewhere
+
+  return {
+    get: (key) => storage.get(key),
+    set: (key, value) => {
+      const acting = pending
+
+      pending = undefined
+      acting?.()
+      storage.set(key, value)
+    },
+    remove: (key) => storage.remove(key),
+    onChangeElsewhere: (listener) => storage.onChangeElsewhere(listener),
+  }
+}
+
+describe('the words for the sign-in page', () => {
+  it('keeps each notice it knows until the page takes them, and reads none from a value naming no sign-in', () => {
+    const storage = memoryStorage()
+
+    for (const notice of SESSION_NOTICES) {
+      saveNotice(storage, notice)
+
+      expect(savedNotice(storage)).toBe(notice)
+
+      forgetNotice(storage)
+
+      expect(savedNotice(storage)).toBeUndefined()
+    }
+
+    storage.set('perch.session.notice.0.signed-out-elsewhere', 'something-else')
+
+    expect(savedNotice(storage)).toBeUndefined()
+  })
+
+  it.each(PAIRS)('says the first by the rank of %s and %s written in turn', (first, then) => {
+    const storage = memoryStorage()
+
+    saveNotice(storage, first)
+    saveNotice(storage, then)
+
+    expect(savedNotice(storage)).toBe(
+      SESSION_NOTICES.indexOf(first) <= SESSION_NOTICES.indexOf(then) ? first : then,
+    )
+  })
+
+  it('ends every word at a sign-in, and a word raised before it that is written later, but keeps one raised after', () => {
     const storage = memoryStorage()
 
     saveNotice(storage, 'signed-out-elsewhere')
 
-    expect(savedNotice(storage)).toBe('signed-out-elsewhere')
+    const ended = signInMark(storage)
 
+    markSignIn(storage)
+
+    expect(savedNotice(storage)).toBeUndefined()
+
+    saveNotice(storage, 'delete-pending', ended)
+
+    expect(savedNotice(storage)).toBeUndefined()
+
+    saveNotice(storage, 'password-changed-elsewhere')
+
+    expect(savedNotice(storage)).toBe('password-changed-elsewhere')
+  })
+
+  it('says no word another tab wrote as it lost a race with a sign-in, and loses no word to another tab', () => {
+    const storage = memoryStorage()
+    // Another tab signs in between this tab's check of the mark and its write.
+    const late = racedBy(storage, () => markSignIn(storage))
+
+    saveNotice(late, 'delete-pending', signInMark(storage))
+
+    expect(savedNotice(storage)).toBeUndefined()
+
+    // Two tabs leave words of one ending, the higher one first: the lower one replaces nothing.
     saveNotice(storage, 'resend-after-sign-in')
+    saveNotice(storage, 'signed-out-elsewhere')
 
     expect(savedNotice(storage)).toBe('resend-after-sign-in')
+  })
 
-    saveNotice(storage, 'password-reset-elsewhere')
+  it("keeps a newer sign-in's word when the same word of the sign-in before lands last, and leaves no key of that one", () => {
+    const storage = memoryStorage()
+    const ended = signInMark(storage)
+    // Between this tab's check of the mark and its write, another tab signs in, and the session it
+    // signed in ends with its data held up too.
+    const late = racedBy(storage, () => {
+      markSignIn(storage)
+      saveNotice(storage, 'delete-pending')
+    })
 
-    expect(savedNotice(storage)).toBe('password-reset-elsewhere')
+    saveNotice(late, 'delete-pending', ended)
+
+    expect(savedNotice(storage)).toBe('delete-pending')
+    expect(storage.get(`perch.session.notice.${ended}.delete-pending`)).toBeUndefined()
 
     forgetNotice(storage)
 
     expect(savedNotice(storage)).toBeUndefined()
+  })
 
-    storage.set('perch.session.notice', 'something-else')
+  it('leaves no key of a word written after two sign-ins passed it', () => {
+    const storage = memoryStorage()
+    const ended = signInMark(storage)
+    const late = racedBy(storage, () => {
+      markSignIn(storage)
+      markSignIn(storage)
+    })
+
+    saveNotice(late, 'delete-pending', ended)
 
     expect(savedNotice(storage)).toBeUndefined()
+    expect(storage.get(`perch.session.notice.${ended}.delete-pending`)).toBeUndefined()
+  })
+
+  it('says no word written as a sign-in is kept, and clears its key at the next sign-in', () => {
+    const storage = memoryStorage()
+    const ended = signInMark(storage)
+    // Another tab writes once this tab's sign-in cleared the words, before it moves the mark.
+    const signingIn = racedBy(storage, () => saveNotice(storage, 'delete-pending', ended))
+
+    markSignIn(signingIn)
+
+    expect(savedNotice(storage)).toBeUndefined()
+
+    markSignIn(storage)
+
+    expect(storage.get(`perch.session.notice.${ended}.delete-pending`)).toBeUndefined()
+  })
+
+  it('moves the mark at each sign-in, from a value it does not know too, and never as the page takes the words', () => {
+    const storage = memoryStorage()
+    const first = signInMark(storage)
+
+    forgetNotice(storage)
+
+    expect(signInMark(storage)).toBe(first)
+
+    for (const kept of [undefined, '41', 'something-else']) {
+      if (kept !== undefined) {
+        storage.set('perch.session.sign-ins', kept)
+      }
+
+      const before = signInMark(storage)
+
+      markSignIn(storage)
+
+      expect(signInMark(storage)).not.toBe(before)
+    }
   })
 })

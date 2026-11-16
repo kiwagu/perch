@@ -1,25 +1,12 @@
 /** `ui-contract manifest [--out <dir>]`, from the root or any folder under it. */
 
-import { existsSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 
 import { PLATFORM_FILE } from '../files'
 import { emitManifest, MANIFEST_DIR } from '../manifest'
 
+import { contractRoot } from './contract-root'
 import { reported } from './problems'
-
-/** The nearest folder at or above `from` that holds the contract. */
-function contractRoot(from: string): string | undefined {
-  for (let folder = from; ; folder = dirname(folder)) {
-    if (existsSync(join(folder, PLATFORM_FILE))) {
-      return folder
-    }
-
-    if (dirname(folder) === folder) {
-      return undefined
-    }
-  }
-}
 
 export function manifest(argv: readonly string[]): number {
   const at = argv.indexOf('--out')

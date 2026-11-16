@@ -10,26 +10,31 @@ connection is the folder `sync-connection/`, entered through its `index.ts`; the
 has no `index.ts` yet: it predates the index rule and is imported file by file.
 
 Devices sync over a WebSocket at `/sync`: a hello carries the device's session token and its
-device id at protocol 8; the gateway reads the session, checks the device, marks it seen and
+device id at protocol 9; the gateway reads the session, checks the device, marks it seen and
 welcomes it; once it is welcomed, the account's email and its profile's are compared, and the
 profile's is written in the account's turn when they differ (`ProfileEmails.reconcile` of the
 auth module), without holding the hello. The session is read through Better Auth
-(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once. A token that reads no live session closes
+(`AuthSessions.read`) at every hello, so a session that ended or expired reads as none at once,
+and so does one still waiting for the gateway's admission (a sign-in's or a verification's never
+handed out). A token that reads no live session closes
 the socket with 4401 (`the session was not accepted`), and a session opened on another device
 than the one the hello names with 4401 too (`no session for this device`): a session is bound to
 the device it was opened on. A read the directory could not make closes the socket as a failed
 server (1011), and the device comes back with the same token. Nothing is spent at a hello, so a
 device may say it again on any socket. A device holds one live socket: the hello that registers
 closes the device's older sockets with 1000 (`another connection of this device took over`,
-`ConnectionRegistry.supersede`), which signs nothing out. A device is marked seen at its hello and
-then at most every five minutes it talks, which extends its live session (`DeviceSessions.seen`);
-a mark that fails is logged and changes nothing for the device. It is welcomed
+`ConnectionRegistry.supersede`), which signs nothing out. A device is marked seen at its hello,
+before its welcome, so the account's devices are judged by that mark whatever the device does
+next, and then at most every five minutes it talks, without holding it up; a mark extends its live
+session (`DeviceSessions.seen`); a mark that fails is logged and changes nothing for the device. It is welcomed
 with its identity's private region, the region `tenant:<key>` of each organisation the identity
 belongs to and those memberships, the only regions it may name (an organisation whose database
 cannot be read is left out of the welcome and logged, its membership kept: the device syncs only
 the regions its welcome names, so it leaves that one alone until its next hello, though the
 connection would still serve it; the private region failing fails the hello,
-`sync-connection/welcome-heads.ts`), and subscribes, pulls, pushes,
+`sync-connection/welcome-heads.ts`), and with the account's platform roles as the read of its
+session found them at this hello (`roles`: `operator` or none, never kept from an earlier read),
+and subscribes, pulls, pushes,
 probes and compacts there through the region hub, the server's copy of the replicated regions, which
 answers it and sends each accepted batch to the region's other devices. The hub keeps a private
 region in the directory and a tenant region in its organisation's database, and names them so
@@ -38,8 +43,16 @@ note names its own member as its author, and nobody changes the author of a note
 subscription carries the device's ability, built from its membership's role and the replica
 schema (`defineAbilityFor`, the owner's everything in its private region): a member edits and
 deletes only its own notes, an admin any, and the hub rejects any other write as
-`forbidden-action`. The hub keeps the ability a subscription was made with, so a change of
-role applies to a device's subscriptions from its next subscribe or hello. The hub also refuses
+`forbidden-action`. A change of role applies to a device's pushes at once, by two paths. Right
+after a role change's directory write, `Organisations` has the registry re-judge the identity's
+open connections in that organisation's region (`ConnectionRegistry.rerole`, as a removal revokes
+it): each connection builds the actor again from the role, without reading anything, keeps it in
+the regions the device may name, so a subscription it makes later pushes as it, and swaps it at the
+hub when the device subscribed (`RegionHub.changeActor`); a telling that fails afterwards leaves no
+old privilege alive. Whenever memberships are told, the connection also swaps the actor of every
+region it keeps (`RegionSubscriptions.changeActors`) before it sends the `memberships` message, a
+role changed or not. A batch already queued at the hub is judged by the actor the hub holds when it
+takes the batch in. The hub also refuses
 a batch that brings changes under a Loro peer another identity's batch was accepted under in the
 region (`foreign-peer`), so no member can write as another member's device and stop it.
 A connection registers in the `ConnectionRegistry` (`connections.ts`) once its session is read;
@@ -47,7 +60,8 @@ when an identity's memberships change, each of its connections leaves the region
 may no longer name at once, without waiting for the device's messages under way (one handled
 from then on that names such a region closes the socket with 4403, and the hub sends it nothing
 more there), and is sent a `memberships` message; it subscribes to a new organisation's region
-itself. A change told while a connection's hello is under way applies right after its welcome.
+itself. A change told while a connection's hello is under way (memberships, a revocation or a
+re-judging of a role) applies right after its welcome, in the order it was told.
 Text the protocol refuses (4400, a hello of an earlier protocol or one that names no device
 included), a token that reads no session of the device (4401), a region the device may not name
 (4403) and a hello that did not come within 10 seconds (4408, after which the device connects
@@ -70,9 +84,18 @@ A device whose session a change of the account's password ended (a reset link, w
 session of the account, or a change on another device, which ends every other one) is closed the
 same way with 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`), so it can
 tell its person why; a hello whose registration such a close refuses, while it is under way, is
-closed with 4001 as for any other close.
+closed with the code its session's row names when the close ended the session (4002, 4003, 4004), and
+with 4001 otherwise, as for any other close. A device whose session a sign-in on another device ended
+at the account's limit of devices is closed the same way with 4003 (`CLOSE.deviceLimit`,
+`signed out by a sign-in past the limit of devices`), and one whose session an operator's ban of
+the account ended with 4004 (`CLOSE.banned`, `signed out because the account was banned`). A
+device offline when one of these ended its
+session hears the same close at its next hello: a hello whose token reads no live session is
+closed with the code its row's `ended_reason` names (4001, 4002, 4003, 4004) when the row is the
+hello's device's, and with 4401 otherwise; a row that cannot be read closes it with 1011.
 A new sign-up or sign-in of the device, once Better Auth accepted it, or the first verification
-of an email opened on it, closes the identity's sockets on that device the same way, with 1000
+of an email opened on it, once the gateway admitted the session either wrote, closes the
+identity's sockets on that device the same way, with 1000
 (`another connection of this device took over`): its session ended the earlier one, and the
 device connects again with the new token. A
 connection that fails to close is reported and the others are closed all the same. No token
@@ -83,11 +106,13 @@ reaches its logs.
 - Route: `GET /sync`, upgraded to a WebSocket by `src/server.ts`.
 - `SyncConnection` (`sync-connection/`): one device's socket: the hello, the welcome, subscribe,
   pull, push, probe and compact through the region hub, and sign-out over the channel; its index
-  also exports `SocketLike`, `SyncConnectionDeps` and `SUPERSEDED` (1000, the close of a socket
-  another connection or a new session of the device took over).
+  also exports `SocketLike`, `SyncConnectionDeps`, `SUPERSEDED` (1000, the close of a socket
+  another connection or a new session of the device took over) and `REASON` (the fixed text each
+  close gives as its reason, which the smoke checks).
 - `ConnectionRegistry` (`connections.ts`): the open connections by identity and device; it
-  closes them, tells them their identity's memberships and takes regions from them.
-- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 8.
+  closes them, tells them their identity's memberships, takes regions from them and re-judges the
+  role they push as in a region.
+- Messages: the replica's sync protocol (`@workspace/replica/protocol`), at protocol 9.
 
 ## Commands
 

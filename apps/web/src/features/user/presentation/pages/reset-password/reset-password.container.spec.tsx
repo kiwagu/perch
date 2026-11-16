@@ -58,6 +58,7 @@ function open(at: string, answer: () => ResetAnswer = () => okAsync(undefined)) 
       {
         path: '/reset-password',
         page: 'Reset',
+        roles: ['guest', 'identity'],
         search: z.object({ token: z.string().min(1).max(4096).optional() }),
       },
     ],

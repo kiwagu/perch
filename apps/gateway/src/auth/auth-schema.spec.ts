@@ -11,7 +11,7 @@ const SCHEMA_DIR = join(import.meta.dirname, '../../../../database/schema/direct
 
 /** Our columns beside Better Auth's, per table: each by name, with whether it may be left empty. */
 const OURS: Record<string, Readonly<Record<string, boolean>>> = {
-  device_session: { last_seen_at: false, ended_at: true },
+  device_session: { last_seen_at: false, ended_at: true, ended_reason: true },
 }
 
 interface Column {
@@ -51,6 +51,27 @@ describe("the committed schema matches Better Auth's for our options", () => {
       log: { error: () => {}, warn: () => {} },
     }),
   )
+
+  it("keeps the admin plugin's role and ban of an account, and its impersonation of a session, in snake_case columns", () => {
+    const columnsOf = (model: 'user' | 'session', names: readonly string[]) =>
+      names.map((name) => {
+        const field = tables[model]?.fields[name]
+
+        return field === undefined ? `no field ${name}` : (field.fieldName ?? name)
+      })
+
+    expect(columnsOf('user', ['role', 'banned', 'banReason', 'banExpires'])).toEqual([
+      'role',
+      'banned',
+      'ban_reason',
+      'ban_expires',
+    ])
+    expect(columnsOf('session', ['impersonatedBy'])).toEqual(['impersonated_by'])
+    expect([...definedFields('identity').keys()]).toEqual(
+      expect.arrayContaining(['role', 'banned', 'ban_reason', 'ban_expires']),
+    )
+    expect([...definedFields('device_session').keys()]).toContain('impersonated_by')
+  })
 
   it.each(Object.values(tables).map((table) => [table.modelName, table] as const))(
     'table %s defines exactly the fields Better Auth expects',
