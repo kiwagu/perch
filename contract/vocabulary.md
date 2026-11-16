@@ -23,9 +23,12 @@ of an entity.
 A derived anchor is `<anchor>.<suffix>` with a suffix from "Derived suffixes", for the parts
 a composite renders on its own: `user.profile.sign-out-dialog.confirm-button`,
 `app-shell.locale-select.option`. Code builds it only with `testIdFor(anchor, suffix)` from
-`@workspace/ui-contract/anchors`, never by joining strings, and the base lists the suffix in
-its `derived`. A rendered anchor, base or derived, has up to 5 segments and matches
-`^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`.
+`@workspace/ui-contract/anchors`, never by joining strings, and the loaded base lists the
+suffix in its `derived`: the loader lists a paged list's parts and, from version 4, the parts a
+kind brings by itself (a select's `option`, a secret `input`'s `visibility-button`, the
+`confirm-button` and `cancel-button` of a `dialog` and a `confirmation`), which a file of
+version 3 or below may still list. A rendered anchor, base or derived, has up to 5 segments
+and matches `^[a-z][a-z0-9]*(-[a-z0-9]+)*(\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$`.
 
 A composite's anchors are declared anchors the loader derives, not derived parts. A secret
 `input` that opts into a composite of the platform (`composite: password-rules`) declares on
