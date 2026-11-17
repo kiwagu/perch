@@ -51,8 +51,9 @@ modules' routes.
   and gone after a few seconds or a click); a guest's theme select (`platform/theme.ts`'s
   `useDeviceTheme` gives its value, the machine's `setTheme` the device's choice, at the start, a
   crash or data that failed to open alike), the guest's language select and "Sign out on this
-  device" are enabled while the machine's state takes them, and the navigation, the reload and
-  "Sign out on this device" show while the state renders them, read from the machine
+  device" are enabled while the machine's state takes them (the container and the start hand the
+  views one `can(event)`, the frame machine's, and each control asks it for its own event), and
+  the navigation, the reload and "Sign out on this device" show while the state renders them, read from the machine
   (`platform/screen-renders.ts`), each state the page settles in reported as `app-shell` in an e2e
   run (`platform/settled-report.ts`, from `main.tsx`); the unrouted states (`opening`,
   `failed`, `signing-out`) render the frame as for a guest, both selects included. Before the router renders, the shell says where the start is: starting

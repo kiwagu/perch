@@ -418,7 +418,9 @@ modeling stage.
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
   (`useScreenMachine(screen, machine, fields)`), for a move it makes, and a state that does not
-  handle one lets it pass; `renders(anchor)` says whether the state renders an anchor, read from
+  handle one lets it pass; `can(event)` says whether the state takes an event, the check `send` and
+  `submit` make too, which a view enables a control by (`disabled={!props.can(<event>)}`);
+  `renders(anchor)` says whether the state renders an anchor, read from
   the machine, whose states carry their flow's `meta.renders` (`screen-renders.ts`: `rendersIn`
   over the engine's `renderedAt` and `isRendered`, which the frame's shell reads too), so a view
   shows an anchor only some states render where the state renders it, never by a list of states

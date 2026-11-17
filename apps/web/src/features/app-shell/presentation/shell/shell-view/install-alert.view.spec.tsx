@@ -16,9 +16,8 @@ describe('InstallAlert', () => {
     renderWithProviders(
       <InstallAlert
         install="install-available"
-        canInstall={true}
+        can={() => true}
         onInstall={onInstall}
-        canPostponeInstall={true}
         onPostponeInstall={onPostponeInstall}
       />,
     )
@@ -36,15 +35,30 @@ describe('InstallAlert', () => {
   })
 
   it('shows the steps that install the app with later and no install button, in Spanish too', () => {
-    renderWithProviders(<InstallAlert install="install-by-steps" canPostponeInstall={false} />, {
-      locale: 'es',
-      es,
-    })
+    renderWithProviders(
+      <InstallAlert
+        install="install-by-steps"
+        can={(event) => event.type !== 'app-shell.install-later-button'}
+      />,
+      { locale: 'es', es },
+    )
 
     expect(screen.getByTestId('app-shell.install-message').textContent).toBe(
       es['app.shell.install.by-steps'],
     )
     expect(screen.queryByTestId('app-shell.install-button')).toBeNull()
+    expect(screen.getByTestId('app-shell.install-later-button').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('enables each button exactly while the flow takes its own event', () => {
+    renderWithProviders(
+      <InstallAlert
+        install="install-available"
+        can={(event) => event.type === 'app-shell.install-button'}
+      />,
+    )
+
+    expect(screen.getByTestId('app-shell.install-button').hasAttribute('disabled')).toBe(false)
     expect(screen.getByTestId('app-shell.install-later-button').hasAttribute('disabled')).toBe(true)
   })
 })

@@ -14,9 +14,8 @@ const actions = (props: Partial<HeaderActionsProps> = {}) => (
   <HeaderActions
     signedIn={false}
     theme="system"
-    canChooseTheme={true}
+    can={() => true}
     onThemeChange={() => {}}
-    canChooseLocale={true}
     onLocaleChange={() => {}}
     {...props}
   />
@@ -43,9 +42,10 @@ describe('HeaderActions', () => {
   })
 
   it('takes a theme choice only while the frame takes one', () => {
-    renderActions({ canChooseTheme: false })
+    renderActions({ can: (event) => event.type !== 'app-shell.theme-select' })
 
     expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(true)
+    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
   })
 
   it("marks a guest's language select", () => {
@@ -55,12 +55,13 @@ describe('HeaderActions', () => {
   })
 
   it('takes a language choice only while the frame takes one', () => {
-    const { rerender } = renderActions({ canChooseLocale: false })
+    const { rerender } = renderActions({ can: (event) => event.type !== 'app-shell.locale-select' })
     const select = screen.getByTestId('app-shell.locale-select')
 
     expect(select.hasAttribute('data-disabled')).toBe(true)
+    expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(false)
 
-    rerender(actions({ canChooseLocale: true }))
+    rerender(actions({ can: () => true }))
 
     expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
   })

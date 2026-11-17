@@ -135,7 +135,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   live.stored = row
   live.unsaved = unsaved
 
-  // Rendered again on every step of the machine; the select is enabled while its state takes a choice.
+  // Rendered again on every step of the machine; each control is enabled while its state takes its event.
   const frameSnapshot = useSelector(actor, (state) => state)
   const frameState = frameSnapshot.value
   // A new value object comes with every new snapshot, so the effects below key on the
@@ -144,12 +144,6 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
   // A signed-in account's data still opening: the frame shows no message of the platform yet, so
   // what the platform says reaches the frame's flow once the data is open.
   const dataOpening = actor.getSnapshot().matches('opening-data')
-  const canChoose = actor.getSnapshot().can({ type: 'app-shell.locale-select', locale: 'en' })
-  const canReload = actor.getSnapshot().can({ type: 'app-shell.reload-button' })
-  const canChooseTheme = actor.getSnapshot().can({ type: 'app-shell.theme-select', theme: 'light' })
-  const canUpdate = actor.getSnapshot().can({ type: 'app-shell.update-button' })
-  const canInstall = actor.getSnapshot().can({ type: 'app-shell.install-button' })
-  const canPostponeInstall = actor.getSnapshot().can({ type: 'app-shell.install-later-button' })
 
   // The stored language and theme arriving or changing, from this tab or another, or another
   // device: the frame's data events, handed again on each move of the frame, so a value that came
@@ -294,7 +288,7 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       renders={rendersIn(frameSnapshot.machine.config, frameState)}
       held={held}
       activePath={route}
-      canChooseLocale={canChoose}
+      can={(event) => frameSnapshot.can(event)}
       onLocaleChange={(locale) => {
         // A change of language is a leave the frame asks about while a field holds unsaved input.
         void guard.before('app-shell.locale-select').then((leave) => {
@@ -313,10 +307,8 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
         })
       }}
       theme={device.theme}
-      canChooseTheme={canChooseTheme}
       onThemeChange={(theme) => actor.send({ type: 'app-shell.theme-select', theme })}
       crash={crash}
-      canReload={canReload}
       onReload={() => {
         // A reload is a leave the frame asks about while a field holds unsaved input.
         void guard.before('app-shell.reload-button').then((leave) => {
@@ -327,12 +319,9 @@ export function ShellContainer(props: { readonly children?: ReactNode }) {
       }}
       sync={sync}
       install={installShown}
-      canInstall={canInstall}
       onInstall={() => actor.send({ type: 'app-shell.install-button' })}
-      canPostponeInstall={canPostponeInstall}
       onPostponeInstall={() => actor.send({ type: 'app-shell.install-later-button' })}
       update={update}
-      canUpdate={canUpdate}
       onUpdate={() => {
         // A reload is a leave the frame asks about while a field holds unsaved input.
         void guard.before('app-shell.update-button').then((leave) => {

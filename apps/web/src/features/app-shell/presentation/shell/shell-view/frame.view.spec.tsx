@@ -31,10 +31,9 @@ const shell = (props: Partial<ShellViewProps> = {}) => (
     renders={READY}
     held={GUEST}
     activePath="/sign-in"
-    canChooseLocale={true}
+    can={() => true}
     onLocaleChange={() => {}}
     theme="system"
-    canChooseTheme={true}
     onThemeChange={() => {}}
     {...props}
   >
@@ -201,7 +200,6 @@ describe('ShellView', () => {
     renderShell({
       crash: 'screen-crashed',
       renders: rendering('app-shell.nav', 'app-shell.reload-button'),
-      canReload: true,
       onReload: () => {},
     })
 
@@ -227,4 +225,36 @@ describe('ShellView', () => {
     expect(screen.queryByTestId('app-shell.update-message')).toBeNull()
     expect(screen.queryByTestId('app-shell.update-button')).toBeNull()
   })
+
+  it.each([true, false])(
+    'enables the controls of every part of the frame exactly while the flow takes their events: %s',
+    (takes) => {
+      renderShell({
+        can: () => takes,
+        renders: rendering(
+          'app-shell.nav',
+          'app-shell.reload-button',
+          'app-shell.sign-out-here-button',
+        ),
+        crash: 'screen-crashed',
+        update: 'new-version',
+        install: 'install-available',
+        onSignOutHere: () => {},
+      })
+
+      for (const select of ['app-shell.theme-select', 'app-shell.locale-select']) {
+        expect(screen.getByTestId(select).hasAttribute('data-disabled')).toBe(!takes)
+      }
+
+      for (const button of [
+        'app-shell.reload-button',
+        'app-shell.update-button',
+        'app-shell.install-button',
+        'app-shell.install-later-button',
+        'app-shell.sign-out-here-button',
+      ]) {
+        expect(screen.getByTestId(button).hasAttribute('disabled')).toBe(!takes)
+      }
+    },
+  )
 })

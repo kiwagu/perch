@@ -256,15 +256,13 @@ function App(props: { readonly reload: () => void }) {
         renders={rendersIn(made.machine.config, state.value)}
         held={heldRoles(false)}
         activePath={window.location.pathname}
-        canChooseLocale={state.can({ type: 'app-shell.locale-select', locale: 'en' })}
+        can={(event) => state.can(event)}
         onLocaleChange={(locale) => send({ type: 'app-shell.locale-select', locale })}
         theme={device.theme}
-        canChooseTheme={state.can({ type: 'app-shell.theme-select', theme: 'light' })}
         onThemeChange={(theme) => send({ type: 'app-shell.theme-select', theme })}
         onSignOutHere={
           signOutHere ? () => send({ type: 'app-shell.sign-out-here-button' }) : undefined
         }
-        signingOutHere={!state.can({ type: 'app-shell.sign-out-here-button' })}
       />
     )
   }
