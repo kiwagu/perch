@@ -67,7 +67,6 @@ export function HeaderActions(props: HeaderActionsProps) {
           onChange={props.onThemeChange}
           disabled={!props.can({ type: 'app-shell.theme-select', theme: props.theme })}
           testId="app-shell.theme-select"
-          holdsInput={false}
         />
       )}
       {/* A guest chooses the language here; a signed-in account does on its settings screen. */}
@@ -79,7 +78,6 @@ export function HeaderActions(props: HeaderActionsProps) {
           onChange={props.onLocaleChange}
           disabled={!props.can({ type: 'app-shell.locale-select', locale })}
           testId="app-shell.locale-select"
-          holdsInput={false}
         />
       )}
     </>

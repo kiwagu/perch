@@ -127,8 +127,8 @@ modules' routes.
   anchor (the kit's `useUnsavedFields()`), and turns on the browser's own prompt for a
   reload, a closed tab or an address typed by hand. A change of search inside one screen, a
   flow's own navigation (`useScreenMachine`) and a leave nobody started here pass. The
-  language select asks it first, and carries `holdsInput={false}`: its choice applies at
-  once.
+  language select asks it first, and holds no input itself (the facts of its anchor say so):
+  its choice applies at once.
 - `presentation/confirm-guard/confirm-guard.container.tsx`: the frame's confirmation, which the
   start mounts around the shell. Before a control whose action destroys what it acts on sends
   its event (`useScreenMachine` asks `useConfirmGuard().before(control)`, then the leave guard

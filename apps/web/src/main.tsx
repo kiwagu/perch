@@ -7,6 +7,7 @@ import { StrictMode, useCallback, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { matchLocale } from '@workspace/i18n'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
@@ -30,6 +31,7 @@ import { useSignedOut } from './features/app-shell/presentation/shell/signed-out
 import { TOAST_TEXTS } from './features/app-shell/presentation/shell/toast-texts'
 import { modules } from './modules'
 import { englishCatalog, loadSpanishCatalog } from './platform/catalogs'
+import { FIELD_FACTS } from './platform/field-facts.gen'
 import { AppI18n, useSetLocale } from './platform/i18n'
 import { browserInstall, InstallContext, useDeviceInstall } from './platform/install'
 import { NoticeProvider } from './platform/notices'
@@ -302,7 +304,9 @@ if (root) {
             en={englishCatalog}
             loadEs={loadSpanishCatalog}
           >
-            <App reload={reload} />
+            <FieldFactsProvider facts={FIELD_FACTS}>
+              <App reload={reload} />
+            </FieldFactsProvider>
           </AppI18n>
         </InstallContext.Provider>
       </ThemeContext.Provider>
