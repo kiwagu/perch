@@ -4,17 +4,17 @@ import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 
+import type { ShellEvent } from '../../../application/shell-machine'
+
 /** How the app installs: by the browser's own window, or by steps the user follows. */
 export type InstallCode = 'install-available' | 'install-by-steps'
 
 export interface InstallAlertProps {
   /** The code the reminder to install the app shows. */
   readonly install: InstallCode
-  /** Whether the frame's flow takes the install now: its button is enabled while it does. */
-  readonly canInstall?: boolean | undefined
+  /** Whether the frame's flow takes `event` now: a button is enabled while it takes its press. */
+  readonly can: (event: ShellEvent) => boolean
   readonly onInstall?: (() => void) | undefined
-  /** Whether the frame's flow takes the reminder put off now. */
-  readonly canPostponeInstall?: boolean | undefined
   readonly onPostponeInstall?: (() => void) | undefined
 }
 
@@ -35,7 +35,7 @@ export function InstallAlert(props: InstallAlertProps) {
           <Button
             type="button"
             size="sm"
-            disabled={!props.canInstall}
+            disabled={!props.can({ type: 'app-shell.install-button' })}
             onClick={props.onInstall}
             data-testid="app-shell.install-button"
           >
@@ -46,7 +46,7 @@ export function InstallAlert(props: InstallAlertProps) {
           type="button"
           variant="outline"
           size="sm"
-          disabled={!props.canPostponeInstall}
+          disabled={!props.can({ type: 'app-shell.install-later-button' })}
           onClick={props.onPostponeInstall}
           data-testid="app-shell.install-later-button"
         >

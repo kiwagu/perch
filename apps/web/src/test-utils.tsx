@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from 'react'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container } from '@workspace/di'
 import { type Catalog, I18nProvider, type Locale } from '@workspace/i18n'
+import { type FieldFactsByAnchor, FieldFactsProvider } from '@workspace/ui/field-facts'
 
 import { englishCatalog } from './platform/catalogs'
 import { ServicesProvider } from './platform/services'
@@ -13,6 +14,8 @@ export interface RenderOptions {
   readonly es?: Catalog
   readonly runner?: FakeShapeRunner
   readonly container?: Container
+  /** The facts the fields inside take, by anchor, as the app's provider gives them; none by default. */
+  readonly facts?: FieldFactsByAnchor
 }
 
 /**
@@ -25,11 +28,18 @@ export function renderWithProviders(ui: ReactElement, options: RenderOptions = {
     runner: options.runner ?? new FakeShapeRunner(),
   }
   const catalogs = { en: englishCatalog, ...(options.es ? { es: options.es } : {}) }
+  const { facts } = options
 
   return render(ui, {
     wrapper: ({ children }: { readonly children: ReactNode }) => (
       <I18nProvider locale={options.locale ?? 'en'} catalogs={catalogs}>
-        <ServicesProvider services={services}>{children}</ServicesProvider>
+        <ServicesProvider services={services}>
+          {facts === undefined ? (
+            children
+          ) : (
+            <FieldFactsProvider facts={facts}>{children}</FieldFactsProvider>
+          )}
+        </ServicesProvider>
       </I18nProvider>
     ),
   })
