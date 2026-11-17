@@ -70,9 +70,6 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
     })),
   )
 
-/** The two answers of a question the frame asks: going on, and staying. */
-export const ANSWERS = ['confirm-button', 'cancel-button'] as const
-
 /** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
 export function bindingRefsOf(
   def: AnchorDef,

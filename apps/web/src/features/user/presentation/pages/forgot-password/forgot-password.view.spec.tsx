@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
@@ -80,5 +84,32 @@ describe('ForgotPasswordView', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.forgot-password.title'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    function Page() {
+      const [email, setEmail] = useState('')
+
+      return (
+        <UnsavedInputScope>
+          <ForgotPasswordView
+            email={email}
+            onEmailChange={setEmail}
+            canSend
+            onSend={() => Promise.resolve(true)}
+          />
+        </UnsavedInputScope>
+      )
+    }
+
+    renderWithProviders(<Page />)
+
+    fireEvent.change(screen.getByTestId('user.forgot-password.email-input'), {
+      target: { value: 'ann@example.test' },
+    })
+
+    expectNoStateColour(screen.getByTestId('user.forgot-password.email-input'))
   })
 })

@@ -226,6 +226,7 @@ export function SignInView(props: SignInViewProps) {
                 type="email"
                 autoComplete="email"
                 required
+                marksState={false}
                 data-testid="user.sign-in.email-input"
               />
             </Field>
@@ -240,6 +241,7 @@ export function SignInView(props: SignInViewProps) {
                 }
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
+                marksState={false}
                 testId="user.sign-in.password-input"
               />
               {props.renders('user.sign-in.password-rule-list') ? (
@@ -278,6 +280,7 @@ export function SignInView(props: SignInViewProps) {
                   aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
                   showLabel={t('user.password.show')}
                   hideLabel={t('user.password.hide')}
+                  marksState={false}
                   testId="user.sign-in.password-confirmation-input"
                 />
                 {error && concerns === 'confirmation' ? (
@@ -298,6 +301,7 @@ export function SignInView(props: SignInViewProps) {
                   {...field('name')}
                   autoComplete="name"
                   required
+                  marksState={false}
                   data-testid="user.sign-in.name-input"
                 />
               </Field>

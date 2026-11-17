@@ -27,8 +27,8 @@ const sendable = (code: number | undefined): code is number =>
 
 /**
  * How long a page may take to connect again once `goOnline` brought its browser back: the app
- * tries at once when the browser says it is online instead of waiting out its reconnect delay
- * (up to 30 seconds), so this bounds a hello and what its answer leads to on a busy host.
+ * tries within a second when the browser says it is online instead of waiting out its reconnect
+ * delay (up to 30 seconds), so this bounds a hello and what its answer leads to on a busy host.
  */
 export const BACK_ONLINE_MS = 10_000
 
@@ -65,10 +65,10 @@ export class SyncNetwork {
   }
 
   /**
-   * Waits, offline, until the app's reconnect delay has grown to its longest: it waits 1, 2, 4,
-   * 8 and 16 seconds before its first five attempts, each refused here, and 30 seconds after the
-   * fifth. Brought back online then, a page that only waited out its delay would connect again up
-   * to 30 seconds later.
+   * Waits, offline, until the app's reconnect delay has grown to its longest: it waits up to 1, 2,
+   * 4, 8 and 16 seconds before its first five attempts, each refused here, and up to 30 seconds
+   * after the fifth. Brought back online then, a page that only waited out its delay might connect
+   * again up to 30 seconds later.
    */
   async untilLongestReconnectDelay(): Promise<void> {
     await expect.poll(() => this.#refused, { timeout: 45_000 }).toBeGreaterThanOrEqual(5)

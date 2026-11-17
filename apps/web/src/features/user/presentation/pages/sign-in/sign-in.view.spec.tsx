@@ -2,6 +2,9 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -707,5 +710,40 @@ describe('SignInView', () => {
     expect(screen.getByTestId('user.sign-in.submit-button').textContent).toBe(
       es['user.sign-in.sign-in'],
     )
+  })
+})
+
+/** Renders the view in `mode` inside a scope tracking unsaved input, as the app's pages are. */
+function renderTracked(mode: SignInViewProps['mode']) {
+  renderWithProviders(
+    <UnsavedInputScope>
+      <SignInView
+        startEmail=""
+        mode={mode}
+        renders={(anchor) => RENDERS[mode].includes(anchor)}
+        can={() => true}
+        onSubmit={() => Promise.resolve(true)}
+        onToggleMode={() => {}}
+        onTypePassword={() => {}}
+        onResend={() => Promise.resolve(true)}
+        onForgot={() => {}}
+        onConfirmDeviceLimit={() => {}}
+        onCancelDeviceLimit={() => {}}
+      />
+    </UnsavedInputScope>,
+  )
+}
+
+describe('the state colour of the fields', () => {
+  it.each([
+    ['sign-in', 'user.sign-in.email-input', 'ann@example.test'],
+    ['sign-in', 'user.sign-in.password-input', 'Abcdefghi1!'],
+    ['sign-up', 'user.sign-in.name-input', 'Ann'],
+    ['sign-up', 'user.sign-in.password-confirmation-input', 'Abcdefghi1!'],
+  ] as const)('draws none in %s mode on %s', (mode, testId, value) => {
+    renderTracked(mode)
+    type(testId, value)
+
+    expectNoStateColour(screen.getByTestId(testId))
   })
 })

@@ -15,6 +15,7 @@ import {
 
 import { endingOf } from './endings'
 import type { ChannelState, DeviceCredentials, EndReason, SyncTransport } from './port'
+import { networkBackDelay, reconnectDelay } from './reconnect-delay'
 
 /** The part of a WebSocket the transport uses. */
 export type SocketLike = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>
@@ -48,14 +49,13 @@ export interface WebSocketTransportOptions {
   readonly socket?: (url: string) => SocketLike
   /**
    * The device's network, heard while the transport is started: once it is back, a reconnect
-   * waiting for its delay connects at once, and the delays start over. Without it, only the
-   * delays bring the channel back.
+   * waiting for its delay connects after a draw from 0 up to a second instead, unless it is due
+   * sooner, and the delays start over. Without it, only the delays bring the channel back.
    */
   readonly network?: DeviceNetwork
+  /** Draws each delay: a number in [0, 1), as `Math.random` gives; `Math.random` by default. */
+  readonly random?: () => number
 }
-
-/** How long the transport waits before each reconnect in a row; the last delay repeats. */
-export const RECONNECT_DELAYS_MS: readonly number[] = [1_000, 2_000, 4_000, 8_000, 16_000, 30_000]
 
 /** How long an open socket waits for the gateway's welcome before it is given up. */
 export const WELCOME_TIMEOUT_MS = 10_000
@@ -76,8 +76,8 @@ type State =
   | { readonly kind: 'idle' }
   /** A socket is open or opening; the channel is up once the gateway welcomed the device. */
   | { readonly kind: 'connected'; readonly socket: SocketLike; readonly up: boolean }
-  /** Waiting to connect again. */
-  | { readonly kind: 'waiting'; readonly cancel: () => void }
+  /** Waiting to connect again, which is due at the instant `at` of the clock. */
+  | { readonly kind: 'waiting'; readonly at: number; readonly cancel: () => void }
   /** The gateway refused the token or the protocol, or signed the device out. */
   | { readonly kind: 'ended' }
 
@@ -86,15 +86,17 @@ type State =
  * device's id; the channel is up once the gateway welcomes it, and only then does it send.
  * The memberships of the welcome and of every later change go to `onMemberships`, before the
  * listeners of messages hear the message. A socket that closes, or is not welcomed within 10
- * seconds, is opened again after a growing delay, which starts over at the next welcome, when
- * the engine gives a welcomed connection up (`reconnect`) or when the device's network comes
- * back (`network`), which also connects a pending reconnect at once. A close that
+ * seconds, is opened again after a delay drawn from 0 up to a step that grows (full jitter, so
+ * the devices one failure drops do not come back together), which starts over at the next welcome,
+ * when the engine gives a welcomed connection up (`reconnect`) or when the device's network comes
+ * back (`network`), which also brings a pending reconnect forward to within a second. A close that
  * refuses the token or the protocol, or signs the device out (at its own request or from another
  * device), ends the channel for good. Text the protocol refuses closes the socket as a breach
  * and connects again.
  */
 export class WebSocketTransport implements SyncTransport {
   readonly #options: WebSocketTransportOptions
+  readonly #random: () => number
   readonly #messageListeners = new Set<(message: ServerMessage) => void>()
   readonly #channelListeners = new Set<(state: ChannelState) => void>()
   readonly #endedListeners = new Set<(reason: EndReason) => void>()
@@ -108,6 +110,7 @@ export class WebSocketTransport implements SyncTransport {
 
   constructor(options: WebSocketTransportOptions) {
     this.#options = options
+    this.#random = options.random ?? Math.random
   }
 
   start(): void {
@@ -309,14 +312,22 @@ export class WebSocketTransport implements SyncTransport {
   }
 
   #reconnect(): void {
-    const delay = RECONNECT_DELAYS_MS[Math.min(this.#attempt, RECONNECT_DELAYS_MS.length - 1)] ?? 0
+    const delay = reconnectDelay(this.#attempt, this.#random)
 
     this.#endWelcomeWait()
 
     this.#attempt += 1
+    this.#wait(delay)
+  }
+
+  /** Connects again after `delay` ms. */
+  #wait(delay: number): void {
+    const { clock } = this.#options
+
     this.#state = {
       kind: 'waiting',
-      cancel: this.#options.clock.schedule(delay, () => this.#connect()),
+      at: clock.now() + delay,
+      cancel: clock.schedule(delay, () => this.#connect()),
     }
   }
 
@@ -348,8 +359,9 @@ export class WebSocketTransport implements SyncTransport {
 
   /**
    * The device's network came back: the delays start over, and a reconnect waiting for its delay
-   * connects at once. A socket open or still opening is left to its welcome or its close, which
-   * then waits the first delay.
+   * connects after a short draw (`networkBackDelay`) instead, unless it is due by then, which
+   * leaves it as it is: the network only ever brings a reconnect forward. A socket open or still
+   * opening is left to its welcome or its close, which then draws from the first step.
    */
   #networkBack(): void {
     const state = this.#state
@@ -357,8 +369,12 @@ export class WebSocketTransport implements SyncTransport {
     this.#attempt = 0
 
     if (state.kind === 'waiting') {
-      state.cancel()
-      this.#connect()
+      const delay = networkBackDelay(this.#random)
+
+      if (state.at > this.#options.clock.now() + delay) {
+        state.cancel()
+        this.#wait(delay)
+      }
     }
   }
 

@@ -29,6 +29,7 @@ import { routePathSchema } from '../binding'
 
 import { flowSchemaOf, readOptOutSchema, toastOptOutSchema } from './build'
 import { effectSchema, navigateParamsSchema } from './effects'
+import { authoredGuardSchema } from './guards'
 import { flowTargetSchema, guardNameSchema, modelEventNameSchema } from './names'
 import { transitionSchemaOf, transitionsSchemaOf } from './transitions'
 
@@ -101,13 +102,13 @@ const authoredTransitionsSchema = transitionsSchemaOf(authoredTransitionSchema)
 export const controlRegionSchema = z
   .strictObject({
     by: anchorSchema.describe(
-      'The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`.',
+      "The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. It carries what the screen decides of the button: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one.",
     ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too.',
+        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.',
       ),
     onError: authoredTransitionsSchema
       .exactOptional()
@@ -126,7 +127,7 @@ export const draftPatternSchema = z
     pattern: z
       .literal('draft')
       .describe(
-        'A control that follows a stored value or holds what was typed: in `following` it shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the stored value becoming it.',
+        "A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.",
       ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     input: anchorSchema.describe('The control typed into.'),
@@ -140,7 +141,9 @@ export const draftPatternSchema = z
 export const authoredFlowSchema = flowSchemaOf({
   transition: authoredTransitionSchema,
   effect: authoredEffectSchema,
+  guard: authoredGuardSchema,
   toastOptOut: true,
+  renderSets: true,
   region: (parts) =>
     z
       .union([draftPatternSchema, controlRegionSchema, parts.region])

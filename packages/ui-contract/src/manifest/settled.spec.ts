@@ -41,19 +41,31 @@ const CONTRACT: SettledContract = {
     },
   ],
   ids: {
-    'x.y.email-input': { screen: 'x.y' },
-    'x.y.forgot-link': { screen: 'x.y' },
-    'x.y.name-input': { screen: 'x.y', derived: ['visibility-button', 'error-message'] },
-    'x.y.leave-dialog': { screen: 'x.y', derived: ['confirm-button', 'cancel-button'] },
-    'x.y.mode-select': { screen: 'x.y', derived: ['option', 'toggle-button'] },
-    'x.y.rule-list': { screen: 'x.y' },
-    'x.y.rule-list.length-item': { screen: 'x.y' },
-    'x.y.form': { screen: 'x.y', roles: ['member'] },
-    'x.y.form.key-input': { screen: 'x.y' },
-    'x.y.item': { screen: 'x.y', dataId: 'note' },
-    'x.y.item.edit-textarea': { screen: 'x.y' },
-    'x.y.edit-textarea': { screen: 'x.y', own: true },
-    'app-shell.nav': { screen: 'app-shell', roles: ['identity'] },
+    'x.y.email-input': { screen: 'x.y', kind: 'input' },
+    'x.y.forgot-link': { screen: 'x.y', kind: 'link' },
+    'x.y.name-input': {
+      screen: 'x.y',
+      kind: 'input',
+      derived: ['visibility-button', 'error-message'],
+    },
+    'x.y.leave-dialog': {
+      screen: 'x.y',
+      kind: 'dialog',
+      derived: ['confirm-button', 'cancel-button'],
+    },
+    'x.y.mode-select': { screen: 'x.y', kind: 'select', derived: ['option', 'toggle-button'] },
+    'x.y.rule-list': { screen: 'x.y', kind: 'list', derivedFrom: { composite: 'password-rules' } },
+    'x.y.rule-list.length-item': {
+      screen: 'x.y',
+      kind: 'item',
+      derivedFrom: { composite: 'password-rules', item: 'length' },
+    },
+    'x.y.form': { screen: 'x.y', kind: 'form', roles: ['member'] },
+    'x.y.form.key-input': { screen: 'x.y', kind: 'input' },
+    'x.y.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+    'x.y.item.edit-textarea': { screen: 'x.y', kind: 'textarea' },
+    'x.y.edit-textarea': { screen: 'x.y', kind: 'textarea', own: true },
+    'app-shell.nav': { screen: 'app-shell', kind: 'nav', roles: ['identity'] },
   },
 }
 
@@ -164,6 +176,7 @@ describe('a settled state held to what it renders', () => {
       ids: {
         'x.y.page-list': {
           screen: 'x.y',
+          kind: 'list',
           derived: ['range', 'previous-link', 'next-link', 'size-select'],
         },
       },
@@ -251,5 +264,375 @@ describe('a settled state held to what it renders', () => {
         page: { url: 'https://stand.example.test/sample/thg_01hzx9k2', anchors },
       }),
     ).toEqual([])
+  })
+})
+
+/** A flow whose busy state alone renders `x.y.later-button`. */
+const SHOWING = {
+  initial: 'idle',
+  states: { idle: {}, busy: { meta: { renders: ['x.y.later-button'] } } },
+}
+
+/** The problems of a page of `x.y` in `value`, its anchors declared as `ids`. */
+const onPage = (ids: SettledContract['ids'], anchors: RenderedAnchor[], value = 'idle') =>
+  settledProblems({ screens: [{ id: 'x.y', flow: SHOWING }], ids }, settled(value, anchors))
+
+/** A visible element that carries `code`, as a report with codes reads it. */
+const coded = (anchor: string, code: string): RenderedAnchor => ({ ...shown(anchor), code })
+
+describe('a settled state held to what its elements show with and without', () => {
+  const update: SettledContract['ids'] = {
+    'x.y.update-message': { screen: 'x.y', kind: 'message' },
+    'x.y.update-button': { screen: 'x.y', kind: 'button', with: ['x.y.update-message'] },
+  }
+  const install: SettledContract['ids'] = {
+    'x.y.install-message': { screen: 'x.y', kind: 'message' },
+    'x.y.install-button': {
+      screen: 'x.y',
+      kind: 'button',
+      with: [{ 'x.y.install-message': ['install-available'] }],
+    },
+  }
+
+  it('holds a control to show exactly while what it shows with shows', () => {
+    expect(onPage(update, [shown('x.y.update-button')])).toEqual([
+      'x.y in idle: "x.y.update-button" is visible, but "x.y.update-message" does not show: it shows only with it',
+    ])
+    expect(onPage(update, [shown('x.y.update-message'), hidden('x.y.update-button')])).toEqual([
+      'x.y in idle: "x.y.update-button" is not visible, but each entry of its with shows and none of its without',
+    ])
+    expect(onPage(update, [shown('x.y.update-message'), shown('x.y.update-button')])).toEqual([])
+    expect(onPage(update, [hidden('x.y.update-message'), hidden('x.y.update-button')])).toEqual([])
+  })
+
+  it('holds a code entry to the code the anchor shows, as a report with codes reads it', () => {
+    expect(
+      onPage(install, [
+        coded('x.y.install-message', 'install-by-steps'),
+        shown('x.y.install-button'),
+      ]),
+    ).toEqual([
+      'x.y in idle: "x.y.install-button" is visible, but "x.y.install-message" (install-available) does not show: it shows only with it',
+    ])
+    expect(onPage(install, [coded('x.y.install-message', 'install-available')])).toEqual([
+      'x.y in idle: "x.y.install-button" is not visible, but each entry of its with shows and none of its without',
+    ])
+    expect(
+      onPage(install, [
+        coded('x.y.install-message', 'install-available'),
+        shown('x.y.install-button'),
+      ]),
+    ).toEqual([])
+    expect(onPage(install, [coded('x.y.install-message', 'install-by-steps')])).toEqual([])
+  })
+
+  it('skips the code of a code entry on a report without codes, and still holds its anchor', () => {
+    expect(onPage(install, [shown('x.y.install-message'), shown('x.y.install-button')])).toEqual([])
+    expect(onPage(install, [shown('x.y.install-message')])).toEqual([])
+    expect(onPage(install, [shown('x.y.install-button')])).toEqual([
+      'x.y in idle: "x.y.install-button" is visible, but "x.y.install-message" (install-available) does not show: it shows only with it',
+    ])
+  })
+
+  it('holds an element with only without entries to hiding while one shows, never to showing', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.ban-button': { screen: 'x.y', kind: 'button', without: ['x.y.banned-badge'] },
+    }
+
+    expect(onPage(ids, [shown('x.y.banned-badge'), shown('x.y.ban-button')])).toEqual([
+      'x.y in idle: "x.y.ban-button" is visible, but "x.y.banned-badge" shows: it shows only without it',
+    ])
+    // Nothing on the page says the area that holds it shows: an account still read shows neither.
+    expect(onPage(ids, [])).toEqual([])
+    expect(onPage(ids, [shown('x.y.ban-button')])).toEqual([])
+  })
+
+  it('lets a cell, an element data decides and one the state does not render stay away', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.heading': { screen: 'x.y', kind: 'heading' },
+      'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.reason-cell': { screen: 'x.y', kind: 'cell', with: ['x.y.banned-badge'] },
+      'x.y.toggle-button': {
+        screen: 'x.y',
+        kind: 'button',
+        roles: ['member'],
+        with: ['x.y.heading'],
+      },
+      'x.y.later-button': { screen: 'x.y', kind: 'button', with: ['x.y.heading'] },
+      'x.y.status': { screen: 'x.y', kind: 'status', with: ['x.y.heading'] },
+    }
+
+    expect(onPage(ids, [shown('x.y.heading'), shown('x.y.banned-badge')])).toEqual([])
+    expect(onPage(ids, [shown('x.y.reason-cell'), shown('x.y.toggle-button')])).toEqual([
+      'x.y in idle: "x.y.reason-cell" is visible, but "x.y.banned-badge" does not show: it shows only with it',
+      'x.y in idle: "x.y.toggle-button" is visible, but "x.y.heading" does not show: it shows only with it',
+    ])
+  })
+
+  it('leaves an element of an entry to the entry, which the report does not tell apart', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.devices.list': { screen: 'x.y', kind: 'list' },
+      'x.y.devices.entry-item': { screen: 'x.y', kind: 'item', dataId: 'device' },
+      'x.y.devices.current-badge': { screen: 'x.y', kind: 'badge' },
+      'x.y.devices.end-button': {
+        screen: 'x.y',
+        kind: 'button',
+        without: ['x.y.devices.current-badge'],
+      },
+    }
+
+    expect(
+      onPage(ids, [
+        shown('x.y.devices.list'),
+        shown('x.y.devices.entry-item'),
+        shown('x.y.devices.current-badge'),
+        shown('x.y.devices.entry-item'),
+        shown('x.y.devices.end-button'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('refuses a visible list with no entry, unless it shows itself waiting or empty', () => {
+    const ids: SettledContract['ids'] = {
+      'x.y.notes.list': { screen: 'x.y', kind: 'list' },
+      'x.y.notes.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+      'x.y.users.list': { screen: 'x.y', kind: 'list', states: ['loading', 'ready', 'empty'] },
+      'x.y.users.account-item': { screen: 'x.y', kind: 'item', dataId: 'account' },
+      'x.y.sent.list': { screen: 'x.y', kind: 'list', states: ['loading'] },
+      'x.y.sent.item': { screen: 'x.y', kind: 'item', dataId: 'invitation' },
+    }
+    const empty =
+      'x.y in idle: "x.y.notes.list" is visible with no entry: a list with none is not rendered'
+
+    expect(onPage(ids, [shown('x.y.notes.list')])).toEqual([empty])
+    expect(onPage(ids, [shown('x.y.notes.list'), hidden('x.y.notes.item')])).toEqual([empty])
+    expect(onPage(ids, [shown('x.y.notes.list'), shown('x.y.notes.item')])).toEqual([])
+    expect(onPage(ids, [hidden('x.y.notes.list')])).toEqual([])
+    expect(onPage(ids, [shown('x.y.users.list'), shown('x.y.sent.list')])).toEqual([])
+  })
+})
+
+/** A flow whose open state lists elements whose own rules may keep them off the page. */
+const OPENING = {
+  initial: 'open',
+  states: {
+    open: {
+      meta: {
+        renders: [
+          'x.y.later-button',
+          'x.y.leave-dialog',
+          'x.y.ban-button',
+          'x.y.reason-cell',
+          'x.y.notes.list',
+          'x.y.page-list',
+        ],
+      },
+    },
+    shut: {},
+  },
+}
+
+const OPEN: SettledContract['ids'] = {
+  'x.y.heading': { screen: 'x.y', kind: 'heading' },
+  'x.y.later-button': { screen: 'x.y', kind: 'button', with: ['x.y.heading'] },
+  'x.y.leave-dialog': {
+    screen: 'x.y',
+    kind: 'dialog',
+    with: ['x.y.heading'],
+    derived: ['confirm-button', 'cancel-button'],
+  },
+  'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+  'x.y.ban-button': { screen: 'x.y', kind: 'button', without: ['x.y.banned-badge'] },
+  'x.y.reason-cell': { screen: 'x.y', kind: 'cell' },
+  'x.y.notes.list': { screen: 'x.y', kind: 'list' },
+  'x.y.notes.item': { screen: 'x.y', kind: 'item', dataId: 'note' },
+  'x.y.page-list': {
+    screen: 'x.y',
+    kind: 'list',
+    derived: ['range', 'previous-link', 'next-link', 'size-select'],
+  },
+}
+
+/** The problems of a page of `x.y` in its open state. */
+const whileOpen = (anchors: RenderedAnchor[]) =>
+  settledProblems({ screens: [{ id: 'x.y', flow: OPENING }], ids: OPEN }, settled('open', anchors))
+
+/** Every element the open state lists, on the page and visible, with what it shows with. */
+const ALL_OPEN = [
+  shown('x.y.heading'),
+  shown('x.y.later-button'),
+  shown('x.y.leave-dialog'),
+  shown('x.y.leave-dialog.confirm-button'),
+  shown('x.y.leave-dialog.cancel-button'),
+  shown('x.y.ban-button'),
+  shown('x.y.reason-cell'),
+  shown('x.y.notes.list'),
+  shown('x.y.notes.item'),
+  shown('x.y.page-list'),
+  shown('x.y.page-list.size-select'),
+]
+
+const others = (...left: string[]) => ALL_OPEN.filter(({ anchor }) => !left.includes(anchor))
+
+describe('a state that renders an element whose own rule may keep it off the page', () => {
+  it('passes the page that shows everything the state lists', () => {
+    expect(whileOpen(ALL_OPEN)).toEqual([])
+  })
+
+  it('lets a listed element and its parts stay away while a with entry does not show', () => {
+    expect(
+      whileOpen(
+        others(
+          'x.y.heading',
+          'x.y.later-button',
+          'x.y.leave-dialog',
+          'x.y.leave-dialog.confirm-button',
+          'x.y.leave-dialog.cancel-button',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  it('lets a listed element stay away while a without entry shows', () => {
+    expect(whileOpen([...others('x.y.ban-button'), shown('x.y.banned-badge')])).toEqual([])
+  })
+
+  it('lets a listed cell stay away: a cell with no value is not rendered', () => {
+    expect(whileOpen(others('x.y.reason-cell'))).toEqual([])
+  })
+
+  it('lets a listed list whose entries come from data, and its parts, stay away', () => {
+    expect(
+      whileOpen(
+        others('x.y.notes.list', 'x.y.notes.item', 'x.y.page-list', 'x.y.page-list.size-select'),
+      ),
+    ).toEqual([])
+  })
+
+  it('still wants a listed element its entries let show, and the parts of a shown base', () => {
+    expect(
+      whileOpen(others('x.y.later-button', 'x.y.ban-button', 'x.y.page-list.size-select')),
+    ).toEqual([
+      'x.y in open: "x.y.later-button" is not on the page, but the state renders it',
+      'x.y in open: "x.y.ban-button" is not on the page, but the state renders it',
+      'x.y in open: "x.y.page-list.size-select" is not on the page, but the state renders it',
+    ])
+    expect(
+      whileOpen([
+        ...others('x.y.leave-dialog.cancel-button'),
+        hidden('x.y.leave-dialog.cancel-button'),
+      ]),
+    ).toEqual(['x.y in open: "x.y.leave-dialog.cancel-button" is hidden, but the state renders it'])
+  })
+})
+
+/** A flow whose open state lists lists that say when they show. */
+const LISTING = {
+  initial: 'open',
+  states: {
+    open: { meta: { renders: ['x.y.users.list', 'x.y.sent.list', 'x.y.rule-list'] } },
+    shut: {},
+  },
+}
+
+const LISTS: SettledContract['ids'] = {
+  'x.y.heading': { screen: 'x.y', kind: 'heading' },
+  'x.y.banned-badge': { screen: 'x.y', kind: 'badge' },
+  'x.y.users.list': {
+    screen: 'x.y',
+    kind: 'list',
+    states: ['loading', 'ready', 'empty'],
+    with: ['x.y.heading'],
+    derived: ['range', 'previous-link', 'next-link', 'size-select'],
+  },
+  'x.y.users.account-item': { screen: 'x.y', kind: 'item', dataId: 'account' },
+  'x.y.sent.list': {
+    screen: 'x.y',
+    kind: 'list',
+    states: ['loading'],
+    without: ['x.y.banned-badge'],
+  },
+  'x.y.sent.list.refresh-button': { screen: 'x.y', kind: 'button' },
+  'x.y.rule-list': {
+    screen: 'x.y',
+    kind: 'list',
+    derivedFrom: { composite: 'password-rules' },
+    with: ['x.y.heading'],
+  },
+  'x.y.rule-list.length-item': {
+    screen: 'x.y',
+    kind: 'item',
+    derivedFrom: { composite: 'password-rules', item: 'length' },
+  },
+}
+
+/** The problems of a page of `x.y` in the open state of `LISTING`. */
+const listsOn = (anchors: RenderedAnchor[]) =>
+  settledProblems({ screens: [{ id: 'x.y', flow: LISTING }], ids: LISTS }, settled('open', anchors))
+
+/** Every list the open state lists, on the page and visible, with what it shows with. */
+const ALL_LISTS = [
+  shown('x.y.heading'),
+  shown('x.y.users.list'),
+  shown('x.y.users.account-item'),
+  shown('x.y.users.list.size-select'),
+  shown('x.y.sent.list'),
+  shown('x.y.sent.list.refresh-button'),
+  shown('x.y.rule-list'),
+  shown('x.y.rule-list.length-item'),
+]
+
+const listsBut = (...left: string[]) => ALL_LISTS.filter(({ anchor }) => !left.includes(anchor))
+
+describe('a state that renders a list whose with or without keep it off the page', () => {
+  it('passes the page that shows every list the state lists', () => {
+    expect(listsOn(ALL_LISTS)).toEqual([])
+  })
+
+  it('lets a waiting or empty list, a composite one, their parts and what is under them stay away while a with entry does not show', () => {
+    expect(
+      listsOn(
+        listsBut(
+          'x.y.heading',
+          'x.y.users.list',
+          'x.y.users.account-item',
+          'x.y.users.list.size-select',
+          'x.y.rule-list',
+          'x.y.rule-list.length-item',
+        ),
+      ),
+    ).toEqual([])
+  })
+
+  it('lets a waiting list and what is under it stay away while a without entry shows', () => {
+    expect(
+      listsOn([
+        ...listsBut('x.y.sent.list', 'x.y.sent.list.refresh-button'),
+        shown('x.y.banned-badge'),
+      ]),
+    ).toEqual([])
+  })
+
+  it('still wants a listed list its entries let show, and the parts of a shown list', () => {
+    expect(
+      listsOn(
+        listsBut(
+          'x.y.users.list',
+          'x.y.users.account-item',
+          'x.y.users.list.size-select',
+          'x.y.sent.list',
+          'x.y.sent.list.refresh-button',
+        ),
+      ),
+    ).toEqual([
+      'x.y in open: "x.y.users.list" is not on the page, but the state renders it',
+      'x.y in open: "x.y.users.list.size-select" is not on the page, but the state renders it',
+      'x.y in open: "x.y.sent.list" is not on the page, but the state renders it',
+      'x.y in open: "x.y.sent.list.refresh-button" is not on the page, but the state renders it',
+    ])
+    expect(listsOn(listsBut('x.y.users.list.size-select'))).toEqual([
+      'x.y in open: "x.y.users.list.size-select" is not on the page, but the state renders it',
+    ])
   })
 })

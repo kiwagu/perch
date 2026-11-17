@@ -6,7 +6,7 @@
 
 import { z } from '@workspace/zod'
 
-import { ANCHOR_PATTERN } from './anchors'
+import { ANCHOR_PATTERN, WHOLE_FORM } from './anchors'
 
 const WORD = '[a-z][a-z0-9]*(-[a-z0-9]+)*'
 
@@ -24,6 +24,11 @@ export const baseAnchorSchema = z
   .string()
   .regex(new RegExp(`^${WORD}(\\.${WORD}){1,3}$`))
   .describe('A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last.')
+
+/** What an error's code concerns: a field of its screen, by its anchor, or the whole form. */
+export const errorFieldSchema = z
+  .union([baseAnchorSchema, z.literal(WHOLE_FORM)])
+  .describe('A field of the screen, by its anchor, or `form`, the form as a whole.')
 
 export const screenNameSchema = z
   .string()

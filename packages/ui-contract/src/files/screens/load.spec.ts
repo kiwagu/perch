@@ -201,7 +201,10 @@ describe('loadScreens', () => {
 
     expect(problems()).toEqual([
       { file: SAMPLE_FILE, message: 'entry: Invalid input: expected array, received undefined' },
-      { file: 'contract/domain/platform.yaml', message: 'version: Invalid input: expected 1' },
+      {
+        file: 'contract/domain/platform.yaml',
+        message: 'version: Invalid input: expected number, received string',
+      },
     ])
   })
   it('reports an anchor key that breaks the grammar', () => {

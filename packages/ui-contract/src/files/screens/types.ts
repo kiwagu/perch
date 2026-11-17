@@ -25,7 +25,20 @@ export type Binding = z.infer<typeof bindingSchema>
 export type BindingRef = z.infer<typeof bindingRefSchema>
 export type AnchorBinding = z.infer<typeof anchorBindingSchema>
 export type ParamValue = z.infer<typeof paramValueSchema>
-export type Platform = z.infer<typeof platformSchema>
+/** The platform section as `platform.yaml` writes it. */
+export type WrittenPlatform = z.infer<typeof platformSchema>
+
+type WrittenValue = NonNullable<WrittenPlatform['values']>[string]
+
+/** A value of `platform.values` as every reader takes it: its length a number or none. */
+export type PlatformValue = Omit<WrittenValue, 'maxLength'> & { maxLength?: number | undefined }
+/**
+ * The platform section as every reader takes it: each value with its length resolved, a default
+ * length taken and a `null` one left out (`withDefaultLengths`).
+ */
+export type Platform = Omit<WrittenPlatform, 'values'> & {
+  values?: Record<string, PlatformValue> | undefined
+}
 export type PlatformComposite = z.infer<typeof platformCompositeSchema>
 export type Flow = z.infer<typeof flowSchema>
 /** A plain state of the root: it may end, carry an address and run an invoke. */

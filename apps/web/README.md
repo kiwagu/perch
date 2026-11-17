@@ -321,8 +321,8 @@ modeling stage.
   not overtaken by a later one, found nothing waiting); every tab reads it with its own network
   (`onOnlineChange`), and a record nobody refreshed for six seconds belongs to a leader that went
   away. The leading tab's sync channel hears the same network (`browser.ts` hands it to
-  `WebSocketTransport`): once the browser is back online it connects at once instead of waiting
-  out its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
+  `WebSocketTransport`): once the browser is back online it connects within a second, not after
+  its backoff. And `PLATFORM_EVENTS` (`platform-events.ts`): the platform's events that reach the
   screens' machines and the frame's, from the facts of this browser no account owns, each a key
   of its storage another tab set (`perch.password.reset` tells `platform.password-reset`,
   `perch.theme` tells `platform.theme-set`); the storage's own
@@ -482,6 +482,7 @@ by default), which a test talking to the gateway directly uses to name a client 
 accounts and the organisations they created are swept; it applies the directory schema as the
 gateway does, which leaves a stand that already has it alone. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
+`src/field-state-colour.test-support.ts` is the one assertion that a field the contract opts out draws no state colour.
 
 ## Commands
 

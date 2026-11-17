@@ -52,8 +52,12 @@ export const ownControlsOf = (screen: Screen): Set<string> =>
     }),
   )
 
+/** The paths of `screen`'s own bindings: a `navigate` to one of them stays on the screen. */
+export const ownPathsOf = (screen: Screen): Set<string> =>
+  new Set(screen.bindings.map(({ path }) => path))
+
 /** The anchors of fields a move carries in its search. */
-const carriedBy = (move: Navigate): string[] =>
+export const carriedBy = (move: Navigate): string[] =>
   Object.values(move.params.search ?? {}).flatMap((value) =>
     typeof value === 'object' && 'anchor' in value ? [value.anchor] : [],
   )
@@ -72,13 +76,13 @@ const branchesOf = (
  * it loses when one of them leaves the screen; none for the frame, which has no path.
  */
 export function controlMovesOf(screen: Screen): ControlMove[] {
-  const { flow, anchors, bindings } = screen
+  const { flow, anchors } = screen
 
   if (flow === undefined || screen.frame === true) {
     return []
   }
 
-  const paths = new Set(bindings.map(({ path }) => path))
+  const paths = ownPathsOf(screen)
   const controls = ownControlsOf(screen)
   const fields = Object.entries(anchors)
     .filter(([, def]) => def.holdsInput === true)

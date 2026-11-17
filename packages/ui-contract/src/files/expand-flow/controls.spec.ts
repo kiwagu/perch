@@ -38,13 +38,17 @@ const OPEN: Control = {
   error: undefined,
 }
 
-const lookups = (controls: readonly Control[]): FlowLookups => ({
+/** The last version whose regions keep their area's error after a success, as the specs below read. */
+const FOUR = 4
+
+const lookups = (controls: readonly Control[], edition = FOUR): FlowLookups => ({
   codesOf: (anchor) => CODES[anchor],
   failureOf: (action) => FAILURES[action],
   controls,
   screen: 'sample',
   toast: undefined,
   platformToasts: {},
+  edition,
 })
 
 /** A flow whose root is one parallel state `viewing` with the regions `regions`. */
@@ -55,9 +59,9 @@ const viewing = (regions: Record<string, unknown>) => ({
 
 const OTHER = { initial: 'idle', states: { idle: {} } }
 
-/** The regions of `viewing` once `flow` is expanded with `controls`, and the issues. */
-function regionsOf(flow: unknown, controls: readonly Control[]) {
-  const expanded = expandFlow(flow, lookups(controls))
+/** The regions of `viewing` once `flow` is expanded with `controls` at `edition`, and the issues. */
+function regionsOf(flow: unknown, controls: readonly Control[], edition = FOUR) {
+  const expanded = expandFlow(flow, lookups(controls, edition))
   const states = (expanded.flow as { states: { viewing: { states: Record<string, unknown> } } })
     .states
 
@@ -315,5 +319,222 @@ describe('the region of a button bound to one action', () => {
       regionsOf(viewing({ list: { by: 'sample.list.remove-button', as: 'removing' } }), [REMOVE])
         .issues,
     ).toEqual([expect.objectContaining({ at: ['flow', 'states', 'viewing', 'states', 'list'] })])
+  })
+})
+
+describe("from version 5, the success of a button's region and its area's error", () => {
+  const FIVE = 5
+  const CLEAR = { type: 'clear', params: { anchor: 'sample.form.error' } }
+  const READ = { type: 'read', params: { anchor: 'sample.list' } }
+  const at5 = (regions: Record<string, unknown>, controls: readonly Control[]) =>
+    regionsOf(viewing(regions), controls, FIVE)
+  const onDoneOf = (region: unknown): unknown =>
+    (region as { states: { running: { invoke: { onDone: unknown } } } }).states.running.invoke
+      .onDone
+  const DERIVED = `derived: a success clears its area's error, sample.form.error; leave it out`
+
+  it('clears the error of the part first, on the outcome a region written by its button writes', () => {
+    const written = { by: 'sample.form.add-button', onDone: { actions: [{ read: 'sample.list' }] } }
+
+    expect(at5({ other: OTHER, form: written }, [ADD])).toEqual({
+      regions: {
+        other: OTHER,
+        form: {
+          ...ADD_REGION,
+          states: {
+            ...ADD_REGION.states,
+            running: {
+              invoke: {
+                ...ADD_REGION.states.running.invoke,
+                onDone: { target: 'idle', actions: [CLEAR, READ] },
+              },
+            },
+          },
+        },
+      },
+      issues: [],
+    })
+    // As written, the outcome clears nothing, and at version 4 it stays so.
+    expect(written.onDone.actions).not.toContainEqual({ clear: 'sample.form.error' })
+    expect(
+      onDoneOf(regionsOf(viewing({ other: OTHER, form: written }), [ADD]).regions['form']),
+    ).toEqual({ target: 'idle', actions: [READ] })
+  })
+
+  it('clears it on the derived outcome, of a region written by its button or derived', () => {
+    const done = {
+      target: 'idle',
+      description: 'The controls whose values the action took are emptied.',
+      actions: [CLEAR],
+    }
+
+    expect(onDoneOf(at5({ other: OTHER }, [ADD]).regions['form-add'])).toEqual(done)
+    expect(
+      onDoneOf(at5({ form: { by: 'sample.form.add-button' } }, [ADD]).regions['form']),
+    ).toEqual(done)
+    expect(onDoneOf(regionsOf(viewing({ other: OTHER }), [ADD]).regions['form-add'])).toEqual({
+      target: 'idle',
+      description: 'The controls whose values the action took are emptied.',
+    })
+  })
+
+  it('clears it on every branch of the outcome: a guarded one, one that says read: false, a target alone', () => {
+    const guarded = at5(
+      {
+        other: OTHER,
+        form: {
+          by: 'sample.form.add-button',
+          onDone: [{ guard: 'ownChange', read: false }, { actions: [{ read: 'sample.list' }] }],
+        },
+      },
+      [ADD],
+    )
+
+    expect(guarded.issues).toEqual([])
+    expect(onDoneOf(guarded.regions['form'])).toEqual([
+      { target: 'idle', guard: 'ownChange', read: false, actions: [CLEAR] },
+      { target: 'idle', actions: [CLEAR, READ] },
+    ])
+    expect(
+      onDoneOf(
+        at5({ form: { by: 'sample.form.add-button', onDone: '#sample.done' } }, [ADD]).regions[
+          'form'
+        ],
+      ),
+    ).toEqual({ target: '#sample.done', actions: [CLEAR] })
+  })
+
+  it('leaves a branch that shows on the error as it is, and the outcome of a failure', () => {
+    const show = { type: 'show', params: { anchor: 'sample.form.error', codes: ['forbidden'] } }
+    const { regions, issues } = at5(
+      {
+        form: {
+          by: 'sample.form.add-button',
+          onDone: [
+            { guard: 'ownChange', actions: [{ show: { 'sample.form.error': ['forbidden'] } }] },
+            { actions: [{ read: 'sample.list' }] },
+          ],
+        },
+      },
+      [ADD],
+    )
+
+    expect(issues).toEqual([])
+    expect(onDoneOf(regions['form'])).toEqual([
+      { target: 'idle', guard: 'ownChange', actions: [show] },
+      { target: 'idle', actions: [CLEAR, READ] },
+    ])
+    expect(regions['form']).toMatchObject({
+      states: { running: { invoke: { onError: ADD_REGION.states.running.invoke.onError } } },
+    })
+  })
+
+  it('gives none to the region of a button whose part has no error', () => {
+    const { regions, issues } = at5(
+      {
+        list: {
+          by: 'sample.list.remove-button',
+          onDone: { actions: [{ read: 'sample.list' }] },
+          onError: { actions: [{ show: 'sample.other.error' }] },
+        },
+      },
+      [REMOVE, OPEN],
+    )
+
+    expect(issues).toEqual([])
+    expect(onDoneOf(regions['list'])).toEqual({ target: 'idle', actions: [READ] })
+    expect(onDoneOf(regions['list-open'])).toEqual({ target: 'idle' })
+  })
+
+  it('keeps a clear of another anchor after the derived one, and leaves a region written in full as it is', () => {
+    const full = {
+      initial: 'idle',
+      states: {
+        idle: { on: { 'sample.form.add-button': 'running' } },
+        running: {
+          invoke: {
+            src: 'thing.createThing',
+            onDone: { target: 'idle', actions: [{ clear: 'sample.form.error' }] },
+            onError: 'idle',
+          },
+        },
+      },
+    }
+    const { regions, issues } = at5(
+      {
+        form: {
+          by: 'sample.form.add-button',
+          onDone: { actions: [{ clear: 'sample.form.title-input' }] },
+        },
+        written: full,
+      },
+      [ADD],
+    )
+    const titleCleared = { type: 'clear', params: { anchor: 'sample.form.title-input' } }
+
+    expect(issues).toEqual([])
+    expect(onDoneOf(regions['form'])).toEqual({ target: 'idle', actions: [CLEAR, titleCleared] })
+    expect(onDoneOf(regions['written'])).toEqual({ target: 'idle', actions: [CLEAR] })
+  })
+
+  it('refuses a clear of the error a branch of the outcome writes, in either form, at its place', () => {
+    const region = ['flow', 'states', 'viewing', 'states', 'form', 'onDone']
+
+    expect(
+      at5(
+        {
+          form: {
+            by: 'sample.form.add-button',
+            onDone: { actions: [{ clear: 'sample.form.error' }, { read: 'sample.list' }] },
+          },
+        },
+        [ADD],
+      ).issues,
+    ).toEqual([{ at: [...region, 'actions', 0], message: DERIVED }])
+    expect(
+      at5(
+        {
+          form: {
+            by: 'sample.form.add-button',
+            onDone: [
+              { guard: 'ownChange', read: false },
+              { actions: [{ read: 'sample.list' }, CLEAR] },
+            ],
+          },
+        },
+        [ADD],
+      ).issues,
+    ).toEqual([{ at: [...region, 1, 'actions', 1], message: DERIVED }])
+    // At version 4 the same clear is the screen's own.
+    expect(
+      regionsOf(
+        viewing({
+          form: {
+            by: 'sample.form.add-button',
+            onDone: { actions: [{ clear: 'sample.form.error' }] },
+          },
+        }),
+        [ADD],
+      ),
+    ).toMatchObject({
+      issues: [],
+      regions: { form: { states: { running: { invoke: { onDone: { actions: [CLEAR] } } } } } },
+    })
+  })
+
+  it('makes a flow the canonical schema takes', () => {
+    const { flow, issues } = expandFlow(
+      viewing({
+        other: OTHER,
+        list: {
+          by: 'sample.list.remove-button',
+          onError: { actions: [{ show: 'sample.other.error' }] },
+        },
+      }),
+      lookups([ADD, REMOVE, OPEN], FIVE),
+    )
+
+    expect(issues).toEqual([])
+    expect(flowSchema.safeParse(flow).success).toBe(true)
   })
 })

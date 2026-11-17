@@ -49,8 +49,11 @@ test.describe('Sign a device out while it is offline', { tag: '@full' }, () => {
     await test.step("3. Take device B's browser offline", async () => {
       await network.goOffline()
       await expect(deviceB.locator('html')).toHaveAttribute('data-sync-channel', 'down')
-      // Offline long enough for its reconnect delay to reach the longest, 30 seconds: coming back
-      // online in step 5 must not wait it out.
+      // Offline until its reconnect delay reaches the capped step: every attempt after the fifth
+      // draws a delay of up to 30 seconds, so a wait pending here can be long, and coming back
+      // online in step 5 must not wait it out. A draw can also be short, so this step does not
+      // prove the network-back wiring; that is checked deterministically in
+      // apps/web/src/composition/sync-transport.spec.ts.
       await network.untilLongestReconnectDelay()
     })
 

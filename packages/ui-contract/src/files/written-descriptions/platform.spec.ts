@@ -78,4 +78,23 @@ describe('platformDescriptions', () => {
       },
     ])
   })
+  it('reads the description of each platform value', () => {
+    expect(
+      platformDescriptions(
+        parse(`
+values:
+  email: { type: string, format: email, description: An address of mail. }
+  flag: { type: boolean }
+actions: {}
+`),
+      ),
+    ).toEqual([
+      {
+        at: ['values', 'email', 'description'],
+        kind: 'value',
+        place: 'platform value email',
+        text: 'An address of mail.',
+      },
+    ])
+  })
 })

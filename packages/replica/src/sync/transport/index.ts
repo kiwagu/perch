@@ -7,8 +7,13 @@ export type {
   SyncTransport,
 } from './port'
 export {
+  NETWORK_BACK_DELAY_MS,
+  networkBackDelay,
+  RECONNECT_STEPS_MS,
+  reconnectDelay,
+} from './reconnect-delay'
+export {
   type DeviceNetwork,
-  RECONNECT_DELAYS_MS,
   type SocketLike,
   WELCOME_TIMEOUT_MS,
   WebSocketTransport,
