@@ -619,6 +619,22 @@ describe('useScreenMachine', () => {
     expect(screen.getByTestId('state').textContent).toBe('idle')
   })
 
+  it('tells whether the state the machine is in takes an event, as the state moves, the check a send makes', async () => {
+    const { running } = await open(passing(), '/here', confirming())
+
+    expect(running.can({ type: 'x.save-button', fail: false })).toBe(true)
+    expect(running.can({ type: 'x.finish-button' })).toBe(true)
+
+    await act(async () => running.send({ type: 'organisation.notes.delete-button' }))
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+
+    expect(running.can({ type: 'x.save-button', fail: false })).toBe(false)
+    expect(running.can({ type: 'x.finish-button' })).toBe(false)
+    // What the control shows and what a press does agree: the state takes neither.
+    expect(await act(() => running.submit({ type: 'x.finish-button' }))).toBe(false)
+    expect(screen.getByTestId('state').textContent).toBe('deleted')
+  })
+
   it("tells what the machine's state renders, read from its states' meta.renders", async () => {
     const { running } = await open(passing())
 
