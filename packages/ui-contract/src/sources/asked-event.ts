@@ -3,9 +3,11 @@
  * (`locals.ts`), read where the expression is written, so a helper's own constant resolves in the
  * helper: the `type` each object its argument may be ends up with, in the order the object writes
  * it (a later `type`, or a spread that sets one, overrides an earlier one), `testIdFor()` of two
- * literals as that type included; a spread the file cannot follow is the event's data (a form's
- * values, `{ type: '<anchor>', ...values }`), never its type. An argument the file cannot follow, a
- * `type` it cannot read, or two alternatives that name different events leave it unread. The facets check holds it to
+ * literals as that type included; a spread the file cannot follow is the data of an event that
+ * writes its own `type` (a form's values, `{ type: '<anchor>', ...values }`), and may be the type
+ * of one that does not. An argument the file cannot follow, a `type` it cannot read, or two
+ * alternatives that name different events leave it unread. The question itself is read from the
+ * tree: one negated call of `can` or `props.can` with one argument, whatever that argument nests. The facets check holds it to
  * the event the control itself sends, its anchor, so a copied `can(reset)` on the revoke button is
  * caught.
  */
@@ -29,8 +31,15 @@ const isCan = (callee: Expression): boolean =>
 /** What an event's `type` may end up as: a name, `null` unread, `undefined` where none is set. */
 type Typed = string | null | undefined
 
-/** The one event `!can(<argument>)` asks about; none when it cannot be read, or reads as several. */
-export function askedEventOf(locals: Locals, written: Expression, at: number): string | undefined {
+/** A `disabled` as the facets check reads it: whether it is one question, and the event it asks. */
+export interface Question {
+  /** One negated question to the machine with nothing beside it: `!can(<one argument>)`. */
+  readonly question: boolean
+  /** The one event it asks about, where its file says; none when unread or several. */
+  readonly asks?: string
+}
+
+export function questionOf(locals: Locals, written: Expression): Question {
   const negated = unwrap(written)
   const call =
     negated.type === 'UnaryExpression' && negated.operator === '!'
@@ -38,15 +47,21 @@ export function askedEventOf(locals: Locals, written: Expression, at: number): s
       : undefined
 
   if (call?.type !== 'CallExpression' || call.callee.type === 'Super' || !isCan(call.callee)) {
-    return undefined
+    return { question: false }
   }
 
-  const [argument] = call.arguments
+  const [argument, ...more] = call.arguments
 
-  if (argument === undefined || argument.type === 'SpreadElement') {
-    return undefined
+  if (argument === undefined || argument.type === 'SpreadElement' || more.length > 0) {
+    return { question: false }
   }
 
+  /** Whether an object writes its own `type`: then a spread it cannot follow is its data. */
+  const typed = (object: ObjectExpression): boolean =>
+    object.properties.some(
+      (property) =>
+        property.type === 'Property' && keyName(property.key, property.computed) === 'type',
+    )
   const typesOf = (alternatives: readonly Alternative[], depth: number): Typed[] =>
     alternatives.flatMap((object): Typed[] =>
       object === undefined ? [null] : object === null ? [undefined] : typesIn(object, depth),
@@ -57,16 +72,23 @@ export function askedEventOf(locals: Locals, written: Expression, at: number): s
       : object.properties.reduce<Typed[]>(
           (now, property) => {
             if (property.type === 'SpreadElement') {
-              // A spread the file cannot follow is the event's data (a form's values), never its type.
               return locals
                 .objectsOf(property.argument, property.start)
-                .flatMap((object) =>
-                  object === undefined || object === null
-                    ? now
-                    : typesIn(object, depth + 1).flatMap((type) =>
-                        type === undefined ? now : [type],
-                      ),
-                )
+                .flatMap((branch): Typed[] => {
+                  if (branch === null) {
+                    return now
+                  }
+
+                  // A spread the file cannot follow is the data of an event that writes its own
+                  // `type` (`{ type: '<anchor>', ...values }`); of one that does not, it may be the type.
+                  if (branch === undefined) {
+                    return typed(object) ? now : [null]
+                  }
+
+                  return typesIn(branch, depth + 1).flatMap((type) =>
+                    type === undefined ? now : [type],
+                  )
+                })
             }
 
             const key = keyName(property.key, property.computed)
@@ -85,8 +107,11 @@ export function askedEventOf(locals: Locals, written: Expression, at: number): s
           [undefined],
         )
 
-  const types = new Set(typesOf(locals.objectsOf(argument, at), 0))
+  const types = new Set(typesOf(locals.objectsOf(argument, argument.start), 0))
   const [event] = types
 
-  return types.size === 1 && typeof event === 'string' ? event : undefined
+  return {
+    question: true,
+    ...(types.size === 1 && typeof event === 'string' ? { asks: event } : {}),
+  }
 }

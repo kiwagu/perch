@@ -23,7 +23,7 @@ import { type Expression, parseSync, Visitor } from 'oxc-parser'
 
 import type { Problem } from '../files'
 
-import { askedEventOf } from './asked-event'
+import { type Question, questionOf } from './asked-event'
 import {
   anchorIn,
   type ElementAttribute,
@@ -96,6 +96,8 @@ export interface Collected {
     line: number
     /** For `disabled`, the event its `!props.can(…)` asks about, where the file says (`asked-event.ts`). */
     asks?: string
+    /** For `disabled`, written as one negated question to the machine with nothing beside it. */
+    question?: true
     /** Supplied by a spread some branch of which leaves it out: never counted as present. */
     partial?: true
   }>
@@ -269,17 +271,18 @@ export function collectFromSource(text: string, file: string): Collected {
 
       if (prop !== undefined) {
         const expression = expressionOf(attribute)
-        const asks =
+        const asked: Question =
           prop === 'disabled' && expression !== undefined
-            ? askedEventOf(locals, expression, expression.start)
-            : undefined
+            ? questionOf(locals, expression)
+            : { question: false }
 
         collected.props.push({
           ...carried,
           name: prop,
           text: sourceOf(attribute),
           line: line(attribute.start),
-          ...(asks === undefined ? {} : { asks }),
+          ...(asked.asks === undefined ? {} : { asks: asked.asks }),
+          ...(asked.question ? { question: true as const } : {}),
           ...(attribute.partial === true ? { partial: true as const } : {}),
         })
       }

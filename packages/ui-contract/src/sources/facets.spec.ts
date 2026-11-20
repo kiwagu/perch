@@ -367,6 +367,14 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['c']}: "sample.c-button": disabled={!props.can({ type: 'sample.c-button' }) || busy}, but no state enables it: only a button, a tab, a select, a checkbox, a radio or a switch whose anchor is an event of its screen's flow is enabled by its machine; leave it out`,
       ])
     })
+    it('passes a question whose argument a builder of the view makes, however deep the call', () => {
+      expect(
+        problemsOf({
+          save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(readDraft()))} />',
+          saveEvent: "(draft) => ({ type: 'sample.save-button', ...draft })",
+        }),
+      ).toEqual([])
+    })
     it('in ahead mode lets a missing disabled by', () => {
       expect(
         problemsOf({ save: '<Button data-testid="sample.save-button" />' }, { ahead: true }),

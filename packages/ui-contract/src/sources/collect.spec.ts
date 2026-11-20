@@ -167,6 +167,7 @@ describe('collectFromSource', () => {
         text: "!props.can({ type: 'x.form.save-button', })",
         line: 5,
         asks: 'x.form.save-button',
+        question: true,
       },
       { anchor: 'x.form.code-input', name: 'maxLength', text: '"6"', line: 12 },
       { anchor: 'x.form.code-input', name: 'disabled', text: '', line: 12 },
@@ -196,6 +197,7 @@ describe('collectFromSource', () => {
         name: 'disabled',
         text: '!can(event)',
         line: 1,
+        question: true,
       },
     ])
   })
@@ -343,6 +345,26 @@ describe('collectFromSource', () => {
     ])
     expect(found.problems.map(formatProblem)).toEqual([
       `x.tsx:5: ${UNDECLARED_ANCHOR('IMPORTED_TEST_ID')}`,
+    ])
+  })
+  it('reads the question from the tree: a nested builder, an untyped spread, something beside it', () => {
+    const found = collectFromSource(
+      [
+        "const createEvent = (draft) => ({ type: 'x.create.submit-button', ...draft })",
+        "const revoke = { type: 'x.sessions.revoke-button' } as const",
+        'const a = <Button data-testid="x.create.submit-button" disabled={!props.can(createEvent(readDraft()))} />',
+        'function Row({ checkEvent }) { return <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ ...revoke, ...checkEvent })} /> }',
+        'const b = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(revoke) || busy} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // The builder writes its own type, so its spread of the draft is data; the row's event takes
+    // its type from spreads only, so the one it cannot follow may override it: unread.
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual([
+      { asks: 'x.create.submit-button', question: true, line: 3 },
+      { asks: undefined, question: true, line: 4 },
+      { asks: undefined, question: undefined, line: 5 },
     ])
   })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {

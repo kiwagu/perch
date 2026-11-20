@@ -84,6 +84,8 @@ interface Facet {
    * for it, on an anchor of these kinds: the app lags the contract. None for a prop the kit takes.
    */
   readonly lags?: { readonly pattern: RegExp; readonly kinds: ReadonlySet<string> }
+  /** The prop must be one negated question to the machine (`Collected.props.question`). */
+  readonly question?: true
 }
 
 type Rule = (facets: Facets) => Facet
@@ -91,8 +93,8 @@ type Rule = (facets: Facets) => Facet
 const MARK_IDIOM = "concerns === '<key>' ? true : undefined"
 const MARK = /^concerns === '[a-z][a-z-]*' \? true : undefined$/
 const ENABLE_IDIOM = '!props.can(<its event>)'
-/** One negated question to the machine, nothing beside it: `!props.can(…)` or `!can(…)`. */
-const ENABLE = /^!\s*(props\.)?can\([^()]*(\([^()]*\)[^()]*)*\)$/
+/** The start of the enabling idiom; that the prop is one question, nothing beside it, is read from the tree. */
+const ENABLE = /^!\s*(props\.)?can\(/
 
 /** The limit of a text field: the kit takes it from the field facts, so no element carries one. */
 const limits: Rule = () => ({ name: 'maxLength', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
@@ -177,6 +179,7 @@ const enabling: Rule = ({ screens }) => ({
   elsewhere:
     "no state enables it: only a button, a tab, a select, a checkbox, a radio or a switch whose anchor is an event of its screen's flow is enabled by its machine; leave it out",
   lags: { pattern: ENABLE, kinds: ENABLED_BY_STATE_KINDS },
+  question: true,
 })
 
 const RULES: readonly Rule[] = [limits, types, marks, enabling]
@@ -190,16 +193,22 @@ const written = (name: string, text: string): string =>
       : `${name}={${text}}`
 
 /** The problems of one facet: each prop written against it, and each one called for and missing. */
-function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets): Problem[] {
+function problemsOf(
+  { name, on, elsewhere, within, lags, question }: Facet,
+  facets: Facets,
+): Problem[] {
   const kinds = new Map(
     declaredAnchors(facets.screens).map(({ anchor, def }) => [anchor, def.kind]),
   )
   const declared = new Set(kinds.keys())
   // The app lags the contract: a prop in its idiom on an anchor of a kind that may carry it.
-  const lagging = (anchor: string, text: string): boolean =>
+  // Written in the idiom: its pattern, and for the enabling one question to the machine.
+  const idiomatic = (pattern: RegExp, text: string, asked: boolean): boolean =>
+    pattern.test(text) && (question !== true || asked)
+  const lagging = (anchor: string, text: string, asked: boolean): boolean =>
     facets.ahead &&
     lags?.kinds.has(kinds.get(anchor) ?? kindOf(anchor)) === true &&
-    lags.pattern.test(text)
+    idiomatic(lags.pattern, text, asked)
   const props = facets.collected.flatMap(({ file, props: all }) =>
     // An undeclared base is the parts check's problem: no facet problem on top of it.
     all
@@ -210,17 +219,17 @@ function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets
   const carried = new Set(
     props.filter(({ partial }) => partial !== true).map(({ anchor }) => anchor),
   )
-  const against = props.flatMap(({ anchor, text, file, line, asks }) => {
+  const against = props.flatMap(({ anchor, text, file, line, asks, question: asked = false }) => {
     const held = on.get(anchor)
     const as = written(name, text)
 
     if (held === undefined) {
-      return (within === undefined || within.has(anchor)) && !lagging(anchor, text)
+      return (within === undefined || within.has(anchor)) && !lagging(anchor, text, asked)
         ? [{ file, line, message: `"${anchor}": ${as}, but ${elsewhere}` }]
         : []
     }
 
-    if (!held.pattern.test(text)) {
+    if (!idiomatic(held.pattern, text, asked)) {
       return [
         {
           file,
