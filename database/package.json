@@ -21,6 +21,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "@workspace/data": "workspace:*",
+    "@workspace/kernel": "workspace:*",
     "@workspace/modeling": "workspace:*",
     "@workspace/ui-contract": "workspace:*",
     "@workspace/zod": "workspace:*",

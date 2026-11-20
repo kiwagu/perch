@@ -10,7 +10,7 @@ DEFINE FIELD OVERWRITE key ON tenant TYPE string
   ASSERT string::matches($value, '^[a-z][a-z0-9_]{1,31}$');
 DEFINE FIELD OVERWRITE name ON tenant TYPE string
   ASSERT string::len($value) > 0
-  AND string::len($value) <= 80;
+  AND string::len($value) <= $organisation_name_max_length;
 DEFINE FIELD OVERWRITE namespace ON tenant TYPE string DEFAULT 'app';
 DEFINE FIELD OVERWRITE database ON tenant TYPE string;
 -- `provisioning` until the organisation's database holds its schema and its first member.

@@ -16,14 +16,14 @@ DEFINE TABLE OVERWRITE profile SCHEMAFULL
 DEFINE FIELD OVERWRITE identity ON profile TYPE record<identity>;
 DEFINE FIELD OVERWRITE name ON profile TYPE string
   ASSERT string::len($value) > 0
-  AND string::len($value) <= 80;
+  AND string::len($value) <= $profile_name_max_length;
 -- @readonly
 DEFINE FIELD OVERWRITE email ON profile TYPE string
   ASSERT string::is_email($value);
 -- @crdt text
 DEFINE FIELD OVERWRITE bio ON profile TYPE option<string>
   ASSERT $value = NONE
-  OR string::len($value) <= 2000;
+  OR string::len($value) <= $profile_bio_max_length;
 -- @readonly
 DEFINE FIELD OVERWRITE created_at ON profile TYPE datetime
   DEFAULT time::now()

@@ -7,10 +7,15 @@
  *
  * The schema is read as the database itself reports it (an embedded database applies it), so an
  * assert is read as the database prints it: `IN` comes back as `INSIDE`, a field that may be
- * `NONE` has the guard `$value = NONE OR ...`, and the clauses of an `AND` are joined on one line.
+ * `NONE` has the guard `$value = NONE OR ...`, and the clauses of an `AND` are joined on one line,
+ * and a length bound that names a parameter is read for the number the parameter holds.
  *
- * The model is read as every reader takes it: where the platform names a default length, a text
- * field that states no limit has it, so the database holds the field to that length too.
+ * The limits are those the kernel's generated values state for each field (`CONTRACT_VALUES`,
+ * which resolves them as every reader of the contract does, a default length included), and the
+ * schema's length parameters are generated from the same values. The values are held to the
+ * contract by their own spec, now or, in the ahead mode, as they were at the base or the head of
+ * the branch, so a business commit that changes a limit does not fail this spec before the
+ * implementation emits the values and the parameters again.
  */
 
 import { join } from 'node:path'
@@ -18,8 +23,12 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { readSchema, type SchemaDatabase } from '@workspace/data/schema-files'
-import { loadSchemaModel, type TableModel, tokenize } from '@workspace/modeling'
-import { loadResolvedModel, type ModelField } from '@workspace/ui-contract'
+import { CONTRACT_VALUES } from '@workspace/kernel'
+import { loadSchemaModel, type TableModel } from '@workspace/modeling'
+import { loadResolvedModel, type ResolvedValue } from '@workspace/ui-contract'
+
+import { type Limits, readAssert } from './assert-limits'
+import { lengthBoundProblems } from './length-bounds'
 
 const ROOT = join(import.meta.dirname, '../..')
 
@@ -28,118 +37,60 @@ const DATABASES: readonly SchemaDatabase[] = ['directory', 'tenant']
 /** The record's own id: every table has it without a field definition, so the structure lists none. */
 const RECORD_ID = 'id'
 
-/** What a model field limits a value to, and what the `ASSERT` of its column limits it to. */
-interface Limits {
-  min?: number
-  max?: number
-  email: boolean
-  pattern?: string
-  members?: string[]
-  /** Clauses of the assert this spec does not read: the model states nothing for them. */
-  unread: string[]
-}
+/** The contract's values by name: every value of the platform and each field as `<entity>.<field>`. */
+const VALUES: Readonly<Record<string, ResolvedValue>> = CONTRACT_VALUES
 
-const LENGTH = /^string::len\(\$value\) (>=|>|<=|<|=) (\d+)$/
-const MATCHES = /^string::matches\(\$value, ('.*'|".*")\)$/
-const INSIDE = /^\$value INSIDE \[(.*)\]$/
+/**
+ * The columns that hold no contract value, so write their length bound as a number: the id a
+ * browser mints for itself and the label it describes itself with, neither a field of the model
+ * nor a value of the platform. A column that holds a contract value names its parameter
+ * (`$<value>_max_length`) instead; this list does not grow for it.
+ */
+const NO_CONTRACT_VALUE = ['device_session.device', 'device_session.label']
 
-/** A SurrealQL string literal's text: the quotes off, `\\` and an escaped quote resolved. */
-const unquote = (literal: string): string => literal.slice(1, -1).replace(/\\([\\'"])/g, '$1')
+/**
+ * The columns that hold a value of the platform, not a field of the model, so no entity holds them:
+ * the schema's own column and the value it is held to.
+ */
+const PLATFORM_VALUE_COLUMNS = [{ table: 'tenant', column: 'name', value: 'organisation-name' }]
 
-/** Splits `text` at each `keyword` outside quotes and brackets. */
-function splitAt(text: string, keyword: 'AND' | 'OR'): string[] {
-  const parts: string[] = []
-  let depth = 0
-  let from = 0
-
-  for (const token of tokenize(text)) {
-    if (token.kind === 'punct' && '([{'.includes(token.text)) {
-      depth++
-    } else if (token.kind === 'punct' && ')]}'.includes(token.text)) {
-      depth--
-    } else if (depth === 0 && token.kind === 'word' && token.text.toUpperCase() === keyword) {
-      parts.push(text.slice(from, token.start).trim())
-      from = token.end
-    }
-  }
-
-  return [...parts, text.slice(from).trim()]
-}
-
-function modelLimits(field: ModelField): Limits {
+/** What the contract's value of a field limits it to, in the form an assert is read in. */
+function valueLimits(value: ResolvedValue): Limits {
   return {
-    ...(field.minLength === undefined ? {} : { min: field.minLength }),
-    ...(field.maxLength === undefined ? {} : { max: field.maxLength }),
-    email: field.format === 'email',
-    ...(field.pattern === undefined ? {} : { pattern: field.pattern }),
-    ...(field.enum === undefined ? {} : { members: field.enum.map(String).sort() }),
+    ...(value.minLength === undefined ? {} : { min: value.minLength }),
+    ...(value.maxLength === undefined ? {} : { max: value.maxLength }),
+    email: value.format === 'email',
+    ...(value.pattern === undefined ? {} : { pattern: value.pattern }),
+    ...(value.enum === undefined ? {} : { members: value.enum.map(String).sort() }),
     unread: [],
   }
-}
-
-/** Reads an assert as the database prints it: an optional field's `NONE` guard is no limit. */
-function assertLimits(assert: string | undefined): Limits {
-  const limits: Limits = { email: false, unread: [] }
-
-  if (assert === undefined) {
-    return limits
-  }
-
-  const [rule, ...others] = splitAt(assert, 'OR').filter((part) => part !== '$value = NONE')
-
-  if (rule === undefined || others.length > 0) {
-    return { ...limits, unread: [assert] }
-  }
-
-  for (const clause of splitAt(rule, 'AND')) {
-    const length = LENGTH.exec(clause)
-    const pattern = MATCHES.exec(clause)?.[1]
-    const members = INSIDE.exec(clause)?.[1]
-
-    if (length) {
-      const bound = Number(length[2])
-      const operator = length[1]
-
-      if (operator === '>' || operator === '>=' || operator === '=') {
-        limits.min = Math.max(limits.min ?? 0, operator === '>' ? bound + 1 : bound)
-      }
-
-      if (operator === '<' || operator === '<=' || operator === '=') {
-        limits.max = Math.min(limits.max ?? bound, operator === '<' ? bound - 1 : bound)
-      }
-    } else if (clause === 'string::is_email($value)') {
-      limits.email = true
-    } else if (pattern !== undefined) {
-      limits.pattern = unquote(pattern)
-    } else if (members !== undefined) {
-      limits.members = tokenize(members)
-        .filter((token) => token.kind === 'string')
-        .map((token) => unquote(token.text))
-        .sort()
-    } else {
-      limits.unread.push(clause)
-    }
-  }
-
-  return limits
 }
 
 /** The columns a set of fields covers, whatever their order. */
 const setOf = (fields: readonly string[]): string => [...fields].sort().join(',')
 
-/** Every table of every database's schema by name, each as its database reports it. */
-async function loadTables(): Promise<ReadonlyMap<string, TableModel>> {
+interface Schema {
+  /** Every table of every database's schema by name, each as its database reports it. */
+  readonly tables: ReadonlyMap<string, TableModel>
+  /** The parameters the schema defines by name, each with the text the database holds. */
+  readonly params: Readonly<Record<string, string>>
+}
+
+async function loadSchema(): Promise<Schema> {
   const tables = new Map<string, TableModel>()
+  const allParams: Record<string, string> = {}
 
   for (const database of DATABASES) {
-    const { model } = (await loadSchemaModel(readSchema(database)))._unsafeUnwrap()
+    const { model, params } = (await loadSchemaModel(readSchema(database)))._unsafeUnwrap()
 
     for (const [name, table] of Object.entries(model.tables)) {
       tables.set(name, table)
     }
+
+    Object.assign(allParams, params)
   }
 
-  return tables
+  return { tables, params: allParams }
 }
 
 const loaded = loadResolvedModel(ROOT)
@@ -149,10 +100,10 @@ if (loaded.model === undefined) {
 }
 
 const entities = Object.values(loaded.model.entities)
-const schema = loadTables()
+const schema = loadSchema()
 
 async function tableOf(name: string): Promise<TableModel> {
-  const table = (await schema).get(name)
+  const table = (await schema).tables.get(name)
 
   if (table === undefined) {
     throw new Error(`no database of the schema defines the table ${name}`)
@@ -220,11 +171,43 @@ describe.each(entities)('entity $name', (entity) => {
     expect(entity.unique.filter((fields) => !unique.includes(setOf(fields)))).toEqual([])
   })
 
-  describe.each(Object.entries(entity.fields))('field %s', (name, field) => {
-    it('has the limits of the model as its assert', async () => {
+  describe.each(Object.keys(entity.fields))('field %s', (name) => {
+    it("has the limits of the contract's value of the field as its assert", async () => {
       const table = await tableOf(entity.table)
+      const value = VALUES[`${entity.name}.${name}`]
 
-      expect(assertLimits(table.asserts[name])).toEqual(modelLimits(field))
+      if (value === undefined) {
+        throw new Error(`the contract's values have none for ${entity.name}.${name}`)
+      }
+
+      expect(readAssert(table.asserts[name], (await schema).params).limits).toEqual(
+        valueLimits(value),
+      )
     })
   })
+})
+
+describe('the length bounds of the schema', () => {
+  it("name the parameters of the contract's values, but on the columns that hold none", async () => {
+    const { tables, params } = await schema
+
+    expect(
+      lengthBoundProblems({ tables, params, values: VALUES, literal: NO_CONTRACT_VALUE }),
+    ).toEqual([])
+  })
+
+  it.each(PLATFORM_VALUE_COLUMNS)(
+    'holds $table $column to the limits of the platform value $value',
+    async ({ table, column, value }) => {
+      const found = VALUES[value]
+
+      if (found === undefined) {
+        throw new Error(`the contract's values have none named ${value}`)
+      }
+
+      expect(
+        readAssert((await tableOf(table)).asserts[column], (await schema).params).limits,
+      ).toEqual(valueLimits(found))
+    },
+  )
 })
