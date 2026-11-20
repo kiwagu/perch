@@ -12,6 +12,9 @@ const AREAS = ['feat/', 'fix/', 'chore/', 'refactor/'] as const
 
 const HEADS = 'refs/heads/'
 
+/** The branch the areas land on, by its full ref: a tag of the same name changes nothing. */
+const MAIN = `${HEADS}main`
+
 const isInFlight = (branch: string): boolean =>
   branch === TRUNK || AREAS.some((area) => branch.startsWith(area))
 
@@ -22,6 +25,26 @@ const branchesOf = (root: string): string[] =>
     .filter((ref) => ref.startsWith(HEADS))
     .map((ref) => ref.slice(HEADS.length))
     .filter(isInFlight)
+
+/**
+ * Whether `branch` carries nothing `main` lacks: its tree is the tree of its one merge base with
+ * `main`, so `git diff main...branch` is empty. Several merge bases, none or a failing git call
+ * leave that unknown, and a branch not known to carry nothing is checked, never left out.
+ */
+function hasNothingUnlanded(branch: string, root: string): boolean {
+  const ref = `${HEADS}${branch}`
+  const treeOf = (rev: string): string => git(root, ['rev-parse', `${rev}^{tree}`]).trim()
+
+  try {
+    const [base, ...others] = git(root, ['merge-base', '--all', MAIN, ref])
+      .split('\n')
+      .filter((line) => line !== '')
+
+    return base !== undefined && others.length === 0 && treeOf(base) === treeOf(ref)
+  } catch {
+    return false
+  }
+}
 
 /**
  * What `branch` holds, as lines: its contract loaded with this engine and put through every
@@ -60,7 +83,11 @@ function report(branch: string, root: string): { lines: string[]; broken: boolea
  * problems; the exit code is 1 when any branch has one. A contract older than the engine passes
  * as long as the engine reads that version. Every rule of the contract check runs, but not the
  * drift of the generated schemas and reference: a branch's copy of them is no part of its
- * contract. It only reads the refs: nothing is checked out.
+ * contract. A branch with nothing unlanded, whose tree is that of its one merge base with
+ * `main`, is left out, printed as such and neither loaded nor counted: it holds nothing `main`
+ * lacks, so a stale one, cut from an older `main`, does not refuse an engine landing. A branch
+ * whose merge base git cannot give as one is checked like any other. It only reads the refs:
+ * nothing is checked out.
  */
 export function inflight(argv: readonly string[]): number {
   if (argv.length > 0) {
@@ -79,20 +106,26 @@ export function inflight(argv: readonly string[]): number {
   }
 
   let broken = 0
+  let leftOut = 0
 
   for (const branch of branches) {
-    const result = report(branch, root)
+    const leaveOut = hasNothingUnlanded(branch, root)
+    const result = leaveOut
+      ? { lines: [`${branch}: nothing unlanded, left out`], broken: false }
+      : report(branch, root)
 
     broken += result.broken ? 1 : 0
+    leftOut += leaveOut ? 1 : 0
 
     for (const line of result.lines) {
       console.log(line)
     }
   }
 
-  console.log(
-    `inflight: ${branches.length} branch${branches.length === 1 ? '' : 'es'}, ${broken} broken`,
-  )
+  const checked = branches.length - leftOut
+  const left = leftOut > 0 ? `, ${leftOut} left out` : ''
+
+  console.log(`inflight: ${checked} branch${checked === 1 ? '' : 'es'}, ${broken} broken${left}`)
 
   return broken === 0 ? 0 : 1
 }

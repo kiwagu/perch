@@ -44,12 +44,17 @@ function run(
   return { code, out: out.join('\n'), err: err.join('\n') }
 }
 
+/** Commits the checkout as it is, an empty commit when nothing changed. */
+function commitAll(root: string, message: string): void {
+  git(root, 'add', '--all')
+  git(root, 'commit', '--quiet', '--allow-empty', '-m', message)
+}
+
 /** Commits what `change` does to the checkout on a new branch `name` cut from `base`. */
 function branchFrom(root: string, base: string, name: string, change: () => void = () => {}): void {
   git(root, 'switch', '--quiet', '--create', name, base)
   change()
-  git(root, 'add', '--all')
-  git(root, 'commit', '--quiet', '--allow-empty', '-m', name)
+  commitAll(root, name)
 }
 
 /**
@@ -82,6 +87,33 @@ function replace(root: string, file: string, from: string, to: string): void {
 }
 
 const breakRule = (root: string): void => replace(root, SCREEN, BOUND, BROKEN)
+
+/** A change that adds a file and touches nothing of the contract. */
+const addNote = (root: string): void => writeFiles(root, { 'NOTES.md': 'work\n' })
+
+/**
+ * A repository whose `main` held a contract with a rule broken when each branch of `branches`
+ * was cut from it, and which `main` has since moved past by fixing the rule. It is left on `main`.
+ */
+function staleRepository(branches: Readonly<Record<string, (root: string) => void>>): string {
+  const root = repository({ 'README.md': '# sample\n' }, ['README.md'])
+
+  git(root, 'commit', '--quiet', '-m', 'first')
+  git(root, 'branch', '--move', 'main')
+  writeContractRepository(root)
+  breakRule(root)
+  commitAll(root, 'old main')
+
+  for (const [name, change] of Object.entries(branches)) {
+    branchFrom(root, 'main', name, () => change(root))
+  }
+
+  git(root, 'switch', '--quiet', 'main')
+  replace(root, SCREEN, BROKEN, BOUND)
+  commitAll(root, 'main moves')
+
+  return root
+}
 
 describe('inflight', () => {
   it('prints each branch in flight with OK or its problems, and exits 1 on a break', () => {
@@ -154,12 +186,114 @@ describe('inflight', () => {
   })
 
   it('does not count a branch with no contract as a break', () => {
-    const result = run(fixtureRepository({ 'chore/bare': () => {} }, ['chore/bare']))
+    const result = run(fixtureRepository({ 'chore/bare': addNote }, ['chore/bare']))
     const lines = result.out.split('\n')
 
     expect(result).toMatchObject({ code: 0, err: '' })
     expect(lines).toContain('chore/bare: no contract')
     expect(lines).toContain('contract/trunk: OK (version 1)')
+  })
+
+  it('leaves out a branch cut from main that adds nothing, its old contract not loaded', () => {
+    const result = run(staleRepository({ 'feat/stale': () => {} }))
+
+    expect(result).toMatchObject({ code: 0, err: '' })
+    expect(result.out.split('\n')).toEqual([
+      'feat/stale: nothing unlanded, left out',
+      'inflight: 0 branches, 0 broken, 1 left out',
+    ])
+    expect(result.out).not.toMatch(/^(\S+): \d+ problems?$/m)
+  })
+
+  it('checks a branch that adds a change, the left out ones counted apart', () => {
+    const result = run(staleRepository({ 'feat/stale': () => {}, 'fix/carries': addNote }))
+    const lines = result.out.split('\n')
+
+    expect(result.code).toBe(1)
+    expect(lines).toContain('feat/stale: nothing unlanded, left out')
+    expect(lines).toContain('fix/carries: 1 problem')
+    expect(lines.at(-1)).toBe('inflight: 1 branch, 1 broken, 1 left out')
+  })
+
+  it('leaves out a branch at the tip of main', () => {
+    const root = fixtureRepository()
+
+    git(root, 'branch', 'feat/tip', 'main')
+
+    const result = run(root)
+
+    expect(result).toMatchObject({ code: 0, err: '' })
+    expect(result.out.split('\n')).toEqual([
+      'contract/trunk: OK (version 1)',
+      'feat/tip: nothing unlanded, left out',
+      'inflight: 1 branch, 0 broken, 1 left out',
+    ])
+  })
+
+  it('leaves out a branch whose work main took in, then merged back', () => {
+    const root = fixtureRepository({ 'feat/landed': addNote })
+
+    git(root, 'merge', '--quiet', '--squash', 'feat/landed')
+    commitAll(root, 'landed')
+    git(root, 'switch', '--quiet', 'feat/landed')
+    git(root, 'merge', '--quiet', '--no-ff', '--no-edit', 'main')
+    git(root, 'switch', '--quiet', 'main')
+
+    const lines = run(root).out.split('\n')
+
+    expect(lines).toContain('feat/landed: nothing unlanded, left out')
+    expect(lines.at(-1)).toBe('inflight: 1 branch, 0 broken, 1 left out')
+  })
+
+  it('checks a branch with no merge base with main, never leaving it out', () => {
+    const root = fixtureRepository()
+
+    git(root, 'switch', '--quiet', '--orphan', 'feat/orphan')
+    commitAll(root, 'unrelated')
+    git(root, 'switch', '--quiet', 'main')
+
+    const lines = run(root).out.split('\n')
+
+    expect(lines).toContain('feat/orphan: no contract')
+    expect(lines.at(-1)).toBe('inflight: 2 branches, 0 broken')
+  })
+
+  it('checks a branch with several merge bases with main, never leaving it out', () => {
+    const root = fixtureRepository()
+    const same = (message: string): void => {
+      writeFiles(root, { 'same.txt': 'same\n' })
+      commitAll(root, message)
+    }
+
+    branchFrom(root, 'main', 'feat/crossed')
+    git(root, 'switch', '--quiet', 'main')
+    same('on main')
+    git(root, 'switch', '--quiet', 'feat/crossed')
+    same('on the branch')
+    git(root, 'merge', '--quiet', '--no-edit', 'main')
+    git(root, 'switch', '--quiet', 'main')
+    git(root, 'merge', '--quiet', '--no-edit', 'feat/crossed^1')
+
+    expect(
+      read(root, ['merge-base', '--all', 'main', 'feat/crossed']).trim().split('\n'),
+    ).toHaveLength(2)
+    expect(read(root, ['diff', 'main...feat/crossed'])).toBe('')
+
+    const lines = run(root).out.split('\n')
+
+    expect(lines).toContain('feat/crossed: no contract')
+    expect(lines.at(-1)).toBe('inflight: 2 branches, 0 broken')
+  })
+
+  it('checks every branch when git cannot read main, never leaving one out', () => {
+    const root = fixtureRepository({ 'feat/x': () => {} })
+
+    git(root, 'branch', '--move', 'main', 'trunkless')
+
+    const lines = run(root).out.split('\n')
+
+    expect(lines).toContain('feat/x: OK (version 1)')
+    expect(lines.at(-1)).toBe('inflight: 2 branches, 0 broken')
   })
 
   it('reads the refs only: the checkout, the index and every branch stay as they were', () => {

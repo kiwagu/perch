@@ -368,7 +368,10 @@ links to as `contract/REFERENCE.md#<slug>`.
 - From the root: `bun run contract:inflight` (`ui-contract inflight`: the contract of
   `contract/trunk` and of each local `feat/*`, `fix/*`, `chore/*` and `refactor/*` branch, loaded
   with this engine from the refs alone, each printed as OK or with its problems; exits 1 when any
-  has one). Not part of `bun run check`.
+  has one; a branch whose tree is that of its one merge base with `main`, so with nothing `main`
+  lacks, is left out as `<branch>: nothing unlanded, left out` and counted apart in the summary;
+  one with several merge bases, none, or a failing git call is checked). Not part of
+  `bun run check`.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
   [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios

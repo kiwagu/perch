@@ -41,7 +41,9 @@
  *     `chore/*` or `refactor/*` with this engine, reading the refs only, and prints each branch
  *     as OK or with the problems the rules find in it (a contract that does not load is its
  *     problem; a branch without `contract/` has none to break); exits 1 when any branch has
- *     one. A contract older than this engine passes while the engine reads that version.
+ *     one. A contract older than this engine passes while the engine reads that version. A
+ *     branch with nothing unlanded (its tree is that of its one merge base with `main`) is
+ *     left out, printed as such and not counted as checked.
  *   ui-contract coverage [--write | --check] [--json] [--unmarked] [--descriptions]
  *     prints the coverage block (the fields and actions of the model bound by anchors, the
  *     transitions of each activity its scenarios walk, the controls marked per module,
