@@ -130,6 +130,18 @@ describe('facetProblems', () => {
         expect(problemsOf({ title }, { ahead: true })).toEqual(expected)
       }
     })
+    it('refuses a maxLength a helper of the view supplies through a spread, in ahead mode too', () => {
+      const changed = {
+        title: `<Input data-testid="sample.title-input" {...field('title')} aria-invalid={${MARK}} />`,
+        field: '(name) => ({ id: name, maxLength: 80 })',
+      }
+      const expected = [
+        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={80}, but ${KIT}`,
+      ]
+
+      expect(problemsOf(changed)).toEqual(expected)
+      expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+    })
     it('refuses a maxLength on a read-only field and on a field whose value has none, in ahead mode too', () => {
       const changed = {
         id: '<Input data-testid="sample.id-input" maxLength={64} />',

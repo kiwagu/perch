@@ -227,6 +227,35 @@ describe('collectFromSource', () => {
     expect(found.inputs).toEqual([{ anchor: 'x.form.title-input', holdsInput: false, line: 3 }])
     expect(found.problems).toEqual([])
   })
+  it('collects what a spread on the element supplies: an object written there, held, or returned by a helper', () => {
+    const found = collectFromSource(
+      [
+        'const limits = { maxLength: 80 }',
+        'const field = (name) => ({ id: name, ...limits })',
+        "function password(name) { const shown = false; return { ...field(name), type: shown ? 'text' : 'password' } }",
+        'const a = <Input data-testid="x.form.name-input" {...{ maxLength: 1 }} />',
+        'const b = <Input data-testid="x.form.email-input" {...field(\'email\')} />',
+        'const c = <Input data-testid="x.form.secret-input" {...password(\'secret\')} holdsInput={false} />',
+        'const d = <Input data-testid="x.form.note-input" {...props} {...rest()} />',
+        'const e = <Input data-testid="x.form.flag-input" {...{ marksState: false, holdsInput: props.holds }} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A spread the file cannot follow (a component's own props, a function declared elsewhere) supplies nothing.
+    expect(found.props).toEqual([
+      { anchor: 'x.form.name-input', name: 'maxLength', text: '1', line: 4 },
+      { anchor: 'x.form.email-input', name: 'maxLength', text: '80', line: 5 },
+      { anchor: 'x.form.secret-input', name: 'maxLength', text: '80', line: 6 },
+      { anchor: 'x.form.secret-input', name: 'type', text: "shown ? 'text' : 'password'", line: 6 },
+    ])
+    expect(found.inputs).toEqual([
+      { anchor: 'x.form.secret-input', holdsInput: false, line: 6 },
+      { anchor: 'x.form.flag-input', holdsInput: 'props.holds', line: 8 },
+    ])
+    expect(found.colours).toEqual([{ anchor: 'x.form.flag-input', marksState: false, line: 8 }])
+    expect(found.problems).toEqual([])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

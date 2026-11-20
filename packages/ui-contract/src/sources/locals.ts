@@ -1,16 +1,21 @@
 /**
  * What a source file's names stand for, as far as the file itself says: the value a constant is
- * declared with, read in the scope that declares it, so a name a view writes resolves as it does
- * at runtime (an inner declaration, a parameter or a destructured name hides an outer one). The
- * collector follows a `<NAME>_TEST_ID` constant to the anchor it holds; a name declared in another
- * file, or a value built at runtime, resolves to nothing.
+ * declared with and the function a name declares, read in the scope that declares it, so a name a
+ * view writes resolves as it does at runtime (an inner declaration, a parameter or a destructured
+ * name hides an outer one). The collector follows a `<NAME>_TEST_ID` constant to the anchor it
+ * holds, and a spread on an element to the props it supplies: an object written there, either
+ * branch of a conditional, an object a constant holds, or every object a function of the file
+ * returns where the spread calls it, through the spreads those objects write in turn. A name declared in another file, or a value built at runtime, resolves to nothing.
  */
 
 import type {
+  ArrowFunctionExpression,
   BindingPattern,
   BindingRestElement,
   Expression,
+  Function as FunctionNode,
   JSXAttributeValue,
+  ObjectExpression,
   ParamPattern,
   Program,
 } from 'oxc-parser'
@@ -42,9 +47,25 @@ interface Binding {
 }
 
 export interface Locals {
-  /** What `name`, written at `at`, is declared with in the file, if the file says. */
-  valueOf(name: string, at: number): Expression | undefined
+  /** What `name`, written at `at`, is declared with in the file (a function too), if it says. */
+  valueNamed(name: string, at: number): Expression | undefined
+  /**
+   * The objects `node`, written at `at`, is or may be: one written there, either branch of a
+   * conditional, the one a constant holds, or each one a function of the file it calls returns
+   * (an arrow's expression, or each `return` of its own body).
+   */
+  objectsOf(node: Expression, at: number): ObjectExpression[]
 }
+
+/** How many names, calls and spreads in a row are followed before giving up: no cycle runs on. */
+export const DEPTH = 8
+
+type Callable = ArrowFunctionExpression | FunctionNode
+
+const isCallable = (value: Expression): value is Callable =>
+  value.type === 'ArrowFunctionExpression' ||
+  value.type === 'FunctionExpression' ||
+  value.type === 'FunctionDeclaration'
 
 const FILE: Span = { start: 0, end: Number.POSITIVE_INFINITY }
 
@@ -77,9 +98,12 @@ function namesIn(pattern: BindingPattern | ParamPattern | BindingRestElement): s
 
 export function localsOf(program: Program): Locals {
   const scopes: Span[] = [FILE]
+  const functions: Span[] = []
   const bindings: Binding[] = []
+  const returns: Array<{ readonly at: number; readonly argument: Expression }> = []
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
     scopes.push(node)
+    functions.push(node)
     bindings.push(
       ...node.params
         .flatMap(namesIn)
@@ -91,9 +115,20 @@ export function localsOf(program: Program): Locals {
     BlockStatement: (node) => {
       scopes.push(node)
     },
+    ReturnStatement: (node) => {
+      if (node.argument !== null) {
+        returns.push({ at: node.start, argument: node.argument })
+      }
+    },
     ArrowFunctionExpression: parameters,
     FunctionExpression: parameters,
-    FunctionDeclaration: parameters,
+    FunctionDeclaration: (node) => {
+      parameters(node)
+
+      if (node.id !== null) {
+        bindings.push({ name: node.id.name, at: node, value: node })
+      }
+    },
     VariableDeclarator: (node) => {
       const at = { start: node.start, end: node.end }
 
@@ -109,29 +144,79 @@ export function localsOf(program: Program): Locals {
     },
   }).visit(program)
 
-  /** The innermost scope around a place, a parameter's being its function. */
+  /** The innermost scope around a place, a parameter's being its function, a function's not. */
   const scopeOf = (at: Span): Span =>
     scopes
-      .filter((scope) => contains(scope, at))
+      .filter((scope) => contains(scope, at) && (scope.start !== at.start || scope.end !== at.end))
       .reduce((inner, scope) => (sizeOf(scope) < sizeOf(inner) ? scope : inner), FILE)
 
   const scoped = bindings.map((binding) => ({ ...binding, scope: scopeOf(binding.at) }))
 
-  return {
-    valueOf(name, at) {
-      const seen = scoped
-        .filter(
-          (binding) => binding.name === name && contains(binding.scope, { start: at, end: at }),
-        )
-        .reduce<(typeof scoped)[number] | undefined>(
-          (inner, binding) =>
-            inner === undefined || sizeOf(binding.scope) < sizeOf(inner.scope) ? binding : inner,
-          undefined,
-        )
+  const valueNamed = (name: string, at: number): Expression | undefined =>
+    scoped
+      .filter((binding) => binding.name === name && contains(binding.scope, { start: at, end: at }))
+      .reduce<(typeof scoped)[number] | undefined>(
+        (inner, binding) =>
+          inner === undefined || sizeOf(binding.scope) < sizeOf(inner.scope) ? binding : inner,
+        undefined,
+      )?.value
 
-      return seen?.value
-    },
+  /** The innermost function around a place. */
+  const functionAround = (at: number): Span | undefined =>
+    functions
+      .filter((fn) => contains(fn, { start: at, end: at }))
+      .reduce<Span | undefined>(
+        (inner, fn) => (inner === undefined || sizeOf(fn) < sizeOf(inner) ? fn : inner),
+        undefined,
+      )
+
+  /** What a function returns: an arrow's expression, or each `return` of its own body. */
+  const returnedBy = (fn: Callable): Expression[] =>
+    fn.body !== null && fn.body.type !== 'BlockStatement'
+      ? [fn.body]
+      : returns
+          .filter(({ at }) => {
+            const around = functionAround(at)
+
+            return around?.start === fn.start && around.end === fn.end
+          })
+          .map(({ argument }) => argument)
+
+  const objectsOf = (node: Expression, at: number, depth = 0): ObjectExpression[] => {
+    const value = unwrap(node)
+
+    if (value.type === 'ObjectExpression') {
+      return [value]
+    }
+
+    if (depth >= DEPTH) {
+      return []
+    }
+
+    if (value.type === 'ConditionalExpression') {
+      return [value.consequent, value.alternate].flatMap((branch) =>
+        objectsOf(branch, branch.start, depth + 1),
+      )
+    }
+
+    const name =
+      value.type === 'Identifier'
+        ? value.name
+        : value.type === 'CallExpression' && value.callee.type === 'Identifier'
+          ? value.callee.name
+          : undefined
+    const declared = name === undefined ? undefined : valueNamed(name, at)
+
+    if (declared === undefined || isCallable(declared) !== (value.type === 'CallExpression')) {
+      return []
+    }
+
+    return (isCallable(declared) ? returnedBy(declared) : [declared]).flatMap((held) =>
+      objectsOf(held, held.start, depth + 1),
+    )
   }
+
+  return { valueNamed, objectsOf: (node, at) => objectsOf(node, at) }
 }
 
 /**
@@ -155,7 +240,7 @@ export function constantAnchorOf(
       return undefined
     }
 
-    return staticText(locals.valueOf(name.name, at))
+    return staticText(locals.valueNamed(name.name, at))
   }
   const written = unwrap(value.expression)
   const held = constant(written)
@@ -165,7 +250,7 @@ export function constantAnchorOf(
   }
 
   if (written.type === 'Identifier' && TEST_ID_CONSTANT.test(written.name)) {
-    const declared = locals.valueOf(written.name, at)
+    const declared = locals.valueNamed(written.name, at)
 
     return declared === undefined ? undefined : derivedAnchorOf(declared)
   }
