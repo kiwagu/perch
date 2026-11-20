@@ -35,6 +35,13 @@ const carriesNoType = (...lines: string[]): boolean => {
   return types.cannotCarry(type, 'type')
 }
 
+/** Whether the file says its probe can carry a `type`. */
+const carriesType = (...lines: string[]): boolean => {
+  const { types, type } = probed(lines)
+
+  return types.canCarry(type, 'type')
+}
+
 /** The source of the type the file declares for `key` of its probe, if it says. */
 const memberText = (key: string, ...lines: string[]): string | undefined => {
   const { types, type, text } = probed(lines)
@@ -180,6 +187,143 @@ describe('declaredTypesIn', () => {
       expect(carriesNoType('export {}', 'type A = B', 'type B = A', 'let probe: A')).toBe(false)
       expect(
         carriesNoType(
+          'export {}',
+          'interface A extends B {}',
+          'interface B extends A {}',
+          'let probe: A',
+        ),
+      ).toBe(false)
+    })
+  })
+
+  describe('canCarry', () => {
+    it('says a type the file declares with the key can carry it: a literal, an interface, an alias, in parentheses', () => {
+      for (const type of [
+        '{ readonly type: string }',
+        '{ type?: string }',
+        '{ type(): string }',
+        '{ get type(): string }',
+        "{ 'type': string }",
+        "{ ['type']: string }",
+        '{ readonly key: string; type?: string }',
+        '({ type?: string })',
+      ]) {
+        expect(carriesType('export {}', `let probe: ${type}`)).toBe(true)
+      }
+
+      expect(
+        carriesType('export {}', 'interface Typed { readonly type?: string }', 'let probe: Typed'),
+      ).toBe(true)
+      expect(carriesType('export {}', 'type Typed = { type?: string }', 'let probe: (Typed)')).toBe(
+        true,
+      )
+    })
+    it('follows an interface through each interface or alias it extends, and an alias through its target', () => {
+      const typed = ['export {}', 'interface Typed { readonly type?: string }']
+
+      expect(carriesType(...typed, 'interface Draft extends Typed {}', 'let probe: Draft')).toBe(
+        true,
+      )
+      expect(
+        carriesType(
+          ...typed,
+          'interface Keyed { readonly key: string }',
+          'interface Draft extends Keyed, Typed {}',
+          'interface Wider extends Draft {}',
+          'let probe: Wider',
+        ),
+      ).toBe(true)
+      expect(carriesType(...typed, 'type Alias = Typed', 'let probe: Alias')).toBe(true)
+      // Its own member counts, though a base it extends is not one the file declares.
+      expect(
+        carriesType(
+          "import type { Base } from './base'",
+          'interface Draft extends Base { readonly type: string }',
+          'let probe: Draft',
+        ),
+      ).toBe(true)
+    })
+    it('says a union or an intersection of which one type can carry it can, undefined and null among the others', () => {
+      expect(carriesType('export {}', DRAFT, 'let probe: Draft | { readonly type: string }')).toBe(
+        true,
+      )
+      expect(carriesType('export {}', DRAFT, 'let probe: Draft & { type?: string }')).toBe(true)
+      expect(carriesType('export {}', 'let probe: { type?: string } | undefined')).toBe(true)
+      expect(carriesType('export {}', DRAFT, 'let probe: Draft | undefined')).toBe(false)
+      expect(carriesType('export {}', 'let probe: { a: string } & { b: string }')).toBe(false)
+    })
+    it('says a type with an index signature, or a key the file cannot read, may carry it', () => {
+      for (const type of [
+        '{ readonly [key: string]: string }',
+        '{ [key: number]: string }',
+        '{ [KEY]: string }',
+        '{ [KEY](): string }',
+        '{ readonly key: string; [other: string]: string }',
+      ]) {
+        expect(carriesType('export {}', "const KEY = 'other'", `let probe: ${type}`)).toBe(true)
+      }
+    })
+    it('cannot tell, so says no, of a type without it, an import, a generic, a mapped or utility type, any or unknown', () => {
+      for (const type of [
+        'Draft',
+        '{ readonly key: string }',
+        '{ (): void }',
+        '{ new (): object }',
+        'undefined',
+        'null',
+        'Partial<Draft>',
+        'Record<string, string>',
+        "{ [K in 'type']: string }",
+        'any',
+        'unknown',
+        'object',
+        'Draft<string>',
+        'typeof draft',
+        'Space.Draft',
+        "import('./draft').Draft",
+      ]) {
+        expect(carriesType('export {}', DRAFT, `let probe: ${type}`)).toBe(false)
+      }
+
+      expect(carriesType("import type { Draft } from './draft'", 'let probe: Draft')).toBe(false)
+      expect(
+        carriesType(
+          "import type { Base } from './base'",
+          'interface Draft extends Base { readonly key: string }',
+          'let probe: Draft',
+        ),
+      ).toBe(false)
+      expect(
+        carriesType(
+          'export {}',
+          'interface Base<T> { readonly type: T }',
+          'interface Draft extends Base<string> {}',
+          'let probe: Draft',
+        ),
+      ).toBe(false)
+    })
+    it('cannot tell a type the file declares more than once, or not at its top, or in a file that is no module', () => {
+      const typed = 'interface Draft { readonly type: string }'
+
+      expect(
+        carriesType(
+          'export {}',
+          typed,
+          'interface Draft { readonly key: string }',
+          'let probe: Draft',
+        ),
+      ).toBe(false)
+      expect(carriesType('export {}', `function h() { ${typed}; let probe: Draft }`)).toBe(false)
+      expect(carriesType('export {}', typed, 'function f<Draft>() { let probe: Draft }')).toBe(
+        false,
+      )
+      expect(carriesType(typed, 'let probe: Draft')).toBe(false)
+      expect(carriesType('export {}', typed, 'let probe: Draft')).toBe(true)
+    })
+    it('ends a cycle of aliases or interfaces unknown, never in a stack overflow', () => {
+      expect(carriesType('export {}', 'type A = B', 'type B = A', 'let probe: A')).toBe(false)
+      expect(
+        carriesType(
           'export {}',
           'interface A extends B {}',
           'interface B extends A {}',

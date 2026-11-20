@@ -24,6 +24,9 @@ import {
   unwrap,
 } from './values'
 
+/** How a name, written at a place, resolves to the value its file declares it with, if it says. */
+type NamedValue = (name: string, at: number) => Expression | undefined
+
 /** An anchor written as a `<NAME>_TEST_ID` constant its file does not declare (an import). */
 export const UNDECLARED_ANCHOR = (name: string): string =>
   `"${name}" is no constant of this file: an anchor constant is read only in the file that declares it; declare it here, or write the anchor`
@@ -82,11 +85,15 @@ export const expressionOf = ({ value, spread }: ElementAttribute): Expression | 
  * The anchor `node`, written at `at`, carries: a literal, `testIdFor()` of two literals, a
  * `<NAME>_TEST_ID` constant of the file that holds either, or `testIdFor()` of such a constant and a
  * literal suffix, which comes with its base; none for anything else, a name passed through included.
+ * A constant is read as `named` resolves it, at every step of an alias or a base: the value its
+ * file declares it with (`Locals.valueNamed`) unless the caller says that only a `const` holds
+ * (`Locals.constantNamed`), a name a `let`, a `var` or a parameter binds being read as none.
  */
 export function anchorIn(
   locals: Locals,
   node: Expression,
   at: number,
+  named: NamedValue = locals.valueNamed,
   depth = 0,
 ): CarriedAnchor | undefined {
   const text = staticText(node)
@@ -103,11 +110,11 @@ export function anchorIn(
 
   if (written.type === 'Identifier' && TEST_ID_CONSTANT.test(written.name)) {
     // A constant may hold a literal, `testIdFor()` of two literals, or one of another constant.
-    const declared = locals.valueNamed(written.name, at)
+    const declared = named(written.name, at)
 
     return declared === undefined
       ? undefined
-      : anchorIn(locals, declared, declared.start, depth + 1)
+      : anchorIn(locals, declared, declared.start, named, depth + 1)
   }
 
   if (written.type !== 'CallExpression' || !isTestIdFor(written.callee)) {
@@ -118,7 +125,7 @@ export function anchorIn(
   const from =
     base === undefined || base.type === 'SpreadElement'
       ? undefined
-      : anchorIn(locals, base, at, depth + 1)
+      : anchorIn(locals, base, at, named, depth + 1)
   const part = staticText(suffix)
 
   return from === undefined || from.base !== undefined || part === undefined

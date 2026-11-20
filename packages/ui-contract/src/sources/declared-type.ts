@@ -1,10 +1,12 @@
 /**
  * What a source file's type declarations say of a type it writes, as far as the file itself says,
  * for the type of a spread `asked-event.ts` cannot follow (`Locals.declaredTypeOf`): the type of a
- * key in an object type, and whether a value of a type cannot carry a key. An object type is a type
- * literal or an interface, its own members and those of each interface or alias it extends, read
- * only where every member is a property or a method whose key the file states (no index, call or
- * construct signature). A name stands for an interface or an alias only where the file declares it
+ * key in an object type, whether a value of a type cannot carry a key, and whether it can. An
+ * object type is a type literal or an interface, its own members and those of each interface or
+ * alias it extends, read only where every member is a property or a method whose key the file
+ * states (no index, call or construct signature); `canCarry` needs less, since one member that is
+ * the key, an index signature or a key the file cannot read shows a type may carry it, whatever
+ * else the type extends. A name stands for an interface or an alias only where the file declares it
  * once, at its top, with no type parameters, and nothing else of the file binds that name as a type
  * (a type parameter, an import, a class, an enum, a namespace, a declaration in a block); and only
  * in a module (an `import` or an `export`), since a script's declarations are global and may merge
@@ -15,6 +17,7 @@
 import type {
   Program,
   TSInterfaceDeclaration,
+  TSInterfaceHeritage,
   TSSignature,
   TSType,
   TSTypeAliasDeclaration,
@@ -32,6 +35,12 @@ export interface DeclaredTypes {
    * intersection of such types, `undefined` or `null` (whose spread supplies nothing).
    */
   cannotCarry(type: TSType, key: string): boolean
+  /**
+   * Whether the file shows a value of `type` may carry `key`: an object type with a member of that
+   * name, an index signature or a key the file cannot read, or a union or an intersection of which
+   * one type does. A type it cannot tell (an import, a generic, `any`) is none that shows it.
+   */
+  canCarry(type: TSType, key: string): boolean
 }
 
 type Declaration = TSInterfaceDeclaration | TSTypeAliasDeclaration
@@ -128,6 +137,12 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
         keyName(member.key, member.computed) !== undefined,
     )
 
+  /** The interface or the alias an `extends` names: a bare name, no type arguments. */
+  const baseOf = (heritage: TSInterfaceHeritage): Declaration | undefined =>
+    heritage.expression.type === 'Identifier' && heritage.typeArguments === null
+      ? declarationNamed(heritage.expression.name)
+      : undefined
+
   /** Every member of an interface: its own, then those of each interface or alias it extends. */
   const interfaceMembers = (
     declaration: TSInterfaceDeclaration,
@@ -140,10 +155,7 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
     }
 
     const bases = declaration.extends.map((heritage) => {
-      const base =
-        heritage.expression.type === 'Identifier' && heritage.typeArguments === null
-          ? declarationNamed(heritage.expression.name)
-          : undefined
+      const base = baseOf(heritage)
 
       return base === undefined ? undefined : declarationMembers(base, depth + 1)
     })
@@ -214,6 +226,53 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
     }
   }
 
+  /** Whether a member may be `key`: it, an index signature, or a key the file cannot read. */
+  const mayBe = (member: TSSignature, key: string): boolean =>
+    member.type === 'TSIndexSignature' ||
+    ((member.type === 'TSPropertySignature' || member.type === 'TSMethodSignature') &&
+      (keyName(member.key, member.computed) ?? key) === key)
+
+  /** Whether an interface or an alias may carry `key`: by its own members, or a base's. */
+  const declarationCarries = (declaration: Declaration, key: string, depth: number): boolean => {
+    if (depth >= DEPTH) {
+      return false
+    }
+
+    if (declaration.type === 'TSTypeAliasDeclaration') {
+      return canCarry(declaration.typeAnnotation, key, depth + 1)
+    }
+
+    return (
+      declaration.body.body.some((member) => mayBe(member, key)) ||
+      declaration.extends.some((heritage) => {
+        const base = baseOf(heritage)
+
+        return base !== undefined && declarationCarries(base, key, depth + 1)
+      })
+    )
+  }
+
+  const canCarry = (type: TSType, key: string, depth: number): boolean => {
+    if (depth >= DEPTH) {
+      return false
+    }
+
+    switch (type.type) {
+      case 'TSParenthesizedType':
+        return canCarry(type.typeAnnotation, key, depth + 1)
+      case 'TSUnionType':
+      case 'TSIntersectionType':
+        return type.types.some((member) => canCarry(member, key, depth + 1))
+      case 'TSTypeLiteral':
+        return type.members.some((member) => mayBe(member, key))
+      default: {
+        const declaration = referenced(type)
+
+        return declaration !== undefined && declarationCarries(declaration, key, depth + 1)
+      }
+    }
+  }
+
   return {
     memberOf: (type, key) => {
       const [member, ...more] = (membersOf(type, 0) ?? []).filter((each) => keyOf(each) === key)
@@ -223,5 +282,6 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
         : undefined
     },
     cannotCarry: (type, key) => cannotCarry(type, key, 0),
+    canCarry: (type, key) => canCarry(type, key, 0),
   }
 }

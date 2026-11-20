@@ -745,6 +745,113 @@ describe('collectFromSource', () => {
       rows.map((_, index) => ({ asks: undefined, question: true, line: 8 + index })),
     )
   })
+  it('reads an event type only through a const: a let, a var or a parameter, behind an alias or a base too, leaves it unread', () => {
+    const found = collectFromSource(
+      [
+        "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+        "const DIALOG_TEST_ID = 'x.help-dialog'",
+        'const ALIAS_TEST_ID = REVOKE_TEST_ID',
+        "let CHECK_TEST_ID = 'x.sessions.revoke-button'",
+        "if (ok) { CHECK_TEST_ID = 'x.reset.send-button' }",
+        "var OLD_TEST_ID = 'x.sessions.revoke-button'",
+        'let LET_ALIAS_TEST_ID = REVOKE_TEST_ID',
+        'const VIA_LET_TEST_ID = LET_ALIAS_TEST_ID',
+        "let LET_DIALOG_TEST_ID = 'x.help-dialog'",
+        'const a = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: ALIAS_TEST_ID })} />',
+        'const b = <Button data-testid="x.help-dialog.confirm-button" disabled={!props.can({ type: testIdFor(DIALOG_TEST_ID, \'confirm-button\') })} />',
+        'const c = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: CHECK_TEST_ID })} />',
+        'const d = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: OLD_TEST_ID })} />',
+        'const e = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: LET_ALIAS_TEST_ID })} />',
+        'const f = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: VIA_LET_TEST_ID })} />',
+        'const g = <Button data-testid="x.help-dialog.confirm-button" disabled={!props.can({ type: testIdFor(LET_DIALOG_TEST_ID, \'confirm-button\') })} />',
+        'function Row(PARAM_TEST_ID) { return <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: PARAM_TEST_ID })} /> }',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A name another statement may assign says nothing of the event: only a const, however far
+    // its aliases and bases go, holds one. The anchor an element carries is read as before.
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual([
+      { asks: 'x.sessions.revoke-button', question: true, line: 10 },
+      { asks: 'x.help-dialog.confirm-button', question: true, line: 11 },
+      { asks: undefined, question: true, line: 12 },
+      { asks: undefined, question: true, line: 13 },
+      { asks: undefined, question: true, line: 14 },
+      { asks: undefined, question: true, line: 15 },
+      { asks: undefined, question: true, line: 16 },
+      { asks: undefined, question: true, line: 17 },
+    ])
+  })
+  it('leaves an event unread whose spread the file types as able to carry a type, whatever the event writes', () => {
+    const rows = [
+      'Typed',
+      'Wider',
+      'Indexed',
+      'Keyed | Typed',
+      'Keyed & { type?: string }',
+      '{ type?: typeof reset.type }',
+      '{ readonly [key: string]: string }',
+      "{ readonly 'type': string }",
+      '{ readonly [KEY]: string }',
+    ]
+    const head = [
+      "import type { Passwords } from './passwords'",
+      "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+      "const reset = { type: 'x.reset.send-button' } as const",
+      "const KEY = 'other'",
+      'interface Keyed { readonly key: string }',
+      'interface Typed { readonly type?: string }',
+      'interface Wider extends Typed { readonly key: string }',
+      'interface Indexed { readonly [key: string]: string }',
+    ]
+    const found = collectFromSource(
+      [
+        ...head,
+        ...rows.map(
+          (type, index) =>
+            `const build${index} = (extra: ${type}) => ({ type: REVOKE_TEST_ID, ...extra })`,
+        ),
+        "const literal = (extra: { type?: typeof reset.type }) => ({ type: 'x.sessions.revoke-button', ...extra })",
+        ...rows.map(
+          (_, index) =>
+            `const e${index} = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(build${index}(reset))} />`,
+        ),
+        'const l = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(literal(reset))} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // The spread may supply another event's type, as `checkFor(reset)` does: the event is unread.
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual(
+      [...rows, 'literal'].map((_, index) => ({
+        asks: undefined,
+        question: true,
+        line: head.length + rows.length + 2 + index,
+      })),
+    )
+  })
+  it('reads a spread the file does not type, or types without a type, as the data of an event that writes its own type', () => {
+    const found = collectFromSource(
+      [
+        "import type { Passwords } from './passwords'",
+        "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+        'interface Keyed { readonly key: string }',
+        'const imported = (values: Passwords) => ({ type: REVOKE_TEST_ID, ...values })',
+        'const declared = (draft: Keyed) => ({ type: REVOKE_TEST_ID, ...draft })',
+        'const untyped = (values) => ({ type: REVOKE_TEST_ID, ...values })',
+        "const literal = (draft: Keyed) => ({ type: 'x.sessions.revoke-button', ...draft })",
+        'const a = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(imported(readValues()))} />',
+        'const b = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(declared(readDraft()))} />',
+        'const c = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(untyped(readValues()))} />',
+        'const d = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(literal(readDraft()))} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.props.map(({ asks, line }) => ({ asks, line }))).toEqual(
+      [8, 9, 10, 11].map((line) => ({ asks: 'x.sessions.revoke-button', line })),
+    )
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

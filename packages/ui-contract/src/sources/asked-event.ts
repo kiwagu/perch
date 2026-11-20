@@ -4,17 +4,21 @@
  * helper: the `type` each object its argument may be ends up with, in the order the object writes
  * it (a later `type`, or a spread that sets one, overrides an earlier one), the `type` read as an
  * element's anchor is (`anchorIn`, `element.ts`): a literal, `testIdFor()` of two literals, or a
- * `<NAME>_TEST_ID` constant of the file that holds either, or `testIdFor()` of such a constant and
- * a literal suffix, the constant resolved where the `type` is written; a spread the file cannot
- * follow is the data of an event that writes its own `type` (a form's values,
- * `{ type: '<anchor>', ...values }`), or of any event where the file writes a type for it that
- * cannot carry `type` (`{ ...submit, ...draft }`, `draft` of an interface of the file without one,
- * `Locals.declaredTypeOf`, `declared-type.ts`), and otherwise may be its type. An argument the
- * file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the file does not declare, an
- * import, included), or two alternatives that name different events leave it unread. The question
- * itself is read from the tree: one negated call of `can` or `props.can` with one argument,
- * whatever that argument nests. The facets check holds it to the event the control itself sends,
- * its anchor, so a copied `can(reset)` on the revoke button is caught.
+ * `<NAME>_TEST_ID` constant that holds either, or `testIdFor()` of such a constant and a literal
+ * suffix. Only a `const` of the file holds one, resolved where the `type` is written, however far
+ * an alias or a base goes: a name a `let`, a `var` or a parameter binds may hold another by the
+ * time the event is sent, and leaves it unread. A spread the file cannot follow is the data of an
+ * event that writes its own `type` (a form's values, `{ type: '<anchor>', ...values }`), or of any
+ * event where the file writes a type for it that cannot carry `type` (`{ ...submit, ...draft }`,
+ * `draft` of an interface of the file without one, `Locals.declaredTypeOf`, `declared-type.ts`).
+ * One it writes a type for that can carry `type` (a `type` member, an index signature) may replace
+ * the type of an event that writes its own, and one the file says nothing of may be the type of an
+ * event that writes none: either leaves the event unread. An argument the file cannot follow, a
+ * `type` it cannot read (a `<NAME>_TEST_ID` the file does not declare, an import, included), or two
+ * alternatives that name different events leave it unread. The question itself is read from the
+ * tree: one negated call of `can` or `props.can` with one argument, whatever that argument nests.
+ * The facets check holds it to the event the control itself sends, its anchor, so a copied
+ * `can(reset)` on the revoke button is caught.
  */
 
 import type { Expression, ObjectExpression, SpreadElement } from 'oxc-parser'
@@ -68,11 +72,19 @@ export function questionOf(locals: Locals, written: Expression): Question {
       (property) =>
         property.type === 'Property' && keyName(property.key, property.computed) === 'type',
     )
-  /** Whether the file writes a type for a spread's value that cannot carry `type`: it is data. */
-  const isData = (spread: SpreadElement): boolean => {
+  /**
+   * Whether a spread the file cannot follow is data of the event: not where the file writes a type
+   * for it that can carry `type`, which may replace the event's; otherwise where the file writes one
+   * that cannot, or the object writes its own `type`.
+   */
+  const isData = (object: ObjectExpression, spread: SpreadElement): boolean => {
     const declared = locals.declaredTypeOf(spread.argument, spread.start)
 
-    return declared !== undefined && locals.types.cannotCarry(declared, 'type')
+    if (declared !== undefined && locals.types.canCarry(declared, 'type')) {
+      return false
+    }
+
+    return typed(object) || (declared !== undefined && locals.types.cannotCarry(declared, 'type'))
   }
   const typesOf = (alternatives: readonly Alternative[], depth: number): Typed[] =>
     alternatives.flatMap((object): Typed[] =>
@@ -93,9 +105,10 @@ export function questionOf(locals: Locals, written: Expression): Question {
 
                   // A spread the file cannot follow is the data of an event that writes its own
                   // `type` (`{ type: '<anchor>', ...values }`), or where the file writes a type for
-                  // it that cannot carry one; otherwise it may be the type.
+                  // it that cannot carry one; otherwise, or where the file writes one that can, it
+                  // may be the type.
                   if (branch === undefined) {
-                    return typed(object) || isData(property) ? now : [null]
+                    return isData(object, property) ? now : [null]
                   }
 
                   return typesIn(branch, depth + 1).flatMap((type) =>
@@ -115,7 +128,10 @@ export function questionOf(locals: Locals, written: Expression): Question {
               ? now
               : property.kind !== 'init'
                 ? [null]
-                : [anchorIn(locals, property.value, property.value.start)?.anchor ?? null]
+                : [
+                    anchorIn(locals, property.value, property.value.start, locals.constantNamed)
+                      ?.anchor ?? null,
+                  ]
           },
           [undefined],
         )
