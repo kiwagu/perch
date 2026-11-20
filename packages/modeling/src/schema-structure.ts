@@ -7,6 +7,7 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { ACTIONS, type Scope, type TableAbilities, TENANT_ROLES } from '@workspace/kernel'
 
 import { annotatedReadonlyFields } from './readonly-fields'
+import { type ParamInfo, schemaParams } from './schema-params'
 import { fieldAsserts, type TableIndex, tableIndexes } from './table-constraints'
 import { type FieldType, parseTypeString } from './type-string'
 
@@ -37,6 +38,7 @@ export interface SchemaModel {
 /** What `INFO FOR DB STRUCTURE` and `INFO FOR TABLE <t> STRUCTURE` report, reduced to what modeling reads. */
 export interface StructureInfo {
   readonly db: {
+    readonly params: readonly ParamInfo[]
     readonly tables: ReadonlyArray<{
       readonly name: string
       readonly kind: {
@@ -67,6 +69,8 @@ export interface StructureInfo {
 
 export interface SchemaResult {
   readonly model: SchemaModel
+  /** Each parameter the schema defines (`DEFINE PARAM`) by name, with the value the database holds. */
+  readonly params: Readonly<Record<string, string>>
   readonly problems: readonly string[]
 }
 
@@ -348,7 +352,7 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
     }
   }
 
-  return { model: { tables }, problems }
+  return { model: { tables }, params: schemaParams(info.db.params, schemaText), problems }
 }
 
 const read = (name: string): string =>

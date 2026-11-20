@@ -46,6 +46,7 @@ describe('parseStructure', () => {
   it('reads relations and nested object fields', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'shelf', kind: { kind: 'NORMAL' } },
           { name: 'keeps', kind: { kind: 'RELATION', in: ['identity'], out: ['shelf'] } },
@@ -81,6 +82,7 @@ describe('parseStructure', () => {
   it('keeps asserts and indexes beside the field types, empty for a table without', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'shelf', kind: { kind: 'NORMAL' } },
           { name: 'rack', kind: { kind: 'NORMAL' } },
@@ -117,6 +119,7 @@ describe('parseStructure', () => {
   it('reports tables and fields whose annotations are missing or wrong', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'a', kind: { kind: 'NORMAL' } },
           { name: 'b', kind: { kind: 'NORMAL' } },
@@ -172,6 +175,7 @@ describe('parseStructure', () => {
   it('accepts the tenant region and refuses a region it does not know', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'note', kind: { kind: 'NORMAL' } },
           { name: 'memo', kind: { kind: 'NORMAL' } },
@@ -234,6 +238,16 @@ describe('loadSchemaModel', () => {
     })
   })
 
+  it('reads the parameters the schema defines, not the ones the data layer stores for itself', async () => {
+    const { params } = (
+      await loadSchemaModel(
+        'DEFINE PARAM OVERWRITE $shelf_max_length VALUE 60;\nDEFINE PARAM OVERWRITE $rack_max_length VALUE 12;',
+      )
+    )._unsafeUnwrap()
+
+    expect(params).toEqual({ rack_max_length: '12', shelf_max_length: '60' })
+  })
+
   it('reads the tenant database with its notes in the tenant region', async () => {
     const { model, problems } = (await loadSchemaModel(readSchema('tenant')))._unsafeUnwrap()
 
@@ -250,7 +264,7 @@ describe('loadSchemaModel', () => {
 
   it('reads the owner and the abilities of a table', () => {
     const info: StructureInfo = {
-      db: { tables: [{ name: 'note', kind: { kind: 'NORMAL' } }] },
+      db: { params: [], tables: [{ name: 'note', kind: { kind: 'NORMAL' } }] },
       tables: {
         note: {
           fields: [
@@ -285,6 +299,7 @@ describe('loadSchemaModel', () => {
   it('refuses owner and can annotations on a table outside the tenant region', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'profile', kind: { kind: 'NORMAL' } },
           { name: 'page', kind: { kind: 'NORMAL' } },
@@ -320,6 +335,7 @@ describe('loadSchemaModel', () => {
   it('reports abilities that are wrong', () => {
     const info: StructureInfo = {
       db: {
+        params: [],
         tables: [
           { name: 'note', kind: { kind: 'NORMAL' } },
           { name: 'member', kind: { kind: 'NORMAL' } },
