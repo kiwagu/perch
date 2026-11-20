@@ -3,9 +3,10 @@
  * declared with and the function a name declares, read in the scope that declares it, so a name a
  * view writes resolves as it does at runtime (an inner declaration, a parameter or a destructured
  * name hides an outer one). The collector follows a `<NAME>_TEST_ID` constant to the anchor it
- * holds, and a spread on an element to the props it supplies: an object written there, either
- * branch of a conditional, an object a constant holds, or every object a function of the file
- * returns where the spread calls it, through the spreads those objects write in turn. A name declared in another file, or a value built at runtime, resolves to nothing.
+ * holds, and a value to every object it may be (`objectsOf`): for a spread on an element, the props
+ * it supplies (`spreads.ts`); for the argument of `can()`, the event it names (`asked-event.ts`). A
+ * name declared in another file, or a value built at runtime, is an alternative the file cannot
+ * follow, which each reader decides about itself.
  */
 
 import type {
@@ -27,6 +28,7 @@ import {
   type CarriedAnchor,
   derivedAnchorOf,
   isTestIdFor,
+  keyName,
   staticText,
   TEST_ID_CONSTANT,
   unwrap,
@@ -50,12 +52,25 @@ export interface Locals {
   /** What `name`, written at `at`, is declared with in the file (a function too), if it says. */
   valueNamed(name: string, at: number): Expression | undefined
   /**
-   * The objects `node`, written at `at`, is or may be: one written there, either branch of a
-   * conditional, the one a constant holds, or each one a function of the file it calls returns
-   * (an arrow's expression, or each `return` of its own body).
+   * What `node`, written at `at`, may be, each alternative once: an object written there, either
+   * branch of a conditional, either side of `||` or `??` and the right of `&&` (or nothing), the
+   * one a constant holds, a member of such an object, or each one a function of the file returns
+   * where it is called (an arrow's expression, each `return` of its own body; a `useCallback` hands
+   * its function on, a `useMemo` holds what its function returns).
    */
-  objectsOf(node: Expression, at: number): ObjectExpression[]
+  objectsOf(node: Expression, at: number): Alternative[]
 }
+
+/**
+ * One thing a value may be: an object, `null` for nothing (`null`, `false`, `undefined`, a function
+ * that returns none), `undefined` for what the file cannot say (a parameter, an import, a value
+ * built at runtime, a chain past `DEPTH`).
+ */
+export type Alternative = ObjectExpression | null | undefined
+
+const isNothing = (value: Expression): boolean =>
+  (value.type === 'Literal' && (value.value === null || value.value === false)) ||
+  (value.type === 'Identifier' && value.name === 'undefined')
 
 /** How many names, calls and spreads in a row are followed before giving up: no cycle runs on. */
 export const DEPTH = 8
@@ -182,38 +197,114 @@ export function localsOf(program: Program): Locals {
           })
           .map(({ argument }) => argument)
 
-  const objectsOf = (node: Expression, at: number, depth = 0): ObjectExpression[] => {
+  /** A hook that hands its function on (`useCallback`) or calls it (`useMemo`), if `node` is one. */
+  const hooked = (
+    node: Expression,
+  ): { readonly calls: boolean; readonly fn: Callable } | undefined => {
+    const call = unwrap(node)
+
+    if (call.type !== 'CallExpression' || call.callee.type !== 'Identifier') {
+      return undefined
+    }
+
+    const hook = call.callee.name
+    const [first] = call.arguments
+    const fn = first === undefined || first.type === 'SpreadElement' ? undefined : unwrap(first)
+
+    return (hook === 'useCallback' || hook === 'useMemo') && fn !== undefined && isCallable(fn)
+      ? { calls: hook === 'useMemo', fn }
+      : undefined
+  }
+
+  const objectsOf = (node: Expression, at: number, depth = 0): Alternative[] => {
     const value = unwrap(node)
+    const next = (expression: Expression): Alternative[] =>
+      objectsOf(expression, expression.start, depth + 1)
+    const resultOf = (fn: Callable): Alternative[] => {
+      const returned = returnedBy(fn)
+
+      return returned.length === 0 ? [null] : returned.flatMap(next)
+    }
 
     if (value.type === 'ObjectExpression') {
       return [value]
     }
 
+    if (isNothing(value)) {
+      return [null]
+    }
+
     if (depth >= DEPTH) {
-      return []
+      return [undefined]
     }
 
-    if (value.type === 'ConditionalExpression') {
-      return [value.consequent, value.alternate].flatMap((branch) =>
-        objectsOf(branch, branch.start, depth + 1),
-      )
+    switch (value.type) {
+      case 'ConditionalExpression':
+        return [...next(value.consequent), ...next(value.alternate)]
+      case 'LogicalExpression':
+        return value.operator === '&&'
+          ? [...next(value.right), null]
+          : [...next(value.left), ...next(value.right)]
+      case 'MemberExpression': {
+        if (
+          value.computed ||
+          value.property.type !== 'Identifier' ||
+          value.object.type === 'Super'
+        ) {
+          return [undefined]
+        }
+
+        const key = value.property.name
+
+        return objectsOf(value.object, at, depth + 1).flatMap((object): Alternative[] => {
+          if (object === null || object === undefined) {
+            return [undefined]
+          }
+
+          const found = object.properties.findLast(
+            (property) =>
+              property.type === 'SpreadElement' ||
+              (property.kind === 'init' && keyName(property.key, property.computed) === key),
+          )
+
+          if (found === undefined) {
+            return [null]
+          }
+
+          return found.type === 'SpreadElement' ? [undefined] : next(found.value)
+        })
+      }
+      case 'Identifier': {
+        const declared = valueNamed(value.name, at)
+
+        if (declared === undefined || isCallable(declared)) {
+          return [undefined]
+        }
+
+        const hook = hooked(declared)
+
+        if (hook === undefined) {
+          return next(declared)
+        }
+
+        return hook.calls ? resultOf(hook.fn) : [undefined]
+      }
+      case 'CallExpression': {
+        const declared =
+          value.callee.type === 'Identifier' ? valueNamed(value.callee.name, at) : undefined
+        const hook = declared === undefined ? undefined : hooked(declared)
+        const fn =
+          declared !== undefined && isCallable(declared)
+            ? declared
+            : hook !== undefined && !hook.calls
+              ? hook.fn
+              : undefined
+
+        return fn === undefined ? [undefined] : resultOf(fn)
+      }
+      default:
+        return [undefined]
     }
-
-    const name =
-      value.type === 'Identifier'
-        ? value.name
-        : value.type === 'CallExpression' && value.callee.type === 'Identifier'
-          ? value.callee.name
-          : undefined
-    const declared = name === undefined ? undefined : valueNamed(name, at)
-
-    if (declared === undefined || isCallable(declared) !== (value.type === 'CallExpression')) {
-      return []
-    }
-
-    return (isCallable(declared) ? returnedBy(declared) : [declared]).flatMap((held) =>
-      objectsOf(held, held.start, depth + 1),
-    )
   }
 
   return { valueNamed, objectsOf: (node, at) => objectsOf(node, at) }

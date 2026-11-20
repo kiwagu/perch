@@ -91,7 +91,8 @@ type Rule = (facets: Facets) => Facet
 const MARK_IDIOM = "concerns === '<key>' ? true : undefined"
 const MARK = /^concerns === '[a-z][a-z-]*' \? true : undefined$/
 const ENABLE_IDIOM = '!props.can(<its event>)'
-const ENABLE = /^!\s*(props\.)?can\(/
+/** One negated question to the machine, nothing beside it: `!props.can(…)` or `!can(…)`. */
+const ENABLE = /^!\s*(props\.)?can\([^()]*(\([^()]*\)[^()]*)*\)$/
 
 /** The limit of a text field: the kit takes it from the field facts, so no element carries one. */
 const limits: Rule = () => ({ name: 'maxLength', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
@@ -197,8 +198,7 @@ function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets
   // The app lags the contract: a prop in its idiom on an anchor of a kind that may carry it.
   const lagging = (anchor: string, text: string): boolean =>
     facets.ahead &&
-    lags !== undefined &&
-    lags.kinds.has(kinds.get(anchor) ?? kindOf(anchor)) &&
+    lags?.kinds.has(kinds.get(anchor) ?? kindOf(anchor)) === true &&
     lags.pattern.test(text)
   const props = facets.collected.flatMap(({ file, props: all }) =>
     // An undeclared base is the parts check's problem: no facet problem on top of it.

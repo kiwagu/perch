@@ -313,6 +313,18 @@ describe('facetProblems', () => {
       // A button whose event the contract dropped keeps its enabling until the view follows.
       expect(problemsOf(changed, { ahead: true })).toEqual(expected.slice(1))
     })
+    it('refuses a disabled with anything beside its one question, in ahead mode too', () => {
+      const save = `<Button data-testid="sample.save-button" disabled={${CAN} || busy} />`
+      const c =
+        '<Button data-testid="sample.c-button" disabled={!props.can({ type: \'sample.c-button\' }) || busy} />'
+
+      expect(problemsOf({ save })).toEqual([
+        `view.tsx:${LINE['save']}: "sample.save-button": disabled={${CAN} || busy}, but the contract says disabled={!props.can(<its event>)}`,
+      ])
+      expect(problemsOf({ c }, { ahead: true })).toEqual([
+        `view.tsx:${LINE['c']}: "sample.c-button": disabled={!props.can({ type: 'sample.c-button' }) || busy}, but no state enables it: only a button, a tab, a select, a checkbox, a radio or a switch whose anchor is an event of its screen's flow is enabled by its machine; leave it out`,
+      ])
+    })
     it('in ahead mode lets a missing disabled by', () => {
       expect(
         problemsOf({ save: '<Button data-testid="sample.save-button" />' }, { ahead: true }),

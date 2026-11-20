@@ -4,9 +4,9 @@
  * grouping its props in an object or a helper (`{...field('email')}`).
  */
 
-import type { Expression, ObjectExpression } from 'oxc-parser'
+import type { Expression } from 'oxc-parser'
 
-import { DEPTH, type Locals } from './locals'
+import { type Alternative, DEPTH, type Locals } from './locals'
 import { keyName } from './values'
 
 /** A prop an object supplies, by its name, with the value it is written with. */
@@ -22,11 +22,11 @@ export interface SuppliedProp {
  * component's own props passed on).
  */
 export function spreadPropsOf(locals: Locals, argument: Expression, at: number): SuppliedProp[] {
-  const propsOf = (objects: readonly ObjectExpression[], depth: number): SuppliedProp[] =>
+  const propsOf = (objects: readonly Alternative[], depth: number): SuppliedProp[] =>
     depth >= DEPTH
       ? []
       : objects.flatMap((object) =>
-          object.properties.flatMap((property): SuppliedProp[] => {
+          (object ?? { properties: [] }).properties.flatMap((property): SuppliedProp[] => {
             if (property.type === 'SpreadElement') {
               return propsOf(locals.objectsOf(property.argument, property.start), depth + 1)
             }

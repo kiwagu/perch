@@ -280,6 +280,33 @@ describe('collectFromSource', () => {
       { anchor: 'x.page.go-button', asks: undefined, line: 7 },
     ])
   })
+  it('reads an event as its object ends up, where it is written; anything it cannot follow leaves it unread', () => {
+    const found = collectFromSource(
+      [
+        "const revoke = { type: 'x.sessions.revoke-button' } as const",
+        "const reset = { type: 'x.reset.send-button' } as const",
+        'const a = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ ...revoke, reason })} />',
+        'const b = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ ...revoke, ...(ok ? reset : {}) })} />',
+        'const c = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(ok ? revoke : props.event)} />',
+        'const d = <Button data-testid="x.sessions.revoke-button" disabled={!other.can(revoke)} />',
+        "const extras = () => { const event = { type: 'x.sessions.revoke-button' } as const; return { disabled: !props.can(event) } }",
+        'const e = <Button data-testid="x.sessions.revoke-button" {...extras()} />',
+        'const f = <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ type: \'x.sessions.revoke-button\', ...rest })} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // b: the reset may override; c: one alternative is unknown; d: not the machine's question;
+    // e: the helper's own constant; f: a spread the file cannot follow is the event's data.
+    expect(found.props.map(({ asks, line }) => ({ asks, line }))).toEqual([
+      { asks: 'x.sessions.revoke-button', line: 3 },
+      { asks: undefined, line: 4 },
+      { asks: undefined, line: 5 },
+      { asks: undefined, line: 6 },
+      { asks: 'x.sessions.revoke-button', line: 8 },
+      { asks: 'x.sessions.revoke-button', line: 9 },
+    ])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

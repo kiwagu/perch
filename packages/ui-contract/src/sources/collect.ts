@@ -280,7 +280,7 @@ export function collectFromSource(text: string, file: string): Collected {
         const expression = expressionOf(attribute)
         const asks =
           prop === 'disabled' && expression !== undefined
-            ? askedEventOf(locals, expression, attribute.start)
+            ? askedEventOf(locals, expression, expression.start)
             : undefined
 
         collected.props.push({
