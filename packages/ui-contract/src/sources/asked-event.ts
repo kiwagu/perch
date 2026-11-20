@@ -14,22 +14,24 @@
  * One it writes a type for that can carry `type` (a `type` member, a string index signature) may
  * replace the type of an event that writes its own, so the event is unread, unless the file says
  * which events that member allows (`allowed-values.ts`): string literal types, `typeof <NAME>` of
- * a `const` of the file whose type is one string (its annotation, else the string its value
- * writes), and `typeof <name>.type` of a `const` of the file, read through its annotation where it
- * has one (which may allow more than its value), else by its `as const` value, whose `type` is
- * read as here. Those join the types the event has before the spread, an optional member being
- * absent, and the event is read where they are one event. One the file says nothing of may be the
- * type of an event that writes none. An argument the file cannot follow, a `type` it cannot read
- * (a `<NAME>_TEST_ID` the file does not declare, an import, included), or two alternatives that
- * name different events leave it unread. The question itself is read from the tree: one negated
- * call of `can` or `props.can` with one argument, whatever that argument nests. The facets check
- * holds it to the event the control itself sends, its anchor, so a copied `can(reset)` on the
- * revoke button is caught.
+ * a `const` of the file, by its type (its annotation, else the type of its value: the string it
+ * writes, or the type an assertion other than `as const` gives it), and `typeof <name>.type` of a
+ * `const` of the file, read through its annotation where it has one (which may allow more than its
+ * value), else by its `as const` value, whose `type` has the type of the value it is written with,
+ * read as a `typeof <NAME>` is (`'x' as 'x' | 'y'` allows both, a `string` const or a `testIdFor()`
+ * call any), unread after a spread, whose members have the spread's type. Those join the types the
+ * event has before the spread, an optional member being absent, and the event is read where they
+ * are one event. One the file says nothing of may be the type of an event that writes none. An
+ * argument the file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the file does not
+ * declare, an import, included), or two alternatives that name different events leave it unread.
+ * The question itself is read from the tree: one negated call of `can` or `props.can` with one
+ * argument, whatever that argument nests. The facets check holds it to the event the control
+ * itself sends, its anchor, so a copied `can(reset)` on the revoke button is caught.
  */
 
 import type { Expression, ObjectExpression, SpreadElement, TSType } from 'oxc-parser'
 
-import { type AllowedValue, allowedValues } from './allowed-values'
+import { type AllowedValue, allowedValues, isConstType, valueAllows } from './allowed-values'
 import { type Alternative, DEPTH } from './alternatives'
 import { anchorIn } from './element'
 import type { Locals } from './locals'
@@ -49,13 +51,16 @@ const isCan = (callee: Expression): boolean =>
 const isConstAssertion = (node: Expression): boolean =>
   node.type === 'ParenthesizedExpression' || node.type === 'TSSatisfiesExpression'
     ? isConstAssertion(node.expression)
-    : node.type === 'TSAsExpression' &&
-      node.typeAnnotation.type === 'TSTypeReference' &&
-      node.typeAnnotation.typeName.type === 'Identifier' &&
-      node.typeAnnotation.typeName.name === 'const'
+    : node.type === 'TSAsExpression' && isConstType(node.typeAnnotation)
 
 /** What an event's `type` may end up as: a name, `null` unread, `undefined` where none is set. */
 type Typed = string | null | undefined
+
+/**
+ * How an object's `type` is read: as the `value` the event is sent with, or as the `type` a query
+ * of it has (`typeof <name>.type`), which is what its value is typed (`valueAllows`).
+ */
+type Reading = 'value' | 'type'
 
 /** A `disabled` as the facets check reads it: whether it is one question, and the event it asks. */
 export interface Question {
@@ -106,8 +111,8 @@ export function questionOf(locals: Locals, written: Expression): Question {
    * The events `typeof <name>.type` says, where `name` is a `const` of the file. One the file
    * annotates has the type its annotation writes, which may allow more than its value does, so it
    * is read through the annotation, and unread where that does not say. One it does not annotate
-   * is read by its value, where that is `as const`, so the `type` it is written with is what the
-   * type allows, and the question reads it as one.
+   * is read by its value, where that is `as const`, so the `type` it is written with has the type
+   * that value has: its string, or the type an assertion other than `as const` gives it.
    */
   const queriedTypes = (
     { reference }: Extract<AllowedValue, { kind: 'query' }>,
@@ -129,9 +134,17 @@ export function questionOf(locals: Locals, written: Expression): Question {
       return undefined
     }
 
-    const types = typesOf(locals.objectsOf(declared, declared.start), depth + 1)
+    const types = typesOf(locals.objectsOf(declared, declared.start), depth + 1, 'type')
 
     return types.every((type): type is string => typeof type === 'string') ? types : undefined
+  }
+  /** The events each value allows: a string, or what the `typeof <name>.type` it is says. */
+  const eventsOf = (allowed: readonly AllowedValue[], depth: number): string[] | undefined => {
+    const events = allowed.map((value) =>
+      value.kind === 'literal' ? [value.text] : queriedTypes(value, depth),
+    )
+
+    return events.every((each): each is string[] => each !== undefined) ? events.flat() : undefined
   }
   /**
    * The events the `type` member of a type the file writes allows: its string literal types, the
@@ -142,15 +155,7 @@ export function questionOf(locals: Locals, written: Expression): Question {
     const member = locals.types.memberOf(declared, 'type')
     const allowed = member === undefined ? undefined : allowedValues(member, 'type', locals, depth)
 
-    if (allowed === undefined) {
-      return undefined
-    }
-
-    const events = allowed.map((value) =>
-      value.kind === 'literal' ? [value.text] : queriedTypes(value, depth),
-    )
-
-    return events.every((each): each is string[] => each !== undefined) ? events.flat() : undefined
+    return allowed === undefined ? undefined : eventsOf(allowed, depth)
   }
   /** The events the file's type for a spread it cannot follow says its `type` may be, if any. */
   const spreadTypes = (spread: SpreadElement, depth: number): string[] | undefined => {
@@ -158,16 +163,36 @@ export function questionOf(locals: Locals, written: Expression): Question {
 
     return declared === undefined ? undefined : allowedTypes(declared, depth)
   }
-  const typesOf = (alternatives: readonly Alternative[], depth: number): Typed[] =>
+  /** The events a `type` written with `value` is typed to allow; unread where it does not say. */
+  const typedAs = (value: Expression, depth: number): Typed[] => {
+    const allowed = valueAllows(value, 'type', locals, depth)
+
+    return (allowed === undefined ? undefined : eventsOf(allowed, depth)) ?? [null]
+  }
+  const typesOf = (
+    alternatives: readonly Alternative[],
+    depth: number,
+    reading: Reading = 'value',
+  ): Typed[] =>
     alternatives.flatMap((object): Typed[] =>
-      object === undefined ? [null] : object === null ? [undefined] : typesIn(object, depth),
+      object === undefined
+        ? [null]
+        : object === null
+          ? [undefined]
+          : typesIn(object, depth, reading),
     )
-  const typesIn = (object: ObjectExpression, depth: number): Typed[] =>
+  const typesIn = (object: ObjectExpression, depth: number, reading: Reading): Typed[] =>
     depth >= DEPTH
       ? [null]
       : object.properties.reduce<Typed[]>(
           (now, property) => {
             if (property.type === 'SpreadElement') {
+              // A member a spread supplies has the type the spread's value has, which its object
+              // need not write `as const`: a query of it is unread, unless a later `type` sets it.
+              if (reading === 'type') {
+                return [null]
+              }
+
               return locals
                 .objectsOf(property.argument, property.start)
                 .flatMap((branch): Typed[] => {
@@ -190,7 +215,7 @@ export function questionOf(locals: Locals, written: Expression): Question {
                     return set === undefined ? [null] : now.concat(set)
                   }
 
-                  return typesIn(branch, depth + 1).flatMap((type) =>
+                  return typesIn(branch, depth + 1, reading).flatMap((type) =>
                     type === undefined ? now : [type],
                   )
                 })
@@ -207,10 +232,12 @@ export function questionOf(locals: Locals, written: Expression): Question {
               ? now
               : property.kind !== 'init'
                 ? [null]
-                : [
-                    anchorIn(locals, property.value, property.value.start, locals.constantNamed)
-                      ?.anchor ?? null,
-                  ]
+                : reading === 'type'
+                  ? typedAs(property.value, depth)
+                  : [
+                      anchorIn(locals, property.value, property.value.start, locals.constantNamed)
+                        ?.anchor ?? null,
+                    ]
           },
           [undefined],
         )

@@ -1,8 +1,11 @@
-import { parseSync, type TSType, Visitor } from 'oxc-parser'
+import { type Expression, parseSync, type TSType, Visitor } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
 
-import { type AllowedValue, allowedValues } from './allowed-values'
+import { type AllowedValue, allowedValues, valueAllows } from './allowed-values'
 import { localsOf } from './locals'
+
+/** The language a probe is written in: `tsx`, or `ts` for an assertion written `<T>value`. */
+type Lang = 'ts' | 'tsx'
 
 /**
  * What the type written after `probe:` allows for the key `type`, with the file it is written in:
@@ -11,9 +14,10 @@ import { localsOf } from './locals'
 function allowedBy(
   type: string,
   around: (probe: string) => string = (probe) => probe,
+  lang: Lang = 'tsx',
 ): { allowed: AllowedValue[] | undefined; text: string } {
   const text = around(`let probe: ${type}`)
-  const { program } = parseSync('x.tsx', text, { lang: 'tsx', sourceType: 'module' })
+  const { program } = parseSync(`x.${lang}`, text, { lang, sourceType: 'module' })
   const found: TSType[] = []
 
   new Visitor({
@@ -33,11 +37,46 @@ function allowedBy(
   return { allowed: allowedValues(probe, 'type', localsOf(program)), text }
 }
 
-/** The values a type allows, a query as `typeof <name>`. */
-const valuesOf = (type: string, around?: (probe: string) => string): string[] | undefined =>
-  allowedBy(type, around).allowed?.map((value) =>
+/** Each value as a string, a query as `typeof <name>`. */
+const named = (allowed: AllowedValue[] | undefined): string[] | undefined =>
+  allowed?.map((value) =>
     value.kind === 'literal' ? value.text : `typeof ${value.reference.name}`,
   )
+
+/** The values a type allows, a query as `typeof <name>`. */
+const valuesOf = (
+  type: string,
+  around?: (probe: string) => string,
+  lang?: Lang,
+): string[] | undefined => named(allowedBy(type, around, lang).allowed)
+
+/** The values the type of the value `probe` is declared with allows, in the file `around` writes. */
+function writtenOf(
+  value: string,
+  around: (probe: string) => string = (probe) => probe,
+): string[] | undefined {
+  const { program } = parseSync('x.tsx', around(`const probe = ${value}`), {
+    lang: 'tsx',
+    sourceType: 'module',
+  })
+  const found: Expression[] = []
+
+  new Visitor({
+    VariableDeclarator: (node) => {
+      if (node.id.type === 'Identifier' && node.id.name === 'probe' && node.init) {
+        found.push(node.init)
+      }
+    },
+  }).visit(program)
+
+  const [probe] = found
+
+  if (probe === undefined) {
+    throw new Error('the file declares its probe')
+  }
+
+  return named(valueAllows(probe, 'type', localsOf(program)))
+}
 
 /** The file that writes `lines`, then types the probe. */
 const after =
@@ -52,6 +91,8 @@ const TEMPLATE = ['`a$', '{string}`'].join('')
 const BUILT = ['`sample.$', "{'save'}-button`"].join('')
 
 const SAVE = "'sample.save-button'"
+
+const A = "'sample.a-button'"
 
 describe('allowedValues', () => {
   it('reads a string literal type, in parentheses or not', () => {
@@ -111,6 +152,38 @@ describe('allowedValues', () => {
     expect(
       valuesOf("'sample.a-button' | typeof SAVE_TEST_ID", after(`const SAVE_TEST_ID = ${SAVE}`)),
     ).toEqual(['sample.a-button', 'sample.save-button'])
+  })
+  it('reads a query of a const whose value an assertion other than as const types by that type', () => {
+    // `<value> as <T>` and `<T><value>` are typed `T`, which may allow more than the value: `T` is
+    // read as an annotation; `as const` keeps the value's own string.
+    const reads: ReadonlyArray<readonly [string, readonly string[], Lang?]> = [
+      [`const SAVE_TEST_ID = ${SAVE} as ${SAVE}`, ['sample.save-button']],
+      [`const SAVE_TEST_ID = (${SAVE} as (${SAVE})) satisfies string`, ['sample.save-button']],
+      [`const SAVE_TEST_ID = ${SAVE} as ${SAVE} | ${A}`, ['sample.save-button', 'sample.a-button']],
+      [`const SAVE_TEST_ID = ${SAVE} as typeof reset.type`, ['typeof reset']],
+      [`const SAVE_TEST_ID = <${SAVE}>${SAVE}`, ['sample.save-button'], 'ts'],
+      [`const SAVE_TEST_ID = <const>${SAVE}`, ['sample.save-button'], 'ts'],
+      [
+        `const SAVE_TEST_ID = <${SAVE} | ${A}>${SAVE}`,
+        ['sample.save-button', 'sample.a-button'],
+        'ts',
+      ],
+    ]
+
+    for (const [declared, values, lang] of reads) {
+      expect(valuesOf('typeof SAVE_TEST_ID', after(declared), lang), declared).toEqual(values)
+    }
+
+    // A type the file does not state as strings says nothing, whatever the value holds.
+    const unread: ReadonlyArray<readonly [string, Lang?]> = [
+      [`const SAVE_TEST_ID = ${SAVE} as Anchor`],
+      [`const SAVE_TEST_ID = ${SAVE} as ${SAVE} | string`],
+      [`const SAVE_TEST_ID = <string>${SAVE}`, 'ts'],
+    ]
+
+    for (const [declared, lang] of unread) {
+      expect(valuesOf('typeof SAVE_TEST_ID', after(declared), lang), declared).toBeUndefined()
+    }
   })
   it('cannot tell a query of a name whose type the file does not state as one string', () => {
     for (const declared of [
@@ -173,6 +246,42 @@ describe('allowedValues', () => {
       "'a'[]",
     ]) {
       expect(valuesOf(type)).toBeUndefined()
+    }
+  })
+})
+
+describe('valueAllows', () => {
+  it('reads the type of a value the file writes: its string, or the type an assertion gives it', () => {
+    const reads: ReadonlyArray<readonly [string, readonly string[], string?]> = [
+      [SAVE, ['sample.save-button']],
+      [`${SAVE} as const`, ['sample.save-button']],
+      [`(${SAVE} as const) satisfies string`, ['sample.save-button']],
+      [`${SAVE} as ${SAVE}`, ['sample.save-button']],
+      [`${SAVE} as ${SAVE} | ${A}`, ['sample.save-button', 'sample.a-button']],
+      ['SAVE_TEST_ID', ['sample.save-button'], `const SAVE_TEST_ID = ${SAVE}`],
+    ]
+
+    for (const [value, values, declared] of reads) {
+      expect(writtenOf(value, declared === undefined ? undefined : after(declared)), value).toEqual(
+        values,
+      )
+    }
+  })
+  it('cannot tell the type of a value the file does not state as strings', () => {
+    const unread: ReadonlyArray<readonly [string, string?]> = [
+      [`${SAVE} as string`],
+      [`${SAVE} as Anchor`],
+      ["testIdFor('sample', 'save-button')"],
+      ['SAVE_TEST_ID', `const SAVE_TEST_ID: string = ${SAVE}`],
+      ['SAVE_TEST_ID', `let SAVE_TEST_ID = ${SAVE}`],
+      [`{ type: ${SAVE} } as const`],
+    ]
+
+    for (const [value, declared] of unread) {
+      expect(
+        writtenOf(value, declared === undefined ? undefined : after(declared)),
+        value,
+      ).toBeUndefined()
     }
   })
 })

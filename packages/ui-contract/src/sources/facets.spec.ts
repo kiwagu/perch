@@ -749,6 +749,79 @@ describe('facetProblems', () => {
           }
         }
       })
+      it('reads a typeof of a member by the type its value has, which an assertion gives, in ahead mode too', () => {
+        const event = "withExtra({ type: 'sample.a-button' })"
+        const entries = {
+          saveEvent: "{ type: 'sample.save-button' } as const",
+          withExtra: '(extra: { type: typeof eventType }) => ({ ...saveEvent, ...extra })',
+          save: `<Button data-testid="sample.save-button" disabled={!props.can(${event})} />`,
+        }
+        const SAVE = "'sample.save-button'"
+        const BOTH = `${SAVE} | 'sample.a-button'`
+        /** An event default the helpers share, `eventType` typed from its `type`. */
+        const sharing = (...defaults: string[]): string[] => [
+          ...defaults,
+          'const eventType: typeof defaults.type = defaults.type',
+        ]
+
+        // An assertion other than `as const` types a value by its type, which may allow more than
+        // the value: the a-button event then fits the helper, and its spread replaces the save event.
+        // So does a value typed `string`, or a member a spread supplies, typed as the spread is.
+        const rows: ReadonlyArray<readonly [readonly string[], boolean]> = [
+          [sharing(`const defaults = { type: ${SAVE} as ${BOTH} } as const`), true],
+          [sharing(`const defaults = { type: ${SAVE} as string } as const`), true],
+          [
+            sharing(
+              "import type { Anchor } from './anchor'",
+              `const defaults = { type: ${SAVE} as Anchor } as const`,
+            ),
+            true,
+          ],
+          [
+            sharing(
+              `const SAVE_TEST_ID: string = ${SAVE}`,
+              'const defaults = { type: SAVE_TEST_ID } as const',
+            ),
+            true,
+          ],
+          [sharing("const defaults = { type: testIdFor('sample', 'save-button') } as const"), true],
+          [
+            sharing(`const base = { type: ${SAVE} }`, 'const defaults = { ...base } as const'),
+            true,
+          ],
+          [[`const eventType = ${SAVE} as ${BOTH}`], true],
+          [sharing(`const defaults = { type: ${SAVE} } as const`), false],
+          [sharing(`const defaults = { type: ${SAVE} as ${SAVE} } as const`), false],
+          [
+            sharing(`const defaults = { type: (${SAVE} as const) satisfies string } as const`),
+            false,
+          ],
+          [
+            sharing(
+              `const SAVE_TEST_ID = ${SAVE}`,
+              'const defaults = { type: SAVE_TEST_ID } as const',
+            ),
+            false,
+          ],
+          [
+            sharing(
+              "const base = { type: 'sample.a-button' }",
+              `const defaults = { ...base, type: ${SAVE} } as const`,
+            ),
+            false,
+          ],
+          [[`const eventType = ${SAVE} as ${SAVE}`], false],
+        ]
+
+        for (const [declarations, refused] of rows) {
+          for (const ahead of [false, true]) {
+            expect(
+              problemsOf(entries, { declarations, ahead }),
+              `${declarations.join('; ')}${ahead ? ' (ahead)' : ''}`,
+            ).toEqual(refused ? cannotRead(event) : [])
+          }
+        }
+      })
       it('passes it, in ahead mode too, where the type the view gives it is indexed by numbers only', () => {
         const changed = {
           save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(payload))} />',

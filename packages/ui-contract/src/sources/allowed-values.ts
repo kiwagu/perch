@@ -4,12 +4,15 @@
  * query of the key of a name (`typeof reset.type`, left to the caller to read, where `reset` is the
  * file's own value), a query of a name a `const` of the file binds where the query is written
  * (`typeof SAVE_TEST_ID`, `Locals.constantNamed`), read as that const's type, or a union of such
- * types, in parentheses or not. A const's type is its annotation where it has one, read as here, and
- * else the one string its value writes: a string literal or a template without expressions, in
- * parentheses, `as const` or `satisfies`, or another such const by its name. Anything else says
- * nothing of which values it allows, so none are read: `string`, an import, a generic, a template, a
- * query of another member or of a longer path, or one of a `let`, a `var`, a parameter, an import,
- * or a const declared with another value (a `testIdFor()` call is typed `string`, which allows any).
+ * types, in parentheses or not. A const's type is its annotation where it has one, read as here,
+ * and else the type of its value (`valueAllows`, which the caller reads the value of a queried
+ * member of an `as const` object with too): the one string a string literal or a template without
+ * expressions writes, in parentheses, `as const` or `satisfies`, or another such const by its name;
+ * under any other assertion (`<value> as <T>`, `<T><value>`) the value has the type `T`, which may
+ * allow more than the value holds, so `T` is read as an annotation is. Anything else says nothing
+ * of which values it allows, so none are read: `string`, an import, a generic, a template, a query
+ * of another member or of a longer path, or one of a `let`, a `var`, a parameter, an import, or a
+ * const declared with another value (a `testIdFor()` call is typed `string`, which allows any).
  */
 
 import type { Expression, IdentifierReference, TSType } from 'oxc-parser'
@@ -22,6 +25,12 @@ import { staticText } from './values'
 export type AllowedValue =
   | { readonly kind: 'literal'; readonly text: string }
   | { readonly kind: 'query'; readonly reference: IdentifierReference }
+
+/** Whether an assertion's type is `const`, which keeps the literal its value writes. */
+export const isConstType = (type: TSType): boolean =>
+  type.type === 'TSTypeReference' &&
+  type.typeName.type === 'Identifier' &&
+  type.typeName.name === 'const'
 
 /** The values `type` allows for `key`; none where it does not say which, or allows more. */
 export function allowedValues(
@@ -80,33 +89,31 @@ function constantValues(
   const annotation = locals.declaredTypeOf(name, name.start)
 
   return annotation === undefined
-    ? valueValues(value, key, locals, depth + 1)
+    ? valueAllows(value, key, locals, depth + 1)
     : allowedValues(annotation, key, locals, depth + 1)
 }
 
 /**
- * The one string the type of an unannotated const's value is, which a `const` keeps as its type;
- * none for any other value, a call or a wider `as` (`'x' as string`) included.
+ * The values the type of a value the file writes allows, as an unannotated const or a member of an
+ * `as const` object keeps it: the one string it writes, or what the type an assertion other than
+ * `as const` gives it allows (`'x' as 'x' | 'y'` both, `'x' as string` none); none for any other
+ * value, a call included.
  */
-function valueValues(
+export function valueAllows(
   value: Expression,
   key: string,
   locals: Locals,
-  depth: number,
+  depth = 0,
 ): AllowedValue[] | undefined {
   switch (value.type) {
     case 'ParenthesizedExpression':
     case 'TSSatisfiesExpression':
-      return valueValues(value.expression, key, locals, depth)
-    case 'TSAsExpression': {
-      const { typeAnnotation } = value
-
-      return typeAnnotation.type === 'TSTypeReference' &&
-        typeAnnotation.typeName.type === 'Identifier' &&
-        typeAnnotation.typeName.name === 'const'
-        ? valueValues(value.expression, key, locals, depth)
-        : undefined
-    }
+      return valueAllows(value.expression, key, locals, depth)
+    case 'TSAsExpression':
+    case 'TSTypeAssertion':
+      return isConstType(value.typeAnnotation)
+        ? valueAllows(value.expression, key, locals, depth)
+        : allowedValues(value.typeAnnotation, key, locals, depth)
     case 'Identifier':
       return constantValues(value, key, locals, depth)
     case 'Literal':
