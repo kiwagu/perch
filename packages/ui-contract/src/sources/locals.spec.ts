@@ -69,6 +69,79 @@ describe('localsOf', () => {
   })
 })
 
+describe('declaredTypeOf', () => {
+  /** The source of the type the file writes for `expression`, read where `marker` is written. */
+  function declaredAt(text: string, expression: string, marker: string): string | undefined {
+    const full = `${text}\nconst probe = ${expression}`
+    const { program } = parseSync('x.tsx', full, { lang: 'tsx', sourceType: 'module' })
+    const declaration = program.body.at(-1)
+    const value =
+      declaration?.type === 'VariableDeclaration' ? declaration.declarations[0]?.init : undefined
+
+    if (value === undefined || value === null) {
+      throw new Error('the probe declares the expression')
+    }
+
+    const type = localsOf(program).declaredTypeOf(value, text.indexOf(marker))
+
+    return type === undefined ? undefined : full.slice(type.start, type.end)
+  }
+
+  const text = [
+    'export {}',
+    'interface Props { readonly draft: Draft; readonly form: { readonly name: Name } }',
+    'function a(props: { readonly draft: Draft; readonly form: { readonly name: Name } }) { const { draft } = props; const { form: { name } } = props; one() }',
+    'function b({ draft, form: { name } }: Props) { two() }',
+    'function c({ draft }: { readonly draft: Draft } = fallback) { three() }',
+    'function d({ draft = fallback }: Props, { ...rest }: Props, [first]: Props[]) { four() }',
+    'function e(props) { const { draft } = props; five() }',
+    'function f() { const typed: Draft = load(); const { draft }: Props = load(); const holder: Props = load(); const { draft: kept } = holder; const { draft: defaulted = fallback } = holder; const built = load(); six() }',
+    'function g(props: Props) { return (props) => seven() }',
+    'for (const item of items) { eight() }',
+  ].join('\n')
+
+  it('reads the type a parameter is written with, and a member of it', () => {
+    expect(declaredAt(text, 'props', 'one(')).toBe(
+      '{ readonly draft: Draft; readonly form: { readonly name: Name } }',
+    )
+    expect(declaredAt(text, 'props.draft', 'one(')).toBe('Draft')
+    expect(declaredAt(text, 'props.form.name', 'one(')).toBe('Name')
+  })
+  it('reads the type of a name destructured from a typed parameter, or in a typed parameter', () => {
+    expect(declaredAt(text, 'draft', 'one(')).toBe('Draft')
+    expect(declaredAt(text, 'name', 'one(')).toBe('Name')
+    expect(declaredAt(text, 'draft', 'two(')).toBe('Draft')
+    expect(declaredAt(text, 'name', 'two(')).toBe('Name')
+    // A default of the whole parameter must be of its type.
+    expect(declaredAt(text, 'draft', 'three(')).toBe('Draft')
+  })
+  it('reads the type a variable is written with, destructured, or destructured from one', () => {
+    expect(declaredAt(text, 'typed', 'six(')).toBe('Draft')
+    expect(declaredAt(text, 'draft', 'six(')).toBe('Draft')
+    expect(declaredAt(text, 'kept', 'six(')).toBe('Draft')
+  })
+  it('reads none the file does not write: a default of the name, a rest, an array, an untyped parameter, a value', () => {
+    expect(declaredAt(text, 'draft', 'four(')).toBeUndefined()
+    expect(declaredAt(text, 'rest', 'four(')).toBeUndefined()
+    expect(declaredAt(text, 'first', 'four(')).toBeUndefined()
+    expect(declaredAt(text, 'props', 'five(')).toBeUndefined()
+    expect(declaredAt(text, 'draft', 'five(')).toBeUndefined()
+    expect(declaredAt(text, 'defaulted', 'six(')).toBeUndefined()
+    expect(declaredAt(text, 'built', 'six(')).toBeUndefined()
+    expect(declaredAt(text, 'item', 'eight(')).toBeUndefined()
+    expect(declaredAt(text, 'elsewhere', 'eight(')).toBeUndefined()
+  })
+  it('reads none for anything but a name or a member: a computed member, a call, a cast, a chain', () => {
+    expect(declaredAt(text, "props['draft']", 'one(')).toBeUndefined()
+    expect(declaredAt(text, 'load()', 'six(')).toBeUndefined()
+    expect(declaredAt(text, '(typed as Draft)', 'six(')).toBeUndefined()
+    expect(declaredAt(text, 'props?.draft', 'one(')).toBeUndefined()
+  })
+  it('reads a name in the scope that binds it: an untyped parameter hides a typed one', () => {
+    expect(declaredAt(text, 'props', 'seven(')).toBeUndefined()
+  })
+})
+
 describe('suppliedBy', () => {
   /** What the spread of `argument`, written at `marker` in `text`, supplies. */
   function supplied(text: string, argument: string, marker: string) {

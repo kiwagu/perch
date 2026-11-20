@@ -688,6 +688,63 @@ describe('collectFromSource', () => {
       { asks: undefined, question: true, line: 6 },
     ])
   })
+  it('reads a spread whose type the file declares without a type as the data of the event', () => {
+    const found = collectFromSource(
+      [
+        "import type { OrganisationEvent } from './organisation-machine'",
+        'export interface CreateDraft { readonly key: string; readonly name: string }',
+        "const submit = { type: 'organisation.create.submit-button' } as const",
+        'export function OrganisationCreate(props: { readonly draft: CreateDraft; readonly can: (event: OrganisationEvent) => boolean }) {',
+        '  const { draft } = props',
+        '  return <Button data-testid="organisation.create.submit-button" disabled={!props.can({ ...submit, ...draft })} />',
+        '}',
+        'interface RowProps { readonly draft?: CreateDraft | null; readonly can: (event: OrganisationEvent) => boolean }',
+        'export const Row = ({ draft, can }: RowProps) => <Button data-testid="organisation.create.submit-button" disabled={!can({ ...submit, ...draft })} />',
+        'export const Inline = (props: RowProps) => <Button data-testid="organisation.create.submit-button" disabled={!props.can({ ...submit, ...props.draft })} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual([
+      { asks: 'organisation.create.submit-button', question: true, line: 6 },
+      { asks: 'organisation.create.submit-button', question: true, line: 9 },
+      { asks: 'organisation.create.submit-button', question: true, line: 10 },
+    ])
+  })
+  it('leaves an event unread whose spread the file declares a type for that may carry a type, or that it cannot tell', () => {
+    const rows = [
+      'CheckEvent',
+      'ImportedEvent',
+      'Indexed',
+      'Twice',
+      'Event',
+      'Partial<Draft>',
+      'any',
+      'unknown',
+      'Draft | CheckEvent',
+    ]
+    const found = collectFromSource(
+      [
+        "import type { ImportedEvent } from './events'",
+        "const revoke = { type: 'x.sessions.revoke-button' } as const",
+        'interface Draft { readonly key: string }',
+        'interface CheckEvent { readonly type: string }',
+        'interface Indexed { readonly [key: string]: string }',
+        'interface Twice { readonly key: string }',
+        'interface Twice { readonly type: string }',
+        ...rows.map(
+          (type) =>
+            `export function Row${type === 'Event' ? '<Event>' : ''}({ checkEvent }: { readonly checkEvent: ${type} }) { return <Button data-testid="x.sessions.revoke-button" disabled={!props.can({ ...revoke, ...checkEvent })} /> }`,
+        ),
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // Each may be another event, whose type overrides the revoke button's.
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual(
+      rows.map((_, index) => ({ asks: undefined, question: true, line: 8 + index })),
+    )
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

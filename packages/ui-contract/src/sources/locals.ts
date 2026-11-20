@@ -6,7 +6,8 @@
  * parameter in its clause), and every
  * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
  * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
- * the file cannot follow, which each reader decides about itself.
+ * the file cannot follow, which each reader decides about itself; for such a value, the type the
+ * file writes for it, where it writes one (`declaredTypeOf`, read by `declared-type.ts`).
  */
 
 import type {
@@ -15,11 +16,13 @@ import type {
   ForStatementLeft,
   ParamPattern,
   Program,
+  TSType,
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { type Alternative, alternativesIn, type Callable, type Member } from './alternatives'
-import { namesIn, pathsIn } from './binding-names'
+import { type Alternative, alternativesIn, type Callable, DEPTH, type Member } from './alternatives'
+import { namesIn, pathsIn, typedNamesIn, type WrittenType } from './binding-names'
+import { type DeclaredTypes, declaredTypesIn } from './declared-type'
 import { endIsReachable } from './reachable-end'
 
 /** A range of the source, `[start, end)`. */
@@ -38,6 +41,8 @@ interface Binding {
   readonly constant?: true
   /** For a destructured name or a `for…of` variable, what it is a part of (`Member`). */
   readonly member?: Member
+  /** Its type as the file writes it, or the value a destructuring takes it from, and the keys. */
+  readonly declared?: WrittenType | { readonly of: Expression; readonly path: readonly string[] }
 }
 
 export interface Locals {
@@ -49,6 +54,15 @@ export interface Locals {
   declares(name: string, at: number): boolean
   /** What `node`, written at `at`, may be, each alternative once (`alternatives.ts`). */
   objectsOf(node: Expression, at: number): Alternative[]
+  /**
+   * The type the file writes for `node`, written at `at`: for a name, its annotation (a parameter,
+   * a variable, a name an annotated pattern destructures, by its keys) or the type of the value a
+   * destructuring takes it from (`const { draft } = props`), by its keys; for a non-computed member
+   * of such a value, its key's (`props.draft`). None for anything else.
+   */
+  declaredTypeOf(node: Expression, at: number): TSType | undefined
+  /** What the file's type declarations say of a type (`declared-type.ts`). */
+  readonly types: DeclaredTypes
 }
 
 const FILE: Span = { start: 0, end: Number.POSITIVE_INFINITY }
@@ -72,8 +86,8 @@ export function localsOf(program: Program): Locals {
     functions.push(node)
     bindings.push(
       ...node.params
-        .flatMap(namesIn)
-        .map((name) => ({ name, at: { start: node.start, end: node.start } })),
+        .flatMap(typedNamesIn)
+        .map((typed) => ({ ...typed, at: { start: node.start, end: node.start } })),
     )
   }
   /** A loop whose head declares a `let` or a `const` is its scope; a `var` binds around the loop. */
@@ -138,6 +152,18 @@ export function localsOf(program: Program): Locals {
       const each = iterated.get(node.start)
       const object = each ?? node.init
       const part = each === undefined ? {} : { iterated: true as const }
+      // A name's type is the one its annotation writes; a name a pattern without one destructures
+      // has the type of the value destructured, by its keys (a `for…of` head's: none).
+      const typed = new Map(typedNamesIn(node.id).map(({ name, declared }) => [name, declared]))
+      const declaredOf = (name: string, path?: readonly string[]): Pick<Binding, 'declared'> => {
+        const declared =
+          typed.get(name) ??
+          (path === undefined || each !== undefined || node.init === null
+            ? undefined
+            : { of: node.init, path })
+
+        return declared === undefined ? {} : { declared }
+      }
 
       if (node.id.type === 'Identifier') {
         bindings.push({
@@ -146,13 +172,15 @@ export function localsOf(program: Program): Locals {
           ...(node.init === null ? {} : { value: node.init }),
           ...(constants.has(node.start) ? { constant: true as const } : {}),
           ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
+          ...declaredOf(node.id.name),
         })
       } else {
         bindings.push(
-          ...pathsIn(node.id).map(({ name, path }) => ({
+          ...pathsIn(node.id).map(({ name, path, defaulted }) => ({
             name,
             at,
             ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
+            ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
           })),
         )
       }
@@ -216,10 +244,44 @@ export function localsOf(program: Program): Locals {
     return [...own.map(({ argument }) => argument), ...(endIsReachable(fn.body) ? [null] : [])]
   }
 
+  const types = declaredTypesIn(program)
+  const declaredTypeOf = (node: Expression, at: number, depth = 0): TSType | undefined => {
+    if (depth >= DEPTH) {
+      return undefined
+    }
+
+    if (node.type === 'MemberExpression') {
+      const { object, property } = node
+
+      if (node.computed || object.type === 'Super' || property.type !== 'Identifier') {
+        return undefined
+      }
+
+      const outer = declaredTypeOf(object, at, depth + 1)
+
+      return outer === undefined ? undefined : types.memberOf(outer, property.name)
+    }
+
+    const declared = node.type === 'Identifier' ? bindingOf(node.name, at)?.declared : undefined
+
+    if (declared === undefined) {
+      return undefined
+    }
+
+    return declared.path.reduce<TSType | undefined>(
+      (outer, key) => (outer === undefined ? undefined : types.memberOf(outer, key)),
+      'type' in declared
+        ? declared.type
+        : declaredTypeOf(declared.of, declared.of.start, depth + 1),
+    )
+  }
+
   return {
     valueNamed,
     constantNamed,
     declares: (name, at) => bindingOf(name, at) !== undefined,
+    declaredTypeOf: (node, at) => declaredTypeOf(node, at),
+    types,
     objectsOf: alternativesIn({
       valueNamed,
       constantNamed,

@@ -7,7 +7,9 @@
  * `<NAME>_TEST_ID` constant of the file that holds either, or `testIdFor()` of such a constant and
  * a literal suffix, the constant resolved where the `type` is written; a spread the file cannot
  * follow is the data of an event that writes its own `type` (a form's values,
- * `{ type: '<anchor>', ...values }`), and may be the type of one that does not. An argument the
+ * `{ type: '<anchor>', ...values }`), or of any event where the file writes a type for it that
+ * cannot carry `type` (`{ ...submit, ...draft }`, `draft` of an interface of the file without one,
+ * `Locals.declaredTypeOf`, `declared-type.ts`), and otherwise may be its type. An argument the
  * file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the file does not declare, an
  * import, included), or two alternatives that name different events leave it unread. The question
  * itself is read from the tree: one negated call of `can` or `props.can` with one argument,
@@ -15,7 +17,7 @@
  * its anchor, so a copied `can(reset)` on the revoke button is caught.
  */
 
-import type { Expression, ObjectExpression } from 'oxc-parser'
+import type { Expression, ObjectExpression, SpreadElement } from 'oxc-parser'
 
 import { type Alternative, DEPTH } from './alternatives'
 import { anchorIn } from './element'
@@ -66,6 +68,12 @@ export function questionOf(locals: Locals, written: Expression): Question {
       (property) =>
         property.type === 'Property' && keyName(property.key, property.computed) === 'type',
     )
+  /** Whether the file writes a type for a spread's value that cannot carry `type`: it is data. */
+  const isData = (spread: SpreadElement): boolean => {
+    const declared = locals.declaredTypeOf(spread.argument, spread.start)
+
+    return declared !== undefined && locals.types.cannotCarry(declared, 'type')
+  }
   const typesOf = (alternatives: readonly Alternative[], depth: number): Typed[] =>
     alternatives.flatMap((object): Typed[] =>
       object === undefined ? [null] : object === null ? [undefined] : typesIn(object, depth),
@@ -84,9 +92,10 @@ export function questionOf(locals: Locals, written: Expression): Question {
                   }
 
                   // A spread the file cannot follow is the data of an event that writes its own
-                  // `type` (`{ type: '<anchor>', ...values }`); of one that does not, it may be the type.
+                  // `type` (`{ type: '<anchor>', ...values }`), or where the file writes a type for
+                  // it that cannot carry one; otherwise it may be the type.
                   if (branch === undefined) {
-                    return typed(object) ? now : [null]
+                    return typed(object) || isData(property) ? now : [null]
                   }
 
                   return typesIn(branch, depth + 1).flatMap((type) =>

@@ -81,11 +81,20 @@ const LINE: Readonly<Record<string, number>> = Object.fromEntries(
   Object.keys(AGREEING).map((key, index) => [key, index + 1]),
 )
 
-/** What the sources check collects from the agreeing view with some elements written otherwise. */
-function collectedOf(changed: Readonly<Record<string, string>> = {}): Collected {
-  const source = Object.entries({ ...AGREEING, ...changed })
-    .map(([key, element]) => `const ${key} = ${element}`)
-    .join('\n')
+/**
+ * What the sources check collects from the agreeing view with some elements written otherwise, and
+ * the `declarations` after them.
+ */
+function collectedOf(
+  changed: Readonly<Record<string, string>> = {},
+  declarations: readonly string[] = [],
+): Collected {
+  const source = [
+    ...Object.entries({ ...AGREEING, ...changed }).map(
+      ([key, element]) => `const ${key} = ${element}`,
+    ),
+    ...declarations,
+  ].join('\n')
 
   return collectFromSource(source, 'view.tsx')
 }
@@ -93,9 +102,13 @@ function collectedOf(changed: Readonly<Record<string, string>> = {}): Collected 
 /** The problems of the agreeing view with some elements written otherwise, in `contract`. */
 function problemsOf(
   changed: Readonly<Record<string, string>> = {},
-  { ahead = false, contract = facetsContract() }: { ahead?: boolean; contract?: Contract } = {},
+  {
+    ahead = false,
+    contract = facetsContract(),
+    declarations = [],
+  }: { ahead?: boolean; contract?: Contract; declarations?: readonly string[] } = {},
 ): string[] {
-  const collected = [collectedOf(changed)]
+  const collected = [collectedOf(changed, declarations)]
   const rendered = new Map(
     collected.flatMap(({ file, literals }) =>
       literals.map(({ anchor, line }) => [anchor, { file, line }] as const),
@@ -533,6 +546,36 @@ describe('facetProblems', () => {
 
       expect(problemsOf(changed)).toEqual(expected)
       expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+    })
+    describe('a question that spreads data its view declares the type of', () => {
+      /** The save button in a component of the view: its props typed, the draft destructured. */
+      const save =
+        '(props: { readonly draft: Draft; readonly can: (event: unknown) => boolean }) => { const { draft } = props; return <Button data-testid="sample.save-button" disabled={!props.can({ ...submit, ...draft })} /> }'
+      const typed = ['export interface Draft { readonly title: string }']
+
+      it('passes it where that type cannot carry a type, in ahead mode too', () => {
+        const changed = { save, submit: "{ type: 'sample.save-button' } as const" }
+
+        expect(problemsOf(changed, { declarations: typed })).toEqual([])
+        expect(problemsOf(changed, { declarations: typed, ahead: true })).toEqual([])
+      })
+      it('refuses it, in ahead mode too, about another event, or where that type may carry a type', () => {
+        const other = { save, submit: "{ type: 'sample.a-button' } as const" }
+        const own = { save, submit: "{ type: 'sample.save-button' } as const" }
+        const carrying = [
+          'export interface Draft { readonly title: string; readonly type?: string }',
+        ]
+        const can = '!props.can({ ...submit, ...draft })'
+
+        for (const ahead of [false, true]) {
+          expect(problemsOf(other, { declarations: typed, ahead })).toEqual([
+            `view.tsx:${LINE['save']}: "sample.save-button": disabled={${can}} asks about "sample.a-button", but the control sends "sample.save-button"`,
+          ])
+          expect(problemsOf(own, { declarations: carrying, ahead })).toEqual([
+            `view.tsx:${LINE['save']}: "sample.save-button": disabled={${can}}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
+          ])
+        }
+      })
     })
     it('in ahead mode lets a missing disabled by', () => {
       expect(
