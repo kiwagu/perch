@@ -83,6 +83,12 @@ describe('suppliedBy', () => {
     'const { reset: checkEvent } = events',
     'function early(c) { if (c) return; return { mark: 1 } }',
     'function maybe(c) { if (c) { return { mark: 1 } } }',
+    'function both(c) { if (c) { return { mark: 1 } } else { return { mark: 2, id: 3 } } }',
+    'function bare(c) { if (c) return { mark: 1 }; else return { mark: 2, id: 3 } }',
+    'function chain(c) { if (c === 1) { return { mark: 1 } } else if (c === 2) { return { mark: 2 } } else { throw new Error() } }',
+    'function oneArm(c) { if (c) { return { mark: 1 } } else { log() } }',
+    'function noElse(c) { if (c) { return { mark: 1 } } else if (c === 2) { return { mark: 2 } } }',
+    'function cases(c) { switch (c) { case 1: return { mark: 1 }; default: return { mark: 2 } } }',
     'const at = 0',
   ].join('\n')
 
@@ -139,6 +145,27 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, 'early(1)', 'const at')).toEqual(['mark'])
     expect(supplied(text, 'early(1)', 'const at').certain.size).toBe(0)
     expect(supplied(text, 'maybe(1)', 'const at').certain.size).toBe(0)
+  })
+  it('counts the end of a body as unreachable when an if and its else both return, with or without braces', () => {
+    for (const call of ['both(1)', 'bare(1)']) {
+      const both = supplied(text, call, 'const at')
+
+      expect(both.props.map(({ name }) => name)).toEqual(['mark', 'mark', 'id'])
+      expect([...both.certain]).toEqual(['mark'])
+      expect(both.followed).toBe(true)
+    }
+    // An `else if` chain that ends in a `throw` ends the body too.
+    expect(suppliedAt(text, 'chain(1)', 'const at')).toEqual(['mark', 'mark'])
+    expect([...supplied(text, 'chain(1)', 'const at').certain]).toEqual(['mark'])
+  })
+  it('still counts the end as reachable when an else arm does not return, or there is no final else', () => {
+    expect(suppliedAt(text, 'oneArm(1)', 'const at')).toEqual(['mark'])
+    expect(supplied(text, 'oneArm(1)', 'const at').certain.size).toBe(0)
+    expect(supplied(text, 'noElse(1)', 'const at').certain.size).toBe(0)
+  })
+  it('still counts the end as reachable after a switch whose every case returns: the form is not read, so it is refused', () => {
+    expect(suppliedAt(text, 'cases(1)', 'const at')).toEqual(['mark', 'mark'])
+    expect(supplied(text, 'cases(1)', 'const at').certain.size).toBe(0)
   })
   it('counts a prop as certain only where every branch supplies it, and says when a branch cannot be followed', () => {
     const either = supplied(

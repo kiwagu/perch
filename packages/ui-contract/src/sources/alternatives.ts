@@ -4,8 +4,10 @@
  * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
  * key lets the scan go on before it), or each object a function of the file returns where it is
- * called (each `return` of its own body, a bare one or a reachable end giving nothing; a
- * `useCallback` hands its function on, a `useMemo` holds what its function returns).
+ * called (each `return` of its own body, a bare one or a reachable end giving nothing, an end no
+ * `return` or `throw` reaches being one a block or both arms of an `if` and `else` end,
+ * `reachable-end.ts`; a `useCallback` hands its function on, a `useMemo` holds what its function
+ * returns).
  */
 
 import type {

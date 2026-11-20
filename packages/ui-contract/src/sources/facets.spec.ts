@@ -301,6 +301,46 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
       ])
     })
+    /** A title that spreads the result of `markOf()`, a helper whose body is `body`. */
+    const helperOf = (body: string): Record<string, string> => ({
+      title: '<Input data-testid="sample.title-input" {...markOf()} />',
+      markOf: `() => { ${body} }`,
+    })
+    const missing = `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`
+
+    it('reads the mark of a helper whose if and else both return it, with or without braces', () => {
+      const mark = `'aria-invalid': ${MARK}`
+
+      expect(
+        problemsOf(
+          helperOf(
+            `if (concerns === 'title') { return { ${mark} } } else { return { ${mark}, id: 'title' } }`,
+          ),
+        ),
+      ).toEqual([])
+      expect(
+        problemsOf(
+          helperOf(
+            `if (concerns === 'title') return { ${mark} }; else return { ${mark}, id: 'a' }`,
+          ),
+        ),
+      ).toEqual([])
+    })
+    it('still wants the mark when an arm of the if and else returns without it, or does not return', () => {
+      const mark = `'aria-invalid': ${MARK}`
+
+      expect(
+        problemsOf(
+          helperOf(`if (concerns === 'title') { return { ${mark} } } else { return { id: 'a' } }`),
+        ),
+      ).toEqual([missing])
+      expect(
+        problemsOf(helperOf(`if (concerns === 'title') { return { ${mark} } } else { log() }`)),
+      ).toEqual([missing])
+      expect(problemsOf(helperOf(`if (concerns === 'title') { return { ${mark} } }`))).toEqual([
+        missing,
+      ])
+    })
     it('reads the anchor a spread supplies, and the facts beside it', () => {
       const title = `<Input {...{ testId: 'sample.title-input', maxLength: 80, 'aria-invalid': ${MARK} }} />`
 

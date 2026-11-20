@@ -12,6 +12,7 @@ import { Visitor } from 'oxc-parser'
 
 import { type Alternative, alternativesIn, type Callable } from './alternatives'
 import { namesIn, pathsIn } from './binding-names'
+import { endIsReachable } from './reachable-end'
 
 /** A range of the source, `[start, end)`. */
 interface Span {
@@ -130,7 +131,8 @@ export function localsOf(program: Program): Locals {
 
   /**
    * What a function returns: an arrow's expression, or each `return` of its own body, `null` for a
-   * bare `return` and for a body whose end it can reach (its last statement no `return` or `throw`).
+   * bare `return` and for a body whose end it can reach (`endIsReachable`: no `return` or `throw`
+   * ends it, in a block or in both arms of an `if` and `else`).
    */
   const returnedBy = (fn: Callable): Array<Expression | null> => {
     if (fn.body === null) {
@@ -141,15 +143,13 @@ export function localsOf(program: Program): Locals {
       return [fn.body]
     }
 
-    const last = fn.body.body.at(-1)
-    const ends = last?.type === 'ReturnStatement' || last?.type === 'ThrowStatement'
     const own = returns.filter(({ at }) => {
       const around = functionAround(at)
 
       return around?.start === fn.start && around.end === fn.end
     })
 
-    return [...own.map(({ argument }) => argument), ...(ends ? [] : [null])]
+    return [...own.map(({ argument }) => argument), ...(endIsReachable(fn.body) ? [null] : [])]
   }
 
   return {
