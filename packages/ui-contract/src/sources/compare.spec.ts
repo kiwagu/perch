@@ -410,17 +410,20 @@ describe('compareWithContract', () => {
     expect(written.strict).toEqual(expected)
     expect(written.ahead).toEqual(expected)
   })
+  /** The contract with a text field the view renders. */
+  const withTitleInput = (): ScreensFile => ({
+    ...SCREENS,
+    screens: SCREENS.screens.map((screen) => ({
+      ...screen,
+      anchors: {
+        ...screen.anchors,
+        'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+      },
+    })),
+  })
+
   it('holds an element whose anchor an async helper or a generator supplies to its field facts, and refuses the spread, in ahead mode too', () => {
-    const screens: ScreensFile = {
-      ...SCREENS,
-      screens: SCREENS.screens.map((screen) => ({
-        ...screen,
-        anchors: {
-          ...screen.anchors,
-          'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
-        },
-      })),
-    }
+    const screens = withTitleInput()
     const anchor = "{ 'data-testid': 'sample.title-input' }"
     const refused = [
       `x.tsx:2: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
@@ -439,6 +442,41 @@ describe('compareWithContract', () => {
           ...agreeing(),
           collectFromSource(
             `${helper}\nconst title = <Input {...searchProps()} maxLength={80} />`,
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
+  it('holds the element to its field facts when another branch of the spread is an async helper or a generator that gives no object', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:3: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // What such a call gives is a Promise or an iterator, never nothing: the branch that writes
+    // the anchor still decides it, whatever the helper falls through to or returns instead.
+    for (const fallback of [
+      'async function fallbackProps() { await loadSuggestions() }',
+      'async function fallbackProps() { return }',
+      'async function fallbackProps() { if (ready) { return null } await loadSuggestions() }',
+      'const fallbackProps = async () => undefined',
+      'function* fallbackProps() { yield 1 }',
+    ]) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              "const searchProps = { 'data-testid': 'sample.title-input' }",
+              fallback,
+              'const title = <Input {...(showSearchAnchor ? searchProps : fallbackProps())} maxLength={80} />',
+            ].join('\n'),
             'x.tsx',
           ),
         ],

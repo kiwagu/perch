@@ -9,7 +9,7 @@
  * `throw` reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
  * `useCallback` hands its function on, a `useMemo` holds what its function returns; an `async`
  * function or a generator gives a Promise or an iterator, which is no object the file writes: the
- * call is also one the file cannot say, beside the objects its returns write).
+ * call is one the file cannot say, beside the objects its returns write, never nothing).
  */
 
 import type {
@@ -80,16 +80,22 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
     const value = unwrap(node)
     const next = (expression: Expression): Alternative[] =>
       objectsOf(expression, expression.start, depth + 1)
-    // An async function returns a Promise and a generator an iterator, whatever objects its
-    // `return`s write: the result is no object the file writes, so it is also unknown, which keeps
-    // it unfollowed and nothing it seems to supply certain, while what the `return`s write stays
-    // among the alternatives, for the anchor and the props the author put there to be read.
+    // An async function returns a Promise and a generator an iterator, whatever its `return`s
+    // write, never nothing: the result is no object the file writes, so it is unknown, which keeps
+    // it unfollowed and nothing it seems to supply certain. The objects its `return`s write stay
+    // among the alternatives, for the anchor and the props the author put there to be read; a bare
+    // `return`, a reachable end or a `null` adds no branch, as it would be a followed one.
     const resultOf = (fn: Callable): Alternative[] => {
       const written = names
         .returnedBy(fn)
         .flatMap((returned) => (returned === null ? [null] : next(returned)))
 
-      return fn.async || fn.generator ? [undefined, ...written] : written
+      return fn.async || fn.generator
+        ? [
+            undefined,
+            ...written.filter((alternative) => alternative !== null && alternative !== undefined),
+          ]
+        : written
     }
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting

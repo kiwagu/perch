@@ -117,6 +117,11 @@ describe('suppliedBy', () => {
     'const memoAsync = useMemo(async () => ({ mark: 1 }), [])',
     'const wrappedAsync = useCallback(async (name) => ({ name }), [])',
     'function viaAsync() { return { id: 1, ...asyncArrow() } }',
+    'async function asyncFalls() { await load() }',
+    'async function asyncBare() { return }',
+    'async function asyncNull(c) { if (c) { return null } return false }',
+    'async function asyncMaybe(c) { if (c) { return null } return { mark: 1 } }',
+    'function* generatedFalls() { yield 1 }',
     'const at = 0',
   ].join('\n')
 
@@ -301,6 +306,40 @@ describe('suppliedBy', () => {
     expect(via.followed).toBe(false)
     expect(via.props.map(({ name }) => name)).toEqual(['id', 'mark'])
     expect([...via.certain]).toEqual(['id'])
+  })
+  it('never takes an async function or a generator for nothing: a fall-through or a null adds no followed branch', () => {
+    const gives = ['asyncFalls()', 'asyncBare()', 'asyncNull(1)', 'generatedFalls()']
+
+    for (const call of gives) {
+      const result = supplied(text, call, 'const at')
+
+      expect(result.followed).toBe(false)
+      expect(result.props).toEqual([])
+      expect(result.followedCertain.size).toBe(0)
+    }
+
+    // Beside a branch that supplies, it leaves that branch the one followed, so what it supplies counts.
+    for (const call of gives) {
+      const either = supplied(text, `ok ? base : ${call}`, 'const at')
+
+      expect(either.followed).toBe(false)
+      expect([...either.followedCertain]).toEqual(['id'])
+      expect(either.certain.size).toBe(0)
+    }
+
+    // The object it returns on another path stays visible, its null adds nothing.
+    const maybe = supplied(text, 'asyncMaybe(1)', 'const at')
+
+    expect(maybe.followed).toBe(false)
+    expect(maybe.props.map(({ name }) => name)).toEqual(['mark'])
+    expect([...maybe.followedCertain]).toEqual(['mark'])
+    expect(maybe.certain.size).toBe(0)
+
+    // A function that is not async still gives nothing where its end is reached.
+    const plain = supplied(text, 'ok ? base : maybe(1)', 'const at')
+
+    expect(plain.followed).toBe(true)
+    expect(plain.followedCertain.size).toBe(0)
   })
   it('counts a prop as certain only where every branch supplies it, and says when a branch cannot be followed', () => {
     const either = supplied(
