@@ -59,8 +59,9 @@ describe('parseStructure', () => {
             { name: 'tags', kind: 'array<string>' },
             { name: 'tags.*', kind: 'string' },
           ],
+          indexes: [],
         },
-        keeps: { fields: [{ name: 'side', kind: "'front' | 'back'" }] },
+        keeps: { fields: [{ name: 'side', kind: "'front' | 'back'" }], indexes: [] },
       },
     }
     const text =
@@ -77,6 +78,42 @@ describe('parseStructure', () => {
     })
   })
 
+  it('keeps asserts and indexes beside the field types, empty for a table without', () => {
+    const info: StructureInfo = {
+      db: {
+        tables: [
+          { name: 'shelf', kind: { kind: 'NORMAL' } },
+          { name: 'rack', kind: { kind: 'NORMAL' } },
+        ],
+      },
+      tables: {
+        shelf: {
+          fields: [
+            { name: 'label', kind: 'string', assert: 'string::len($value) <= 60' },
+            { name: 'address', kind: 'none | object' },
+            { name: 'address.city', kind: 'string', assert: 'string::len($value) > 1' },
+          ],
+          indexes: [{ name: 'shelf_label', cols: ['label'], index: 'UNIQUE' }],
+        },
+        rack: { fields: [{ name: 'size', kind: 'int' }], indexes: [] },
+      },
+    }
+    const text =
+      '-- @region tenant\n-- @id shf\nDEFINE TABLE shelf;\n-- @region tenant\n-- @id rck\nDEFINE TABLE rack;'
+    const parsed = parseStructure(info, text).model
+
+    expect(parsed.tables['shelf']?.asserts).toEqual({
+      label: 'string::len($value) <= 60',
+      'address.city': 'string::len($value) > 1',
+    })
+    expect(parsed.tables['shelf']?.indexes).toEqual({
+      shelf_label: { fields: ['label'], unique: true },
+    })
+    expect(parsed.tables['shelf']?.fields['label']).toEqual({ kind: 'scalar', name: 'string' })
+    expect(parsed.tables['rack']?.asserts).toEqual({})
+    expect(parsed.tables['rack']?.indexes).toEqual({})
+  })
+
   it('reports tables and fields whose annotations are missing or wrong', () => {
     const info: StructureInfo = {
       db: {
@@ -88,7 +125,7 @@ describe('parseStructure', () => {
         ],
       },
       tables: {
-        a: { fields: [] },
+        a: { fields: [], indexes: [] },
         b: {
           fields: [
             { name: 'n', kind: 'int' },
@@ -96,9 +133,10 @@ describe('parseStructure', () => {
             { name: 'p', kind: 'object' },
             { name: 'p.q', kind: 'string' },
           ],
+          indexes: [],
         },
-        c: { fields: [] },
-        d: { fields: [{ name: 'm', kind: 'string' }] },
+        c: { fields: [], indexes: [] },
+        d: { fields: [{ name: 'm', kind: 'string' }], indexes: [] },
       },
     }
     const text = [
@@ -139,7 +177,7 @@ describe('parseStructure', () => {
           { name: 'memo', kind: { kind: 'NORMAL' } },
         ],
       },
-      tables: { note: { fields: [] }, memo: { fields: [] } },
+      tables: { note: { fields: [], indexes: [] }, memo: { fields: [], indexes: [] } },
     }
     const text = [
       '-- @region tenant',
@@ -183,6 +221,19 @@ describe('loadSchemaModel', () => {
     expect(problems).toEqual([])
   })
 
+  it('keeps each field assert and each index of the schema', async () => {
+    const { model } = (await loadSchemaModel(schemaText))._unsafeUnwrap()
+    const profile = model.tables['profile']
+
+    expect(profile?.asserts['bio']).toContain('string::len')
+    expect(profile?.asserts['created_at']).toBeUndefined()
+    expect(profile?.indexes).toEqual({ profile_identity: { fields: ['identity'], unique: true } })
+    expect(model.tables['membership']?.indexes).toEqual({
+      membership_identity_tenant: { fields: ['identity', 'tenant'], unique: true },
+      membership_tenant: { fields: ['tenant'], unique: false },
+    })
+  })
+
   it('reads the tenant database with its notes in the tenant region', async () => {
     const { model, problems } = (await loadSchemaModel(readSchema('tenant')))._unsafeUnwrap()
 
@@ -206,6 +257,7 @@ describe('loadSchemaModel', () => {
             { name: 'author', kind: 'record<member>' },
             { name: 'text', kind: 'string' },
           ],
+          indexes: [],
         },
       },
     }
@@ -239,8 +291,8 @@ describe('loadSchemaModel', () => {
         ],
       },
       tables: {
-        profile: { fields: [{ name: 'identity', kind: 'record<identity>' }] },
-        page: { fields: [{ name: 'author', kind: 'record<member>' }] },
+        profile: { fields: [{ name: 'identity', kind: 'record<identity>' }], indexes: [] },
+        page: { fields: [{ name: 'author', kind: 'record<member>' }], indexes: [] },
       },
     }
     const text = [
@@ -273,7 +325,10 @@ describe('loadSchemaModel', () => {
           { name: 'member', kind: { kind: 'NORMAL' } },
         ],
       },
-      tables: { note: { fields: [{ name: 'text', kind: 'string' }] }, member: { fields: [] } },
+      tables: {
+        note: { fields: [{ name: 'text', kind: 'string' }], indexes: [] },
+        member: { fields: [], indexes: [] },
+      },
     }
     const text = [
       '-- @region tenant',

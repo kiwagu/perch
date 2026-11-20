@@ -7,6 +7,7 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { ACTIONS, type Scope, type TableAbilities, TENANT_ROLES } from '@workspace/kernel'
 
 import { annotatedReadonlyFields } from './readonly-fields'
+import { fieldAsserts, type TableIndex, tableIndexes } from './table-constraints'
 import { type FieldType, parseTypeString } from './type-string'
 
 export type RegionName = 'private' | 'public' | 'tenant'
@@ -15,6 +16,10 @@ export type CrdtKind = 'text' | 'list' | 'counter'
 
 export interface TableModel {
   readonly fields: Readonly<Record<string, FieldType>>
+  /** The `ASSERT` clause of each field that has one, by field name (a nested field's name is dotted). */
+  readonly asserts: Readonly<Record<string, string>>
+  /** Each index of the table by name. */
+  readonly indexes: Readonly<Record<string, TableIndex>>
   readonly relation?: { readonly in: readonly string[]; readonly out: readonly string[] }
   readonly region?: RegionName
   readonly replicate?: 'none'
@@ -44,7 +49,18 @@ export interface StructureInfo {
   readonly tables: Readonly<
     Record<
       string,
-      { readonly fields: ReadonlyArray<{ readonly name: string; readonly kind: string }> }
+      {
+        readonly fields: ReadonlyArray<{
+          readonly name: string
+          readonly kind: string
+          readonly assert?: string
+        }>
+        readonly indexes: ReadonlyArray<{
+          readonly name: string
+          readonly cols: readonly string[]
+          readonly index: string
+        }>
+      }
     >
   >
 }
@@ -275,6 +291,7 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
     const replicate = first(own, 'replicate')
     const idPrefix = first(own, 'id')
     const rawFields = info.tables[name]?.fields ?? []
+    const rawIndexes = info.tables[name]?.indexes ?? []
     const crdt: Record<string, CrdtKind> = {}
 
     if (
@@ -319,6 +336,8 @@ export function parseStructure(info: StructureInfo, schemaText: string): SchemaR
 
     tables[name] = {
       fields: buildFields(rawFields),
+      asserts: fieldAsserts(rawFields),
+      indexes: tableIndexes(rawIndexes),
       ...(kind.kind === 'RELATION' ? { relation: { in: kind.in ?? [], out: kind.out ?? [] } } : {}),
       ...(region !== undefined && REGIONS.has(region) ? { region: region as RegionName } : {}),
       ...(replicate === 'none' ? { replicate: 'none' as const } : {}),
@@ -347,12 +366,12 @@ export function loadSchemaModel(schemaText: string): ResultAsync<SchemaResult, D
     const load = async (): Promise<SchemaResult> => {
       try {
         const [db] = (await local.db.query(read('info-db.surql'))) as [StructureInfo['db']]
-        const tables: Record<string, { fields: Array<{ name: string; kind: string }> }> = {}
+        const tables: Record<string, StructureInfo['tables'][string]> = {}
 
         for (const table of db.tables) {
           const [info] = (await local.db.query(read('info-table.surql'), {
             table: table.name,
-          })) as [{ fields: Array<{ name: string; kind: string }> }]
+          })) as [StructureInfo['tables'][string]]
 
           tables[table.name] = info
         }

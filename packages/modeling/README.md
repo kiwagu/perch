@@ -31,7 +31,10 @@ TypeScript or React code.
 - `parseShapeFile`, `parseCommandsFile`, `parseShape`, `tokenize`: the dialect parsers.
 - `loadSchemaModel`, `parseStructure`: the schema model with its annotations
   (`@region private|public|tenant`, `@replicate none`, `@id`, `@crdt`, `@owner`, `@can`,
-  `@readonly`) and their problems. `-- @owner <field>` names the `record<member>` field that
+  `@readonly`) and their problems. Each table also carries `asserts` (the `ASSERT` clause of each
+  field that has one, by field name, worded as the database prints it) and `indexes` (each index
+  by name, with its fields and whether it is unique), so a check can hold the schema's limits to
+  another model. `-- @owner <field>` names the `record<member>` field that
   holds a record's author; `-- @can <member|admin> <action>[:own], …` (one line per role,
   actions `create`, `update`, `delete`, `:own` limiting the role to the records it owns)
   declares who may write a tenant table. The rules are emitted into the replica schema as
