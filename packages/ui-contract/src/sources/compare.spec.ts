@@ -190,6 +190,27 @@ describe('compareWithContract', () => {
       'b.tsx:2: "sample.other-button" is not in contract/domain/screens; add it there or rename it',
     ])
   })
+  it('reports an anchor an object writes under a computed key a const holds, in ahead mode too', () => {
+    const view = (override: string): Collected[] => [
+      collectFromSource(
+        [
+          "const TEST_ID_PROP = 'data-testid'",
+          `const a = <Page data-testid="sample.page" {...(compact ? ${override} : {})} />`,
+          'const b = <Select testId="sample.mode-select" />',
+        ].join('\n'),
+        'x.tsx',
+      ),
+    ]
+    const typo = strictAndAhead(view("{ [TEST_ID_PROP]: 'sample.seach-input' }"), SCREENS)
+    const plain = strictAndAhead(view("{ [TEST_ID_PROP]: 'sample.mode-select' }"), SCREENS)
+    const reported =
+      'x.tsx:2: "sample.seach-input" is not in contract/domain/screens; add it there or rename it'
+
+    expect(typo.strict).toContain(reported)
+    expect(typo.ahead).toContain(reported)
+    expect(plain.strict).not.toContain(reported)
+    expect(plain.ahead).not.toContain(reported)
+  })
   it('keeps every other problem when the contract runs ahead', () => {
     const collected = [
       source('c.tsx', { problems: [{ file: 'c.tsx', line: 9, message: 'built at runtime' }] }),

@@ -45,6 +45,8 @@ export const isCallable = (value: Expression): value is Callable =>
 /** What the scopes of a file say of a name, for following a value. */
 export interface Names {
   valueNamed(name: string, at: number): Expression | undefined
+  /** The value of a name a `const` declares, as `Locals.constantNamed`. */
+  constantNamed(name: string, at: number): Expression | undefined
   /** A destructured name: the value destructured and the keys down to it. */
   memberNamed(
     name: string,
@@ -128,7 +130,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         }
 
         if (property !== undefined) {
-          const named = statedKeyName(property.key, property.computed, names.valueNamed)
+          const named = statedKeyName(property.key, property.computed, names.constantNamed)
 
           if (named === undefined) {
             // It may be the key or not: the member is unknown, and the properties before it stand.

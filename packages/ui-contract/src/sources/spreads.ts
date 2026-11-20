@@ -86,7 +86,7 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
       // A getter, a setter or a key the file does not state may supply any prop: not followed.
       const name =
         property.kind === 'init'
-          ? statedKeyName(property.key, property.computed, locals.valueNamed)
+          ? statedKeyName(property.key, property.computed, locals.constantNamed)
           : undefined
 
       return name === undefined

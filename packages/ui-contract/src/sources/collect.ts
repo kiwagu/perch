@@ -42,7 +42,7 @@ import {
   attributeValue,
   type CarriedAnchor,
   isTestIdFor,
-  keyName,
+  statedKeyName,
   staticText,
   TEST_ID_CONSTANT,
   unwrap,
@@ -336,7 +336,7 @@ export function collectFromSource(text: string, file: string): Collected {
           continue
         }
 
-        const key = keyName(property.key, property.computed)
+        const key = statedKeyName(property.key, property.computed, locals.constantNamed)
 
         if (key !== undefined && isAnchorAttribute(key)) {
           anchor(anchorValue(property.value), 'key', property.start)

@@ -88,6 +88,13 @@ describe('suppliedBy', () => {
     'const unsureProps = { search: searchProps, [props.layout]: { size: 1 } }',
     "const LABEL_PROP = 'aria-label'",
     'function hidden(LABEL_PROP) { return { [LABEL_PROP]: 1 } }',
+    "let prop = 'tabIndex'",
+    "if (ok) prop = 'maxLength'",
+    'const extra = { [prop]: 3 }',
+    "var oldKey = 'maxLength'",
+    'const viaVar = { [oldKey]: 3 }',
+    'const { picked } = props',
+    'const viaPicked = { [picked]: 3 }',
     'const getter = { name: nameProps, ...{ get name() { return { maxLength: 3 } } } }',
     'const setter = { name: nameProps, ...{ set name(value) {} } }',
     "const aside = { name: nameProps, ...{ get other() { return 1 }, ['x']: 2 } }",
@@ -182,6 +189,15 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, 'inputProps.compact', 'const at')).toEqual(['size'])
     expect(suppliedAt(text, '{ [LABEL_PROP]: 1 }', 'const at')).toEqual(['aria-label'])
     expect(supplied(text, '{ [LABEL_PROP]: 1 }', 'const at').followed).toBe(true)
+  })
+  it('states a computed key only by a const: a let that is reassigned, a var and a destructured name are unknown', () => {
+    for (const argument of ['extra', 'viaVar', 'viaPicked']) {
+      expect(supplied(text, argument, 'const at').followed).toBe(false)
+    }
+
+    // The const of the same name is read.
+    expect(suppliedAt(text, '{ [LABEL_PROP]: 1 }', 'const at')).toEqual(['aria-label'])
+    expect(supplied(text, 'inputProps.search', 'const at').followed).toBe(true)
   })
   it('keeps a computed key it cannot state unknown: a parameter, a name the file does not declare, a member', () => {
     for (const argument of ['hidden(1)', '{ [imported]: 1 }', '{ [props.key]: 1 }']) {

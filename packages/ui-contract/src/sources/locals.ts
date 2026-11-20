@@ -26,6 +26,8 @@ interface Binding {
   /** Where it is declared; its scope is the innermost scope around this place. */
   readonly at: Span
   readonly value?: Expression
+  /** Whether a `const` declares it, so the value it is declared with is the one it holds. */
+  readonly constant?: true
   /** For a destructured name, the value destructured and the keys that lead to it. */
   readonly member?: { readonly object: Expression; readonly path: readonly string[] }
 }
@@ -33,6 +35,8 @@ interface Binding {
 export interface Locals {
   /** What `name`, written at `at`, is declared with in the file (a function too), if it says. */
   valueNamed(name: string, at: number): Expression | undefined
+  /** The value of `name`, written at `at`, where a `const` declares it: it never holds another. */
+  constantNamed(name: string, at: number): Expression | undefined
   /** Whether the file binds `name` where it is written at `at`: declared, or a parameter. */
   declares(name: string, at: number): boolean
   /** What `node`, written at `at`, may be, each alternative once (`alternatives.ts`). */
@@ -51,6 +55,8 @@ export function localsOf(program: Program): Locals {
   const functions: Span[] = []
   const bindings: Binding[] = []
   const returns: Array<{ readonly at: number; readonly argument: Expression | null }> = []
+  /** Where each declarator of a `const` declaration starts. */
+  const constants = new Set<number>()
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
     scopes.push(node)
     functions.push(node)
@@ -77,6 +83,13 @@ export function localsOf(program: Program): Locals {
         bindings.push({ name: node.id.name, at: node, value: node })
       }
     },
+    VariableDeclaration: (node) => {
+      if (node.kind === 'const') {
+        for (const declarator of node.declarations) {
+          constants.add(declarator.start)
+        }
+      }
+    },
     VariableDeclarator: (node) => {
       const at = { start: node.start, end: node.end }
 
@@ -85,6 +98,7 @@ export function localsOf(program: Program): Locals {
           name: node.id.name,
           at,
           ...(node.init === null ? {} : { value: node.init }),
+          ...(constants.has(node.start) ? { constant: true as const } : {}),
         })
       } else {
         const { init } = node
@@ -119,6 +133,11 @@ export function localsOf(program: Program): Locals {
       )
   const valueNamed = (name: string, at: number): Expression | undefined =>
     bindingOf(name, at)?.value
+  const constantNamed = (name: string, at: number): Expression | undefined => {
+    const binding = bindingOf(name, at)
+
+    return binding?.constant === true ? binding.value : undefined
+  }
 
   /** The innermost function around a place. */
   const functionAround = (at: number): Span | undefined =>
@@ -154,9 +173,11 @@ export function localsOf(program: Program): Locals {
 
   return {
     valueNamed,
+    constantNamed,
     declares: (name, at) => bindingOf(name, at) !== undefined,
     objectsOf: alternativesIn({
       valueNamed,
+      constantNamed,
       memberNamed: (name, at) => bindingOf(name, at)?.member,
       returnedBy,
     }),

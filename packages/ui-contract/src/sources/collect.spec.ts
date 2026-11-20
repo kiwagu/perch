@@ -361,6 +361,55 @@ describe('collectFromSource', () => {
       `x.tsx:5: ${UNFOLLOWED_SPREAD('x.form.b-input')}`,
     ])
   })
+  it('states a computed key of a spread by a const only: a reassigned let or a var is not followed', () => {
+    const view = (declarations: readonly string[]) =>
+      collectFromSource(
+        [
+          ...declarations,
+          'const extra = { [prop]: 3 }',
+          'const a = <Input data-testid="x.form.search-input" {...extra} />',
+        ].join('\n'),
+        'x.tsx',
+      )
+    const stated = view(["const prop = 'maxLength'"])
+
+    expect(stated.props).toEqual([
+      { anchor: 'x.form.search-input', name: 'maxLength', text: '3', line: 3 },
+    ])
+    expect(stated.problems).toEqual([])
+
+    for (const declarations of [
+      ["let prop = 'tabIndex'", "if (compact) prop = 'maxLength'"],
+      ["let prop = 'maxLength'"],
+      ["var prop = 'maxLength'"],
+    ]) {
+      const found = view(declarations)
+
+      expect(found.props).toEqual([])
+      expect(found.problems.map(formatProblem)).toEqual([
+        `x.tsx:${declarations.length + 2}: ${UNFOLLOWED_SPREAD('x.form.search-input')}`,
+      ])
+    }
+  })
+  it('reads an object key a const of the file states as an anchor key and as a code key, and no other', () => {
+    const found = collectFromSource(
+      [
+        "const TEST_ID_PROP = 'data-testid'",
+        "const CODE_KEY = 'code'",
+        "const a = { [TEST_ID_PROP]: 'x.form.seach-input', [CODE_KEY]: 'welcome' }",
+        'const b = { [TEST_ID_PROP]: OTHER_TEST_ID }',
+        "let letKey = 'data-testid'",
+        "const c = { [letKey]: 'x.form.other-input', [props.key]: 'x.form.third-input' }",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.literals).toEqual([{ anchor: 'x.form.seach-input', form: 'key', line: 3 }])
+    expect(found.codes).toEqual([{ code: 'welcome', form: 'key', line: 3 }])
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:4: ${UNDECLARED_ANCHOR('OTHER_TEST_ID')}`,
+    ])
+  })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(
       [
