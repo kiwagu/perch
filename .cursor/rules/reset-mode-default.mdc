@@ -20,9 +20,9 @@ alwaysApply: true
 
 ## Core rule
 
-- Before production, schema files are rewritten in place rather than accumulated as migrations; every stand is recreated from the current schema, never migrated, and the current seed or tests fill it as needed.
-- So before production there are no accounts and no stored data made under an earlier rule, schema or format. Records left from before, in a stand not restarted since the change or in a browser's local database, are test data: nothing converts them or carries them forward, and one in the way is cleared (the stand restarted, the browser's site data cleared).
-- Nothing keeps them working: no contract text, code path, spec, scenario, seed, migration or adapter is written so that an account or a record made under an earlier rule, schema or format still signs in, loads or is accepted. One already written is a breach of this rule, not a decision to keep. The usual opening of a database, which applies the current schema to whatever it holds, is not such a path and stays as it is.
+- Before production, schema files are rewritten in place rather than accumulated as migrations. A stand is recreated by starting it again, from the current schema and never from a migrated database, and the current seed or tests fill it as needed; a schema edit alone recreates nothing.
+- So before production there are no accounts and no stored data made under an earlier rule, schema or format. Records left from before, in a stand not restarted since the change or in a browser's local database, are test data: nothing converts them or carries them forward, and one in the way is cleared by hand (the stand restarted, the browser's site data cleared).
+- Nothing keeps them working: no contract text, code path, spec, scenario, seed, migration or adapter is written so that an account or a record made under an earlier rule, schema or format still signs in, loads or is accepted. One already written is a breach of this rule, not a decision to keep. The usual opening of a database, which applies the current schema to whatever it holds (a browser's local database, the gateway reopening a running stand's database after a schema edit), is not such a path and stays as it is.
 - Whether accounts or data made before a change must keep working is not a question for the developer: by this rule, they need not.
 - Move every caller in the same change; do not leave adapters that translate between the old and the new shape.
 - Regenerate generated files (`bun run model`) and commit them with the source that produced them.
