@@ -38,6 +38,8 @@ export function OrganisationCreate(props: {
   const [name, setName] = useState('')
   const error = props.error ? organisationErrorOf(t, props.error) : undefined
   const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  // One message: under the field its code concerns, or above Submit when it concerns the form.
+  const message = <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
   const submit = () => {
     const created = props.onCreate({ key, name })
 
@@ -75,6 +77,7 @@ export function OrganisationCreate(props: {
                 data-testid="organisation.create.key-input"
               />
               <FieldDescription id={hintId}>{t('organisation.create.key-hint')}</FieldDescription>
+              {concerns === 'key' ? message : null}
             </Field>
             <Field data-invalid={concerns === 'name' ? true : undefined}>
               <FieldLabel htmlFor={nameId}>{t('organisation.create.name')}</FieldLabel>
@@ -87,9 +90,10 @@ export function OrganisationCreate(props: {
                 aria-invalid={concerns === 'name' ? true : undefined}
                 data-testid="organisation.create.name-input"
               />
+              {concerns === 'name' ? message : null}
             </Field>
             <Field>
-              <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
+              {concerns === undefined ? message : null}
               <Button
                 type="submit"
                 disabled={!props.can({ type: 'organisation.create.submit-button', key, name })}

@@ -210,6 +210,58 @@ describe('OrganisationView without memberships', () => {
       }),
     )
   })
+
+  it.each([
+    ['organisation:KEY_INVALID', 'key-invalid', 'organisation.create.key-input'],
+    ['key-taken', 'key-taken', 'organisation.create.key-input'],
+    ['organisation:NAME_REQUIRED', 'name-required', 'organisation.create.name-input'],
+    ['organisation:NAME_TOO_LONG', 'name-too-long', 'organisation.create.name-input'],
+  ])(
+    'shows %s once, under the field it concerns and not beside Submit',
+    (refusal, code, anchor) => {
+      renderView({
+        organisations: [],
+        current: undefined,
+        notes: undefined,
+        errors: { create: refusal },
+      })
+
+      const errors = screen.queryAllByTestId('organisation.create.error')
+      const error = errors[0]
+      const control = field(anchor)
+      const submit = screen.getByTestId('organisation.create.submit-button')
+
+      expect(errors).toHaveLength(1)
+      expect(error?.getAttribute('data-code')).toBe(code)
+      expect(control.closest('[data-slot="field"]')?.contains(error ?? null)).toBe(true)
+      expect(submit.closest('[data-slot="field"]')?.contains(error ?? null)).toBe(false)
+      expect(
+        control.compareDocumentPosition(error ?? control) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy()
+    },
+  )
+
+  it.each([
+    ['rate-limited', 'rate-limited'],
+    ['data:OFFLINE', 'failed'],
+  ])('shows the refusal of the form, %s, once beside Submit, marking no field', (refusal, code) => {
+    renderView({
+      organisations: [],
+      current: undefined,
+      notes: undefined,
+      errors: { create: refusal },
+    })
+
+    const errors = screen.queryAllByTestId('organisation.create.error')
+    const submit = screen.getByTestId('organisation.create.submit-button')
+
+    expect(errors).toHaveLength(1)
+    expect(errors[0]?.getAttribute('data-code')).toBe(code)
+    expect(submit.closest('[data-slot="field"]')?.contains(errors[0] ?? null)).toBe(true)
+    expect(document.querySelectorAll('[aria-invalid="true"], [data-invalid="true"]')).toHaveLength(
+      0,
+    )
+  })
 })
 
 describe('OrganisationView of a member', () => {
@@ -775,6 +827,34 @@ describe('OrganisationView of an administrator', () => {
       0,
     )
   })
+
+  it.each([
+    ['email-invalid', true],
+    ['already-member', false],
+  ])(
+    'shows %s once, under the email when it concerns it, beside Submit otherwise',
+    (refusal, underEmail) => {
+      renderView({
+        current: acmeAdmin,
+        organisations: [acmeAdmin],
+        members: [ann],
+        errors: { members: refusal },
+      })
+
+      const errors = screen.queryAllByTestId('organisation.invite.error')
+      const error = errors[0] ?? screen.getByTestId('organisation.invite.form')
+      const email = field('organisation.invite.email-input')
+      const role = screen.getByTestId('organisation.invite.role-select')
+      const follows = (before: Element, after: Element) =>
+        Boolean(before.compareDocumentPosition(after) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+      expect(errors).toHaveLength(1)
+      expect(email.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+      expect(follows(email, error)).toBe(true)
+      // Under the email, before the role's select; or after the select, above Submit.
+      expect(follows(error, role)).toBe(underEmail)
+    },
+  )
 
   it('lists the invitations not accepted yet, each with its email, its role, a copy and a revoke', () => {
     const { onCopy, onRevoke } = renderView({

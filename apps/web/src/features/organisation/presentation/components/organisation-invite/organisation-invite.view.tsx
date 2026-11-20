@@ -45,6 +45,8 @@ export function OrganisationInvite(props: {
   const { draft } = props
   const error = props.error ? organisationErrorOf(t, props.error) : undefined
   const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  // One message: under the email when its code concerns it, or above Submit when it concerns the form.
+  const message = <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
 
   return (
     <Form
@@ -63,6 +65,7 @@ export function OrganisationInvite(props: {
           aria-invalid={concerns === 'email' ? true : undefined}
           data-testid="organisation.invite.email-input"
         />
+        {concerns === 'email' ? message : null}
         <OptionSelect
           label={t('organisation.invite.role')}
           value={draft.role}
@@ -70,7 +73,7 @@ export function OrganisationInvite(props: {
           onChange={(role) => props.onChange({ ...draft, role })}
           testId="organisation.invite.role-select"
         />
-        <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
+        {concerns === undefined ? message : null}
         <Button
           type="submit"
           disabled={
