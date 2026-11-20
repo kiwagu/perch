@@ -29,7 +29,7 @@ function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 
   renderWithProviders(
     <ResetPasswordView
       renders={only('user.reset-password.form')}
-      canSubmit
+      can={() => true}
       {...handlers}
       {...props}
     />,
@@ -156,12 +156,26 @@ describe('ResetPasswordView', () => {
     expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
   })
 
-  it('holds the submit while the flow does not take it', () => {
-    renderView({ canSubmit: false })
+  it('holds the submit while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.reset-password.submit-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the submit with both passwords as typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ can })
+    type(PASSWORD, 'Secret-new1')
+    type(CONFIRMATION, 'Secret-new1')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.reset-password.submit-button',
+      password: 'Secret-new1',
+      confirmation: 'Secret-new1',
+    })
   })
 
   it('speaks Spanish', () => {
@@ -179,7 +193,7 @@ describe('the state colour of the fields', () => {
       <UnsavedInputScope>
         <ResetPasswordView
           renders={only('user.reset-password.form')}
-          canSubmit
+          can={() => true}
           onTypePassword={() => {}}
           onSubmit={() => Promise.resolve(true)}
         />

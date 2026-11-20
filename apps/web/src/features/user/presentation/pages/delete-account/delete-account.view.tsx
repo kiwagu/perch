@@ -6,6 +6,7 @@ import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { FieldGroup } from '@workspace/ui/components/ui/field'
 
+import type { DeleteAccountEvent } from '../../../application/delete-account.machine'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 /** The anchors only some states of the flow render that the page shows or leaves out. */
@@ -24,8 +25,8 @@ export interface DeleteAccountViewProps {
    * sign in.
    */
   readonly renders: (anchor: DeleteAccountListed) => boolean
-  /** Whether the flow takes the press now: the button is enabled while it does. */
-  readonly canDelete: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: DeleteAccountEvent) => boolean
   /** Whether nobody is signed in here, the one who is led to the sign-in page from the message. */
   readonly guest: boolean
   /** Asks to delete the account; the frame's confirmation comes first. */
@@ -89,7 +90,7 @@ export function DeleteAccountView(props: DeleteAccountViewProps) {
               <Button
                 type="button"
                 variant="destructive"
-                disabled={!props.canDelete}
+                disabled={!props.can({ type: 'user.delete-account.delete-button' })}
                 onClick={props.onDelete}
                 data-testid="user.delete-account.delete-button"
               >

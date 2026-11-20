@@ -22,7 +22,7 @@ function renderView(props: Partial<VerifyEmailViewProps> = {}, locale: 'en' | 'e
   const onResend = vi.fn((_email: string) => Promise.resolve(true))
 
   renderWithProviders(
-    <VerifyEmailView renders={() => false} canResend={false} onResend={onResend} {...props} />,
+    <VerifyEmailView renders={() => false} can={() => false} onResend={onResend} {...props} />,
     { locale, es },
   )
 
@@ -74,7 +74,7 @@ describe('VerifyEmailView', () => {
     ['data:OFFLINE', 'failed'],
     ['verify-email:UNKNOWN', 'failed'],
   ] as const)('shows %s as %s, with the form that sends a new link', (error, code) => {
-    renderView({ error, renders: only('user.verify-email.form'), canResend: true })
+    renderView({ error, renders: only('user.verify-email.form'), can: () => true })
 
     const shown = screen.getByTestId('user.verify-email.error')
 
@@ -120,7 +120,7 @@ describe('VerifyEmailView', () => {
     const { onResend } = renderView({
       error: 'data:LINK_INVALID',
       renders: only('user.verify-email.form'),
-      canResend: true,
+      can: () => true,
     })
 
     type('user.verify-email.email-input', 'ann@example.test')
@@ -132,11 +132,23 @@ describe('VerifyEmailView', () => {
     )
   })
 
+  it('asks the flow about the resend with the email typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ renders: only('user.verify-email.form'), can })
+    type('user.verify-email.email-input', 'ann@example.test')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.verify-email.resend-button',
+      email: 'ann@example.test',
+    })
+  })
+
   it('holds the button while it cannot send', () => {
     renderView({
       error: 'data:LINK_INVALID',
       renders: only('user.verify-email.form'),
-      canResend: false,
+      can: () => false,
     })
 
     expect(screen.getByTestId('user.verify-email.resend-button').hasAttribute('disabled')).toBe(
@@ -149,7 +161,7 @@ describe('VerifyEmailView', () => {
       message: 'check-your-mail',
       sentTo: 'ann@example.test',
       renders: only('user.verify-email.form'),
-      canResend: true,
+      can: () => true,
     })
 
     type('user.verify-email.email-input', 'someone-else@example.test')
@@ -165,7 +177,7 @@ describe('VerifyEmailView', () => {
 
   it('speaks the language the app speaks', () => {
     renderView(
-      { error: 'data:LINK_EXPIRED', renders: only('user.verify-email.form'), canResend: true },
+      { error: 'data:LINK_EXPIRED', renders: only('user.verify-email.form'), can: () => true },
       'es',
     )
 
@@ -184,7 +196,7 @@ describe('the state colour of the fields', () => {
       <UnsavedInputScope>
         <VerifyEmailView
           renders={only('user.verify-email.form')}
-          canResend
+          can={() => true}
           error="data:LINK_INVALID"
           onResend={() => Promise.resolve(true)}
         />

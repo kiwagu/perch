@@ -180,7 +180,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
   submit is disabled until the two agree again; a submit while only a part of it was typed asks for
-  nothing and says the same; the password typed again is never sent;
+  nothing and says the same; the password typed again is never sent; each button, the switch of
+  mode among them, is enabled while the machine's state handles its event, so none is while a
+  sign-in, a sign-up or a resend runs;
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
   stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again

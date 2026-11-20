@@ -13,7 +13,7 @@ import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
 import type { ProfileResult } from './profile.model.gen'
-import { type ProfileControl, ProfileView, type ProfileViewProps } from './profile.view'
+import { ProfileView, type ProfileViewProps } from './profile.view'
 
 const ROOT = join(import.meta.dirname, '../../../../../../../..')
 
@@ -100,7 +100,7 @@ describe('ProfileView', () => {
 
   it('enables each button while the flow handles it', () => {
     const { onSave, rerender } = renderView({
-      can: (control: ProfileControl) => control === 'user.profile.sign-out-button',
+      can: (event) => event.type === 'user.profile.sign-out-button',
     })
     const save = screen.getByTestId('user.profile.save-button') as HTMLButtonElement
     const signOut = screen.getByTestId('user.profile.sign-out-button') as HTMLButtonElement
@@ -112,7 +112,7 @@ describe('ProfileView', () => {
 
     expect(onSave).not.toHaveBeenCalled()
 
-    rerender({ can: (control: ProfileControl) => control === 'user.profile.save-button' })
+    rerender({ can: (event) => event.type === 'user.profile.save-button' })
 
     expect(save.disabled).toBe(false)
     expect(signOut.disabled).toBe(true)

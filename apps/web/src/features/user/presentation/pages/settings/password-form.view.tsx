@@ -9,7 +9,10 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 
 import { concernsOf } from '../../../../../platform/concerns'
-import { SETTINGS_PASSWORDS_DIFFER } from '../../../application/settings/settings-machine'
+import {
+  SETTINGS_PASSWORDS_DIFFER,
+  type SettingsEvent,
+} from '../../../application/settings/settings-machine'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
 /** The anchor of the form's error, drawn above the form or under the field its code concerns. */
@@ -37,8 +40,8 @@ export interface PasswordFormViewProps {
   readonly values: PasswordFormValues
   /** The code of the last failure, or of the password typed again differing. */
   readonly error?: string | undefined
-  /** Whether the flow takes the save now: the button is enabled while it does. */
-  readonly canSave: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: SettingsEvent) => boolean
   /** A keystroke in `field`, with every value as it is after it. */
   readonly onChange: (field: keyof PasswordFormValues, values: PasswordFormValues) => void
   /** Changes the password: resolves whether it did. */
@@ -176,7 +179,14 @@ export function PasswordFormView(props: PasswordFormViewProps) {
             </Field>
             <Button
               type="submit"
-              disabled={!props.canSave}
+              disabled={
+                !props.can({
+                  type: 'user.settings.password.save-button',
+                  currentPassword: props.values.current,
+                  password: props.values.password,
+                  confirmation: props.values.confirmation,
+                })
+              }
               data-testid="user.settings.password.save-button"
             >
               {t('user.settings.password.save')}

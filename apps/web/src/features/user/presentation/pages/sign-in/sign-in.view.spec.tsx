@@ -391,7 +391,7 @@ describe('SignInView', () => {
     renderView({
       mode: 'sign-up',
       error: PASSWORDS_DIFFER,
-      can: (control) => control !== 'user.sign-in.submit-button',
+      can: (event) => event.type !== 'user.sign-in.submit-button',
     })
 
     const error = screen.getByTestId('user.sign-in.error')
@@ -600,7 +600,7 @@ describe('SignInView', () => {
   it('holds the resend while it cannot run', () => {
     const { onResend } = renderView({
       resend: true,
-      can: (control) => control !== 'user.sign-in.resend-button',
+      can: (event) => event.type !== 'user.sign-in.resend-button',
     })
     const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
 
@@ -743,11 +743,53 @@ describe('SignInView', () => {
   })
 
   it('holds the submit while the flow does not take it', () => {
-    renderView({ can: (control) => control !== 'user.sign-in.submit-button' })
+    renderView({ can: (event) => event.type !== 'user.sign-in.submit-button' })
 
     expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
       true,
     )
+  })
+
+  it('holds the switch of mode while the flow does not take it, and no other button', () => {
+    renderView({
+      resend: true,
+      can: (event) => event.type !== 'user.sign-in.toggle-button',
+    })
+
+    expect((screen.getByTestId('user.sign-in.toggle-button') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+    expect((screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  it('asks the flow about each button with the values as typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ mode: 'sign-up', resend: true, can })
+    type('user.sign-in.email-input', 'ann@example.test')
+    type('user.sign-in.password-input', 'Secret-new1')
+    type('user.sign-in.password-confirmation-input', 'Secret-new1')
+    type('user.sign-in.name-input', 'Ann')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.sign-in.resend-button',
+      email: 'ann@example.test',
+    })
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.sign-in.submit-button',
+      form: { email: 'ann@example.test', password: 'Secret-new1', name: 'Ann', locale: 'en' },
+      confirmation: 'Secret-new1',
+    })
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.sign-in.toggle-button',
+      password: 'Secret-new1',
+      confirmation: 'Secret-new1',
+    })
   })
 
   it('speaks Spanish', () => {

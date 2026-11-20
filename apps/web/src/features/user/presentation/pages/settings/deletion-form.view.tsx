@@ -15,6 +15,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 
 import { concernsOf } from '../../../../../platform/concerns'
+import type { SettingsEvent } from '../../../application/settings/settings-machine'
 
 /** The anchor of the form's error, drawn above the form or under the field its code concerns. */
 const DELETION_ERROR_TEST_ID = 'user.settings.deletion.error'
@@ -26,8 +27,8 @@ export interface DeletionFormViewProps {
   readonly error?: string | undefined
   /** The code of the message, once the mail with the deletion link went out. */
   readonly message?: 'check-your-mail' | undefined
-  /** Whether the flow takes the send now: the button is enabled while it does. */
-  readonly canSend: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: SettingsEvent) => boolean
   readonly onChange: (password: string) => void
   /** Sends the mail with the deletion link: resolves whether it went out. */
   readonly onSend: () => Promise<boolean>
@@ -126,7 +127,9 @@ export function DeletionFormView(props: DeletionFormViewProps) {
             <Button
               type="submit"
               variant="destructive"
-              disabled={!props.canSend}
+              disabled={
+                !props.can({ type: 'user.settings.deletion.send-button', password: props.password })
+              }
               data-testid="user.settings.deletion.send-button"
             >
               {t('user.settings.deletion.send')}

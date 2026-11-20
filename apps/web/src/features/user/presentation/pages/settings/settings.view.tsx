@@ -3,14 +3,16 @@ import { OptionSelect } from '@workspace/ui/components/platform/option-select'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 
 import { THEMES, type Theme } from '../../../../../platform/theme'
+import type { SettingsEvent } from '../../../application/settings/settings-machine'
 
 export interface SettingsViewProps {
   readonly theme: Theme
   readonly locale: Locale
-  /** Whether the screen's flow takes a theme now: none before the settings arrive, or while one is stored. */
-  readonly canChooseTheme: boolean
-  /** Whether the screen's flow takes a language now: none before the settings arrive, or while one is stored. */
-  readonly canChooseLocale: boolean
+  /**
+   * Whether the screen's flow takes the event now: a choice is enabled exactly while it does, none
+   * before the settings arrive or while one is stored.
+   */
+  readonly can: (event: SettingsEvent) => boolean
   readonly onTheme: (theme: Theme) => void
   readonly onLocale: (locale: Locale) => void
 }
@@ -45,7 +47,7 @@ export function SettingsView(props: SettingsViewProps) {
           value={props.theme}
           options={themes}
           onChange={props.onTheme}
-          disabled={!props.canChooseTheme}
+          disabled={!props.can({ type: 'user.settings.theme-select', theme: props.theme })}
           testId="user.settings.theme-select"
           holdsInput={false}
         />
@@ -54,7 +56,7 @@ export function SettingsView(props: SettingsViewProps) {
           value={props.locale}
           options={locales}
           onChange={props.onLocale}
-          disabled={!props.canChooseLocale}
+          disabled={!props.can({ type: 'user.settings.locale-select', locale: props.locale })}
           testId="user.settings.locale-select"
           holdsInput={false}
         />

@@ -11,7 +11,7 @@ import {
 import { PROFILE_SERVICE } from '../../../application/profile.service'
 
 import { profileShape } from './profile.model.gen'
-import { type ProfileControl, ProfileView } from './profile.view'
+import { ProfileView } from './profile.view'
 
 /** The anchor whose event a field's typing is. */
 const INPUTS = { name: 'user.profile.name-input', bio: 'user.profile.bio-textarea' } as const
@@ -41,7 +41,7 @@ export function ProfileContainer() {
       }),
     [profiles, session],
   )
-  const { state, send, submit, renders } = useScreenMachine('user.profile', machine)
+  const { state, send, submit, renders, can } = useScreenMachine('user.profile', machine)
 
   // The stored fields changed, here or on another device: the data events of the flow.
   useEffect(() => {
@@ -72,7 +72,7 @@ export function ProfileContainer() {
         bio: state.context.edited.bio ? drafts.bio : stored.bio,
       }}
       error={state.context.error}
-      can={(control: ProfileControl) => state.can({ type: control })}
+      can={can}
       onType={type}
       onSave={() => submit({ type: 'user.profile.save-button' })}
       onSignOut={() => send({ type: 'user.profile.sign-out-button' })}

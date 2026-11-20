@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 
-import { useT } from '@workspace/i18n'
+import { useLocale, useT } from '@workspace/i18n'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
@@ -12,6 +12,7 @@ import { Input } from '@workspace/ui/components/ui/input'
 
 import { concernsOf } from '../../../../../platform/concerns'
 import type { SessionNotice } from '../../../../../platform/session.port'
+import type { SignInEvent } from '../../../application/sign-in-machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
@@ -35,9 +36,6 @@ export interface SignInValues {
   readonly confirmation: string
   readonly name: string
 }
-
-/** The buttons the sign-in flow handles: each is enabled while the machine's state does. */
-export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-button'
 
 /** The anchors only some states of the flow render: each shows while the machine's state does. */
 export type SignInListed =
@@ -74,8 +72,8 @@ export interface SignInViewProps {
   readonly sentTo?: string | undefined
   /** Whether the flow's state renders an anchor: the anchor shows while it does. */
   readonly renders: (anchor: SignInListed) => boolean
-  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
-  readonly can: (control: SignInControl) => boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: SignInEvent) => boolean
   /** Signs in or up with the values: resolves whether it did. */
   readonly onSubmit: (values: SignInValues) => Promise<boolean>
   /** Switches the mode, with both passwords as typed. */
@@ -169,6 +167,7 @@ function noticeText(
 
 export function SignInView(props: SignInViewProps) {
   const t = useT()
+  const locale = useLocale()
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
   // The error under a field describes that field while it shows there.
   const errorIds = { name: useId(), confirmation: useId() }
@@ -330,7 +329,18 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
             <Button
               type="submit"
-              disabled={!props.can('user.sign-in.submit-button')}
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.submit-button',
+                  form: {
+                    email: values.email,
+                    password: values.password,
+                    name: values.name,
+                    locale,
+                  },
+                  confirmation: values.confirmation,
+                })
+              }
               data-testid="user.sign-in.submit-button"
             >
               {signingUp ? t('user.sign-in.sign-up') : t('user.sign-in.sign-in')}
@@ -338,6 +348,13 @@ export function SignInView(props: SignInViewProps) {
             <Button
               type="button"
               variant="link"
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.toggle-button',
+                  password: values.password,
+                  confirmation: values.confirmation,
+                })
+              }
               onClick={() =>
                 props.onToggleMode({ password: values.password, confirmation: values.confirmation })
               }
@@ -350,7 +367,7 @@ export function SignInView(props: SignInViewProps) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!props.can('user.sign-in.resend-button')}
+                disabled={!props.can({ type: 'user.sign-in.resend-button', email: values.email })}
                 onClick={() => void props.onResend(values.email)}
                 data-testid="user.sign-in.resend-button"
               >

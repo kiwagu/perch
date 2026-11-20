@@ -11,7 +11,12 @@ function renderView(props: Partial<EmailFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
   renderWithProviders(
-    <EmailFormView values={{ email: '', password: '' }} canSend {...handlers} {...props} />,
+    <EmailFormView
+      values={{ email: '', password: '' }}
+      can={() => true}
+      {...handlers}
+      {...props}
+    />,
   )
 
   return handlers
@@ -76,11 +81,23 @@ describe('EmailFormView', () => {
   })
 
   it('says any other refusal above the form', () => {
-    renderView({ error: 'data:OFFLINE', canSend: false })
+    renderView({ error: 'data:OFFLINE', can: () => false })
 
     expect(screen.getByTestId('user.settings.email.error').getAttribute('data-code')).toBe('failed')
     expect(
       (screen.getByTestId('user.settings.email.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the email and the password it holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ values: { email: 'ann.new@example.test', password: 'Secret-old1' }, can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.settings.email.send-button',
+      email: 'ann.new@example.test',
+      password: 'Secret-old1',
+    })
   })
 })

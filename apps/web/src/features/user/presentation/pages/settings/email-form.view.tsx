@@ -10,6 +10,7 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
 import { concernsOf } from '../../../../../platform/concerns'
+import type { SettingsEvent } from '../../../application/settings/settings-machine'
 
 /** The anchor of the form's error, drawn above the form or under the field its code concerns. */
 const EMAIL_ERROR_TEST_ID = 'user.settings.email.error'
@@ -28,8 +29,8 @@ export interface EmailFormViewProps {
   readonly message?: 'check-your-mail' | undefined
   /** The new email that mail went to, which the message names. */
   readonly sentTo?: string | undefined
-  /** Whether the flow takes the send now: the button is enabled while it does. */
-  readonly canSend: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: SettingsEvent) => boolean
   readonly onChange: (values: EmailFormValues) => void
   /** Sends the mail that confirms the new email: resolves whether it went out. */
   readonly onSend: () => Promise<boolean>
@@ -137,7 +138,13 @@ export function EmailFormView(props: EmailFormViewProps) {
             </Field>
             <Button
               type="submit"
-              disabled={!props.canSend}
+              disabled={
+                !props.can({
+                  type: 'user.settings.email.send-button',
+                  email: props.values.email,
+                  password: props.values.password,
+                })
+              }
               data-testid="user.settings.email.send-button"
             >
               {t('user.settings.email.send')}

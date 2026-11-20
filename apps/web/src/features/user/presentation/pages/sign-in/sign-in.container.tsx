@@ -9,7 +9,7 @@ import { SESSION } from '../../../../../platform/session.port'
 import { SIGN_IN_SERVICE } from '../../../application/sign-in.service'
 import { createSignInMachine } from '../../../application/sign-in-machine'
 
-import { type SignInControl, SignInView } from './sign-in.view'
+import { SignInView } from './sign-in.view'
 
 /** The anchor whose event a keystroke in a password field is. */
 const PASSWORD_INPUTS = {
@@ -29,19 +29,12 @@ export function SignInContainer() {
   // The word left for the page stays on it while it is open, and only once.
   const [notice] = useState(() => session.notice())
   const machine = useMemo(() => createSignInMachine(service), [service])
-  const { state, send, submit, actor, renders } = useScreenMachine('user.sign-in', machine)
+  const { state, send, submit, actor, renders, can } = useScreenMachine('user.sign-in', machine)
   const locale = useLocale()
   // The mode sign-up is where the state renders the fields of a new account, sign-in elsewhere
   // (asking to check the mail and offering the resend among them, the values kept, and done,
   // which only a sign-in reaches).
   const mode = renders('user.sign-in.name-input') ? 'sign-up' : 'sign-in'
-  // Whether the state handles a button's event; what the event carries does not decide it.
-  const can = (control: SignInControl) =>
-    state.can(
-      control === 'user.sign-in.submit-button'
-        ? { type: control, form: { email: '', password: '', name: '', locale }, confirmation: '' }
-        : { type: control, email: '' },
-    )
 
   useEffect(() => {
     if (notice) {

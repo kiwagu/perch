@@ -38,18 +38,17 @@ function ResetForm(props: { readonly token: string }) {
       }),
     [session, props.token],
   )
-  const { state, send, submit, actor, renders } = useScreenMachine('user.reset-password', machine)
+  const { state, send, submit, actor, renders, can } = useScreenMachine(
+    'user.reset-password',
+    machine,
+  )
 
   return (
     <ResetPasswordView
       message={state.context.message}
       error={state.context.error}
       renders={renders}
-      canSubmit={state.can({
-        type: 'user.reset-password.submit-button',
-        password: '',
-        confirmation: '',
-      })}
+      can={can}
       onTypePassword={(field, passwords) =>
         send(
           field === 'password'

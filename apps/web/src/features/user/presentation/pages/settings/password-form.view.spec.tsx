@@ -21,7 +21,7 @@ const CONFIRMATION = 'user.settings.password.password-confirmation-input'
 function renderView(props: Partial<PasswordFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSave: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(<PasswordFormView values={EMPTY} canSave {...handlers} {...props} />)
+  renderWithProviders(<PasswordFormView values={EMPTY} can={() => true} {...handlers} {...props} />)
 
   return handlers
 }
@@ -93,7 +93,7 @@ describe('PasswordFormView', () => {
   })
 
   it('says a refusal that concerns no field above the form, and holds the save the flow does not take', () => {
-    renderView({ error: 'data:RATE_LIMITED', canSave: false })
+    renderView({ error: 'data:RATE_LIMITED', can: () => false })
 
     expect(screen.getByTestId('user.settings.password.error').getAttribute('data-code')).toBe(
       'rate-limited',
@@ -101,5 +101,21 @@ describe('PasswordFormView', () => {
     expect(
       (screen.getByTestId('user.settings.password.save-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the save with the three passwords it holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({
+      values: { current: 'Secret-old1', password: 'Secret-new1', confirmation: 'Secret-new1' },
+      can,
+    })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.settings.password.save-button',
+      currentPassword: 'Secret-old1',
+      password: 'Secret-new1',
+      confirmation: 'Secret-new1',
+    })
   })
 })

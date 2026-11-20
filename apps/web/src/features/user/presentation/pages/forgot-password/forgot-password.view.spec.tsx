@@ -19,7 +19,7 @@ function renderView(props: Partial<ForgotPasswordViewProps> = {}, locale: 'en' |
     <ForgotPasswordView
       email=""
       onEmailChange={onEmailChange}
-      canSend
+      can={() => true}
       onSend={onSend}
       {...props}
     />,
@@ -77,12 +77,23 @@ describe('ForgotPasswordView', () => {
     expect(screen.getByTestId('user.forgot-password.error').getAttribute('data-code')).toBe(code)
   })
 
-  it('holds the send button while the flow does not take it', () => {
-    renderView({ canSend: false })
+  it('holds the send button while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.forgot-password.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the email the page holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ email: 'ann@example.test', can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.forgot-password.send-button',
+      email: 'ann@example.test',
+    })
   })
 
   it('speaks Spanish', () => {
@@ -104,7 +115,7 @@ describe('the state colour of the fields', () => {
           <ForgotPasswordView
             email={email}
             onEmailChange={setEmail}
-            canSend
+            can={() => true}
             onSend={() => Promise.resolve(true)}
           />
         </UnsavedInputScope>

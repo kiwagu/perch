@@ -9,7 +9,10 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 
 import { concernsOf } from '../../../../../platform/concerns'
-import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
+import {
+  RESET_PASSWORDS_DIFFER,
+  type ResetPasswordEvent,
+} from '../../../application/reset-password.machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
@@ -46,8 +49,8 @@ export interface ResetPasswordViewProps {
    * asking for a new mail once the link does not work, the way to sign in once it is set.
    */
   readonly renders: (anchor: ResetPasswordListed) => boolean
-  /** Whether the flow takes the submit now: the button is enabled while it does. */
-  readonly canSubmit: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: ResetPasswordEvent) => boolean
   /** A keystroke in a password, with both passwords as they are after it. */
   readonly onTypePassword: (field: ResetPasswordField, passwords: Passwords) => void
   /** Sets the new password: resolves whether it did. */
@@ -175,7 +178,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
               </Field>
               <Button
                 type="submit"
-                disabled={!props.canSubmit}
+                disabled={!props.can({ type: 'user.reset-password.submit-button', ...values })}
                 data-testid="user.reset-password.submit-button"
               >
                 {t('user.reset-password.submit')}

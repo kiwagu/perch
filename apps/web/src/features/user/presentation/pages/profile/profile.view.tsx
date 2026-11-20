@@ -10,16 +10,13 @@ import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import { concernsOf } from '../../../../../platform/concerns'
-import type { ProfileFields } from '../../../application/profile.machine'
+import type { ProfileEvent, ProfileFields } from '../../../application/profile.machine'
 
 export interface ProfileViewData {
   readonly name: string
   readonly email: string
   readonly bio?: string | undefined
 }
-
-/** The buttons the profile's flow handles: each is enabled while the machine's state does. */
-export type ProfileControl = 'user.profile.save-button' | 'user.profile.sign-out-button'
 
 export interface ProfileViewProps {
   readonly status: 'idle' | 'loading' | 'ready'
@@ -29,8 +26,8 @@ export interface ProfileViewProps {
   readonly form: ProfileFields
   /** The code of the last refused save. */
   readonly error?: string | undefined
-  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
-  readonly can: (control: ProfileControl) => boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: ProfileEvent) => boolean
   readonly onType: (field: keyof ProfileFields, value: string) => void
   /** Saves the form: resolves whether it saved, and the fields then hold no unsaved input. */
   readonly onSave: () => Promise<boolean>
@@ -116,7 +113,7 @@ function ProfileForm(props: ProfileViewProps) {
           {concerns ? null : message}
           <Button
             type="submit"
-            disabled={!props.can('user.profile.save-button')}
+            disabled={!props.can({ type: 'user.profile.save-button' })}
             data-testid="user.profile.save-button"
           >
             {t('user.profile.save')}
@@ -168,7 +165,7 @@ export function ProfileView(props: ProfileViewProps) {
           <Button
             type="button"
             variant="outline"
-            disabled={!props.can('user.profile.sign-out-button')}
+            disabled={!props.can({ type: 'user.profile.sign-out-button' })}
             onClick={() => props.onSignOut()}
             data-testid="user.profile.sign-out-button"
           >

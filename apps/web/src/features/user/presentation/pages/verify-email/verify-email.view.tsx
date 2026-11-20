@@ -8,6 +8,7 @@ import { Field, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import type { VerifyEmailEvent } from '../../../application/verify-email.machine'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
 
 /** The anchors only some states of the flow render that the page shows or leaves out. */
@@ -28,8 +29,8 @@ export interface VerifyEmailViewProps {
   readonly sentTo?: string | undefined
   /** The code of the failure the error shows: of the link, or of the last resend. */
   readonly error?: string | undefined
-  /** Whether its button can send now. */
-  readonly canResend: boolean
+  /** Whether the flow takes the event now: the button is enabled exactly while it does. */
+  readonly can: (event: VerifyEmailEvent) => boolean
   /** Sends a new link to `email`: resolves whether it did. */
   readonly onResend: (email: string) => Promise<boolean>
   readonly link?: ComponentType<PageLinkProps>
@@ -115,7 +116,7 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                 </Field>
                 <Button
                   type="submit"
-                  disabled={!props.canResend}
+                  disabled={!props.can({ type: 'user.verify-email.resend-button', email })}
                   data-testid="user.verify-email.resend-button"
                 >
                   {t('user.verify-email.resend')}

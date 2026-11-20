@@ -10,7 +10,7 @@ import { DeletionFormView, type DeletionFormViewProps } from './deletion-form.vi
 function renderView(props: Partial<DeletionFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(<DeletionFormView password="" canSend {...handlers} {...props} />)
+  renderWithProviders(<DeletionFormView password="" can={() => true} {...handlers} {...props} />)
 
   return handlers
 }
@@ -102,10 +102,21 @@ describe('DeletionFormView', () => {
   })
 
   it('disables the button while the flow takes no send', () => {
-    renderView({ canSend: false })
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.settings.deletion.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the password it holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ password: 'Secret-old1', can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.settings.deletion.send-button',
+      password: 'Secret-old1',
+    })
   })
 })
