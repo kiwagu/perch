@@ -2,7 +2,8 @@
  * Every object a value may be, as far as its file says, the names read in their scopes
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
  * `??` (a left that is nothing selects the right, so it adds no branch) and the right of `&&` (or
- * nothing), the one a constant holds, a destructured name's key,
+ * nothing), the one a constant holds (each a name two declarations of one scope bind may hold), a
+ * destructured name's key,
  * each element of an array the file states for the variable of a `for…of` over it, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
  * key lets the scan go on before it, a property whose key the file does not state or a spread the
@@ -56,12 +57,18 @@ export interface Member {
   readonly iterated?: true
 }
 
+/** What a declaration binds a name to: the value it declares, or the part of one (`Member`). */
+export interface Bound {
+  readonly value?: Expression
+  readonly member?: Member
+}
+
 /** What the scopes of a file say of a name, for following a value. */
 export interface Names {
-  valueNamed(name: string, at: number): Expression | undefined
+  /** What a name, written at a place, is bound to: each declaration of the scope that binds it. */
+  boundTo(name: string, at: number): readonly Bound[]
   /** The value of a name a `const` declares, as `Locals.constantNamed`. */
   constantNamed(name: string, at: number): Expression | undefined
-  memberNamed(name: string, at: number): Member | undefined
   returnedBy(fn: Callable): Array<Expression | null>
 }
 
@@ -123,12 +130,14 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         )
       }
 
-      const declared =
-        array.type === 'Identifier' && level < DEPTH
-          ? names.valueNamed(array.name, array.start)
-          : undefined
+      const bound =
+        array.type === 'Identifier' && level < DEPTH ? names.boundTo(array.name, array.start) : []
 
-      return declared === undefined ? [undefined] : elementsOf(declared, level + 1)
+      return bound.length === 0
+        ? [undefined]
+        : bound.flatMap(({ value }) =>
+            value === undefined ? [undefined] : elementsOf(value, level + 1),
+          )
     }
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
@@ -231,45 +240,49 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         return membersOf(objectsOf(value.object, at, depth + 1), value.property.name)
       }
       case 'Identifier': {
-        const member = names.memberNamed(value.name, at)
+        const bound = names.boundTo(value.name, at)
 
-        if (member !== undefined) {
-          // A destructured name: the value destructured, or each element of the one a `for…of`
-          // iterates, then each key down to it.
-          return member.path.reduce(
-            (alternatives, key) => membersOf(alternatives, key),
-            member.iterated === true
-              ? elementsOf(member.object, depth + 1)
-              : objectsOf(member.object, member.object.start, depth + 1),
-          )
-        }
+        // Each declaration the scope that binds it makes may be the one.
+        return bound.length === 0
+          ? [undefined]
+          : bound.flatMap(({ value: declared, member }): Alternative[] => {
+              if (member !== undefined) {
+                // A destructured name: the value destructured, or each element of the one a
+                // `for…of` iterates, then each key down to it.
+                return member.path.reduce(
+                  (alternatives, key) => membersOf(alternatives, key),
+                  member.iterated === true
+                    ? elementsOf(member.object, depth + 1)
+                    : objectsOf(member.object, member.object.start, depth + 1),
+                )
+              }
 
-        const declared = names.valueNamed(value.name, at)
+              const hook = declared === undefined ? undefined : hooked(declared)
 
-        if (declared === undefined || isCallable(declared)) {
-          return [undefined]
-        }
-
-        const hook = hooked(declared)
-
-        if (hook === undefined) {
-          return next(declared)
-        }
-
-        return hook.calls ? resultOf(hook.fn) : [undefined]
+              return declared === undefined || isCallable(declared)
+                ? [undefined]
+                : hook === undefined
+                  ? next(declared)
+                  : hook.calls
+                    ? resultOf(hook.fn)
+                    : [undefined]
+            })
       }
       case 'CallExpression': {
-        const declared =
-          value.callee.type === 'Identifier' ? names.valueNamed(value.callee.name, at) : undefined
-        const hook = declared === undefined ? undefined : hooked(declared)
-        const fn =
-          declared !== undefined && isCallable(declared)
-            ? declared
-            : hook !== undefined && !hook.calls
-              ? hook.fn
-              : undefined
+        const bound = value.callee.type === 'Identifier' ? names.boundTo(value.callee.name, at) : []
+        const calls = bound.map(({ value: declared }): Alternative[] => {
+          const hook = declared === undefined ? undefined : hooked(declared)
+          const fn =
+            declared !== undefined && isCallable(declared)
+              ? declared
+              : hook !== undefined && !hook.calls
+                ? hook.fn
+                : undefined
 
-        return fn === undefined ? [undefined] : resultOf(fn)
+          return fn === undefined ? [undefined] : resultOf(fn)
+        })
+
+        return calls.length === 0 ? [undefined] : calls.flat()
       }
       default:
         return [undefined]

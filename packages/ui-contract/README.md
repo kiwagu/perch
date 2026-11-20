@@ -176,7 +176,7 @@ links to as `contract/REFERENCE.md#<slug>`.
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
     (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
     of the file to what it declares (`sources/locals.ts`, in the scope that binds it,
-    `sources/scopes.ts`, every object a value may be in
+    `sources/bindings.ts`, `sources/scopes.ts`, every object a value may be in
     `sources/alternatives.ts`: an anchor a `<NAME>_TEST_ID` constant
     holds, the props a spread on an element supplies, `sources/spreads.ts`, read per element in
     `sources/element.ts`, the event a `disabled`

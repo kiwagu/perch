@@ -85,7 +85,7 @@ describe('localsOf', () => {
       expect(valueAt(scoped, 'prop', marker, 'constantNamed')).toBe('data-testid')
     }
   })
-  it('binds a var in its function, class static block or file, whatever block, case, loop or catch it is in', () => {
+  it('binds a var in its function body, class static block or file, whatever block, case, loop or catch it is in', () => {
     const hoisted = [
       "const prop = 'data-testid'",
       "function a() { switch (mode) { default: var prop = 'aria-label' } one(prop) }",
@@ -95,44 +95,57 @@ describe('localsOf', () => {
       "class E { static { { var prop = 'aria-label' } five(prop) } }",
       "function f() { { let prop = 'aria-label' } six(prop) }",
       'seven(prop)',
+      "function g(render = () => eight(prop)) { var prop = 'aria-label'; nine(prop) }",
     ].join('\n')
 
-    for (const marker of ['one(', 'two(', 'three(', 'four(', 'five(']) {
+    for (const marker of ['one(', 'two(', 'three(', 'four(', 'five(', 'nine(']) {
       expect(valueAt(hoisted, 'prop', marker)).toBe('aria-label')
     }
 
-    // A `let` stays in its block, and no `var` leaves its function or static block.
-    expect(valueAt(hoisted, 'prop', 'six(', 'constantNamed')).toBe('data-testid')
-    expect(valueAt(hoisted, 'prop', 'seven(', 'constantNamed')).toBe('data-testid')
+    // A `let` stays in its block, no `var` leaves its function or static block, and a default of a
+    // parameter does not see a `var` of the body.
+    for (const marker of ['six(', 'seven(', 'eight(']) {
+      expect(valueAt(hoisted, 'prop', marker, 'constantNamed')).toBe('data-testid')
+    }
   })
-  it('reads the names of a namespace in the file, so one declaration of it sees what another exports', () => {
-    const split = [
-      "namespace Sessions { export const revoke = 'x.sessions.revoke-button' }",
-      'namespace Sessions { one(revoke) }',
+  it('gives a namespace body its own scope, which sees what each declaration of the namespace or one around it exports', () => {
+    const spaced = [
+      "const prop = 'data-testid'",
+      "namespace N { const prop = 'aria-label'; one(prop) }",
+      'two(prop)',
+      "namespace S { export const shared = 'x.sessions.revoke-button'; const own = 'aria-label' }",
+      'namespace S { three(shared); four(own) }',
+      'namespace T { five(shared) }',
+      "namespace A { export const deep = 'aria-label' }",
+      'namespace A.B { six(deep) }',
+      'namespace A { export namespace B { seven(deep) } }',
+      "namespace V { if (ok) { var held = 'aria-label' } eight(held) }",
+      'nine(held)',
     ].join('\n')
 
-    expect(valueAt(split, 'revoke', 'one(', 'constantNamed')).toBe('x.sessions.revoke-button')
+    expect(valueAt(spaced, 'prop', 'one(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(spaced, 'prop', 'two(', 'constantNamed')).toBe('data-testid')
+    expect(valueAt(spaced, 'shared', 'three(', 'constantNamed')).toBe('x.sessions.revoke-button')
+    expect(valueAt(spaced, 'deep', 'six(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(spaced, 'deep', 'seven(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(spaced, 'held', 'eight(')).toBe('aria-label')
+
+    // What a body does not export, and what another namespace exports, it does not share.
+    expect(valueAt(spaced, 'own', 'four(')).toBeUndefined()
+    expect(valueAt(spaced, 'shared', 'five(')).toBeUndefined()
+    expect(valueAt(spaced, 'held', 'nine(')).toBeUndefined()
   })
-  it('cannot tell a name two declarations bind in one scope: a var of two blocks, a namespace beside the file', () => {
+  it('reads a name two declarations bind in one scope as each: one value where they agree, none where they differ', () => {
     const twice = [
       "function a() { if (ok) { var prop = 'aria-label' } else { var prop = 'data-testid' } one(prop) }",
-      "const other = 'data-testid'",
-      "namespace N { const other = 'aria-label'; two(other) }",
-      'three(other)',
+      "function b() { var same = 'aria-label'; if (ok) { var same = 'aria-label' } two(same) }",
     ].join('\n')
     const { program } = parseSync('x.tsx', twice, { lang: 'tsx', sourceType: 'module' })
-    const locals = localsOf(program)
 
-    for (const [name, marker] of [
-      ['prop', 'one('],
-      ['other', 'two('],
-      ['other', 'three('],
-    ] as const) {
-      expect(valueAt(twice, name, marker)).toBeUndefined()
-      expect(valueAt(twice, name, marker, 'constantNamed')).toBeUndefined()
-      // The file still binds it there.
-      expect(locals.declares(name, twice.indexOf(marker))).toBe(true)
-    }
+    expect(valueAt(twice, 'prop', 'one(')).toBeUndefined()
+    // The file still binds it there.
+    expect(localsOf(program).declares('prop', twice.indexOf('one('))).toBe(true)
+    expect(valueAt(twice, 'same', 'two(')).toBe('aria-label')
   })
 })
 
