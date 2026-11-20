@@ -149,7 +149,8 @@ password, as strings, answers 400
 Better Auth as that very JSON, so the email whose password is checked is the email counted, but
 for a password of a length no account's password has (outside the `password` value's, the empty
 one included): Better Auth gets `NO_ACCOUNTS_PASSWORD` in its place (`password-length.ts`), ten
-spaces, which no password set under the rules has, so it is refused, counted and timed as a
+spaces, which no password set under the rules has and which the password verifier
+(`verifyPassword`, `password-hash.ts`) never accepts, so it is refused, counted and timed as a
 wrong one, after the same checks of the request (its origin, the email's shape) as any other
 (Better Auth would fail to hash an empty password, which it hashes to time an unknown email's
 answer). Better Auth's answers reach the client
