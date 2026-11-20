@@ -9,35 +9,24 @@
  * - `aria-invalid={concerns === '<key>' ? true : undefined}` on each field an error of its screen
  *   names in its `fields` (`form` names none), and on no other element;
  * - `disabled={!props.can(<its event>)}` on a control of `ENABLED_BY_STATE_KINDS` whose anchor is
- *   an event of its screen's flow, called for where a state the machine can be in renders it
- *   (`meta.renders`, `isRendered`) and does not handle it; it may stand on such a control that
- *   every state handles too, as the machine's own answer; never on a link, a text field or a
- *   control no state handles.
+ *   an event of its screen's flow (a declared anchor of the screen, or a part one lists in
+ *   `derived`, of the kind its suffix ends with), called for where a state the machine can be in
+ *   renders it and does not handle it (`unhandled.ts`); it may stand on such a control that every
+ *   state handles too, as the machine's own answer; never on a link, a text field or a control no
+ *   state handles.
  *
  * A prop where the contract puts none, or in another idiom, is a problem at its line; one the
- * contract calls for and the element lacks, at the anchor's first literal, except in ahead mode:
+ * contract calls for and the element lacks, at the anchor's first literal (for a part, the first
+ * `testIdFor()` of two literals that builds it), except in ahead mode:
  * the contract runs ahead of the app on a branch, so the app may lag behind it, never go beyond.
  */
 
-import {
-  ENABLED_BY_STATE_KINDS,
-  isRendered,
-  listedBy,
-  TEXT_FIELD_KINDS,
-  WHOLE_FORM,
-} from '../anchors'
+import { ENABLED_BY_STATE_KINDS, kindOf, TEXT_FIELD_KINDS, testIdFor, WHOLE_FORM } from '../anchors'
 import { declaredAnchors, own } from '../check'
-import {
-  type FlowNode,
-  fieldValueOf,
-  flowNodes,
-  type Model,
-  type Problem,
-  type RegionStateNode,
-  type ScreensFile,
-} from '../files'
+import { fieldValueOf, flowNodes, type Model, type Problem, type ScreensFile } from '../files'
 
 import type { Collected, FacetProp } from './collect'
+import { unhandledWhere } from './unhandled'
 
 interface Place {
   readonly file: string
@@ -48,7 +37,10 @@ export interface Facets {
   readonly collected: readonly Collected[]
   readonly screens: ScreensFile
   readonly model: Model
-  /** The first place each anchor a source renders as a literal is written. */
+  /**
+   * The first place each anchor a source renders as a literal is written; a part a `testIdFor()`
+   * of two literals builds is read from `collected`.
+   */
   readonly rendered: ReadonlyMap<string, Place>
   /** The contract runs ahead of the app: a facet not written yet is allowed. */
   readonly ahead: boolean
@@ -70,9 +62,6 @@ interface Facet {
 }
 
 type Rule = (facets: Facets) => Facet
-
-/** A state of a flow: of the root, plain or parallel, or of a region. */
-type StateNode = Exclude<FlowNode, { kind: 'region' }>
 
 const MARK_IDIOM = "concerns === '<key>' ? true : undefined"
 const MARK = /^concerns === '[a-z][a-z-]*' \? true : undefined$/
@@ -130,46 +119,6 @@ const marks: Rule = ({ screens }) => ({
   elsewhere: 'no error of its screen names it in its fields; leave it out',
 })
 
-/**
- * A state the machine can be in that renders `event` and does not handle it, by its path: a plain
- * state of the root, or a parallel state with one state of each of its regions. A parallel state
- * whose own `on` handles it, or one of whose regions handles it in every state, handles it in each;
- * otherwise a state of a region that does not handle it, with the others in one that does not
- * either, renders it where it or its parallel state lists it, or where no state lists it.
- */
-function unhandledWhere(nodes: readonly FlowNode[], event: string): string | undefined {
-  const states = nodes.filter((node): node is StateNode => node.kind !== 'region')
-  const regionStates = states.filter(
-    (node): node is RegionStateNode => node.kind === 'region-state',
-  )
-  const listed = states.flatMap((node) => listedBy(node.state))
-  const handles = (node: StateNode): boolean => Object.hasOwn(node.state.on ?? {}, event)
-  const renders = (...active: readonly StateNode[]): boolean =>
-    isRendered({ listed, rendered: active.flatMap((node) => listedBy(node.state)) }, event)
-
-  for (const node of states) {
-    if (node.kind === 'root' && !handles(node) && renders(node)) {
-      return node.path
-    }
-
-    if (node.kind === 'parallel' && !handles(node)) {
-      const unhandled = regionStates.filter(
-        (other) => other.parallel === node.name && !handles(other),
-      )
-      const everyRegion = Object.keys(node.state.states).every((region) =>
-        unhandled.some((other) => other.region === region),
-      )
-      const found = everyRegion ? unhandled.find((other) => renders(node, other)) : undefined
-
-      if (found !== undefined) {
-        return found.path
-      }
-    }
-  }
-
-  return undefined
-}
-
 /** The enabling of a control by its machine, on each control of a held kind that is an event. */
 const enabling: Rule = ({ screens }) => ({
   name: 'disabled',
@@ -179,9 +128,15 @@ const enabling: Rule = ({ screens }) => ({
       const events = new Set(
         nodes.flatMap((node) => (node.kind === 'region' ? [] : Object.keys(node.state.on ?? {}))),
       )
+      const parts = new Set(
+        Object.entries(anchors).flatMap(([anchor, { derived }]) =>
+          (derived ?? []).map((suffix) => testIdFor(anchor, suffix)),
+        ),
+      )
 
       return [...events].flatMap((event) => {
-        const kind = own(anchors, event)?.kind
+        // A declared control's kind, or the kind a part's suffix ends with (`confirm-button`).
+        const kind = own(anchors, event)?.kind ?? (parts.has(event) ? kindOf(event) : undefined)
 
         if (kind === undefined || !ENABLED_BY_STATE_KINDS.has(kind)) {
           return []
@@ -264,5 +219,28 @@ function problemsOf({ name, on, elsewhere }: Facet, facets: Facets): Problem[] {
   return [...against, ...missing]
 }
 
-export const facetProblems = (facets: Facets): Problem[] =>
-  RULES.flatMap((rule) => problemsOf(rule(facets), facets))
+/**
+ * Where a source first renders each anchor: its literal, or for a part, which has no literal of
+ * its own, the first `testIdFor()` of two literals that builds it.
+ */
+function renderedPlaces({ rendered, collected }: Facets): ReadonlyMap<string, Place> {
+  const places = new Map(rendered)
+
+  for (const { file, derived } of collected) {
+    for (const { suffix, base, line } of derived) {
+      const anchor = base === undefined ? undefined : testIdFor(base, suffix)
+
+      if (anchor !== undefined && !places.has(anchor)) {
+        places.set(anchor, { file, line })
+      }
+    }
+  }
+
+  return places
+}
+
+export function facetProblems(facets: Facets): Problem[] {
+  const placed = { ...facets, rendered: renderedPlaces(facets) }
+
+  return RULES.flatMap((rule) => problemsOf(rule(placed), placed))
+}

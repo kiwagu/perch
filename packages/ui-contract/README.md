@@ -173,9 +173,10 @@ links to as `contract/REFERENCE.md#<slug>`.
     value, and `pairingResolver(contract)` why a value does not pair with its anchor, for the
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
-    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`) and `colours`
-    (`marksState`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
-    `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
+    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
+    (`marksState`) and `props` (`maxLength`, `aria-invalid`, `disabled`); `scanSources(root)`
+    collects the sources under `SOURCE_ROOTS`;
+    `compareWithContract(collected, screens, vocabulary, model)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the opt-outs a view writes: the
     kit takes them from the generated field facts, so a view may leave them out); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,

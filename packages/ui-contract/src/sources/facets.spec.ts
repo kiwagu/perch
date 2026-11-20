@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Contract } from '../check'
-import { sampleContract, screenIn } from '../check/contract.fixture'
+import { flowStateIn, sampleContract, screenIn } from '../check/contract.fixture'
 import { type Flow, formatProblem } from '../files'
 
 import { collectFromSource } from './collect'
@@ -258,6 +258,54 @@ describe('facetProblems', () => {
       expect(
         problemsOf({ save: '<Button data-testid="sample.save-button" />' }, { ahead: true }),
       ).toEqual([])
+    })
+
+    /**
+     * The contract with a dialog whose derived confirm button, a part it lists in `derived`, only
+     * the editing state handles: the dialog is listed by no state, so saving renders it too.
+     */
+    const withDialog = (): Contract => {
+      const contract = facetsContract()
+      const editing = flowStateIn(contract, 'editing')
+
+      screenIn(contract, 'sample').anchors['sample.help-dialog'] = {
+        kind: 'dialog',
+        derived: ['confirm-button'],
+      }
+      editing.on = { ...editing.on, 'sample.help-dialog.confirm-button': { target: 'editing' } }
+
+      return contract
+    }
+
+    /** The dialog's confirm button built with `testIdFor()` of two literals, with `props` beside. */
+    const confirm = (props: string): Record<string, string> => ({
+      confirm: `<Button testId={testIdFor('sample.help-dialog', 'confirm-button')}${props} />`,
+    })
+
+    /** The line of the confirm button: after every element of the agreeing view. */
+    const CONFIRM_LINE = Object.keys(AGREEING).length + 1
+
+    it('lets a part a declared base derives, built with testIdFor() of two literals, carry its enabling', () => {
+      const can = " disabled={!props.can({ type: 'sample.help-dialog.confirm-button' })}"
+
+      expect(problemsOf(confirm(can), { contract: withDialog() })).toEqual([])
+      expect(problemsOf(confirm(can), { contract: withDialog(), ahead: true })).toEqual([])
+    })
+    it('wants the enabling on such a part where a state renders it and does not handle it, except in ahead mode', () => {
+      expect(problemsOf(confirm(''), { contract: withDialog() })).toEqual([
+        `view.tsx:${CONFIRM_LINE}: "sample.help-dialog.confirm-button" carries disabled={!props.can(<its event>)} by the contract: the state "saving" renders it and does not handle it`,
+      ])
+      expect(problemsOf(confirm(''), { contract: withDialog(), ahead: true })).toEqual([])
+    })
+    it('refuses the enabling of such a part written in another idiom, in ahead mode too', () => {
+      const expected = [
+        `view.tsx:${CONFIRM_LINE}: "sample.help-dialog.confirm-button": disabled={busy}, but the contract says disabled={!props.can(<its event>)}`,
+      ]
+
+      expect(problemsOf(confirm(' disabled={busy}'), { contract: withDialog() })).toEqual(expected)
+      expect(
+        problemsOf(confirm(' disabled={busy}'), { contract: withDialog(), ahead: true }),
+      ).toEqual(expected)
     })
 
     /** The contract with the screen's flow one parallel state of two regions. */
