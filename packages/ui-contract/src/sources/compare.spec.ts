@@ -157,6 +157,12 @@ const pagedProblems = (
   screens: ScreensFile = WITH_PAGED_LIST,
 ): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY).map(formatProblem)
 
+/** The full check and ahead mode: a wrong opt-out is refused in both, and none is wanted in either. */
+const MODES = [
+  { name: 'the full check', ahead: false },
+  { name: 'ahead mode', ahead: true },
+] as const
+
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
     expect(printed(agreeing())).toEqual([])
@@ -195,64 +201,78 @@ describe('compareWithContract', () => {
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
   })
-  it("holds a field's holdsInput to the contract", () => {
-    expect(
-      compareWithContract(
-        withInputs([
-          { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
-          { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
-        ]),
-        WITH_FIELDS,
-        vocabulary,
-      ).map(formatProblem),
-    ).toEqual([
-      'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
-      'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
-      'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
-    ])
-    expect(
-      compareWithContract(
-        withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
-        WITH_FIELDS,
-        vocabulary,
-      ),
-    ).toEqual([])
-  })
-  it("holds a field's marksState to the contract", () => {
-    expect(
-      compareWithContract(
-        withColours([
-          { anchor: 'sample.form.name-input', marksState: false, line: 3 },
-          { anchor: 'sample.form.code-input', marksState: true, line: 4 },
-          { anchor: 'sample.form', marksState: false, line: 5 },
-        ]),
-        WITH_COLOURS,
-        vocabulary,
-      ).map(formatProblem),
-    ).toEqual([
-      'contract/domain/screens/__root.yaml:1: anchors["sample.form.code-input"]: shows no state colour by the contract; its element carries marksState={false}',
-      'x.tsx:3: "sample.form.name-input" shows its state colour by the contract; drop marksState={false}',
-      'x.tsx:4: "sample.form.code-input": marksState={true} is the default; leave it out',
-      'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
-    ])
-    expect(
-      compareWithContract(
-        withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
-        WITH_COLOURS,
-        vocabulary,
-      ),
-    ).toEqual([])
-  })
-  it('lets the contract run ahead of a field that drops its state colour', () => {
-    expect(
-      compareWithContract(withColours([]), WITH_COLOURS, vocabulary).map(formatProblem),
-    ).toEqual([
-      'contract/domain/screens/__root.yaml:1: anchors["sample.form.code-input"]: shows no state colour by the contract; its element carries marksState={false}',
-    ])
-    expect(compareWithContract(withColours([]), WITH_COLOURS, vocabulary, { ahead: true })).toEqual(
-      [],
-    )
-  })
+  it.each(MODES)(
+    'refuses a holdsInput the contract does not call for on a field, in $name',
+    ({ ahead }) => {
+      expect(
+        compareWithContract(
+          withInputs([
+            { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+            { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+          ]),
+          WITH_FIELDS,
+          vocabulary,
+          { ahead },
+        ).map(formatProblem),
+      ).toEqual([
+        'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
+        'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+      ])
+    },
+  )
+  it.each(MODES)(
+    'lets a holdsInput={false} the contract calls for stand, in $name',
+    ({ ahead }) => {
+      expect(
+        compareWithContract(
+          withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
+          WITH_FIELDS,
+          vocabulary,
+          { ahead },
+        ),
+      ).toEqual([])
+    },
+  )
+  it.each(MODES)(
+    'refuses a marksState the contract does not call for on a field, in $name',
+    ({ ahead }) => {
+      expect(
+        compareWithContract(
+          withColours([
+            { anchor: 'sample.form.name-input', marksState: false, line: 3 },
+            { anchor: 'sample.form.code-input', marksState: true, line: 4 },
+            { anchor: 'sample.form', marksState: false, line: 5 },
+          ]),
+          WITH_COLOURS,
+          vocabulary,
+          { ahead },
+        ).map(formatProblem),
+      ).toEqual([
+        'x.tsx:3: "sample.form.name-input" shows its state colour by the contract; drop marksState={false}',
+        'x.tsx:4: "sample.form.code-input": marksState={true} is the default; leave it out',
+        'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
+      ])
+    },
+  )
+  it.each(MODES)(
+    'lets a marksState={false} the contract calls for stand, in $name',
+    ({ ahead }) => {
+      expect(
+        compareWithContract(
+          withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
+          WITH_COLOURS,
+          vocabulary,
+          { ahead },
+        ),
+      ).toEqual([])
+    },
+  )
+  it.each(MODES)(
+    'leaves the state colour of a field the contract drops to the kit: no marksState is wanted, in $name',
+    ({ ahead }) => {
+      expect(compareWithContract(withColours([]), WITH_COLOURS, vocabulary, { ahead })).toEqual([])
+    },
+  )
   it('reports marksState on a field that holds no input, and on a kind the kit does not colour', () => {
     const screens = structuredClone(WITH_COLOURS)
 
@@ -291,19 +311,12 @@ describe('compareWithContract', () => {
       'y.tsx:4: "sample.form.agree-checkbox" is a checkbox, not a field that holds input; only such a field shows a state colour',
     ])
   })
-  it('wants the opt-out on the element of a field that holds no input, once it is rendered', () => {
-    expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary).map(formatProblem)).toEqual(
-      [
-        'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
-      ],
-    )
-    // On a branch the contract may run ahead: the element gains its opt-out in the code's commit.
-    expect(
-      compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead: true }).map(
-        formatProblem,
-      ),
-    ).toEqual([])
-  })
+  it.each(MODES)(
+    'leaves a field that holds no input to the kit: no holdsInput is wanted once it is rendered, in $name',
+    ({ ahead }) => {
+      expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead })).toEqual([])
+    },
+  )
 
   it("lets holdsInput={false} sit on a paged list's size select, which holds no input by its facet", () => {
     expect(
@@ -316,23 +329,32 @@ describe('compareWithContract', () => {
       ),
     ).toEqual([])
   })
-  it("reports holdsInput={true} on a paged list's size select as the default", () => {
-    expect(
-      pagedProblems(
-        withPagedList({
-          inputs: [
-            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: true, line: 5 },
-          ],
-        }),
-      ),
-    ).toEqual([
-      'list.tsx:5: "sample.list.size-select": holdsInput={true} is the default; leave it out',
-    ])
-  })
+  it.each(MODES)(
+    "reports holdsInput={true} on a paged list's size select as the default, in $name",
+    ({ ahead }) => {
+      expect(
+        compareWithContract(
+          withPagedList({
+            inputs: [
+              { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: true, line: 5 },
+            ],
+          }),
+          WITH_PAGED_LIST,
+          PAGED_VOCABULARY,
+          { ahead },
+        ).map(formatProblem),
+      ).toEqual([
+        'list.tsx:5: "sample.list.size-select": holdsInput={true} is the default; leave it out',
+      ])
+    },
+  )
   it("reports marksState on a paged list's size select, a select that holds no input", () => {
     expect(
       pagedProblems(
         withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
+          ],
           colours: [
             { anchor: 'sample.list.size-select', base: 'sample.list', marksState: false, line: 5 },
           ],
@@ -390,6 +412,12 @@ describe('compareWithContract', () => {
         withPagedList(
           {
             inputs: [
+              {
+                anchor: 'sample.list.size-select',
+                base: 'sample.list',
+                holdsInput: false,
+                line: 5,
+              },
               { anchor: 'sample.list.next-link', base: 'sample.list', holdsInput: false, line: 6 },
               { anchor: 'sample.list.range', base: 'sample.list', holdsInput: true, line: 7 },
             ],
@@ -430,8 +458,35 @@ describe('compareWithContract', () => {
       'select.tsx:5: "sample.mode-select.size-select" is derived from "sample.mode-select", not a field; only a field holds input',
     ])
   })
-  it("does not want the opt-out on a paged list's size select rendered without the prop", () => {
-    expect(pagedProblems(withPagedList({}))).toEqual([])
+  it.each(MODES)(
+    "leaves a paged list's size select to the kit: no holdsInput is wanted at its testIdFor(), in $name",
+    ({ ahead }) => {
+      expect(
+        compareWithContract(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY, { ahead }),
+      ).toEqual([])
+    },
+  )
+  it("passes a paged list's size select that carries holdsInput={false}", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          inputs: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', holdsInput: false, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([])
+  })
+  it("wants no opt-out on a paged list's next link rendered without a flag", () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'next-link', base: 'sample.list', line: 6 }],
+        }),
+      ]),
+    ).toEqual([])
   })
   it('reports holdsInput on an anchor that is not a field', () => {
     expect(

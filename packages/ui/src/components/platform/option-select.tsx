@@ -21,9 +21,9 @@ export interface OptionSelectProps<Value extends string> {
   readonly testId?: string
   /** Takes no choice: the trigger cannot be opened. */
   readonly disabled?: boolean
-  /** False for a choice that applies at once, as the contract derives for it. */
+  /** False for a choice that applies at once; its facts' say (by `testId`) when left out. */
   readonly holdsInput?: boolean
-  /** False for a choice whose border takes no color by its state; its form's say when left out. */
+  /** False for a choice whose border takes no color by its state; its facts' say (by `testId`), else its form's, when left out. */
   readonly marksState?: boolean
 }
 

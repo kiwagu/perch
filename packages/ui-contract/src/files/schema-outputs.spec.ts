@@ -4,7 +4,9 @@ import { join } from 'node:path'
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { SCREEN_SCHEMA_FILE } from './paths'
+import { renderReference } from '../reference'
+
+import { REFERENCE_FILE, SCREEN_SCHEMA_FILE } from './paths'
 import { SCHEMA_OUTPUTS, schemaDrift, writeSchemas } from './schema-outputs'
 import { jsonSchemaProblems, validateAgainst } from './validator'
 
@@ -47,14 +49,16 @@ afterEach(() => {
 })
 
 describe('writeSchemas', () => {
-  it('writes the schemas', () => {
+  it('writes the schemas, then the reference', () => {
     expect(writeSchemas(root)).toEqual([
       'contract/schemas/screen.schema.json',
       'contract/schemas/platform.schema.json',
       'contract/schemas/activity.schema.json',
       'contract/schemas/x-perch.schema.json',
       'contract/schemas/manifest.schema.json',
+      'contract/REFERENCE.md',
     ])
+    expect(readFileSync(join(root, REFERENCE_FILE), 'utf8')).toBe(renderReference())
   })
   it.each(SCHEMA_OUTPUTS.map((output) => output.file))(
     'writes %s as a JSON Schema 2020-12 with a description on every property',

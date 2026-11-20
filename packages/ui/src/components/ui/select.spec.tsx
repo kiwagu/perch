@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@workspace/ui/components/ui/select'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 const ITEMS = [
@@ -362,5 +363,79 @@ describe('the state a Select trigger shows on its own border', () => {
     expect(trigger.className).not.toContain('border-warning')
     expect(trigger.className).toMatch(/(^| )focus-visible:border-ring/)
     expect(trigger.getAttribute('data-state')).toBe('unsaved')
+  })
+})
+
+describe('a Select inside a provider of facts', () => {
+  const FACTS = {
+    'x.once-select': { holdsInput: false },
+    'x.plain-select': { marksState: false },
+  }
+
+  /** A controlled select rendering `anchor`, with the says of its own that are given. */
+  function Anchored(props: {
+    readonly anchor: string
+    readonly holdsInput?: boolean
+    readonly marksState?: boolean
+  }) {
+    const [value, setValue] = useState<string | null>('a')
+
+    return (
+      <FieldFactsProvider facts={FACTS}>
+        <UnsavedInputScope>
+          <Select
+            items={ITEMS}
+            value={value}
+            onValueChange={setValue}
+            anchor={props.anchor}
+            holdsInput={props.holdsInput}
+            marksState={props.marksState}
+          >
+            <SelectTrigger aria-label="kind" data-testid={props.anchor}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ITEMS.map((item) => (
+                <SelectItem key={item.value} value={item.value}>
+                  {item.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Probe />
+        </UnsavedInputScope>
+      </FieldFactsProvider>
+    )
+  }
+
+  it('holds no unsaved input when its facts say it holds none, its own say winning', async () => {
+    render(<Anchored anchor="x.once-select" />)
+    await chooseBeta()
+    expect(probe()).toBe('false')
+
+    cleanup()
+    render(<Anchored anchor="x.once-select" holdsInput />)
+    await chooseBeta()
+    expect(probe()).toBe('true')
+  })
+
+  it('holds unsaved input for an anchor its facts say nothing of', async () => {
+    render(<Anchored anchor="x.other-select" />)
+    await chooseBeta()
+    expect(probe()).toBe('true')
+  })
+
+  it('loses the state colours by its facts, keeping data-state, its own say winning', async () => {
+    render(<Anchored anchor="x.plain-select" />)
+
+    const trigger = screen.getByLabelText('kind')
+
+    await chooseBeta()
+    expect(trigger.getAttribute('data-state')).toBe('unsaved')
+    expect(trigger.className).not.toContain('border-warning')
+
+    cleanup()
+    render(<Anchored anchor="x.plain-select" marksState />)
+    expect(screen.getByLabelText('kind').className).toContain('border-warning')
   })
 })

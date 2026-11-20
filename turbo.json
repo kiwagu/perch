@@ -43,8 +43,23 @@
       "dependsOn": ["^build"],
       "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
     },
+    "@workspace/kernel#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/gateway#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
+    "@workspace/database#test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTRACT_AHEAD", "CONTRACT_AHEAD_BASE", "CONTRACT_AHEAD_HEAD"]
+    },
     "model": {
       "dependsOn": ["^build"],
+      "cache": false
+    },
+    "emit": {
       "cache": false
     },
     "model:check": {

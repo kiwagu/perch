@@ -16,6 +16,7 @@ export {
   own,
 } from './contract'
 export { descriptionsProblems } from './descriptions'
+export { editionOf, since } from './editions'
 export { fieldStatesOf, showsStoredValue } from './field-states'
 export {
   type DeepTarget,
@@ -34,18 +35,20 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { keyProblems } from './keys'
 export { leavingProblems } from './leaving'
 export { mailsProblems } from './mails'
 export { noticesProblems, unknownNotice } from './notices'
 export { pagingProblems } from './paging'
 export { parameterSample, type SampleSlot } from './parameter-sample'
 export { parseRoutePath, type RouteSegment, routesProblems } from './routes'
-export { checkContract, loadContract } from './run'
+export { checkContract, contractProblems, loadContract } from './run'
 export { runsProblems } from './runs'
 export { pairingResolver, referenceResolver, scenariosProblems, textsOf } from './scenarios'
 export { screensProblems } from './screens'
 export { searchProblems } from './search'
 export { toastsProblems } from './toasts'
 export { unsavedInputProblems } from './unsaved-input'
-export { versionProblems } from './version'
+export { outdatedProblem, versionProblems } from './version'
 export { vocabularyProblems } from './vocabulary'
+export { withProblems } from './with'

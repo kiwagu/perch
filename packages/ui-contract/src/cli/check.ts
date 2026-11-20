@@ -1,6 +1,12 @@
-/** `ui-contract check [--sources [--ahead]] [--consumers [--tests=<dir>]]`. */
+/** `ui-contract check [--current] [--sources [--ahead]] [--consumers [--tests=<dir>]]`. */
 
-import { type Contract, checkContract, declaredAnchors, loadContract } from '../check'
+import {
+  type Contract,
+  checkContract,
+  declaredAnchors,
+  loadContract,
+  outdatedProblem,
+} from '../check'
 import { CONSUMER_ROOT, compareConsumers, scanConsumers } from '../consumers'
 import { totalsOf } from '../handoff'
 import { compareWithContract, scanSources } from '../sources'
@@ -74,13 +80,21 @@ export function check(argv: readonly string[]): number {
     return 1
   }
 
+  const outdated = outdatedProblem(contract)
+  const current = argv.includes('--current')
+
   console.log(summaryOf(contract))
 
+  if (outdated !== undefined && !current) {
+    console.log(`ui-contract: ${outdated.message}`)
+  }
+
+  const behind = outdated !== undefined && current && reported([outdated]) ? 1 : 0
   const sources = argv.includes('--sources')
     ? checkSources(root, contract, argv.includes('--ahead'))
     : 0
   const tests = optionOf(argv, 'tests') ?? CONSUMER_ROOT
   const consumers = argv.includes('--consumers') ? checkConsumers(root, contract, tests) : 0
 
-  return Math.max(sources, consumers)
+  return Math.max(behind, sources, consumers)
 }

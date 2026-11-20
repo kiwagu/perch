@@ -87,6 +87,19 @@ describe('screensProblems', () => {
       'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields["title-too-long"]: "sample.gone-input" is not an anchor of the screen',
     ])
   })
+  it("takes form in an error's fields for a code that concerns the form, never as an anchor", () => {
+    const contract = sampleContract()
+
+    screenIn(contract, 'sample').anchors['sample.save-error'] = {
+      kind: 'error',
+      codes: ['title-required', 'failed'],
+      fields: { 'title-required': 'form', missing: 'form' },
+    }
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/screens/sample/$key.yaml:1: anchors["sample.save-error"].fields.missing: "missing" is not a code of the anchor',
+    ])
+  })
   it('says only a field holds input', () => {
     const contract = sampleContract()
 

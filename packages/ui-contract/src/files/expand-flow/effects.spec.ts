@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VERSION } from '../../anchors'
 import { flowSchema } from '../../schemas'
 import type { Control, Failure } from '../derive'
 
@@ -34,6 +35,7 @@ const lookups = (failureOf: FlowLookups['failureOf']): FlowLookups => ({
   screen: 'user.sign-in',
   toast: undefined,
   platformToasts: {},
+  edition: CONTRACT_VERSION,
 })
 
 const LOOKUPS = lookups((action) => FAILURES[action])

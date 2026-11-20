@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import { UnsavedInputScope, useMarksState, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
 function Probe() {
@@ -141,5 +142,74 @@ describe('Form marksState', () => {
     expect(marks()).toBe('true')
     rerender(<Marks own={false} />)
     expect(marks()).toBe('false')
+  })
+})
+
+/** Shows whether the field that renders `anchor`, with its own `own`, marks its state. */
+function MarksAt(props: { readonly anchor: string; readonly own?: boolean | undefined }) {
+  return <output data-testid="marks">{String(useMarksState(props.own, props.anchor))}</output>
+}
+
+describe('Form marksState and the facts of a field', () => {
+  const facts = {
+    'x.plain-input': { marksState: false },
+    'x.coloured-input': { marksState: true },
+    'x.silent-input': {},
+  }
+
+  it("takes the field's facts before its form's", () => {
+    render(
+      <FieldFactsProvider facts={facts}>
+        <Form onSubmit={() => true}>
+          <MarksAt anchor="x.plain-input" />
+        </Form>
+      </FieldFactsProvider>,
+    )
+    expect(marks()).toBe('false')
+
+    cleanup()
+    render(
+      <FieldFactsProvider facts={facts}>
+        <Form onSubmit={() => true} marksState={false}>
+          <MarksAt anchor="x.coloured-input" />
+        </Form>
+      </FieldFactsProvider>,
+    )
+    expect(marks()).toBe('true')
+  })
+
+  it('leaves it to the form when the facts say nothing of it, or the field has none', () => {
+    render(
+      <FieldFactsProvider facts={facts}>
+        <Form onSubmit={() => true} marksState={false}>
+          <MarksAt anchor="x.silent-input" />
+        </Form>
+      </FieldFactsProvider>,
+    )
+    expect(marks()).toBe('false')
+
+    cleanup()
+    render(
+      <FieldFactsProvider facts={facts}>
+        <Form onSubmit={() => true} marksState={false}>
+          <MarksAt anchor="x.other-input" />
+        </Form>
+      </FieldFactsProvider>,
+    )
+    expect(marks()).toBe('false')
+  })
+
+  it("is the field's own say before its facts'", () => {
+    render(
+      <FieldFactsProvider facts={facts}>
+        <MarksAt anchor="x.plain-input" own />
+      </FieldFactsProvider>,
+    )
+    expect(marks()).toBe('true')
+  })
+
+  it('is true without a provider, whatever the anchor', () => {
+    render(<MarksAt anchor="x.plain-input" />)
+    expect(marks()).toBe('true')
   })
 })

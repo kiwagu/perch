@@ -59,7 +59,7 @@ describe('contractAt', () => {
     const files = fixtureFiles()
     const broken = history({
       ...files,
-      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 2'),
+      [PLATFORM_FILE]: (files[PLATFORM_FILE] ?? '').replace('version: 1', 'version: 0'),
     })
 
     expect(() => contractAt('HEAD', broken)).toThrow(
