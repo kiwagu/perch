@@ -226,6 +226,63 @@ describe('compareWithContract', () => {
     expect(found.strict).toEqual(expected)
     expect(found.ahead).toEqual(expected)
   })
+  it('refuses a holdsInput and a marksState a view writes as a name or a member, in ahead mode too', () => {
+    const inputs = strictAndAhead(
+      withInputs([
+        { anchor: 'sample.form.name-input', holdsInput: 'localFlag', line: 3 },
+        { anchor: 'sample.page.kind-select', holdsInput: 'props.hold', line: 4 },
+      ]),
+      WITH_FIELDS,
+    )
+    const colours = strictAndAhead(
+      withColours([
+        { anchor: 'sample.form.name-input', marksState: 'props.mark', line: 3 },
+        { anchor: 'sample.form.code-input', marksState: 'mark', line: 4 },
+      ]),
+      WITH_COLOURS,
+    )
+
+    for (const found of [inputs.strict, inputs.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+        `x.tsx:4: "sample.page.kind-select": holdsInput={props.hold}, but ${KIT}`,
+      ])
+    }
+
+    for (const found of [colours.strict, colours.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+        `x.tsx:4: "sample.form.code-input": marksState={mark}, but ${KIT}`,
+      ])
+    }
+  })
+  it('refuses the flags of a field written from a source as a name or a member, and lets a wrapper through', () => {
+    const rendered = (flags: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(
+        [
+          '<form data-testid="sample.form">',
+          `<Input data-testid="sample.form.name-input" ${flags} />`,
+          '<Input data-testid="sample.form.code-input" />',
+          '<Input data-testid={testId} holdsInput={holdsInput} marksState={props.marksState} />',
+          '</form>',
+        ].join('\n'),
+        'x.tsx',
+      ),
+    ]
+    const found = strictAndAhead(
+      rendered('holdsInput={localFlag} marksState={props.mark}'),
+      WITH_COLOURS,
+    )
+    const expected = [
+      `x.tsx:2: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+      `x.tsx:2: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+    expect(strictAndAhead(rendered(''), WITH_COLOURS)).toEqual({ strict: [], ahead: [] })
+  })
   it('wants no holdsInput on the element of a field that holds no input, rendered or not', () => {
     const found = strictAndAhead(withInputs([]), WITH_FIELDS)
 

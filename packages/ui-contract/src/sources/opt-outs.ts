@@ -2,8 +2,9 @@
  * The flags the sources write against the contract. The contract decides whether a field holds
  * input (`holdsInput`) and whether it shows its state colour (`marksState`), and the kit takes
  * both from the generated field facts (by the field's anchor), so a view writes neither on a
- * declared field: no `{false}`, no `{true}`, in ahead mode too, and nothing is wanted of a field
- * rendered. A flag is also a problem on an anchor that is not a field that holds input (a
+ * declared field: no `{false}`, no `{true}`, no name or member (`{localFlag}`, `{props.mark}`), in
+ * ahead mode too, and nothing is wanted of a field rendered. Only a wrapper that passes its anchor
+ * on, which no check can read, passes the prop on as well. A flag is also a problem on an anchor that is not a field that holds input (a
  * `holdsInput` on a page, a `marksState` on a form, a checkbox or a select that holds none), and
  * on any other part a `testIdFor()` derives: that part is no field.
  *
@@ -17,7 +18,7 @@ import { FIELD_KINDS, SIZE_SELECT, STATEFUL_FIELD_KINDS, testIdFor } from '../an
 import type { DeclaredAnchor } from '../check'
 import type { Problem } from '../files'
 
-import { type Collected, LEFT_TO_THE_KIT } from './collect'
+import { type Collected, type FlagValue, LEFT_TO_THE_KIT } from './collect'
 
 interface OptOuts {
   readonly collected: readonly Collected[]
@@ -43,7 +44,7 @@ const isDeclared = (contract: readonly DeclaredAnchor[], base: string): boolean 
   contract.some(({ anchor }) => anchor === base)
 
 /** A flag a view writes on a field, which the kit takes from the contract's field facts. */
-const leftToTheKit = (anchor: string, name: string, value: boolean): string =>
+const leftToTheKit = (anchor: string, name: string, value: FlagValue): string =>
   `"${anchor}": ${name}={${value}}, but ${LEFT_TO_THE_KIT}`
 
 function holdsInputProblems({ collected, contract }: OptOuts): Problem[] {

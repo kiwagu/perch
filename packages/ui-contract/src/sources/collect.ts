@@ -9,9 +9,10 @@
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
  * while a `data-code` literal outside the grammar is a problem. And `holdsInput` and `marksState`
  * beside a field's anchor, which the contract decides and the kit takes from its field facts: a
- * boolean literal on the element that carries the anchor as a literal or as `testIdFor()` of
- * two literals (a paged list's size select, with the base it derives from), or a prop passed
- * through. And the facets the contract decides on a control's element, `maxLength`, `type`,
+ * boolean literal, or a name or a member passed as written, on the element that carries the anchor
+ * as a literal or as `testIdFor()` of two literals (a paged list's size select, with the base it
+ * derives from); a prop passed through on an element that carries no anchor the check can read (a
+ * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so.
  */
 
@@ -48,16 +49,22 @@ export const MARKS_STATE_ANCHOR = `marksState on an element that carries no anch
 
 export const MARKS_STATE_VALUE = `marksState is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
 
+/**
+ * What a view writes for a flag the contract decides: a boolean literal's value, or the source of
+ * a name or a member passed as written (`localFlag`, `props.mark`).
+ */
+export type FlagValue = boolean | string
+
 export interface Collected {
   file: string
   literals: Array<{ anchor: string; form: 'attribute' | 'prop' | 'key' | 'constant'; line: number }>
   /** The suffix of each `testIdFor()`, with its base when the call writes it as a literal. */
   derived: Array<{ suffix: string; base?: string; line: number }>
   codes: Array<{ code: string; form: 'attribute' | 'key' | 'map'; line: number }>
-  /** `holdsInput` written as a literal on the element of an anchor, with the base of a derived one. */
-  inputs: Array<{ anchor: string; base?: string; holdsInput: boolean; line: number }>
-  /** `marksState` written as a literal on the element of an anchor, with the base of a derived one. */
-  colours: Array<{ anchor: string; base?: string; marksState: boolean; line: number }>
+  /** `holdsInput` written on the element of an anchor, with the base of a derived one. */
+  inputs: Array<{ anchor: string; base?: string; holdsInput: FlagValue; line: number }>
+  /** `marksState` written on the element of an anchor, with the base of a derived one. */
+  colours: Array<{ anchor: string; base?: string; marksState: FlagValue; line: number }>
   /**
    * A facet prop on the element of an anchor, with the base of a derived one, and its value as
    * written: an expression's source with each run of whitespace one space, a string with its
@@ -186,14 +193,16 @@ export function collectFromSource(text: string, file: string): Collected {
   }
 
   /**
-   * A boolean literal prop of an element, with the anchor the element carries as a literal or as
-   * `testIdFor()` of two literals; a prop passed through is let by, any other value or an element
-   * with no such anchor a problem.
+   * A flag prop of an element, with the anchor the element carries as a literal or as
+   * `testIdFor()` of two literals: a boolean literal's value, or a name or a member as written,
+   * whatever the expression (the comparison refuses either on a declared field). A name or a
+   * member on an element with no such anchor is a wrapper passing the prop on, and is let by; any
+   * other value is a problem, and so is a boolean literal on an element with no such anchor.
    */
   const flag = (
     attributes: readonly ElementAttribute[],
     { name, anchorMessage, valueMessage }: Flag,
-  ): (CarriedAnchor & { value: boolean; line: number }) | undefined => {
+  ): (CarriedAnchor & { value: FlagValue; line: number }) | undefined => {
     const written = attributes.find((attribute) => attribute.name === name)
 
     if (written === undefined) {
@@ -202,12 +211,13 @@ export function collectFromSource(text: string, file: string): Collected {
 
     const expression =
       written.value?.type === 'JSXExpressionContainer' ? written.value.expression : undefined
+    const passed = expression?.type === 'Identifier' || expression?.type === 'MemberExpression'
+    const literal =
+      expression?.type === 'Literal' && typeof expression.value === 'boolean'
+        ? expression.value
+        : undefined
 
-    if (expression?.type === 'Identifier' || expression?.type === 'MemberExpression') {
-      return undefined
-    }
-
-    if (expression?.type !== 'Literal' || typeof expression.value !== 'boolean') {
+    if (!passed && literal === undefined) {
       collected.problems.push({ file, line: line(written.start), message: valueMessage })
 
       return undefined
@@ -216,12 +226,14 @@ export function collectFromSource(text: string, file: string): Collected {
     const carried = carriedBy(attributes)
 
     if (carried === undefined) {
-      collected.problems.push({ file, line: line(written.start), message: anchorMessage })
+      if (!passed) {
+        collected.problems.push({ file, line: line(written.start), message: anchorMessage })
+      }
 
       return undefined
     }
 
-    return { ...carried, value: expression.value, line: line(written.start) }
+    return { ...carried, value: literal ?? sourceOf(written.value), line: line(written.start) }
   }
 
   /** The facet props of an element that carries its anchor so; an element passed one is let by. */

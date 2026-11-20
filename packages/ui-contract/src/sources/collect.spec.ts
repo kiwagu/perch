@@ -222,6 +222,55 @@ describe('collectFromSource', () => {
     ])
     expect(found.problems).toEqual([])
   })
+  it('collects a holdsInput written as a name or a member on the element of an anchor, as written', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid="x.form.name-input" holdsInput={localFlag} />',
+        'const b = <OptionSelect testId="x.page.kind-select" holdsInput={props.hold} />',
+        "const c = <OptionSelect testId={testIdFor('x.list', 'size-select')} holdsInput={flag} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.inputs).toEqual([
+      { anchor: 'x.form.name-input', holdsInput: 'localFlag', line: 1 },
+      { anchor: 'x.page.kind-select', holdsInput: 'props.hold', line: 2 },
+      { anchor: 'x.list.size-select', base: 'x.list', holdsInput: 'flag', line: 3 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it('collects a marksState written as a name or a member on the element of an anchor, as written', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid="x.form.name-input" marksState={ props.mark } />',
+        'const b = <Textarea testId="x.form.note-input" marksState={mark} />',
+        "const c = <OptionSelect testId={testIdFor('x.list', 'size-select')} marksState={state.mark} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.colours).toEqual([
+      { anchor: 'x.form.name-input', marksState: 'props.mark', line: 1 },
+      { anchor: 'x.form.note-input', marksState: 'mark', line: 2 },
+      { anchor: 'x.list.size-select', base: 'x.list', marksState: 'state.mark', line: 3 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it('lets a wrapper pass a flag on beside an anchor it passes on, which no check can read', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid={testId} holdsInput={holdsInput} marksState={props.marksState} />',
+        'const b = <Input testId={props.testId} holdsInput={props.holdsInput} marksState={marksState} />',
+        "const c = <Input testId={testIdFor(base, 'name-input')} holdsInput={holdsInput} />",
+        "const d = <Input testId={testIdFor('x.form', suffix)} marksState={marksState} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.inputs).toEqual([])
+    expect(found.colours).toEqual([])
+    expect(found.problems.filter(({ message }) => message !== RUNTIME_SUFFIX)).toEqual([])
+  })
   it('reports holdsInput that is neither a boolean literal nor passed, or sits on no anchor', () => {
     const found = collectFromSource(
       [
