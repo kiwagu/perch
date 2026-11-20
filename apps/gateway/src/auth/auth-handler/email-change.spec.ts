@@ -178,6 +178,8 @@ describe('authHandler, the request to change the email', () => {
     const longest = `${'a'.repeat(254 - '@example.test'.length)}@example.test`
 
     expect((await asked(mounted, ann, longest))?.status).toBe(202)
+    // The mail starts after the answer: wait for it, then count.
+    await mounted.outbox.next(longest)
     expect(mounted.outbox.to(longest)).toHaveLength(1)
   })
 
