@@ -18,14 +18,17 @@ else is asked.
 Better Auth's own limiter is off (`src/auth/auth-instance.ts`): it restarts its count only after
 a pause as long as its window, so it would refuse an address's 21st request however slowly the
 20 before it came. Failed sign-ins (answered 401) are limited to 10 per email in 15
-minutes, cleared by a successful sign-in, or one Better Auth answers 403 (the password was
-right, but the email is not verified yet or the account is banned), by the same mount. An
+minutes, cleared by a successful sign-in, or one answered 403 `EMAIL_NOT_VERIFIED` or
+`account-banned` (the password was right, but the email is not verified yet or the account is
+banned), by the same mount. Any other 403, one refusing the request's origin, its Fetch Metadata
+or its callback before the password is checked, judges nothing. An
 email counts in lower case, as
 the directory keeps and matches an account's: an address in any case is one account, and its
 failures in any case share one limit. A sign-in holds one of its
 email's 10 places from the moment it is let through until Better Auth answers, so parallel
-guesses are counted while under way: wrong credentials (401) keep the place, a success (200, or 403)
-clears the email's window, and any other answer, or a handler that threw instead of answering,
+guesses are counted while under way: wrong credentials (401) keep the place, a success (200, 409,
+or a 403 `EMAIL_NOT_VERIFIED` or `account-banned`) clears the email's window, and any other answer
+(any other 403 included), or a handler that threw instead of answering,
 gives the place back; each sign-in is settled once. A sign-in whose body is not JSON naming an
 email answers 400 and counts against no email (its address's check, taken first, stays taken, as
 every sign-up's does whatever Better Auth answers); one that is reaches Better Auth as that very

@@ -433,9 +433,13 @@ describe('authHandler', () => {
     expect(received).toHaveLength(20)
   })
 
-  it("clears an email's failed sign-ins once Better Auth answers 403: the password was right, the email is not verified", async () => {
+  it("clears an email's failed sign-ins once Better Auth answers 403 EMAIL_NOT_VERIFIED: the password was right, the email is not verified", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 403
+        ? Response.json({ code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
+        : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 403
@@ -459,6 +463,30 @@ describe('authHandler', () => {
     expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
     expect(received).toHaveLength(34)
   })
+
+  it.each([
+    [
+      'a 403 coded INVALID_ORIGIN',
+      () => Response.json({ code: 'INVALID_ORIGIN' }, { status: 403 }),
+    ],
+    ['a 403 that names no code', status(403)],
+  ])(
+    "keeps an email's failed sign-ins through %s, which Better Auth answers before it checks the password, and gives the place back",
+    async (_, refusal) => {
+      let answer = status(401)
+      const { route, received } = mountedOnFakeAuth(() => answer())
+
+      expect(await signIns(route, 'ann@example.test', 9)).toEqual(times(9, 401))
+      answer = refusal
+      // The refusals count nothing and keep no place: twelve in a row reach Better Auth.
+      expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 403))
+      answer = status(401)
+
+      // The nine failures stand: the tenth spends them.
+      expect(await signIns(route, 'ann@example.test', 2)).toEqual([401, 429])
+      expect(received).toHaveLength(22)
+    },
+  )
 
   it('gives the place of a sign-in whose handler threw back, and lets the throw through', async () => {
     let fail = true
