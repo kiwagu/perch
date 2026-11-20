@@ -821,24 +821,16 @@ describe('facetProblems', () => {
           ])
         }
       })
-      it('refuses, in ahead mode too, a question about the event a var of the row holds, in a case or a block', () => {
-        // The row's `var` binds in the row, past the switch or the block, and hides the outer one.
+      it('refuses, in ahead mode too, a question about the event a var of a case of the row holds', () => {
+        // A case is no scope of a `var`: the row binds it past the switch, and it hides the outer one.
         const cased = {
           save: '() => { switch (mode) { default: var submit = { type: "sample.a-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
-          submit: "{ type: 'sample.save-button' } as const",
-        }
-        // Two `var`s of the row may each be the one it holds: the event is unread.
-        const branched = {
-          save: '() => { if (ok) { var submit = { type: "sample.save-button" } as const } else { var submit = { type: "sample.a-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
           submit: "{ type: 'sample.save-button' } as const",
         }
 
         for (const ahead of [false, true]) {
           expect(problemsOf(cased, { ahead })).toEqual([
             `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)} asks about "sample.a-button", but the control sends "sample.save-button"`,
-          ])
-          expect(problemsOf(branched, { ahead })).toEqual([
-            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
           ])
         }
       })
@@ -873,21 +865,15 @@ describe('facetProblems', () => {
           expect(problemsOf(own, { declarations: unrelated, ahead })).toEqual([])
         }
       })
-      it('reads, in ahead mode too, a var of the row declared twice as each value: one event where they agree', () => {
-        const same = {
-          save: '() => { if (ok) { var submit = { type: "sample.save-button" } as const } else { var submit = { type: "sample.save-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+      it('passes, in ahead mode too, a question about a var of the row a case declares again without a value', () => {
+        // The first declaration of the row's scope is read: the one that holds the event.
+        const changed = {
+          save: '() => { var event: Revoke = { type: "sample.save-button" } as const; switch (mode) { default: var event: Revoke; return <Button data-testid="sample.save-button" disabled={!props.can(event)} /> } }',
         }
-        // Spread after the button's own type, either may replace it: two events, unread.
-        const spread = {
-          save: '() => { if (ok) { var event = { type: "sample.save-button" } as const } else { var event = { type: "sample.a-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can({ type: "sample.save-button", ...event })} /> }',
-        }
+        const declarations = ["type Revoke = { readonly type: 'sample.save-button' }"]
 
-        for (const ahead of [false, true]) {
-          expect(problemsOf(same, { ahead })).toEqual([])
-          expect(problemsOf(spread, { ahead })).toEqual([
-            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can({ type: "sample.save-button", ...event })}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
-          ])
-        }
+        expect(problemsOf(changed, { declarations })).toEqual([])
+        expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
       })
       it('passes, in ahead mode too, a question about the event one declaration of a namespace exports to another', () => {
         const changed = { save: 'null' }
@@ -899,19 +885,30 @@ describe('facetProblems', () => {
         expect(problemsOf(changed, { declarations })).toEqual([])
         expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
       })
-      it('refuses, in ahead mode too, a question in a namespace about the event its own name holds', () => {
-        // Its own name hides the file's in the namespace.
-        const changed = { save: 'null', submit: "{ type: 'sample.save-button' } as const" }
+      it('refuses, in ahead mode too, a question in a private namespace about the event the file declares first, though another exports its own', () => {
+        // A namespace's names bind in the file, where the file's own `event` comes first.
+        const changed = { save: 'null', event: "{ type: 'sample.a-button' } as const" }
         const declarations = [
-          'export namespace Sample { const submit = { type: "sample.a-button" } as const; export const Save = () => <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+          "export namespace Sessions { namespace Row { export const event = { type: 'sample.save-button' } as const } }",
+          'export namespace Sessions { namespace Row { export const Save = () => <Button data-testid="sample.save-button" disabled={!props.can(event)} /> } }',
         ]
-        const line = Object.keys({ ...AGREEING, ...changed }).length + 1
+        const line = Object.keys({ ...AGREEING, ...changed }).length + 2
 
         for (const ahead of [false, true]) {
           expect(problemsOf(changed, { declarations, ahead })).toEqual([
-            `view.tsx:${line}: "sample.save-button": disabled={!props.can(submit)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+            `view.tsx:${line}: "sample.save-button": disabled={!props.can(event)} asks about "sample.a-button", but the control sends "sample.save-button"`,
           ])
         }
+      })
+      it('passes, in ahead mode too, a question in a nested namespace about the event its own name holds, declared before another the namespace around exports', () => {
+        const changed = { save: 'null' }
+        const declarations = [
+          'export namespace Sessions.Row { const event = { type: "sample.save-button" } as const; export const Save = () => <Button data-testid="sample.save-button" disabled={!props.can(event)} /> }',
+          "export namespace Sessions { export const event = { type: 'sample.a-button' } as const }",
+        ]
+
+        expect(problemsOf(changed, { declarations })).toEqual([])
+        expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
       })
       it('refuses it, in ahead mode too, where only a case of a switch declares the type of a name the question reads past it', () => {
         // After the switch the name is the parameter again, which the view does not type.

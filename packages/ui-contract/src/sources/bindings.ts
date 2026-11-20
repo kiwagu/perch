@@ -1,14 +1,14 @@
 /**
- * The names a source file binds, each in the scope that binds it (`scopes.ts`), with what the file
- * declares it with, for `locals.ts` to resolve a name where it is written: a parameter (typed where
- * its annotation says, `binding-names.ts`), a `catch` parameter, a function declaration's name, and
- * each name a variable declaration binds, with the value it is declared with, or the value it is
- * a part of (a destructured name, the variable of a `for…of`), and its written type. A `var` binds
- * in its function's body; a declaration a namespace's body exports binds in each body it is shared
- * with too.
+ * The names a source file binds, each in the innermost scope around its declaration (`scopes.ts`),
+ * with what the file declares it with, for `locals.ts` to resolve a name where it is written: a
+ * parameter (typed where its annotation says, `binding-names.ts`), a `catch` parameter, a function
+ * declaration's name, and each name a variable declaration binds, with the value it is declared
+ * with, or the value it is a part of (a destructured name, the variable of a `for…of`), and its
+ * written type. Only a `let` or a `const` binds in the cases of a `switch` or a class `static`
+ * block; every other declaration binds around them. In the order the file declares them.
  */
 
-import type { Expression, ParamPattern, Program } from 'oxc-parser'
+import type { Expression, ParamPattern, Program, VariableDeclaration } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
 import type { Member } from './alternatives'
@@ -33,26 +33,19 @@ export interface Binding {
 
 export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
   const bindings: Binding[] = []
-  /** Where each declarator of a `const` or a `var` declaration starts, with its kind. */
-  const kinds = new Map<number, 'const' | 'var'>()
+  /** Where each declarator of a variable declaration starts, with its kind. */
+  const kinds = new Map<number, VariableDeclaration['kind']>()
   /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
   const iterated = new Map<number, Expression>()
-  /**
-   * Binds the names a declaration at `at` declares: in its lexical scope, or a `var`'s; one a
-   * namespace's body exports (`shared`, a function's or a variable's, never a parameter) in each
-   * body it shares it with too.
-   */
+  /** Binds the names a declaration at `at` declares, a `let` or a `const` (`lexical`) or another. */
   const bind = (
     at: Span,
-    hoisted: boolean,
+    lexical: boolean,
     declared: ReadonlyArray<Omit<Binding, 'at' | 'scope'>>,
-    shared = false,
   ): void => {
-    const own = scopeAround(at, hoisted ? scopes.hoisting : scopes.lexical)
+    const scope = scopeAround(at, lexical ? [...scopes.every, ...scopes.lexical] : scopes.every)
 
-    for (const scope of [own, ...(shared ? scopes.sharedAt(at.start) : [])]) {
-      bindings.push(...declared.map((binding) => ({ ...binding, at, scope })))
-    }
+    bindings.push(...declared.map((binding) => ({ ...binding, at, scope })))
   }
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
     bind({ start: node.start, end: node.start }, false, node.params.flatMap(typedNamesIn))
@@ -82,14 +75,12 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
       parameters(node)
 
       if (node.id !== null) {
-        bind(node, false, [{ name: node.id.name, value: node }], true)
+        bind(node, false, [{ name: node.id.name, value: node }])
       }
     },
     VariableDeclaration: (node) => {
       for (const declarator of node.declarations) {
-        if (node.kind === 'const' || node.kind === 'var') {
-          kinds.set(declarator.start, node.kind)
-        }
+        kinds.set(declarator.start, node.kind)
       }
     },
     VariableDeclarator: (node) => {
@@ -110,33 +101,27 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
         return declared === undefined ? {} : { declared }
       }
       const at = { start: node.start, end: node.end }
-      const hoisted = kinds.get(node.start) === 'var'
+      const lexical = kinds.get(node.start) !== 'var'
 
       if (node.id.type === 'Identifier') {
-        bind(
-          at,
-          hoisted,
-          [
-            {
-              name: node.id.name,
-              ...(node.init === null ? {} : { value: node.init }),
-              ...(kinds.get(node.start) === 'const' ? { constant: true as const } : {}),
-              ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
-              ...declaredOf(node.id.name),
-            },
-          ],
-          true,
-        )
+        bind(at, lexical, [
+          {
+            name: node.id.name,
+            ...(node.init === null ? {} : { value: node.init }),
+            ...(kinds.get(node.start) === 'const' ? { constant: true as const } : {}),
+            ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
+            ...declaredOf(node.id.name),
+          },
+        ])
       } else {
         bind(
           at,
-          hoisted,
+          lexical,
           pathsIn(node.id).map(({ name, path, defaulted }) => ({
             name,
             ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
             ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
           })),
-          true,
         )
       }
     },
