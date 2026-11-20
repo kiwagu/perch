@@ -53,7 +53,6 @@ function NoteEditForm(props: {
       <Textarea
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        maxLength={500}
         aria-label={t('organisation.notes.edit')}
         data-testid="organisation.notes.edit-textarea"
       />
@@ -184,7 +183,6 @@ export function OrganisationNotes(
             <Textarea
               value={text}
               onChange={(event) => props.onTextChange(event.target.value)}
-              maxLength={500}
               placeholder={t('organisation.notes.placeholder')}
               aria-label={t('organisation.notes.placeholder')}
               data-testid="organisation.notes.new-textarea"

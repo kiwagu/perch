@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import es from '../../i18n/user.es.json'
 
@@ -26,7 +26,7 @@ function renderView(props: Partial<ResetPasswordViewProps> = {}, locale: 'en' | 
     onSubmit: vi.fn(() => Promise.resolve(true)),
   }
 
-  renderWithProviders(
+  renderWithFacts(
     <ResetPasswordView
       renders={only('user.reset-password.form')}
       can={() => true}
@@ -78,11 +78,12 @@ describe('ResetPasswordView', () => {
     expect(onSubmit).toHaveBeenCalledWith({ password: 'Secret-new1', confirmation: 'Secret-new1' })
   })
 
-  it('limits the password and its confirmation as their value does', () => {
+  it('gives the password and its confirmation what the contract says of them', () => {
     renderView()
 
-    expect(input(PASSWORD).maxLength).toBe(35)
-    expect(input(CONFIRMATION).maxLength).toBe(35)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([PASSWORD, CONFIRMATION]),
+    )
   })
 
   it('renders the eye of both passwords', () => {
@@ -189,7 +190,7 @@ describe('ResetPasswordView', () => {
 
 describe('the state colour of the fields', () => {
   it.each([PASSWORD, CONFIRMATION])('draws none on %s', (testId) => {
-    renderWithProviders(
+    renderWithFacts(
       <UnsavedInputScope>
         <ResetPasswordView
           renders={only('user.reset-password.form')}

@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
@@ -55,7 +55,7 @@ function renderView(
     onCancelDeviceLimit: vi.fn(),
   }
 
-  renderWithProviders(
+  renderWithFacts(
     <SignInView
       startEmail=""
       mode="sign-in"
@@ -252,20 +252,24 @@ describe('SignInView', () => {
     })
   })
 
-  it('limits the email as its value does, and the password by no length', () => {
+  it('gives the email and the password what the contract says of them', () => {
     renderView()
 
-    expect(input('user.sign-in.email-input').maxLength).toBe(254)
-    expect(input('user.sign-in.email-input').type).toBe('email')
-    expect(input('user.sign-in.password-input').hasAttribute('maxlength')).toBe(false)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining(['user.sign-in.email-input', 'user.sign-in.password-input']),
+    )
   })
 
-  it('limits the name as its value does while creating an account, and both passwords by no length', () => {
+  it('gives the name and both passwords what the contract says of them while creating an account', () => {
     renderView({ mode: 'sign-up' })
 
-    expect(input('user.sign-in.name-input').maxLength).toBe(80)
-    expect(input('user.sign-in.password-input').hasAttribute('maxlength')).toBe(false)
-    expect(input('user.sign-in.password-confirmation-input').hasAttribute('maxlength')).toBe(false)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'user.sign-in.name-input',
+        'user.sign-in.password-input',
+        'user.sign-in.password-confirmation-input',
+      ]),
+    )
   })
 
   it('asks for the password again to create an account, both as a new password', () => {
@@ -454,7 +458,7 @@ describe('SignInView', () => {
     }
     const describedBy = () =>
       input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
-    const { rerender } = renderWithProviders(<SignInView {...props} error={PASSWORDS_DIFFER} />)
+    const { rerender } = renderWithFacts(<SignInView {...props} error={PASSWORDS_DIFFER} />)
 
     expect(describedBy()).not.toBeNull()
     expect(document.getElementById(describedBy() ?? '')).toBe(
@@ -803,7 +807,7 @@ describe('SignInView', () => {
 
 /** Renders the view in `mode` inside a scope tracking unsaved input, as the app's pages are. */
 function renderTracked(mode: SignInViewProps['mode']) {
-  renderWithProviders(
+  renderWithFacts(
     <UnsavedInputScope>
       <SignInView
         startEmail=""

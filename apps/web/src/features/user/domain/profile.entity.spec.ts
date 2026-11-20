@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import { ProfileSchema } from './profile.entity'
+
+/** The most characters a display name and a bio have, as the contract says it. */
+const { maxLength: NAME_MAX } = CONTRACT_VALUES['profile.name']
+const { maxLength: BIO_MAX } = CONTRACT_VALUES['profile.bio']
 
 const valid = {
   id: profileIdFactory.create(),
@@ -18,9 +23,9 @@ describe('ProfileSchema', () => {
     expect(ProfileSchema.safeParse({ ...valid, bio: 'Hi' }).success).toBe(true)
   })
 
-  it('rejects a bio longer than 2000 characters', () => {
-    expect(ProfileSchema.safeParse({ ...valid, bio: 'x'.repeat(2000) }).success).toBe(true)
-    expect(ProfileSchema.safeParse({ ...valid, bio: 'x'.repeat(2001) }).success).toBe(false)
+  it('rejects a bio longer than the limit', () => {
+    expect(ProfileSchema.safeParse({ ...valid, bio: 'x'.repeat(BIO_MAX) }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, bio: 'x'.repeat(BIO_MAX + 1) }).success).toBe(false)
   })
 
   it('rejects an empty name, a bad email and an id of another kind', () => {
@@ -34,9 +39,13 @@ describe('ProfileSchema', () => {
   it('counts a character outside the basic plane once in a name and a bio', () => {
     const emoji = '\u{1F600}'
 
-    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(80) }).success).toBe(true)
-    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(81) }).success).toBe(false)
-    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(2000) }).success).toBe(true)
-    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(2001) }).success).toBe(false)
+    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(NAME_MAX) }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(NAME_MAX + 1) }).success).toBe(
+      false,
+    )
+    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(BIO_MAX) }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(BIO_MAX + 1) }).success).toBe(
+      false,
+    )
   })
 })

@@ -3,9 +3,9 @@ import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountCard } from '../../../../../platform/accounts.port'
-import { renderWithProviders } from '../../../../../test-utils'
 import type { AccountErrorCode, AccountEvent } from '../../../application/account-machine/machine'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
@@ -55,7 +55,7 @@ function renderView(
   // An account left out is Una's; one given as undefined is being read.
   const account = 'account' in props ? given : unaCard
 
-  renderWithProviders(
+  renderWithFacts(
     <AccountView
       account={account}
       failure={failure}
@@ -182,7 +182,7 @@ describe('AccountView', () => {
   )
 
   it('acts on nothing where it is given no areas', () => {
-    renderWithProviders(<AccountView account={unaCard} failure={undefined} />)
+    renderWithFacts(<AccountView account={unaCard} failure={undefined} />)
 
     expect(byId('console.account.section').getAttribute('data-state')).toBe('ready')
     expect(screen.queryAllByRole('button')).toEqual([])
@@ -201,12 +201,16 @@ describe('AccountView', () => {
     )
   })
 
-  it('limits the name and the email as their values do', () => {
+  it('gives the name, the email and the reason what the contract says of them', () => {
     renderView({ name: 'Una S' })
 
-    expect(byId<HTMLInputElement>('console.account.name.name-input').maxLength).toBe(80)
-    expect(byId<HTMLInputElement>('console.account.email.email-input').maxLength).toBe(254)
-    expect(byId<HTMLInputElement>('console.account.email.email-input').type).toBe('email')
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'console.account.name.name-input',
+        'console.account.email.email-input',
+        'console.account.ban.reason-input',
+      ]),
+    )
   })
 
   it('offers no rename to an account without a profile', () => {
@@ -230,7 +234,7 @@ describe('AccountView', () => {
     expect(shown('console.account.verification.resend-button')).toBe(false)
   })
 
-  it('offers the ban with a reason of at most 500 characters while the account is not banned', () => {
+  it('offers the ban with a reason while the account is not banned', () => {
     renderView({ reason: 'spam' })
 
     const reason = byId<HTMLInputElement>('console.account.ban.reason-input')
@@ -238,7 +242,6 @@ describe('AccountView', () => {
     expect(byId('console.account.ban.form').tagName).toBe('FORM')
     expect(screen.getByRole('textbox', { name: 'Reason' })).toBe(reason)
     expect(reason.value).toBe('spam')
-    expect(reason.maxLength).toBe(500)
     expect(byId('console.account.ban.ban-button').textContent).toBe('Ban')
     expect(shown('console.account.ban.unban-button')).toBe(false)
   })

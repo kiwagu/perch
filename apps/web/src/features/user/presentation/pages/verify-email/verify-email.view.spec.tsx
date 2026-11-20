@@ -4,8 +4,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
@@ -21,7 +21,7 @@ const only = (anchor: VerifyEmailListed) => (asked: VerifyEmailListed) => asked 
 function renderView(props: Partial<VerifyEmailViewProps> = {}, locale: 'en' | 'es' = 'en') {
   const onResend = vi.fn((_email: string) => Promise.resolve(true))
 
-  renderWithProviders(
+  renderWithFacts(
     <VerifyEmailView renders={() => false} can={() => false} onResend={onResend} {...props} />,
     { locale, es },
   )
@@ -81,7 +81,6 @@ describe('VerifyEmailView', () => {
     expect(shown.getAttribute('data-code')).toBe(code)
     expect(shown.textContent).toBe(en[`user.verify-email.error.${code}`])
     expect(screen.getByTestId('user.verify-email.form').tagName).toBe('FORM')
-    expect(screen.getByTestId('user.verify-email.email-input').getAttribute('type')).toBe('email')
     expect(screen.getByTestId('user.verify-email.resend-button').hasAttribute('disabled')).toBe(
       false,
     )
@@ -107,13 +106,10 @@ describe('VerifyEmailView', () => {
     },
   )
 
-  it('limits the email as its value does', () => {
+  it('gives the email what the contract says of it', () => {
     renderView({ renders: only('user.verify-email.form') })
 
-    const email = screen.getByTestId('user.verify-email.email-input') as HTMLInputElement
-
-    expect(email.maxLength).toBe(254)
-    expect(email.type).toBe('email')
+    expect(expectFieldFacts(document.body)).toEqual(['user.verify-email.email-input'])
   })
 
   it('sends a new link to the email typed', () => {
@@ -192,7 +188,7 @@ describe('VerifyEmailView', () => {
 
 describe('the state colour of the fields', () => {
   it('draws none on the email', () => {
-    renderWithProviders(
+    renderWithFacts(
       <UnsavedInputScope>
         <VerifyEmailView
           renders={only('user.verify-email.form')}

@@ -106,11 +106,8 @@ export function VerifyEmailView(props: VerifyEmailViewProps) {
                     id={emailId}
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    type="email"
                     autoComplete="email"
-                    maxLength={254}
                     required
-                    marksState={false}
                     data-testid="user.verify-email.email-input"
                   />
                 </Field>

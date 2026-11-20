@@ -157,7 +157,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the guest pages
   (sign-in, forgot-password, verify-email) follow another tab's sign-in to the profile through
   the router's guard, a sign-in of the page's own going on to its welcome. The name and the bio
-  (at most 2000 characters) each follow the stored value until typed into, then keep what was
+  (within the length of the contract's `profile.bio` field) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its
   code concerns (the error's `fields`); Save and the sign-out button are enabled while the

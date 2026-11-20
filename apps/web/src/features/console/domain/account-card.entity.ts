@@ -4,13 +4,11 @@
  */
 
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-/** The longest id the card's address carries. */
-export const ACCOUNT_ID_MAX = 64
-
 export const AccountCardSearchSchema = z.object({
-  id: z.string().min(1).max(ACCOUNT_ID_MAX).optional(),
+  id: z.string().min(1).max(CONTRACT_VALUES.id.maxLength).optional(),
 })
 
 /** The search of the card as its route reads the address. */

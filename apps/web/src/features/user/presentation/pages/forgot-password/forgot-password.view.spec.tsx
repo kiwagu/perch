@@ -5,8 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
 import { ForgotPasswordView, type ForgotPasswordViewProps } from './forgot-password.view'
@@ -15,7 +15,7 @@ function renderView(props: Partial<ForgotPasswordViewProps> = {}, locale: 'en' |
   const onSend = vi.fn((_email: string) => Promise.resolve(true))
   const onEmailChange = vi.fn((_email: string) => {})
 
-  renderWithProviders(
+  renderWithFacts(
     <ForgotPasswordView
       email=""
       onEmailChange={onEmailChange}
@@ -51,11 +51,10 @@ describe('ForgotPasswordView', () => {
     )
   })
 
-  it('limits the email as its value does', () => {
+  it('gives the email what the contract says of it', () => {
     renderView()
 
-    expect(input('user.forgot-password.email-input').maxLength).toBe(254)
-    expect(input('user.forgot-password.email-input').type).toBe('email')
+    expect(expectFieldFacts(document.body)).toEqual(['user.forgot-password.email-input'])
   })
 
   it('asks to open the link of the mail, naming where it went', () => {
@@ -122,7 +121,7 @@ describe('the state colour of the fields', () => {
       )
     }
 
-    renderWithProviders(<Page />)
+    renderWithFacts(<Page />)
 
     fireEvent.change(screen.getByTestId('user.forgot-password.email-input'), {
       target: { value: 'ann@example.test' },

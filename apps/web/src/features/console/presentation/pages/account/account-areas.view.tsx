@@ -83,7 +83,6 @@ function NameArea(props: AccountAreasProps) {
               id={ids.input}
               value={props.name}
               onChange={(event) => props.onName(event.target.value)}
-              maxLength={80}
               aria-invalid={concerns === 'name' ? true : undefined}
               aria-describedby={concerns === 'name' ? ids.error : undefined}
               data-testid="console.account.name.name-input"
@@ -132,9 +131,7 @@ function EmailArea(props: AccountAreasProps) {
         <FieldLabel htmlFor={ids.input}>{t('console.account.email.label')}</FieldLabel>
         <Input
           id={ids.input}
-          type="email"
           autoComplete="off"
-          maxLength={254}
           value={props.email}
           onChange={(event) => props.onEmail(event.target.value)}
           aria-invalid={concerns === 'email' ? true : undefined}
@@ -192,7 +189,6 @@ function BanArea(props: AccountAreasProps) {
             <Input
               id={reasonId}
               value={props.reason}
-              maxLength={500}
               onChange={(event) => props.onReason(event.target.value)}
               data-testid="console.account.ban.reason-input"
             />

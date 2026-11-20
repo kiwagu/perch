@@ -108,9 +108,7 @@ export function EmailFormView(props: EmailFormViewProps) {
                 id={ids.email}
                 value={props.values.email}
                 onChange={(event) => props.onChange({ ...props.values, email: event.target.value })}
-                type="email"
                 autoComplete="email"
-                maxLength={254}
                 required
                 aria-invalid={concerns === 'email' ? true : undefined}
                 aria-describedby={concerns === 'email' ? ids.error : undefined}

@@ -3,7 +3,7 @@ import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { SETTINGS_PASSWORDS_DIFFER } from '../../../application/settings/settings-machine'
 
 import {
@@ -21,7 +21,7 @@ const CONFIRMATION = 'user.settings.password.password-confirmation-input'
 function renderView(props: Partial<PasswordFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSave: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(<PasswordFormView values={EMPTY} can={() => true} {...handlers} {...props} />)
+  renderWithFacts(<PasswordFormView values={EMPTY} can={() => true} {...handlers} {...props} />)
 
   return handlers
 }
@@ -58,12 +58,12 @@ describe('PasswordFormView', () => {
     }
   })
 
-  it('limits the new password and its confirmation as their value does, and the current one by no length', () => {
+  it('gives the current password, the new one and its confirmation what the contract says of them', () => {
     renderView()
 
-    expect(input(NEW).maxLength).toBe(35)
-    expect(input(CONFIRMATION).maxLength).toBe(35)
-    expect(input(CURRENT).hasAttribute('maxlength')).toBe(false)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([CURRENT, NEW, CONFIRMATION]),
+    )
   })
 
   it.each([

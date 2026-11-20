@@ -49,7 +49,6 @@ export function SettingsView(props: SettingsViewProps) {
           onChange={props.onTheme}
           disabled={!props.can({ type: 'user.settings.theme-select', theme: props.theme })}
           testId="user.settings.theme-select"
-          holdsInput={false}
         />
         <OptionSelect
           label={t('user.settings.locale')}
@@ -58,7 +57,6 @@ export function SettingsView(props: SettingsViewProps) {
           onChange={props.onLocale}
           disabled={!props.can({ type: 'user.settings.locale-select', locale: props.locale })}
           testId="user.settings.locale-select"
-          holdsInput={false}
         />
       </CardContent>
     </Card>

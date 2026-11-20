@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import en from '../../i18n/organisation.en.json'
 import es from '../../i18n/organisation.es.json'
 
@@ -142,7 +142,7 @@ function renderView(
       {...more}
     />
   )
-  const { rerender } = renderWithProviders(view({}), { locale, es })
+  const { rerender } = renderWithFacts(view({}), { locale, es })
 
   return {
     ...handlers,
@@ -182,11 +182,12 @@ describe('OrganisationView without memberships', () => {
     expect(screen.queryByTestId('organisation.create.toggle-button')).toBeNull()
   })
 
-  it('limits the key and the name as their values do', () => {
+  it('gives the key and the name what the contract says of them', () => {
     renderView({ organisations: [], current: undefined, notes: undefined })
 
-    expect(field('organisation.create.key-input').maxLength).toBe(32)
-    expect(field('organisation.create.name-input').maxLength).toBe(80)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining(['organisation.create.key-input', 'organisation.create.name-input']),
+    )
   })
 
   it('explains a key, a name or a creation the gateway refuses', () => {
@@ -369,7 +370,6 @@ describe('OrganisationView of a member', () => {
     expect(field('organisation.notes.new-textarea').placeholder).toBe(
       en['organisation.notes.placeholder'],
     )
-    expect(field('organisation.notes.new-textarea').maxLength).toBe(500)
 
     type('organisation.notes.new-textarea', 'New plan')
     fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
@@ -408,10 +408,15 @@ describe('OrganisationView of a member', () => {
     )
   })
 
-  it('limits the note being edited as its value does', () => {
+  it('gives the new note and the note being edited what the contract says of them', () => {
     renderView({ editing: hello.id })
 
-    expect(field('organisation.notes.edit-textarea').maxLength).toBe(500)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'organisation.notes.new-textarea',
+        'organisation.notes.edit-textarea',
+      ]),
+    )
   })
 
   it('edits a note in place', () => {
@@ -792,8 +797,7 @@ describe('OrganisationView of an administrator', () => {
     expect(screen.getByLabelText(en['organisation.invite.email'])).toBe(
       field('organisation.invite.email-input'),
     )
-    expect(field('organisation.invite.email-input').type).toBe('email')
-    expect(field('organisation.invite.email-input').maxLength).toBe(254)
+    expect(expectFieldFacts(document.body)).toContain('organisation.invite.email-input')
     expect(select.getAttribute('data-value')).toBe('member')
     expect(select.getAttribute('aria-label')).toBe(en['organisation.invite.role'])
 

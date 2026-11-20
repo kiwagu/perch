@@ -8,7 +8,7 @@ import type { ProfileId } from '@workspace/ids'
 import { loadScreens } from '@workspace/ui-contract'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
@@ -47,7 +47,7 @@ function renderView(props: Partial<ProfileViewProps> = {}, locale: 'en' | 'es' =
       {...more}
     />
   )
-  const { rerender } = renderWithProviders(view({}), { locale, es })
+  const { rerender } = renderWithFacts(view({}), { locale, es })
 
   return { ...handlers, rerender: (more: Partial<ProfileViewProps>) => rerender(view(more)) }
 }
@@ -76,13 +76,16 @@ describe('ProfileView', () => {
     expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 
-  it('limits each field as its value does, and sets none on the email it only shows', () => {
+  it('gives each field what the contract says of it, the email it only shows included', () => {
     renderView()
 
-    expect(field('user.profile.name-input').maxLength).toBe(80)
-    expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
-    expect(field('user.profile.email-input').type).toBe('email')
-    expect(field('user.profile.email-input').hasAttribute('maxlength')).toBe(false)
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'user.profile.name-input',
+        'user.profile.bio-textarea',
+        'user.profile.email-input',
+      ]),
+    )
   })
 
   it('tells what is typed into each field, and Save', () => {

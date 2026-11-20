@@ -3,14 +3,14 @@ import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 
 import { EmailFormView, type EmailFormViewProps } from './email-form.view'
 
 function renderView(props: Partial<EmailFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(
+  renderWithFacts(
     <EmailFormView
       values={{ email: '', password: '' }}
       can={() => true}
@@ -39,12 +39,13 @@ describe('EmailFormView', () => {
     expect(screen.getByTestId('user.settings.email.password-input.visibility-button')).toBeTruthy()
   })
 
-  it('limits the email as its value does, and the password by no length', () => {
+  it('gives the email and the password what the contract says of them', () => {
     renderView()
 
-    expect(input('user.settings.email.email-input').maxLength).toBe(254)
-    expect(input('user.settings.email.email-input').type).toBe('email')
-    expect(input('user.settings.email.password-input').hasAttribute('maxlength')).toBe(false)
+    expect(expectFieldFacts(document.body)).toEqual([
+      'user.settings.email.email-input',
+      'user.settings.email.password-input',
+    ])
   })
 
   it('asks to open the link of the mail, naming the new email', () => {

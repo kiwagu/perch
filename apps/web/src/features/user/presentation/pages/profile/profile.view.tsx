@@ -91,7 +91,6 @@ function ProfileForm(props: ProfileViewProps) {
             value={props.form.name}
             onChange={(event) => props.onType('name', event.target.value)}
             autoComplete="name"
-            maxLength={80}
             aria-invalid={concerns === 'name' ? true : undefined}
             data-testid="user.profile.name-input"
           />
@@ -103,7 +102,6 @@ function ProfileForm(props: ProfileViewProps) {
             id={bioId}
             value={props.form.bio}
             onChange={(event) => props.onType('bio', event.target.value)}
-            maxLength={2000}
             aria-invalid={concerns === 'bio' ? true : undefined}
             data-testid="user.profile.bio-textarea"
           />
@@ -155,7 +153,6 @@ export function ProfileView(props: ProfileViewProps) {
             <FieldLabel htmlFor={emailId}>{t('user.profile.email')}</FieldLabel>
             <Input
               id={emailId}
-              type="email"
               value={profile.email}
               readOnly
               data-testid="user.profile.email-input"

@@ -66,7 +66,6 @@ export function OrganisationCreate(props: {
                 onChange={(event) => props.onChange({ ...draft, key: event.target.value })}
                 autoCapitalize="none"
                 autoComplete="off"
-                maxLength={32}
                 aria-invalid={concerns === 'key' ? true : undefined}
                 aria-describedby={hintId}
                 data-testid="organisation.create.key-input"
@@ -81,7 +80,6 @@ export function OrganisationCreate(props: {
                 value={draft.name}
                 onChange={(event) => props.onChange({ ...draft, name: event.target.value })}
                 autoComplete="organization"
-                maxLength={80}
                 aria-invalid={concerns === 'name' ? true : undefined}
                 data-testid="organisation.create.name-input"
               />

@@ -57,11 +57,9 @@ export function OrganisationInvite(props: {
         <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
         <Input
           id={emailId}
-          type="email"
           value={draft.email}
           onChange={(event) => props.onChange({ ...draft, email: event.target.value })}
           autoComplete="off"
-          maxLength={254}
           aria-invalid={concerns === 'email' ? true : undefined}
           data-testid="organisation.invite.email-input"
         />

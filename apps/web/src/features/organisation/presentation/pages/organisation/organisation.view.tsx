@@ -134,7 +134,6 @@ function OrganisationHeader(props: {
             onChange={props.onSelect}
             disabled={!props.can({ type: 'organisation.page.current-select', key: current.key })}
             testId="organisation.page.current-select"
-            holdsInput={false}
           />
         ) : null}
       </CardContent>
