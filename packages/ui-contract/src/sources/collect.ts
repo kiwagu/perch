@@ -14,22 +14,28 @@
  * derives from), or through a `<NAME>_TEST_ID` constant the file declares (`locals.ts`); a prop passed through on an element that carries no anchor the check can read (a
  * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so. A
- * prop a spread on the element supplies counts as written there, at the spread (`spreads.ts`).
+ * prop a spread on the element supplies counts as written there, at the spread, and one a spread
+ * the file cannot follow is refused on an element whose anchor the check reads (`element.ts`).
  */
 
-import { type Expression, type JSXAttributeValue, parseSync, Visitor } from 'oxc-parser'
+import { type Expression, parseSync, Visitor } from 'oxc-parser'
 
 import type { Problem } from '../files'
 
 import { askedEventOf } from './asked-event'
-import { constantAnchorOf, localsOf } from './locals'
-import { spreadPropsOf } from './spreads'
+import {
+  type ElementAttribute,
+  expressionOf,
+  isAnchorAttribute,
+  type ReadElement,
+  readElement,
+} from './element'
+import { localsOf } from './locals'
 import {
   type AnchorValue,
   anchorValue,
   attributeValue,
   type CarriedAnchor,
-  carriedAnchor,
   isTestIdFor,
   keyName,
   staticText,
@@ -53,6 +59,10 @@ export const HOLDS_INPUT_VALUE = `holdsInput is neither a boolean literal nor a 
 export const MARKS_STATE_ANCHOR = `marksState on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
 
 export const MARKS_STATE_VALUE = `marksState is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
+
+/** A spread on an element whose anchor the check reads, when the file cannot say what it supplies. */
+export const UNFOLLOWED_SPREAD = (anchor: string): string =>
+  `a spread on the element of "${anchor}" that the check cannot follow (a parameter, an import, a value built at runtime); write its props on the element, or build them in this file`
 
 /**
  * What a view writes for a flag the contract decides: a boolean literal's value, or the source of
@@ -83,6 +93,8 @@ export interface Collected {
     line: number
     /** For `disabled`, the event its `!props.can(…)` asks about, where the file says (`asked-event.ts`). */
     asks?: string
+    /** Supplied by a spread some branch of which leaves it out: never counted as present. */
+    partial?: true
   }>
   problems: Problem[]
 }
@@ -120,22 +132,10 @@ const MARKS_STATE: Flag = {
   valueMessage: MARKS_STATE_VALUE,
 }
 
-interface ElementAttribute {
-  readonly name: string
-  readonly value: JSXAttributeValue | null
-  /** The value a spread on the element supplies the prop with, where one does. */
-  readonly spread?: Expression
-  readonly start: number
-}
-
 const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
 
 /** The grammar of a contract code: `welcome`, `devices-read-failed`. */
 const CODE = /^[a-z]+(-[a-z0-9]+)*$/
-
-/** An attribute that carries an anchor: `data-testid`, `testId` or a `*TestId` prop. */
-export const isAnchorAttribute = (name: string): boolean =>
-  name === 'data-testid' || name === 'testId' || name.endsWith('TestId')
 
 export function collectFromSource(text: string, file: string): Collected {
   const collected: Collected = {
@@ -194,27 +194,6 @@ export function collectFromSource(text: string, file: string): Collected {
 
   const locals = localsOf(program)
 
-  /**
-   * The anchor an element carries as a literal or as `testIdFor()` of two literals, or through a
-   * `<NAME>_TEST_ID` constant of the file that holds one, if any.
-   */
-  const carriedBy = (attributes: readonly ElementAttribute[]): CarriedAnchor | undefined => {
-    const carrier = attributes.find(
-      (attribute) => attribute.spread === undefined && isAnchorAttribute(attribute.name),
-    )
-
-    return carrier === undefined
-      ? undefined
-      : (carriedAnchor(carrier.value) ?? constantAnchorOf(locals, carrier.value, carrier.start))
-  }
-
-  /** The expression of an attribute's value, or the one a spread supplies; none for a string. */
-  const expressionOf = ({ value, spread }: ElementAttribute): Expression | undefined =>
-    spread ??
-    (value?.type === 'JSXExpressionContainer' && value.expression.type !== 'JSXEmptyExpression'
-      ? value.expression
-      : undefined)
-
   /** The source of an attribute's value: an expression's, a string's with its quotes, or none. */
   const sourceOf = ({ value, spread }: ElementAttribute): string => {
     const node = spread ?? (value?.type === 'JSXExpressionContainer' ? value.expression : value)
@@ -230,7 +209,7 @@ export function collectFromSource(text: string, file: string): Collected {
    * other value is a problem, and so is a boolean literal on an element with no such anchor.
    */
   const flag = (
-    attributes: readonly ElementAttribute[],
+    { attributes, carried }: ReadElement,
     { name, anchorMessage, valueMessage }: Flag,
   ): (CarriedAnchor & { value: FlagValue; line: number }) | undefined => {
     const written = attributes.find((attribute) => attribute.name === name)
@@ -252,8 +231,6 @@ export function collectFromSource(text: string, file: string): Collected {
       return undefined
     }
 
-    const carried = carriedBy(attributes)
-
     if (carried === undefined) {
       if (!passed) {
         collected.problems.push({ file, line: line(written.start), message: anchorMessage })
@@ -266,11 +243,13 @@ export function collectFromSource(text: string, file: string): Collected {
   }
 
   /** The facet props of an element that carries its anchor so; an element passed one is let by. */
-  const facets = (attributes: readonly ElementAttribute[]): void => {
-    const carried = carriedBy(attributes)
-
+  const facets = ({ attributes, carried, unfollowed }: ReadElement): void => {
     if (carried === undefined) {
       return
+    }
+
+    for (const at of unfollowed) {
+      collected.problems.push({ file, line: line(at), message: UNFOLLOWED_SPREAD(carried.anchor) })
     }
 
     for (const attribute of attributes) {
@@ -289,6 +268,7 @@ export function collectFromSource(text: string, file: string): Collected {
           text: sourceOf(attribute),
           line: line(attribute.start),
           ...(asks === undefined ? {} : { asks }),
+          ...(attribute.partial === true ? { partial: true as const } : {}),
         })
       }
     }
@@ -309,23 +289,12 @@ export function collectFromSource(text: string, file: string): Collected {
       }
     },
     JSXOpeningElement(node) {
-      // A prop a spread supplies counts as written on the element, at the spread.
-      const attributes = node.attributes.flatMap((attribute): ElementAttribute[] =>
-        attribute.type === 'JSXSpreadAttribute'
-          ? spreadPropsOf(locals, attribute.argument, attribute.start).map(({ name, value }) => ({
-              name,
-              value: null,
-              spread: value,
-              start: attribute.start,
-            }))
-          : attribute.name.type === 'JSXIdentifier'
-            ? [{ name: attribute.name.name, value: attribute.value, start: attribute.start }]
-            : [],
-      )
-      const holds = flag(attributes, HOLDS_INPUT)
-      const marks = flag(attributes, MARKS_STATE)
+      // A prop a spread supplies counts as written on the element, at the spread (`element.ts`).
+      const element = readElement(node, locals)
+      const holds = flag(element, HOLDS_INPUT)
+      const marks = flag(element, MARKS_STATE)
 
-      facets(attributes)
+      facets(element)
 
       if (holds !== undefined) {
         const { value: holdsInput, ...carried } = holds

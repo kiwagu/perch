@@ -206,7 +206,10 @@ function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets
       .filter((prop) => prop.name === name && (prop.base === undefined || declared.has(prop.base)))
       .map((prop) => ({ ...prop, file })),
   )
-  const carried = new Set(props.map(({ anchor }) => anchor))
+  // A prop one branch of a spread leaves out is not there on that branch: it is still wanted.
+  const carried = new Set(
+    props.filter(({ partial }) => partial !== true).map(({ anchor }) => anchor),
+  )
   const against = props.flatMap(({ anchor, text, file, line, asks }) => {
     const held = on.get(anchor)
     const as = written(name, text)

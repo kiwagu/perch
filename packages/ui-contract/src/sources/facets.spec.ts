@@ -249,6 +249,34 @@ describe('facetProblems', () => {
         `view.tsx:${constantLine}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
       ])
     })
+    it('wants the mark on every branch a spread may take, and reads it there', () => {
+      const branches = {
+        marked: `{ 'aria-invalid': ${MARK}, id: 'title' }`,
+        plain: "{ id: 'title' }",
+      }
+
+      expect(
+        problemsOf({
+          title: '<Input data-testid="sample.title-input" {...(failed ? marked : plain)} />',
+          ...branches,
+        }),
+      ).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
+      ])
+      expect(
+        problemsOf({
+          title: '<Input data-testid="sample.title-input" {...(failed ? marked : marked)} />',
+          ...branches,
+        }),
+      ).toEqual([])
+    })
+    it('reads the anchor a spread supplies, and the facts beside it', () => {
+      const title = `<Input {...{ testId: 'sample.title-input', maxLength: 80, 'aria-invalid': ${MARK} }} />`
+
+      expect(problemsOf({ title })).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={80}, but ${KIT}`,
+      ])
+    })
     it('in ahead mode lets a missing mark by', () => {
       expect(
         problemsOf({ title: '<Input data-testid="sample.title-input" />' }, { ahead: true }),

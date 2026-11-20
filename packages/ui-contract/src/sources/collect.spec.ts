@@ -13,6 +13,7 @@ import {
   MARKS_STATE_VALUE,
   RUNTIME_ANCHOR,
   RUNTIME_SUFFIX,
+  UNFOLLOWED_SPREAD,
 } from './collect'
 
 const FIXTURES = join(import.meta.dirname, '../__fixtures__/sources')
@@ -176,7 +177,10 @@ describe('collectFromSource', () => {
         line: 14,
       },
     ])
-    expect(found.problems).toEqual([])
+    // `field` is no name of this file: its spread on an element whose anchor is read is refused.
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('x.form.password-input')}`,
+    ])
   })
   it("collects them beside a testIdFor() of two literals, with the derived anchor's base", () => {
     const found = collectFromSource(
@@ -255,7 +259,11 @@ describe('collectFromSource', () => {
       { anchor: 'x.form.flag-input', holdsInput: 'props.holds', line: 8 },
     ])
     expect(found.colours).toEqual([{ anchor: 'x.form.flag-input', marksState: false, line: 8 }])
-    expect(found.problems).toEqual([])
+    // Neither spread on the note input can be followed, and its anchor is read: both are refused.
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:7: ${UNFOLLOWED_SPREAD('x.form.note-input')}`,
+      `x.tsx:7: ${UNFOLLOWED_SPREAD('x.form.note-input')}`,
+    ])
   })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(

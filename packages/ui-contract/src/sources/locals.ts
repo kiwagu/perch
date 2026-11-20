@@ -1,12 +1,10 @@
 /**
- * What a source file's names stand for, as far as the file itself says: the value a constant is
- * declared with and the function a name declares, read in the scope that declares it, so a name a
- * view writes resolves as it does at runtime (an inner declaration, a parameter or a destructured
- * name hides an outer one). The collector follows a `<NAME>_TEST_ID` constant to the anchor it
- * holds, and a value to every object it may be (`objectsOf`): for a spread on an element, the props
- * it supplies (`spreads.ts`); for the argument of `can()`, the event it names (`asked-event.ts`). A
- * name declared in another file, or a value built at runtime, is an alternative the file cannot
- * follow, which each reader decides about itself.
+ * What a source file's names stand for, as far as the file itself says: the value a constant or a
+ * function is declared with, read in the scope that declares it, so a name resolves as it does at
+ * runtime (an inner declaration, a parameter or a destructured name hides an outer one), and every
+ * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
+ * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
+ * the file cannot follow, which each reader decides about itself.
  */
 
 import type {
@@ -15,24 +13,13 @@ import type {
   BindingRestElement,
   Expression,
   Function as FunctionNode,
-  JSXAttributeValue,
   ObjectExpression,
   ParamPattern,
   Program,
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { testIdFor } from '../anchors'
-
-import {
-  type CarriedAnchor,
-  derivedAnchorOf,
-  isTestIdFor,
-  keyName,
-  staticText,
-  TEST_ID_CONSTANT,
-  unwrap,
-} from './values'
+import { keyName, unwrap } from './values'
 
 /** A range of the source, `[start, end)`. */
 interface Span {
@@ -308,53 +295,4 @@ export function localsOf(program: Program): Locals {
   }
 
   return { valueNamed, objectsOf: (node, at) => objectsOf(node, at) }
-}
-
-/**
- * The anchor an attribute carries through a `<NAME>_TEST_ID` constant of its file: the constant's
- * literal, or `testIdFor()` of such a constant and a literal suffix, which comes with its base; no
- * anchor for any other value, a constant the file does not declare as a literal included.
- */
-export function constantAnchorOf(
-  locals: Locals,
-  value: JSXAttributeValue | null,
-  at: number,
-): CarriedAnchor | undefined {
-  if (value?.type !== 'JSXExpressionContainer' || value.expression.type === 'JSXEmptyExpression') {
-    return undefined
-  }
-
-  const constant = (node: Expression | undefined): string | undefined => {
-    const name = node === undefined ? undefined : unwrap(node)
-
-    if (name?.type !== 'Identifier' || !TEST_ID_CONSTANT.test(name.name)) {
-      return undefined
-    }
-
-    return staticText(locals.valueNamed(name.name, at))
-  }
-  const written = unwrap(value.expression)
-  const held = constant(written)
-
-  if (held !== undefined) {
-    return { anchor: held }
-  }
-
-  if (written.type === 'Identifier' && TEST_ID_CONSTANT.test(written.name)) {
-    const declared = locals.valueNamed(written.name, at)
-
-    return declared === undefined ? undefined : derivedAnchorOf(declared)
-  }
-
-  if (written.type !== 'CallExpression' || !isTestIdFor(written.callee)) {
-    return undefined
-  }
-
-  const [base, suffix] = written.arguments
-  const from = base === undefined || base.type === 'SpreadElement' ? undefined : constant(base)
-  const part = staticText(suffix)
-
-  return from === undefined || part === undefined
-    ? undefined
-    : { anchor: testIdFor(from, part), base: from }
 }
