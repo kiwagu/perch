@@ -3,12 +3,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import { useService, useShape } from '../../../../../platform/module'
 import { useScreenMachine } from '../../../../../platform/screen-machine'
 import { SESSION } from '../../../../../platform/session.port'
+import { PROFILE_SERVICE } from '../../../application/profile.service'
 import {
   createProfileMachine,
   type ProfileFields,
   type ProfileValues,
-} from '../../../application/profile.machine'
-import { PROFILE_SERVICE } from '../../../application/profile.service'
+} from '../../../application/profile-machine'
 
 import { profileShape } from './profile.model.gen'
 import { ProfileView } from './profile.view'

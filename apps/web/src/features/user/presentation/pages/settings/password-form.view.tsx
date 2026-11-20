@@ -172,6 +172,7 @@ export function PasswordFormView(props: PasswordFormViewProps) {
               </FieldLabel>
               <PasswordInput
                 {...field('confirmation')}
+                maxLength={35}
                 aria-invalid={concerns === 'confirmation' ? true : undefined}
                 testId="user.settings.password.password-confirmation-input"
               />

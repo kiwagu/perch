@@ -3,78 +3,14 @@ import { assign, emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
 import type { DataError } from '@workspace/data'
-import type { ProfileId } from '@workspace/ids'
 
-/** The anchor of the form's own error: the machine keeps the code it shows for the view. */
-const PROFILE_ERROR = 'user.profile.error'
+import type { ProfileContext, ProfileFields } from './context'
+import type { ProfileMachineDeps, SignOutOutcome } from './deps'
+import { ASKED, BIO_REFUSED, NAME_REFUSED, PROFILE_ERROR, SAVED, TO_SIGN_IN } from './effects'
+import type { NavigateParams, ProfileEmitted, ProfileEvent, ShowParams } from './events'
 
 /** The code of a failure that carries none. */
 const UNKNOWN_FAILURE = 'profile:UNKNOWN'
-
-export interface ProfileFields {
-  readonly name: string
-  readonly bio: string
-}
-
-/** What the page holds beside the machine: the profile as stored, and what was typed into it. */
-export interface ProfileValues {
-  readonly id: ProfileId | undefined
-  readonly stored: ProfileFields
-  readonly drafts: ProfileFields
-}
-
-export interface ProfileContext {
-  /** The code of the last refused save, until a save succeeds. */
-  readonly error: string | undefined
-  /** The fields whose region is `edited`: they show what was typed, not the stored value. */
-  readonly edited: { readonly [Field in keyof ProfileFields]: boolean }
-}
-
-/** The events of the screen's flow: the anchors acted on, and the stored fields that changed. */
-export type ProfileEvent =
-  | { readonly type: 'user.profile.name-input' }
-  | { readonly type: 'user.profile.bio-textarea' }
-  | { readonly type: 'model.profile.name' }
-  | { readonly type: 'model.profile.bio' }
-  | { readonly type: 'user.profile.save-button' }
-  | { readonly type: 'user.profile.sign-out-button' }
-  | { readonly type: 'user.profile.sign-out-dialog.confirm-button' }
-  | { readonly type: 'user.profile.sign-out-dialog.cancel-button' }
-
-/** The params of the flow's effects: an anchor shows one of the codes; the app moves to a path. */
-interface ShowParams {
-  readonly anchor: string
-  readonly codes: readonly string[]
-}
-
-interface NavigateParams {
-  readonly to: string
-}
-
-/** What the machine asks of its host: a code shown outside the form, a move to a path. */
-export type ProfileEmitted =
-  | ({ readonly type: 'show' } & ShowParams)
-  | ({ readonly type: 'navigate' } & NavigateParams)
-
-export type SignOutOutcome = 'signed-out' | 'needs-confirmation'
-
-export interface ProfileMachineDeps {
-  readonly profiles: {
-    readonly updateName: (input: {
-      readonly id: ProfileId
-      readonly name: string
-    }) => ResultAsync<void, BusError>
-    readonly updateBio: (input: {
-      readonly id: ProfileId
-      readonly bio: string
-    }) => ResultAsync<void, BusError>
-  }
-  readonly signOut: (options?: {
-    readonly forgetUnsent: true
-  }) => ResultAsync<SignOutOutcome, DataError>
-  /** Read at each guard and each write: what the page holds now. */
-  readonly values: () => ProfileValues
-}
 
 /** The code a refused write rejected with, read off the error event of its invoke. */
 function failureOf(event: object): string {
@@ -98,24 +34,6 @@ async function settled<T>(result: ResultAsync<T, BusError | DataError> | undefin
 
   return outcome.isOk() ? outcome.value : Promise.reject(outcome.error)
 }
-
-/** The toast of a Save, said once where it ends, however many writes it ran. */
-const SAVED = {
-  type: 'show',
-  params: { anchor: 'app-shell.toast', codes: ['profile-saved'] },
-} as const
-const REFUSED = {
-  type: 'show',
-  params: {
-    anchor: PROFILE_ERROR,
-    codes: ['name-required', 'name-too-long', 'bio-too-long', 'failed'],
-  },
-} as const
-const ASKED = {
-  type: 'show',
-  params: { anchor: 'user.profile.sign-out-dialog', codes: ['unsent-changes'] },
-} as const
-const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
 
 /**
  * The profile page as the screen's flow says (`contract/domain/screens/me.yaml`): the name and the
@@ -249,7 +167,7 @@ export function createProfileMachine(deps: ProfileMachineDeps) {
                     { target: 'saving-bio', guard: 'bioChanged' },
                     { target: 'idle', actions: ['clearError', SAVED] },
                   ],
-                  onError: { target: 'idle', actions: [REFUSED] },
+                  onError: { target: 'idle', actions: [NAME_REFUSED] },
                 },
               },
               'saving-bio': {
@@ -257,7 +175,7 @@ export function createProfileMachine(deps: ProfileMachineDeps) {
                   src: 'profile.updateBio',
                   input: ({ context }) => ({ bio: inputOf(context, 'bio') }),
                   onDone: { target: 'idle', actions: ['clearError', SAVED] },
-                  onError: { target: 'idle', actions: [REFUSED] },
+                  onError: { target: 'idle', actions: [BIO_REFUSED] },
                 },
               },
             },

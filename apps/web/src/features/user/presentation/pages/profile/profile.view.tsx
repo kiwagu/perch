@@ -10,7 +10,7 @@ import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import { concernsOf } from '../../../../../platform/concerns'
-import type { ProfileEvent, ProfileFields } from '../../../application/profile.machine'
+import type { ProfileEvent, ProfileFields } from '../../../application/profile-machine'
 
 export interface ProfileViewData {
   readonly name: string

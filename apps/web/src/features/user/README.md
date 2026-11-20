@@ -150,7 +150,7 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   `user.settings` in `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`,
   `forgot-password.yaml`, `reset-password.yaml`, `confirm-email.yaml`, `delete-account.yaml`,
   `me.yaml` and `settings.yaml`.
-- Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
+- Behaviour: the page runs its screen's flow as its machine (`application/profile-machine/`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
   frame's guard of unsaved input, the sign-out button asks it first, and both forms are the

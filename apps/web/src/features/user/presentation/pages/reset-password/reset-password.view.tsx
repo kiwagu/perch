@@ -170,6 +170,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                 </FieldLabel>
                 <PasswordInput
                   {...password('confirmation')}
+                  maxLength={35}
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
                   marksState={false}
                   testId="user.reset-password.password-confirmation-input"
