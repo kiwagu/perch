@@ -1,10 +1,11 @@
-import { CREATE_REFUSED, ORGANISATION_CREATED } from './effects'
+import { CLEAR_KEY, CLEAR_NAME, CREATE_REFUSED, ORGANISATION_CREATED } from './effects'
 import { taken } from './events'
 
 /**
  * The region of the screen's flow that creates an organisation: the form is closed until its
  * toggle opens it (without a membership it is shown regardless, so its submit is taken closed
- * too), a creation starts every area afresh, a refusal keeps the form open with what was typed.
+ * too), a creation empties the form's fields and starts every area afresh, a refusal keeps the
+ * form open with what was typed.
  */
 export const CREATE_FORM_REGION = {
   initial: 'closed',
@@ -25,7 +26,10 @@ export const CREATE_FORM_REGION = {
       invoke: {
         src: 'platform.organisations.create',
         input: taken('organisation.create.submit-button'),
-        onDone: { target: '#organisation.viewing', actions: [ORGANISATION_CREATED] },
+        onDone: {
+          target: '#organisation.viewing',
+          actions: [CLEAR_KEY, CLEAR_NAME, ORGANISATION_CREATED],
+        },
         onError: { target: 'open', actions: [CREATE_REFUSED] },
       },
     },

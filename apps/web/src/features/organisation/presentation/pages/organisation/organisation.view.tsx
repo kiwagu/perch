@@ -11,7 +11,10 @@ import type {
   OrganisationEvent,
   TenantRole,
 } from '../../../application/organisation-machine'
-import { OrganisationCreate } from '../../components/organisation-create/organisation-create.view'
+import {
+  type CreateDraft,
+  OrganisationCreate,
+} from '../../components/organisation-create/organisation-create.view'
 import {
   type InviteDraft,
   OrganisationInvite,
@@ -34,7 +37,15 @@ import {
 } from '../../components/organisation-sent/organisation-sent.view'
 import { roleLabel } from '../../components/role-words'
 
-export type { InviteDraft, MemberItem, NoteItem, OrganisationErrors, ReceivedItem, SentItem }
+export type {
+  CreateDraft,
+  InviteDraft,
+  MemberItem,
+  NoteItem,
+  OrganisationErrors,
+  ReceivedItem,
+  SentItem,
+}
 
 /** An organisation the signed-in identity belongs to, with its role there. */
 export interface OrganisationChoice {
@@ -63,8 +74,14 @@ export interface OrganisationViewProps {
   /** The note whose edit form is shown; none while no note is edited. */
   readonly editing: NoteId | undefined
   readonly onToggleCreate: () => void
-  /** The actions of the forms resolve true once done, and the form that asked starts afresh. */
-  readonly onCreate: (input: { readonly key: string; readonly name: string }) => Promise<boolean>
+  /** What the create form's fields hold, and a change of them. */
+  readonly create: CreateDraft
+  readonly onCreateChange: (draft: CreateDraft) => void
+  /** What the new note's field holds, and a change of it. */
+  readonly newNote: string
+  readonly onNewNoteChange: (text: string) => void
+  /** The actions of the forms resolve true once done; the page empties the fields as its flow says. */
+  readonly onCreate: (input: CreateDraft) => Promise<boolean>
   readonly onSelect: (key: string) => void
   readonly onAddNote: (text: string) => Promise<boolean>
   readonly onOpenEdit: (id: NoteId) => void
@@ -152,7 +169,9 @@ export function OrganisationView(props: OrganisationViewProps) {
               notes={props.notes}
               editing={props.editing}
               error={props.errors?.notes}
+              text={props.newNote}
               can={props.can}
+              onTextChange={props.onNewNoteChange}
               onAdd={props.onAddNote}
               onOpenEdit={props.onOpenEdit}
               onEdit={props.onEditNote}
@@ -217,8 +236,10 @@ export function OrganisationView(props: OrganisationViewProps) {
       {/* Closed, the create form is hidden and keeps what was typed; another organisation starts it afresh. */}
       <div key={current?.key ?? ''} hidden={current !== undefined && !props.creating}>
         <OrganisationCreate
+          draft={props.create}
           error={props.errors?.create}
           can={props.can}
+          onChange={props.onCreateChange}
           onCreate={props.onCreate}
         />
       </div>

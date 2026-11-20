@@ -132,24 +132,16 @@ export function OrganisationNotes(
     /** The note whose edit form is shown; none while no note is edited. */
     readonly editing: NoteId | undefined
     readonly error: string | undefined
+    /** What the new note's field holds, and a change of it. */
+    readonly text: string
+    readonly onTextChange: (text: string) => void
     /** Resolves true once the note is written. */
     readonly onAdd: (text: string) => Promise<boolean>
   },
 ) {
   const t = useT()
-  const [text, setText] = useState('')
+  const { text } = props
   const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? 'ready' : 'empty'
-  const add = () => {
-    const added = props.onAdd(text)
-
-    void added.then((done) => {
-      if (done) {
-        setText('')
-      }
-    })
-
-    return added
-  }
 
   return (
     <Card>
@@ -187,11 +179,11 @@ export function OrganisationNotes(
             {t('organisation.notes.empty')}
           </p>
         ) : null}
-        <Form onSubmit={add}>
+        <Form onSubmit={() => props.onAdd(text)}>
           <Field>
             <Textarea
               value={text}
-              onChange={(event) => setText(event.target.value)}
+              onChange={(event) => props.onTextChange(event.target.value)}
               maxLength={500}
               placeholder={t('organisation.notes.placeholder')}
               aria-label={t('organisation.notes.placeholder')}

@@ -67,8 +67,8 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
   email's field empties once its mail is on its way, the reason's once the account is banned, and
   a removal moves to the accounts. A refused action shows its code in its area's error: under
   the field it concerns for `name-required`, `name-too-long`, `email-invalid` and `email-taken`,
-  above the area's controls for any other; a done action forgets its area's error. The ban, the
-  sign-out everywhere and the removal ask the frame's confirmation first
+  above the area's controls for any other; a done action clears its area's error, as its flow
+  says. The ban, the sign-out everywhere and the removal ask the frame's confirmation first
   (`platform/confirmations.ts`). A read that failed shows `console.account.error` in the place of
   the section: `not-operator`, `account-gone` or `failed`. Every link and button of the card is
   a touch target of 44 by 44 CSS px at least.

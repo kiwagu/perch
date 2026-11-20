@@ -31,10 +31,12 @@ on the replica schema are applied on the device before a command runs
   not accepted yet, with the link to copy and the revoke button), `OrganisationReceived` (the
   invitations for the account, with accept and decline) and `OrganisationErrorLine` (a
   refused change as its contract code and its copy), in `presentation/components/`;
-  `roleShown` (the role a member's row shows) and `useInviteDraft` (the invitation form's
-  fields, which the flow empties) sit beside the page's view, which reads the members, the
-  invitations sent and the invitations for the account through the platform's `useListed` (a
-  list as last read, and the change it settled after).
+  `roleShown` (the role a member's row shows), `useInviteDraft` (the invitation form's fields)
+  and `useOrganisationDraft` (the create form's fields and the new note's, which the page holds
+  for the organisation it shows) sit beside the page's view, whose flow empties those fields
+  once their action is done, and which reads the members, the invitations sent and the
+  invitations for the account through the platform's `useListed` (a list as last read, and the
+  change it settled after).
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screens `organisation` in `contract/domain/screens/org.yaml` and

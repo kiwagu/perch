@@ -5,11 +5,17 @@ import {
   BAN_LIFTED,
   BAN_REFUSED,
   BAN_SET,
+  CLEAR_BAN_ERROR,
   CLEAR_EMAIL,
+  CLEAR_EMAIL_ERROR,
+  CLEAR_NAME_ERROR,
   CLEAR_REASON,
+  CLEAR_REMOVAL_ERROR,
+  CLEAR_RESET_ERROR,
+  CLEAR_SESSIONS_ERROR,
+  CLEAR_VERIFICATION_ERROR,
   EMAIL_CHANGE_SENT,
   EMAIL_REFUSED,
-  forget,
   NAME_SAVED,
   READ_SECTION,
   REMOVE_REFUSED,
@@ -62,7 +68,7 @@ function reasonInput({ event }: { readonly event: AccountEvent }): { readonly re
 /**
  * The areas of the card's flow (`contract/domain/screens/console/account.yaml`), the regions of
  * `viewing`: each idle until its control is pressed, running its action on the account until it
- * ends. A done action forgets its area's error, says itself in a toast and reads the card again; a
+ * ends. A done action clears its area's error, says itself in a toast and reads the card again; a
  * refused one shows its code in its area's error and reads the card again, since what it shows may
  * have changed meanwhile. A removal done leaves the card for the accounts.
  */
@@ -76,7 +82,7 @@ export const NAME_REGION = {
       invoke: {
         src: 'platform.accounts.rename',
         input: nameInput,
-        onDone: { target: 'idle', actions: [forget('name'), READ_SECTION, NAME_SAVED] },
+        onDone: { target: 'idle', actions: [CLEAR_NAME_ERROR, READ_SECTION, NAME_SAVED] },
         onError: { target: 'idle', actions: [RENAME_REFUSED, READ_SECTION] },
       },
     },
@@ -94,7 +100,7 @@ export const EMAIL_REGION = {
         input: emailInput,
         onDone: {
           target: 'idle',
-          actions: [forget('email'), CLEAR_EMAIL, READ_SECTION, EMAIL_CHANGE_SENT],
+          actions: [CLEAR_EMAIL_ERROR, CLEAR_EMAIL, READ_SECTION, EMAIL_CHANGE_SENT],
         },
         onError: { target: 'idle', actions: [EMAIL_REFUSED, READ_SECTION] },
       },
@@ -116,14 +122,17 @@ export const BAN_REGION = {
       invoke: {
         src: 'platform.accounts.ban',
         input: reasonInput,
-        onDone: { target: 'idle', actions: [forget('ban'), CLEAR_REASON, READ_SECTION, BAN_SET] },
+        onDone: {
+          target: 'idle',
+          actions: [CLEAR_BAN_ERROR, CLEAR_REASON, READ_SECTION, BAN_SET],
+        },
         onError: { target: 'idle', actions: [BAN_REFUSED, READ_SECTION] },
       },
     },
     unbanning: {
       invoke: {
         src: 'platform.accounts.unban',
-        onDone: { target: 'idle', actions: [forget('ban'), READ_SECTION, BAN_LIFTED] },
+        onDone: { target: 'idle', actions: [CLEAR_BAN_ERROR, READ_SECTION, BAN_LIFTED] },
         onError: { target: 'idle', actions: [UNBAN_REFUSED, READ_SECTION] },
       },
     },
@@ -138,7 +147,10 @@ export const SESSIONS_REGION = {
     running: {
       invoke: {
         src: 'platform.accounts.revoke-sessions',
-        onDone: { target: 'idle', actions: [forget('sessions'), READ_SECTION, SESSIONS_REVOKED] },
+        onDone: {
+          target: 'idle',
+          actions: [CLEAR_SESSIONS_ERROR, READ_SECTION, SESSIONS_REVOKED],
+        },
         onError: { target: 'idle', actions: [REVOKE_REFUSED, READ_SECTION] },
       },
     },
@@ -153,7 +165,7 @@ export const RESET_REGION = {
     running: {
       invoke: {
         src: 'platform.accounts.send-reset',
-        onDone: { target: 'idle', actions: [forget('reset'), READ_SECTION, RESET_SENT] },
+        onDone: { target: 'idle', actions: [CLEAR_RESET_ERROR, READ_SECTION, RESET_SENT] },
         onError: { target: 'idle', actions: [RESET_REFUSED, READ_SECTION] },
       },
     },
@@ -170,7 +182,7 @@ export const VERIFICATION_REGION = {
         src: 'platform.accounts.resend-verification',
         onDone: {
           target: 'idle',
-          actions: [forget('verification'), READ_SECTION, VERIFICATION_SENT],
+          actions: [CLEAR_VERIFICATION_ERROR, READ_SECTION, VERIFICATION_SENT],
         },
         onError: { target: 'idle', actions: [RESEND_REFUSED, READ_SECTION] },
       },
@@ -186,7 +198,10 @@ export const REMOVAL_REGION = {
     running: {
       invoke: {
         src: 'platform.accounts.remove',
-        onDone: { target: '#account.removed', actions: [TO_ACCOUNTS, ACCOUNT_REMOVED] },
+        onDone: {
+          target: '#account.removed',
+          actions: [CLEAR_REMOVAL_ERROR, TO_ACCOUNTS, ACCOUNT_REMOVED],
+        },
         onError: { target: 'idle', actions: [REMOVE_REFUSED, READ_SECTION] },
       },
     },

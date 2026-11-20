@@ -12,6 +12,7 @@ import en from '../../i18n/organisation.en.json'
 import es from '../../i18n/organisation.es.json'
 
 import {
+  type CreateDraft,
   type InviteDraft,
   type MemberItem,
   type NoteItem,
@@ -21,6 +22,7 @@ import {
   type ReceivedItem,
   type SentItem,
 } from './organisation.view'
+import { useOrganisationDraft } from './use-organisation-draft'
 
 const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: 'member' }
 const acmeAdmin: OrganisationChoice = { ...acme, role: 'admin' }
@@ -77,15 +79,38 @@ const fromInitech: ReceivedItem = {
   role: 'admin',
 }
 
-/** The page with the invitation form's fields held as its container holds them. */
-function Page(props: Omit<OrganisationViewProps, 'invite' | 'onInviteChange'>) {
-  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: 'member' })
+/** The props the page's container gives, which the page here holds as the container holds them. */
+type Held =
+  | 'invite'
+  | 'onInviteChange'
+  | 'create'
+  | 'onCreateChange'
+  | 'newNote'
+  | 'onNewNoteChange'
 
-  return <OrganisationView {...props} invite={invite} onInviteChange={setInvite} />
+const NO_CREATE: CreateDraft = { key: '', name: '' }
+
+/** The page with the fields of its forms held as its container holds them. */
+function Page(props: Omit<OrganisationViewProps, Held>) {
+  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: 'member' })
+  const create = useOrganisationDraft(props.current?.key, NO_CREATE)
+  const note = useOrganisationDraft(props.current?.key, '')
+
+  return (
+    <OrganisationView
+      {...props}
+      invite={invite}
+      onInviteChange={setInvite}
+      create={create.draft}
+      onCreateChange={(draft) => create.change(() => draft)}
+      newNote={note.draft}
+      onNewNoteChange={(text) => note.change(() => text)}
+    />
+  )
 }
 
 function renderView(
-  props: Partial<Omit<OrganisationViewProps, 'invite' | 'onInviteChange'>> = {},
+  props: Partial<Omit<OrganisationViewProps, Held>> = {},
   locale: 'en' | 'es' = 'en',
 ) {
   const handlers = {
@@ -104,7 +129,7 @@ function renderView(
     onAccept: vi.fn(),
     onDecline: vi.fn(),
   }
-  const view = (more: Partial<Omit<OrganisationViewProps, 'invite' | 'onInviteChange'>>) => (
+  const view = (more: Partial<Omit<OrganisationViewProps, Held>>) => (
     <Page
       organisations={[acme]}
       current={acme}
@@ -121,8 +146,7 @@ function renderView(
 
   return {
     ...handlers,
-    rerender: (more: Partial<Omit<OrganisationViewProps, 'invite' | 'onInviteChange'>>) =>
-      rerender(view(more)),
+    rerender: (more: Partial<Omit<OrganisationViewProps, Held>>) => rerender(view(more)),
   }
 }
 
@@ -339,7 +363,7 @@ describe('OrganisationView of a member', () => {
     expect(screen.queryByTestId('organisation.notes.empty-message')).toBeNull()
   })
 
-  it('adds a note and empties the field once it is written', async () => {
+  it('adds a note and keeps what was typed for the page to empty', async () => {
     const { onAddNote } = renderView()
 
     expect(field('organisation.notes.new-textarea').placeholder).toBe(
@@ -351,7 +375,9 @@ describe('OrganisationView of a member', () => {
     fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
 
     expect(onAddNote).toHaveBeenCalledWith('New plan')
-    await waitFor(() => expect(field('organisation.notes.new-textarea').value).toBe(''))
+    await act(() => Promise.resolve())
+
+    expect(field('organisation.notes.new-textarea').value).toBe('New plan')
   })
 
   it('keeps a note that was refused in the field and explains why', async () => {
@@ -568,6 +594,32 @@ describe('OrganisationView of a member', () => {
 
     expect(createHidden()).toBe(true)
     expect(field('organisation.create.key-input').value).toBe('')
+  })
+
+  it('starts the forms afresh when another organisation becomes current, and not again when it is current once more', () => {
+    const { rerender } = renderView({ organisations: [acme, globex], creating: true })
+
+    type('organisation.notes.new-textarea', 'Draft for Acme')
+    type('organisation.create.key-input', 'initech')
+    rerender({ organisations: [acme, globex], current: globex, notes: [], creating: true })
+    rerender({ organisations: [acme, globex], current: acme, creating: true })
+
+    expect(field('organisation.notes.new-textarea').value).toBe('')
+    expect(field('organisation.create.key-input').value).toBe('')
+  })
+
+  it('keeps what was typed into the create form once the creation is done, for the page to empty', async () => {
+    const { onCreate } = renderView({ creating: true })
+
+    type('organisation.create.key-input', 'globex')
+    type('organisation.create.name-input', 'Globex')
+    fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith({ key: 'globex', name: 'Globex' }))
+    await act(() => Promise.resolve())
+
+    expect(field('organisation.create.key-input').value).toBe('globex')
+    expect(field('organisation.create.name-input').value).toBe('Globex')
   })
 
   it('keeps what was typed into the create form when the creation fails', async () => {
