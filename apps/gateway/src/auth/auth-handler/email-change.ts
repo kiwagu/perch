@@ -23,7 +23,8 @@ import { type MountCaller, signedIn } from './signed-in'
  */
 export const CHANGE_EMAIL_FLOOR_MS = 800
 
-const changeBody = z.object({ email: z.string(), password: z.string() })
+/** The password is the account's own, so never empty: an empty one is no guess. */
+const changeBody = z.object({ email: z.string(), password: z.string().min(1) })
 /** A new email as the change takes it: an email of at most `MAX_EMAIL` characters, trimmed. */
 const newEmailShape = z.email().max(MAX_EMAIL)
 const confirmBody = z.object({ token: z.string().min(1).max(4096) })
@@ -31,18 +32,19 @@ const confirmBody = z.object({ token: z.string().min(1).max(4096) })
 /**
  * Asks to change the caller's email (`{ email, password }`, with the device's token and
  * `X-Perch-Device`). After the caller is read (`signedIn`), it takes one of the client address's
- * credential checks (429); a body it cannot read answers 400 `bad-request`, a new email that is
- * not an email (empty, longer than 254 characters, or of any other shape) 400 `email-invalid`.
- * Then one of the address's mails and one of the account's three changes in a quarter of an hour
- * are taken (`RequestLimits.emailChangeMail`, 429). Everything after runs in the account's turn,
- * so no reset or change of its password runs in between: the caller's session is read again (401
- * `unauthorized` when it ended meanwhile) with the account's email as it is now, the password must
- * find a place among that email's failed sign-ins (429) and match the credential row, a wrong one
- * keeping its place: 400 `invalid-credentials`. With the right password the earlier pending change
- * ends and, when no account has the new email (the account's own email counts as taken), a new
- * change is kept and the mail to the new email starts, its link carrying the change's token; a
- * taken email gets no mail. Both answer `202` with no body, no sooner than `CHANGE_EMAIL_FLOOR_MS`
- * after the request began. The account keeps its email until the link is opened.
+ * credential checks (429); a body it cannot read, or one with no password, answers 400
+ * `bad-request`, a new email that is not an email (empty, longer than 254 characters, or of any
+ * other shape) 400 `email-invalid`. Then one of the address's mails and one of the account's three
+ * changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`, 429). Everything
+ * after runs in the account's turn, so no reset or change of its password runs in between: the
+ * caller's session is read again (401 `unauthorized` when it ended meanwhile) with the account's
+ * email as it is now, the password must find a place among that email's failed sign-ins (429) and
+ * match the credential row, a wrong one keeping its place: 400 `invalid-credentials`. With the
+ * right password the earlier pending change ends and, when no account has the new email (the
+ * account's own email counts as taken), a new change is kept and the mail to the new email starts,
+ * its link carrying the change's token; a taken email gets no mail. Both answer `202` with no body,
+ * no sooner than `CHANGE_EMAIL_FLOOR_MS` after the request began. The account keeps its email until
+ * the link is opened.
  */
 export function changeEmail(
   deps: AuthMountDeps,

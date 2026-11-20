@@ -213,13 +213,13 @@ describe('authHandler, the request to change the email', () => {
     expect((await mounted.route(confirm(second), FROM))?.status).toBe(200)
   })
 
-  it('refuses an empty password with invalid-credentials, mailing nothing', async () => {
+  it('refuses an empty password with bad-request, not as a wrong one, mailing nothing', async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
     const empty = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, ''), FROM)
 
     expect(empty?.status).toBe(400)
-    expect(await empty?.json()).toEqual({ code: 'invalid-credentials' })
+    expect(await empty?.json()).toEqual({ code: 'bad-request' })
     expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
   })
 

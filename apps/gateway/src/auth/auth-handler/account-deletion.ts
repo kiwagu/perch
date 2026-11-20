@@ -17,7 +17,8 @@ import { confirmPassword } from './password-confirmation'
 import { badRequest, internal, refused } from './requests'
 import { type MountCaller, signedIn } from './signed-in'
 
-const requestBody = z.object({ password: z.string() })
+/** The password is the account's own, so never empty: an empty one is no guess. */
+const requestBody = z.object({ password: z.string().min(1) })
 const deleteBody = z.object({ token: z.string().min(1).max(4096) })
 
 /** 409 `last-admin`: the account is the only admin of an organisation with other members. */
@@ -38,7 +39,8 @@ const LINK_EXPIRED: DeletionStop = { kind: 'link-expired' }
 /**
  * Asks to delete the caller's account (`{ password }`, with the device's token and
  * `X-Perch-Device`). After the caller is read (`signedIn`), it takes one of the client address's
- * credential checks (429); a body it cannot read answers 400 `bad-request`. Then one of the
+ * credential checks (429); a body it cannot read, or one with no password, answers 400
+ * `bad-request`. Then one of the
  * address's mails and one of the account's three requests in a quarter of an hour are taken
  * (`RequestLimits.deletionMail`, 429). Everything after runs in the account's turn: the password
  * is confirmed (`confirmPassword`: 401 when the session ended meanwhile, 429, 400

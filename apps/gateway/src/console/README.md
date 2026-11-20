@@ -111,9 +111,10 @@ its allowance 429 `rate-limited` with `Retry-After`; a failure of the gateway an
 
 ## Surface
 
-- Routes (`console-routes/`, through its `index.ts`: the targets of a path, the operator caller,
-  the action's account and its turn, the read, edit, ban, mail and removal handlers and the routes
-  that answer them), each for an operator alone:
+- Routes (`console-routes/`, through its `index.ts`: the targets of a path and the paths the
+  console answers, `CONSOLE_PATHS`, which the spec that holds the routes to the platform's actions
+  reads, the operator caller, the action's account and its turn, the read, edit, ban, mail and
+  removal handlers and the routes that answer them), each for an operator alone:
   - `GET /console/accounts?q&page&size`: 200 `{ accounts, total }`, page `page` (from 1, default
     1) of `size` accounts (10, 25 or 50, default 25) whose email or shown name holds `q` (up to 254
     characters; absent or empty, every account), each `{ id, name, email, emailVerified, banned,

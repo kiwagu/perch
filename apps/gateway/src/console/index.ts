@@ -17,5 +17,5 @@ export {
   type AccountSearch,
   type ListedAccount,
 } from './account-directory'
-export { type ConsoleRoutesOptions, consoleRoutes } from './console-routes'
+export { CONSOLE_PATHS, type ConsoleRoutesOptions, consoleRoutes } from './console-routes'
 export { ProfileNames, type ProfileNamesOptions, type Renaming } from './profile-names'

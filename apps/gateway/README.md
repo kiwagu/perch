@@ -96,7 +96,12 @@ the update; each device's next hello is then refused with 4401.
   `gateway` app has them) after `mcproc start services`; the pm2 stand's `gateway` app
   (`mcproc start dev`) is the other way to run it.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
-  one per organisation for the organisation services and routes.
+  one per organisation for the organisation services and routes. `src/platform-contract.spec.ts`
+  holds the whole server, asked over HTTP, to the actions of the platform the UI contract declares
+  (`contract/domain/platform.yaml`, read through `@workspace/ui-contract`, a dev dependency of
+  this package that no gateway source imports): each action is a route or the client's own, each
+  route has its action or its reason, and each bound of a parameter (a length, a pattern, a
+  format) is the bound of its route.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`

@@ -142,9 +142,10 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email and a password that is not empty, as strings, answers 400 `bad-request` before anything
-is read for the email, alike for any email (Better Auth would hash an empty password to time an
-unknown email's answer, which fails, and check a known one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
+an email of at most 254 characters (`MAX_EMAIL`) and a password that is not empty, as strings,
+answers 400 `bad-request` before anything is read for the email, alike for any email (Better Auth
+would hash an empty password to time an unknown email's answer, which fails, and check a known
+one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
 is the email counted. Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
@@ -386,7 +387,8 @@ most, each replaced by the next.
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
-credential checks, answers 400 `password-rejected` for a new password that breaks the rules,
+credential checks, answers 400 `bad-request` for a body without a current password (an empty one
+counts as none), 400 `password-rejected` for a new password that breaks the rules,
 and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
 `invalid-credentials`, a right one clears them. In the account's turn, the current password is
@@ -400,7 +402,8 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 `/change-password` is not used: it sets the password apart from the endings.
 
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
-its token and `X-Perch-Device`. After a credential check of its address, a new email that is not
+its token and `X-Perch-Device`. After a credential check of its address, a body without a
+password (an empty one counts as none) answers 400 `bad-request` and a new email that is not
 an email (empty, longer than 254 characters, or of any other shape) answers 400 `email-invalid`;
 then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
@@ -473,7 +476,7 @@ the addressee read before the account went (`AccountTeardown.addressee`) and rea
 
 A signed-in device asks to delete its account with `POST /auth/request-account-deletion`
 `{ password }`, its token and `X-Perch-Device`. After a credential check of its address (429) and
-a body it can read (400 `bad-request`), one of the address's mails and one of the account's 3
+a body it can read, with a password that is not empty (400 `bad-request`), one of the address's mails and one of the account's 3
 requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
 change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
 it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
@@ -589,7 +592,9 @@ error carries one.
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
-  `device.routes.ts`).
+  `device.routes.ts`). The paths the mount answers (`MOUNT_PATHS`) and those the device routes
+  answer (`DEVICE_PATHS`) are listed beside their handlers, for the spec that holds the routes to
+  the platform's actions.
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
   a change of the password ended, so the device can tell its person why it was signed out; 4003
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
@@ -693,7 +698,8 @@ error carries one.
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
   change and a confirmation, an empty password answered alike for any email before anything is
-  read, an empty current password answered `invalid-credentials`, a sign-in that checked the old
+  read, an empty current password, new email's password or deletion's password answered
+  `bad-request`, a sign-in that checked the old
   password beside a reset or a change, or whose email moved to another account meanwhile, or to
   one and away or back again, left with no working session and no other account's start, the
   start a

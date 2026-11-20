@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   mountedOnFakeAuth,
   mountedOnRealAuth,
+  PASSWORD,
   pastFloor,
   postTo,
   resendRequest,
+  signInRequest,
   signUpRequest,
 } from './__fixtures__/mount'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
@@ -34,6 +36,22 @@ describe('authHandler, the longest email a body names', () => {
     expect(received).toHaveLength(1)
 
     const refused = await route(signUpRequest(emailOf(LONGEST + 1)), FROM)
+
+    expect(refused?.status).toBe(400)
+    expect(await refused?.json()).toEqual({ code: 'bad-request' })
+    expect(received).toHaveLength(1)
+  })
+
+  it('asks Better Auth to sign in an email of 254 characters and refuses one of 255 at once', async () => {
+    const { route, received } = mountedOnFakeAuth(() =>
+      Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
+    )
+    const signIn = (email: string) => route(signInRequest(email, PASSWORD, 'laptop'), FROM)
+
+    expect((await signIn(emailOf(LONGEST)))?.status).toBe(401)
+    expect(received).toHaveLength(1)
+
+    const refused = await signIn(emailOf(LONGEST + 1))
 
     expect(refused?.status).toBe(400)
     expect(await refused?.json()).toEqual({ code: 'bad-request' })

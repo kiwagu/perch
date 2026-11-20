@@ -12,6 +12,13 @@ export const ACCOUNT_ACTIONS = [
 
 export type AccountAction = (typeof ACCOUNT_ACTIONS)[number]
 
+/** The paths the console answers, an account's identity id written `:id`. */
+export const CONSOLE_PATHS: readonly string[] = [
+  '/console/accounts',
+  '/console/accounts/:id',
+  ...ACCOUNT_ACTIONS.map((action) => `/console/accounts/:id/${action}`),
+]
+
 /**
  * What a console path names: the platform's accounts, one of them by its identity id, or an
  * action on one of them.

@@ -225,7 +225,9 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   memberships and members and those of the invitations, and the routes that answer them);
   `POST /invitations/read`, `GET /invitations`, `POST /invitations/accept` and
   `POST /invitations/decline` (`invitation-routes/`, through its `index.ts`);
-  `organisation-http.ts` holds the answers both share.
+  `organisation-http.ts` holds the answers both share. The paths each answers
+  (`ORGANISATION_PATHS`, `INVITATION_PATHS`) are listed beside their handlers, for the spec that
+  holds the routes to the platform's actions.
 - Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
   commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`

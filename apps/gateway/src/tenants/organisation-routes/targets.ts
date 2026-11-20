@@ -8,6 +8,21 @@ export type Target =
   | { readonly kind: 'invitations'; readonly key: string }
   | { readonly kind: 'invitation'; readonly key: string; readonly invitation: string }
 
+/**
+ * The path each kind of target is served under, an organisation's key, a member's identity and an
+ * invitation's id written `:key`, `:identity` and `:invitation`.
+ */
+const PATH_OF: Readonly<Record<Target['kind'], string>> = {
+  organisations: '/organisations',
+  members: '/organisations/:key/members',
+  member: '/organisations/:key/members/:identity',
+  invitations: '/organisations/:key/invitations',
+  invitation: '/organisations/:key/invitations/:invitation',
+}
+
+/** The paths the organisation routes answer. */
+export const ORGANISATION_PATHS: readonly string[] = Object.values(PATH_OF)
+
 /** An organisation's key in a path: the kernel's key rule without its anchors. */
 const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
 

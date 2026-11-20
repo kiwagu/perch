@@ -114,7 +114,7 @@ describe('authHandler, the request to delete the account', () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    for (const password of ['Wrong-pass-1', '']) {
+    for (const password of ['Wrong-pass-1', 'Wrong-pass-2']) {
       const wrong = await mounted.route(askToDelete(ann.on('laptop'), password), FROM)
 
       expect(wrong?.status).toBe(400)
@@ -138,6 +138,18 @@ describe('authHandler, the request to delete the account', () => {
     const ann = await signedInOn(mounted, ANN, ['laptop'])
     const answer = await mounted.route(
       postTo('/auth/request-account-deletion', {}, ann.on('laptop')),
+      FROM,
+    )
+
+    expect(answer?.status).toBe(400)
+    expect(await answer?.json()).toEqual({ code: 'bad-request' })
+  })
+
+  it('answers a body whose password is empty bad-request, as one that names none', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const answer = await mounted.route(
+      postTo('/auth/request-account-deletion', { password: '' }, ann.on('laptop')),
       FROM,
     )
 

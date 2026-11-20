@@ -22,6 +22,17 @@ type Target =
   | { readonly kind: 'everywhere' }
   | { readonly kind: 'sign-out' }
 
+/** The path each kind of target is served under, a device's session id written `:id`. */
+const PATH_OF: Readonly<Record<Target['kind'], string>> = {
+  devices: '/devices',
+  device: '/devices/:id',
+  everywhere: '/auth/sign-out-everywhere',
+  'sign-out': '/auth/sign-out',
+}
+
+/** The paths the device routes answer. */
+export const DEVICE_PATHS: readonly string[] = Object.values(PATH_OF)
+
 /** Who a call with a session token comes from: the identity, and the device of its live session. */
 interface Caller {
   readonly identity: IdentityId
@@ -48,11 +59,11 @@ interface ListedDevice {
 }
 
 function targetOf(pathname: string): Target | undefined {
-  if (pathname === '/auth/sign-out-everywhere') {
+  if (pathname === PATH_OF.everywhere) {
     return { kind: 'everywhere' }
   }
 
-  if (pathname === '/auth/sign-out') {
+  if (pathname === PATH_OF['sign-out']) {
     return { kind: 'sign-out' }
   }
 

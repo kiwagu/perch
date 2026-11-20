@@ -123,13 +123,13 @@ describe('authHandler, the change of a password', () => {
     ARGON2_RUNS_MS,
   )
 
-  it('refuses an empty current password with invalid-credentials, changing nothing', async () => {
+  it('refuses an empty current password with bad-request, not as a wrong one, changing nothing', async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
     const empty = await mounted.route(change(ann.on('laptop'), ''), FROM)
 
     expect(empty?.status).toBe(400)
-    expect(await empty?.json()).toEqual({ code: 'invalid-credentials' })
+    expect(await empty?.json()).toEqual({ code: 'bad-request' })
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
   })
 

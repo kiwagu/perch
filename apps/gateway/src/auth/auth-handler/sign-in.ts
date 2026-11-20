@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { MAX_EMAIL } from '../account-email'
 import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
 import { ADMISSION_HEADER } from '../session-hooks'
 
@@ -18,14 +19,15 @@ import { refusalOf, withJsonBody } from './requests'
 export const SIGN_IN_PATH = '/auth/sign-in/email'
 
 /**
- * What a sign-in's body must name before anything is read for its email: its email, and a password
- * that is not empty, as strings. An empty password answers alike for any email here: Better Auth
+ * What a sign-in's body must name before anything is read for its email: its email, of at most
+ * `MAX_EMAIL` characters (a longer one is no account's), and a password that is not empty, as
+ * strings. An empty password answers alike for any email here: Better Auth
  * would hash it to keep the time of an unknown email's answer, which fails, while it checks a known
  * one's and finds it wrong. `signOutOldest`, true once the person confirmed a sign-in past the
  * account's limit of devices, is the gateway's: Better Auth gets the rest of the body.
  */
 const signInBody = z.looseObject({
-  email: z.string(),
+  email: z.string().max(MAX_EMAIL),
   password: z.string().min(1),
   signOutOldest: z.boolean().optional(),
 })
@@ -212,8 +214,9 @@ function signedIn(
 }
 
 /**
- * A sign-in: its body must be JSON naming an email and a password that is not empty (else 400
- * `bad-request`, before anything is read for the email), and the email, in lower case, must find a place among its
+ * A sign-in: its body must be JSON naming an email of at most 254 characters and a password that
+ * is not empty (else 400 `bad-request`, before anything is read for the email), and the email, in
+ * lower case, must find a place among its
  * failed sign-ins and those still under way (`RequestLimits.signInAttempt`; else 429). Better Auth
  * gets that very JSON, and the place is settled once with what it answered. A sign-in takes no turn
  * of the account: it runs alike, and as soon, whether the email has an account and whatever work
