@@ -5,11 +5,15 @@ import { endIsReachable } from './reachable-end'
 
 /** Whether control can run off the end of the body of `function f() { <body> }`. */
 function reachable(body: string): boolean {
-  const { program } = parseSync('x.ts', `function f(c) { ${body} }`, {
+  const { program, errors } = parseSync('x.ts', `function f(c) { ${body} }`, {
     lang: 'ts',
     sourceType: 'module',
   })
   const declaration = program.body[0]
+
+  if (errors.length > 0) {
+    throw new Error(`the probe is valid source: ${errors.map(({ message }) => message).join('; ')}`)
+  }
 
   if (declaration?.type !== 'FunctionDeclaration' || declaration.body === null) {
     throw new Error('the probe declares a function with a body')
@@ -61,7 +65,9 @@ describe('endIsReachable', () => {
     expect(reachable('try { return 1 } finally { log() }')).toBe(true)
     expect(reachable('label: { return 1 }')).toBe(true)
     expect(reachable('while (c) { break }')).toBe(true)
-    expect(reachable('if (c) { break } else { return 1 }')).toBe(true)
+    expect(reachable('loop: while (c) { if (c) { break loop } else { return 1 } }')).toBe(true)
+    // A labelled break skips the return after it, so the end is reached.
+    expect(reachable('skip: { break skip; return 1 }')).toBe(true)
   })
   it('does not look into a function a statement declares', () => {
     expect(reachable('function g() { return 1 }')).toBe(true)

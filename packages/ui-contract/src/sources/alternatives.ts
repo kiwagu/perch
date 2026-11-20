@@ -7,7 +7,8 @@
  * unknown), or each object a function of the file returns where it is called (each `return` of
  * its own body, a bare one or a reachable end giving nothing, an end no `return` or `throw`
  * reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
- * `useCallback` hands its function on, a `useMemo` holds what its function returns).
+ * `useCallback` hands its function on, a `useMemo` holds what its function returns; an `async`
+ * function or a generator gives a Promise or an iterator, which no object the file writes is).
  */
 
 import type {
@@ -22,7 +23,7 @@ import { keyName, unwrap } from './values'
 /**
  * One thing a value may be: an object, `null` for nothing (`null`, `false`, `undefined`, a function
  * that returns none), `undefined` for what the file cannot say (a parameter, an import, a value
- * built at runtime, a chain past `DEPTH`).
+ * built at runtime, what an `async` function or a generator returns, a chain past `DEPTH`).
  */
 export type Alternative = ObjectExpression | null | undefined
 
@@ -76,8 +77,12 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
     const value = unwrap(node)
     const next = (expression: Expression): Alternative[] =>
       objectsOf(expression, expression.start, depth + 1)
+    // An async function returns a Promise and a generator an iterator, whatever objects its
+    // `return`s write: the result is no object the file writes.
     const resultOf = (fn: Callable): Alternative[] =>
-      names.returnedBy(fn).flatMap((returned) => (returned === null ? [null] : next(returned)))
+      fn.async || fn.generator
+        ? [undefined]
+        : names.returnedBy(fn).flatMap((returned) => (returned === null ? [null] : next(returned)))
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
      * `level`: a property with the key decides; a spread decides for each branch it may take that

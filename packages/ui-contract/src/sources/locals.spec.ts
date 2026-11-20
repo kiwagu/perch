@@ -97,6 +97,12 @@ describe('suppliedBy', () => {
     'function oneArm(c) { if (c) { return { mark: 1 } } else { log() } }',
     'function noElse(c) { if (c) { return { mark: 1 } } else if (c === 2) { return { mark: 2 } } }',
     'function cases(c) { switch (c) { case 1: return { mark: 1 }; default: return { mark: 2 } } }',
+    'async function asyncBoth(c) { if (c) { return { mark: 1 } } else { return { mark: 2 } } }',
+    'function* generated() { yield 1; return { mark: 1 } }',
+    'const asyncArrow = async () => ({ mark: 1 })',
+    'const memoAsync = useMemo(async () => ({ mark: 1 }), [])',
+    'const wrappedAsync = useCallback(async (name) => ({ name }), [])',
+    'function viaAsync() { return { id: 1, ...asyncArrow() } }',
     'const at = 0',
   ].join('\n')
 
@@ -210,6 +216,27 @@ describe('suppliedBy', () => {
   it('still counts the end as reachable after a switch whose every case returns: the form is not read, so it is refused', () => {
     expect(suppliedAt(text, 'cases(1)', 'const at')).toEqual(['mark', 'mark'])
     expect(supplied(text, 'cases(1)', 'const at').certain.size).toBe(0)
+  })
+  it('does not follow what an async function or a generator returns: a Promise and an iterator are no object the file writes', () => {
+    for (const call of [
+      'asyncBoth(1)',
+      'generated()',
+      'asyncArrow()',
+      'memoAsync',
+      "wrappedAsync('x')",
+    ]) {
+      const result = supplied(text, call, 'const at')
+
+      expect(result.followed).toBe(false)
+      expect(result.props).toEqual([])
+      expect(result.certain.size).toBe(0)
+    }
+
+    // A spread of such a call inside an object leaves the object not followed, its own props known.
+    const via = supplied(text, 'viaAsync()', 'const at')
+
+    expect(via.followed).toBe(false)
+    expect(via.props.map(({ name }) => name)).toEqual(['id'])
   })
   it('counts a prop as certain only where every branch supplies it, and says when a branch cannot be followed', () => {
     const either = supplied(

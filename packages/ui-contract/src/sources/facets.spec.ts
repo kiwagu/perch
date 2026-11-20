@@ -4,7 +4,7 @@ import type { Contract } from '../check'
 import { flowStateIn, sampleContract, screenIn } from '../check/contract.fixture'
 import { type Flow, formatProblem } from '../files'
 
-import { collectFromSource } from './collect'
+import { type Collected, collectFromSource, UNFOLLOWED_SPREAD } from './collect'
 import { facetProblems } from './facets'
 
 /**
@@ -81,16 +81,21 @@ const LINE: Readonly<Record<string, number>> = Object.fromEntries(
   Object.keys(AGREEING).map((key, index) => [key, index + 1]),
 )
 
+/** What the sources check collects from the agreeing view with some elements written otherwise. */
+function collectedOf(changed: Readonly<Record<string, string>> = {}): Collected {
+  const source = Object.entries({ ...AGREEING, ...changed })
+    .map(([key, element]) => `const ${key} = ${element}`)
+    .join('\n')
+
+  return collectFromSource(source, 'view.tsx')
+}
+
 /** The problems of the agreeing view with some elements written otherwise, in `contract`. */
 function problemsOf(
   changed: Readonly<Record<string, string>> = {},
   { ahead = false, contract = facetsContract() }: { ahead?: boolean; contract?: Contract } = {},
 ): string[] {
-  const elements = { ...AGREEING, ...changed }
-  const source = Object.entries(elements)
-    .map(([key, element]) => `const ${key} = ${element}`)
-    .join('\n')
-  const collected = [collectFromSource(source, 'view.tsx')]
+  const collected = [collectedOf(changed)]
   const rendered = new Map(
     collected.flatMap(({ file, literals }) =>
       literals.map(({ anchor, line }) => [anchor, { file, line }] as const),
@@ -304,10 +309,10 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
       ])
     })
-    /** A title that spreads the result of `markOf()`, a helper whose body is `body`. */
-    const helperOf = (body: string): Record<string, string> => ({
+    /** A title that spreads the result of `markOf()`, a helper written `head { body }`. */
+    const helperOf = (body: string, head = '() =>'): Record<string, string> => ({
       title: '<Input data-testid="sample.title-input" {...markOf()} />',
-      markOf: `() => { ${body} }`,
+      markOf: `${head} { ${body} }`,
     })
     const missing = `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`
 
@@ -343,6 +348,23 @@ describe('facetProblems', () => {
       expect(problemsOf(helperOf(`if (concerns === 'title') { return { ${mark} } }`))).toEqual([
         missing,
       ])
+    })
+    it('does not take the mark from what an async helper or a generator returns, and refuses the spread', () => {
+      const mark = `'aria-invalid': ${MARK}`
+      const body = `if (concerns === 'title') { return { ${mark} } } else { return { ${mark}, id: 'title' } }`
+      const refused = `view.tsx:${LINE['title']}: ${UNFOLLOWED_SPREAD('sample.title-input')}`
+
+      for (const head of ['async () =>', 'async function ()', 'function* ()']) {
+        const changed = helperOf(body, head)
+
+        expect(problemsOf(changed)).toEqual([missing])
+        // What the spread cannot be followed to is refused whatever the mode (it is no facet).
+        expect(collectedOf(changed).problems.map(formatProblem)).toEqual([refused])
+        expect(problemsOf(changed, { ahead: true })).toEqual([])
+      }
+
+      // The same helper, not async, is followed and passes.
+      expect(collectedOf(helperOf(body)).problems).toEqual([])
     })
     it('does not take the mark of a member that a property with a key it cannot read may replace', () => {
       const marked = `{ 'aria-invalid': ${MARK} }`
