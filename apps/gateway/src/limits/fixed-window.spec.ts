@@ -16,6 +16,13 @@ function windowOf(limit: number, windowMs: number, maxKeys?: number) {
   return { clock, window }
 }
 
+/** The reservation `window` makes of `key`, which must be allowed. */
+function reservedOf(window: FixedWindow, key: string) {
+  const reservation = window.reserve(key)
+
+  return reservation.allowed ? reservation : expect.unreachable('a reservation')
+}
+
 describe('FixedWindow', () => {
   it('lets limit takes through and refuses the next with the rest of the window', async () => {
     const { clock, window } = windowOf(2, 10_000)
@@ -114,6 +121,48 @@ describe('FixedWindow', () => {
     }
 
     expect(window.take('b').allowed).toBe(false)
+  })
+
+  it('leaves no window behind a reservation of an unseen key that was given back: the next window starts at its first take', async () => {
+    const { clock, window } = windowOf(2, 10_000)
+
+    reservedOf(window, 'a').giveBack()
+    // Just before the deadline the empty window would have had.
+    await clock.advance(9_999)
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+  })
+
+  it.each([
+    ['in the order they were taken', false],
+    ['in the reverse order', true],
+  ])(
+    'leaves no window behind two reservations of an unseen key given back %s',
+    async (_, reversed) => {
+      const { clock, window } = windowOf(2, 10_000)
+      const held = [reservedOf(window, 'a'), reservedOf(window, 'a')]
+
+      for (const reservation of reversed ? held.reverse() : held) {
+        reservation.giveBack()
+      }
+
+      await clock.advance(9_999)
+      expect(window.take('a')).toEqual({ allowed: true })
+      expect(window.take('a')).toEqual({ allowed: true })
+      expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+    },
+  )
+
+  it('keeps the window of a key while an attempt other than the one given back still counts', async () => {
+    const { clock, window } = windowOf(2, 10_000)
+    const reservation = reservedOf(window, 'a')
+
+    expect(window.take('a')).toEqual({ allowed: true })
+    reservation.giveBack()
+    await clock.advance(9_999)
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 1 })
   })
 
   it('forgets a key', () => {

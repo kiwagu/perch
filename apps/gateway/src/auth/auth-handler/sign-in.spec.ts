@@ -62,6 +62,17 @@ async function moved(mounted: Mounted, identity: IdentityId, from: string, to: s
   expect((await mounted.route(postTo('/auth/confirm-email', { token }), FROM))?.status).toBe(200)
 }
 
+/** `request` with `set` among its headers. */
+function withHeaders(request: Request, set: Readonly<Record<string, string>>): Request {
+  const headers = new Headers(request.headers)
+
+  for (const [name, value] of Object.entries(set)) {
+    headers.set(name, value)
+  }
+
+  return new Request(request, { headers })
+}
+
 /** The session token a sign-in answered with: a raw token, which no test can know beforehand. */
 const tokenOf = (body: unknown): string => z.object({ token: z.string().min(1) }).parse(body).token
 
@@ -543,4 +554,104 @@ describe('authHandler, the sign-in of a banned account', () => {
     ).toEqual([[false, bannedAt, 'banned']])
     expect((await mounted.sessions.read(token)).kind).toBe('none')
   }, 30_000)
+})
+
+/**
+ * Ann's right password, sent so that Better Auth refuses it 403 before it checks any password, by
+ * what it refuses: the request's origin, its Fetch Metadata, its callback URL.
+ */
+const REFUSED_BEFORE_THE_PASSWORD = [
+  [
+    "an origin it does not trust, asked as a fetch's",
+    'INVALID_ORIGIN',
+    () =>
+      withHeaders(signInRequest(ANN, PASSWORD, 'desk'), {
+        origin: 'http://elsewhere.test',
+        'sec-fetch-mode': 'cors',
+      }),
+  ],
+  [
+    'a cross-site navigation',
+    'CROSS_SITE_NAVIGATION_LOGIN_BLOCKED',
+    () =>
+      withHeaders(signInRequest(ANN, PASSWORD, 'desk'), {
+        'sec-fetch-site': 'cross-site',
+        'sec-fetch-mode': 'navigate',
+      }),
+  ],
+  [
+    'a callback URL it does not trust',
+    'INVALID_CALLBACK_URL',
+    () =>
+      postTo(
+        '/auth/sign-in/email',
+        { email: ANN, password: PASSWORD, callbackURL: 'http://elsewhere.test/' },
+        { device: 'desk' },
+      ),
+  ],
+] as const
+
+describe("authHandler, a sign-in Better Auth refused before it checked the email's password", () => {
+  it.each(REFUSED_BEFORE_THE_PASSWORD)(
+    "keeps an email's failed sign-ins through a sign-in refused for %s: its right password was not checked, so it is no failure and no success",
+    async (_, code, forged) => {
+      const mounted = await mountedOnRealAuth()
+
+      await signedInOn(mounted, ANN, ['laptop'])
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      const refused = await mounted.route(forged(), FROM)
+
+      expect([refused?.status, await refused?.json()]).toEqual([403, { code }])
+      // It was no failure: the next wrong password is the tenth, not the eleventh.
+      expect(
+        (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+      ).toBe(401)
+      // It was no success either: the nine failures stand, so the right password waits.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    },
+    60_000,
+  )
+
+  it("counts a lockout from the email's first wrong password, not from a refusal before it that found no failures", async () => {
+    const mounted = await mountedOnRealAuth()
+    const [, , forged] = REFUSED_BEFORE_THE_PASSWORD[0]
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+
+    await signedInOn(mounted, ANN, ['laptop'])
+    expect((await mounted.route(forged(), FROM))?.status).toBe(403)
+
+    // A second before a quarter hour after the refusal, the first wrong passwords come.
+    await mounted.clock.advance(15 * 60_000 - 1_000)
+
+    for (let failed = 0; failed < 10; failed += 1) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    // Past the quarter hour of the refusal, still within that of the first wrong password.
+    await mounted.clock.advance(2_000)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+
+  it("forgets the email's failed sign-ins at the right password of an account whose email is not verified, which Better Auth refuses after it checked it", async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await annsLink(mounted.outbox)
+    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+    const refused = await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'EMAIL_NOT_VERIFIED' }])
+
+    // The right password was checked: ten more wrong ones reach Better Auth before the limit.
+    for (let failed = 0; failed < 10; failed += 1) {
+      expect(
+        (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+      ).toBe(401)
+    }
+
+    expect(
+      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+    ).toBe(429)
+  }, 90_000)
 })
