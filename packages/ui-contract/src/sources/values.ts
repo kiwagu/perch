@@ -47,6 +47,9 @@ export function staticText(node: Expression | Argument | undefined): string | un
   return undefined
 }
 
+/** A constant that holds an anchor: `<NAME>_TEST_ID`. */
+export const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
+
 export const isTestIdFor = (node: Expression): boolean =>
   node.type === 'Identifier' && node.name === 'testIdFor'
 

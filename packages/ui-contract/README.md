@@ -173,11 +173,17 @@ links to as `contract/REFERENCE.md#<slug>`.
     value, and `pairingResolver(contract)` why a value does not pair with its anchor, for the
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
-    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`) and `colours`
-    (`marksState`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
+    its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
+    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
+    of the file to what it declares (`sources/locals.ts`, every object a value may be in
+    `sources/alternatives.ts`: an anchor a `<NAME>_TEST_ID` constant
+    holds, the props a spread on an element supplies, `sources/spreads.ts`, read per element in
+    `sources/element.ts`, the event a `disabled`
+    asks its machine about, `sources/asked-event.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
-    `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the opt-outs a view writes: the
-    kit takes them from the generated field facts, so a view may leave them out); the
+    `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
+    and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
+    `sources/facets.ts` refuse it, the size select's `holdsInput` included); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
     `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).
@@ -308,8 +314,8 @@ links to as `contract/REFERENCE.md#<slug>`.
   reference; prints `file:line: message` per
   problem and exits 1, or a one-line summary, followed for a contract older than the engine by
   `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;
-  part of `bun run check` and the pre-commit hook). `ui-contract check --current` fails on such a
-  contract instead.
+  part of the pre-commit hook on a branch). `ui-contract check --current`, which `bun run check`
+  and a commit on `main` run, fails on such a contract instead.
 - From the root: `bun run contract:migrate` (`ui-contract migrate [--write]`: each step from the
   version the contract declares to the engine's, `<n> -> <n+1>: <note>`, with the files it
   changes and the work it leaves by hand, `by hand: <work>`; `--write` rewrites those files,
