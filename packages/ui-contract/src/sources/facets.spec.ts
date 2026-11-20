@@ -744,6 +744,51 @@ describe('facetProblems', () => {
           ])
         }
       })
+      it('refuses, in ahead mode too, a question about the event a var of the row holds, in a case or a block', () => {
+        // The row's `var` binds in the row, past the switch or the block, and hides the outer one.
+        const cased = {
+          save: '() => { switch (mode) { default: var submit = { type: "sample.a-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+          submit: "{ type: 'sample.save-button' } as const",
+        }
+        // Two `var`s of the row may each be the one it holds: the event is unread.
+        const branched = {
+          save: '() => { if (ok) { var submit = { type: "sample.save-button" } as const } else { var submit = { type: "sample.a-button" } as const } return <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+          submit: "{ type: 'sample.save-button' } as const",
+        }
+
+        for (const ahead of [false, true]) {
+          expect(problemsOf(cased, { ahead })).toEqual([
+            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+          ])
+          expect(problemsOf(branched, { ahead })).toEqual([
+            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
+          ])
+        }
+      })
+      it('passes, in ahead mode too, a question about the event one declaration of a namespace exports to another', () => {
+        const changed = { save: 'null' }
+        const declarations = [
+          "export namespace Sample { export const submit = { type: 'sample.save-button' } as const }",
+          'export namespace Sample { export const Save = () => <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+        ]
+
+        expect(problemsOf(changed, { declarations })).toEqual([])
+        expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
+      })
+      it('refuses, in ahead mode too, a question whose event a namespace and the file both name', () => {
+        // Its own name hides the file's in the namespace; read beside each other, neither is told.
+        const changed = { save: 'null', submit: "{ type: 'sample.save-button' } as const" }
+        const declarations = [
+          'export namespace Sample { const submit = { type: "sample.a-button" } as const; export const Save = () => <Button data-testid="sample.save-button" disabled={!props.can(submit)} /> }',
+        ]
+        const line = Object.keys({ ...AGREEING, ...changed }).length + 1
+
+        for (const ahead of [false, true]) {
+          expect(problemsOf(changed, { declarations, ahead })).toEqual([
+            `view.tsx:${line}: "sample.save-button": disabled={!props.can(submit)}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
+          ])
+        }
+      })
       it('refuses it, in ahead mode too, where only a case of a switch declares the type of a name the question reads past it', () => {
         // After the switch the name is the parameter again, which the view does not type.
         const changed = {

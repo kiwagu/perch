@@ -1,10 +1,13 @@
 /**
- * The lexical scopes of a source file, for `locals.ts` to bind each name in the innermost one
- * around its declaration: a block, a function (its parameters and body), a loop whose head
- * declares a `let`, a `const` or a `using` (a `var` binds around the loop), a `catch` clause with a
+ * The scopes of a source file, for `locals.ts` to bind each name in the innermost one around its
+ * declaration. A `let`, a `const`, a function declaration, a parameter or a `catch` parameter binds
+ * in its lexical scope: a block, a function (its parameters and body), a loop whose head declares
+ * a `let`, a `const` or a `using` (a `var` binds around the loop), a `catch` clause with a
  * parameter, the block of a `switch`'s cases (after its discriminant, which is read outside: a
- * `const` in an unbraced `case` binds in every case and nowhere past the switch), a class `static`
- * block and a namespace's body.
+ * `const` in an unbraced `case` binds in every case and nowhere past the switch) and a class
+ * `static` block. A `var` binds in the innermost function or class `static` block around it,
+ * whatever block, case, loop or `catch` it is written in. A namespace's body is no scope here: its
+ * names are read in the file, as one declaration of a namespace sees what another exports.
  */
 
 import type { ForStatementInit, ForStatementLeft, Program } from 'oxc-parser'
@@ -16,25 +19,36 @@ export interface Span {
   readonly end: number
 }
 
-/** Every lexical scope of the file but the file itself, in no particular order. */
-export function scopesIn(program: Program): Span[] {
-  const scopes: Span[] = []
-  const scope = (node: Span): void => {
-    scopes.push(node)
+/** The scopes of a file but the file itself, each in no particular order. */
+export interface Scopes {
+  /** Where a `let`, a `const`, a function declaration or a parameter binds. */
+  readonly lexical: readonly Span[]
+  /** Where a `var` binds: a function or a class `static` block. */
+  readonly hoisting: readonly Span[]
+}
+
+export function scopesIn(program: Program): Scopes {
+  const lexical: Span[] = []
+  const hoisting: Span[] = []
+  const block = (node: Span): void => {
+    lexical.push(node)
+  }
+  const fn = (node: Span): void => {
+    lexical.push(node)
+    hoisting.push(node)
   }
   const loop = (node: Span, head: ForStatementInit | ForStatementLeft | null): void => {
     if (head?.type === 'VariableDeclaration' && head.kind !== 'var') {
-      scopes.push(node)
+      lexical.push(node)
     }
   }
 
   new Visitor({
-    BlockStatement: scope,
-    StaticBlock: scope,
-    TSModuleBlock: scope,
-    ArrowFunctionExpression: scope,
-    FunctionExpression: scope,
-    FunctionDeclaration: scope,
+    BlockStatement: block,
+    StaticBlock: fn,
+    ArrowFunctionExpression: fn,
+    FunctionExpression: fn,
+    FunctionDeclaration: fn,
     ForStatement: (node) => {
       loop(node, node.init)
     },
@@ -46,13 +60,13 @@ export function scopesIn(program: Program): Span[] {
     },
     CatchClause: (node) => {
       if (node.param !== null) {
-        scopes.push(node)
+        lexical.push(node)
       }
     },
     SwitchStatement: (node) => {
-      scopes.push({ start: node.discriminant.end, end: node.end })
+      lexical.push({ start: node.discriminant.end, end: node.end })
     },
   }).visit(program)
 
-  return scopes
+  return { lexical, hoisting }
 }

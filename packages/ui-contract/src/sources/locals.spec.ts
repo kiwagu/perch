@@ -67,25 +67,71 @@ describe('localsOf', () => {
     expect(valueAt(scoped, 'prop', 'six(', 'constantNamed')).toBe('data-testid')
     expect(valueAt(scoped, 'prop', 'eight(', 'constantNamed')).toBe('data-testid')
   })
-  it('gives the cases of a switch, a class static block and a namespace their own scope', () => {
+  it('gives the cases of a switch and a class static block their own scope', () => {
     const scoped = [
       "const prop = 'data-testid'",
       "switch (one(prop)) { case 'a': const prop = 'aria-label'; two(prop); break; default: three(prop) }",
       'four(prop)',
       "class A { static { const prop = 'aria-label'; five(prop) } }",
       'six(prop)',
-      "namespace N { const prop = 'aria-label'; seven(prop) }",
-      'eight(prop)',
     ].join('\n')
 
     // A case's `const` binds in the block of the cases, every case of it, not in the discriminant.
     expect(valueAt(scoped, 'prop', 'two(', 'constantNamed')).toBe('aria-label')
     expect(valueAt(scoped, 'prop', 'three(', 'constantNamed')).toBe('aria-label')
     expect(valueAt(scoped, 'prop', 'five(', 'constantNamed')).toBe('aria-label')
-    expect(valueAt(scoped, 'prop', 'seven(', 'constantNamed')).toBe('aria-label')
 
-    for (const marker of ['one(', 'four(', 'six(', 'eight(']) {
+    for (const marker of ['one(', 'four(', 'six(']) {
       expect(valueAt(scoped, 'prop', marker, 'constantNamed')).toBe('data-testid')
+    }
+  })
+  it('binds a var in its function, class static block or file, whatever block, case, loop or catch it is in', () => {
+    const hoisted = [
+      "const prop = 'data-testid'",
+      "function a() { switch (mode) { default: var prop = 'aria-label' } one(prop) }",
+      "function b() { if (ok) { var prop = 'aria-label' } two(prop) }",
+      "function c() { for (var prop = 'aria-label'; ok; ) {} three(prop) }",
+      "function d() { try { run() } catch { var prop = 'aria-label' } four(prop) }",
+      "class E { static { { var prop = 'aria-label' } five(prop) } }",
+      "function f() { { let prop = 'aria-label' } six(prop) }",
+      'seven(prop)',
+    ].join('\n')
+
+    for (const marker of ['one(', 'two(', 'three(', 'four(', 'five(']) {
+      expect(valueAt(hoisted, 'prop', marker)).toBe('aria-label')
+    }
+
+    // A `let` stays in its block, and no `var` leaves its function or static block.
+    expect(valueAt(hoisted, 'prop', 'six(', 'constantNamed')).toBe('data-testid')
+    expect(valueAt(hoisted, 'prop', 'seven(', 'constantNamed')).toBe('data-testid')
+  })
+  it('reads the names of a namespace in the file, so one declaration of it sees what another exports', () => {
+    const split = [
+      "namespace Sessions { export const revoke = 'x.sessions.revoke-button' }",
+      'namespace Sessions { one(revoke) }',
+    ].join('\n')
+
+    expect(valueAt(split, 'revoke', 'one(', 'constantNamed')).toBe('x.sessions.revoke-button')
+  })
+  it('cannot tell a name two declarations bind in one scope: a var of two blocks, a namespace beside the file', () => {
+    const twice = [
+      "function a() { if (ok) { var prop = 'aria-label' } else { var prop = 'data-testid' } one(prop) }",
+      "const other = 'data-testid'",
+      "namespace N { const other = 'aria-label'; two(other) }",
+      'three(other)',
+    ].join('\n')
+    const { program } = parseSync('x.tsx', twice, { lang: 'tsx', sourceType: 'module' })
+    const locals = localsOf(program)
+
+    for (const [name, marker] of [
+      ['prop', 'one('],
+      ['other', 'two('],
+      ['other', 'three('],
+    ] as const) {
+      expect(valueAt(twice, name, marker)).toBeUndefined()
+      expect(valueAt(twice, name, marker, 'constantNamed')).toBeUndefined()
+      // The file still binds it there.
+      expect(locals.declares(name, twice.indexOf(marker))).toBe(true)
     }
   })
 })

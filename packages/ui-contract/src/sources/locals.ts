@@ -3,7 +3,9 @@
  * function is declared with, read in the scope that declares it (`scopes.ts`), so a name resolves
  * as it does at runtime (an inner declaration, a parameter or a destructured name hides an outer
  * one; a loop's `let` or `const` binds in the loop, as each element of the value a `for…of`
- * iterates, a `catch` parameter in its clause, a `const` of a `case` in its `switch`), and every
+ * iterates, a `catch` parameter in its clause, a `const` of a `case` in its `switch`, a `var` in its
+ * function; two declarations of a name in one scope, a `var` twice or a namespace's beside the
+ * file's, leave it unknown), and every
  * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
  * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
  * the file cannot follow, which each reader decides about itself; for such a value, the type the
@@ -27,6 +29,8 @@ interface Binding {
   readonly value?: Expression
   /** Whether a `const` declares it, so the value it is declared with is the one it holds. */
   readonly constant?: true
+  /** Whether a `var` declares it: it binds in its function, not in its block (`scopes.ts`). */
+  readonly hoisted?: true
   /** For a destructured name or a `for…of` variable, what it is a part of (`Member`). */
   readonly member?: Member
   /** Its type as the file writes it, or the value a destructuring takes it from, and the keys. */
@@ -66,6 +70,8 @@ export function localsOf(program: Program): Locals {
   const returns: Array<{ readonly at: number; readonly argument: Expression | null }> = []
   /** Where each declarator of a `const` declaration starts. */
   const constants = new Set<number>()
+  /** Where each declarator of a `var` declaration starts. */
+  const vars = new Set<number>()
   /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
   const iterated = new Map<number, Expression>()
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
@@ -108,14 +114,19 @@ export function localsOf(program: Program): Locals {
       }
     },
     VariableDeclaration: (node) => {
-      if (node.kind === 'const') {
-        for (const declarator of node.declarations) {
+      for (const declarator of node.declarations) {
+        if (node.kind === 'const') {
           constants.add(declarator.start)
+        }
+
+        if (node.kind === 'var') {
+          vars.add(declarator.start)
         }
       }
     },
     VariableDeclarator: (node) => {
       const at = { start: node.start, end: node.end }
+      const hoisted = vars.has(node.start) ? { hoisted: true as const } : {}
       // A `for…of` head's name is each element of the value it iterates, not a value of its own.
       const each = iterated.get(node.start)
       const object = each ?? node.init
@@ -137,6 +148,7 @@ export function localsOf(program: Program): Locals {
         bindings.push({
           name: node.id.name,
           at,
+          ...hoisted,
           ...(node.init === null ? {} : { value: node.init }),
           ...(constants.has(node.start) ? { constant: true as const } : {}),
           ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
@@ -147,6 +159,7 @@ export function localsOf(program: Program): Locals {
           ...pathsIn(node.id).map(({ name, path, defaulted }) => ({
             name,
             at,
+            ...hoisted,
             ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
             ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
           })),
@@ -155,24 +168,35 @@ export function localsOf(program: Program): Locals {
     },
   }).visit(program)
 
-  const scopes = scopesIn(program)
+  const { lexical, hoisting } = scopesIn(program)
   /** The innermost scope around a place, a parameter's being its function, a function's not. */
-  const scopeOf = (at: Span): Span =>
+  const scopeOf = (at: Span, scopes: readonly Span[]): Span =>
     scopes
       .filter((scope) => contains(scope, at) && (scope.start !== at.start || scope.end !== at.end))
       .reduce((inner, scope) => (sizeOf(scope) < sizeOf(inner) ? scope : inner), FILE)
 
-  const scoped = bindings.map((binding) => ({ ...binding, scope: scopeOf(binding.at) }))
+  const scoped = bindings.map((binding) => ({
+    ...binding,
+    scope: scopeOf(binding.at, binding.hoisted === true ? hoisting : lexical),
+  }))
+  /** The bindings of `name` a place sees, of every scope around it. */
+  const visible = (name: string, at: number): typeof scoped =>
+    scoped.filter(
+      (binding) => binding.name === name && contains(binding.scope, { start: at, end: at }),
+    )
 
-  /** The binding of `name` that a place sees: the one of the innermost scope around it. */
-  const bindingOf = (name: string, at: number): (typeof scoped)[number] | undefined =>
-    scoped
-      .filter((binding) => binding.name === name && contains(binding.scope, { start: at, end: at }))
-      .reduce<(typeof scoped)[number] | undefined>(
-        (inner, binding) =>
-          inner === undefined || sizeOf(binding.scope) < sizeOf(inner.scope) ? binding : inner,
-        undefined,
-      )
+  /**
+   * The binding of `name` that a place sees: the one of the innermost scope around it. Where two
+   * bind it in that scope (a `var` declared twice, a namespace's name beside the file's), either
+   * may be the one: none.
+   */
+  const bindingOf = (name: string, at: number): (typeof scoped)[number] | undefined => {
+    const around = visible(name, at)
+    const size = Math.min(...around.map(({ scope }) => sizeOf(scope)))
+    const [inner, ...more] = around.filter(({ scope }) => sizeOf(scope) === size)
+
+    return more.length === 0 ? inner : undefined
+  }
   const valueNamed = (name: string, at: number): Expression | undefined =>
     bindingOf(name, at)?.value
   const constantNamed = (name: string, at: number): Expression | undefined => {
@@ -248,7 +272,7 @@ export function localsOf(program: Program): Locals {
   return {
     valueNamed,
     constantNamed,
-    declares: (name, at) => bindingOf(name, at) !== undefined,
+    declares: (name, at) => visible(name, at).length > 0,
     declaredTypeOf: (node, at) => declaredTypeOf(node, at),
     types,
     objectsOf: alternativesIn({
