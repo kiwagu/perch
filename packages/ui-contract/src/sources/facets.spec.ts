@@ -667,6 +667,19 @@ describe('facetProblems', () => {
           ])
         }
       })
+      it('refuses it, in ahead mode too, where only a case of a switch declares the type of a name the question reads past it', () => {
+        // After the switch the name is the parameter again, which the view does not type.
+        const changed = {
+          save: '({ checkEvent }) => { switch (mode) { case "preview": const checkEvent: Draft = readDraft(); break } return <Button data-testid="sample.save-button" disabled={!props.can({ ...submit, ...checkEvent })} /> }',
+          submit: "{ type: 'sample.save-button' } as const",
+        }
+
+        for (const ahead of [false, true]) {
+          expect(problemsOf(changed, { declarations: typed, ahead })).toEqual([
+            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can({ ...submit, ...checkEvent })}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
+          ])
+        }
+      })
     })
     it('in ahead mode lets a missing disabled by', () => {
       expect(

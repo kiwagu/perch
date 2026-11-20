@@ -1,35 +1,23 @@
 /**
  * What a source file's names stand for, as far as the file itself says: the value a constant or a
- * function is declared with, read in the scope that declares it, so a name resolves as it does at
- * runtime (an inner declaration, a parameter or a destructured name hides an outer one; a loop's
- * `let` or `const` binds in the loop, as each element of the value a `for…of` iterates, a `catch`
- * parameter in its clause), and every
+ * function is declared with, read in the scope that declares it (`scopes.ts`), so a name resolves
+ * as it does at runtime (an inner declaration, a parameter or a destructured name hides an outer
+ * one; a loop's `let` or `const` binds in the loop, as each element of the value a `for…of`
+ * iterates, a `catch` parameter in its clause, a `const` of a `case` in its `switch`), and every
  * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
  * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
  * the file cannot follow, which each reader decides about itself; for such a value, the type the
  * file writes for it, where it writes one (`declaredTypeOf`, read by `declared-type.ts`).
  */
 
-import type {
-  Expression,
-  ForStatementInit,
-  ForStatementLeft,
-  ParamPattern,
-  Program,
-  TSType,
-} from 'oxc-parser'
+import type { Expression, ParamPattern, Program, TSType } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
 import { type Alternative, alternativesIn, type Callable, DEPTH, type Member } from './alternatives'
 import { namesIn, pathsIn, typedNamesIn, type WrittenType } from './binding-names'
 import { type DeclaredTypes, declaredTypesIn } from './declared-type'
 import { endIsReachable } from './reachable-end'
-
-/** A range of the source, `[start, end)`. */
-interface Span {
-  readonly start: number
-  readonly end: number
-}
+import { type Span, scopesIn } from './scopes'
 
 /** A name a scope binds, with the value the file declares it with; none for a parameter. */
 interface Binding {
@@ -73,7 +61,6 @@ const contains = (outer: Span, inner: Span): boolean =>
 const sizeOf = ({ start, end }: Span): number => end - start
 
 export function localsOf(program: Program): Locals {
-  const scopes: Span[] = [FILE]
   const functions: Span[] = []
   const bindings: Binding[] = []
   const returns: Array<{ readonly at: number; readonly argument: Expression | null }> = []
@@ -82,7 +69,6 @@ export function localsOf(program: Program): Locals {
   /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
   const iterated = new Map<number, Expression>()
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
-    scopes.push(node)
     functions.push(node)
     bindings.push(
       ...node.params
@@ -90,26 +76,9 @@ export function localsOf(program: Program): Locals {
         .map((typed) => ({ ...typed, at: { start: node.start, end: node.start } })),
     )
   }
-  /** A loop whose head declares a `let` or a `const` is its scope; a `var` binds around the loop. */
-  const loop = (node: Span, head: ForStatementInit | ForStatementLeft | null): void => {
-    if (head?.type === 'VariableDeclaration' && head.kind !== 'var') {
-      scopes.push(node)
-    }
-  }
 
   new Visitor({
-    BlockStatement: (node) => {
-      scopes.push(node)
-    },
-    ForStatement: (node) => {
-      loop(node, node.init)
-    },
-    ForInStatement: (node) => {
-      loop(node, node.left)
-    },
     ForOfStatement: (node) => {
-      loop(node, node.left)
-
       // Its variable is each element of the value it iterates; a `var` outlives the loop.
       if (node.left.type === 'VariableDeclaration' && node.left.kind !== 'var') {
         for (const declarator of node.left.declarations) {
@@ -121,7 +90,6 @@ export function localsOf(program: Program): Locals {
       const { param } = node
 
       if (param !== null) {
-        scopes.push(node)
         bindings.push(
           ...namesIn(param).map((name) => ({ name, at: { start: param.start, end: param.end } })),
         )
@@ -187,6 +155,7 @@ export function localsOf(program: Program): Locals {
     },
   }).visit(program)
 
+  const scopes = scopesIn(program)
   /** The innermost scope around a place, a parameter's being its function, a function's not. */
   const scopeOf = (at: Span): Span =>
     scopes

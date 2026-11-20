@@ -67,6 +67,27 @@ describe('localsOf', () => {
     expect(valueAt(scoped, 'prop', 'six(', 'constantNamed')).toBe('data-testid')
     expect(valueAt(scoped, 'prop', 'eight(', 'constantNamed')).toBe('data-testid')
   })
+  it('gives the cases of a switch, a class static block and a namespace their own scope', () => {
+    const scoped = [
+      "const prop = 'data-testid'",
+      "switch (one(prop)) { case 'a': const prop = 'aria-label'; two(prop); break; default: three(prop) }",
+      'four(prop)',
+      "class A { static { const prop = 'aria-label'; five(prop) } }",
+      'six(prop)',
+      "namespace N { const prop = 'aria-label'; seven(prop) }",
+      'eight(prop)',
+    ].join('\n')
+
+    // A case's `const` binds in the block of the cases, every case of it, not in the discriminant.
+    expect(valueAt(scoped, 'prop', 'two(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(scoped, 'prop', 'three(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(scoped, 'prop', 'five(', 'constantNamed')).toBe('aria-label')
+    expect(valueAt(scoped, 'prop', 'seven(', 'constantNamed')).toBe('aria-label')
+
+    for (const marker of ['one(', 'four(', 'six(', 'eight(']) {
+      expect(valueAt(scoped, 'prop', marker, 'constantNamed')).toBe('data-testid')
+    }
+  })
 })
 
 describe('declaredTypeOf', () => {
@@ -139,6 +160,15 @@ describe('declaredTypeOf', () => {
   })
   it('reads a name in the scope that binds it: an untyped parameter hides a typed one', () => {
     expect(declaredAt(text, 'props', 'seven(')).toBeUndefined()
+  })
+  it('reads a name a case of a switch declares only in the switch: past it, the parameter', () => {
+    const cased = [
+      'export {}',
+      "function Row({ checkEvent }) { switch (mode) { case 'preview': const checkEvent: Draft = readDraft(); one(); break } two() }",
+    ].join('\n')
+
+    expect(declaredAt(cased, 'checkEvent', 'one(')).toBe('Draft')
+    expect(declaredAt(cased, 'checkEvent', 'two(')).toBeUndefined()
   })
 })
 
