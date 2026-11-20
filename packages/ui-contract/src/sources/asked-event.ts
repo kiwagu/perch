@@ -2,21 +2,25 @@
  * The event a `disabled={!props.can(<event>)}` asks its machine about, as far as its file says
  * (`locals.ts`), read where the expression is written, so a helper's own constant resolves in the
  * helper: the `type` each object its argument may be ends up with, in the order the object writes
- * it (a later `type`, or a spread that sets one, overrides an earlier one), `testIdFor()` of two
- * literals as that type included; a spread the file cannot follow is the data of an event that
- * writes its own `type` (a form's values, `{ type: '<anchor>', ...values }`), and may be the type
- * of one that does not. An argument the file cannot follow, a `type` it cannot read, or two
- * alternatives that name different events leave it unread. The question itself is read from the
- * tree: one negated call of `can` or `props.can` with one argument, whatever that argument nests. The facets check holds it to
- * the event the control itself sends, its anchor, so a copied `can(reset)` on the revoke button is
- * caught.
+ * it (a later `type`, or a spread that sets one, overrides an earlier one), the `type` read as an
+ * element's anchor is (`anchorIn`, `element.ts`): a literal, `testIdFor()` of two literals, or a
+ * `<NAME>_TEST_ID` constant of the file that holds either, or `testIdFor()` of such a constant and
+ * a literal suffix, the constant resolved where the `type` is written; a spread the file cannot
+ * follow is the data of an event that writes its own `type` (a form's values,
+ * `{ type: '<anchor>', ...values }`), and may be the type of one that does not. An argument the
+ * file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the file does not declare, an
+ * import, included), or two alternatives that name different events leave it unread. The question
+ * itself is read from the tree: one negated call of `can` or `props.can` with one argument,
+ * whatever that argument nests. The facets check holds it to the event the control itself sends,
+ * its anchor, so a copied `can(reset)` on the revoke button is caught.
  */
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
 
 import { type Alternative, DEPTH } from './alternatives'
+import { anchorIn } from './element'
 import type { Locals } from './locals'
-import { derivedAnchorOf, keyName, staticText, unwrap } from './values'
+import { keyName, unwrap } from './values'
 
 /** `can` or `props.can`, the machine's question as the facets idiom writes it. */
 const isCan = (callee: Expression): boolean =>
@@ -102,7 +106,7 @@ export function questionOf(locals: Locals, written: Expression): Question {
               ? now
               : property.kind !== 'init'
                 ? [null]
-                : [staticText(property.value) ?? derivedAnchorOf(property.value)?.anchor ?? null]
+                : [anchorIn(locals, property.value, property.value.start)?.anchor ?? null]
           },
           [undefined],
         )

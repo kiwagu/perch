@@ -502,6 +502,38 @@ describe('facetProblems', () => {
         }),
       ).toEqual([])
     })
+    it('passes a question whose event type an anchor constant of the view holds, in ahead mode too', () => {
+      const held = {
+        save: '<Button data-testid={SAVE_TEST_ID} disabled={!props.can(saveEvent)} />',
+        SAVE_TEST_ID: "'sample.save-button'",
+        saveEvent: '{ type: SAVE_TEST_ID } as const',
+      }
+      const inline = {
+        save: '<Button data-testid={SAVE_TEST_ID} disabled={!props.can({ type: SAVE_TEST_ID })} />',
+        SAVE_TEST_ID: "'sample.save-button'",
+      }
+
+      for (const changed of [held, inline]) {
+        expect(problemsOf(changed)).toEqual([])
+        expect(problemsOf(changed, { ahead: true })).toEqual([])
+      }
+    })
+    it('refuses, in ahead mode too, a type constant that names another event, or one the view does not declare', () => {
+      const changed = {
+        save: '<Button data-testid={SAVE_TEST_ID} disabled={!props.can(saveEvent)} />',
+        SAVE_TEST_ID: "'sample.save-button'",
+        saveEvent: '{ type: A_TEST_ID } as const',
+        A_TEST_ID: "'sample.a-button'",
+        a: '<Button data-testid="sample.a-button" disabled={!props.can({ type: IMPORTED_TEST_ID })} />',
+      }
+      const expected = [
+        `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(saveEvent)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+        `view.tsx:${LINE['a']}: "sample.a-button": disabled={!props.can({ type: IMPORTED_TEST_ID })}, but the event it asks about cannot be read; write can({ type: 'sample.a-button' }) or a constant of the file that holds it`,
+      ]
+
+      expect(problemsOf(changed)).toEqual(expected)
+      expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+    })
     it('in ahead mode lets a missing disabled by', () => {
       expect(
         problemsOf({ save: '<Button data-testid="sample.save-button" />' }, { ahead: true }),

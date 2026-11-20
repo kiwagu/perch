@@ -639,6 +639,55 @@ describe('collectFromSource', () => {
       { asks: undefined, question: undefined, line: 5 },
     ])
   })
+  it('reads an event whose type an anchor constant holds, where its file declares the constant', () => {
+    const found = collectFromSource(
+      [
+        "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+        "const RESET_TEST_ID = 'x.reset.send-button'",
+        "const DIALOG_TEST_ID = 'x.help-dialog'",
+        "const CONFIRM_TEST_ID = testIdFor(DIALOG_TEST_ID, 'confirm-button')",
+        'const revoke = { type: REVOKE_TEST_ID } as const',
+        'const reset = { type: RESET_TEST_ID } as const',
+        'const a = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can(revoke)} />',
+        'const b = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can(reset)} />',
+        "const c = <Button testId={testIdFor(DIALOG_TEST_ID, 'confirm-button')} disabled={!props.can({ type: testIdFor(DIALOG_TEST_ID, 'confirm-button') })} />",
+        'const d = <Button testId={CONFIRM_TEST_ID} disabled={!props.can({ type: CONFIRM_TEST_ID })} />',
+        'const e = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can({ type: RESET_TEST_ID, ...rest })} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // b: a constant naming another event asks that one, which the facets check then refuses.
+    expect(found.props.map(({ anchor, asks, line }) => ({ anchor, asks, line }))).toEqual([
+      { anchor: 'x.sessions.revoke-button', asks: 'x.sessions.revoke-button', line: 7 },
+      { anchor: 'x.sessions.revoke-button', asks: 'x.reset.send-button', line: 8 },
+      { anchor: 'x.help-dialog.confirm-button', asks: 'x.help-dialog.confirm-button', line: 9 },
+      { anchor: 'x.help-dialog.confirm-button', asks: 'x.help-dialog.confirm-button', line: 10 },
+      { anchor: 'x.sessions.revoke-button', asks: 'x.reset.send-button', line: 11 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it('leaves an event unread whose type an anchor constant holds that its file does not declare', () => {
+    const found = collectFromSource(
+      [
+        "import { IMPORTED_TEST_ID } from './anchors'",
+        "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+        'const a = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can({ type: IMPORTED_TEST_ID })} />',
+        'const b = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can({ type: MISSING_TEST_ID })} />',
+        "const c = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can({ type: testIdFor(IMPORTED_TEST_ID, 'revoke-button') })} />",
+        'const d = <Button data-testid={REVOKE_TEST_ID} disabled={!props.can({ type: revokeAnchor })} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // The question is still one to the machine, about an event the file does not say.
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual([
+      { asks: undefined, question: true, line: 3 },
+      { asks: undefined, question: true, line: 4 },
+      { asks: undefined, question: true, line: 5 },
+      { asks: undefined, question: true, line: 6 },
+    ])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [
