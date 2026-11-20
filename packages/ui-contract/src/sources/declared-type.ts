@@ -5,13 +5,14 @@
  * object type is a type literal or an interface, its own members and those of each interface or
  * alias it extends, read only where every member is a property or a method whose key the file
  * states (no index, call or construct signature); `canCarry` needs less, since one member that is
- * the key, an index signature or a key the file cannot read shows a type may carry it, whatever
- * else the type extends. A name stands for an interface or an alias only where the file declares it
- * once, at its top, with no type parameters, and nothing else of the file binds that name as a type
- * (a type parameter, an import, a class, an enum, a namespace, a declaration in a block); and only
- * in a module (an `import` or an `export`), since a script's declarations are global and may merge
- * with others. Anything else, an import, a generic, a mapped or utility type, `Record`, `any`,
- * `unknown`, a type argument or a chain past `DEPTH`, the file does not say, so it cannot be told.
+ * the key, a string index signature or a key the file cannot read shows a type may carry it
+ * (`member-key.ts`), whatever else the type extends. A name stands for an interface or an alias
+ * only where the file declares it once, at its top, with no type parameters, and nothing else of
+ * the file binds that name as a type (a type parameter, an import, a class, an enum, a namespace, a
+ * declaration in a block); and only in a module (an `import` or an `export`), since a script's
+ * declarations are global and may merge with others. Anything else, an import, a generic, a mapped
+ * or utility type, `Record`, `any`, `unknown`, a type argument or a chain past `DEPTH`, the file
+ * does not say, so it cannot be told.
  */
 
 import type {
@@ -25,6 +26,7 @@ import type {
 import { Visitor } from 'oxc-parser'
 
 import { DEPTH } from './alternatives'
+import { mayBeKey } from './member-key'
 import { keyName } from './values'
 
 export interface DeclaredTypes {
@@ -37,8 +39,8 @@ export interface DeclaredTypes {
   cannotCarry(type: TSType, key: string): boolean
   /**
    * Whether the file shows a value of `type` may carry `key`: an object type with a member of that
-   * name, an index signature or a key the file cannot read, or a union or an intersection of which
-   * one type does. A type it cannot tell (an import, a generic, `any`) is none that shows it.
+   * name, a string index signature or a key the file cannot read, or a union or an intersection of
+   * which one type does. A type it cannot tell (an import, a generic, `any`) is none that shows it.
    */
   canCarry(type: TSType, key: string): boolean
 }
@@ -226,12 +228,6 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
     }
   }
 
-  /** Whether a member may be `key`: it, an index signature, or a key the file cannot read. */
-  const mayBe = (member: TSSignature, key: string): boolean =>
-    member.type === 'TSIndexSignature' ||
-    ((member.type === 'TSPropertySignature' || member.type === 'TSMethodSignature') &&
-      (keyName(member.key, member.computed) ?? key) === key)
-
   /** Whether an interface or an alias may carry `key`: by its own members, or a base's. */
   const declarationCarries = (declaration: Declaration, key: string, depth: number): boolean => {
     if (depth >= DEPTH) {
@@ -243,7 +239,7 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
     }
 
     return (
-      declaration.body.body.some((member) => mayBe(member, key)) ||
+      declaration.body.body.some((member) => mayBeKey(member, key)) ||
       declaration.extends.some((heritage) => {
         const base = baseOf(heritage)
 
@@ -264,7 +260,7 @@ export function declaredTypesIn(program: Program): DeclaredTypes {
       case 'TSIntersectionType':
         return type.types.some((member) => canCarry(member, key, depth + 1))
       case 'TSTypeLiteral':
-        return type.members.some((member) => mayBe(member, key))
+        return type.members.some((member) => mayBeKey(member, key))
       default: {
         const declaration = referenced(type)
 

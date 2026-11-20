@@ -852,6 +852,72 @@ describe('collectFromSource', () => {
       [8, 9, 10, 11].map((line) => ({ asks: 'x.sessions.revoke-button', line })),
     )
   })
+  it('reads the events a spread the file types says its type may be, where they are the event the object writes', () => {
+    const REVOKE = 'x.sessions.revoke-button'
+    const rows: ReadonlyArray<readonly [string, string | undefined]> = [
+      ['{ type?: typeof same.type }', REVOKE],
+      [`{ type?: '${REVOKE}' }`, REVOKE],
+      ['{ type?: typeof aliased.type }', REVOKE],
+      [`{ readonly type?: '${REVOKE}' | typeof same.type }`, REVOKE],
+      [`{ type?: ('${REVOKE}') }`, REVOKE],
+      ['{ type?: typeof other.type }', undefined],
+      ["{ type?: 'x.reset.send-button' }", undefined],
+      [`{ type?: '${REVOKE}' | 'x.reset.send-button' }`, undefined],
+      ['{ type?: typeof plain.type }', undefined],
+      ['{ type?: typeof missing.type }', undefined],
+      ['{ type?: typeof built.type }', undefined],
+      ['{ type?: string }', undefined],
+      ['{ readonly name: string; readonly [slot: number]: string }', REVOKE],
+      ['{ readonly name: string; readonly [slot: string]: string }', undefined],
+    ]
+    const head = [
+      `const REVOKE_TEST_ID = '${REVOKE}'`,
+      `const same = { type: '${REVOKE}' } as const`,
+      'const aliased = { type: REVOKE_TEST_ID } as const',
+      "const other = { type: 'x.reset.send-button' } as const",
+      `const plain = { type: '${REVOKE}' }`,
+      'const built = { type: testIdFor(BASE, suffix) } as const',
+    ]
+    const found = collectFromSource(
+      [
+        ...head,
+        ...rows.map(
+          ([type], index) =>
+            `const build${index} = (extra: ${type}) => ({ type: REVOKE_TEST_ID, ...extra })`,
+        ),
+        ...rows.map(
+          (_, index) =>
+            `const e${index} = <Button data-testid="${REVOKE}" disabled={!props.can(build${index}(same))} />`,
+        ),
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A `type` the file writes with an optional member may be absent, so the event keeps the type
+    // it writes before the spread beside the events the spread may set.
+    expect(found.props.map(({ asks, line }) => ({ asks, line }))).toEqual(
+      rows.map(([, asks], index) => ({ asks, line: head.length + rows.length + 1 + index })),
+    )
+  })
+  it('leaves an event unread whose only type is an optional member of a spread, and one whose types cycle', () => {
+    const found = collectFromSource(
+      [
+        "const REVOKE_TEST_ID = 'x.sessions.revoke-button'",
+        "const same = { type: 'x.sessions.revoke-button' } as const",
+        "const bare = (extra: { type?: 'x.sessions.revoke-button' }) => ({ ...extra })",
+        'declare const looped: { type?: typeof cycle.type }',
+        'const cycle = { type: REVOKE_TEST_ID, ...looped } as const',
+        'const a = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(bare(same))} />',
+        'const b = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(cycle)} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.props.map(({ asks, question, line }) => ({ asks, question, line }))).toEqual([
+      { asks: undefined, question: true, line: 6 },
+      { asks: undefined, question: true, line: 7 },
+    ])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

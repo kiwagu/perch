@@ -50,6 +50,9 @@ const memberText = (key: string, ...lines: string[]): string | undefined => {
   return member === undefined ? undefined : text.slice(member.start, member.end)
 }
 
+/** A template literal type, `a${string}`: written in parts, which no string placeholder rule reads. */
+const TEMPLATE = ['`a$', '{string}`'].join('')
+
 const DRAFT = 'interface Draft { readonly key: string; readonly name: string }'
 
 describe('declaredTypesIn', () => {
@@ -255,13 +258,29 @@ describe('declaredTypesIn', () => {
     it('says a type with an index signature, or a key the file cannot read, may carry it', () => {
       for (const type of [
         '{ readonly [key: string]: string }',
-        '{ [key: number]: string }',
+        '{ [key: symbol]: string }',
+        `{ [key: ${TEMPLATE}]: string }`,
+        '{ [key: string | number]: string }',
         '{ [KEY]: string }',
         '{ [KEY](): string }',
         '{ readonly key: string; [other: string]: string }',
       ]) {
         expect(carriesType('export {}', "const KEY = 'other'", `let probe: ${type}`)).toBe(true)
       }
+    })
+    it('says a number key, an index of numbers or a member named by one, says nothing of a key that is a name', () => {
+      for (const type of [
+        '{ readonly name: string; readonly [slot: number]: string }',
+        '{ [slot: number]: string }',
+        '{ readonly name: string; 0: string }',
+        '{ 1: string; [slot: number]: string }',
+      ]) {
+        expect(carriesType('export {}', `let probe: ${type}`)).toBe(false)
+      }
+
+      expect(carriesType('export {}', 'let probe: { [slot: number]: string; type?: string }')).toBe(
+        true,
+      )
     })
     it('cannot tell, so says no, of a type without it, an import, a generic, a mapped or utility type, any or unknown', () => {
       for (const type of [

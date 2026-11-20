@@ -587,23 +587,100 @@ describe('facetProblems', () => {
         `view.tsx:${LINE[anchor]}: "sample.${anchor}-button": disabled={!props.can(${event})}, but the event it asks about cannot be read; write can({ type: 'sample.${anchor}-button' }) or a constant of the file that holds it`,
       ]
 
-      it('refuses it, in ahead mode too, where the view types the spread as able to carry a type', () => {
+      it('refuses it, in ahead mode too, where the type the view gives it allows another event', () => {
         const changed = {
           reset: "{ type: 'sample.a-button' } as const",
           SAVE_TEST_ID: "'sample.save-button'",
           checkFor: '(extra: { type?: typeof reset.type }) => ({ type: SAVE_TEST_ID, ...extra })',
           save: '<Button data-testid={SAVE_TEST_ID} disabled={!props.can(checkFor(reset))} />',
-          literalFor:
-            "(extra: { type?: typeof reset.type }) => ({ type: 'sample.a-button', ...extra })",
-          a: '<Button data-testid="sample.a-button" disabled={!props.can(literalFor(reset))} />',
+          otherFor: "(extra: { type?: 'other.event' }) => ({ type: 'sample.a-button', ...extra })",
+          a: '<Button data-testid="sample.a-button" disabled={!props.can(otherFor(reset))} />',
         }
 
         for (const ahead of [false, true]) {
           expect(problemsOf(changed, { ahead })).toEqual([
             ...cannotRead('checkFor(reset)'),
-            ...cannotRead('literalFor(reset)', 'a'),
+            ...cannotRead('otherFor(reset)', 'a'),
           ])
         }
+      })
+      it('refuses it, in ahead mode too, where the type the view gives it allows any other, or does not say', () => {
+        const entries = {
+          reset: "{ type: 'sample.a-button' } as const",
+          other: "{ type: 'other.event' } as const",
+          plain: "{ type: 'sample.a-button' }",
+        }
+        const imported = "import { imported } from './imported'"
+
+        for (const [extra, declarations] of [
+          ['{ type?: string }', []],
+          ["{ type?: 'sample.a-button' | 'other.event' }", []],
+          ["{ type?: 'sample.a-button' | string }", []],
+          ['{ type?: typeof other.type }', []],
+          // A `type` the file writes as a plain string is `string`, whatever `plain.type` holds.
+          ['{ type?: typeof plain.type }', []],
+          ['{ type?: typeof late.type }', ["let late = { type: 'sample.a-button' } as const"]],
+          ['{ type?: typeof imported.type }', [imported]],
+          ['{ type?: Event }', ["import type { Event } from './event'"]],
+          ['{ readonly [key: string]: string }', []],
+          ['{ type(): string }', []],
+        ] as const) {
+          const changed = {
+            ...entries,
+            literalFor: `(extra: ${extra}) => ({ type: 'sample.a-button', ...extra })`,
+            a: '<Button data-testid="sample.a-button" disabled={!props.can(literalFor(reset))} />',
+          }
+
+          for (const ahead of [false, true]) {
+            expect(problemsOf(changed, { declarations, ahead })).toEqual(
+              cannotRead('literalFor(reset)', 'a'),
+            )
+          }
+        }
+      })
+      it("passes it, in ahead mode too, where the type the view gives it allows only the control's own event", () => {
+        for (const extra of [
+          '{ type?: typeof reset.type }',
+          "{ type?: 'sample.a-button' }",
+          "{ readonly type?: 'sample.a-button' | typeof reset.type }",
+          "{ type?: ('sample.a-button') }",
+        ]) {
+          const changed = {
+            reset: "{ type: 'sample.a-button' } as const",
+            literalFor: `(extra: ${extra}) => ({ type: 'sample.a-button', ...extra })`,
+            a: '<Button data-testid="sample.a-button" disabled={!props.can(literalFor(reset))} />',
+          }
+
+          expect(problemsOf(changed)).toEqual([])
+          expect(problemsOf(changed, { ahead: true })).toEqual([])
+        }
+      })
+      it('passes it, in ahead mode too, through a constant type, an interface or an alias of the view', () => {
+        const changed = {
+          reset: "{ type: 'sample.save-button' } as const",
+          SAVE_TEST_ID: "'sample.save-button'",
+          save: '<Button data-testid={SAVE_TEST_ID} disabled={!props.can(saveEvent(reset))} />',
+          saveEvent: '(extra: Same) => ({ type: SAVE_TEST_ID, ...extra })',
+          a: '<Button data-testid="sample.a-button" disabled={!props.can(aEvent(reset))} />',
+          aEvent: "(extra: Alias) => ({ type: 'sample.a-button', ...extra })",
+        }
+        const declarations = [
+          'export interface Same { readonly name?: string; readonly type?: typeof reset.type }',
+          "export type Alias = { readonly type?: 'sample.a-button' }",
+        ]
+
+        expect(problemsOf(changed, { declarations })).toEqual([])
+        expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
+      })
+      it('passes it, in ahead mode too, where the type the view gives it is indexed by numbers only', () => {
+        const changed = {
+          save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(payload))} />',
+          saveEvent:
+            "(extra: { readonly name: string; readonly [slot: number]: string }) => ({ type: 'sample.save-button', ...extra })",
+        }
+
+        expect(problemsOf(changed)).toEqual([])
+        expect(problemsOf(changed, { ahead: true })).toEqual([])
       })
       it('refuses it, in ahead mode too, where an interface of the view gives it a type, or an index', () => {
         const changed = {
