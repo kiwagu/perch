@@ -7,6 +7,7 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
 import type { AccountCard } from '../../../../../platform/accounts.port'
+import { concernsOf } from '../../../../../platform/concerns'
 import type {
   AccountErrorCode,
   AccountErrors,
@@ -41,11 +42,17 @@ export interface AccountAreasProps {
   readonly onAct: (event: AccountEvent) => Promise<boolean>
 }
 
-/** The codes of the name's error that concern its field, as the contract's `fields` map them. */
-const NAME_FIELD: ReadonlySet<AccountErrorCode> = new Set(['name-required', 'name-too-long'])
+/** The field each code of `console.account.name.error` concerns, as the screen's `fields` say. */
+const NAME_ERROR_FIELDS: Partial<Record<AccountErrorCode, 'name'>> = {
+  'name-required': 'name',
+  'name-too-long': 'name',
+}
 
-/** The codes of the email's error that concern its field, as the contract's `fields` map them. */
-const EMAIL_FIELD: ReadonlySet<AccountErrorCode> = new Set(['email-invalid', 'email-taken'])
+/** The field each code of `console.account.email.error` concerns, as the screen's `fields` say. */
+const EMAIL_ERROR_FIELDS: Partial<Record<AccountErrorCode, 'email'>> = {
+  'email-invalid': 'email',
+  'email-taken': 'email',
+}
 
 /**
  * The name of the account's profile, shown while it has one; a code that concerns the name shows
@@ -55,12 +62,13 @@ function NameArea(props: AccountAreasProps) {
   const t = useT()
   const ids = { input: useId(), error: useId() }
   const code = props.errors.name
-  const underField = props.account.hasProfile && code !== undefined && NAME_FIELD.has(code)
+  // The field shows only while the account has a profile: a code for it shows above otherwise.
+  const concerns = props.account.hasProfile ? concernsOf(NAME_ERROR_FIELDS, code) : undefined
   const save = { type: 'console.account.name.save-button', name: props.name } as const
 
   return (
     <div className="flex flex-col gap-2">
-      {code !== undefined && !underField ? (
+      {code !== undefined && concerns === undefined ? (
         <AreaError testId={NAME_ERROR_TEST_ID} code={code} />
       ) : null}
       {props.account.hasProfile ? (
@@ -69,18 +77,18 @@ function NameArea(props: AccountAreasProps) {
           className="flex flex-col gap-2"
           data-testid="console.account.name.form"
         >
-          <Field data-invalid={underField ? true : undefined}>
+          <Field data-invalid={concerns === 'name' ? true : undefined}>
             <FieldLabel htmlFor={ids.input}>{t('console.account.name.label')}</FieldLabel>
             <Input
               id={ids.input}
               value={props.name}
               onChange={(event) => props.onName(event.target.value)}
               maxLength={80}
-              aria-invalid={underField ? true : undefined}
-              aria-describedby={underField ? ids.error : undefined}
+              aria-invalid={concerns === 'name' ? true : undefined}
+              aria-describedby={concerns === 'name' ? ids.error : undefined}
               data-testid="console.account.name.name-input"
             />
-            {underField ? (
+            {code !== undefined && concerns === 'name' ? (
               <FieldError id={ids.error} data-testid={NAME_ERROR_TEST_ID} data-code={code}>
                 {areaErrorText(t, code)}
               </FieldError>
@@ -108,7 +116,7 @@ function EmailArea(props: AccountAreasProps) {
   const t = useT()
   const ids = { input: useId(), error: useId() }
   const code = props.errors.email
-  const underField = code !== undefined && EMAIL_FIELD.has(code)
+  const concerns = concernsOf(EMAIL_ERROR_FIELDS, code)
   const send = { type: 'console.account.email.send-button', email: props.email } as const
 
   return (
@@ -117,10 +125,10 @@ function EmailArea(props: AccountAreasProps) {
       className="flex flex-col gap-2"
       data-testid="console.account.email.form"
     >
-      {code !== undefined && !underField ? (
+      {code !== undefined && concerns === undefined ? (
         <AreaError testId={EMAIL_ERROR_TEST_ID} code={code} />
       ) : null}
-      <Field data-invalid={underField ? true : undefined}>
+      <Field data-invalid={concerns === 'email' ? true : undefined}>
         <FieldLabel htmlFor={ids.input}>{t('console.account.email.label')}</FieldLabel>
         <Input
           id={ids.input}
@@ -129,11 +137,11 @@ function EmailArea(props: AccountAreasProps) {
           maxLength={254}
           value={props.email}
           onChange={(event) => props.onEmail(event.target.value)}
-          aria-invalid={underField ? true : undefined}
-          aria-describedby={underField ? ids.error : undefined}
+          aria-invalid={concerns === 'email' ? true : undefined}
+          aria-describedby={concerns === 'email' ? ids.error : undefined}
           data-testid="console.account.email.email-input"
         />
-        {underField ? (
+        {code !== undefined && concerns === 'email' ? (
           <FieldError id={ids.error} data-testid={EMAIL_ERROR_TEST_ID} data-code={code}>
             {areaErrorText(t, code)}
           </FieldError>

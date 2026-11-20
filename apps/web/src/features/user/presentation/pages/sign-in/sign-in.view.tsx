@@ -10,6 +10,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { SessionNotice } from '../../../../../platform/session.port'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
@@ -94,8 +95,24 @@ export interface SignInViewProps {
   readonly onCancelDeviceLimit: () => void
 }
 
+/** The codes of `user.sign-in.error`. */
+type SignInErrorCode =
+  | 'invalid-credentials'
+  | 'email-not-verified'
+  | 'account-banned'
+  | 'sign-up-rejected'
+  | 'rate-limited'
+  | 'other-account'
+  | 'name-required'
+  | 'name-too-long'
+  | 'passwords-differ'
+  | 'failed'
+
 /** The contract code of a refusal, with its text. */
-function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
+function errorOf(
+  t: ReturnType<typeof useT>,
+  code: string,
+): { code: SignInErrorCode; text: string } {
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
       return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
@@ -120,8 +137,10 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   }
 }
 
-/** The field a code of `user.sign-in.error` concerns, as the screen's `fields` say. */
-const ERROR_FIELDS: Readonly<Record<string, keyof SignInValues>> = {
+/** The field each code of `user.sign-in.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<SignInErrorCode, 'name' | 'confirmation'>> = {
+  'name-required': 'name',
+  'name-too-long': 'name',
   'passwords-differ': 'confirmation',
 }
 
@@ -151,8 +170,8 @@ function noticeText(
 export function SignInView(props: SignInViewProps) {
   const t = useT()
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
-  // The error under the password typed again describes that field while it shows there.
-  const confirmationErrorId = useId()
+  // The error under a field describes that field while it shows there.
+  const errorIds = { name: useId(), confirmation: useId() }
   // The rules of a new password describe the password while an account is created.
   const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
@@ -183,7 +202,13 @@ export function SignInView(props: SignInViewProps) {
     },
   })
   const error = props.error ? errorOf(t, props.error) : undefined
-  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  const under = (key: 'name' | 'confirmation') =>
+    error && concerns === key ? (
+      <FieldError id={errorIds[key]} data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
+        {error.text}
+      </FieldError>
+    ) : null
 
   return (
     <Card className="mx-auto w-full max-w-sm">
@@ -212,7 +237,7 @@ export function SignInView(props: SignInViewProps) {
                 </AlertDescription>
               </Alert>
             ) : null}
-            {error && !concerns ? (
+            {error && concerns === undefined ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
                   {error.text}
@@ -278,34 +303,29 @@ export function SignInView(props: SignInViewProps) {
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
-                  aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
+                  aria-describedby={concerns === 'confirmation' ? errorIds.confirmation : undefined}
                   showLabel={t('user.password.show')}
                   hideLabel={t('user.password.hide')}
                   marksState={false}
                   testId="user.sign-in.password-confirmation-input"
                 />
-                {error && concerns === 'confirmation' ? (
-                  <FieldError
-                    id={confirmationErrorId}
-                    data-testid={SIGN_IN_ERROR_TEST_ID}
-                    data-code={error.code}
-                  >
-                    {error.text}
-                  </FieldError>
-                ) : null}
+                {under('confirmation')}
               </Field>
             ) : null}
             {props.renders('user.sign-in.name-input') ? (
-              <Field>
+              <Field data-invalid={concerns === 'name' ? true : undefined}>
                 <FieldLabel htmlFor={ids.name}>{t('user.sign-in.name')}</FieldLabel>
                 <Input
                   {...field('name')}
                   autoComplete="name"
                   maxLength={80}
                   required
+                  aria-invalid={concerns === 'name' ? true : undefined}
+                  aria-describedby={concerns === 'name' ? errorIds.name : undefined}
                   marksState={false}
                   data-testid="user.sign-in.name-input"
                 />
+                {under('name')}
               </Field>
             ) : null}
             <Button

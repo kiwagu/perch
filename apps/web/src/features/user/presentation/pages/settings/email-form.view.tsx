@@ -9,6 +9,8 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
+
 /** The anchor of the form's error, drawn above the form or under the field its code concerns. */
 const EMAIL_ERROR_TEST_ID = 'user.settings.email.error'
 
@@ -33,24 +35,19 @@ export interface EmailFormViewProps {
   readonly onSend: () => Promise<boolean>
 }
 
-/** The contract code of a failure, the field it concerns if any, and its text. */
-function errorOf(
-  t: ReturnType<typeof useT>,
-  code: string,
-): { code: string; field?: keyof EmailFormValues; text: string } {
+/** The codes of `user.settings.email.error`. */
+type EmailErrorCode = 'invalid-credentials' | 'email-invalid' | 'rate-limited' | 'failed'
+
+/** The contract code of a failure, with its text. */
+function errorOf(t: ReturnType<typeof useT>, code: string): { code: EmailErrorCode; text: string } {
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
       return {
         code: 'invalid-credentials',
-        field: 'password',
         text: t('user.settings.email.error.invalid-credentials'),
       }
     case 'data:EMAIL_INVALID':
-      return {
-        code: 'email-invalid',
-        field: 'email',
-        text: t('user.settings.email.error.email-invalid'),
-      }
+      return { code: 'email-invalid', text: t('user.settings.email.error.email-invalid') }
     case 'data:RATE_LIMITED':
       return { code: 'rate-limited', text: t('user.settings.email.error.rate-limited') }
     default:
@@ -58,17 +55,20 @@ function errorOf(
   }
 }
 
+/** The field each code of `user.settings.email.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<EmailErrorCode, 'email' | 'password'>> = {
+  'invalid-credentials': 'password',
+  'email-invalid': 'email',
+}
+
 /** The account's email, changed once the link of the mail sent to the new one is opened. */
 export function EmailFormView(props: EmailFormViewProps) {
   const t = useT()
   const ids = { email: useId(), password: useId(), error: useId() }
   const error = props.error ? errorOf(t, props.error) : undefined
-  const marked = (name: keyof EmailFormValues) => ({
-    'aria-invalid': error?.field === name ? true : undefined,
-    'aria-describedby': error?.field === name ? ids.error : undefined,
-  })
-  const underField = (name: keyof EmailFormValues) =>
-    error?.field === name ? (
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  const under = (key: 'email' | 'password') =>
+    error && concerns === key ? (
       <FieldError id={ids.error} data-testid={EMAIL_ERROR_TEST_ID} data-code={error.code}>
         {error.text}
       </FieldError>
@@ -94,14 +94,14 @@ export function EmailFormView(props: EmailFormViewProps) {
                 </AlertDescription>
               </Alert>
             ) : null}
-            {error && error.field === undefined ? (
+            {error && concerns === undefined ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid={EMAIL_ERROR_TEST_ID} data-code={error.code}>
                   {error.text}
                 </AlertDescription>
               </Alert>
             ) : null}
-            <Field data-invalid={error?.field === 'email' ? true : undefined}>
+            <Field data-invalid={concerns === 'email' ? true : undefined}>
               <FieldLabel htmlFor={ids.email}>{t('user.settings.email.email')}</FieldLabel>
               <Input
                 id={ids.email}
@@ -111,12 +111,13 @@ export function EmailFormView(props: EmailFormViewProps) {
                 autoComplete="email"
                 maxLength={254}
                 required
-                {...marked('email')}
+                aria-invalid={concerns === 'email' ? true : undefined}
+                aria-describedby={concerns === 'email' ? ids.error : undefined}
                 data-testid="user.settings.email.email-input"
               />
-              {underField('email')}
+              {under('email')}
             </Field>
-            <Field data-invalid={error?.field === 'password' ? true : undefined}>
+            <Field data-invalid={concerns === 'password' ? true : undefined}>
               <FieldLabel htmlFor={ids.password}>{t('user.settings.email.password')}</FieldLabel>
               <PasswordInput
                 id={ids.password}
@@ -126,12 +127,13 @@ export function EmailFormView(props: EmailFormViewProps) {
                 }
                 autoComplete="current-password"
                 required
-                {...marked('password')}
+                aria-invalid={concerns === 'password' ? true : undefined}
+                aria-describedby={concerns === 'password' ? ids.error : undefined}
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
                 testId="user.settings.email.password-input"
               />
-              {underField('password')}
+              {under('password')}
             </Field>
             <Button
               type="submit"

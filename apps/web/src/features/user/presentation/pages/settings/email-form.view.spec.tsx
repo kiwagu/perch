@@ -2,6 +2,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 
 import { EmailFormView, type EmailFormViewProps } from './email-form.view'
@@ -61,6 +62,17 @@ describe('EmailFormView', () => {
     expect(error.getAttribute('data-code')).toBe(code)
     expect(input(field).getAttribute('aria-invalid')).toBe('true')
     expect(input(field).closest('[data-slot="field"]')?.contains(error)).toBe(true)
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'invalid-credentials': 'data:INVALID_CREDENTIALS',
+      'email-invalid': 'data:EMAIL_INVALID',
+    }
+
+    expectEachCodeMarksItsField('user.settings.email.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
   })
 
   it('says any other refusal above the form', () => {

@@ -188,14 +188,13 @@ export function OrganisationNotes(
           </p>
         ) : null}
         <Form onSubmit={add}>
-          <Field data-invalid={props.error ? true : undefined}>
+          <Field>
             <Textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
               maxLength={500}
               placeholder={t('organisation.notes.placeholder')}
               aria-label={t('organisation.notes.placeholder')}
-              aria-invalid={props.error ? true : undefined}
               data-testid="organisation.notes.new-textarea"
             />
             <OrganisationErrorLine code={props.error} testId="organisation.notes.error" />

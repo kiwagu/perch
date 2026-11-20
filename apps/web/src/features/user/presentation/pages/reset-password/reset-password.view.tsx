@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/componen
 import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { type PageLinkProps, PlainLink } from '../../components/page-link/page-link'
@@ -54,33 +55,40 @@ export interface ResetPasswordViewProps {
   readonly link?: ComponentType<PageLinkProps>
 }
 
-/** The contract code of a failure, the field it concerns if any, and its text. */
+/** The codes of `user.reset-password.error`. */
+type ResetPasswordErrorCode =
+  | 'link-invalid'
+  | 'link-expired'
+  | 'password-rejected'
+  | 'passwords-differ'
+  | 'rate-limited'
+  | 'failed'
+
+/** The contract code of a failure, with its text. */
 function errorOf(
   t: ReturnType<typeof useT>,
   code: string,
-): { code: string; field?: ResetPasswordField; text: string } {
+): { code: ResetPasswordErrorCode; text: string } {
   switch (code) {
     case 'data:LINK_INVALID':
       return { code: 'link-invalid', text: t('user.reset-password.error.link-invalid') }
     case 'data:LINK_EXPIRED':
       return { code: 'link-expired', text: t('user.reset-password.error.link-expired') }
     case 'data:PASSWORD_REJECTED':
-      return {
-        code: 'password-rejected',
-        field: 'password',
-        text: t('user.reset-password.error.password-rejected'),
-      }
+      return { code: 'password-rejected', text: t('user.reset-password.error.password-rejected') }
     case RESET_PASSWORDS_DIFFER:
-      return {
-        code: 'passwords-differ',
-        field: 'confirmation',
-        text: t('user.reset-password.error.passwords-differ'),
-      }
+      return { code: 'passwords-differ', text: t('user.reset-password.error.passwords-differ') }
     case 'data:RATE_LIMITED':
       return { code: 'rate-limited', text: t('user.reset-password.error.rate-limited') }
     default:
       return { code: 'failed', text: t('user.reset-password.error.failed') }
   }
+}
+
+/** The field each code of `user.reset-password.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<ResetPasswordErrorCode, ResetPasswordField>> = {
+  'password-rejected': 'password',
+  'passwords-differ': 'confirmation',
 }
 
 /** What the link of a reset mail opens: the new password typed twice, then what came of it. */
@@ -90,6 +98,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
   const [values, setValues] = useState<Passwords>({ password: '', confirmation: '' })
   const Link = props.link ?? PlainLink
   const error = props.error ? errorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
   const password = (field: ResetPasswordField) => ({
     id: ids[field],
     value: values[field],
@@ -101,22 +110,21 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
     },
     required: true,
     autoComplete: 'new-password',
-    'aria-invalid': error?.field === field ? true : undefined,
     'aria-describedby':
-      [field === 'password' ? ids.rules : undefined, error?.field === field ? ids.error : undefined]
+      [field === 'password' ? ids.rules : undefined, concerns === field ? ids.error : undefined]
         .filter(Boolean)
         .join(' ') || undefined,
     showLabel: t('user.password.show'),
     hideLabel: t('user.password.hide'),
   })
-  const underField = (field: ResetPasswordField) =>
-    error?.field === field ? (
+  const under = (key: ResetPasswordField) =>
+    error && concerns === key ? (
       <FieldError id={ids.error} data-testid={RESET_ERROR_TEST_ID} data-code={error.code}>
         {error.text}
       </FieldError>
     ) : null
   const aboveForm =
-    error && error.field === undefined ? (
+    error && concerns === undefined ? (
       <Alert variant="destructive">
         <AlertDescription data-testid={RESET_ERROR_TEST_ID} data-code={error.code}>
           {error.text}
@@ -136,11 +144,12 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
           <Form onSubmit={() => props.onSubmit(values)} data-testid="user.reset-password.form">
             <FieldGroup>
               {aboveForm}
-              <Field data-invalid={error?.field === 'password' ? true : undefined}>
+              <Field data-invalid={concerns === 'password' ? true : undefined}>
                 <FieldLabel htmlFor={ids.password}>{t('user.reset-password.password')}</FieldLabel>
                 <PasswordInput
                   {...password('password')}
                   maxLength={35}
+                  aria-invalid={concerns === 'password' ? true : undefined}
                   marksState={false}
                   testId="user.reset-password.password-input"
                 />
@@ -150,18 +159,19 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                   testId="user.reset-password.password-rule-list"
                   items={RULES}
                 />
-                {underField('password')}
+                {under('password')}
               </Field>
-              <Field data-invalid={error?.field === 'confirmation' ? true : undefined}>
+              <Field data-invalid={concerns === 'confirmation' ? true : undefined}>
                 <FieldLabel htmlFor={ids.confirmation}>
                   {t('user.reset-password.password-confirmation')}
                 </FieldLabel>
                 <PasswordInput
                   {...password('confirmation')}
+                  aria-invalid={concerns === 'confirmation' ? true : undefined}
                   marksState={false}
                   testId="user.reset-password.password-confirmation-input"
                 />
-                {underField('confirmation')}
+                {under('confirmation')}
               </Field>
               <Button
                 type="submit"

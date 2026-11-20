@@ -9,6 +9,7 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { ProfileFields } from '../../../application/profile.machine'
 
 export interface ProfileViewData {
@@ -43,8 +44,14 @@ export interface ProfileViewProps {
   readonly onCancelSignOut: () => void
 }
 
+/** The codes of `user.profile.error`. */
+type ProfileErrorCode = 'name-required' | 'name-too-long' | 'bio-too-long' | 'failed'
+
 /** The contract code of a refused change, with its text. */
-function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
+function errorOf(
+  t: ReturnType<typeof useT>,
+  code: string,
+): { code: ProfileErrorCode; text: string } {
   switch (code) {
     case 'profile:NAME_REQUIRED':
       return { code: 'name-required', text: t('user.profile.error.name-required') }
@@ -57,8 +64,8 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   }
 }
 
-/** The field each code of `user.profile.error` concerns, as the screen's `fields` say; others concern the form. */
-const ERROR_FIELDS: Readonly<Record<string, keyof ProfileFields>> = {
+/** The field each code of `user.profile.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<ProfileErrorCode, 'name' | 'bio'>> = {
   'name-required': 'name',
   'name-too-long': 'name',
   'bio-too-long': 'bio',
@@ -69,7 +76,7 @@ function ProfileForm(props: ProfileViewProps) {
   const nameId = useId()
   const bioId = useId()
   const error = props.error ? errorOf(t, props.error) : undefined
-  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
   // One message: under the field its code concerns, or above Save when it concerns the form.
   const message = error ? (
     <FieldError data-testid="user.profile.error" data-code={error.code}>
@@ -105,7 +112,7 @@ function ProfileForm(props: ProfileViewProps) {
           />
           {concerns === 'bio' ? message : null}
         </Field>
-        <Field data-invalid={error && !concerns ? true : undefined}>
+        <Field>
           {concerns ? null : message}
           <Button
             type="submit"

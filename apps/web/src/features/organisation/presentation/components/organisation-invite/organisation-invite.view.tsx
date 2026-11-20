@@ -7,7 +7,12 @@ import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { OrganisationEvent, TenantRole } from '../../../application/organisation-machine'
+import {
+  type OrganisationErrorCode,
+  organisationErrorOf,
+} from '../organisation-error-line/organisation-error'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 import { roleOptions } from '../role-words'
 
@@ -15,6 +20,11 @@ import { roleOptions } from '../role-words'
 export interface InviteDraft {
   readonly email: string
   readonly role: TenantRole
+}
+
+/** The field each code of `organisation.invite.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<OrganisationErrorCode, 'email'>> = {
+  'email-invalid': 'email',
 }
 
 /**
@@ -33,13 +43,15 @@ export function OrganisationInvite(props: {
   const t = useT()
   const emailId = useId()
   const { draft } = props
+  const error = props.error ? organisationErrorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
 
   return (
     <Form
       onSubmit={() => props.onInvite(draft.email, draft.role)}
       data-testid="organisation.invite.form"
     >
-      <Field data-invalid={props.error ? true : undefined}>
+      <Field data-invalid={concerns === 'email' ? true : undefined}>
         <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
         <Input
           id={emailId}
@@ -48,7 +60,7 @@ export function OrganisationInvite(props: {
           onChange={(event) => props.onChange({ ...draft, email: event.target.value })}
           autoComplete="off"
           maxLength={254}
-          aria-invalid={props.error ? true : undefined}
+          aria-invalid={concerns === 'email' ? true : undefined}
           data-testid="organisation.invite.email-input"
         />
         <OptionSelect

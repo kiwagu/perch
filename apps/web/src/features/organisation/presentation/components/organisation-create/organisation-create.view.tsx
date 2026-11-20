@@ -7,8 +7,21 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from '@workspace/ui/c
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { OrganisationEvent } from '../../../application/organisation-machine'
+import {
+  type OrganisationErrorCode,
+  organisationErrorOf,
+} from '../organisation-error-line/organisation-error'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
+
+/** The field each code of `organisation.create.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<OrganisationErrorCode, 'key' | 'name'>> = {
+  'key-invalid': 'key',
+  'key-taken': 'key',
+  'name-required': 'name',
+  'name-too-long': 'name',
+}
 
 /** The form that creates an organisation; the creator becomes its administrator. */
 export function OrganisationCreate(props: {
@@ -23,6 +36,8 @@ export function OrganisationCreate(props: {
   const hintId = useId()
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
+  const error = props.error ? organisationErrorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
   const submit = () => {
     const created = props.onCreate({ key, name })
 
@@ -46,7 +61,7 @@ export function OrganisationCreate(props: {
       <CardContent>
         <Form onSubmit={submit} data-testid="organisation.create.form">
           <FieldGroup>
-            <Field>
+            <Field data-invalid={concerns === 'key' ? true : undefined}>
               <FieldLabel htmlFor={keyId}>{t('organisation.create.key')}</FieldLabel>
               <Input
                 id={keyId}
@@ -55,12 +70,13 @@ export function OrganisationCreate(props: {
                 autoCapitalize="none"
                 autoComplete="off"
                 maxLength={32}
+                aria-invalid={concerns === 'key' ? true : undefined}
                 aria-describedby={hintId}
                 data-testid="organisation.create.key-input"
               />
               <FieldDescription id={hintId}>{t('organisation.create.key-hint')}</FieldDescription>
             </Field>
-            <Field>
+            <Field data-invalid={concerns === 'name' ? true : undefined}>
               <FieldLabel htmlFor={nameId}>{t('organisation.create.name')}</FieldLabel>
               <Input
                 id={nameId}
@@ -68,10 +84,11 @@ export function OrganisationCreate(props: {
                 onChange={(event) => setName(event.target.value)}
                 autoComplete="organization"
                 maxLength={80}
+                aria-invalid={concerns === 'name' ? true : undefined}
                 data-testid="organisation.create.name-input"
               />
             </Field>
-            <Field data-invalid={props.error ? true : undefined}>
+            <Field>
               <OrganisationErrorLine code={props.error} testId="organisation.create.error" />
               <Button
                 type="submit"

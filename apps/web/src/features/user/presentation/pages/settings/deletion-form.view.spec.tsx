@@ -2,6 +2,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 
 import { DeletionFormView, type DeletionFormViewProps } from './deletion-form.view'
@@ -69,6 +70,16 @@ describe('DeletionFormView', () => {
     expect(error.getAttribute('data-code')).toBe('invalid-credentials')
     expect(field.getAttribute('aria-invalid')).toBe('true')
     expect(field.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'invalid-credentials': 'data:INVALID_CREDENTIALS',
+    }
+
+    expectEachCodeMarksItsField('user.settings.deletion.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
   })
 
   it.each([

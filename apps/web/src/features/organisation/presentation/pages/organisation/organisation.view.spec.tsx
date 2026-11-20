@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/organisation.en.json'
 import es from '../../i18n/organisation.es.json'
@@ -190,6 +191,24 @@ describe('OrganisationView without memberships', () => {
       expect(error.getAttribute('data-code')).toBe(code)
       expect(error.textContent).toBe(en[key])
     }
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const refusals: Readonly<Record<string, string>> = {
+      'key-invalid': 'organisation:KEY_INVALID',
+      'key-taken': 'key-taken',
+      'name-required': 'organisation:NAME_REQUIRED',
+      'name-too-long': 'organisation:NAME_TOO_LONG',
+    }
+
+    expectEachCodeMarksItsField('organisation.create.error', (code) =>
+      renderView({
+        organisations: [],
+        current: undefined,
+        notes: undefined,
+        errors: { create: refusals[code] },
+      }),
+    )
   })
 })
 
@@ -436,6 +455,17 @@ describe('OrganisationView of a member', () => {
     )
     expect(screen.getByTestId('organisation.notes.error').textContent).toBe(
       'Only the author or an administrator can change this note.',
+    )
+  })
+
+  it('marks no field for a note refused, which concerns the form', () => {
+    const refusals: Readonly<Record<string, string>> = {
+      'text-required': 'note:TEXT_REQUIRED',
+      'text-too-long': 'note:TEXT_TOO_LONG',
+    }
+
+    expectEachCodeMarksItsField('organisation.notes.error', (code) =>
+      renderView({ errors: { notes: refusals[code] } }),
     )
   })
 
@@ -715,6 +745,35 @@ describe('OrganisationView of an administrator', () => {
       expect(error.getAttribute('data-code')).toBe(code)
       expect(error.textContent).toBe(en[key])
     }
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const refusals: Readonly<Record<string, string>> = { 'email-invalid': 'email-invalid' }
+
+    expectEachCodeMarksItsField('organisation.invite.error', (code) =>
+      renderView({
+        current: acmeAdmin,
+        organisations: [acmeAdmin],
+        members: [ann],
+        errors: { members: refusals[code] },
+      }),
+    )
+  })
+
+  it('marks no field for a refusal that concerns the form', () => {
+    renderView({
+      current: acmeAdmin,
+      organisations: [acmeAdmin],
+      members: [ann],
+      errors: { members: 'already-member' },
+    })
+
+    expect(screen.getByTestId('organisation.invite.error').getAttribute('data-code')).toBe(
+      'already-member',
+    )
+    expect(document.querySelectorAll('[aria-invalid="true"], [data-invalid="true"]')).toHaveLength(
+      0,
+    )
   })
 
   it('lists the invitations not accepted yet, each with its email, its role, a copy and a revoke', () => {

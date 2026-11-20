@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
@@ -406,6 +407,35 @@ describe('SignInView', () => {
       confirmation.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(input('user.sign-in.submit-button').disabled).toBe(true)
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'name-required': 'profile:NAME_REQUIRED',
+      'name-too-long': 'profile:NAME_TOO_LONG',
+      'sign-up-rejected': 'data:SIGN_UP_REJECTED',
+      'passwords-differ': PASSWORDS_DIFFER,
+    }
+
+    expectEachCodeMarksItsField('user.sign-in.error', (code) =>
+      renderView({ mode: 'sign-up', error: failures[code] }),
+    )
+  })
+
+  it.each([
+    ['profile:NAME_REQUIRED', 'name-required', en['user.sign-in.error.name-required']],
+    ['profile:NAME_TOO_LONG', 'name-too-long', en['user.sign-in.error.name-too-long']],
+  ])('says %s under the name, describing it', (failure, code, text) => {
+    renderView({ mode: 'sign-up', error: failure })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const name = input('user.sign-in.name-input')
+
+    expect(error.getAttribute('data-code')).toBe(code)
+    expect(error.textContent).toBe(text)
+    expect(name.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(name.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')).toBe(error)
   })
 
   it('describes the password typed again by its error exactly while the passwords differ', () => {

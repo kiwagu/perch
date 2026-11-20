@@ -2,10 +2,11 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountCard } from '../../../../../platform/accounts.port'
 import { renderWithProviders } from '../../../../../test-utils'
-import type { AccountEvent } from '../../../application/account-machine/machine'
+import type { AccountErrorCode, AccountEvent } from '../../../application/account-machine/machine'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
 
@@ -350,6 +351,18 @@ describe('AccountView', () => {
       expect(input.getAttribute('aria-invalid')).toBe('true')
       expect(input.getAttribute('aria-describedby')).toBe(error.id)
       expect(input.parentElement?.contains(error)).toBe(true)
+    },
+  )
+
+  it.each([
+    ['name', 'console.account.name.error'],
+    ['email', 'console.account.email.error'],
+  ] as const)(
+    "marks the field each code of the %s error concerns, as the screen's fields say, and no other",
+    (area, error) => {
+      expectEachCodeMarksItsField(error, (code) =>
+        renderView({ errors: { [area]: code as AccountErrorCode } }),
+      )
     },
   )
 

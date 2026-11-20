@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import { RESET_PASSWORDS_DIFFER } from '../../../application/reset-password.machine'
@@ -105,6 +106,17 @@ describe('ResetPasswordView', () => {
     expect(error.getAttribute('data-code')).toBe(code)
     expect(input(field).getAttribute('aria-invalid')).toBe('true')
     expect(input(field).closest('[data-slot="field"]')?.contains(error)).toBe(true)
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'password-rejected': 'data:PASSWORD_REJECTED',
+      'passwords-differ': RESET_PASSWORDS_DIFFER,
+    }
+
+    expectEachCodeMarksItsField('user.reset-password.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
   })
 
   it('says a refusal that concerns no field above the form', () => {

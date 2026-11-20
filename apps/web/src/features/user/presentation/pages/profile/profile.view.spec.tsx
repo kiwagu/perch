@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ProfileId } from '@workspace/ids'
 import { loadScreens } from '@workspace/ui-contract'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
@@ -136,6 +137,10 @@ describe('ProfileView', () => {
     }
   })
 
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    expectEachCodeMarksItsField('user.profile.error', (code) => renderView({ error: DOMAIN[code] }))
+  })
+
   it('explains each refused save, and shows a failure that concerns no field above Save', () => {
     const { rerender } = renderView({ error: 'profile:NAME_REQUIRED' })
 
@@ -157,6 +162,9 @@ describe('ProfileView', () => {
     )
     expect(fieldOf('user.profile.error')).toBe(fieldOf('user.profile.save-button'))
     expect(field('user.profile.name-input').getAttribute('aria-invalid')).toBeNull()
+    expect(document.querySelectorAll('[aria-invalid="true"], [data-invalid="true"]')).toHaveLength(
+      0,
+    )
   })
 
   it('says when the profile is still loading or missing', () => {
