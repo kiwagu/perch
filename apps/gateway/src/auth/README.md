@@ -143,12 +143,14 @@ whatever its email, and a resend takes one of those and one of its email's 3 res
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
 an email of at most the `email` value's length and a password, as strings, answers 400
-`bad-request` before anything is read for the email, alike for any email. A password of a length
-no account's password has (outside the `password` value's, the empty one included:
-`password-length.ts`) answers 401 as a wrong one does and counts among the email's failed
-sign-ins, once the email found its place, nothing read for it and Better Auth not asked (it would
-hash an empty password to time an unknown email's answer, which fails); any other reaches Better
-Auth as that very JSON, so the email whose password is checked is the email counted. Better Auth's answers reach the client
+`bad-request` before anything is read for the email, alike for any email. One that is reaches
+Better Auth as that very JSON, so the email whose password is checked is the email counted, but
+for a password of a length no account's password has (outside the `password` value's, the empty
+one included): Better Auth gets `NO_ACCOUNTS_PASSWORD` in its place (`password-length.ts`), ten
+spaces, which no password set under the rules has, so it is refused, counted and timed as a
+wrong one, after the same checks of the request (its origin, the email's shape) as any other
+(Better Auth would fail to hash an empty password, which it hashes to time an unknown email's
+answer). Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
@@ -704,8 +706,8 @@ error carries one.
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
   change and a confirmation, a password of no account's length (empty, 9 or 36 characters) refused
-  and counted as a wrong one at a sign-in, alike for any email and before anything is read, and
-  at a change of the password, of the email and a deletion's request, a sign-in that checked the old
+  and counted as a wrong one at a sign-in, alike for any email, its origin and email's shape
+  checked first, and at a change of the password, of the email and a deletion's request, a sign-in that checked the old
   password beside a reset or a change, or whose email moved to another account meanwhile, or to
   one and away or back again, left with no working session and no other account's start, the
   start a

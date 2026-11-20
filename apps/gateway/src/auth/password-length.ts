@@ -14,3 +14,12 @@ export function hasPasswordLength(password: string): boolean {
     length >= CONTRACT_VALUES.password.minLength && length <= CONTRACT_VALUES.password.maxLength
   )
 }
+
+/**
+ * A password of an account's length that no account's password is: every one was set under the
+ * rules of a new one, which take printable characters only, never a space. A sign-in hands it to
+ * Better Auth in place of a password of no account's length, so that one is refused, counted and
+ * timed as a wrong one, after every check that answers before the password is (the request's
+ * origin, the email's shape).
+ */
+export const NO_ACCOUNTS_PASSWORD = ' '.repeat(CONTRACT_VALUES.password.minLength)
