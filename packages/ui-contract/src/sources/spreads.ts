@@ -3,8 +3,8 @@
  * each prop as written on the element, so a view cannot slip a field fact past the check by
  * grouping its props in an object or a helper (`{...field('email')}`). A prop counts as certain
  * only where every branch the spread may take supplies it, so a mark one branch leaves out is still
- * wanted; a branch the file cannot follow is said as such, for the collector to refuse on an
- * element whose anchor it reads.
+ * wanted; a branch the file cannot follow, or an object with a key it cannot read, is said as such,
+ * for the collector to refuse on an element whose anchor it reads.
  */
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
@@ -59,10 +59,15 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
         return ofAlternatives(locals.objectsOf(property.argument, property.start), depth + 1)
       }
 
+      if (property.method) {
+        return NOTHING
+      }
+
+      // A getter, a setter or a key that is no name or string may supply any prop: not followed.
       const name = property.kind === 'init' ? keyName(property.key, property.computed) : undefined
 
-      return name === undefined || property.method
-        ? NOTHING
+      return name === undefined
+        ? UNKNOWN
         : { props: [{ name, value: property.value }], certain: new Set([name]), followed: true }
     })
 

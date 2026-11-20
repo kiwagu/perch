@@ -3,11 +3,11 @@
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
  * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
- * key lets the scan go on before it), or each object a function of the file returns where it is
- * called (each `return` of its own body, a bare one or a reachable end giving nothing, an end no
- * `return` or `throw` reaches being one a block or both arms of an `if` and `else` end,
- * `reachable-end.ts`; a `useCallback` hands its function on, a `useMemo` holds what its function
- * returns).
+ * key lets the scan go on before it, a property whose key it cannot read leaves the member
+ * unknown), or each object a function of the file returns where it is called (each `return` of
+ * its own body, a bare one or a reachable end giving nothing, an end no `return` or `throw`
+ * reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
+ * `useCallback` hands its function on, a `useMemo` holds what its function returns).
  */
 
 import type {
@@ -79,35 +79,54 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
     const resultOf = (fn: Callable): Alternative[] =>
       names.returnedBy(fn).flatMap((returned) => (returned === null ? [null] : next(returned)))
     /**
-     * The alternatives of `key` in an object's properties, scanning back from `from`: a property
-     * with the key decides; a spread decides for each branch it may take that has the key, and for
-     * a branch that lacks it, at any depth, the scan goes on with the properties before the spread.
-     * `absent` says what holds where no property has the key: the scan of the object that spread
-     * this one goes on, and only the outermost scan, of the member itself, says nothing.
+     * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
+     * `level`: a property with the key decides; a spread decides for each branch it may take that
+     * has the key, and for a branch that lacks it, at any depth, the scan goes on with the
+     * properties before the spread. A property the scan cannot read leaves the member unknown, as
+     * it may be the key: one whose key is no name or string (`[name]`), and a getter or a setter
+     * with the key. `absent` says what holds where no property has the key: the scan of the object
+     * that spread this one goes on, and only the outermost scan, of the member itself, says
+     * nothing. Each object spread in turn is one level deeper, so no cycle runs on: at `DEPTH`
+     * the member is unknown.
      */
     const memberIn = (
       properties: ObjectExpression['properties'],
       from: number,
       key: string,
+      level: number,
       absent: () => Alternative[],
     ): Alternative[] => {
+      if (level >= DEPTH) {
+        return [undefined]
+      }
+
       for (let index = from; index >= 0; index -= 1) {
         const property = properties[index]
 
         if (property?.type === 'SpreadElement') {
-          const before = (): Alternative[] => memberIn(properties, index - 1, key, absent)
+          const before = (): Alternative[] => memberIn(properties, index - 1, key, level, absent)
 
-          return objectsOf(property.argument, property.start, depth + 1).flatMap((branch) =>
+          return objectsOf(property.argument, property.start, level + 1).flatMap((branch) =>
             branch === undefined
               ? [undefined]
               : branch === null
                 ? before()
-                : memberIn(branch.properties, branch.properties.length - 1, key, before),
+                : memberIn(branch.properties, branch.properties.length - 1, key, level + 1, before),
           )
         }
 
-        if (property?.kind === 'init' && keyName(property.key, property.computed) === key) {
-          return next(property.value)
+        if (property !== undefined) {
+          const named = keyName(property.key, property.computed)
+
+          if (named === undefined) {
+            return [undefined]
+          }
+
+          if (named === key) {
+            return property.kind === 'init'
+              ? objectsOf(property.value, property.value.start, level + 1)
+              : [undefined]
+          }
         }
       }
 
@@ -117,7 +136,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
       alternatives.flatMap((object) =>
         object === null || object === undefined
           ? [undefined]
-          : memberIn(object.properties, object.properties.length - 1, key, () => [null]),
+          : memberIn(object.properties, object.properties.length - 1, key, depth, () => [null]),
       )
 
     if (value.type === 'ObjectExpression') {

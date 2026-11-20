@@ -79,6 +79,14 @@ describe('suppliedBy', () => {
     'const first = { id: 1 }',
     "const second = { type: 'b' }",
     'const decided = { name: first, ...{ ...{ name: second } } }',
+    "const fieldKey = 'name'",
+    'const drafted = { name: nameProps, ...{ ...(ok ? { [fieldKey]: { maxLength: 3 } } : {}) } }',
+    'const getter = { name: nameProps, ...{ get name() { return { maxLength: 3 } } } }',
+    'const setter = { name: nameProps, ...{ set name(value) {} } }',
+    "const aside = { name: nameProps, ...{ get other() { return 1 }, ['x']: 2 } }",
+    "const literal = { name: nameProps, ...{ ['name']: first } }",
+    'const fieldOverrides = (level) => ({ ...(level > 0 ? fieldOverrides(level - 1) : emailOverrides) })',
+    'const recursive = { name: nameProps, ...fieldOverrides(1) }',
     "const events = { reset: { type: 'r' } }",
     'const { reset: checkEvent } = events',
     'function early(c) { if (c) return; return { mark: 1 } }',
@@ -140,6 +148,42 @@ describe('suppliedBy', () => {
   })
   it('still says a nested branch it cannot follow cannot be followed, rather than going on past it', () => {
     expect(supplied(text, 'opaque.name', 'const at').followed).toBe(false)
+  })
+  it('leaves a member unknown where a property whose key it cannot read, or a getter or a setter, may supply it', () => {
+    for (const member of ['drafted.name', 'getter.name', 'setter.name']) {
+      const read = supplied(text, member, 'const at')
+
+      expect(read.followed).toBe(false)
+      expect(read.certain.has('aria-invalid')).toBe(false)
+    }
+  })
+  it('goes on past a property whose key it can read and that is not the key, a computed string literal included', () => {
+    expect(suppliedAt(text, 'aside.name', 'const at')).toEqual(['aria-invalid'])
+    expect(supplied(text, 'aside.name', 'const at').followed).toBe(true)
+    expect(suppliedAt(text, 'literal.name', 'const at')).toEqual(['id'])
+    expect(supplied(text, 'literal.name', 'const at').followed).toBe(true)
+  })
+  it('ends a helper that calls itself as unknown, never in a stack overflow', () => {
+    const read = supplied(text, 'recursive.name', 'const at')
+
+    expect(read.followed).toBe(false)
+    expect(read.certain.has('aria-invalid')).toBe(false)
+  })
+  it('says an object it cannot read a key of cannot be followed: a computed key, a getter, a setter', () => {
+    for (const argument of [
+      '{ [limitKey]: 3 }',
+      '{ id: 1, [`maxLength`]: 3 }',
+      '{ get maxLength() { return 3 } }',
+      '{ set maxLength(value) {} }',
+    ]) {
+      expect(supplied(text, argument, 'const at').followed).toBe(false)
+    }
+  })
+  it('reads a computed string literal as its name and lets a method supply nothing', () => {
+    const read = supplied(text, "{ ['maxLength']: 3, onChange() {}, id: 1 }", 'const at')
+
+    expect(read.props.map(({ name }) => name)).toEqual(['maxLength', 'id'])
+    expect(read.followed).toBe(true)
   })
   it('counts a bare return and a reachable end as supplying nothing', () => {
     expect(suppliedAt(text, 'early(1)', 'const at')).toEqual(['mark'])

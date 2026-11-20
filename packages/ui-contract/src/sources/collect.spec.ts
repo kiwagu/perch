@@ -272,6 +272,25 @@ describe('collectFromSource', () => {
       `x.tsx:7: ${UNFOLLOWED_SPREAD('x.form.note-input')}`,
     ])
   })
+  it('refuses a spread on an element whose anchor is read when a key of its object cannot be read', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Input data-testid="x.form.name-input" {...{ [limitKey]: 3 }} />',
+        'const b = <Input data-testid="x.form.email-input" {...{ get maxLength() { return 3 } }} />',
+        'const c = <Input data-testid="x.form.note-input" {...{ [\'maxLength\']: 3, onChange() {} }} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A computed string literal is its name, and a method supplies nothing.
+    expect(found.props).toEqual([
+      { anchor: 'x.form.note-input', name: 'maxLength', text: '3', line: 3 },
+    ])
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:1: ${UNFOLLOWED_SPREAD('x.form.name-input')}`,
+      `x.tsx:2: ${UNFOLLOWED_SPREAD('x.form.email-input')}`,
+    ])
+  })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(
       [

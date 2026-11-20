@@ -271,11 +271,14 @@ describe('facetProblems', () => {
       ).toEqual([])
     })
     /** A title that spreads `fields.name`, whose object spreads one that lacks `name`, with the props of `name`. */
-    const grouped = (nameProps: string): Record<string, string> => ({
+    const grouped = (
+      nameProps: string,
+      overrides = '{ ...emailOverrides }',
+    ): Record<string, string> => ({
       title: '<Input data-testid="sample.title-input" {...fields.name} />',
       nameProps,
       emailOverrides: '{ email: { maxLength: 3 } }',
-      overrides: '{ ...emailOverrides }',
+      overrides,
       fields: '{ name: nameProps, ...overrides }',
     })
 
@@ -340,6 +343,18 @@ describe('facetProblems', () => {
       expect(problemsOf(helperOf(`if (concerns === 'title') { return { ${mark} } }`))).toEqual([
         missing,
       ])
+    })
+    it('does not take the mark of a member that a property with a key it cannot read may replace', () => {
+      const marked = `{ 'aria-invalid': ${MARK} }`
+
+      for (const overrides of [
+        '{ ...(useDraft ? { [fieldKey]: { maxLength: 3 } } : {}) }',
+        '{ ...{ get name() { return { maxLength: 3 } } } }',
+      ]) {
+        expect(problemsOf(grouped(marked, overrides))).toEqual([missing])
+      }
+      // A key it can read, a computed string literal included, that is not `name` goes on to it.
+      expect(problemsOf(grouped(marked, "{ ...{ ['email']: { maxLength: 3 } } }"))).toEqual([])
     })
     it('reads the anchor a spread supplies, and the facts beside it', () => {
       const title = `<Input {...{ testId: 'sample.title-input', maxLength: 80, 'aria-invalid': ${MARK} }} />`
