@@ -13,17 +13,18 @@
  * `draft` of an interface of the file without one, `Locals.declaredTypeOf`, `declared-type.ts`).
  * One it writes a type for that can carry `type` (a `type` member, a string index signature) may
  * replace the type of an event that writes its own, so the event is unread, unless the file says
- * which events that member allows (`allowed-values.ts`): string literal types, and `typeof
- * <name>.type` of a `const` of the file, read through its annotation where it has one (which may
- * allow more than its value), else by its `as const` value, whose `type` is read as here. Those
- * join the types the event has before the spread, an optional member being absent, and the event
- * is read where they are one event. One the file says nothing of may be the type of an event that
- * writes none. An argument the file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the
- * file does not declare, an import, included), or two alternatives that name different events
- * leave it unread. The question itself is read from the tree: one negated call of `can` or
- * `props.can` with one argument, whatever that argument nests. The facets check holds it to the
- * event the control itself sends, its anchor, so a copied `can(reset)` on the revoke button is
- * caught.
+ * which events that member allows (`allowed-values.ts`): string literal types, `typeof <NAME>` of
+ * a `const` of the file whose type is one string (its annotation, else the string its value
+ * writes), and `typeof <name>.type` of a `const` of the file, read through its annotation where it
+ * has one (which may allow more than its value), else by its `as const` value, whose `type` is
+ * read as here. Those join the types the event has before the spread, an optional member being
+ * absent, and the event is read where they are one event. One the file says nothing of may be the
+ * type of an event that writes none. An argument the file cannot follow, a `type` it cannot read
+ * (a `<NAME>_TEST_ID` the file does not declare, an import, included), or two alternatives that
+ * name different events leave it unread. The question itself is read from the tree: one negated
+ * call of `can` or `props.can` with one argument, whatever that argument nests. The facets check
+ * holds it to the event the control itself sends, its anchor, so a copied `can(reset)` on the
+ * revoke button is caught.
  */
 
 import type { Expression, ObjectExpression, SpreadElement, TSType } from 'oxc-parser'
@@ -133,13 +134,13 @@ export function questionOf(locals: Locals, written: Expression): Question {
     return types.every((type): type is string => typeof type === 'string') ? types : undefined
   }
   /**
-   * The events the `type` member of a type the file writes allows: its string literal types and
-   * what each `typeof <name>.type` it names says; none where the file does not say, as for a
-   * `string`, an import or an index.
+   * The events the `type` member of a type the file writes allows: its string literal types, the
+   * string each `typeof <NAME>` of a `const` it names is, and what each `typeof <name>.type` it
+   * names says; none where the file does not say, as for a `string`, an import or an index.
    */
   const allowedTypes = (declared: TSType, depth: number): string[] | undefined => {
     const member = locals.types.memberOf(declared, 'type')
-    const allowed = member === undefined ? undefined : allowedValues(member, 'type')
+    const allowed = member === undefined ? undefined : allowedValues(member, 'type', locals, depth)
 
     if (allowed === undefined) {
       return undefined

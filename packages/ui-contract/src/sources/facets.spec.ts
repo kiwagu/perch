@@ -707,6 +707,48 @@ describe('facetProblems', () => {
           }
         }
       })
+      it('reads a typeof of a const the view declares with one event, and refuses one that may hold another', () => {
+        const entries = {
+          withExtra:
+            "(extra: { type?: typeof template.type }) => ({ type: 'sample.save-button', ...extra })",
+          direct:
+            "(extra: { type?: typeof SAVE_TEST_ID }) => ({ type: 'sample.save-button', ...extra })",
+        }
+        const declarations = (constant: string): string[] => [
+          constant,
+          'const template: { readonly type: typeof SAVE_TEST_ID } = { type: SAVE_TEST_ID } as const',
+        ]
+        const save = "'sample.save-button'"
+
+        // The type of a const is its annotation where it has one, else the one string its value
+        // writes; `testIdFor()` is typed `string`, which allows any event.
+        for (const [constant, refused] of [
+          [`const SAVE_TEST_ID = ${save}`, false],
+          [`const SAVE_TEST_ID: ${save} = ${save}`, false],
+          [`const BASE_TEST_ID = ${save}; const SAVE_TEST_ID = BASE_TEST_ID`, false],
+          [`let SAVE_TEST_ID = ${save}`, true],
+          [`const SAVE_TEST_ID: string = ${save}`, true],
+          [`const BASE_TEST_ID: string = ${save}; const SAVE_TEST_ID = BASE_TEST_ID`, true],
+          [`const SAVE_TEST_ID: ${save} | 'sample.a-button' = ${save}`, true],
+          ["import { SAVE_TEST_ID } from './ids'", true],
+          ["const SAVE_TEST_ID = testIdFor('sample', 'save-button')", true],
+          ["const SAVE_TEST_ID = 'sample.a-button'", true],
+        ] as const) {
+          for (const event of ['withExtra(template)', 'direct(template)']) {
+            const changed = {
+              ...entries,
+              save: `<Button data-testid="sample.save-button" disabled={!props.can(${event})} />`,
+            }
+
+            for (const ahead of [false, true]) {
+              expect(
+                problemsOf(changed, { declarations: declarations(constant), ahead }),
+                `${constant}: ${event}`,
+              ).toEqual(refused ? cannotRead(event) : [])
+            }
+          }
+        }
+      })
       it('passes it, in ahead mode too, where the type the view gives it is indexed by numbers only', () => {
         const changed = {
           save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(payload))} />',
