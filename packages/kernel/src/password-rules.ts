@@ -1,7 +1,7 @@
 /**
  * The rules a new password keeps, the same wherever it is checked: the sign-up form marks each as
  * the password is typed, and the gateway refuses a sign-up whose password breaks one. They hold
- * for a new password only: a sign-in checks none, so a password chosen before them still signs in.
+ * for a new password only: a sign-in checks none, since every account's password was set by them.
  */
 
 import { CONTRACT_VALUES } from './contract-values.gen'

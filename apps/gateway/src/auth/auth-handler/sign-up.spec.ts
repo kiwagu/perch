@@ -267,35 +267,6 @@ describe('authHandler, the rules of a new password', () => {
       expect((await route(signInRequest(ANN, other, 'laptop'), FROM))?.status).toBe(401)
     }
   })
-
-  it.each([
-    ['8 characters', 'old-pass'],
-    ['128 characters', 'p'.repeat(128)],
-  ])(
-    'signs an account whose password was set before the rules in, its password of %s',
-    async (_, password) => {
-      const { auth, route } = await mountedOnRealAuth()
-      const context = await auth.$context
-      const user = await context.internalAdapter.createUser<{ readonly locale: string }>({
-        email: ANN,
-        name: 'Ann',
-        emailVerified: true,
-        locale: 'en',
-      })
-
-      await context.internalAdapter.linkAccount({
-        userId: user.id,
-        providerId: 'credential',
-        accountId: user.id,
-        password: await hashPassword(password),
-      })
-
-      const answer = await route(signInRequest(ANN, password, 'laptop'), FROM)
-
-      expect(answer?.status).toBe(200)
-      expect(await answer?.json()).toMatchObject({ user: { id: user.id, email: ANN } })
-    },
-  )
 })
 
 /** Names that break the rule of a profile's name, each by what it lacks or holds, with the code that says it. */

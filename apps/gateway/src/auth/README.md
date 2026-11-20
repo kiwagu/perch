@@ -178,8 +178,8 @@ email. The name must keep the rule of a profile's name (`profileNameOf`: 1 to th
 field's length in characters once trimmed); one that breaks it answers 400 `name-required` or
 `name-too-long` at once, on the same terms, whatever the email.
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
-which it checks on a new password only: a sign-in checks no rule, so an account whose password was
-set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
+which it checks on a new password only: a sign-in checks no rule, and a password of another
+length is no account's, so it is refused as a wrong one. Better Auth's refusals (a malformed
 email, a language the gateway does not speak) pass as their status and code alone; they do not
 depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
