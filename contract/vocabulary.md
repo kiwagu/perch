@@ -222,8 +222,8 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invitation.error`, `console.account.email.error`, `console.account.reset.error`, `console.account.verification.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error`, `organisation.invitation.error`, `organisation.received.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is empty |
-| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than 80 characters |
-| `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
+| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than its value allows |
+| `bio-too-long` | `user.profile.error` | the bio is longer than its value allows |
 | `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
@@ -236,7 +236,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted or removed while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
-| `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |
+| `text-too-long` | `organisation.notes.error` | the note is longer than its value allows |
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
