@@ -5,11 +5,16 @@ import { localsOf } from './locals'
 import { suppliedBy } from './spreads'
 import { staticText } from './values'
 
-/** The value `name` stands for where `marker` is written in `text`. */
-function valueAt(text: string, name: string, marker: string): string | undefined {
+/** The value `name` stands for where `marker` is written in `text`, or the one a `const` holds. */
+function valueAt(
+  text: string,
+  name: string,
+  marker: string,
+  lookup: 'valueNamed' | 'constantNamed' = 'valueNamed',
+): string | undefined {
   const { program } = parseSync('x.tsx', text, { lang: 'tsx', sourceType: 'module' })
 
-  return staticText(localsOf(program).valueNamed(name, text.indexOf(marker)))
+  return staticText(localsOf(program)[lookup](name, text.indexOf(marker)))
 }
 
 describe('localsOf', () => {
@@ -33,6 +38,34 @@ describe('localsOf', () => {
   })
   it('resolves no name the file does not declare', () => {
     expect(valueAt(text, 'OTHER', 'five(')).toBeUndefined()
+  })
+  it('gives a loop and a catch their own scope: the name each binds hides an outer one there, and only there', () => {
+    const scoped = [
+      "const prop = 'data-testid'",
+      "for (const prop of ['aria-label'] as const) { one(prop) }",
+      'for (const prop in labels) two(prop)',
+      "for (const prop = 'aria-label'; ok; ) { three(prop) }",
+      'try { run() } catch (prop) { four(prop) }',
+      'try { run() } catch ({ prop }) { five(prop) }',
+      'try { run() } catch { six(prop) }',
+      "function g() { for (var prop = 'aria-label'; ok; ) {} seven(prop) }",
+      'eight(prop)',
+    ].join('\n')
+
+    // A loop's variable and a catch parameter have no value the file declares.
+    for (const marker of ['one(', 'two(', 'four(', 'five(']) {
+      expect(valueAt(scoped, 'prop', marker)).toBeUndefined()
+      expect(valueAt(scoped, 'prop', marker, 'constantNamed')).toBeUndefined()
+    }
+
+    // A const in a loop's head holds its value in the loop.
+    expect(valueAt(scoped, 'prop', 'three(', 'constantNamed')).toBe('aria-label')
+    // A var in a loop's head binds around the loop, and is no const.
+    expect(valueAt(scoped, 'prop', 'seven(')).toBe('aria-label')
+    expect(valueAt(scoped, 'prop', 'seven(', 'constantNamed')).toBeUndefined()
+    // After a loop or a catch, and in a catch that binds nothing, the outer const holds.
+    expect(valueAt(scoped, 'prop', 'six(', 'constantNamed')).toBe('data-testid')
+    expect(valueAt(scoped, 'prop', 'eight(', 'constantNamed')).toBe('data-testid')
   })
 })
 

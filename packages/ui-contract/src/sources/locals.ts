@@ -1,13 +1,20 @@
 /**
  * What a source file's names stand for, as far as the file itself says: the value a constant or a
  * function is declared with, read in the scope that declares it, so a name resolves as it does at
- * runtime (an inner declaration, a parameter or a destructured name hides an outer one), and every
+ * runtime (an inner declaration, a parameter or a destructured name hides an outer one; a loop's
+ * `let` or `const` binds in the loop, a `catch` parameter in its clause), and every
  * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
  * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
  * the file cannot follow, which each reader decides about itself.
  */
 
-import type { Expression, ParamPattern, Program } from 'oxc-parser'
+import type {
+  Expression,
+  ForStatementInit,
+  ForStatementLeft,
+  ParamPattern,
+  Program,
+} from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
 import { type Alternative, alternativesIn, type Callable } from './alternatives'
@@ -66,10 +73,35 @@ export function localsOf(program: Program): Locals {
         .map((name) => ({ name, at: { start: node.start, end: node.start } })),
     )
   }
+  /** A loop whose head declares a `let` or a `const` is its scope; a `var` binds around the loop. */
+  const loop = (node: Span, head: ForStatementInit | ForStatementLeft | null): void => {
+    if (head?.type === 'VariableDeclaration' && head.kind !== 'var') {
+      scopes.push(node)
+    }
+  }
 
   new Visitor({
     BlockStatement: (node) => {
       scopes.push(node)
+    },
+    ForStatement: (node) => {
+      loop(node, node.init)
+    },
+    ForInStatement: (node) => {
+      loop(node, node.left)
+    },
+    ForOfStatement: (node) => {
+      loop(node, node.left)
+    },
+    CatchClause: (node) => {
+      const { param } = node
+
+      if (param !== null) {
+        scopes.push(node)
+        bindings.push(
+          ...namesIn(param).map((name) => ({ name, at: { start: param.start, end: param.end } })),
+        )
+      }
     },
     ReturnStatement: (node) => {
       returns.push({ at: node.start, argument: node.argument })

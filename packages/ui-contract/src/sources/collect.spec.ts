@@ -410,6 +410,48 @@ describe('collectFromSource', () => {
       `x.tsx:4: ${UNDECLARED_ANCHOR('OTHER_TEST_ID')}`,
     ])
   })
+  it('reads a key a loop variable or a catch parameter names in their own scope, not by the const around them', () => {
+    const view = (inside: string) =>
+      collectFromSource(
+        [
+          'function View() {',
+          "  const prop = 'data-testid'",
+          '  const labels = {}',
+          `  ${inside}`,
+          "  const anchorProps = { [prop]: 'x.users.search-input' }",
+          "  return <Input {...anchorProps} aria-label={labels['aria-label']} />",
+          '}',
+        ].join('\n'),
+        'x.tsx',
+      )
+    const label = "Object.assign(labels, { [prop]: t('x.users.search') })"
+    const search = { anchor: 'x.users.search-input', form: 'key', line: 5 }
+
+    for (const inside of [
+      `for (const prop of ['aria-label'] as const) { ${label} }`,
+      `for (const prop in { 'aria-label': 1 }) ${label}`,
+      `try { load() } catch (prop) { ${label} }`,
+    ]) {
+      const found = view(inside)
+
+      // The loop's or the catch's own name has no value the file states: the key is not read.
+      expect(found.problems).toEqual([])
+      // After it, the const is read again.
+      expect(found.literals).toEqual([search])
+    }
+
+    // The const itself, and a const in a loop's head, still state the key: a runtime anchor.
+    for (const inside of [
+      label,
+      `for (const prop = 'data-testid'; ok; ) { ${label} }`,
+      `try { load() } catch { ${label} }`,
+    ]) {
+      const found = view(inside)
+
+      expect(found.problems.map(formatProblem)).toEqual([`x.tsx:4: ${RUNTIME_ANCHOR}`])
+      expect(found.literals).toEqual([search])
+    }
+  })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(
       [
