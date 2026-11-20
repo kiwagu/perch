@@ -2,14 +2,15 @@
  * One JSX element as the sources check reads it (`collect.ts`): its attributes, each prop a spread
  * on it supplies counted as written there, at the spread (`spreads.ts`), and marked partial where
  * some branch of the spread leaves it out; the anchor it carries, written on it or supplied by a
- * spread (in every branch of it the file can follow, where another cannot be followed), as a
- * literal, as `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of its file
- * (`locals.ts`); and where each spread on it the file cannot follow is written.
+ * spread (in every branch of it the file can follow, where another cannot be followed, or, where
+ * it carries none so, as the value under a key the file does not state), as a literal, as
+ * `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of its file (`locals.ts`);
+ * and where each spread on it the file cannot follow is written.
  */
 
 import type { Expression, JSXAttributeValue, JSXOpeningElement } from 'oxc-parser'
 
-import { testIdFor } from '../anchors'
+import { isAnchor, testIdFor } from '../anchors'
 
 import { DEPTH } from './alternatives'
 import type { Locals } from './locals'
@@ -127,6 +128,7 @@ export function anchorIn(
 
 export function readElement(node: JSXOpeningElement, locals: Locals): ReadElement {
   const unfollowed: number[] = []
+  const unstated: Expression[] = []
   const attributes = node.attributes.flatMap((attribute): ElementAttribute[] => {
     if (attribute.type === 'JSXAttribute') {
       return attribute.name.type === 'JSXIdentifier'
@@ -134,15 +136,14 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
         : []
     }
 
-    const { props, certain, followedCertain, followed } = suppliedBy(
-      locals,
-      attribute.argument,
-      attribute.start,
-    )
+    const supplied = suppliedBy(locals, attribute.argument, attribute.start)
+    const { props, certain, followedCertain } = supplied
 
-    if (!followed) {
+    if (!supplied.followed) {
       unfollowed.push(attribute.start)
     }
+
+    unstated.push(...supplied.unstated)
 
     return props.map(({ name, value }) => ({
       name,
@@ -185,15 +186,32 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
       ? one
       : undefined
   }
+  /**
+   * The anchor a value under a key the file does not state reads as (`{ [prop]: SEARCH_TEST_ID }`),
+   * one in the anchor grammar and the same for each such value that reads as one: the key may be
+   * the anchor's, so where the element carries no other, its facets are held to it and the spread
+   * the file cannot follow is refused. A value that reads as no anchor (`t('...')`) changes nothing.
+   */
+  const possibleAnchor = (): CarriedAnchor | undefined => {
+    const found = unstated
+      .flatMap((value) => anchorIn(locals, value, value.start) ?? [])
+      .filter(({ anchor }) => isAnchor(anchor))
+    const [one] = found
+
+    return one !== undefined &&
+      found.every((other) => other.anchor === one.anchor && other.base === one.base)
+      ? one
+      : undefined
+  }
   const written = attributes.find(
     ({ spread, name }) => spread === undefined && isAnchorAttribute(name),
   )
-  const supplied = attributes.find(
+  const certainly = attributes.find(
     ({ spread, name, partial }) =>
       spread !== undefined && partial !== true && isAnchorAttribute(name),
   )
-  const carrier = written ?? supplied
-  const carried = carrier === undefined ? sharedAnchor() : anchorOf(carrier)
+  const carrier = written ?? certainly
+  const carried = (carrier === undefined ? sharedAnchor() : anchorOf(carrier)) ?? possibleAnchor()
 
   return { attributes, ...(carried === undefined ? {} : { carried }), unfollowed }
 }

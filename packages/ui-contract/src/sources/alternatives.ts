@@ -1,7 +1,8 @@
 /**
  * Every object a value may be, as far as its file says, the names read in their scopes
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
- * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
+ * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key,
+ * each element of an array the file states for the variable of a `for…of` over it, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
  * key lets the scan go on before it, a property whose key the file does not state or a spread the
  * file cannot follow is one more alternative, unknown, and the scan goes on before it too), or each
@@ -43,16 +44,23 @@ export const isCallable = (value: Expression): value is Callable =>
   value.type === 'FunctionExpression' ||
   value.type === 'FunctionDeclaration'
 
+/**
+ * A name bound to a part of another value: a destructured name, the value destructured and the
+ * keys down to it; the variable of a `for…of`, each element of the value it iterates (`iterated`),
+ * then the keys its head destructures.
+ */
+export interface Member {
+  readonly object: Expression
+  readonly path: readonly string[]
+  readonly iterated?: true
+}
+
 /** What the scopes of a file say of a name, for following a value. */
 export interface Names {
   valueNamed(name: string, at: number): Expression | undefined
   /** The value of a name a `const` declares, as `Locals.constantNamed`. */
   constantNamed(name: string, at: number): Expression | undefined
-  /** A destructured name: the value destructured and the keys down to it. */
-  memberNamed(
-    name: string,
-    at: number,
-  ): { readonly object: Expression; readonly path: readonly string[] } | undefined
+  memberNamed(name: string, at: number): Member | undefined
   returnedBy(fn: Callable): Array<Expression | null>
 }
 
@@ -97,6 +105,29 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
             ...written.filter((alternative) => alternative !== null && alternative !== undefined),
           ]
         : written
+    }
+    /**
+     * What each element of an array may be, for the variable of a `for…of` over it: the array
+     * written there or held by a name of the file, each element followed. A spread element, a hole
+     * or a value the file does not state as an array may be anything: unknown.
+     */
+    const elementsOf = (iterated: Expression, level: number): Alternative[] => {
+      const array = unwrap(iterated)
+
+      if (array.type === 'ArrayExpression') {
+        return array.elements.flatMap((element) =>
+          element === null || element.type === 'SpreadElement'
+            ? [undefined]
+            : objectsOf(element, element.start, level + 1),
+        )
+      }
+
+      const declared =
+        array.type === 'Identifier' && level < DEPTH
+          ? names.valueNamed(array.name, array.start)
+          : undefined
+
+      return declared === undefined ? [undefined] : elementsOf(declared, level + 1)
     }
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
@@ -196,10 +227,13 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         const member = names.memberNamed(value.name, at)
 
         if (member !== undefined) {
-          // A destructured name: the value destructured, then each key down to it.
+          // A destructured name: the value destructured, or each element of the one a `for…of`
+          // iterates, then each key down to it.
           return member.path.reduce(
             (alternatives, key) => membersOf(alternatives, key),
-            objectsOf(member.object, member.object.start, depth + 1),
+            member.iterated === true
+              ? elementsOf(member.object, depth + 1)
+              : objectsOf(member.object, member.object.start, depth + 1),
           )
         }
 

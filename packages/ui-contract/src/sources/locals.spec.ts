@@ -157,6 +157,15 @@ describe('suppliedBy', () => {
     'function* generatedFalls() { yield 1 }',
     'const fallbackMap = { search: searchProps, ...asyncFalls() }',
     'const extraMap = { search: searchProps, ...props.extra }',
+    'const listed = [searchProps]',
+    'for (const row of listed) { inRow() }',
+    'for (let letRow of [searchProps] as const) { inLetRow() }',
+    'for (const { search: pickedRow } of [inputProps]) { inPickedRow() }',
+    'for (const spreadRow of [...more, searchProps]) { inSpreadRow() }',
+    'for (const holeRow of [, searchProps]) { inHoleRow() }',
+    'function overParam(list) { for (const paramRow of list) { inParamRow() } }',
+    'for (const keyRow in searchProps) { inKeyRow() }',
+    'for (var varRow of listed) { inVarRow() }',
     'const at = 0',
   ].join('\n')
 
@@ -411,6 +420,58 @@ describe('suppliedBy', () => {
     expect(supplied(text, 'ok && base', 'const at').certain.size).toBe(0)
     expect(supplied(text, '{ ...props, id: 1 }', 'const at').followed).toBe(false)
     expect(supplied(text, 'ok ? base : props', 'const at').followed).toBe(false)
+  })
+  it('follows the variable of a for…of to each element of the array the file states it iterates', () => {
+    for (const [row, marker] of [
+      ['row', 'inRow('],
+      ['letRow', 'inLetRow('],
+      ['pickedRow', 'inPickedRow('],
+    ] as const) {
+      const read = supplied(text, row, marker)
+
+      expect(read.props.map(({ name }) => name)).toEqual(['data-testid'])
+      expect([...read.certain]).toEqual(['data-testid'])
+      expect(read.followed).toBe(true)
+    }
+  })
+  it('keeps an element of a for…of it cannot say unknown: a spread element, a hole, a parameter', () => {
+    // The element the array states beside it stays one more alternative.
+    for (const [row, marker] of [
+      ['spreadRow', 'inSpreadRow('],
+      ['holeRow', 'inHoleRow('],
+    ] as const) {
+      const read = supplied(text, row, marker)
+
+      expect(read.followed).toBe(false)
+      expect(read.certain.size).toBe(0)
+      expect([...read.followedCertain]).toEqual(['data-testid'])
+    }
+
+    // A parameter iterated, the key of a for…in and the var of a loop, which outlives it, say nothing.
+    for (const [row, marker] of [
+      ['paramRow', 'inParamRow('],
+      ['keyRow', 'inKeyRow('],
+      ['varRow', 'inVarRow('],
+    ] as const) {
+      const read = supplied(text, row, marker)
+
+      expect(read.followed).toBe(false)
+      expect(read.props).toEqual([])
+    }
+  })
+  it('says the value of each property whose key the file does not state, at any depth', () => {
+    const read = supplied(
+      text,
+      "{ id: 1, [props.key]: 'x.search-input', ...{ [prop]: 3 }, [LABEL_PROP]: 2 }",
+      'const at',
+    )
+
+    expect(read.unstated.map((value) => staticText(value) ?? value.type)).toEqual([
+      'x.search-input',
+      'Literal',
+    ])
+    expect(read.followed).toBe(false)
+    expect(supplied(text, 'searchProps', 'const at').unstated).toEqual([])
   })
   it('follows never a cycle, a parameter or a name the file does not declare', () => {
     expect(suppliedAt(text, 'loop()', 'const at')).toEqual([])

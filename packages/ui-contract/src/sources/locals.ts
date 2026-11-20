@@ -2,7 +2,8 @@
  * What a source file's names stand for, as far as the file itself says: the value a constant or a
  * function is declared with, read in the scope that declares it, so a name resolves as it does at
  * runtime (an inner declaration, a parameter or a destructured name hides an outer one; a loop's
- * `let` or `const` binds in the loop, a `catch` parameter in its clause), and every
+ * `let` or `const` binds in the loop, as each element of the value a `for…of` iterates, a `catch`
+ * parameter in its clause), and every
  * object a value may be (`objectsOf`), for a spread's props (`spreads.ts`) and the event `can()`
  * names (`asked-event.ts`). A name of another file, or a value built at runtime, is an alternative
  * the file cannot follow, which each reader decides about itself.
@@ -17,7 +18,7 @@ import type {
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { type Alternative, alternativesIn, type Callable } from './alternatives'
+import { type Alternative, alternativesIn, type Callable, type Member } from './alternatives'
 import { namesIn, pathsIn } from './binding-names'
 import { endIsReachable } from './reachable-end'
 
@@ -35,8 +36,8 @@ interface Binding {
   readonly value?: Expression
   /** Whether a `const` declares it, so the value it is declared with is the one it holds. */
   readonly constant?: true
-  /** For a destructured name, the value destructured and the keys that lead to it. */
-  readonly member?: { readonly object: Expression; readonly path: readonly string[] }
+  /** For a destructured name or a `for…of` variable, what it is a part of (`Member`). */
+  readonly member?: Member
 }
 
 export interface Locals {
@@ -64,6 +65,8 @@ export function localsOf(program: Program): Locals {
   const returns: Array<{ readonly at: number; readonly argument: Expression | null }> = []
   /** Where each declarator of a `const` declaration starts. */
   const constants = new Set<number>()
+  /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
+  const iterated = new Map<number, Expression>()
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
     scopes.push(node)
     functions.push(node)
@@ -92,6 +95,13 @@ export function localsOf(program: Program): Locals {
     },
     ForOfStatement: (node) => {
       loop(node, node.left)
+
+      // Its variable is each element of the value it iterates; a `var` outlives the loop.
+      if (node.left.type === 'VariableDeclaration' && node.left.kind !== 'var') {
+        for (const declarator of node.left.declarations) {
+          iterated.set(declarator.start, node.right)
+        }
+      }
     },
     CatchClause: (node) => {
       const { param } = node
@@ -124,6 +134,10 @@ export function localsOf(program: Program): Locals {
     },
     VariableDeclarator: (node) => {
       const at = { start: node.start, end: node.end }
+      // A `for…of` head's name is each element of the value it iterates, not a value of its own.
+      const each = iterated.get(node.start)
+      const object = each ?? node.init
+      const part = each === undefined ? {} : { iterated: true as const }
 
       if (node.id.type === 'Identifier') {
         bindings.push({
@@ -131,15 +145,14 @@ export function localsOf(program: Program): Locals {
           at,
           ...(node.init === null ? {} : { value: node.init }),
           ...(constants.has(node.start) ? { constant: true as const } : {}),
+          ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
         })
       } else {
-        const { init } = node
-
         bindings.push(
           ...pathsIn(node.id).map(({ name, path }) => ({
             name,
             at,
-            ...(path === undefined || init === null ? {} : { member: { object: init, path } }),
+            ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
           })),
         )
       }

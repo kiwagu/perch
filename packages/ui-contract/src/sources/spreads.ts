@@ -5,7 +5,8 @@
  * only where every branch the spread may take supplies it, so a mark one branch leaves out is still
  * wanted; a branch the file cannot follow, or an object with a key the file does not state, is said
  * as such, for the collector to refuse on an element whose anchor it reads. What every branch it
- * can follow supplies is said too, so an anchor all of those supply is the element's.
+ * can follow supplies is said too, so an anchor all of those supply is the element's, and so is the
+ * value under each key the file does not state, which may be the anchor's.
  */
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
@@ -29,6 +30,8 @@ export interface Supplied {
   readonly followedCertain: ReadonlySet<string>
   /** Whether every branch can be followed. */
   readonly followed: boolean
+  /** The value of each property whose key the file does not state: it may supply any prop. */
+  readonly unstated: readonly Expression[]
 }
 
 const NOTHING: Supplied = {
@@ -36,12 +39,14 @@ const NOTHING: Supplied = {
   certain: new Set(),
   followedCertain: new Set(),
   followed: true,
+  unstated: [],
 }
 const UNKNOWN: Supplied = {
   props: [],
   certain: new Set(),
   followedCertain: new Set(),
   followed: false,
+  unstated: [],
 }
 
 /** The names every one of `sets` has; none for no set. */
@@ -67,6 +72,7 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
           .map((it) => it.followedCertain),
       ),
       followed: each.every(({ followed }) => followed),
+      unstated: each.flatMap(({ unstated }) => unstated),
     }
   }
   const ofObject = (object: ObjectExpression, depth: number): Supplied => {
@@ -89,14 +95,17 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
           ? statedKeyName(property.key, property.computed, locals.constantNamed)
           : undefined
 
-      return name === undefined
-        ? UNKNOWN
-        : {
-            props: [{ name, value: property.value }],
-            certain: new Set([name]),
-            followedCertain: new Set([name]),
-            followed: true,
-          }
+      if (name === undefined) {
+        return property.kind === 'init' ? { ...UNKNOWN, unstated: [property.value] } : UNKNOWN
+      }
+
+      return {
+        props: [{ name, value: property.value }],
+        certain: new Set([name]),
+        followedCertain: new Set([name]),
+        followed: true,
+        unstated: [],
+      }
     })
 
     return {
@@ -104,6 +113,7 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
       certain: new Set(parts.flatMap(({ certain }) => [...certain])),
       followedCertain: new Set(parts.flatMap(({ followedCertain }) => [...followedCertain])),
       followed: parts.every(({ followed }) => followed),
+      unstated: parts.flatMap(({ unstated }) => unstated),
     }
   }
 

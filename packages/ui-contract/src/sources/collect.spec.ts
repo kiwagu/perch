@@ -452,6 +452,98 @@ describe('collectFromSource', () => {
       expect(found.literals).toEqual([search])
     }
   })
+  it('reads the variable of a for…of as each element of the array it iterates, the file stating it', () => {
+    const view = (fields: string) =>
+      collectFromSource(
+        [
+          "const SEARCH_TEST_ID = 'x.users.search-input'",
+          "const inputProps = { 'data-testid': SEARCH_TEST_ID }",
+          `const fields = ${fields}`,
+          'const inputs = []',
+          'for (const inputProps of fields) {',
+          "  inputs.push(<Input key={inputProps['data-testid']} {...inputProps} maxLength={3} />)",
+          '}',
+        ].join('\n'),
+        'x.tsx',
+      )
+    const limit = { anchor: 'x.users.search-input', name: 'maxLength', text: '3', line: 6 }
+    const looped = view('[inputProps]')
+
+    // The loop's own `inputProps` is each element of `fields`: the outer object, with its anchor.
+    expect(looped.props).toEqual([limit])
+    expect(looped.problems).toEqual([])
+
+    // A spread element beside it cannot be followed: the anchor is still read, the spread refused.
+    const spread = view('[...more, inputProps]')
+
+    expect(spread.props).toEqual([limit])
+    expect(spread.problems.map(formatProblem)).toEqual([
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('x.users.search-input')}`,
+    ])
+
+    // An array the file says nothing of leaves the anchor unread, as a wrapper's.
+    for (const fields of ['[...more]', 'props.fields']) {
+      const found = view(fields)
+
+      expect(found.props).toEqual([])
+      expect(found.problems).toEqual([])
+    }
+  })
+  it('holds an element to the anchor a value under a key the file does not state reads as', () => {
+    const view = (lines: readonly string[]) =>
+      collectFromSource(
+        [
+          "const SEARCH_TEST_ID = 'x.users.search-input'",
+          "let prop: string = 'data-testid'",
+          ...lines,
+        ].join('\n'),
+        'x.tsx',
+      )
+    const limit = { anchor: 'x.users.search-input', name: 'maxLength', text: '3', line: 6 }
+    const refused = `x.tsx:6: ${UNFOLLOWED_SPREAD('x.users.search-input')}`
+
+    // The key may be the anchor's: the element is held to it, and both spreads are refused.
+    for (const value of ['SEARCH_TEST_ID', "'x.users.search-input'"]) {
+      const found = view([
+        `const anchorProps = { ...{ [prop]: ${value} } }`,
+        "prop = 'aria-label'",
+        "const labelProps = { [prop]: t('x.users.search') }",
+        'const a = <Input {...anchorProps} {...labelProps} maxLength={3} />',
+      ])
+
+      expect(found.props).toEqual([limit])
+      expect(found.problems.map(formatProblem)).toEqual([refused, refused])
+    }
+
+    // An anchor the element carries otherwise stays its anchor.
+    const written = view([
+      'const anchorProps = { [prop]: SEARCH_TEST_ID }',
+      '',
+      '',
+      'const a = <Input data-testid="x.users.name-input" {...anchorProps} maxLength={3} />',
+    ])
+
+    expect(written.props).toEqual([{ ...limit, anchor: 'x.users.name-input' }])
+    expect(written.problems.map(formatProblem)).toEqual([
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('x.users.name-input')}`,
+    ])
+  })
+  it('changes nothing for a key the file does not state whose value reads as no anchor, or as two', () => {
+    const found = collectFromSource(
+      [
+        "const SEARCH_TEST_ID = 'x.users.search-input'",
+        "let prop: string = 'data-testid'",
+        "const labelProps = { [prop]: t('x.users.search'), [props.key]: 'Search users' }",
+        'const a = <Input {...labelProps} {...{ [prop]: 3 }} maxLength={3} />',
+        "const b = <Input {...{ [prop]: SEARCH_TEST_ID }} {...{ [prop]: 'x.users.other-input' }} maxLength={3} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // No anchor read: the elements are let by, as a wrapper's.
+    expect(found.props).toEqual([])
+    expect(found.problems).toEqual([])
+  })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(
       [

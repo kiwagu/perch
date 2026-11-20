@@ -518,6 +518,57 @@ describe('compareWithContract', () => {
       expect(found.ahead).toEqual(refused)
     }
   })
+  it('holds the element a for…of renders to the anchor each element of its array supplies, in ahead mode too', () => {
+    const found = strictAndAhead(
+      [
+        ...agreeing(),
+        collectFromSource(
+          [
+            "const TITLE_TEST_ID = 'sample.title-input'",
+            "const inputProps = { 'data-testid': TITLE_TEST_ID }",
+            'const fields = [inputProps]',
+            'const inputs = []',
+            'for (const inputProps of fields) {',
+            "  inputs.push(<Input key={inputProps['data-testid']} {...inputProps} maxLength={3} />)",
+            '}',
+          ].join('\n'),
+          'x.tsx',
+        ),
+      ],
+      withTitleInput(),
+    )
+    const refused = [`x.tsx:6: "sample.title-input": maxLength={3}, but ${KIT}`]
+
+    expect(found.strict).toEqual(refused)
+    expect(found.ahead).toEqual(refused)
+  })
+  it('holds an element to the anchor a value under a key the file does not state reads as, and refuses the spreads, in ahead mode too', () => {
+    const found = strictAndAhead(
+      [
+        ...agreeing(),
+        collectFromSource(
+          [
+            "const TITLE_TEST_ID = 'sample.title-input'",
+            "let prop: string = 'data-testid'",
+            'const anchorProps = { [prop]: TITLE_TEST_ID }',
+            "prop = 'aria-label'",
+            "const labelProps = { [prop]: t('sample.title') }",
+            'const title = <Input {...anchorProps} {...labelProps} maxLength={3} />',
+          ].join('\n'),
+          'x.tsx',
+        ),
+      ],
+      withTitleInput(),
+    )
+    const refused = [
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:6: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:6: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(refused)
+    expect(found.ahead).toEqual(refused)
+  })
 
   it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {
     for (const holdsInput of [false, true]) {
