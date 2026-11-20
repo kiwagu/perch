@@ -16,6 +16,7 @@ bindings:
           maxLength: 64
           description: The identity id of the account, as the entry of the accounts list carries it.
           examples: [ idn_01jkq5x3y8z2h9m4n6p7r8s9t0 ]
+          x-perch: { key: account-gone }
       additionalProperties: false
 entry: [ console.account.heading, console.account.section, console.account.error ]
 anchors:
@@ -41,7 +42,7 @@ anchors:
     description: When the account was made.
   console.account.seen-cell:
     kind: cell
-    description: When one of the account's devices was last seen, among its sessions still kept; absent when none is.
+    description: When one of the account's devices was last seen, among its sessions still kept.
   console.account.verified-badge:
     kind: badge
     description: Marks an account whose email is verified.
@@ -53,10 +54,11 @@ anchors:
     description: Marks an operator of the platform.
   console.account.reason-cell:
     kind: cell
-    description: Why the account was banned, as the operator wrote it; shown while it is banned and a reason was given.
+    description: Why the account was banned, as the operator wrote it.
+    with: [ console.account.banned-badge ]
   console.account.organisations.list:
     kind: list
-    description: "The organisations the account is a member of, with its role in each: what a removal refused with last-admin points at; absent when it is in none."
+    description: "The organisations the account is a member of, with its role in each: what a removal refused with last-admin points at."
   console.account.organisations.item:
     kind: item
     description: One organisation of the account.
@@ -91,15 +93,12 @@ anchors:
         id: { search: id }
   console.account.name.error:
     kind: error
-    fields:
-      name-required: console.account.name.name-input
-      name-too-long: console.account.name.name-input
   console.account.email.form:
     kind: form
     description: Asks to change the account's email; the account keeps its email until the link sent to the new one is opened.
   console.account.email.email-input:
     kind: input
-    description: The new email (type email).
+    description: The new email.
     binding:
       action: platform.accounts.change-email
       params:
@@ -113,29 +112,29 @@ anchors:
         id: { search: id }
   console.account.email.error:
     kind: error
-    fields:
-      email-invalid: console.account.email.email-input
-      email-taken: console.account.email.email-input
   console.account.ban.form:
     kind: form
     description: Bans the account with an optional reason, or lifts its ban.
   console.account.ban.reason-input:
     kind: input
-    description: "Optional: why the account is banned, for operators alone; shown while it is not banned."
+    description: Why the account is banned, for operators alone.
+    without: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.ban
       params:
         reason: console.account.ban.reason-input
   console.account.ban.ban-button:
     kind: button
-    description: Bans the account until an operator lifts the ban, signing its devices out; shown while it is not banned.
+    description: Bans the account until an operator lifts the ban, signing its devices out.
+    without: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.ban
       params:
         id: { search: id }
   console.account.ban.unban-button:
     kind: button
-    description: Lifts the ban; shown while the account is banned.
+    description: Lifts the ban.
+    with: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.unban
       params:
@@ -162,7 +161,8 @@ anchors:
     kind: error
   console.account.verification.resend-button:
     kind: button
-    description: Sends the account the mail whose link verifies its email, again; shown while the email is not verified.
+    description: Sends the account the mail whose link verifies its email, again.
+    without: [ console.account.verified-badge ]
     binding:
       action: platform.accounts.resend-verification
       params:
@@ -228,6 +228,7 @@ flow:
                   target: idle
                   description: The account is banned and its devices are signed out.
                   actions:
+                    - clear: console.account.ban.error
                     - clear: console.account.ban.reason-input
                     - read: console.account.section
                 onError:
@@ -242,6 +243,7 @@ flow:
                 onDone:
                   target: idle
                   actions:
+                    - clear: console.account.ban.error
                     - read: console.account.section
                 onError:
                   target: idle

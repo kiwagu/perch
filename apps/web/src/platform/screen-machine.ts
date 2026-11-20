@@ -15,8 +15,10 @@
  * (`platform-events.port.ts`) to the machine while it runs, each carrying what the screen's fields
  * hold as it comes (`fields`, by anchor, as the container gives them), for a move it makes; a
  * state that does not handle one lets it pass. It tells the view what the state renders
- * (`renders(anchor)`, `screen-renders.ts`), and in development and e2e builds reports each state
- * of `screen` the page settles in (`settled-report.ts`).
+ * (`renders(anchor)`, `screen-renders.ts`) and whether the state takes a control's event
+ * (`can(event)`, the check `send` and `submit` make too), so a control is enabled exactly while
+ * its event is taken, read from the machine and never from a flag; and in development and e2e
+ * builds it reports each state of `screen` the page settles in (`settled-report.ts`).
  */
 
 import { useNavigate } from '@tanstack/react-router'
@@ -251,8 +253,11 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
 
   useEffect(() => sendPlatformEvents(platform, actor, () => held.current), [actor, platform])
 
-  /** Whether the state the machine is in now takes `event`. */
-  const takes = useCallback(
+  /**
+   * Whether the state the machine is in now takes `event`: a control is enabled exactly while
+   * its event is taken, and `send` and `submit` go ahead only while it is, by this check.
+   */
+  const can = useCallback(
     (event: EventFromLogic<TMachine>): boolean => {
       const now: AnyMachineSnapshot = actor.getSnapshot()
 
@@ -267,7 +272,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
   const start = useCallback(
     (event: EventFromLogic<TMachine>) =>
       new Promise<boolean>((settle) => {
-        if (!takes(event)) {
+        if (!can(event)) {
           settle(false)
 
           return
@@ -285,7 +290,7 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
         byEvent.current.set(event, run)
         actor.send(event)
       }),
-    [actor, takes],
+    [actor, can],
   )
   const send = useCallback(
     (event: EventFromLogic<TMachine>) => {
@@ -299,17 +304,17 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
 
       // A question for an event the state would not take asks about nothing, and the state may
       // move on while the user answers.
-      if (!takes(event)) {
+      if (!can(event)) {
         return
       }
 
       void ask(control).then((go) => {
-        if (go && takes(event)) {
+        if (go && can(event)) {
           actor.send(event)
         }
       })
     },
-    [actor, ask, takes],
+    [actor, ask, can],
   )
   const submit = useCallback(
     (event: EventFromLogic<TMachine>): Promise<boolean> => {
@@ -320,10 +325,10 @@ export function useScreenMachine<TMachine extends AnyStateMachine>(
       }
 
       // `start` takes the event only when the state still takes it once the user answered.
-      return takes(event) ? ask(control).then((go) => go && start(event)) : Promise.resolve(false)
+      return can(event) ? ask(control).then((go) => go && start(event)) : Promise.resolve(false)
     },
-    [ask, start, takes],
+    [ask, start, can],
   )
 
-  return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value) }
+  return { state, send, submit, actor, renders: rendersIn(machine.config, shown.value), can }
 }

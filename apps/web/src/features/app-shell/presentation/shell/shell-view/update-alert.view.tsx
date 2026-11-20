@@ -4,14 +4,16 @@ import { useT } from '@workspace/i18n'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 
+import type { ShellEvent } from '../../../application/shell-machine'
+
 /** Why the page should load again: a newer build is served, or this build's sync is refused. */
 export type UpdateCode = 'new-version' | 'protocol-outdated'
 
 export interface UpdateAlertProps {
   /** The code the update message shows. */
   readonly update: UpdateCode
-  /** Whether the frame's flow takes the update's reload now: the button is enabled while it does. */
-  readonly canUpdate?: boolean | undefined
+  /** Whether the frame's flow takes `event` now: the reload is enabled while it takes its press. */
+  readonly can: (event: ShellEvent) => boolean
   readonly onUpdate?: (() => void) | undefined
 }
 
@@ -32,7 +34,7 @@ export function UpdateAlert(props: UpdateAlertProps) {
         variant="outline"
         size="sm"
         className="mt-2 justify-self-start"
-        disabled={!props.canUpdate}
+        disabled={!props.can({ type: 'app-shell.update-button' })}
         onClick={props.onUpdate}
         data-testid="app-shell.update-button"
       >

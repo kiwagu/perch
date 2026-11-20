@@ -1,1 +1,1 @@
-export { type AccountDepartures, type AuthMountDeps, authHandler } from './mount'
+export { type AccountDepartures, type AuthMountDeps, authHandler, MOUNT_PATHS } from './mount'

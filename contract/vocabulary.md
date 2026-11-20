@@ -1,7 +1,5 @@
 # Vocabulary
 
-Contract version: 1
-
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
 value, role and screen name that the screen files (`contract/domain/screens/`) and the platform
 file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
@@ -211,7 +209,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `verified-before` | `user.verify-email.message`, `console.account.verification.error` | the link's email was verified before; the account signs in on the sign-in page; for an operator's resend, the email is verified already, so no mail is sent |
 | `link-invalid` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is not one a mail of the app carried, it was used before or replaced by a newer one, or what it was for no longer holds (its account or its organisation is gone, the account changed since the mail was sent, or the invitation was declined or revoked) |
 | `link-expired` | `user.verify-email.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.delete-account.error`, `organisation.invitation.error` | the link is too old: a verification or confirmation link after a day, a reset or deletion link after an hour, an invitation's after seven days; a new one is asked for |
-| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error` | the email or the password is wrong |
+| `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error` | the email or the password is wrong, a password longer or shorter than its value allows included |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
@@ -224,8 +222,8 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `rate-limited` | `user.sign-in.error`, `user.verify-email.error`, `organisation.create.error`, `organisation.invite.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invitation.error`, `console.account.email.error`, `console.account.reset.error`, `console.account.verification.error` | too many attempts were made, so the user waits and tries again |
 | `other-account` | `user.sign-in.error`, `user.verify-email.error`, `organisation.invitation.error`, `organisation.received.error` | another account is signed in on this browser and must be signed out first |
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is empty |
-| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than 80 characters |
-| `bio-too-long` | `user.profile.error` | the bio is longer than 2000 characters |
+| `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than its value allows |
+| `bio-too-long` | `user.profile.error` | the bio is longer than its value allows |
 | `failed` | `user.sign-in.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
@@ -238,7 +236,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `last-admin` | `user.settings.deletion.error`, `user.delete-account.error`, `organisation.invite.error`, `console.account.removal.error` | the account is the only administrator of an organisation: it cannot be made a member until another member is made an administrator, nor deleted or removed while the organisation has other members until one of them is made an administrator or they are removed; the organisation page shows them |
 | `forbidden` | `organisation.notes.error` | only the author of a note or an administrator may change it |
 | `text-required` | `organisation.notes.error` | the note is empty |
-| `text-too-long` | `organisation.notes.error` | the note is longer than 500 characters |
+| `text-too-long` | `organisation.notes.error` | the note is longer than its value allows |
 | `no-notes` | `organisation.notes.empty-message` | the organisation has no notes yet |
 | `unsent-changes` | `user.profile.sign-out-dialog` | the dialog asks whether to sign out and lose the changes this device has not sent |
 | `sign-out-everywhere` | `device.everywhere.dialog` | the dialog asks whether to sign out every device of the account, this one included |
@@ -347,11 +345,11 @@ included.
 | `app-shell.crash-message` | the message in the place of a screen that failed to render, which carries `data-code` and renders no derived anchor |
 | `app-shell.reload-button` | the button that loads the page again, shown with `app-shell.crash-message`, which renders no derived anchor |
 | `app-shell.update-message` | the message that the page should load again, a newer version served or the sync protocol refused, which carries `data-code` and renders no derived anchor |
-| `app-shell.update-button` | the button that loads the page again on the version the server serves, shown with `app-shell.update-message`, which renders no derived anchor |
+| `app-shell.update-button` | the button that loads the page again on the version the server serves, which renders no derived anchor |
 | `app-shell.sync-message` | the state of this device's sync for a signed-in account, the same in every tab, which carries `data-code` and renders no derived anchor |
 | `app-shell.install-message` | the reminder to install the app until it is installed, which carries `data-code` and renders no derived anchor |
-| `app-shell.install-button` | the button that asks the browser to install the app, shown with `app-shell.install-message` where the browser can, which renders no derived anchor |
-| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, shown with `app-shell.install-message`, which renders no derived anchor |
+| `app-shell.install-button` | the button that asks the browser to install the app, which renders no derived anchor |
+| `app-shell.install-later-button` | the button that puts the reminder off for three days on this device, which renders no derived anchor |
 | `app-shell.toast` | the toasts of what the user changed, the newest at the top, each rendered as one `app-shell.toast` carrying `data-code`; tests locate one by its code, `[data-testid="app-shell.toast"][data-code="note-created"]`; it renders no derived anchor |
 
 ## Composites

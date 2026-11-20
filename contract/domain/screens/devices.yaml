@@ -31,10 +31,11 @@ anchors:
     description: When the device was last seen.
   device.list.revoked-cell:
     kind: cell
-    description: When the device was signed out; shown once it is.
+    description: When the device was signed out.
   device.list.revoke-button:
     kind: button
-    description: Signs that device out; not on this device nor on a device signed out already.
+    description: Signs that device out.
+    without: [ device.list.current-badge, device.list.revoked-cell ]
     binding:
       action: platform.devices.revoke
       params:
@@ -47,7 +48,6 @@ anchors:
     description: Asks whether to sign every device out, this one included.
     binding: { action: platform.sign-out-everywhere }
     codes: [ sign-out-everywhere ]
-    derived: [ confirm-button, cancel-button ]
 states:
   loading: "device.page.status in loading: the devices are being read; when the read fails, app-shell.notice-message says devices-read-failed and the status stays."
   ready: device.list with an item per device, this device marked, and the sign-out everywhere button.

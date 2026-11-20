@@ -1,9 +1,13 @@
 // @vitest-environment jsdom
 import { screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
+import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 
+import { renderWithFacts } from '../../../../../field-facts.test-support'
 import es from '../../../../../platform/i18n/app.es.json'
 import { renderWithProviders } from '../../../../../test-utils'
 
@@ -14,9 +18,8 @@ const actions = (props: Partial<HeaderActionsProps> = {}) => (
   <HeaderActions
     signedIn={false}
     theme="system"
-    canChooseTheme={true}
+    can={() => true}
     onThemeChange={() => {}}
-    canChooseLocale={true}
     onLocaleChange={() => {}}
     {...props}
   />
@@ -43,9 +46,10 @@ describe('HeaderActions', () => {
   })
 
   it('takes a theme choice only while the frame takes one', () => {
-    renderActions({ canChooseTheme: false })
+    renderActions({ can: (event) => event.type !== 'app-shell.theme-select' })
 
     expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(true)
+    expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
   })
 
   it("marks a guest's language select", () => {
@@ -55,12 +59,13 @@ describe('HeaderActions', () => {
   })
 
   it('takes a language choice only while the frame takes one', () => {
-    const { rerender } = renderActions({ canChooseLocale: false })
+    const { rerender } = renderActions({ can: (event) => event.type !== 'app-shell.locale-select' })
     const select = screen.getByTestId('app-shell.locale-select')
 
     expect(select.hasAttribute('data-disabled')).toBe(true)
+    expect(screen.getByTestId('app-shell.theme-select').hasAttribute('data-disabled')).toBe(false)
 
-    rerender(actions({ canChooseLocale: true }))
+    rerender(actions({ can: () => true }))
 
     expect(screen.getByTestId('app-shell.locale-select').hasAttribute('data-disabled')).toBe(false)
   })
@@ -79,5 +84,51 @@ describe('HeaderActions', () => {
     renderActions()
 
     expect(screen.queryByTestId('app-shell.sync-message')).toBeNull()
+  })
+})
+
+/** Says whether a field inside the scope holds unsaved input. */
+function Unsaved() {
+  return <output data-testid="unsaved">{String(useUnsavedInput())}</output>
+}
+
+/** The guest's theme choice as the app wires it: the frame gives back what was chosen. */
+function GuestTheme() {
+  const [theme, setTheme] = useState<'system' | 'light' | 'dark'>('system')
+
+  return (
+    <UnsavedInputScope>
+      {actions({ theme, onThemeChange: setTheme })}
+      <Unsaved />
+    </UnsavedInputScope>
+  )
+}
+
+describe('HeaderActions choices', () => {
+  /** Chooses dark in the theme select once its list takes the pointer. */
+  async function chooseDark() {
+    await userEvent.click(screen.getByTestId('app-shell.theme-select'))
+
+    const option = await screen.findByRole('option', { name: /dark/i })
+
+    await vi.waitFor(() => expect(getComputedStyle(option).pointerEvents).not.toBe('none'))
+    await userEvent.click(option)
+  }
+
+  it('apply at once: a theme choice leaves no unsaved input, as the facts of its anchor say', async () => {
+    renderWithFacts(<GuestTheme />)
+
+    await chooseDark()
+
+    expect(screen.getByTestId('app-shell.theme-select').getAttribute('data-value')).toBe('dark')
+    expect(screen.getByTestId('unsaved').textContent).toBe('false')
+  })
+
+  it('take their say from the facts alone: without them the select holds its choice as input', async () => {
+    renderWithProviders(<GuestTheme />)
+
+    await chooseDark()
+
+    expect(screen.getByTestId('unsaved').textContent).toBe('true')
   })
 })

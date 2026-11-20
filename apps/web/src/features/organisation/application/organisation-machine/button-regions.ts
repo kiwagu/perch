@@ -1,9 +1,12 @@
 import {
   CLEAR_EMAIL,
+  CLEAR_INVITE_ERROR,
+  CLEAR_NEW_NOTE,
+  CLEAR_NOTES_ERROR,
+  CLEAR_RECEIVED_ERROR,
   CLEAR_ROLE,
   COPY_REFUSED,
   DECLINE_REFUSED,
-  forget,
   INVITATION_DECLINED,
   INVITATION_REVOKED,
   INVITE_REFUSED,
@@ -23,7 +26,7 @@ import { taken } from './events'
 /**
  * The regions of the screen's flow that wait for the one action a button runs (`by` a button in
  * the contract): idle until the button is pressed, running until its action ends. A done change
- * forgets the error of its part and says itself in a toast, and reads again the list it changed
+ * clears the error of its part and says itself in a toast, and reads again the list it changed
  * (`read`), as its flow says.
  */
 
@@ -38,7 +41,7 @@ export const INVITE_REGION = {
         input: taken('organisation.invite.submit-button'),
         onDone: {
           target: 'idle',
-          actions: [CLEAR_EMAIL, CLEAR_ROLE, forget('members'), READ_SENT, INVITED],
+          actions: [CLEAR_INVITE_ERROR, CLEAR_EMAIL, CLEAR_ROLE, READ_SENT, INVITED],
         },
         onError: { target: 'idle', actions: [INVITE_REFUSED] },
       },
@@ -57,7 +60,7 @@ export const MEMBERS_REGION = {
         input: taken('organisation.members.remove-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('members'), READ_MEMBERS, MEMBER_REMOVED],
+          actions: [CLEAR_INVITE_ERROR, READ_MEMBERS, MEMBER_REMOVED],
         },
         onError: { target: 'idle', actions: [REMOVE_REFUSED] },
       },
@@ -65,7 +68,7 @@ export const MEMBERS_REGION = {
   },
 } as const
 
-/** Adds the new note. */
+/** Adds the new note: its field empties once it is written. */
 export const NOTES_ADD_REGION = {
   initial: 'idle',
   states: {
@@ -74,7 +77,10 @@ export const NOTES_ADD_REGION = {
       invoke: {
         src: 'note.createNote',
         input: taken('organisation.notes.add-button'),
-        onDone: { target: 'idle', actions: [forget('notes'), NOTE_CREATED] },
+        onDone: {
+          target: 'idle',
+          actions: [CLEAR_NOTES_ERROR, CLEAR_NEW_NOTE, NOTE_CREATED],
+        },
         onError: { target: 'idle', actions: [NOTE_REFUSED] },
       },
     },
@@ -90,7 +96,7 @@ export const SENT_COPY_REGION = {
       invoke: {
         src: 'platform.organisations.copy-invitation',
         input: taken('organisation.sent.copy-button'),
-        onDone: { target: 'idle', actions: [forget('members'), LINK_COPIED] },
+        onDone: { target: 'idle', actions: [CLEAR_INVITE_ERROR, LINK_COPIED] },
         onError: { target: 'idle', actions: [COPY_REFUSED] },
       },
     },
@@ -108,7 +114,7 @@ export const SENT_REVOKE_REGION = {
         input: taken('organisation.sent.revoke-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('members'), READ_SENT, INVITATION_REVOKED],
+          actions: [CLEAR_INVITE_ERROR, READ_SENT, INVITATION_REVOKED],
         },
         onError: { target: 'idle', actions: [REVOKE_REFUSED] },
       },
@@ -127,7 +133,7 @@ export const RECEIVED_DECLINE_REGION = {
         input: taken('organisation.received.decline-button'),
         onDone: {
           target: 'idle',
-          actions: [forget('received'), READ_RECEIVED, INVITATION_DECLINED],
+          actions: [CLEAR_RECEIVED_ERROR, READ_RECEIVED, INVITATION_DECLINED],
         },
         onError: { target: 'idle', actions: [DECLINE_REFUSED, READ_RECEIVED] },
       },

@@ -86,10 +86,10 @@ emails. A test uses as few emails, sign-ins and links as its scenario needs; a n
 up, mails, opens a link or creates an organisation counts against these.
 
 - `contract/base/manifest`: the manifest the front serves at `/ui-manifest/manifest.json`
-  (`no-store`) is valid against the schema served beside it and names contract version 1; on
-  `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in the manifest's `ids` with
-  the same kind, or derived from one with a suffix it lists, and the helper reports the page's
-  URL with `app-shell.status` in `ready`.
+  (`no-store`) is valid against the schema served beside it and names the contract version the
+  stand was built from; on `/sign-in`, every anchor `window.__perch.ui.anchors()` reports is in
+  the manifest's `ids` with the same kind, or derived from one with a suffix it lists, and the
+  helper reports the page's URL with `app-shell.status` in `ready`.
 - `app-shell/base/open-before-data`: a signed-in device reloaded while its database engines
   are held back shows `app-shell.status` in `opening-data` on `/me`, with the account's four
   navigation links and `user.profile.status` in `loading`; once the engines load, it reaches

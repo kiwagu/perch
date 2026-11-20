@@ -2,14 +2,20 @@ import { Input as InputPrimitive } from '@base-ui/react/input'
 import { cn } from 'cn'
 import type * as React from 'react'
 
-import { stateBorder, useMarksState, useTracksInput } from '@workspace/ui/unsaved-input'
+import { useFieldFacts } from '@workspace/ui/field-facts'
+import {
+  stateBorder,
+  useHoldsInput,
+  useMarksState,
+  useTracksInput,
+} from '@workspace/ui/unsaved-input'
 
 export interface InputProps extends React.ComponentProps<'input'> {
-  /** The field keeps what is typed until an action takes it (the default); false for a field whose own change runs its action. */
+  /** The field keeps what is typed until an action takes it (its facts' say, else the default); false for a field whose own change runs its action. */
   readonly holdsInput?: boolean | undefined
-  /** The anchor the field renders, which it also reports while it holds unsaved input. */
+  /** The anchor the field renders, which it also reports while it holds unsaved input, and by which it finds its facts. */
   readonly 'data-testid'?: string | undefined
-  /** Whether the field colors its border by its state (its form's say, else true); `data-state` stays either way. */
+  /** Whether the field colors its border by its state (its facts' say, else its form's, else true); `data-state` stays either way. */
   readonly marksState?: boolean | undefined
 }
 
@@ -17,19 +23,32 @@ export interface InputProps extends React.ComponentProps<'input'> {
 const text = (value: React.ComponentProps<'input'>['value']): string | undefined =>
   value === undefined ? undefined : Array.isArray(value) ? value.join(',') : String(value)
 
-function Input({ className, type, holdsInput = true, marksState, onChange, ...props }: InputProps) {
+/** An input: what its element does not say, its facts (by its anchor) give: `type` and `maxLength`. */
+function Input({
+  className,
+  type,
+  maxLength,
+  holdsInput,
+  marksState,
+  onChange,
+  ...props
+}: InputProps) {
+  const anchor = props['data-testid']
+  const facts = useFieldFacts(anchor)
+  const holds = useHoldsInput(holdsInput, anchor)
   const { typed, state } = useTracksInput({
-    holdsInput,
-    anchor: props['data-testid'],
+    holdsInput: holds,
+    anchor,
     value: text(props.value),
     defaultValue: text(props.defaultValue) ?? '',
   })
 
-  const marks = useMarksState(marksState)
+  const marks = useMarksState(marksState, anchor)
 
   return (
     <InputPrimitive
-      type={type}
+      type={type ?? facts?.type}
+      maxLength={maxLength ?? facts?.maxLength}
       data-slot="input"
       data-state={state}
       className={cn(

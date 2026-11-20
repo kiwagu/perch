@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import { Container } from '@workspace/di'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
@@ -66,10 +67,13 @@ describe('ConsoleModule', () => {
     expect(account?.anchors['console.account.section']?.source).toEqual(ACCOUNT_SECTION_SOURCE)
   })
 
-  it('takes an id of 1 to 64 characters for the card, and none', () => {
+  it("takes an id the contract's length for the card, and none", () => {
     expect(z.parse(AccountCardSearchSchema, { id: 'idn_ann' })).toEqual({ id: 'idn_ann' })
     expect(z.parse(AccountCardSearchSchema, {})).toEqual({})
     expect(z.safeParse(AccountCardSearchSchema, { id: '' }).success).toBe(false)
-    expect(z.safeParse(AccountCardSearchSchema, { id: 'i'.repeat(65) }).success).toBe(false)
+    expect(
+      z.safeParse(AccountCardSearchSchema, { id: 'i'.repeat(CONTRACT_VALUES.id.maxLength + 1) })
+        .success,
+    ).toBe(false)
   })
 })

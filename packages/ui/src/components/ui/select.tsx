@@ -7,16 +7,21 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type * as React from 'react'
 import { createContext, useContext } from 'react'
 
-import { stateBorder, useMarksState, useTracksInput } from '@workspace/ui/unsaved-input'
+import {
+  stateBorder,
+  useHoldsInput,
+  useMarksState,
+  useTracksInput,
+} from '@workspace/ui/unsaved-input'
 import type { FieldState } from '@workspace/ui-contract/anchors'
 
 export interface SelectProps<Value, Multiple extends boolean | undefined = false>
   extends SelectPrimitive.Root.Props<Value, Multiple> {
-  /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
+  /** The field keeps what is chosen until an action takes it (its facts' say, else the default); false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
-  /** The anchor its trigger renders, which the select's root reports while it holds unsaved input. */
+  /** The anchor its trigger renders, which the select's root reports while it holds unsaved input, and by which it finds its facts. */
   readonly anchor?: string | undefined
-  /** Whether the trigger colors its border by the select's state (its form's say, else true); `data-state` stays either way. */
+  /** Whether the trigger colors its border by the select's state (its facts' say, else its form's, else true); `data-state` stays either way. */
   readonly marksState?: boolean | undefined
 }
 
@@ -67,16 +72,17 @@ function sameChoice<Value>(
 
 /** The select's root, tracking what is chosen with the comparison of its one mode. */
 function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
-  holdsInput = true,
+  holdsInput,
   anchor,
   marksState,
   onValueChange,
   ...props
 }: SelectProps<Value, Multiple>) {
   const several = props.multiple === true
-  const marks = useMarksState(marksState)
+  const marks = useMarksState(marksState, anchor)
+  const holds = useHoldsInput(holdsInput, anchor)
   const { typed, state } = useTracksInput<Choice<Value>>({
-    holdsInput,
+    holdsInput: holds,
     anchor,
     value: props.value,
     // Base UI starts a multiple select with none chosen as an empty list, a single one as null.

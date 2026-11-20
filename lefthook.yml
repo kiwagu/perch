@@ -43,6 +43,7 @@ pre-commit:
         . scripts/ensure-path.sh && bun run model &&
         git ls-files -z --modified --others --exclude-standard --
         '*.model.gen.ts' '*.surql.d.ts' '*.model.json' 'database/src/replica.schema.gen.ts'
+        'database/schema/common/contract-values.gen.surql'
         'database/tests/suites/generated-*.toml'
         | xargs -0 -r git add --
 

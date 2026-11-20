@@ -1,11 +1,19 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { type ReactNode, Suspense, startTransition, use, useState } from 'react'
+import {
+  type ComponentProps,
+  type ReactNode,
+  Suspense,
+  startTransition,
+  use,
+  useState,
+} from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 import {
   type UnsavedFields,
   UnsavedInputScope,
@@ -285,5 +293,158 @@ describe.each([
     cleanup()
     render(<Saving marksState={false}>{field(true)}</Saving>)
     expect(screen.getByLabelText('f').className).toContain('border-warning')
+  })
+})
+
+/** The facts of some fields, by the anchor each renders. */
+const FACTS = {
+  'x.name-input': { maxLength: 7, type: 'email', marksState: false },
+  'x.once-input': { holdsInput: false },
+  'x.marked-input': { marksState: true },
+  'x.silent-input': {},
+} as const
+
+describe.each([
+  [
+    'Input',
+    (props: Partial<ComponentProps<typeof Input>>) => (
+      <Input aria-label="f" defaultValue="" {...props} />
+    ),
+  ],
+  [
+    'Textarea',
+    (props: Partial<ComponentProps<typeof Textarea>>) => (
+      <Textarea aria-label="f" defaultValue="" {...props} />
+    ),
+  ],
+])('%s inside a provider of facts', (_name, field) => {
+  const inFacts = (element: ReactNode) =>
+    render(<FieldFactsProvider facts={FACTS}>{element}</FieldFactsProvider>)
+
+  it('takes its maxLength and the loss of the state colours from the facts of its anchor', () => {
+    inFacts(field({ 'data-testid': 'x.name-input' }))
+
+    const element = screen.getByLabelText('f')
+
+    expect(element.getAttribute('maxlength')).toBe('7')
+    expect(element.className).not.toContain('border-warning')
+    expect(element.className).not.toContain('border-success')
+  })
+
+  it('keeps what its own props say, whatever the facts say', () => {
+    inFacts(field({ 'data-testid': 'x.name-input', maxLength: 3, marksState: true }))
+
+    const element = screen.getByLabelText('f')
+
+    expect(element.getAttribute('maxlength')).toBe('3')
+    expect(element.className).toContain('border-warning')
+  })
+
+  it('takes a prop it was given undefined from the facts', () => {
+    inFacts(field({ 'data-testid': 'x.name-input', maxLength: undefined, marksState: undefined }))
+
+    const element = screen.getByLabelText('f')
+
+    expect(element.getAttribute('maxlength')).toBe('7')
+    expect(element.className).not.toContain('border-warning')
+  })
+
+  it('takes nothing without a provider, for an anchor with no entry, or with no anchor', () => {
+    render(field({ 'data-testid': 'x.name-input' }))
+
+    const bare = screen.getByLabelText('f')
+
+    expect(bare.hasAttribute('maxlength')).toBe(false)
+    expect(bare.className).toContain('border-warning')
+
+    cleanup()
+    inFacts(field({ 'data-testid': 'x.silent-input' }))
+    expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
+
+    cleanup()
+    inFacts(field({}))
+    expect(screen.getByLabelText('f').hasAttribute('maxlength')).toBe(false)
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
+  })
+
+  it("marks its state by its facts before its form's, and by its form's when its facts say nothing", () => {
+    inFacts(
+      <Form onSubmit={() => true} marksState={false}>
+        {field({ 'data-testid': 'x.marked-input' })}
+      </Form>,
+    )
+    expect(screen.getByLabelText('f').className).toContain('border-warning')
+
+    cleanup()
+    inFacts(
+      <Form onSubmit={() => true} marksState={false}>
+        {field({ 'data-testid': 'x.silent-input' })}
+      </Form>,
+    )
+    expect(screen.getByLabelText('f').className).not.toContain('border-warning')
+
+    cleanup()
+    inFacts(<Form onSubmit={() => true}>{field({ 'data-testid': 'x.name-input' })}</Form>)
+    expect(screen.getByLabelText('f').className).not.toContain('border-warning')
+  })
+
+  it('keeps data-state while its facts take the colours away', async () => {
+    inFacts(field({ 'data-testid': 'x.name-input' }))
+    await userEvent.type(screen.getByLabelText('f'), 'x')
+    expect(screen.getByLabelText('f').getAttribute('data-state')).toBe('unsaved')
+  })
+
+  it('holds no unsaved input when its facts say it holds none, its own say winning', async () => {
+    render(
+      <FieldFactsProvider facts={FACTS}>
+        <UnsavedInputScope>
+          {field({ 'data-testid': 'x.once-input' })}
+          <Probe />
+        </UnsavedInputScope>
+      </FieldFactsProvider>,
+    )
+    await userEvent.type(screen.getByLabelText('f'), 'x')
+    expect(probe()).toBe('false')
+
+    cleanup()
+    render(
+      <FieldFactsProvider facts={FACTS}>
+        <UnsavedInputScope>
+          {field({ 'data-testid': 'x.once-input', holdsInput: true })}
+          <Probe />
+        </UnsavedInputScope>
+      </FieldFactsProvider>,
+    )
+    await userEvent.type(screen.getByLabelText('f'), 'x')
+    expect(probe()).toBe('true')
+  })
+})
+
+describe('an Input and its type inside a provider of facts', () => {
+  const inFacts = (element: ReactNode) =>
+    render(<FieldFactsProvider facts={FACTS}>{element}</FieldFactsProvider>)
+
+  it('takes its type from the facts of its anchor, its own type winning', () => {
+    inFacts(<Input aria-label="f" data-testid="x.name-input" />)
+    expect(screen.getByLabelText('f').getAttribute('type')).toBe('email')
+
+    cleanup()
+    inFacts(<Input aria-label="f" data-testid="x.name-input" type="text" />)
+    expect(screen.getByLabelText('f').getAttribute('type')).toBe('text')
+  })
+
+  it('has no type without a provider, or for an anchor whose facts name none', () => {
+    render(<Input aria-label="f" data-testid="x.name-input" />)
+    expect(screen.getByLabelText('f').hasAttribute('type')).toBe(false)
+
+    cleanup()
+    inFacts(<Input aria-label="f" data-testid="x.silent-input" />)
+    expect(screen.getByLabelText('f').hasAttribute('type')).toBe(false)
+  })
+
+  it('is a textarea that takes no type from its facts', () => {
+    inFacts(<Textarea aria-label="f" data-testid="x.name-input" />)
+    expect(screen.getByLabelText('f').hasAttribute('type')).toBe(false)
   })
 })

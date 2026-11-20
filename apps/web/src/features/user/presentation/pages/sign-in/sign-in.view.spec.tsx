@@ -4,8 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
@@ -54,7 +55,7 @@ function renderView(
     onCancelDeviceLimit: vi.fn(),
   }
 
-  renderWithProviders(
+  renderWithFacts(
     <SignInView
       startEmail=""
       mode="sign-in"
@@ -251,6 +252,26 @@ describe('SignInView', () => {
     })
   })
 
+  it('gives the email and the password what the contract says of them', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining(['user.sign-in.email-input', 'user.sign-in.password-input']),
+    )
+  })
+
+  it('gives the name and both passwords what the contract says of them while creating an account', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(expectFieldFacts(document.body)).toEqual(
+      expect.arrayContaining([
+        'user.sign-in.name-input',
+        'user.sign-in.password-input',
+        'user.sign-in.password-confirmation-input',
+      ]),
+    )
+  })
+
   it('asks for the password again to create an account, both as a new password', () => {
     renderView({ mode: 'sign-up' })
 
@@ -374,7 +395,7 @@ describe('SignInView', () => {
     renderView({
       mode: 'sign-up',
       error: PASSWORDS_DIFFER,
-      can: (control) => control !== 'user.sign-in.submit-button',
+      can: (event) => event.type !== 'user.sign-in.submit-button',
     })
 
     const error = screen.getByTestId('user.sign-in.error')
@@ -390,6 +411,35 @@ describe('SignInView', () => {
       confirmation.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
     expect(input('user.sign-in.submit-button').disabled).toBe(true)
+  })
+
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'name-required': 'profile:NAME_REQUIRED',
+      'name-too-long': 'profile:NAME_TOO_LONG',
+      'sign-up-rejected': 'data:SIGN_UP_REJECTED',
+      'passwords-differ': PASSWORDS_DIFFER,
+    }
+
+    expectEachCodeMarksItsField('user.sign-in.error', (code) =>
+      renderView({ mode: 'sign-up', error: failures[code] }),
+    )
+  })
+
+  it.each([
+    ['profile:NAME_REQUIRED', 'name-required', en['user.sign-in.error.name-required']],
+    ['profile:NAME_TOO_LONG', 'name-too-long', en['user.sign-in.error.name-too-long']],
+  ])('says %s under the name, describing it', (failure, code, text) => {
+    renderView({ mode: 'sign-up', error: failure })
+
+    const error = screen.getByTestId('user.sign-in.error')
+    const name = input('user.sign-in.name-input')
+
+    expect(error.getAttribute('data-code')).toBe(code)
+    expect(error.textContent).toBe(text)
+    expect(name.closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(name.compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(document.getElementById(name.getAttribute('aria-describedby') ?? '')).toBe(error)
   })
 
   it('describes the password typed again by its error exactly while the passwords differ', () => {
@@ -408,7 +458,7 @@ describe('SignInView', () => {
     }
     const describedBy = () =>
       input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
-    const { rerender } = renderWithProviders(<SignInView {...props} error={PASSWORDS_DIFFER} />)
+    const { rerender } = renderWithFacts(<SignInView {...props} error={PASSWORDS_DIFFER} />)
 
     expect(describedBy()).not.toBeNull()
     expect(document.getElementById(describedBy() ?? '')).toBe(
@@ -554,7 +604,7 @@ describe('SignInView', () => {
   it('holds the resend while it cannot run', () => {
     const { onResend } = renderView({
       resend: true,
-      can: (control) => control !== 'user.sign-in.resend-button',
+      can: (event) => event.type !== 'user.sign-in.resend-button',
     })
     const resend = screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement
 
@@ -697,11 +747,53 @@ describe('SignInView', () => {
   })
 
   it('holds the submit while the flow does not take it', () => {
-    renderView({ can: (control) => control !== 'user.sign-in.submit-button' })
+    renderView({ can: (event) => event.type !== 'user.sign-in.submit-button' })
 
     expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
       true,
     )
+  })
+
+  it('holds the switch of mode while the flow does not take it, and no other button', () => {
+    renderView({
+      resend: true,
+      can: (event) => event.type !== 'user.sign-in.toggle-button',
+    })
+
+    expect((screen.getByTestId('user.sign-in.toggle-button') as HTMLButtonElement).disabled).toBe(
+      true,
+    )
+    expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+    expect((screen.getByTestId('user.sign-in.resend-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  it('asks the flow about each button with the values as typed', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ mode: 'sign-up', resend: true, can })
+    type('user.sign-in.email-input', 'ann@example.test')
+    type('user.sign-in.password-input', 'Secret-new1')
+    type('user.sign-in.password-confirmation-input', 'Secret-new1')
+    type('user.sign-in.name-input', 'Ann')
+
+    expect(can).toHaveBeenLastCalledWith({
+      type: 'user.sign-in.resend-button',
+      email: 'ann@example.test',
+    })
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.sign-in.submit-button',
+      form: { email: 'ann@example.test', password: 'Secret-new1', name: 'Ann', locale: 'en' },
+      confirmation: 'Secret-new1',
+    })
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.sign-in.toggle-button',
+      password: 'Secret-new1',
+      confirmation: 'Secret-new1',
+    })
   })
 
   it('speaks Spanish', () => {
@@ -715,7 +807,7 @@ describe('SignInView', () => {
 
 /** Renders the view in `mode` inside a scope tracking unsaved input, as the app's pages are. */
 function renderTracked(mode: SignInViewProps['mode']) {
-  renderWithProviders(
+  renderWithFacts(
     <UnsavedInputScope>
       <SignInView
         startEmail=""

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
+import { FieldFactsProvider } from '@workspace/ui/field-facts'
 
 // Without vitest globals, Testing Library cannot register its own cleanup.
 afterEach(() => cleanup())
@@ -60,5 +61,29 @@ describe('PasswordInput', () => {
     expect(input().disabled).toBe(true)
     expect((eye() as HTMLButtonElement).disabled).toBe(false)
     expect((eye() as HTMLButtonElement).type).toBe('button')
+  })
+})
+
+describe('a PasswordInput inside a provider of facts', () => {
+  it('takes the limit of its anchor and keeps its own type, shown or hidden', async () => {
+    render(
+      <FieldFactsProvider
+        facts={{ 'x.y.password-input': { maxLength: 35, type: 'email', marksState: false } }}
+      >
+        <PasswordInput
+          testId="x.y.password-input"
+          showLabel="Show"
+          hideLabel="Hide"
+          defaultValue=""
+        />
+      </FieldFactsProvider>,
+    )
+
+    expect(input().maxLength).toBe(35)
+    expect(input().type).toBe('password')
+    expect(input().className).not.toContain('border-warning')
+
+    await userEvent.click(eye())
+    expect(input().type).toBe('text')
   })
 })

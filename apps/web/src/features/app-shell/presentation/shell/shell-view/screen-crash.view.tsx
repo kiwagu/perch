@@ -1,6 +1,8 @@
 import { useT } from '@workspace/i18n'
 import { Button } from '@workspace/ui/components/ui/button'
 
+import type { ShellEvent } from '../../../application/shell-machine'
+
 /** The open screen failed to render. */
 export type CrashCode = 'screen-crashed'
 
@@ -9,8 +11,8 @@ export interface ScreenCrashProps {
   readonly crash?: CrashCode | undefined
   /** Whether the frame's flow renders the reload in its state. */
   readonly reload: boolean
-  /** Whether the frame's flow takes a reload now: the button is enabled while it does. */
-  readonly canReload?: boolean | undefined
+  /** Whether the frame's flow takes `event` now: the reload is enabled while it takes its press. */
+  readonly can: (event: ShellEvent) => boolean
   readonly onReload?: (() => void) | undefined
 }
 
@@ -30,7 +32,7 @@ export function ScreenCrash(props: ScreenCrashProps) {
           type="button"
           variant="outline"
           className="self-start"
-          disabled={!props.canReload}
+          disabled={!props.can({ type: 'app-shell.reload-button' })}
           onClick={props.onReload}
           data-testid="app-shell.reload-button"
         >

@@ -5,8 +5,9 @@ import { createActor, waitFor } from 'xstate'
 import type { BusError } from '@workspace/cqrs'
 import { type DataError, dataError } from '@workspace/data'
 import type { ProfileId } from '@workspace/ids'
+import { projected } from '@workspace/ui-contract/machines'
 
-import { createProfileMachine, type ProfileFields } from './profile.machine'
+import { createProfileMachine, type ProfileFields } from '.'
 
 const id = 'prf_0000000000000000.01m52pexcp' as ProfileId
 
@@ -30,18 +31,18 @@ function page(
   const updateName = vi.fn(options.updateName ?? (() => okAsync(undefined)))
   const updateBio = vi.fn(options.updateBio ?? (() => okAsync(undefined)))
   const signOut = vi.fn(options.signOut ?? (() => okAsync('signed-out' as const)))
-  const actor = createActor(
-    createProfileMachine({
-      profiles: { updateName, updateBio },
-      signOut,
-      values: () => ({ id, stored, drafts }),
-    }),
-  ).start()
+  const machine = createProfileMachine({
+    profiles: { updateName, updateBio },
+    signOut,
+    values: () => ({ id, stored, drafts }),
+  })
+  const actor = createActor(machine).start()
   const emitted: unknown[] = []
 
   actor.on('*', (event) => emitted.push(event))
 
   return {
+    machine,
     actor,
     updateName,
     updateBio,
@@ -65,6 +66,12 @@ function page(
 }
 
 const SAVED = { type: 'show', anchor: 'app-shell.toast', codes: ['profile-saved'] }
+
+/** What the form's own error shows when the write of the state `saving` is refused. */
+const refusedAt = (machine: { readonly config: unknown }, saving: string) =>
+  projected(machine.config).states['editing']?.regions?.['save']?.states[
+    saving
+  ]?.invoke?.onError.flatMap((branch) => branch.effects)
 
 describe('profile machine', () => {
   it('follows the stored name until it is typed into, and again once typed back', () => {
@@ -147,6 +154,21 @@ describe('profile machine', () => {
     await idle()
 
     expect(actor.getSnapshot().context.error).toBeUndefined()
+  })
+
+  it("shows a refused write's own codes: the name's three, the bio's two", () => {
+    const { machine } = page()
+    const error = 'user.profile.error'
+
+    expect(refusedAt(machine, 'saving-name')).toEqual([
+      {
+        type: 'show',
+        params: { anchor: error, codes: ['name-required', 'name-too-long', 'failed'] },
+      },
+    ])
+    expect(refusedAt(machine, 'saving-bio')).toEqual([
+      { type: 'show', params: { anchor: error, codes: ['bio-too-long', 'failed'] } },
+    ])
   })
 
   it('takes no second click on Save while it saves', async () => {

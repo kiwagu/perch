@@ -120,8 +120,9 @@ const shownCode = (event: object, codes: readonly string[]): AccountErrorCode =>
  * verification and the removal, each running one action on the account at a time; a removal done
  * ends the card (`removed`). A control is enabled while a state handles its event
  * (`snapshot.can`). Its `show` keeps the code of an area's error for the view and emits a toast;
- * its `clear` is emitted for the host to empty a field; its `read` counts a read of the card, which
- * the view makes; its `navigate` is emitted for the host to move.
+ * its `clear` drops the code of an area's error, or is emitted for the host to empty a field; its
+ * `read` counts a read of the card, which the view makes; its `navigate` is emitted for the host
+ * to move.
  */
 export function createAccountMachine(deps: AccountMachineDeps) {
   /** An action on the card's account, as an invoke: done, or rejected with its failure. */
@@ -163,12 +164,20 @@ export function createAccountMachine(deps: AccountMachineDeps) {
 
         enqueue.assign({ errors: { ...context.errors, [area]: shownCode(event, params.codes) } })
       }),
-      clear: emit((_, params: ClearParams) => ({ type: 'clear' as const, ...params })),
+      // An area's error shows no code any more; a field is emptied by the host.
+      clear: enqueueActions(({ enqueue, context }, params: ClearParams) => {
+        const area = areaOf(params.anchor)
+
+        if (area === undefined) {
+          enqueue.emit({ type: 'clear', ...params })
+
+          return
+        }
+
+        enqueue.assign({ errors: { ...context.errors, [area]: undefined } })
+      }),
       read: assign({ sectionReads: ({ context }) => context.sectionReads + 1 }),
       navigate: emit((_, params: NavigateParams) => ({ type: 'navigate' as const, ...params })),
-      forget: assign(({ context }, params: { readonly area: ErrorArea }) => ({
-        errors: { ...context.errors, [params.area]: undefined },
-      })),
     },
   }).createMachine({
     id: 'account',

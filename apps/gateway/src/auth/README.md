@@ -142,10 +142,15 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email and a password that is not empty, as strings, answers 400 `bad-request` before anything
-is read for the email, alike for any email (Better Auth would hash an empty password to time an
-unknown email's answer, which fails, and check a known one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
-is the email counted. Better Auth's answers reach the client
+an email of at most the `email` value's length and a password, as strings, answers 400
+`bad-request` before anything is read for the email, alike for any email. One that is reaches
+Better Auth as that very JSON, so the email whose password is checked is the email counted, but
+for a password of a length no account's password has (outside the `password` value's, the empty
+one included): Better Auth gets `NO_ACCOUNTS_PASSWORD` in its place (`password-length.ts`), ten
+spaces, which no password set under the rules has, so it is refused, counted and timed as a
+wrong one, after the same checks of the request (its origin, the email's shape) as any other
+(Better Auth would fail to hash an empty password, which it hashes to time an unknown email's
+answer). Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
@@ -167,14 +172,18 @@ whether the email has an account. One email's sign-ups run one at a time (the ac
 otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
 sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
 address's verification mails, whatever its email (429 when they are spent); a body that names no
-email or no password answers 400 `bad-request`. The password must keep the rules of a new
-password (`keepsPasswordRules` of `@workspace/kernel`: 10 to 35 characters, only Latin letters,
-digits and the 32 printable ASCII symbols, with at least one digit, one uppercase letter, one
-lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at once,
-before the email's turn, Better Auth and the directory, so the refusal reads nothing of the email.
+email, no password or no name, or an email longer than the `email` value allows (as every
+body's email is held to), answers 400 `bad-request`. The password must keep the rules of a new
+password (`keepsPasswordRules` of `@workspace/kernel`: the length of the `new-password` value, only
+Latin letters, digits and the 32 printable ASCII symbols, with at least one digit, one uppercase
+letter, one lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at
+once, before the email's turn, Better Auth and the directory, so the refusal reads nothing of the
+email. The name must keep the rule of a profile's name (`profileNameOf`: 1 to the `profile.name`
+field's length in characters once trimmed); one that breaks it answers 400 `name-required` or
+`name-too-long` at once, on the same terms, whatever the email.
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
-which it checks on a new password only: a sign-in checks no rule, so an account whose password was
-set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
+which it checks on a new password only: a sign-in checks no rule, and a password of another
+length is no account's, so it is refused as a wrong one. Better Auth's refusals (a malformed
 email, a language the gateway does not speak) pass as their status and code alone; they do not
 depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
 answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
@@ -382,10 +391,12 @@ most, each replaced by the next.
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
-credential checks, answers 400 `password-rejected` for a new password that breaks the rules,
+credential checks, answers 400 `bad-request` for a body without a current password, 400
+`password-rejected` for a new password that breaks the rules,
 and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
-`invalid-credentials`, a right one clears them. In the account's turn, the current password is
+`invalid-credentials`, as one of a length no account's password has does without being checked;
+a right one clears them. In the account's turn, the current password is
 checked against the credential row and the new one hashed (`AccountPasswords.change`); then one
 transaction (`surql/password-change-commit.surql`) makes sure the caller's session is still live
 (401 `unauthorized` when it ended while the change waited) and the row still holds the hash that
@@ -396,14 +407,16 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 `/change-password` is not used: it sets the password apart from the endings.
 
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
-its token and `X-Perch-Device`. After a credential check of its address, a new email that is not
-an email (empty, longer than 320 characters, or of any other shape) answers 400 `email-invalid`;
-then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
+its token and `X-Perch-Device`. After a credential check of its address, a body without a
+password answers 400 `bad-request` and a new email that is not
+an email (empty, longer than the `email` value's length, or of any other shape) answers 400
+`email-invalid`; then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
 waited), with the account's email as it is then, and the password must find a place among that
 email's failed sign-ins and match the credential row (`AccountPasswords.matches`), a wrong one
-answering 400 `invalid-credentials`. Its earlier pending change then ends; when no account has the
+answering 400 `invalid-credentials`, as one of a length no account's password has does without
+being checked. Its earlier pending change then ends; when no account has the
 new email (the account's own counts as taken), a new change
 is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
 key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
@@ -469,7 +482,7 @@ the addressee read before the account went (`AccountTeardown.addressee`) and rea
 
 A signed-in device asks to delete its account with `POST /auth/request-account-deletion`
 `{ password }`, its token and `X-Perch-Device`. After a credential check of its address (429) and
-a body it can read (400 `bad-request`), one of the address's mails and one of the account's 3
+a body it can read, with a password (400 `bad-request`), one of the address's mails and one of the account's 3
 requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
 change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
 it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
@@ -547,8 +560,9 @@ holds, on the device the request names (the Bearer caller, `bearer-caller.ts`):
   Neither a token nor a device's own id is ever sent: a hello binds by that id.
 - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's sockets
   are closed with 4001. A session that ended already answers 204 with nothing closed, so the
-  device's later session keeps its sockets. An id that is not one of the caller's sessions
-  answers 404 `no-such-device`.
+  device's later session keeps its sockets. An id longer than the `id` value allows
+  (`src/path-id.ts`) answers 400 `bad-request` before any session is looked for; any other id that
+  is not one of the caller's sessions answers 404 `no-such-device`.
 - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller has ended, the
   asking one included, and every socket of the identity is closed with 4001.
 - `POST /auth/sign-out`: a device ends its own session with its token and its `X-Perch-Device`,
@@ -585,7 +599,10 @@ error carries one.
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
-  `device.routes.ts`).
+  `device.routes.ts`). The paths the mount answers (`MOUNT_PATHS`) and those the device routes
+  answer (`DEVICE_PATHS`) are listed beside their handlers, for the spec that holds the routes to
+  the platform's actions; the device routes answer a path only through their list
+  (`src/route-path.ts`).
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
   a change of the password ended, so the device can tell its person why it was signed out; 4003
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
@@ -623,10 +640,13 @@ error carries one.
   `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
-  organisation routes, and the caller's email and session row besides), `accountEmail` (`account-email.ts`, an email as the invitations take
-  it) and `identityByEmail` (`identity-by-email.ts`: the one lookup of an identity by its email,
-  in any case, answering its key and email or none; `AuthSessions.identityOf` and the
-  organisations' invites use it, each deciding what none means).
+  organisation routes, and the caller's email and session row besides), `accountEmail`
+  (`account-email.ts`, an email as the invitations take it, at most the `email` value's length, the
+  longest an email in any body may be), `profileNameOf` (`profile-name.ts`: a name as a profile
+  takes it, as a sign-up and an operator's rename hold it) and `identityByEmail`
+  (`identity-by-email.ts`: the one lookup of an identity by its email, in any case, answering its
+  key and email or none; `AuthSessions.identityOf` and the organisations' invites use it, each
+  deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session for a row written admitted, a sign-in's admission
@@ -677,14 +697,17 @@ error carries one.
   closed only once it is admitted;
   `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
-  takes one of its address's verification mails; `auth-handler/sign-in.spec.ts`,
+  takes one of its address's verification mails, and that a name which breaks the rule of a
+  profile's name is refused at once, whatever the email; `auth-handler/email-length.spec.ts`,
+  which holds the longest email a body may name; `auth-handler/sign-in.spec.ts`,
   `auth-handler/password-reset.spec.ts`,
   `auth-handler/password-change.spec.ts` and `auth-handler/email-change.spec.ts`, which hold the
   uniform answers and their floors, each limit, the single use, the newest link only, the
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
-  change and a confirmation, an empty password answered alike for any email before anything is
-  read, an empty current password answered `invalid-credentials`, a sign-in that checked the old
+  change and a confirmation, a password of no account's length (empty, 9 or 36 characters) refused
+  and counted as a wrong one at a sign-in, alike for any email, its origin and email's shape
+  checked first, and at a change of the password, of the email and a deletion's request, a sign-in that checked the old
   password beside a reset or a change, or whose email moved to another account meanwhile, or to
   one and away or back again, left with no working session and no other account's start, the
   start a

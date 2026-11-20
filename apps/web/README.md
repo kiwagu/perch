@@ -359,7 +359,10 @@ modeling stage.
   class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
   and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
   tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
-  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  views through `ThemeContext`, read with `useDeviceTheme()`), the length of a text as the gateway
+  and the database count it (`text-length.ts`, `textLength`: one for each code point, which every
+  domain rule judging a name, a bio or a note against its limit uses, though the native `maxLength`
+  of an input counts UTF-16 units), and this tab's own writes of
   the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
   frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
   earlier write is not taken for a value another tab or device stored; the start provides them
@@ -418,7 +421,9 @@ modeling stage.
   or actor; `false` when the state does not take the event; the platform's events reach the
   machine while it runs, each carrying what the screen's fields hold, as the container gives them
   (`useScreenMachine(screen, machine, fields)`), for a move it makes, and a state that does not
-  handle one lets it pass; `renders(anchor)` says whether the state renders an anchor, read from
+  handle one lets it pass; `can(event)` says whether the state takes an event, the check `send` and
+  `submit` make too, which a view enables a control by (`disabled={!props.can(<event>)}`);
+  `renders(anchor)` says whether the state renders an anchor, read from
   the machine, whose states carry their flow's `meta.renders` (`screen-renders.ts`: `rendersIn`
   over the engine's `renderedAt` and `isRendered`, which the frame's shell reads too), so a view
   shows an anchor only some states render where the state renders it, never by a list of states
@@ -483,6 +488,7 @@ accounts and the organisations they created are swept; it applies the directory 
 gateway does, which leaves a stand that already has it alone. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 `src/field-state-colour.test-support.ts` is the one assertion that a field the contract opts out draws no state colour.
+`src/platform/field-facts.gen.ts` (generated, `bun run emit`) holds what the contract says of each field by its anchor (its limit, input type, whether it marks its state, whether it holds input), and `src/main.tsx` gives it to the kit's `FieldFactsProvider` around the app, so the fields take it from there: a view gives its fields none of these itself, and the domain rules and the console's route search read their bounds from `CONTRACT_VALUES` of `@workspace/kernel`. `src/field-facts.test-support.ts` renders a view inside that provider (`renderWithFacts`) and holds each declared field it renders to the facts (`expectFieldFacts`).
 
 ## Commands
 
@@ -515,7 +521,13 @@ gateway does, which leaves a stand that already has it alone. `openStandTenant()
   it too; otherwise it prints how close it came. Every module the start loads statically goes
   into one chunk (`first-frame`, `vite.config.ts`), so a lazy script that shares modules with the
   start never splits them into common chunks loaded with it.
-- `bun run test`: composition, platform and component tests.
+- `bun run test`: composition, platform and component tests. It holds `src/platform/field-facts.gen.ts`
+  to the contract through `heldModule` of the engine's `@workspace/ui-contract/testing`: what the
+  engine emits for the contract now, or, in the pre-commit hook on a branch (`CONTRACT_AHEAD`), also
+  for the contract at the branch's merge base with `main` or at its commit, so a change of a field's
+  fact in the contract does not fail the hook before the module is generated again.
+- `bun run emit` (or `bun run contract:emit` from the root): writes `src/platform/field-facts.gen.ts`
+  from the contract (`ui-contract emit fields`).
 - `bun run model` / `bun run model:check`: generate or check the models of `.surql` files.
 - `bun run i18n:check`: translation keys against the catalogs.
 - `bun run typecheck`, `bun run lint`.

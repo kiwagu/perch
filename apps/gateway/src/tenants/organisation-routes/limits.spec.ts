@@ -305,12 +305,16 @@ describe('organisationRoutes', () => {
       expect((await creates(dan, 'dan_0', '203.0.113.2')).status).toBe(201)
     })
 
-    it('counts nothing for a creation whose body does not follow the schema', async () => {
+    it('counts nothing for a creation whose key or name a rule refuses', async () => {
       const { ann, ask } = await harness()
 
-      for (let n = 0; n < 12; n += 1) {
+      for (let n = 0; n < 6; n += 1) {
         expect(
           (await ask('POST', '/organisations', { as: ann, body: { key: 'A', name: 'Org' } }))
+            .status,
+        ).toBe(400)
+        expect(
+          (await ask('POST', '/organisations', { as: ann, body: { key: 'acme', name: '' } }))
             .status,
         ).toBe(400)
       }
