@@ -2,6 +2,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { renderWithProviders } from '../../../../../test-utils'
 
 import { DeletionFormView, type DeletionFormViewProps } from './deletion-form.view'
@@ -9,7 +10,7 @@ import { DeletionFormView, type DeletionFormViewProps } from './deletion-form.vi
 function renderView(props: Partial<DeletionFormViewProps> = {}) {
   const handlers = { onChange: vi.fn(), onSend: vi.fn(() => Promise.resolve(true)) }
 
-  renderWithProviders(<DeletionFormView password="" canSend {...handlers} {...props} />)
+  renderWithProviders(<DeletionFormView password="" can={() => true} {...handlers} {...props} />)
 
   return handlers
 }
@@ -71,6 +72,16 @@ describe('DeletionFormView', () => {
     expect(field.closest('[data-slot="field"]')?.contains(error)).toBe(true)
   })
 
+  it("marks the field each code concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = {
+      'invalid-credentials': 'data:INVALID_CREDENTIALS',
+    }
+
+    expectEachCodeMarksItsField('user.settings.deletion.error', (code) =>
+      renderView({ error: failures[code] }),
+    )
+  })
+
   it.each([
     [
       'data:LAST_ADMIN',
@@ -91,10 +102,21 @@ describe('DeletionFormView', () => {
   })
 
   it('disables the button while the flow takes no send', () => {
-    renderView({ canSend: false })
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.settings.deletion.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the password it holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ password: 'Secret-old1', can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.settings.deletion.send-button',
+      password: 'Secret-old1',
+    })
   })
 })

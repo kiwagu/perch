@@ -20,6 +20,7 @@ import {
 import { fakeServices } from '../../../../../platform/__fixtures__/session'
 import { englishCatalog } from '../../../../../platform/catalogs'
 import { CLIPBOARD } from '../../../../../platform/clipboard.port'
+import type { CommandsPort } from '../../../../../platform/commands.port'
 import type { InvitationsPort, ReceivedInvitation } from '../../../../../platform/invitations.port'
 import { defineModule } from '../../../../../platform/module'
 import type {
@@ -52,6 +53,8 @@ const sentToBea: InvitationView = {
   link: 'https://perch.example.test/invitation?token=t',
 }
 
+type Membership = ReturnType<typeof membership>
+
 const acme = membership('acme', 'Acme', 'admin')
 const globex = membership('globex', 'Globex', 'admin')
 
@@ -63,13 +66,15 @@ const fromInitech: ReceivedInvitation = {
 
 /**
  * The organisation page of `ann`, a member of `memberships` (the first is current), over
- * `gateway` and the invitations to her (`invitations`). `select` makes another organisation
- * current without the page choosing it.
+ * `gateway`, the invitations to her (`invitations`) and the commands that write her notes
+ * (`commands`, none that works by default). `select` makes another organisation current
+ * without the page choosing it.
  */
 async function openPage(
   memberships: Parameters<typeof sessionIn>[1],
   gateway: OrganisationsPort,
   invitations: InvitationsPort = noInvitations,
+  commands: CommandsPort = { execute: unavailable },
 ) {
   const { session, select } = sessionIn(ann, memberships)
   const organisations = new OrganisationService(session, gateway, invitations, replicaSchema)
@@ -82,7 +87,7 @@ async function openPage(
       () =>
         new NotesService(
           services.runner,
-          { execute: unavailable },
+          commands,
           { shape: organisationShape, commands: organisationCommands },
           () => organisations.ability(),
         ),
@@ -194,6 +199,82 @@ describe('OrganisationContainer', () => {
       await waitFor(() => expect(invitations).toHaveBeenCalledTimes(3))
 
       expect(field('organisation.invite.email-input').value).toBe('cy@example.test')
+    })
+  })
+
+  describe('the new note form', () => {
+    it('empties once the note is written', async () => {
+      const written = later<void>()
+      const execute = vi.fn(() => written.result)
+
+      await openPage([acme], gatewayWith({}), noInvitations, { execute })
+      type('organisation.notes.new-textarea', 'Plans')
+      fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
+      await waitFor(() => expect(execute).toHaveBeenCalled())
+
+      expect(field('organisation.notes.new-textarea').value).toBe('Plans')
+
+      await act(async () => {
+        written.done(undefined)
+      })
+
+      await waitFor(() => expect(field('organisation.notes.new-textarea').value).toBe(''))
+    })
+
+    it('keeps what was typed when the note is refused', async () => {
+      const written = later<void>()
+
+      await openPage([acme], gatewayWith({}), noInvitations, { execute: () => written.result })
+      type('organisation.notes.new-textarea', 'Plans')
+      fireEvent.click(screen.getByTestId('organisation.notes.add-button'))
+      await act(async () => {
+        written.refuse('failed')
+      })
+
+      await screen.findByTestId('organisation.notes.error')
+
+      expect(field('organisation.notes.new-textarea').value).toBe('Plans')
+    })
+  })
+
+  describe('the create form', () => {
+    it('empties once the organisation is created, which is current by then', async () => {
+      const created = later<Membership>()
+      const create = vi.fn(() => created.result)
+
+      await openPage([acme], gatewayWith({ create }))
+      fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+      type('organisation.create.key-input', 'acme')
+      type('organisation.create.name-input', 'Acme')
+      fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+      await waitFor(() => expect(create).toHaveBeenCalledWith({ key: 'acme', name: 'Acme' }))
+
+      expect(field('organisation.create.key-input').value).toBe('acme')
+
+      await act(async () => {
+        created.done(acme)
+      })
+
+      await waitFor(() => expect(field('organisation.create.key-input').value).toBe(''))
+      expect(field('organisation.create.name-input').value).toBe('')
+    })
+
+    it('keeps what was typed when the creation is refused', async () => {
+      const created = later<Membership>()
+
+      await openPage([acme], gatewayWith({ create: () => created.result }))
+      fireEvent.click(screen.getByTestId('organisation.create.toggle-button'))
+      type('organisation.create.key-input', 'acme')
+      type('organisation.create.name-input', 'Acme')
+      fireEvent.click(screen.getByTestId('organisation.create.submit-button'))
+      await act(async () => {
+        created.refuse('key-taken')
+      })
+
+      await screen.findByTestId('organisation.create.error')
+
+      expect(field('organisation.create.key-input').value).toBe('acme')
+      expect(field('organisation.create.name-input').value).toBe('Acme')
     })
   })
 

@@ -1,11 +1,16 @@
 /**
  * The rules a new password keeps, the same wherever it is checked: the sign-up form marks each as
  * the password is typed, and the gateway refuses a sign-up whose password breaks one. They hold
- * for a new password only: a sign-in checks none, so a password chosen before them still signs in.
+ * for a new password only: a sign-in checks none, since every account's password was set by them.
  */
 
-/** The fewest and the most characters a new password has. */
-export const PASSWORD_LENGTH = { min: 10, max: 35 } as const
+import { CONTRACT_VALUES } from './contract-values.gen'
+
+/** The fewest and the most characters a new password has: the bounds of the contract's `new-password`. */
+export const PASSWORD_LENGTH = {
+  min: CONTRACT_VALUES['new-password'].minLength,
+  max: CONTRACT_VALUES['new-password'].maxLength,
+} as const
 
 /** The 32 printable ASCII symbols a password may hold, beside Latin letters and digits. */
 export const PASSWORD_SYMBOLS = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'
@@ -39,9 +44,10 @@ const isAllowed = (character: string): boolean =>
   isSymbol(character)
 
 /**
- * Which rules `password` keeps: 10 to 35 characters (counted as typed, an emoji one); every
- * character a Latin letter, a digit or one of the symbols, once something is typed; and at least
- * one digit, one uppercase letter, one lowercase letter and one symbol. Nothing typed keeps none.
+ * Which rules `password` keeps: within the length of a new password (counted as typed, an emoji
+ * one); every character a Latin letter, a digit or one of the symbols, once something is typed;
+ * and at least one digit, one uppercase letter, one lowercase letter and one symbol. Nothing typed
+ * keeps none.
  */
 export function checkPasswordRules(password: string): PasswordRulesKept {
   const characters = [...password]

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import { type DataError, dataError, type SignUpInput } from '@workspace/data'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import {
   openTestSession,
@@ -132,7 +133,7 @@ describe('the sign-in service', () => {
 
   it.each([
     ['  ', 'profile:NAME_REQUIRED'],
-    ['a'.repeat(81), 'profile:NAME_TOO_LONG'],
+    ['a'.repeat(CONTRACT_VALUES['profile.name'].maxLength + 1), 'profile:NAME_TOO_LONG'],
   ])('refuses the name %j before it asks anything', async (name, code) => {
     const { asked, port } = recordingSession()
 

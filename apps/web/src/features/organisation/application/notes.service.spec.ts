@@ -6,7 +6,7 @@ import type { Command } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { identityIdFactory, idSchemas, noteIdFactory } from '@workspace/ids'
-import { type Ability, defineAbilityFor, NO_ABILITY } from '@workspace/kernel'
+import { type Ability, CONTRACT_VALUES, defineAbilityFor, NO_ABILITY } from '@workspace/kernel'
 
 import type { CommandsPort } from '../../../platform/commands.port'
 import {
@@ -99,9 +99,14 @@ describe('NotesService', () => {
     expect((await notes.add({ author: ann, text: '   ' }))._unsafeUnwrapErr().code).toBe(
       'note:TEXT_REQUIRED',
     )
-    expect((await notes.add({ author: ann, text: 'x'.repeat(501) }))._unsafeUnwrapErr().code).toBe(
-      'note:TEXT_TOO_LONG',
-    )
+    expect(
+      (
+        await notes.add({
+          author: ann,
+          text: 'x'.repeat(CONTRACT_VALUES['note.text'].maxLength + 1),
+        })
+      )._unsafeUnwrapErr().code,
+    ).toBe('note:TEXT_TOO_LONG')
     expect(commands.calls).toEqual([])
   })
 

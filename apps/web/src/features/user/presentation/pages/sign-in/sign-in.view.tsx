@@ -1,6 +1,6 @@
 import { useId, useState } from 'react'
 
-import { useT } from '@workspace/i18n'
+import { useLocale, useT } from '@workspace/i18n'
 import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
@@ -10,7 +10,9 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@workspace/ui/compone
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { SessionNotice } from '../../../../../platform/session.port'
+import type { SignInEvent } from '../../../application/sign-in-machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
 
@@ -34,9 +36,6 @@ export interface SignInValues {
   readonly confirmation: string
   readonly name: string
 }
-
-/** The buttons the sign-in flow handles: each is enabled while the machine's state does. */
-export type SignInControl = 'user.sign-in.submit-button' | 'user.sign-in.resend-button'
 
 /** The anchors only some states of the flow render: each shows while the machine's state does. */
 export type SignInListed =
@@ -73,8 +72,8 @@ export interface SignInViewProps {
   readonly sentTo?: string | undefined
   /** Whether the flow's state renders an anchor: the anchor shows while it does. */
   readonly renders: (anchor: SignInListed) => boolean
-  /** Whether the flow's state handles a button's event: the button is enabled while it does. */
-  readonly can: (control: SignInControl) => boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: SignInEvent) => boolean
   /** Signs in or up with the values: resolves whether it did. */
   readonly onSubmit: (values: SignInValues) => Promise<boolean>
   /** Switches the mode, with both passwords as typed. */
@@ -94,8 +93,24 @@ export interface SignInViewProps {
   readonly onCancelDeviceLimit: () => void
 }
 
+/** The codes of `user.sign-in.error`. */
+type SignInErrorCode =
+  | 'invalid-credentials'
+  | 'email-not-verified'
+  | 'account-banned'
+  | 'sign-up-rejected'
+  | 'rate-limited'
+  | 'other-account'
+  | 'name-required'
+  | 'name-too-long'
+  | 'passwords-differ'
+  | 'failed'
+
 /** The contract code of a refusal, with its text. */
-function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text: string } {
+function errorOf(
+  t: ReturnType<typeof useT>,
+  code: string,
+): { code: SignInErrorCode; text: string } {
   switch (code) {
     case 'data:INVALID_CREDENTIALS':
       return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
@@ -120,8 +135,10 @@ function errorOf(t: ReturnType<typeof useT>, code: string): { code: string; text
   }
 }
 
-/** The field a code of `user.sign-in.error` concerns, as the screen's `fields` say. */
-const ERROR_FIELDS: Readonly<Record<string, keyof SignInValues>> = {
+/** The field each code of `user.sign-in.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<SignInErrorCode, 'name' | 'confirmation'>> = {
+  'name-required': 'name',
+  'name-too-long': 'name',
   'passwords-differ': 'confirmation',
 }
 
@@ -150,9 +167,10 @@ function noticeText(
 
 export function SignInView(props: SignInViewProps) {
   const t = useT()
+  const locale = useLocale()
   const ids = { email: useId(), password: useId(), confirmation: useId(), name: useId() }
-  // The error under the password typed again describes that field while it shows there.
-  const confirmationErrorId = useId()
+  // The error under a field describes that field while it shows there.
+  const errorIds = { name: useId(), confirmation: useId() }
   // The rules of a new password describe the password while an account is created.
   const rulesId = useId()
   const [values, setValues] = useState<SignInValues>({
@@ -183,7 +201,13 @@ export function SignInView(props: SignInViewProps) {
     },
   })
   const error = props.error ? errorOf(t, props.error) : undefined
-  const concerns = error ? ERROR_FIELDS[error.code] : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  const under = (key: 'name' | 'confirmation') =>
+    error && concerns === key ? (
+      <FieldError id={errorIds[key]} data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
+        {error.text}
+      </FieldError>
+    ) : null
 
   return (
     <Card className="mx-auto w-full max-w-sm">
@@ -212,7 +236,7 @@ export function SignInView(props: SignInViewProps) {
                 </AlertDescription>
               </Alert>
             ) : null}
-            {error && !concerns ? (
+            {error && concerns === undefined ? (
               <Alert variant="destructive">
                 <AlertDescription data-testid={SIGN_IN_ERROR_TEST_ID} data-code={error.code}>
                   {error.text}
@@ -223,10 +247,8 @@ export function SignInView(props: SignInViewProps) {
               <FieldLabel htmlFor={ids.email}>{t('user.sign-in.email')}</FieldLabel>
               <Input
                 {...field('email')}
-                type="email"
                 autoComplete="email"
                 required
-                marksState={false}
                 data-testid="user.sign-in.email-input"
               />
             </Field>
@@ -241,7 +263,6 @@ export function SignInView(props: SignInViewProps) {
                 }
                 showLabel={t('user.password.show')}
                 hideLabel={t('user.password.hide')}
-                marksState={false}
                 testId="user.sign-in.password-input"
               />
               {props.renders('user.sign-in.password-rule-list') ? (
@@ -277,38 +298,42 @@ export function SignInView(props: SignInViewProps) {
                   autoComplete="new-password"
                   required
                   aria-invalid={concerns === 'confirmation' ? true : undefined}
-                  aria-describedby={concerns === 'confirmation' ? confirmationErrorId : undefined}
+                  aria-describedby={concerns === 'confirmation' ? errorIds.confirmation : undefined}
                   showLabel={t('user.password.show')}
                   hideLabel={t('user.password.hide')}
-                  marksState={false}
                   testId="user.sign-in.password-confirmation-input"
                 />
-                {error && concerns === 'confirmation' ? (
-                  <FieldError
-                    id={confirmationErrorId}
-                    data-testid={SIGN_IN_ERROR_TEST_ID}
-                    data-code={error.code}
-                  >
-                    {error.text}
-                  </FieldError>
-                ) : null}
+                {under('confirmation')}
               </Field>
             ) : null}
             {props.renders('user.sign-in.name-input') ? (
-              <Field>
+              <Field data-invalid={concerns === 'name' ? true : undefined}>
                 <FieldLabel htmlFor={ids.name}>{t('user.sign-in.name')}</FieldLabel>
                 <Input
                   {...field('name')}
                   autoComplete="name"
                   required
-                  marksState={false}
+                  aria-invalid={concerns === 'name' ? true : undefined}
+                  aria-describedby={concerns === 'name' ? errorIds.name : undefined}
                   data-testid="user.sign-in.name-input"
                 />
+                {under('name')}
               </Field>
             ) : null}
             <Button
               type="submit"
-              disabled={!props.can('user.sign-in.submit-button')}
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.submit-button',
+                  form: {
+                    email: values.email,
+                    password: values.password,
+                    name: values.name,
+                    locale,
+                  },
+                  confirmation: values.confirmation,
+                })
+              }
               data-testid="user.sign-in.submit-button"
             >
               {signingUp ? t('user.sign-in.sign-up') : t('user.sign-in.sign-in')}
@@ -316,6 +341,13 @@ export function SignInView(props: SignInViewProps) {
             <Button
               type="button"
               variant="link"
+              disabled={
+                !props.can({
+                  type: 'user.sign-in.toggle-button',
+                  password: values.password,
+                  confirmation: values.confirmation,
+                })
+              }
               onClick={() =>
                 props.onToggleMode({ password: values.password, confirmation: values.confirmation })
               }
@@ -328,7 +360,7 @@ export function SignInView(props: SignInViewProps) {
               <Button
                 type="button"
                 variant="outline"
-                disabled={!props.can('user.sign-in.resend-button')}
+                disabled={!props.can({ type: 'user.sign-in.resend-button', email: values.email })}
                 onClick={() => void props.onResend(values.email)}
                 data-testid="user.sign-in.resend-button"
               >

@@ -13,10 +13,12 @@ accounts under `/console`; devices sync over a WebSocket at
 
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
-`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
-time (one identity's membership changes, one account's sign-ups, verifications, resets and
-changes). The modules that predate the index rule have no
-`index.ts` yet and are imported file by file.
+`src/composition/root.ts` builds them; `src/route-path.ts` reads a request's path against the path
+templates a route module lists (a segment `:name` is a parameter), so a module answers only the
+paths it lists, and `src/path-id.ts` holds the longest id a path may carry; `src/keyed-turns.ts`
+runs one key's work one turn at a time (one identity's membership changes, one account's sign-ups,
+verifications, resets and changes). The modules that
+predate the index rule have no `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an
   email and the resend of its mail behind the gateway's limits, the recovery and the change of a
@@ -96,7 +98,12 @@ the update; each device's next hello is then refused with 4401.
   `gateway` app has them) after `mcproc start services`; the pm2 stand's `gateway` app
   (`mcproc start dev`) is the other way to run it.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
-  one per organisation for the organisation services and routes.
+  one per organisation for the organisation services and routes. `src/platform-contract.spec.ts`
+  holds the whole server, asked over HTTP, to the actions of the platform the UI contract declares
+  (`contract/domain/platform.yaml`, read through `@workspace/ui-contract`, a dev dependency of
+  this package that no gateway source imports): each action is a route or the client's own, each
+  route has its action or its reason, and each bound of a parameter (a length, a pattern, a
+  format) is the bound of its route.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`

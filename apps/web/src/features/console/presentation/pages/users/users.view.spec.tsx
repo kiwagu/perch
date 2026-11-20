@@ -8,9 +8,9 @@ import type { IdentityId } from '@workspace/ids'
 import { UnsavedInputScope, useUnsavedInput } from '@workspace/ui/unsaved-input'
 import { sizeOptionOf } from '@workspace/ui-contract/anchors'
 
+import { renderWithFacts } from '../../../../../field-facts.test-support'
 import { accountsNamed, bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import type { AccountPage } from '../../../../../platform/accounts.port'
-import { renderWithProviders } from '../../../../../test-utils'
 import en from '../../i18n/console.en.json'
 import es from '../../i18n/console.es.json'
 
@@ -61,7 +61,7 @@ function renderView(
     ...handlers,
     ...props,
   }
-  const rendered = renderWithProviders(around(<UsersView {...all} />))
+  const rendered = renderWithFacts(around(<UsersView {...all} />))
 
   return { ...rendered, ...handlers, view: all }
 }

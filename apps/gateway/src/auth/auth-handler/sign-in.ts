@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern'
 
 import { idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -8,6 +9,7 @@ import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
+import { hasPasswordLength, NO_ACCOUNTS_PASSWORD } from '../password-length'
 import { ADMISSION_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
@@ -18,15 +20,17 @@ import { refusalOf, withJsonBody } from './requests'
 export const SIGN_IN_PATH = '/auth/sign-in/email'
 
 /**
- * What a sign-in's body must name before anything is read for its email: its email, and a password
- * that is not empty, as strings. An empty password answers alike for any email here: Better Auth
- * would hash it to keep the time of an unknown email's answer, which fails, while it checks a known
- * one's and finds it wrong. `signOutOldest`, true once the person confirmed a sign-in past the
- * account's limit of devices, is the gateway's: Better Auth gets the rest of the body.
+ * What a sign-in's body must name before anything is read for its email: its email, of at most
+ * the `email` value's length (a longer one is no account's), and a password, as strings. A
+ * password of a length no account's password has, the empty one included, reaches Better Auth as
+ * `NO_ACCOUNTS_PASSWORD` (`hasPasswordLength`), so it is checked, timed, counted and refused as a
+ * wrong one, after the same checks of the request (its origin, the email's shape) as any other;
+ * Better Auth would fail to hash an empty one. `signOutOldest`, true once the person confirmed a
+ * sign-in past the account's limit of devices, is the gateway's: Better Auth gets the rest.
  */
 const signInBody = z.looseObject({
-  email: z.string(),
-  password: z.string().min(1),
+  email: z.string().max(CONTRACT_VALUES.email.maxLength),
+  password: z.string(),
   signOutOldest: z.boolean().optional(),
 })
 
@@ -212,10 +216,12 @@ function signedIn(
 }
 
 /**
- * A sign-in: its body must be JSON naming an email and a password that is not empty (else 400
- * `bad-request`, before anything is read for the email), and the email, in lower case, must find a place among its
- * failed sign-ins and those still under way (`RequestLimits.signInAttempt`; else 429). Better Auth
- * gets that very JSON, and the place is settled once with what it answered. A sign-in takes no turn
+ * A sign-in: its body must be JSON naming an email of at most the `email` value's length and a
+ * password (else 400 `bad-request`, before anything is read for the email), and the email, in
+ * lower case, must find a place among its failed sign-ins and those still under way
+ * (`RequestLimits.signInAttempt`; else 429). Better Auth gets that very JSON, a password of a
+ * length no account's password has replaced by `NO_ACCOUNTS_PASSWORD`, and the place is settled
+ * once with what it answered. A sign-in takes no turn
  * of the account: it runs alike, and as soon, whether the email has an account and whatever work
  * of that account is under way. Instead the email's account and the hash of its password are read
  * before Better Auth checks the password (`AccountPasswords.credentialOf`, the same read for an
@@ -232,7 +238,11 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
     return Response.json({ code: 'bad-request' }, { status: 400 })
   }
 
-  const { signOutOldest = false, ...forwarded } = named.data
+  const { signOutOldest = false, password, ...rest } = named.data
+  const forwarded = {
+    ...rest,
+    password: hasPasswordLength(password) ? password : NO_ACCOUNTS_PASSWORD,
+  }
   const email = forwarded.email.toLowerCase()
   const attempt = deps.limits.signInAttempt(email)
 

@@ -24,6 +24,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
+import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
@@ -123,15 +124,25 @@ describe('authHandler, the change of a password', () => {
     ARGON2_RUNS_MS,
   )
 
-  it('refuses an empty current password with invalid-credentials, changing nothing', async () => {
-    const mounted = await mountedOnRealAuth()
-    const ann = await signedInOn(mounted, ANN, ['laptop'])
-    const empty = await mounted.route(change(ann.on('laptop'), ''), FROM)
+  it.each(OUT_OF_LENGTH)(
+    'refuses %s as the current one as a wrong one, counted, changing nothing',
+    async (_, current) => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    expect(empty?.status).toBe(400)
-    expect(await empty?.json()).toEqual({ code: 'invalid-credentials' })
-    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
-  })
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      const refused = await mounted.route(change(ann.on('laptop'), current), FROM)
+
+      expect(refused?.status).toBe(400)
+      expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
+      // The tenth failure spent the account's failed sign-ins; the password stays what it was.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+      await mounted.clock.advance(15 * 60 * 1000)
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
+    },
+    ARGON2_RUNS_MS,
+  )
 
   it('refuses a new password that breaks the rules with password-rejected, counting nothing', async () => {
     const mounted = await mountedOnRealAuth()

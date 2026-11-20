@@ -5,7 +5,12 @@ import { registry } from '@workspace/ids'
 import { checkIdRegistry } from './id-registry'
 import type { SchemaModel } from './schema-structure'
 
-const table = (idPrefix?: string) => ({ fields: {}, ...(idPrefix ? { idPrefix } : {}) })
+const table = (idPrefix?: string) => ({
+  fields: {},
+  asserts: {},
+  indexes: {},
+  ...(idPrefix ? { idPrefix } : {}),
+})
 
 describe('checkIdRegistry', () => {
   it('accepts a schema whose @id prefixes match the registry both ways', () => {

@@ -17,11 +17,11 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
 ## Surface
 
 - Route: `/console/users` (roles `operator`; any other device gets the not-found page at the same
-  address, its search unread) renders `UsersPage`. Its search: `q` (at most 254 characters),
-  `page` (from 1, default 1) and `size` (10, 25 or 50, default 25); a value equal to its default
+  address, its search unread) renders `UsersPage`. Its search: `q` (within the length of the
+  contract's `account-search` value), `page` (from 1, default 1) and `size` (10, 25 or 50, default 25); a value equal to its default
   stays out of the address, and `size` is retained across a new search.
 - Route: `/console/account` (roles `operator`, likewise) renders `AccountPage`. Its search: `id`
-  (1 to 64 characters), the identity id of the account.
+  (within the length of the contract's `id` value), the identity id of the account.
 - Both pages are lazy pages (`LazyPage`): their code (containers, views, machines) loads apart
   from the first frame, when an operator first opens one of them, never for any other device; the
   routes, their search schemas (`domain/`) and the service stay in the first frame.
@@ -62,13 +62,13 @@ marks they share (`components/mark-badge`) and the i18n catalogs.
   account, and the section shows its email, when it was made and last seen, its verified, banned
   and operator marks, the ban's reason while banned, and its organisations with its role in each;
   the name form shows only while the account has a profile, the resend only while its email is
-  not verified, the ban form a reason (at most 500 characters) and the ban while it is not
-  banned, the lift of the ban while it is. A done action says itself in the frame's toast; the
+  not verified, the ban form a reason (within the length of the contract's `ban-reason` value)
+  and the ban while it is not banned, the lift of the ban while it is. A done action says itself in the frame's toast; the
   email's field empties once its mail is on its way, the reason's once the account is banned, and
   a removal moves to the accounts. A refused action shows its code in its area's error: under
   the field it concerns for `name-required`, `name-too-long`, `email-invalid` and `email-taken`,
-  above the area's controls for any other; a done action forgets its area's error. The ban, the
-  sign-out everywhere and the removal ask the frame's confirmation first
+  above the area's controls for any other; a done action clears its area's error, as its flow
+  says. The ban, the sign-out everywhere and the removal ask the frame's confirmation first
   (`platform/confirmations.ts`). A read that failed shows `console.account.error` in the place of
   the section: `not-operator`, `account-gone` or `failed`. Every link and button of the card is
   a touch target of 44 by 44 CSS px at least.

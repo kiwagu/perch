@@ -5,7 +5,7 @@
 The platform's organisation module on the device: the identity's memberships, creating an
 organisation, the current organisation's members for an administrator, invitations and
 removals, and the shared notes of the current organisation as the first table of the tenant
-region. `domain/` holds the organisation entity (the name bound) and one file per rule
+region. `domain/` holds the note entity and one file per rule
 (`tenant-key.rule.ts`, `organisation-name.rule.ts`); `application/` the organisation and
 notes services and the machines of the two pages (`organisation-machine/`, `invitation.machine.ts`). Reads and writes go to the current organisation's database. The write rules declared
 on the replica schema are applied on the device before a command runs
@@ -31,10 +31,12 @@ on the replica schema are applied on the device before a command runs
   not accepted yet, with the link to copy and the revoke button), `OrganisationReceived` (the
   invitations for the account, with accept and decline) and `OrganisationErrorLine` (a
   refused change as its contract code and its copy), in `presentation/components/`;
-  `roleShown` (the role a member's row shows) and `useInviteDraft` (the invitation form's
-  fields, which the flow empties) sit beside the page's view, which reads the members, the
-  invitations sent and the invitations for the account through the platform's `useListed` (a
-  list as last read, and the change it settled after).
+  `roleShown` (the role a member's row shows), `useInviteDraft` (the invitation form's fields)
+  and `useOrganisationDraft` (the create form's fields and the new note's, which the page holds
+  for the organisation it shows) sit beside the page's view, whose flow empties those fields
+  once their action is done, and which reads the members, the invitations sent and the
+  invitations for the account through the platform's `useListed` (a list as last read, and the
+  change it settled after).
 - Providers: `NOTES_SERVICE`, `ORGANISATION_SERVICE`.
 - i18n namespace `organisation.*`.
 - Anchors: screens `organisation` in `contract/domain/screens/org.yaml` and
@@ -45,16 +47,16 @@ on the replica schema are applied on the device before a command runs
   and their roles, the invitations sent and received, and the new note are its regions, a write is an invoke of its action, a control is enabled
   while the machine's state handles its event, and the machine keeps the codes of the page's
   errors with the organisation they were refused in. Without memberships the page offers to
-  create an organisation (a key checked by the kernel's `isTenantKey`, a name of at most 80
-  characters); the creator becomes its administrator and the new organisation the current one;
-  closed by its toggle, the create form is only hidden and keeps what was typed. With several
-  memberships the page offers a choice, which applies at once (`holdsInput={false}`), after
-  the frame's guard of unsaved input asks while a field holds some (the hook asks it before
+  create an organisation (a key checked by the kernel's `isTenantKey`, a name within the
+  length of the contract's `organisation-name` value); the creator becomes its administrator and
+  the new organisation the current one; closed by its toggle, the create form is only hidden and keeps what was typed. With several
+  memberships the page offers a choice, which applies at once (its field facts say it holds no
+  input), after the frame's guard of unsaved input asks while a field holds some (the hook asks it before
   the select's event). Choosing another organisation, or creating one, starts every area
   afresh; the forms' drafts belong to their organisation. One note is edited at a time:
   opening another note's edit form, or deleting another note, closes the open one and drops
   what was typed into it. Every form is
-  the kit's `Form`, whose saved submit leaves its fields with nothing unsaved. Notes are at most 500 characters. A member edits and deletes only its own
+  the kit's `Form`, whose saved submit leaves its fields with nothing unsaved. A note is within the length of the contract's `note.text` field. A member edits and deletes only its own
   notes and an administrator any, so "Edit" and "Delete" appear only where allowed, the
   member's own notes are marked "Yours", and a change the rules forbid is explained
   (`note:FORBIDDEN`). An administrator also sees the members, each with a role select that

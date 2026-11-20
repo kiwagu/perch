@@ -10,6 +10,8 @@ const schema: SchemaModel = {
     identity: {
       replicate: 'none',
       idPrefix: 'idn',
+      asserts: {},
+      indexes: {},
       fields: { email: { kind: 'scalar', name: 'string' } },
     },
     profile: {
@@ -17,6 +19,8 @@ const schema: SchemaModel = {
       idPrefix: 'prf',
       crdt: { bio: 'text' },
       readonlyFields: ['identity', 'created_at'],
+      asserts: {},
+      indexes: {},
       fields: {
         identity: { kind: 'record', tables: ['identity'] },
         name: { kind: 'scalar', name: 'string' },
@@ -29,6 +33,8 @@ const schema: SchemaModel = {
       idPrefix: 'nte',
       crdt: { text: 'text' },
       readonlyFields: ['author', 'created_at'],
+      asserts: {},
+      indexes: {},
       fields: {
         author: { kind: 'record', tables: ['member'] },
         text: { kind: 'scalar', name: 'string' },

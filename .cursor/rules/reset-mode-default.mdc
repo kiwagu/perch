@@ -1,5 +1,5 @@
 ---
-description: 'Use when: changing a schema, a data format, a generated artifact or an established pattern.'
+description: 'Use when: changing a schema, a data format, a rule of what is valid, a generated artifact or an established pattern, or asking whether accounts or data made before such a change must keep working.'
 alwaysApply: true
 ---
 
@@ -12,13 +12,17 @@ alwaysApply: true
 ## Use This When
 
 - A schema file, a stored format, or a pattern used in several places needs to change.
+- A rule of what is valid changes (a password's rules, a field's limits, a record's shape), and the question comes up whether accounts or data made under the old one must keep working.
 
 ## Stop Here If
 
-- The change rewrites the thing in place and every user of it moved in the same change.
+- The change rewrites the thing in place, every user of it moved in the same change, and nothing keeps accounts or data made under the old version working.
 
 ## Core rule
 
-- Before production, schema files are rewritten in place rather than accumulated as migrations; local stands are recreated from the schema.
+- Before production, schema files are rewritten in place rather than accumulated as migrations. A stand is recreated by starting it again, from the current schema and never from a migrated database, and the current seed or tests fill it as needed; a schema edit alone recreates nothing.
+- So before production there are no accounts and no stored data made under an earlier rule, schema or format. Records left from before, in a stand not restarted since the change or in a browser's local database, are test data: nothing converts them or carries them forward, and one in the way is cleared by hand (the stand restarted, the browser's site data cleared).
+- Nothing keeps them working: no contract text, code path, spec, scenario, seed, migration or adapter is written so that an account or a record made under an earlier rule, schema or format still signs in, loads or is accepted. One already written is a breach of this rule, not a decision to keep. The usual opening of a database, which applies the current schema to whatever it holds (a browser's local database, the gateway reopening a running stand's database after a schema edit), is not such a path and stays as it is.
+- Whether accounts or data made before a change must keep working is not a question for the developer: by this rule, they need not.
 - Move every caller in the same change; do not leave adapters that translate between the old and the new shape.
 - Regenerate generated files (`bun run model`) and commit them with the source that produced them.
