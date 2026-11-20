@@ -5,16 +5,16 @@
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every code is in the
  * vocabulary, and every suffix of `testIdFor()` too, listed in the `derived` of an anchor of the
- * contract (of the base itself when the call writes it as a literal); the `holdsInput` and the
- * `marksState` written in the sources are held to the contract (`opt-outs.ts`), and so are the
- * facets of a control's element, its `maxLength`, `aria-invalid` and `disabled` (`facets.ts`). The
+ * contract (of the base itself when the call writes it as a literal); a `holdsInput` or a
+ * `marksState` written on a field (`opt-outs.ts`), a `maxLength` and a `type` on a text field
+ * (`facets.ts`) are problems, since the kit takes them from the contract's field facts, and the
+ * `aria-invalid` and `disabled` of a control's element are held to the contract (`facets.ts`). The
  * problems carry `file:line`.
  */
 
 import { baseOf } from '../anchors'
 import { codesOf, type DeclaredAnchor, declaredAnchors, locate } from '../check'
 import {
-  type Model,
   type Problem,
   SCREENS_DIR,
   type ScreensFile,
@@ -106,7 +106,6 @@ export function compareWithContract(
   collected: readonly Collected[],
   screens: ScreensFile,
   vocabulary: Vocabulary,
-  model: Model,
   options: { readonly ahead?: boolean } = {},
 ): Problem[] {
   const { first, problems: duplicates } = firstPlaces(collected)
@@ -152,7 +151,6 @@ export function compareWithContract(
   const facets = facetProblems({
     collected,
     screens,
-    model,
     rendered: first,
     ahead: options.ahead === true,
   })

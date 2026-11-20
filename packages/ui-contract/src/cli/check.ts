@@ -26,14 +26,10 @@ const summaryOf = (contract: Contract): string => {
   ].join(', ')
 }
 
-function checkSources(
-  root: string,
-  { screens, vocabulary, model }: Contract,
-  ahead: boolean,
-): number {
+function checkSources(root: string, { screens, vocabulary }: Contract, ahead: boolean): number {
   const collected = scanSources(root)
 
-  if (reported(compareWithContract(collected, screens, vocabulary, model, { ahead }))) {
+  if (reported(compareWithContract(collected, screens, vocabulary, { ahead }))) {
     return 1
   }
 

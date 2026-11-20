@@ -9,10 +9,10 @@ import { facetProblems } from './facets'
 
 /**
  * The sample with one screen of controls: a field whose value takes at most 80 characters (its
- * model field's `maxLength`) and which an error's code concerns, a read-only field whose value has
- * a `maxLength` too, a textarea without a value, and controls a flow of two states handles: the save
- * button only while editing, a button in both states, one only while editing that only editing
- * renders, one no state handles, and a link only while editing.
+ * model field's `maxLength`, which the view leaves to its kit) and which an error's code concerns,
+ * a read-only field whose value has a `maxLength` too, a textarea without a value, and controls a
+ * flow of two states handles: the save button only while editing, a button in both states, one only
+ * while editing that only editing renders, one no state handles, and a link only while editing.
  */
 function facetsContract(): Contract {
   const contract = sampleContract()
@@ -61,11 +61,12 @@ function facetsContract(): Contract {
 }
 
 const MARK = "concerns === 'title' ? true : undefined"
+const KIT = "the kit takes it from the contract's field facts; leave it out"
 const CAN = "!props.can({ type: 'sample.save-button' })"
 
 /** The view that agrees with the contract, one element a line. */
 const AGREEING: Readonly<Record<string, string>> = {
-  title: `<Input data-testid="sample.title-input" maxLength={80} aria-invalid={${MARK}} />`,
+  title: `<Input data-testid="sample.title-input" aria-invalid={${MARK}} />`,
   id: '<Input data-testid="sample.id-input" />',
   note: '<Textarea data-testid="sample.note-textarea" />',
   save: `<Button data-testid="sample.save-button" disabled={${CAN}} />`,
@@ -96,13 +97,7 @@ function problemsOf(
     ),
   )
 
-  return facetProblems({
-    collected,
-    screens: contract.screens,
-    model: contract.model,
-    rendered,
-    ahead,
-  }).map(formatProblem)
+  return facetProblems({ collected, screens: contract.screens, rendered, ahead }).map(formatProblem)
 }
 
 describe('facetProblems', () => {
@@ -114,83 +109,80 @@ describe('facetProblems', () => {
     expect(
       problemsOf({
         part: "<Input testId={testIdFor('sample.title-input', 'visibility-button')} maxLength={80} />",
-        gone: "<Select testId={testIdFor('sample.gone-list', 'size-select')} disabled={busy} />",
+        gone: "<Select testId={testIdFor('sample.gone-list', 'size-select')} maxLength={80} />",
       }),
-    ).toEqual([
-      'view.tsx:9: "sample.title-input.visibility-button": maxLength={80}, but the contract gives its value no maxLength (a read-only value takes none); leave it out',
-    ])
+    ).toEqual([`view.tsx:9: "sample.title-input.visibility-button": maxLength={80}, but ${KIT}`])
   })
 
-  describe('the limit of a text field', () => {
-    it('wants maxLength={N} on a field whose value takes at most N characters', () => {
-      expect(
-        problemsOf({ title: `<Input data-testid="sample.title-input" aria-invalid={${MARK}} />` }),
-      ).toEqual([
-        `view.tsx:${LINE['title']}: "sample.title-input" carries maxLength={80} by the contract: its value takes at most 80 characters`,
-      ])
-    })
-    it('refuses another number, naming both, and the number written any other way', () => {
-      expect(
-        problemsOf({
-          title: `<Input data-testid="sample.title-input" maxLength={81} aria-invalid={${MARK}} />`,
-        }),
-      ).toEqual([
-        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={81}, but the contract says maxLength={80}`,
-      ])
-      expect(
-        problemsOf({
-          title: `<Input data-testid="sample.title-input" maxLength={TITLE_MAX} aria-invalid={${MARK}} />`,
-        }),
-      ).toEqual([
-        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={TITLE_MAX}, but the contract says maxLength={80}`,
-      ])
-    })
-    it('refuses maxLength on a read-only field and on a field whose value has none', () => {
-      const elsewhere =
-        'but the contract gives its value no maxLength (a read-only value takes none); leave it out'
+  describe('the limit and the type of a text field, which the kit takes from the contract', () => {
+    // The sample's model gives `thing.title` at most 80 characters, and the agreeing view lacks it.
+    it('refuses a maxLength a view writes, whatever the number or the way it is written, in ahead mode too', () => {
+      for (const written of [
+        'maxLength={80}',
+        'maxLength={81}',
+        'maxLength={TITLE_MAX}',
+        'maxLength="80"',
+      ]) {
+        const title = `<Input data-testid="sample.title-input" ${written} aria-invalid={${MARK}} />`
+        const expected = [`view.tsx:${LINE['title']}: "sample.title-input": ${written}, but ${KIT}`]
 
-      expect(
-        problemsOf({
-          id: '<Input data-testid="sample.id-input" maxLength={64} />',
-          note: '<Textarea data-testid="sample.note-textarea" maxLength={500} />',
-        }),
-      ).toEqual([
-        `view.tsx:${LINE['id']}: "sample.id-input": maxLength={64}, ${elsewhere}`,
-        `view.tsx:${LINE['note']}: "sample.note-textarea": maxLength={500}, ${elsewhere}`,
-      ])
+        expect(problemsOf({ title })).toEqual(expected)
+        expect(problemsOf({ title }, { ahead: true })).toEqual(expected)
+      }
     })
-    it('in ahead mode lets a missing limit by, never a wrong one', () => {
-      expect(
-        problemsOf(
-          { title: `<Input data-testid="sample.title-input" aria-invalid={${MARK}} />` },
-          { ahead: true },
-        ),
-      ).toEqual([])
-      expect(
-        problemsOf(
-          {
-            title: `<Input data-testid="sample.title-input" maxLength={81} aria-invalid={${MARK}} />`,
-          },
-          { ahead: true },
-        ),
-      ).toEqual([
-        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={81}, but the contract says maxLength={80}`,
-      ])
+    it('refuses a maxLength on a read-only field and on a field whose value has none, in ahead mode too', () => {
+      const changed = {
+        id: '<Input data-testid="sample.id-input" maxLength={64} />',
+        note: '<Textarea data-testid="sample.note-textarea" maxLength={500} />',
+      }
+      const expected = [
+        `view.tsx:${LINE['id']}: "sample.id-input": maxLength={64}, but ${KIT}`,
+        `view.tsx:${LINE['note']}: "sample.note-textarea": maxLength={500}, but ${KIT}`,
+      ]
+
+      expect(problemsOf(changed)).toEqual(expected)
+      expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+    })
+    it('refuses a type a view writes on a text field, an email or any other, in ahead mode too', () => {
+      for (const written of ['type="email"', 'type="text"', "type={shown ? 'text' : 'password'}"]) {
+        const changed = {
+          title: `<Input data-testid="sample.title-input" ${written} aria-invalid={${MARK}} />`,
+          id: `<Input data-testid="sample.id-input" ${written} />`,
+          note: `<Textarea data-testid="sample.note-textarea" ${written} />`,
+        }
+        const expected = [
+          `view.tsx:${LINE['title']}: "sample.title-input": ${written}, but ${KIT}`,
+          `view.tsx:${LINE['id']}: "sample.id-input": ${written}, but ${KIT}`,
+          `view.tsx:${LINE['note']}: "sample.note-textarea": ${written}, but ${KIT}`,
+        ]
+
+        expect(problemsOf(changed)).toEqual(expected)
+        expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+      }
+    })
+    it('lets a type stand on a control that is no text field: a button, a link, a part of a field', () => {
+      const changed = {
+        save: `<Button data-testid="sample.save-button" type="submit" disabled={${CAN}} />`,
+        a: '<Button data-testid="sample.a-button" type="button" />',
+        home: '<Link data-testid="sample.home-link" type="text/html" />',
+        part: `<Button testId={testIdFor('sample.title-input', 'visibility-button')} type="button" />`,
+      }
+
+      expect(problemsOf(changed)).toEqual([])
+      expect(problemsOf(changed, { ahead: true })).toEqual([])
     })
   })
 
   describe('the mark of the field an error concerns', () => {
     it("wants aria-invalid on each field an error's fields name, never on form", () => {
-      expect(
-        problemsOf({ title: '<Input data-testid="sample.title-input" maxLength={80} />' }),
-      ).toEqual([
+      expect(problemsOf({ title: '<Input data-testid="sample.title-input" />' })).toEqual([
         `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
       ])
     })
     it('refuses aria-invalid written in another idiom', () => {
       expect(
         problemsOf({
-          title: '<Input data-testid="sample.title-input" maxLength={80} aria-invalid={invalid} />',
+          title: '<Input data-testid="sample.title-input" aria-invalid={invalid} />',
         }),
       ).toEqual([
         `view.tsx:${LINE['title']}: "sample.title-input": aria-invalid={invalid}, but the contract says aria-invalid={concerns === '<key>' ? true : undefined}`,
@@ -207,10 +199,7 @@ describe('facetProblems', () => {
     })
     it('in ahead mode lets a missing mark by', () => {
       expect(
-        problemsOf(
-          { title: '<Input data-testid="sample.title-input" maxLength={80} />' },
-          { ahead: true },
-        ),
+        problemsOf({ title: '<Input data-testid="sample.title-input" />' }, { ahead: true }),
       ).toEqual([])
     })
   })

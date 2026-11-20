@@ -130,7 +130,7 @@ describe('collectFromSource', () => {
       problems: [],
     })
   })
-  it('collects maxLength, aria-invalid and disabled beside the anchor of their element, as written', () => {
+  it('collects maxLength, type, aria-invalid and disabled beside the anchor of their element, as written', () => {
     const found = collectFromSource(
       [
         '// A word of another script — ü — keeps the offsets of the text.',
@@ -145,6 +145,8 @@ describe('collectFromSource', () => {
         '  data-testid="x.form.save-button"',
         '/>',
         'const d = <Input data-testid="x.form.code-input" maxLength="6" disabled />',
+        'const e = <Input data-testid="x.form.email-input" type="email" />',
+        'const f = <Input type={shown ? "text" : "password"} data-testid="x.form.secret-input" />',
       ].join('\n'),
       'x.tsx',
     )
@@ -165,6 +167,13 @@ describe('collectFromSource', () => {
       },
       { anchor: 'x.form.code-input', name: 'maxLength', text: '"6"', line: 12 },
       { anchor: 'x.form.code-input', name: 'disabled', text: '', line: 12 },
+      { anchor: 'x.form.email-input', name: 'type', text: '"email"', line: 13 },
+      {
+        anchor: 'x.form.secret-input',
+        name: 'type',
+        text: 'shown ? "text" : "password"',
+        line: 14,
+      },
     ])
     expect(found.problems).toEqual([])
   })
@@ -263,7 +272,7 @@ describe('collectFromSource', () => {
       [2, MARKS_STATE_VALUE],
     ])
     expect(MARKS_STATE_VALUE).toBe(
-      'marksState is {false} or left out; the contract decides it (a prop passed through is fine)',
+      "marksState is neither a boolean literal nor a prop passed through: the kit takes it from the contract's field facts; leave it out",
     )
   })
   it("collects holdsInput beside a testIdFor() of two literals, with the derived anchor's base", () => {
@@ -315,12 +324,12 @@ describe('collectFromSource', () => {
       [4, MARKS_STATE_ANCHOR],
     ])
   })
-  it('words the anchor problems to name a testIdFor() of two literals', () => {
+  it('words the anchor problems to name a testIdFor() of two literals, and to leave the flag to the kit', () => {
     expect(HOLDS_INPUT_ANCHOR).toBe(
-      "holdsInput goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals",
+      "holdsInput on an element that carries no anchor as a literal or as testIdFor() of two literals: the kit takes it from the contract's field facts; leave it out",
     )
     expect(MARKS_STATE_ANCHOR).toBe(
-      "marksState goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals",
+      "marksState on an element that carries no anchor as a literal or as testIdFor() of two literals: the kit takes it from the contract's field facts; leave it out",
     )
   })
   it('reports a file it cannot parse', () => {

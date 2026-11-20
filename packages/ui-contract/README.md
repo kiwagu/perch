@@ -174,11 +174,12 @@ links to as `contract/REFERENCE.md#<slug>`.
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
-    (`marksState`) and `props` (`maxLength`, `aria-invalid`, `disabled`); `scanSources(root)`
+    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`); `scanSources(root)`
     collects the sources under `SOURCE_ROOTS`;
-    `compareWithContract(collected, screens, vocabulary, model)` holds them to the contract, with
-    `codesOf(vocabulary, screens)` (`sources/opt-outs.ts` holds the opt-outs a view writes: the
-    kit takes them from the generated field facts, so a view may leave them out); the
+    `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
+    `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
+    and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
+    `sources/facets.ts` refuse it, the size select's `holdsInput` included); the
     problem codes are `RUNTIME_ANCHOR`, `RUNTIME_SUFFIX`, `HOLDS_INPUT_VALUE`,
     `HOLDS_INPUT_ANCHOR`, `MARKS_STATE_VALUE` and `MARKS_STATE_ANCHOR`
     (`contract/REFERENCE.md#rule-check-sources`, `contract/REFERENCE.md#rule-field-holds-input`).

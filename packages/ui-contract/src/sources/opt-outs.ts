@@ -1,22 +1,23 @@
 /**
- * The opt-outs the sources write against the contract. The kit takes a field's opt-outs from the
- * generated field facts, so a view may leave them out, and nothing is wanted of a field rendered.
- * One a view does write is held to the contract: a `holdsInput` is `{false}`, on a field the
- * contract says holds no input, never on an anchor that is not a field; a `marksState` is
- * `{false}` too, on a field the contract says drops its state colour, never on an anchor that is
- * not an input, a textarea or a select that holds input.
+ * The flags the sources write against the contract. The contract decides whether a field holds
+ * input (`holdsInput`) and whether it shows its state colour (`marksState`), and the kit takes
+ * both from the generated field facts (by the field's anchor), so a view writes neither on a
+ * declared field: no `{false}`, no `{true}`, in ahead mode too, and nothing is wanted of a field
+ * rendered. A flag is also a problem on an anchor that is not a field that holds input (a
+ * `holdsInput` on a page, a `marksState` on a form, a checkbox or a select that holds none), and
+ * on any other part a `testIdFor()` derives: that part is no field.
  *
  * A paged list's size select is no declared anchor: the list derives it, and by its facet it is a
- * select that holds no input. `holdsInput={false}` on it is no problem, `{true}` is the default,
- * and a `marksState` sits on a select that holds no input. A flag on any other part a
- * `testIdFor()` derives is a problem: that part is no field.
+ * select that holds no input, which the field facts carry too. A `holdsInput` on it is refused as
+ * on a declared field, a `marksState` on it as one on a select that holds no input, whichever
+ * value they write.
  */
 
 import { FIELD_KINDS, SIZE_SELECT, STATEFUL_FIELD_KINDS, testIdFor } from '../anchors'
 import type { DeclaredAnchor } from '../check'
 import type { Problem } from '../files'
 
-import type { Collected } from './collect'
+import { type Collected, LEFT_TO_THE_KIT } from './collect'
 
 interface OptOuts {
   readonly collected: readonly Collected[]
@@ -27,11 +28,10 @@ interface OptOuts {
 interface Colour {
   readonly kind: string
   readonly shows: boolean
-  readonly dropped: boolean
 }
 
 /** The size select each paged list of the contract derives. */
-const sizeSelectsOf = (contract: readonly DeclaredAnchor[]): ReadonlySet<string> =>
+const sizeSelectsOf = (contract: readonly DeclaredAnchor[]): Set<string> =>
   new Set(
     contract
       .filter(({ def }) => def.derived?.includes(SIZE_SELECT) === true)
@@ -42,13 +42,12 @@ const sizeSelectsOf = (contract: readonly DeclaredAnchor[]): ReadonlySet<string>
 const isDeclared = (contract: readonly DeclaredAnchor[], base: string): boolean =>
   contract.some(({ anchor }) => anchor === base)
 
+/** A flag a view writes on a field, which the kit takes from the contract's field facts. */
+const leftToTheKit = (anchor: string, name: string, value: boolean): string =>
+  `"${anchor}": ${name}={${value}}, but ${LEFT_TO_THE_KIT}`
+
 function holdsInputProblems({ collected, contract }: OptOuts): Problem[] {
   const sizeSelects = sizeSelectsOf(contract)
-  const holding = new Set(
-    contract
-      .filter(({ def }) => FIELD_KINDS.has(def.kind) && def.holdsInput !== false)
-      .map(({ anchor }) => anchor),
-  )
   const kinds = new Map<string, string>([
     ...contract.map(({ anchor, def }): [string, string] => [anchor, def.kind]),
     ...[...sizeSelects].map((anchor): [string, string] => [anchor, 'select']),
@@ -79,20 +78,10 @@ function holdsInputProblems({ collected, contract }: OptOuts): Problem[] {
         ]
       }
 
-      if (holdsInput) {
-        return [
-          { ...place, message: `"${anchor}": holdsInput={true} is the default; leave it out` },
-        ]
-      }
-
-      return holding.has(anchor)
-        ? [
-            {
-              ...place,
-              message: `"${anchor}" holds input by the contract; drop holdsInput={false}`,
-            },
-          ]
-        : []
+      // An anchor the contract lacks is the literals check's problem.
+      return kind === undefined
+        ? []
+        : [{ ...place, message: leftToTheKit(anchor, 'holdsInput', holdsInput) }]
     }),
   )
 }
@@ -101,19 +90,15 @@ function marksStateProblems({ collected, contract }: OptOuts): Problem[] {
   const sizeSelects = sizeSelectsOf(contract)
 
   // The state colour is shown by an input, a textarea or a select that holds input, the same test
-  // as the screens check; the contract may drop it.
+  // as the screens check; the size select derived by a paged list holds none.
   const shown = new Map<string, Colour>([
     ...contract.map(({ anchor, def }): [string, Colour] => [
       anchor,
-      {
-        kind: def.kind,
-        shows: STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true,
-        dropped: def.marksState === false,
-      },
+      { kind: def.kind, shows: STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true },
     ]),
     ...[...sizeSelects].map((anchor): [string, Colour] => [
       anchor,
-      { kind: 'select', shows: false, dropped: false },
+      { kind: 'select', shows: false },
     ]),
   ])
 
@@ -145,20 +130,10 @@ function marksStateProblems({ collected, contract }: OptOuts): Problem[] {
         ]
       }
 
-      if (marksState) {
-        return [
-          { ...place, message: `"${anchor}": marksState={true} is the default; leave it out` },
-        ]
-      }
-
-      return colour?.dropped === false
-        ? [
-            {
-              ...place,
-              message: `"${anchor}" shows its state colour by the contract; drop marksState={false}`,
-            },
-          ]
-        : []
+      // An anchor the contract lacks is the literals check's problem.
+      return colour === undefined
+        ? []
+        : [{ ...place, message: leftToTheKit(anchor, 'marksState', marksState) }]
     }),
   )
 }

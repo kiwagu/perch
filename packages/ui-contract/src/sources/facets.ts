@@ -2,10 +2,14 @@
  * The facets the contract decides on a control's element, held where the sources write them on
  * the element that carries its anchor (`Collected.props`). Each rule of the table says, of one
  * prop, the anchors it may stand on, the idiom it is written in there, and on which of them the
- * contract calls for it:
+ * contract calls for it; a prop the kit takes from the contract's field facts has none, and is
+ * refused where a view would write it:
  *
- * - `maxLength={N}`, the literal, on a text field whose value takes at most N characters and is
- *   not read-only (`fieldValueOf`), and on no other element;
+ * - `maxLength`, on no element that carries an anchor: the kit gives a text field the limit its
+ *   value takes (`fieldValueOf`) from the generated field facts, whatever the number a view writes;
+ * - `type`, on no declared text field (an `input` or a `textarea`): the kit gives it the type its
+ *   value has (an email) from the same facts, and any other a view writes would override them; a
+ *   `type` on a button, a link or a part of a field is no field's;
  * - `aria-invalid={concerns === '<key>' ? true : undefined}` on each field an error of its screen
  *   names in its `fields` (`form` names none), and on no other element;
  * - `disabled={!props.can(<its event>)}` on a control of `ENABLED_BY_STATE_KINDS` whose anchor is
@@ -15,17 +19,18 @@
  *   state handles too, as the machine's own answer; never on a link, a text field or a control no
  *   state handles.
  *
- * A prop where the contract puts none, or in another idiom, is a problem at its line; one the
- * contract calls for and the element lacks, at the anchor's first literal (for a part, the first
- * `testIdFor()` of two literals that builds it), except in ahead mode:
- * the contract runs ahead of the app on a branch, so the app may lag behind it, never go beyond.
+ * A prop where the contract puts none, or in another idiom, is a problem at its line, in ahead
+ * mode too; one the contract calls for and the element lacks, at the anchor's first literal (for
+ * a part, the first `testIdFor()` of two literals that builds it), except in ahead mode: the
+ * contract runs ahead of the app on a branch, so the app may lag behind it, never go beyond. A
+ * prop the kit takes from the facts is never called for.
  */
 
 import { ENABLED_BY_STATE_KINDS, kindOf, TEXT_FIELD_KINDS, testIdFor, WHOLE_FORM } from '../anchors'
 import { declaredAnchors, own } from '../check'
-import { fieldValueOf, flowNodes, type Model, type Problem, type ScreensFile } from '../files'
+import { flowNodes, type Problem, type ScreensFile } from '../files'
 
-import type { Collected, FacetProp } from './collect'
+import { type Collected, type FacetProp, LEFT_TO_THE_KIT } from './collect'
 import { unhandledWhere } from './unhandled'
 
 interface Place {
@@ -36,7 +41,6 @@ interface Place {
 export interface Facets {
   readonly collected: readonly Collected[]
   readonly screens: ScreensFile
-  readonly model: Model
   /**
    * The first place each anchor a source renders as a literal is written; a part a `testIdFor()`
    * of two literals builds is read from `collected`.
@@ -59,6 +63,8 @@ interface Facet {
   readonly name: FacetProp
   readonly on: ReadonlyMap<string, Held>
   readonly elsewhere: string
+  /** The anchors `elsewhere` holds the prop away from; every anchor when left out. */
+  readonly within?: ReadonlySet<string>
 }
 
 type Rule = (facets: Facets) => Facet
@@ -68,32 +74,19 @@ const MARK = /^concerns === '[a-z][a-z-]*' \? true : undefined$/
 const ENABLE_IDIOM = '!props.can(<its event>)'
 const ENABLE = /^!\s*(props\.)?can\(/
 
-/** The limit of a text field: the `maxLength` of its value, unless the value is read-only. */
-const limits: Rule = ({ screens, model }) => ({
-  name: 'maxLength',
-  on: new Map(
-    declaredAnchors(screens).flatMap(({ anchor, def, screen }) => {
-      const value = TEXT_FIELD_KINDS.has(def.kind)
-        ? fieldValueOf(anchor, screen, screens.platform, model)
-        : undefined
-      const limit = value?.readOnly === true ? undefined : value?.maxLength
+/** The limit of a text field: the kit takes it from the field facts, so no element carries one. */
+const limits: Rule = () => ({ name: 'maxLength', on: new Map(), elsewhere: LEFT_TO_THE_KIT })
 
-      return limit === undefined
-        ? []
-        : [
-            [
-              anchor,
-              {
-                idiom: `${limit}`,
-                pattern: new RegExp(`^${limit}$`),
-                because: `its value takes at most ${limit} characters`,
-              },
-            ] as const,
-          ]
-    }),
+/** The type of a text field: the kit takes it from the field facts, so no text field carries one. */
+const types: Rule = ({ screens }) => ({
+  name: 'type',
+  on: new Map(),
+  elsewhere: LEFT_TO_THE_KIT,
+  within: new Set(
+    declaredAnchors(screens).flatMap(({ anchor, def }) =>
+      TEXT_FIELD_KINDS.has(def.kind) ? [anchor] : [],
+    ),
   ),
-  elsewhere:
-    'the contract gives its value no maxLength (a read-only value takes none); leave it out',
 })
 
 /** The mark of a field: each field an error's code concerns, never `form`. */
@@ -163,7 +156,7 @@ const enabling: Rule = ({ screens }) => ({
     "no state enables it: only a button, a tab, a select, a checkbox, a radio or a switch whose anchor is an event of its screen's flow is enabled by its machine; leave it out",
 })
 
-const RULES: readonly Rule[] = [limits, marks, enabling]
+const RULES: readonly Rule[] = [limits, types, marks, enabling]
 
 /** A prop as the source writes it: bare, a string, or an expression in braces. */
 const written = (name: string, text: string): string =>
@@ -174,7 +167,7 @@ const written = (name: string, text: string): string =>
       : `${name}={${text}}`
 
 /** The problems of one facet: each prop written against it, and each one called for and missing. */
-function problemsOf({ name, on, elsewhere }: Facet, facets: Facets): Problem[] {
+function problemsOf({ name, on, elsewhere, within }: Facet, facets: Facets): Problem[] {
   const declared = new Set(declaredAnchors(facets.screens).map(({ anchor }) => anchor))
   const props = facets.collected.flatMap(({ file, props: all }) =>
     // An undeclared base is the parts check's problem: no facet problem on top of it.
@@ -188,7 +181,9 @@ function problemsOf({ name, on, elsewhere }: Facet, facets: Facets): Problem[] {
     const as = written(name, text)
 
     if (held === undefined) {
-      return [{ file, line, message: `"${anchor}": ${as}, but ${elsewhere}` }]
+      return within === undefined || within.has(anchor)
+        ? [{ file, line, message: `"${anchor}": ${as}, but ${elsewhere}` }]
+        : []
     }
 
     return held.pattern.test(text)

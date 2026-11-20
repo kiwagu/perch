@@ -7,11 +7,11 @@
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
  * problem, since no check can follow it. A key or a map value is a contract code only in
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
- * while a `data-code` literal outside the grammar is a problem. And `holdsInput={false}` and
- * `marksState={false}` beside a field's anchor, for the opt-outs the contract decides: a
+ * while a `data-code` literal outside the grammar is a problem. And `holdsInput` and `marksState`
+ * beside a field's anchor, which the contract decides and the kit takes from its field facts: a
  * boolean literal on the element that carries the anchor as a literal or as `testIdFor()` of
  * two literals (a paged list's size select, with the base it derives from), or a prop passed
- * through. And the facets the contract decides on a control's element, `maxLength`,
+ * through. And the facets the contract decides on a control's element, `maxLength`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so.
  */
 
@@ -37,17 +37,16 @@ export const RUNTIME_ANCHOR =
 export const RUNTIME_SUFFIX =
   'the suffix of testIdFor() is built at runtime; pass a literal suffix of the vocabulary'
 
-export const HOLDS_INPUT_ANCHOR =
-  "holdsInput goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals"
+/** Why a view writes none of the props the contract decides for a field and the kit takes. */
+export const LEFT_TO_THE_KIT = "the kit takes it from the contract's field facts; leave it out"
 
-export const HOLDS_INPUT_VALUE =
-  'holdsInput is {false} or left out; the contract decides it (a prop passed through is fine)'
+export const HOLDS_INPUT_ANCHOR = `holdsInput on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
 
-export const MARKS_STATE_ANCHOR =
-  "marksState goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals"
+export const HOLDS_INPUT_VALUE = `holdsInput is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
 
-export const MARKS_STATE_VALUE =
-  'marksState is {false} or left out; the contract decides it (a prop passed through is fine)'
+export const MARKS_STATE_ANCHOR = `marksState on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
+
+export const MARKS_STATE_VALUE = `marksState is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
 
 export interface Collected {
   file: string
@@ -68,8 +67,11 @@ export interface Collected {
   problems: Problem[]
 }
 
-/** The props of a control's element whose value the contract decides (`facets.ts`). */
-export const FACET_PROPS = ['maxLength', 'aria-invalid', 'disabled'] as const
+/**
+ * The props of a control's element whose value the contract decides (`facets.ts`): `aria-invalid`
+ * and `disabled` it calls for, `maxLength` and `type` the kit takes from the field facts.
+ */
+export const FACET_PROPS = ['maxLength', 'type', 'aria-invalid', 'disabled'] as const
 
 export type FacetProp = (typeof FACET_PROPS)[number]
 
