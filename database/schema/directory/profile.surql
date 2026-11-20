@@ -15,9 +15,11 @@ DEFINE TABLE OVERWRITE profile SCHEMAFULL
 -- @readonly
 DEFINE FIELD OVERWRITE identity ON profile TYPE record<identity>;
 DEFINE FIELD OVERWRITE name ON profile TYPE string
-  ASSERT string::len($value) > 0;
+  ASSERT string::len($value) > 0
+  AND string::len($value) <= 80;
 -- @readonly
-DEFINE FIELD OVERWRITE email ON profile TYPE string;
+DEFINE FIELD OVERWRITE email ON profile TYPE string
+  ASSERT string::is_email($value);
 -- @crdt text
 DEFINE FIELD OVERWRITE bio ON profile TYPE option<string>
   ASSERT $value = NONE

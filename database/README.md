@@ -35,8 +35,8 @@ only the gateway's own writes change it (the profile's email through the confirm
   (one-time tokens with an expiry), the last three closed to every record user; their reference
   columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
   schema defines no access method, so no record user signs in to a server. Then `profile` (its
-  owner reads it; only the gateway writes it, through replication; a bio holds at most 2000
-  characters), `settings` (an account's settings, today its language and its theme, one row per identity in
+  owner reads it; only the gateway writes it, through replication; a name holds 1 to 80 characters,
+  an email is an address, a bio holds at most 2000 characters), `settings` (an account's settings, today its language and its theme, one row per identity in
   its private region; its owner reads it, only the gateway writes it, through replication),
   `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
   name, namespace, database and status; closed to every record user), `membership` (an
@@ -61,10 +61,17 @@ only the gateway's own writes change it (the profile's email through the confirm
   sign up and in through it, which creates the identity row and its credential row as the
   gateway does; the product schema has none;
   `tests/anonymous`: the unauthenticated-client check over raw HTTP.
+- `src/model-contract.spec.ts`: holds the schema to the contract's model
+  (`contract/domain/model.schema.json`). Each entity has its table, its fields, region, id prefix,
+  crdt and read-only fields, owner and abilities, and a unique index for each unique set, and the
+  `ASSERT` of each field states the model's limits (enum members, `minLength`, `maxLength`,
+  `format: email`, `pattern`), no more and no less. It reads the schema as an embedded database
+  reports it, so it needs no stand.
 
 ## Commands
 
 - `bun run typecheck`, `bun run lint`.
+- `bun run test`: the unit spec (`vitest.unit.config.ts`), no stand needed.
 - `bun run test:db`: SurrealKit suites and the anonymous check against the stand at
   `SURREAL_URL`, which `bun run test:db` at the repository root sets through `mcproc exec` from
   the mcproc manifest (the `surrealdb-e2e` app, `http://127.0.0.1:8010` in the main checkout).
