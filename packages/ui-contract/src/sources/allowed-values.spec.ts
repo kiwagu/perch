@@ -29,7 +29,7 @@ function allowedBy(type: string): { allowed: AllowedValue[] | undefined; text: s
 /** The values a type allows, a query as `typeof <name>`. */
 const valuesOf = (type: string): string[] | undefined =>
   allowedBy(type).allowed?.map((value) =>
-    value.kind === 'literal' ? value.text : `typeof ${value.name}`,
+    value.kind === 'literal' ? value.text : `typeof ${value.reference.name}`,
   )
 
 /** A template literal type, `a${string}`: written in parts, which no string placeholder rule reads. */
@@ -44,7 +44,16 @@ describe('allowedValues', () => {
   it('reads a query of the key of a name, where it is written', () => {
     const { allowed, text } = allowedBy('typeof reset.type')
 
-    expect(allowed).toEqual([{ kind: 'query', name: 'reset', at: text.indexOf('reset') }])
+    expect(allowed?.map((value) => value.kind)).toEqual(['query'])
+
+    // The name is handed on as written, so the file's own reading of it (a value, or the type it is
+    // annotated with) can be asked where it is.
+    const [value] = allowed ?? []
+
+    expect(value?.kind === 'query' ? [value.reference.name, value.reference.start] : []).toEqual([
+      'reset',
+      text.indexOf('reset'),
+    ])
   })
   it('reads a union of such types, whatever it nests', () => {
     expect(valuesOf("'a' | typeof reset.type | ('b' | 'c')")).toEqual([

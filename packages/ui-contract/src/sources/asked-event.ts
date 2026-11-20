@@ -14,17 +14,19 @@
  * One it writes a type for that can carry `type` (a `type` member, a string index signature) may
  * replace the type of an event that writes its own, so the event is unread, unless the file says
  * which events that member allows (`allowed-values.ts`): string literal types, and `typeof
- * <name>.type` of an `as const` object of the file, whose `type` is read as here. Those join the
- * types the event has before the spread, an optional member being absent, and the event is read
- * where they are one event. One the file says nothing of may be the type of an event that writes
- * none. An argument the file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the file
- * does not declare, an import, included), or two alternatives that name different events leave it
- * unread. The question itself is read from the tree: one negated call of `can` or `props.can` with
- * one argument, whatever that argument nests. The facets check holds it to the event the control
- * itself sends, its anchor, so a copied `can(reset)` on the revoke button is caught.
+ * <name>.type` of a `const` of the file, read through its annotation where it has one (which may
+ * allow more than its value), else by its `as const` value, whose `type` is read as here. Those
+ * join the types the event has before the spread, an optional member being absent, and the event
+ * is read where they are one event. One the file says nothing of may be the type of an event that
+ * writes none. An argument the file cannot follow, a `type` it cannot read (a `<NAME>_TEST_ID` the
+ * file does not declare, an import, included), or two alternatives that name different events
+ * leave it unread. The question itself is read from the tree: one negated call of `can` or
+ * `props.can` with one argument, whatever that argument nests. The facets check holds it to the
+ * event the control itself sends, its anchor, so a copied `can(reset)` on the revoke button is
+ * caught.
  */
 
-import type { Expression, ObjectExpression, SpreadElement } from 'oxc-parser'
+import type { Expression, ObjectExpression, SpreadElement, TSType } from 'oxc-parser'
 
 import { type AllowedValue, allowedValues } from './allowed-values'
 import { type Alternative, DEPTH } from './alternatives'
@@ -100,16 +102,29 @@ export function questionOf(locals: Locals, written: Expression): Question {
     return typed(object) || (declared !== undefined && locals.types.cannotCarry(declared, 'type'))
   }
   /**
-   * The events `typeof <name>.type` says, where `name` is a `const` of the file that is `as const`,
-   * so the `type` it is written with is what the type allows, and the question reads it as one.
+   * The events `typeof <name>.type` says, where `name` is a `const` of the file. One the file
+   * annotates has the type its annotation writes, which may allow more than its value does, so it
+   * is read through the annotation, and unread where that does not say. One it does not annotate
+   * is read by its value, where that is `as const`, so the `type` it is written with is what the
+   * type allows, and the question reads it as one.
    */
   const queriedTypes = (
-    { name, at }: Extract<AllowedValue, { kind: 'query' }>,
+    { reference }: Extract<AllowedValue, { kind: 'query' }>,
     depth: number,
   ): string[] | undefined => {
-    const declared = locals.constantNamed(name, at)
+    const declared = locals.constantNamed(reference.name, reference.start)
 
-    if (declared === undefined || !isConstAssertion(declared)) {
+    if (declared === undefined || depth >= DEPTH) {
+      return undefined
+    }
+
+    const annotation = locals.declaredTypeOf(reference, reference.start)
+
+    if (annotation !== undefined) {
+      return allowedTypes(annotation, depth + 1)
+    }
+
+    if (!isConstAssertion(declared)) {
       return undefined
     }
 
@@ -118,13 +133,12 @@ export function questionOf(locals: Locals, written: Expression): Question {
     return types.every((type): type is string => typeof type === 'string') ? types : undefined
   }
   /**
-   * The events the file's type for a spread it cannot follow says its `type` may be: the string
-   * literals its `type` member allows and what each `typeof <name>.type` it names reads as; none
-   * where the file does not say, as for a `string`, an import or an index.
+   * The events the `type` member of a type the file writes allows: its string literal types and
+   * what each `typeof <name>.type` it names says; none where the file does not say, as for a
+   * `string`, an import or an index.
    */
-  const spreadTypes = (spread: SpreadElement, depth: number): string[] | undefined => {
-    const declared = locals.declaredTypeOf(spread.argument, spread.start)
-    const member = declared === undefined ? undefined : locals.types.memberOf(declared, 'type')
+  const allowedTypes = (declared: TSType, depth: number): string[] | undefined => {
+    const member = locals.types.memberOf(declared, 'type')
     const allowed = member === undefined ? undefined : allowedValues(member, 'type')
 
     if (allowed === undefined) {
@@ -136,6 +150,12 @@ export function questionOf(locals: Locals, written: Expression): Question {
     )
 
     return events.every((each): each is string[] => each !== undefined) ? events.flat() : undefined
+  }
+  /** The events the file's type for a spread it cannot follow says its `type` may be, if any. */
+  const spreadTypes = (spread: SpreadElement, depth: number): string[] | undefined => {
+    const declared = locals.declaredTypeOf(spread.argument, spread.start)
+
+    return declared === undefined ? undefined : allowedTypes(declared, depth)
   }
   const typesOf = (alternatives: readonly Alternative[], depth: number): Typed[] =>
     alternatives.flatMap((object): Typed[] =>

@@ -7,12 +7,12 @@
  * which values it allows, so none are read.
  */
 
-import type { TSType } from 'oxc-parser'
+import type { IdentifierReference, TSType } from 'oxc-parser'
 
-/** A value a type allows: a string, or the `key` of the name a query writes, written at `at`. */
+/** A value a type allows: a string, or the `key` of the name a query writes, as it is written. */
 export type AllowedValue =
   | { readonly kind: 'literal'; readonly text: string }
-  | { readonly kind: 'query'; readonly name: string; readonly at: number }
+  | { readonly kind: 'query'; readonly reference: IdentifierReference }
 
 /** The values `type` allows for `key`; none where it does not say which, or allows more. */
 export function allowedValues(type: TSType, key: string): AllowedValue[] | undefined {
@@ -35,7 +35,7 @@ export function allowedValues(type: TSType, key: string): AllowedValue[] | undef
         exprName.left.type === 'Identifier' &&
         exprName.right.name === key &&
         typeArguments === null
-        ? [{ kind: 'query', name: exprName.left.name, at: exprName.left.start }]
+        ? [{ kind: 'query', reference: exprName.left }]
         : undefined
     }
     default:

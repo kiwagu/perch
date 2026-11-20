@@ -672,6 +672,41 @@ describe('facetProblems', () => {
         expect(problemsOf(changed, { declarations })).toEqual([])
         expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
       })
+      it('reads the const a typeof names through its annotation where it has one, and refuses what that allows besides', () => {
+        const entries = {
+          saveEvent: "{ type: 'sample.save-button' } as const",
+          other: "{ type: 'sample.save-button' } as const",
+          withExtra: '(extra: { type?: typeof template.type }) => ({ ...saveEvent, ...extra })',
+          save: '<Button data-testid="sample.save-button" disabled={!props.can(withExtra(template))} />',
+        }
+        const declarations = (annotation: string): string[] => [
+          "import type { Imported } from './imported'",
+          "export interface Narrow { readonly type: 'sample.save-button' }",
+          "export interface Wide { readonly type: 'sample.save-button' | 'sample.a-button' }",
+          `const template${annotation} = { type: 'sample.save-button' } as const`,
+        ]
+
+        // The annotation, not the initializer, is the type of the const: an a-button event fits a
+        // template annotated to allow it, and the helper's spread may then replace the save event.
+        for (const [annotation, refused] of [
+          ['', false],
+          [": { readonly type: 'sample.save-button' }", false],
+          [': { readonly type: typeof other.type }', false],
+          [': Narrow', false],
+          [": { readonly type: 'sample.save-button' | 'sample.a-button' }", true],
+          [': { readonly type: string }', true],
+          [': { readonly type: typeof template.type }', true],
+          [': Wide', true],
+          [': Imported', true],
+        ] as const) {
+          for (const ahead of [false, true]) {
+            expect(
+              problemsOf(entries, { declarations: declarations(annotation), ahead }),
+              annotation === '' ? 'unannotated' : annotation,
+            ).toEqual(refused ? cannotRead('withExtra(template)') : [])
+          }
+        }
+      })
       it('passes it, in ahead mode too, where the type the view gives it is indexed by numbers only', () => {
         const changed = {
           save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(payload))} />',
