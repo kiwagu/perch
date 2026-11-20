@@ -1,4 +1,4 @@
-import { parseSync } from 'oxc-parser'
+import { parseSync, type TSType } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
 
 import { localsOf } from './locals'
@@ -89,24 +89,30 @@ describe('localsOf', () => {
 
     expect(valueAt(scoped, 'held', 'eight(')).toBeUndefined()
   })
-  it('binds a var in the innermost block or function around it: a case of a switch or a class static block is no scope of it', () => {
+  it('binds a var in the body of the function around it, a class static block or the file, wherever it is written', () => {
     const scoped = [
       "const prop = 'data-testid'",
       "function a() { switch (mode) { default: var prop = 'aria-label' } one(prop) }",
-      "function b() { class B { static { var prop = 'aria-label' } } two(prop) }",
-      "function c() { for (var prop = 'aria-label'; ok; ) {} three(prop) }",
-      "function d() { if (ok) { var prop = 'aria-label'; four(prop) } five(prop) }",
-      "function g(render = () => six(prop)) { var prop = 'aria-label'; seven(prop) }",
-      'eight(prop)',
+      "function b() { class B { static { { var prop = 'aria-label' } two(prop) } } three(prop) }",
+      "function c() { for (var prop = 'aria-label'; ok; ) {} four(prop) }",
+      "function d() { if (ok) { var prop = 'aria-label' } five(prop) }",
+      "function e() { try { run() } catch (error) { var prop = 'aria-label' } six(prop) }",
+      "function f() { for (const item of items) var prop = 'aria-label'; seven(prop) }",
+      "function g(render = () => eight(prop)) { { var prop = 'aria-label' } nine(prop) }",
+      'ten(prop)',
+      "if (ok) { var held = 'aria-label' }",
+      'eleven(held)',
     ].join('\n')
 
-    // Past the switch, the class or the loop, the function around it binds it.
-    for (const marker of ['one(', 'two(', 'three(', 'four(', 'seven(']) {
+    // Past the switch, the block, the loop or the catch, the body of the function binds it.
+    for (const marker of ['one(', 'two(', 'four(', 'five(', 'six(', 'seven(', 'nine(']) {
       expect(valueAt(scoped, 'prop', marker)).toBe('aria-label')
     }
 
-    // A block binds it as it binds a `let`; a default of a parameter is outside the body.
-    for (const marker of ['five(', 'six(', 'eight(']) {
+    expect(valueAt(scoped, 'held', 'eleven(')).toBe('aria-label')
+
+    // A static block keeps it; a default of a parameter is outside the body.
+    for (const marker of ['three(', 'eight(', 'ten(']) {
       expect(valueAt(scoped, 'prop', marker, 'constantNamed')).toBe('data-testid')
     }
   })
@@ -128,11 +134,23 @@ describe('localsOf', () => {
     expect(valueAt(spaced, 'shared', 'three(', 'constantNamed')).toBe('aria-label')
     expect(valueAt(spaced, 'shared', 'four(', 'constantNamed')).toBe('aria-label')
   })
-  it('reads a name two declarations bind in one scope as the first: a var declared again without a value keeps it', () => {
-    const twice =
-      "function a() { var prop: Label = 'aria-label'; switch (mode) { default: var prop: Label; one(prop) } }"
+  it('reads the vars of one function and its parameter as each value they give it: one where they agree', () => {
+    const twice = [
+      "function a() { var prop: Label = 'aria-label'; switch (mode) { default: var prop: Label; one(prop) } }",
+      "function b() { var prop = 'aria-label'; if (ok) { var prop = 'data-testid' } two(prop) }",
+      "function c() { var prop = 'aria-label'; if (ok) { var prop = 'aria-label' } three(prop) }",
+      "function d(prop) { if (ok) { var prop = 'aria-label' } four(prop) }",
+      "function e() { for (var prop of labels) { five(prop) } var prop = 'aria-label' }",
+    ].join('\n')
 
+    // A bare `var` keeps the value; two that state it alike state it.
     expect(valueAt(twice, 'prop', 'one(')).toBe('aria-label')
+    expect(valueAt(twice, 'prop', 'three(')).toBe('aria-label')
+
+    // Two values, or one beside the argument or a loop's element, state none.
+    for (const marker of ['two(', 'four(', 'five(']) {
+      expect(valueAt(twice, 'prop', marker)).toBeUndefined()
+    }
   })
 })
 
@@ -150,8 +168,13 @@ describe('declaredTypeOf', () => {
     }
 
     const type = localsOf(program).declaredTypeOf(value, text.indexOf(marker))
+    // A union, written or of the types several declarations write, as its types.
+    const source = (written: TSType): string =>
+      written.type === 'TSUnionType'
+        ? written.types.map(source).join(' | ')
+        : full.slice(written.start, written.end)
 
-    return type === undefined ? undefined : full.slice(type.start, type.end)
+    return type === undefined ? undefined : source(type)
   }
 
   const text = [
@@ -206,6 +229,20 @@ describe('declaredTypeOf', () => {
   })
   it('reads a name in the scope that binds it: an untyped parameter hides a typed one', () => {
     expect(declaredAt(text, 'props', 'seven(')).toBeUndefined()
+  })
+  it('reads a var declared again, or a parameter a var declares again, as of any type they write', () => {
+    const again = [
+      'export {}',
+      'function h(draft: Draft) { if (ok) { var draft = load() } one() }',
+      'function i(draft: Draft) { if (ok) { var draft: Other = load() } two() }',
+      'function j(draft: Draft) { var draft; three() }',
+      'function k() { var draft: Draft = load(); { var draft: Other = load() } four() }',
+    ].join('\n')
+
+    expect(declaredAt(again, 'draft', 'one(')).toBe('Draft')
+    expect(declaredAt(again, 'draft', 'two(')).toBe('Draft | Other')
+    expect(declaredAt(again, 'draft', 'three(')).toBe('Draft')
+    expect(declaredAt(again, 'draft', 'four(')).toBe('Draft | Other')
   })
   it('reads a name a case of a switch declares only in the switch: past it, the parameter', () => {
     const cased = [

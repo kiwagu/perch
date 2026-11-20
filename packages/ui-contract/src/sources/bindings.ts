@@ -5,10 +5,21 @@
  * declaration's name, and each name a variable declaration binds, with the value it is declared
  * with, or the value it is a part of (a destructured name, the variable of a `for…of`), and its
  * written type. Only a `let` or a `const` binds in the cases of a `switch` or a class `static`
- * block; every other declaration binds around them. In the order the file declares them.
+ * block; a `var` binds in the body of the function around it, a class `static` block or the file,
+ * where the function's parameters are bound once more, since JavaScript takes a `var` and a
+ * parameter of one name there for one variable (`Binding.variable`). In the order the file
+ * declares them.
  */
 
-import type { Expression, ParamPattern, Program, VariableDeclaration } from 'oxc-parser'
+import type {
+  Expression,
+  ForInStatement,
+  ForOfStatement,
+  FunctionBody,
+  ParamPattern,
+  Program,
+  VariableDeclaration,
+} from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
 import type { Member } from './alternatives'
@@ -29,6 +40,12 @@ export interface Binding {
   readonly member?: Member
   /** Its type as the file writes it, or the value a destructuring takes it from, and the keys. */
   readonly declared?: WrittenType | { readonly of: Expression; readonly path: readonly string[] }
+  /**
+   * For a parameter or a `var`, which a function may declare again as the same variable: whether
+   * this declaration gives it a value (`assigns`: an initializer or a loop's head; a `parameter`:
+   * the argument) or keeps the one it has (`bare`: `var x`).
+   */
+  readonly variable?: 'parameter' | 'assigns' | 'bare'
 }
 
 export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
@@ -37,22 +54,52 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
   const kinds = new Map<number, VariableDeclaration['kind']>()
   /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
   const iterated = new Map<number, Expression>()
-  /** Binds the names a declaration at `at` declares, a `let` or a `const` (`lexical`) or another. */
+  /** Where each `var` declarator of a `for…in` or a `for…of` head starts: the loop assigns it. */
+  const looped = new Set<number>()
+  const lexical = [...scopes.every, ...scopes.lexical]
+  /** Binds the names a declaration at `at` declares in the innermost of `around` around it. */
   const bind = (
     at: Span,
-    lexical: boolean,
+    around: readonly Span[],
     declared: ReadonlyArray<Omit<Binding, 'at' | 'scope'>>,
   ): void => {
-    const scope = scopeAround(at, lexical ? [...scopes.every, ...scopes.lexical] : scopes.every)
+    const scope = scopeAround(at, around)
 
     bindings.push(...declared.map((binding) => ({ ...binding, at, scope })))
   }
-  const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
-    bind({ start: node.start, end: node.start }, false, node.params.flatMap(typedNamesIn))
+  const parameters = (
+    node: Span & {
+      readonly params: readonly ParamPattern[]
+      readonly body: FunctionBody | Expression | null
+    },
+  ): void => {
+    const at = { start: node.start, end: node.start }
+    const declared = node.params
+      .flatMap(typedNamesIn)
+      .map((binding) => ({ ...binding, variable: 'parameter' as const }))
+
+    bind(at, scopes.every, declared)
+
+    const { body } = node
+
+    // In its body, where a `var` of its name declares it again.
+    if (body?.type === 'BlockStatement') {
+      bindings.push(...declared.map((binding) => ({ ...binding, at, scope: body })))
+    }
+  }
+  const loop = (node: ForInStatement | ForOfStatement): void => {
+    if (node.left.type === 'VariableDeclaration' && node.left.kind === 'var') {
+      for (const declarator of node.left.declarations) {
+        looped.add(declarator.start)
+      }
+    }
   }
 
   new Visitor({
+    ForInStatement: loop,
     ForOfStatement: (node) => {
+      loop(node)
+
       // Its variable is each element of the value it iterates; a `var` outlives the loop.
       if (node.left.type === 'VariableDeclaration' && node.left.kind !== 'var') {
         for (const declarator of node.left.declarations) {
@@ -64,7 +111,7 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
       if (param !== null) {
         bind(
           param,
-          false,
+          scopes.every,
           namesIn(param).map((name) => ({ name })),
         )
       }
@@ -75,7 +122,7 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
       parameters(node)
 
       if (node.id !== null) {
-        bind(node, false, [{ name: node.id.name, value: node }])
+        bind(node, scopes.every, [{ name: node.id.name, value: node }])
       }
     },
     VariableDeclaration: (node) => {
@@ -101,26 +148,34 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
         return declared === undefined ? {} : { declared }
       }
       const at = { start: node.start, end: node.end }
-      const lexical = kinds.get(node.start) !== 'var'
+      const kind = kinds.get(node.start)
+      // A `var` that neither an initializer nor a loop assigns keeps the value it has.
+      const variable: Pick<Binding, 'variable'> =
+        kind !== 'var'
+          ? {}
+          : { variable: node.init !== null || looped.has(node.start) ? 'assigns' : 'bare' }
+      const around = kind === 'var' ? scopes.hoisting : lexical
 
       if (node.id.type === 'Identifier') {
-        bind(at, lexical, [
+        bind(at, around, [
           {
             name: node.id.name,
             ...(node.init === null ? {} : { value: node.init }),
-            ...(kinds.get(node.start) === 'const' ? { constant: true as const } : {}),
+            ...(kind === 'const' ? { constant: true as const } : {}),
             ...(each === undefined ? {} : { member: { object: each, path: [], iterated: true } }),
             ...declaredOf(node.id.name),
+            ...variable,
           },
         ])
       } else {
         bind(
           at,
-          lexical,
+          around,
           pathsIn(node.id).map(({ name, path, defaulted }) => ({
             name,
             ...(path === undefined || object === null ? {} : { member: { object, path, ...part } }),
             ...(path === undefined || defaulted === true ? {} : declaredOf(name, path)),
+            ...variable,
           })),
         )
       }

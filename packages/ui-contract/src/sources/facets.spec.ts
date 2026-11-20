@@ -907,17 +907,84 @@ describe('facetProblems', () => {
           ])
         }
       })
-      it('refuses, in ahead mode too, a question a default of a parameter asks about the event around the function', () => {
-        // The default does not see the body's `var`: it asks about the file's `submit`.
-        const changed = {
-          save: '(render = () => <Button data-testid="sample.save-button" disabled={!props.can(submit)} />) => { var submit = { type: "sample.save-button" } as const; return render() }',
-          submit: "{ type: 'sample.a-button' } as const",
-        }
+      it('refuses, in ahead mode too, a question about the event a var of a branch of the row holds', () => {
+        // The `var` binds in the row's body, past its branch; a case's `const` stays in the switch.
+        const branch =
+          'if (confirming) { var event = { type: "sample.a-button" } as const } else { return null }'
+        const button =
+          'return <Button data-testid="sample.save-button" disabled={!props.can(event)} />'
+        const preview =
+          'switch (mode) { case "preview": const event = { type: "sample.a-button" } as const; return describe(event) }'
+        const event = "{ type: 'sample.save-button' } as const"
 
         for (const ahead of [false, true]) {
-          expect(problemsOf(changed, { ahead })).toEqual([
-            `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)} asks about "sample.a-button", but the control sends "sample.save-button"`,
-          ])
+          for (const save of [
+            `() => { ${branch} ${button} }`,
+            `() => { ${preview} ${branch} ${button} }`,
+          ]) {
+            expect(problemsOf({ save, event }, { ahead })).toEqual([
+              `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(event)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+            ])
+          }
+        }
+      })
+      it('reads, in ahead mode too, the vars of the row and its parameter as each event they give one name', () => {
+        const button = (can: string): string =>
+          `return <Button data-testid="sample.save-button" disabled={!props.can(${can})} />`
+        const own = '{ type: "sample.save-button" } as const'
+        const other = '{ type: "sample.a-button" } as const'
+        const unread = (can: string): string =>
+          `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(${can})}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`
+        const spread = '{ type: "sample.save-button", ...event }'
+
+        for (const ahead of [false, true]) {
+          // Two events, or one beside the argument, are no one event.
+          expect(
+            problemsOf(
+              { save: `() => { var event = ${own}; var event = ${other}; ${button('event')} }` },
+              { ahead },
+            ),
+          ).toEqual([unread('event')])
+          expect(
+            problemsOf(
+              {
+                save: `() => { if (ok) { var event = ${own} } else { var event = ${other} } ${button(spread)} }`,
+              },
+              { ahead },
+            ),
+          ).toEqual([unread(spread)])
+          expect(
+            problemsOf(
+              { save: `(event) => { if (confirming) { var event = ${own} } ${button('event')} }` },
+              { ahead },
+            ),
+          ).toEqual([unread('event')])
+          // Two that hold the control's own event hold it.
+          expect(
+            problemsOf(
+              {
+                save: `() => { if (ok) { var event = ${own} } else { var event = ${own} } ${button('event')} }`,
+              },
+              { ahead },
+            ),
+          ).toEqual([])
+        }
+      })
+      it('refuses, in ahead mode too, a question a default of a parameter asks about the event around the function', () => {
+        // The default does not see the body's `var`: it asks about the file's `submit`.
+        const render =
+          '(render = () => <Button data-testid="sample.save-button" disabled={!props.can(submit)} />) =>'
+        const submit = "{ type: 'sample.a-button' } as const"
+        const own = '{ type: "sample.save-button" } as const'
+
+        for (const ahead of [false, true]) {
+          for (const body of [`var submit = ${own};`, `if (ok) { var submit = ${own} }`]) {
+            expect(
+              problemsOf({ save: `${render} { ${body} return render() }`, submit }, { ahead }),
+            ).toEqual([
+              `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(submit)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+            ])
+          }
         }
       })
       it('reads, in ahead mode too, the event a file names beside a namespace that names its own', () => {

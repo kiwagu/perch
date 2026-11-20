@@ -1,15 +1,22 @@
 /**
  * The scopes of a source file, for `bindings.ts` to bind each name in the innermost one around its
- * declaration, whatever its kind: a block, a function (its parameters), a loop whose head declares
- * a `let`, a `const` or a `using` (a `var` there binds around the loop), a `catch` clause with a
- * parameter, and the file; a namespace's body is none, so its names bind around it. Two more bind
- * only a `let` or a `const` written in them: the block of a `switch`'s cases (after its
- * discriminant, which is read outside: a `const` of an unbraced `case` binds in every case and
- * nowhere past the switch) and a class `static` block. A `var` or a function declared there binds
- * around them, as anywhere else.
+ * declaration: a block, a function (its parameters), a loop whose head declares a `let`, a `const`
+ * or a `using`, a `catch` clause with a parameter, and the file; a namespace's body is none, so its
+ * names bind around it. Two more bind only a `let` or a `const` written in them: the block of a
+ * `switch`'s cases (after its discriminant, which is read outside: a `const` of an unbraced `case`
+ * binds in every case and nowhere past the switch) and a class `static` block; a function declared
+ * there binds around them, as anywhere else. A `var` binds, as JavaScript binds it, in the body of
+ * the function around it, a class `static` block or the file, whatever block, case, loop or `catch`
+ * it is written in; a default of a parameter, outside the body, does not see it.
  */
 
-import type { ForStatementInit, ForStatementLeft, Program } from 'oxc-parser'
+import type {
+  Expression,
+  ForStatementInit,
+  ForStatementLeft,
+  FunctionBody,
+  Program,
+} from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
 /** A range of the source, `[start, end)`. */
@@ -33,17 +40,25 @@ export const scopeAround = (at: Span, scopes: readonly Span[]): Span =>
 
 /** The scopes of a file but the file itself, each in no particular order. */
 export interface Scopes {
-  /** Where every declaration binds: a block, a function, a loop or a `catch` clause. */
+  /** Where every declaration but a `var` binds: a block, a function, a loop or a `catch` clause. */
   readonly every: readonly Span[]
   /** Where a `let` or a `const` binds too: the cases of a `switch`, a class `static` block. */
   readonly lexical: readonly Span[]
+  /** Where a `var` binds: the body of a function, a class `static` block. */
+  readonly hoisting: readonly Span[]
 }
 
 export function scopesIn(program: Program): Scopes {
   const every: Span[] = []
   const lexical: Span[] = []
-  const scope = (node: Span): void => {
+  const hoisting: Span[] = []
+  const fn = (node: Span & { readonly body: FunctionBody | Expression | null }): void => {
     every.push(node)
+
+    // An arrow's expression body declares nothing.
+    if (node.body?.type === 'BlockStatement') {
+      hoisting.push(node.body)
+    }
   }
   const loop = (node: Span, head: ForStatementInit | ForStatementLeft | null): void => {
     if (head?.type === 'VariableDeclaration' && head.kind !== 'var') {
@@ -52,10 +67,12 @@ export function scopesIn(program: Program): Scopes {
   }
 
   new Visitor({
-    BlockStatement: scope,
-    ArrowFunctionExpression: scope,
-    FunctionExpression: scope,
-    FunctionDeclaration: scope,
+    BlockStatement: (node) => {
+      every.push(node)
+    },
+    ArrowFunctionExpression: fn,
+    FunctionExpression: fn,
+    FunctionDeclaration: fn,
     ForStatement: (node) => {
       loop(node, node.init)
     },
@@ -75,8 +92,9 @@ export function scopesIn(program: Program): Scopes {
     },
     StaticBlock: (node) => {
       lexical.push(node)
+      hoisting.push(node)
     },
   }).visit(program)
 
-  return { every, lexical }
+  return { every, lexical, hoisting }
 }
