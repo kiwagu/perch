@@ -10,9 +10,13 @@
  * staged files against HEAD, which on `main` is what the landing adds. The check runs from the
  * working tree, so it runs only when every file it executes is the staged one: a file of those
  * (`CHECK_INPUTS`) that differs from the index, untracked ones included, refuses the landing
- * before the check runs, naming it. On any other branch, or on a detached HEAD, the check does
- * nothing. The branch is told by its full ref, so a tag named `main` changes nothing, and a commit
- * git cannot tell the branch, the staged files or the working tree's differences of fails.
+ * before the check runs, naming it. The check reads each branch by its name, so a branch another
+ * checkout commits to while it runs could be read half before and half after that commit: the
+ * local branch heads are read before the check and again after it, and a head that moved, was
+ * made or was deleted in between refuses the landing, naming it, whatever the check answered. On
+ * any other branch, or on a detached HEAD, the check does nothing. The branch is told by its full
+ * ref, so a tag named `main` changes nothing, and a commit git cannot tell the branch, the staged
+ * files, the working tree's differences or the local branches of fails.
  *
  * Usage: bun run scripts/gates/check-main-gates.ts [--branch <name>]
  */
@@ -115,11 +119,43 @@ function unstagedInputs(): string[] | undefined {
   return [...pathsOf(changed.out), ...pathsOf(untracked.out)].sort()
 }
 
+const HEADS = 'refs/heads/'
+
+/** Every local branch by name, with the commit it points at; undefined when git fails. */
+function branchHeads(): Map<string, string> | undefined {
+  const { status, out } = git(['for-each-ref', '--format=%(objectname) %(refname)', HEADS])
+
+  if (status !== 0) {
+    return undefined
+  }
+
+  return new Map(
+    out
+      .split('\n')
+      .filter((line) => line !== '')
+      .map((line) => {
+        const space = line.indexOf(' ')
+
+        return [line.slice(space + 1 + HEADS.length), line.slice(0, space)]
+      }),
+  )
+}
+
+/** The branches whose head differs between two readings, made and deleted ones included, by name. */
+function movedBranches(
+  before: ReadonlyMap<string, string>,
+  after: ReadonlyMap<string, string>,
+): string[] {
+  const names = new Set([...before.keys(), ...after.keys()])
+
+  return [...names].filter((name) => before.get(name) !== after.get(name)).sort()
+}
+
 /**
  * Runs the check of the branches in flight and says why the landing is refused, as lines;
- * none when it passes. The check runs only when nothing it executes differs from the index. A
- * run that names no broken branch (it did not finish, or failed) is refused as well, with what
- * it printed.
+ * none when it passes. The check runs only when nothing it executes differs from the index, and
+ * its answer counts only when no local branch head moved while it ran. A run that names no broken
+ * branch (it did not finish, or failed) is refused as well, with what it printed.
  */
 function inflightRefusal(): string[] {
   const unstaged = unstagedInputs()
@@ -136,18 +172,34 @@ function inflightRefusal(): string[] {
     ]
   }
 
+  const before = branchHeads()
   const run = spawnSync(process.execPath, ['run', '--silent', INFLIGHT_SCRIPT], {
     cwd: topLevel(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   })
+  const after = branchHeads()
+
+  if (before === undefined || after === undefined) {
+    return ['gates: git cannot list the local branches.']
+  }
+
+  const lead = `gates: this landing changes ${ENGINE_DIR}, and`
+  const moved = movedBranches(before, after)
+
+  if (moved.length > 0) {
+    return [
+      `${lead} these branches moved while the in-flight check ran, so its answer may mix their commits:`,
+      ...moved.map((branch) => `  ${branch}`),
+      'gates: commit again: the check then runs on the branches as they stand.',
+    ]
+  }
 
   if (run.status === 0) {
     return []
   }
 
   const broken = brokenBranches(run.stdout)
-  const lead = `gates: this landing changes ${ENGINE_DIR}, and`
 
   if (broken.length > 0) {
     return [

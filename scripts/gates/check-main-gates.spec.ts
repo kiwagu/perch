@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -102,22 +110,25 @@ function stage(root: string, path: string, content?: string): void {
 
 /**
  * Writes a `contract:inflight` script of its own into the working tree of `root`, in place of the
- * engine's: it marks each run in `ran.txt`, prints `report` and exits with `status`.
+ * engine's: it runs `meanwhile` (what another checkout does while the check runs), marks each run
+ * in `ran.txt`, prints `report` and exits with `status`.
  */
-function writeStub(root: string, status: number, report = ''): void {
+function writeStub(root: string, status: number, report = '', meanwhile = ''): void {
+  const steps = [meanwhile, 'echo ran >> ran.txt', 'cat report.txt', `exit ${status}`]
+
   write(root, 'report.txt', report)
   write(
     root,
     'package.json',
     JSON.stringify({
-      scripts: { 'contract:inflight': `echo ran >> ran.txt; cat report.txt; exit ${status}` },
+      scripts: { 'contract:inflight': steps.filter((step) => step !== '').join('; ') },
     }),
   )
 }
 
 /** The stub staged, as the check the landing's tree holds. */
-function stubInflight(root: string, status: number, report = ''): void {
-  writeStub(root, status, report)
+function stubInflight(root: string, status: number, report = '', meanwhile = ''): void {
+  writeStub(root, status, report, meanwhile)
   git(root, 'add', 'package.json', 'report.txt')
 }
 
@@ -495,5 +506,64 @@ describe('check-main-gates, the branches in flight', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('gates: a commit on main needs green suites on tree')
     expect(result.stderr).toContain('these branches in flight would break:\n  feat/notes')
+  })
+})
+
+describe('check-main-gates, branches that move while the in-flight check runs', () => {
+  it('refuses a landing whose check passed while a branch moved, naming the branch', () => {
+    const root = checkout('main')
+    const other = git(root, 'commit-tree', '-m', 'other', git(root, 'rev-parse', 'HEAD^{tree}'))
+
+    git(root, 'branch', 'feat/notes')
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0, '', `git update-ref refs/heads/feat/notes ${other}`)
+    recordReceipts(root)
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(inflightRan(root)).toBe(true)
+    expect(result.stderr).toContain(
+      'gates: this landing changes packages/ui-contract, and these branches moved while the in-flight check ran, so its answer may mix their commits:\n  feat/notes\ngates: commit again',
+    )
+    expect(result.stdout).not.toContain('landing allowed')
+  })
+
+  it('refuses on the branches made or deleted while the check ran, not on what it reported', () => {
+    const root = checkout('main')
+
+    git(root, 'branch', 'fix/gone')
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 1, REPORT, 'git branch feat/new; git branch -D fix/gone')
+    recordReceipts(root)
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(
+      'so its answer may mix their commits:\n  feat/new\n  fix/gone\n',
+    )
+    expect(result.stderr).not.toContain('would break')
+  })
+
+  it('lets the landing commit through its own hook, which moves main only after the check', () => {
+    const root = checkout('main')
+    const hook = join(root, '.git', 'hooks', 'pre-commit')
+    const start = git(root, 'rev-parse', 'main')
+
+    git(root, 'branch', 'feat/notes')
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(
+      root,
+      '.git/hooks/pre-commit',
+      `#!/bin/sh\nexec "${process.execPath}" "${CHECK_MAIN_GATES}"\n`,
+    )
+    chmodSync(hook, 0o755)
+    git(root, 'commit', '-q', '-m', 'land')
+
+    expect(inflightRan(root)).toBe(true)
+    expect(git(root, 'rev-parse', 'main^')).toBe(start)
   })
 })
