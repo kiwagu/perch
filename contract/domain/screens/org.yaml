@@ -8,7 +8,8 @@ entry: [ organisation.page.status, organisation.page.heading, organisation.notes
 anchors:
   organisation.page.status:
     kind: status
-    description: Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error); not rendered while an organisation is current.
+    description: Says the account is a member of no organisation (empty), or that it has memberships none of whose databases opened on this device (error).
+    without: [ organisation.page.heading ]
     roles: [ identity ]
     states: [ empty, error ]
   organisation.page.heading:
@@ -30,7 +31,7 @@ anchors:
     roles: [ member, admin ]
   organisation.create.toggle-button:
     kind: button
-    description: Opens or closes the create form; shown with a current organisation.
+    description: Opens or closes the create form.
     roles: [ member, admin ]
   organisation.create.form:
     kind: form
@@ -66,7 +67,7 @@ anchors:
       direction: asc
   organisation.notes.list:
     kind: list
-    description: The notes, oldest first; rendered when there is at least one.
+    description: The notes, oldest first.
     roles: [ member, admin ]
   organisation.notes.empty-message:
     kind: message
@@ -94,7 +95,7 @@ anchors:
     own: true
   organisation.notes.delete-button:
     kind: button
-    description: Deletes the note; shown where the rules allow, as the edit button.
+    description: Deletes the note.
     binding:
       action: note.deleteNote
       params:
@@ -137,7 +138,7 @@ anchors:
     roles: [ member, admin ]
   organisation.members.list:
     kind: list
-    description: The members of the current organisation, rendered once read.
+    description: The members of the current organisation.
     roles: [ admin ]
     source:
       platform: organisations.members
@@ -194,7 +195,7 @@ anchors:
     roles: [ admin ]
   organisation.sent.list:
     kind: list
-    description: The invitations not accepted yet, the newest first; rendered when there is at least one.
+    description: The invitations not accepted yet, the newest first.
     roles: [ admin ]
     source:
       platform: organisations.invitations
@@ -230,7 +231,7 @@ anchors:
     roles: [ admin ]
   organisation.received.list:
     kind: list
-    description: The invitations to the account's email, the newest first; rendered once read, when there is at least one.
+    description: The invitations to the account's email, the newest first.
     source:
       platform: invitations.mine
   organisation.received.item:

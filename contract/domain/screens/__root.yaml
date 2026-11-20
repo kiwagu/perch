@@ -74,7 +74,8 @@ anchors:
     codes: [ new-version, protocol-outdated ]
   app-shell.update-button:
     kind: button
-    description: Loads the page again on the version the server serves, shown with app-shell.update-message.
+    description: Loads the page again on the version the server serves.
+    with: [ app-shell.update-message ]
     binding: { action: platform.reload }
   app-shell.sync-message:
     kind: message
@@ -86,11 +87,13 @@ anchors:
     codes: [ install-available, install-by-steps ]
   app-shell.install-button:
     kind: button
-    description: Asks the browser to install the app, shown with app-shell.install-message where the browser can.
+    description: Asks the browser to install the app.
+    with: [ { app-shell.install-message: [ install-available ] } ]
     binding: { action: platform.install.prompt }
   app-shell.install-later-button:
     kind: button
-    description: Puts the reminder to install the app off for three days on this device, shown with app-shell.install-message.
+    description: Puts the reminder to install the app off for three days on this device.
+    with: [ app-shell.install-message ]
     binding: { action: platform.install.postpone }
   app-shell.confirmation:
     kind: confirmation

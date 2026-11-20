@@ -31,10 +31,11 @@ anchors:
     description: When the device was last seen.
   device.list.revoked-cell:
     kind: cell
-    description: When the device was signed out; shown once it is.
+    description: When the device was signed out.
   device.list.revoke-button:
     kind: button
-    description: Signs that device out; not on this device nor on a device signed out already.
+    description: Signs that device out.
+    without: [ device.list.current-badge, device.list.revoked-cell ]
     binding:
       action: platform.devices.revoke
       params:

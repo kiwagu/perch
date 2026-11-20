@@ -41,7 +41,7 @@ anchors:
     description: When the account was made.
   console.account.seen-cell:
     kind: cell
-    description: When one of the account's devices was last seen, among its sessions still kept; absent when none is.
+    description: When one of the account's devices was last seen, among its sessions still kept.
   console.account.verified-badge:
     kind: badge
     description: Marks an account whose email is verified.
@@ -53,10 +53,11 @@ anchors:
     description: Marks an operator of the platform.
   console.account.reason-cell:
     kind: cell
-    description: Why the account was banned, as the operator wrote it; shown while it is banned and a reason was given.
+    description: Why the account was banned, as the operator wrote it.
+    with: [ console.account.banned-badge ]
   console.account.organisations.list:
     kind: list
-    description: "The organisations the account is a member of, with its role in each: what a removal refused with last-admin points at; absent when it is in none."
+    description: "The organisations the account is a member of, with its role in each: what a removal refused with last-admin points at."
   console.account.organisations.item:
     kind: item
     description: One organisation of the account.
@@ -115,21 +116,24 @@ anchors:
     description: Bans the account with an optional reason, or lifts its ban.
   console.account.ban.reason-input:
     kind: input
-    description: "Optional: why the account is banned, for operators alone; shown while it is not banned."
+    description: Why the account is banned, for operators alone.
+    without: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.ban
       params:
         reason: console.account.ban.reason-input
   console.account.ban.ban-button:
     kind: button
-    description: Bans the account until an operator lifts the ban, signing its devices out; shown while it is not banned.
+    description: Bans the account until an operator lifts the ban, signing its devices out.
+    without: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.ban
       params:
         id: { search: id }
   console.account.ban.unban-button:
     kind: button
-    description: Lifts the ban; shown while the account is banned.
+    description: Lifts the ban.
+    with: [ console.account.banned-badge ]
     binding:
       action: platform.accounts.unban
       params:
@@ -156,7 +160,8 @@ anchors:
     kind: error
   console.account.verification.resend-button:
     kind: button
-    description: Sends the account the mail whose link verifies its email, again; shown while the email is not verified.
+    description: Sends the account the mail whose link verifies its email, again.
+    without: [ console.account.verified-badge ]
     binding:
       action: platform.accounts.resend-verification
       params:
