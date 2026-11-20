@@ -188,14 +188,40 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['title']}: "sample.title-input": aria-invalid={invalid}, but the contract says aria-invalid={concerns === '<key>' ? true : undefined}`,
       ])
     })
-    it('refuses aria-invalid on a field no error names, in ahead mode too', () => {
+    it('refuses aria-invalid on a field no error names; in ahead mode one in its idiom lags the contract', () => {
       const id = `<Input data-testid="sample.id-input" aria-invalid={concerns === 'id' ? true : undefined} />`
-      const expected = [
-        `view.tsx:${LINE['id']}: "sample.id-input": aria-invalid={concerns === 'id' ? true : undefined}, but no error of its screen names it in its fields; leave it out`,
-      ]
 
-      expect(problemsOf({ id })).toEqual(expected)
-      expect(problemsOf({ id }, { ahead: true })).toEqual(expected)
+      expect(problemsOf({ id })).toEqual([
+        `view.tsx:${LINE['id']}: "sample.id-input": aria-invalid={concerns === 'id' ? true : undefined}, but no error of its screen names it in its fields; leave it out`,
+      ])
+      expect(problemsOf({ id }, { ahead: true })).toEqual([])
+    })
+    it('passes, in ahead mode only, the mark of a field whose error code the contract moved to the form', () => {
+      const contract = facetsContract()
+      const error = screenIn(contract, 'sample').anchors['sample.error']
+
+      if (error === undefined) {
+        throw new Error('the sample has the anchor sample.error')
+      }
+
+      error.fields = { 'title-taken': 'form', failed: 'form' }
+
+      expect(problemsOf({}, { contract })).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input": aria-invalid={${MARK}}, but no error of its screen names it in its fields; leave it out`,
+      ])
+      expect(problemsOf({}, { contract, ahead: true })).toEqual([])
+    })
+    it('refuses, in ahead mode too, a mark the contract does not call for in another idiom or on a control', () => {
+      const changed = {
+        id: '<Input data-testid="sample.id-input" aria-invalid={invalid} />',
+        a: `<Button data-testid="sample.a-button" aria-invalid={concerns === 'a' ? true : undefined} />`,
+      }
+      const elsewhere = 'but no error of its screen names it in its fields; leave it out'
+
+      expect(problemsOf(changed, { ahead: true })).toEqual([
+        `view.tsx:${LINE['id']}: "sample.id-input": aria-invalid={invalid}, ${elsewhere}`,
+        `view.tsx:${LINE['a']}: "sample.a-button": aria-invalid={concerns === 'a' ? true : undefined}, ${elsewhere}`,
+      ])
     })
     it('in ahead mode lets a missing mark by', () => {
       expect(
@@ -228,7 +254,7 @@ describe('facetProblems', () => {
         }),
       ).toEqual([])
     })
-    it('refuses disabled on a control no state handles and on a link, in ahead mode too', () => {
+    it('refuses disabled on a control no state handles and on a link; in ahead mode only the link', () => {
       const changed = {
         c: '<Button data-testid="sample.c-button" disabled={!props.can({ type: \'sample.c-button\' })} />',
         home: '<Link data-testid="sample.home-link" disabled={!props.can({ type: \'sample.home-link\' })} />',
@@ -241,7 +267,8 @@ describe('facetProblems', () => {
       ]
 
       expect(problemsOf(changed)).toEqual(expected)
-      expect(problemsOf(changed, { ahead: true })).toEqual(expected)
+      // A button whose event the contract dropped keeps its enabling until the view follows.
+      expect(problemsOf(changed, { ahead: true })).toEqual(expected.slice(1))
     })
     it('in ahead mode lets a missing disabled by', () => {
       expect(

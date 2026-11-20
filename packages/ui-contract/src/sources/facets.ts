@@ -23,10 +23,20 @@
  * mode too; one the contract calls for and the element lacks, at the anchor's first literal (for
  * a part, the first `testIdFor()` of two literals that builds it), except in ahead mode: the
  * contract runs ahead of the app on a branch, so the app may lag behind it, never go beyond. A
- * prop the kit takes from the facts is never called for.
+ * prop the kit takes from the facts is never called for. Lagging also covers a mark or an enabling
+ * the contract has just stopped calling for: in ahead mode one written in its idiom on a field
+ * (`aria-invalid`) or on a control of `ENABLED_BY_STATE_KINDS` (`disabled`) passes, so a business
+ * commit may move an error's code off a field, or drop a control's event, before the view follows.
  */
 
-import { ENABLED_BY_STATE_KINDS, kindOf, TEXT_FIELD_KINDS, testIdFor, WHOLE_FORM } from '../anchors'
+import {
+  ENABLED_BY_STATE_KINDS,
+  FIELD_KINDS,
+  kindOf,
+  TEXT_FIELD_KINDS,
+  testIdFor,
+  WHOLE_FORM,
+} from '../anchors'
 import { declaredAnchors, own } from '../check'
 import { flowNodes, type Problem, type ScreensFile } from '../files'
 
@@ -65,6 +75,11 @@ interface Facet {
   readonly elsewhere: string
   /** The anchors `elsewhere` holds the prop away from; every anchor when left out. */
   readonly within?: ReadonlySet<string>
+  /**
+   * In ahead mode, the idiom the prop may still be written in where the contract no longer calls
+   * for it, on an anchor of these kinds: the app lags the contract. None for a prop the kit takes.
+   */
+  readonly lags?: { readonly pattern: RegExp; readonly kinds: ReadonlySet<string> }
 }
 
 type Rule = (facets: Facets) => Facet
@@ -110,6 +125,7 @@ const marks: Rule = ({ screens }) => ({
     ),
   ),
   elsewhere: 'no error of its screen names it in its fields; leave it out',
+  lags: { pattern: MARK, kinds: FIELD_KINDS },
 })
 
 /** The enabling of a control by its machine, on each control of a held kind that is an event. */
@@ -154,6 +170,7 @@ const enabling: Rule = ({ screens }) => ({
   ),
   elsewhere:
     "no state enables it: only a button, a tab, a select, a checkbox, a radio or a switch whose anchor is an event of its screen's flow is enabled by its machine; leave it out",
+  lags: { pattern: ENABLE, kinds: ENABLED_BY_STATE_KINDS },
 })
 
 const RULES: readonly Rule[] = [limits, types, marks, enabling]
@@ -167,8 +184,17 @@ const written = (name: string, text: string): string =>
       : `${name}={${text}}`
 
 /** The problems of one facet: each prop written against it, and each one called for and missing. */
-function problemsOf({ name, on, elsewhere, within }: Facet, facets: Facets): Problem[] {
-  const declared = new Set(declaredAnchors(facets.screens).map(({ anchor }) => anchor))
+function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets): Problem[] {
+  const kinds = new Map(
+    declaredAnchors(facets.screens).map(({ anchor, def }) => [anchor, def.kind]),
+  )
+  const declared = new Set(kinds.keys())
+  // The app lags the contract: a prop in its idiom on an anchor of a kind that may carry it.
+  const lagging = (anchor: string, text: string): boolean =>
+    facets.ahead &&
+    lags !== undefined &&
+    lags.kinds.has(kinds.get(anchor) ?? kindOf(anchor)) &&
+    lags.pattern.test(text)
   const props = facets.collected.flatMap(({ file, props: all }) =>
     // An undeclared base is the parts check's problem: no facet problem on top of it.
     all
@@ -181,7 +207,7 @@ function problemsOf({ name, on, elsewhere, within }: Facet, facets: Facets): Pro
     const as = written(name, text)
 
     if (held === undefined) {
-      return within === undefined || within.has(anchor)
+      return (within === undefined || within.has(anchor)) && !lagging(anchor, text)
         ? [{ file, line, message: `"${anchor}": ${as}, but ${elsewhere}` }]
         : []
     }
