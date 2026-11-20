@@ -378,6 +378,39 @@ describe('facetProblems', () => {
       // A key it can read, a computed string literal included, that is not `name` goes on to it.
       expect(problemsOf(grouped(marked, "{ ...{ ['email']: { maxLength: 3 } } }"))).toEqual([])
     })
+    it('holds an element to the anchor its spread supplies in each branch it can follow, and refuses its facts', () => {
+      const idProps = { idProps: "{ 'data-testid': 'sample.id-input' }" }
+      const element = '<Input {...inputProps.id} maxLength={3} />'
+      const refused = `view.tsx:${LINE['id']}: "sample.id-input": maxLength={3}, but ${KIT}`
+
+      // `layoutKey` is 'compact': the member is the id props, whose anchor the element carries.
+      expect(
+        problemsOf({
+          id: element,
+          layoutKey: "'compact'",
+          inputProps: '{ id: idProps, [layoutKey]: { size: 1 } }',
+          ...idProps,
+        }),
+      ).toEqual([refused])
+      // `props.layout` may be 'id': the member is unknown in one branch, and the anchor stands.
+      expect(
+        problemsOf({
+          id: element,
+          inputProps: '{ id: idProps, [props.layout]: { size: 1 } }',
+          ...idProps,
+        }),
+      ).toEqual([refused])
+    })
+    it('takes the key a constant of the file holds as the key, so the property it names replaces the mark', () => {
+      const overrides = '{ ...(useDraft ? { [FIELD_KEY]: { maxLength: 3 } } : {}) }'
+
+      expect(
+        problemsOf({ ...grouped(`{ 'aria-invalid': ${MARK} }`, overrides), FIELD_KEY: "'name'" }),
+      ).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input": maxLength={3}, but ${KIT}`,
+        missing,
+      ])
+    })
     it('reads the anchor a spread supplies, and the facts beside it', () => {
       const title = `<Input {...{ testId: 'sample.title-input', maxLength: 80, 'aria-invalid': ${MARK} }} />`
 

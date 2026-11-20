@@ -81,6 +81,13 @@ describe('suppliedBy', () => {
     'const decided = { name: first, ...{ ...{ name: second } } }',
     "const fieldKey = 'name'",
     'const drafted = { name: nameProps, ...{ ...(ok ? { [fieldKey]: { maxLength: 3 } } : {}) } }',
+    'const unsure = { name: nameProps, ...{ ...(ok ? { [props.fieldKey]: { maxLength: 3 } } : {}) } }',
+    "const layoutKey = 'compact'",
+    "const searchProps = { 'data-testid': 'x.search-input' }",
+    'const inputProps = { search: searchProps, [layoutKey]: { size: 1 } }',
+    'const unsureProps = { search: searchProps, [props.layout]: { size: 1 } }',
+    "const LABEL_PROP = 'aria-label'",
+    'function hidden(LABEL_PROP) { return { [LABEL_PROP]: 1 } }',
     'const getter = { name: nameProps, ...{ get name() { return { maxLength: 3 } } } }',
     'const setter = { name: nameProps, ...{ set name(value) {} } }',
     "const aside = { name: nameProps, ...{ get other() { return 1 }, ['x']: 2 } }",
@@ -156,12 +163,47 @@ describe('suppliedBy', () => {
     expect(supplied(text, 'opaque.name', 'const at').followed).toBe(false)
   })
   it('leaves a member unknown where a property whose key it cannot read, or a getter or a setter, may supply it', () => {
-    for (const member of ['drafted.name', 'getter.name', 'setter.name']) {
+    for (const member of ['unsure.name', 'getter.name', 'setter.name']) {
       const read = supplied(text, member, 'const at')
 
       expect(read.followed).toBe(false)
       expect(read.certain.has('aria-invalid')).toBe(false)
     }
+  })
+  it('reads a computed key that a constant of the file holds as that string, where the key is written', () => {
+    const drafts = supplied(text, 'drafted.name', 'const at')
+
+    // `[fieldKey]` is 'name': the override replaces the mark in one branch, and the other keeps it.
+    expect(drafts.props.map(({ name }) => name)).toEqual(['maxLength', 'aria-invalid'])
+    expect(drafts.followed).toBe(true)
+    expect(drafts.certain.size).toBe(0)
+    expect(suppliedAt(text, 'inputProps.search', 'const at')).toEqual(['data-testid'])
+    expect(supplied(text, 'inputProps.search', 'const at').followed).toBe(true)
+    expect(suppliedAt(text, 'inputProps.compact', 'const at')).toEqual(['size'])
+    expect(suppliedAt(text, '{ [LABEL_PROP]: 1 }', 'const at')).toEqual(['aria-label'])
+    expect(supplied(text, '{ [LABEL_PROP]: 1 }', 'const at').followed).toBe(true)
+  })
+  it('keeps a computed key it cannot state unknown: a parameter, a name the file does not declare, a member', () => {
+    for (const argument of ['hidden(1)', '{ [imported]: 1 }', '{ [props.key]: 1 }']) {
+      expect(supplied(text, argument, 'const at').followed).toBe(false)
+    }
+  })
+  it('goes on past a key it cannot state, with the property before it as one more alternative', () => {
+    const read = supplied(text, 'unsureProps.search', 'const at')
+
+    expect(read.followed).toBe(false)
+    expect(read.props.map(({ name }) => name)).toEqual(['data-testid'])
+    expect(read.certain.size).toBe(0)
+    expect([...read.followedCertain]).toEqual(['data-testid'])
+  })
+  it('says what every branch it can follow supplies, the ones it cannot follow left aside', () => {
+    expect([
+      ...supplied(text, 'ok ? { a: 1, b: 2 } : { a: 3 } ', 'const at').followedCertain,
+    ]).toEqual(['a'])
+    expect([...supplied(text, 'ok ? { a: 1 } : props', 'const at').followedCertain]).toEqual(['a'])
+    expect(supplied(text, 'ok ? { a: 1 } : props', 'const at').certain.size).toBe(0)
+    expect(supplied(text, 'ok && { a: 1 }', 'const at').followedCertain.size).toBe(0)
+    expect(supplied(text, 'props', 'const at').followedCertain.size).toBe(0)
   })
   it('goes on past a property whose key it can read and that is not the key, a computed string literal included', () => {
     expect(suppliedAt(text, 'aside.name', 'const at')).toEqual(['aria-invalid'])

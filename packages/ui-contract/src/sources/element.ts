@@ -2,8 +2,9 @@
  * One JSX element as the sources check reads it (`collect.ts`): its attributes, each prop a spread
  * on it supplies counted as written there, at the spread (`spreads.ts`), and marked partial where
  * some branch of the spread leaves it out; the anchor it carries, written on it or supplied by a
- * spread, as a literal, as `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of
- * its file (`locals.ts`); and where each spread on it the file cannot follow is written.
+ * spread (in every branch of it the file can follow, where another cannot be followed), as a
+ * literal, as `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of its file
+ * (`locals.ts`); and where each spread on it the file cannot follow is written.
  */
 
 import type { Expression, JSXAttributeValue, JSXOpeningElement } from 'oxc-parser'
@@ -53,6 +54,8 @@ export interface ElementAttribute {
   readonly start: number
   /** A spread's prop that some branch of the spread leaves out. */
   readonly partial?: true
+  /** A partial prop that every branch the file can follow supplies, another cannot be followed. */
+  readonly byFollowed?: true
 }
 
 export interface ReadElement {
@@ -131,7 +134,11 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
         : []
     }
 
-    const { props, certain, followed } = suppliedBy(locals, attribute.argument, attribute.start)
+    const { props, certain, followedCertain, followed } = suppliedBy(
+      locals,
+      attribute.argument,
+      attribute.start,
+    )
 
     if (!followed) {
       unfollowed.push(attribute.start)
@@ -143,8 +150,41 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
       spread: value,
       start: attribute.start,
       ...(certain.has(name) ? {} : { partial: true as const }),
+      ...(!certain.has(name) && followedCertain.has(name) ? { byFollowed: true as const } : {}),
     }))
   })
+  const anchorOf = (attribute: ElementAttribute): CarriedAnchor | undefined => {
+    const expression = expressionOf(attribute)
+
+    return (
+      carriedAnchor(attribute.value) ??
+      (expression === undefined ? undefined : anchorIn(locals, expression, expression.start))
+    )
+  }
+  /**
+   * The anchor a spread supplies in every branch the file can follow, the same in each, where
+   * another branch cannot be followed: the element carries it, so its facets are held to it and the
+   * spread the file cannot follow is refused.
+   */
+  const sharedAnchor = (): CarriedAnchor | undefined => {
+    const shared = attributes.filter(
+      ({ spread, byFollowed, name }) =>
+        spread !== undefined && byFollowed === true && isAnchorAttribute(name),
+    )
+    const [first] = shared
+    const found =
+      first === undefined
+        ? []
+        : shared
+            .filter(({ start, name }) => start === first.start && name === first.name)
+            .map(anchorOf)
+    const [one] = found
+
+    return one !== undefined &&
+      found.every((other) => other?.anchor === one.anchor && other.base === one.base)
+      ? one
+      : undefined
+  }
   const written = attributes.find(
     ({ spread, name }) => spread === undefined && isAnchorAttribute(name),
   )
@@ -153,12 +193,7 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
       spread !== undefined && partial !== true && isAnchorAttribute(name),
   )
   const carrier = written ?? supplied
-  const expression = carrier === undefined ? undefined : expressionOf(carrier)
-  const carried =
-    carrier === undefined
-      ? undefined
-      : (carriedAnchor(carrier.value) ??
-        (expression === undefined ? undefined : anchorIn(locals, expression, expression.start)))
+  const carried = carrier === undefined ? sharedAnchor() : anchorOf(carrier)
 
   return { attributes, ...(carried === undefined ? {} : { carried }), unfollowed }
 }

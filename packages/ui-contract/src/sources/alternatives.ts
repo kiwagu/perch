@@ -3,10 +3,10 @@
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
  * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
- * key lets the scan go on before it, a property whose key it cannot read leaves the member
- * unknown), or each object a function of the file returns where it is called (each `return` of
- * its own body, a bare one or a reachable end giving nothing, an end no `return` or `throw`
- * reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
+ * key lets the scan go on before it, a property whose key the file does not state is one more
+ * alternative, unknown), or each object a function of the file returns where it is called (each
+ * `return` of its own body, a bare one or a reachable end giving nothing, an end no `return` or
+ * `throw` reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
  * `useCallback` hands its function on, a `useMemo` holds what its function returns; an `async`
  * function or a generator gives a Promise or an iterator, which no object the file writes is).
  */
@@ -18,7 +18,7 @@ import type {
   ObjectExpression,
 } from 'oxc-parser'
 
-import { keyName, unwrap } from './values'
+import { statedKeyName, unwrap } from './values'
 
 /**
  * One thing a value may be: an object, `null` for nothing (`null`, `false`, `undefined`, a function
@@ -87,12 +87,13 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
      * `level`: a property with the key decides; a spread decides for each branch it may take that
      * has the key, and for a branch that lacks it, at any depth, the scan goes on with the
-     * properties before the spread. A property the scan cannot read leaves the member unknown, as
-     * it may be the key: one whose key is no name or string (`[name]`), and a getter or a setter
-     * with the key. `absent` says what holds where no property has the key: the scan of the object
-     * that spread this one goes on, and only the outermost scan, of the member itself, says
-     * nothing. Each object spread in turn is one level deeper, so no cycle runs on: at `DEPTH`
-     * the member is unknown.
+     * properties before the spread. A getter or a setter with the key is the key and leaves the
+     * member unknown. A property whose key the file does not state (`[props.name]`) may be the key
+     * or not: the member is unknown there and the scan goes on, so the properties before it stand
+     * as more alternatives. `absent` says what holds where no property has the key: the scan of
+     * the object that spread this one goes on, and only the outermost scan, of the member itself,
+     * says nothing. Each object spread in turn is one level deeper, so no cycle runs on: at
+     * `DEPTH` the member is unknown.
      */
     const memberIn = (
       properties: ObjectExpression['properties'],
@@ -121,10 +122,11 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         }
 
         if (property !== undefined) {
-          const named = keyName(property.key, property.computed)
+          const named = statedKeyName(property.key, property.computed, names.valueNamed)
 
           if (named === undefined) {
-            return [undefined]
+            // It may be the key or not: the member is unknown, and the properties before it stand.
+            return [undefined, ...memberIn(properties, index - 1, key, level, absent)]
           }
 
           if (named === key) {

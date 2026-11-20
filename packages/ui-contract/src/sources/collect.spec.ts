@@ -291,6 +291,76 @@ describe('collectFromSource', () => {
       `x.tsx:2: ${UNFOLLOWED_SPREAD('x.form.email-input')}`,
     ])
   })
+  it('holds an element to the anchor its spread supplies in every branch the file can follow', () => {
+    const base = [
+      "const layoutKey = 'compact'",
+      "const searchProps = { 'data-testid': 'x.form.search-input' }",
+    ]
+    const stated = collectFromSource(
+      [
+        ...base,
+        'const inputProps = { search: searchProps, [layoutKey]: { size: 1 } }',
+        'const a = <Input {...inputProps.search} maxLength={3} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // `[layoutKey]` is 'compact', so `inputProps.search` is the search props and nothing else.
+    expect(stated.props).toEqual([
+      { anchor: 'x.form.search-input', name: 'maxLength', text: '3', line: 4 },
+    ])
+    expect(stated.problems).toEqual([])
+
+    const unsure = collectFromSource(
+      [
+        ...base,
+        'const inputProps = { search: searchProps, [props.layout]: { size: 1 } }',
+        'const a = <Input {...inputProps.search} maxLength={3} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // `[props.layout]` may be 'search': one branch cannot be followed, the other still gives the anchor.
+    expect(unsure.props).toEqual([
+      { anchor: 'x.form.search-input', name: 'maxLength', text: '3', line: 4 },
+    ])
+    expect(unsure.problems.map(formatProblem)).toEqual([
+      `x.tsx:4: ${UNFOLLOWED_SPREAD('x.form.search-input')}`,
+    ])
+  })
+  it('leaves an anchor unread where the branches the file can follow supply different ones, or one leaves it out', () => {
+    const found = collectFromSource(
+      [
+        "const a = <Input {...(ok ? { 'data-testid': 'x.form.a-input' } : more ? { 'data-testid': 'x.form.b-input' } : props)} maxLength={3} />",
+        "const b = <Input {...(ok ? { 'data-testid': 'x.form.c-input' } : more ? { id: 'c' } : props)} maxLength={3} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // No anchor all the followed branches share: the element reads none, as before.
+    expect(found.props).toEqual([])
+    expect(found.problems).toEqual([])
+  })
+  it('reads a computed key a constant of the file holds, and refuses one it cannot state, on an anchored element', () => {
+    const found = collectFromSource(
+      [
+        "const LABEL_PROP = 'aria-label'",
+        'function field(KEY) { return <Input data-testid="x.form.d-input" {...{ [KEY]: 1 }} /> }',
+        'function hidden(LABEL_PROP) { return <Input data-testid="x.form.e-input" {...{ [LABEL_PROP]: 1 }} /> }',
+        'const a = <Input data-testid="x.form.search-input" {...{ [LABEL_PROP]: t(\'search\') }} />',
+        'const b = <Input data-testid="x.form.b-input" {...{ [imported]: 1 }} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A constant of the file is its string: no problem. A parameter that hides it, a name of
+    // another file and a parameter are not stated: the spread is refused.
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:2: ${UNFOLLOWED_SPREAD('x.form.d-input')}`,
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('x.form.e-input')}`,
+      `x.tsx:5: ${UNFOLLOWED_SPREAD('x.form.b-input')}`,
+    ])
+  })
   it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
     const found = collectFromSource(
       [
