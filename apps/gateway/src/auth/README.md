@@ -142,11 +142,13 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email of at most the `email` value's length and a password that is not empty, as strings,
-answers 400 `bad-request` before anything is read for the email, alike for any email (Better Auth
-would hash an empty password to time an unknown email's answer, which fails, and check a known
-one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
-is the email counted. Better Auth's answers reach the client
+an email of at most the `email` value's length and a password, as strings, answers 400
+`bad-request` before anything is read for the email, alike for any email. A password of a length
+no account's password has (outside the `password` value's, the empty one included:
+`password-length.ts`) answers 401 as a wrong one does and counts among the email's failed
+sign-ins, once the email found its place, nothing read for it and Better Auth not asked (it would
+hash an empty password to time an unknown email's answer, which fails); any other reaches Better
+Auth as that very JSON, so the email whose password is checked is the email counted. Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
@@ -387,11 +389,12 @@ most, each replaced by the next.
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
-credential checks, answers 400 `bad-request` for a body without a current password (an empty one
-counts as none), 400 `password-rejected` for a new password that breaks the rules,
+credential checks, answers 400 `bad-request` for a body without a current password, 400
+`password-rejected` for a new password that breaks the rules,
 and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
-`invalid-credentials`, a right one clears them. In the account's turn, the current password is
+`invalid-credentials`, as one of a length no account's password has does without being checked;
+a right one clears them. In the account's turn, the current password is
 checked against the credential row and the new one hashed (`AccountPasswords.change`); then one
 transaction (`surql/password-change-commit.surql`) makes sure the caller's session is still live
 (401 `unauthorized` when it ended while the change waited) and the row still holds the hash that
@@ -403,14 +406,15 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
 its token and `X-Perch-Device`. After a credential check of its address, a body without a
-password (an empty one counts as none) answers 400 `bad-request` and a new email that is not
+password answers 400 `bad-request` and a new email that is not
 an email (empty, longer than the `email` value's length, or of any other shape) answers 400
 `email-invalid`; then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
 waited), with the account's email as it is then, and the password must find a place among that
 email's failed sign-ins and match the credential row (`AccountPasswords.matches`), a wrong one
-answering 400 `invalid-credentials`. Its earlier pending change then ends; when no account has the
+answering 400 `invalid-credentials`, as one of a length no account's password has does without
+being checked. Its earlier pending change then ends; when no account has the
 new email (the account's own counts as taken), a new change
 is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
 key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
@@ -476,7 +480,7 @@ the addressee read before the account went (`AccountTeardown.addressee`) and rea
 
 A signed-in device asks to delete its account with `POST /auth/request-account-deletion`
 `{ password }`, its token and `X-Perch-Device`. After a credential check of its address (429) and
-a body it can read, with a password that is not empty (400 `bad-request`), one of the address's mails and one of the account's 3
+a body it can read, with a password (400 `bad-request`), one of the address's mails and one of the account's 3
 requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
 change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
 it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
@@ -699,9 +703,9 @@ error carries one.
   uniform answers and their floors, each limit, the single use, the newest link only, the
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
-  change and a confirmation, an empty password answered alike for any email before anything is
-  read, an empty current password, new email's password or deletion's password answered
-  `bad-request`, a sign-in that checked the old
+  change and a confirmation, a password of no account's length (empty, 9 or 36 characters) refused
+  and counted as a wrong one at a sign-in, alike for any email and before anything is read, and
+  at a change of the password, of the email and a deletion's request, a sign-in that checked the old
   password beside a reset or a change, or whose email moved to another account meanwhile, or to
   one and away or back again, left with no working session and no other account's start, the
   start a

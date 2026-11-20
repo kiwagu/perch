@@ -30,6 +30,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
+import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from. */
@@ -188,35 +189,53 @@ describe('authHandler, a sign-in and what runs beside it', () => {
     expect(await liveSessions(mounted, ann.identity)).toEqual(['desk'])
   }, 30_000)
 
-  it('answers an empty password alike for an email that has an account and one that has none, before anything is read', async () => {
-    const queries: string[] = []
-    const mounted = await mountedOnRealAuth({
-      directory: (local) =>
-        interceptQueries(local, (text) => {
-          queries.push(text)
-        }),
-    })
+  it.each(OUT_OF_LENGTH)(
+    'refuses %s as a wrong one, alike for an email that has an account and one that has none, before anything is read',
+    async (_, password) => {
+      const queries: string[] = []
+      const mounted = await mountedOnRealAuth({
+        directory: (local) =>
+          interceptQueries(local, (text) => {
+            queries.push(text)
+          }),
+      })
 
-    await signedInOn(mounted, ANN, ['laptop'])
-    queries.splice(0)
+      await signedInOn(mounted, ANN, ['laptop'])
+      queries.splice(0)
 
-    const answers = await Promise.all(
-      [ANN, GHOST].map((email) =>
-        mounted.route(
-          postTo('/auth/sign-in/email', { email, password: '' }, { device: 'desk' }),
-          FROM,
+      const answers = await Promise.all(
+        [ANN, GHOST].map((email) =>
+          mounted.route(
+            postTo('/auth/sign-in/email', { email, password }, { device: 'desk' }),
+            FROM,
+          ),
         ),
-      ),
-    )
+      )
 
-    for (const answer of answers) {
-      expect(answer?.status).toBe(400)
-      expect(await answer?.json()).toEqual({ code: 'bad-request' })
-    }
+      for (const answer of answers) {
+        expect(answer?.status).toBe(401)
+        expect(await answer?.json()).toEqual({ code: 'INVALID_EMAIL_OR_PASSWORD' })
+      }
 
-    // Better Auth was not asked: it reads the email's account first.
-    expect(queries).toEqual([])
-  })
+      // Better Auth was not asked: it reads the email's account first.
+      expect(queries).toEqual([])
+    },
+  )
+
+  it.each(OUT_OF_LENGTH)(
+    'counts %s among the failed sign-ins of its email, as a wrong one',
+    async (_, password) => {
+      const mounted = await mountedOnRealAuth()
+
+      await signedInOn(mounted, ANN, ['laptop'])
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      expect((await mounted.route(signInRequest(ANN, password, 'desk'), FROM))?.status).toBe(401)
+      // The tenth failure spent them: the right password waits too.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    },
+    60_000,
+  )
 
   it('answers a sign-in that names no password at once, for an email that has an account as for one that has none, whatever runs for them', async () => {
     const mounted = await mountedOnRealAuth()

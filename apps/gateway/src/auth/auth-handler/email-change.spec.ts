@@ -23,6 +23,7 @@ import {
   signInRequest,
   turnsAsked,
 } from './__fixtures__/mount'
+import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { CHANGE_EMAIL_FLOOR_MS } from './email-change'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
@@ -224,15 +225,24 @@ describe('authHandler, the request to change the email', () => {
     expect((await mounted.route(confirm(second), FROM))?.status).toBe(200)
   })
 
-  it('refuses an empty password with bad-request, not as a wrong one, mailing nothing', async () => {
-    const mounted = await mountedOnRealAuth()
-    const ann = await signedInOn(mounted, ANN, ['laptop'])
-    const empty = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, ''), FROM)
+  it.each(OUT_OF_LENGTH)(
+    'refuses %s as a wrong one, mailing nothing, and counts it as a failed sign-in',
+    async (_, password) => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    expect(empty?.status).toBe(400)
-    expect(await empty?.json()).toEqual({ code: 'bad-request' })
-    expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
-  })
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      const refused = await mounted.route(changeTo(ann.on('laptop'), NEW_EMAIL, password), FROM)
+
+      expect(refused?.status).toBe(400)
+      expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
+      expect(mounted.outbox.to(NEW_EMAIL)).toEqual([])
+      // The tenth failure spent the account's failed sign-ins.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    },
+    60_000,
+  )
 
   it('answers a request without a live session of its device 401', async () => {
     const mounted = await mountedOnRealAuth()

@@ -18,8 +18,8 @@ import { confirmPassword } from './password-confirmation'
 import { badRequest, internal, refused } from './requests'
 import { type MountCaller, signedIn } from './signed-in'
 
-/** The password is the account's own, so never empty: an empty one is no guess. */
-const requestBody = z.object({ password: z.string().min(1) })
+/** The password is confirmed as typed: one of no account's length is a wrong one. */
+const requestBody = z.object({ password: z.string() })
 const deleteBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
 
 /** 409 `last-admin`: the account is the only admin of an organisation with other members. */

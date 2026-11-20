@@ -23,8 +23,8 @@ import { type MountCaller, signedIn } from './signed-in'
  */
 export const CHANGE_EMAIL_FLOOR_MS = 800
 
-/** The password is the account's own, so never empty: an empty one is no guess. */
-const changeBody = z.object({ email: z.string(), password: z.string().min(1) })
+/** The password is confirmed as typed: one of no account's length is a wrong one. */
+const changeBody = z.object({ email: z.string(), password: z.string() })
 /** A new email as the change takes it: an email of at most the `email` value's length, trimmed. */
 const newEmailShape = z.email().max(CONTRACT_VALUES.email.maxLength)
 const confirmBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })

@@ -29,6 +29,7 @@ import {
   turnsAsked,
   welcomed,
 } from './__fixtures__/mount'
+import { failNineSignIns, OUT_OF_LENGTH } from './__fixtures__/out-of-length'
 import { SIGN_UP_FLOOR_MS } from './sign-up'
 
 /** The client address a request comes from, unless a test names another. */
@@ -145,17 +146,25 @@ describe('authHandler, the request to delete the account', () => {
     expect(await answer?.json()).toEqual({ code: 'bad-request' })
   })
 
-  it('answers a body whose password is empty bad-request, as one that names none', async () => {
-    const mounted = await mountedOnRealAuth()
-    const ann = await signedInOn(mounted, ANN, ['laptop'])
-    const answer = await mounted.route(
-      postTo('/auth/request-account-deletion', { password: '' }, ann.on('laptop')),
-      FROM,
-    )
+  it.each(OUT_OF_LENGTH)(
+    'refuses %s as a wrong one, mailing nothing, and counts it as a failed sign-in',
+    async (_, password) => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
 
-    expect(answer?.status).toBe(400)
-    expect(await answer?.json()).toEqual({ code: 'bad-request' })
-  })
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+
+      const refused = await mounted.route(askToDelete(ann.on('laptop'), password), FROM)
+
+      expect(refused?.status).toBe(400)
+      expect(await refused?.json()).toEqual({ code: 'invalid-credentials' })
+      // The sign-up's mail alone: no mail to delete the account.
+      expect(mounted.outbox.to(ANN)).toHaveLength(1)
+      // The tenth failure spent the account's failed sign-ins.
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+    },
+    60_000,
+  )
 
   it('answers last-admin to the only admin of an organisation with other members, mailing nothing, until they are removed', async () => {
     const mounted = await mountedOnRealAuth()
