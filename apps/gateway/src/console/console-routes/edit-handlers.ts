@@ -2,9 +2,9 @@ import { okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { MAX_EMAIL } from '../../auth/account-email'
 import { profileNameOf } from '../../auth/profile-name'
 import { readBody } from '../../read-body'
 import { errorAnswer, rateLimited, refusalAnswer } from '../console-refusal'
@@ -19,8 +19,11 @@ const renameBody = z.object({ name: z.string() })
 /** What an operator sends to change an account's email: the new email, held to its shape below. */
 const emailBody = z.object({ email: z.string() })
 
-/** A new email as the account's own change takes it: lower case, trimmed, at most 254 characters. */
-const newEmailShape = z.email().max(MAX_EMAIL)
+/**
+ * A new email as the account's own change takes it: lower case, trimmed, at most the `email`
+ * value's length.
+ */
+const newEmailShape = z.email().max(CONTRACT_VALUES.email.maxLength)
 
 /**
  * The console's changes of an account, each for an operator, on the account the path's id names
@@ -30,19 +33,19 @@ const newEmailShape = z.email().max(MAX_EMAIL)
  * after the other. Each answers 204 once done.
  *
  * - rename (`{ name }`): the name held to the profile page's rule (trimmed, 400 `name-required`
- *   when nothing is left, 400 `name-too-long` past 80 characters), then, in the account's turn,
- *   written into its profile through its private region (`ProfileNames.rename`), so its devices
- *   show it as any change of the profile; an account that has no profile yet (it never signed
- *   in) has no name to set: 409 `failed`, nothing written.
- * - email (`{ email }`): the account's own change of its email, without its password: a new
- *   email that is no email (in lower case and trimmed, at most 254 characters) answers 400
- *   `email-invalid` before anything is taken; then one of the operator's address's mails and one
- *   of the account's three changes in a quarter of an hour are taken
- *   (`RequestLimits.emailChangeMail`, 429 `rate-limited`); in the account's turn, the account's
- *   own email, or one another account holds, answers 409 `email-taken`, nothing changed and
- *   nothing sent; any other ends the account's pending change, keeps the new one and starts the
- *   mail to the new email with its link (`EmailChanges`, `AccountMails.confirmEmail`). The
- *   account keeps its email until the link is opened, which also marks the new one verified.
+ *   when nothing is left, 400 `name-too-long` past the `profile.name` field's length), then, in the
+ *   account's turn, written into its profile through its private region (`ProfileNames.rename`), so
+ *   its devices show it as any change of the profile; an account that has no profile yet (it never
+ *   signed in) has no name to set: 409 `failed`, nothing written.
+ * - email (`{ email }`): the account's own change of its email, without its password: a new email
+ *   that is no email (in lower case and trimmed, at most the `email` value's length) answers 400
+ *   `email-invalid` before anything is taken; then one of the operator's address's mails and one of
+ *   the account's three changes in a quarter of an hour are taken (`RequestLimits.emailChangeMail`,
+ *   429 `rate-limited`); in the account's turn, the account's own email, or one another account
+ *   holds, answers 409 `email-taken`, nothing changed and nothing sent; any other ends the
+ *   account's pending change, keeps the new one and starts the mail to the new email with its link
+ *   (`EmailChanges`, `AccountMails.confirmEmail`). The account keeps its email until the link is
+ *   opened, which also marks the new one verified.
  */
 export function editHandlers(options: ConsoleRoutesOptions) {
   const failed = errorAnswer(options.onFailure)

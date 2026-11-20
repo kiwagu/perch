@@ -61,9 +61,9 @@ change, in the auth mount, takes the identity's turn and then the new email's. W
 taken the identity's comes first and the email's inside it, never the other way round, so the two
 never wait on each other in a circle.
 
-- A rename (`edit-handlers.ts`) holds the name to the profile page's rule (trimmed, 1 to 80
-  characters) and writes it through `ProfileNames`; an account without a profile answers 409
-  `failed` (the card offers no rename then, so only a race meets it).
+- A rename (`edit-handlers.ts`) holds the name to the profile page's rule (trimmed, 1 to the
+  `profile.name` field's length) and writes it through `ProfileNames`; an account without a profile
+  answers 409 `failed` (the card offers no rename then, so only a race meets it).
 - A change of the email (`edit-handlers.ts`) is the account's own change of its email without its
   password (`auth/README.md`): one of the operator's address's mails and one of the account's
   three changes in a quarter of an hour; in the account's turn, an email another account holds,
@@ -115,27 +115,28 @@ its allowance 429 `rate-limited` with `Retry-After`; a failure of the gateway an
   console answers, `CONSOLE_PATHS`, which the spec that holds the routes to the platform's actions
   reads and the targets answer a path through, the operator caller, the action's account and its turn, the read, edit, ban, mail and
   removal handlers and the routes that answer them), each for an operator alone:
-  - `GET /console/accounts?q&page&size`: 200 `{ accounts, total }`, page `page` (from 1, default
-    1) of `size` accounts (10, 25 or 50, default 25) whose email or shown name holds `q` (up to 254
-    characters; absent or empty, every account), each `{ id, name, email, emailVerified, banned,
-    operator, createdAt }`; a page past the last holds none. A query naming another key, a key
-    twice or a value out of its schema answers 400 `bad-request`.
+  - `GET /console/accounts?q&page&size`: 200 `{ accounts, total }`, page `page` (from 1, default 1)
+    of `size` accounts (10, 25 or 50, default 25) whose email or shown name holds `q` (up to the
+    `account-search` value's length; absent or empty, every account), each `{ id, name, email,
+    emailVerified, banned, operator, createdAt }`; a page past the last holds none. A query naming
+    another key, a key twice or a value out of its schema answers 400 `bad-request`.
   - `GET /console/accounts/:id`: 200 `{ account }`, `{ id, name, email, emailVerified, createdAt,
     hasProfile, lastSeenAt, operator, banned, banReason, organisations }`, `lastSeenAt` and
     `banReason` null when the account has none, `organisations` each `{ key, name, role }`; 404
     `account-gone` for an id no account has, of the form of an identity id or not, 400
-    `bad-request` for an id of more than 64 characters (`MAX_PATH_ID`, `src/path-id.ts`), at every
-    path of an account, before any account is looked for.
+    `bad-request` for an id longer than the `id` value allows (`src/path-id.ts`), at every path of
+    an account, before any account is looked for.
   - `POST /console/accounts/:id/rename` with `{ name }`: 204 once the profile carries the name,
-    trimmed; 400 `name-required` (nothing left once trimmed) or `name-too-long` (past 80
-    characters), 409 `failed` for an account that has no profile yet.
-  - `POST /console/accounts/:id/email` with `{ email }`: 204 once the mail with the change's link
-    is on its way to the new email (in lower case, trimmed); 400 `email-invalid` (no email, or past
-    254 characters, before any allowance is taken), 409 `email-taken` (another account's email or
-    the account's own), 429 `rate-limited` past the account's three changes in a quarter of an hour.
-  - `POST /console/accounts/:id/ban` with `{ reason? }` (at most 500 characters once trimmed,
-    else 400 `bad-request`): 204 once the account is banned and its sessions ended, then its
-    sockets closed with 4004; 409 `own-account` for the operator's own account.
+    trimmed; 400 `name-required` (nothing left once trimmed) or `name-too-long` (past the
+    `profile.name` field's length), 409 `failed` for an account that has no profile yet.
+  - `POST /console/accounts/:id/email` with `{ email }`: 204 once the mail with the change's link is
+    on its way to the new email (in lower case, trimmed); 400 `email-invalid` (no email, or past the
+    `email` value's length, before any allowance is taken), 409 `email-taken` (another account's
+    email or the account's own), 429 `rate-limited` past the account's three changes in a quarter of
+    an hour.
+  - `POST /console/accounts/:id/ban` with `{ reason? }` (at most the `ban-reason` value's length
+    once trimmed, else 400 `bad-request`): 204 once the account is banned and its sessions ended,
+    then its sockets closed with 4004; 409 `own-account` for the operator's own account.
   - `POST /console/accounts/:id/unban`: 204 once the ban is lifted; nothing ends, nothing closes.
   - `POST /console/accounts/:id/sign-out`: 204 once every session of the account ended `revoked`,
     then its sockets closed with 4001; 409 `own-account` for the operator's own account.

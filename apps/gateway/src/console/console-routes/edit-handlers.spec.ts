@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import {
   holdTurn,
@@ -27,6 +28,14 @@ const CAT = 'cat@example.test'
 const NEW_EMAIL = 'robert@elsewhere.test'
 
 const MINUTE_MS = 60 * 1000
+
+/** The most characters a name and an email have, as the contract says it. */
+const { maxLength: MAX_NAME } = CONTRACT_VALUES['profile.name']
+const { maxLength: MAX_ADDRESS } = CONTRACT_VALUES.email
+
+/** An email of exactly `length` characters. */
+const emailOf = (length: number): string =>
+  `${'r'.repeat(length - '@example.test'.length)}@example.test`
 
 /** Another client address, which nothing the operator asks charges. */
 const ELSEWHERE = '203.0.113.20'
@@ -58,10 +67,10 @@ describe('consoleRoutes: POST /console/accounts/:id/rename', () => {
     expect(mounted.consoleFailures).toEqual([])
   })
 
-  it('takes a name of 80 characters once trimmed', async () => {
+  it('takes a name of the limit once trimmed', async () => {
     const mounted = await consoleOnMount()
     const { bob } = await bobWithProfile(mounted)
-    const name = 'r'.repeat(80)
+    const name = 'r'.repeat(MAX_NAME)
 
     expect((await mounted.act(bob.identity, 'rename', { name: ` ${name} ` })).status).toBe(204)
     expect((await mounted.card(bob.identity))?.name).toBe(name)
@@ -70,7 +79,7 @@ describe('consoleRoutes: POST /console/accounts/:id/rename', () => {
   it.each([
     { name: '', code: 'name-required' },
     { name: '   ', code: 'name-required' },
-    { name: 'r'.repeat(81), code: 'name-too-long' },
+    { name: 'r'.repeat(MAX_NAME + 1), code: 'name-too-long' },
   ])('refuses the name "$name" 400 $code, writing nothing', async ({ name, code }) => {
     const mounted = await consoleOnMount()
     const { bob, device } = await bobWithProfile(mounted)
@@ -201,8 +210,8 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
     { what: 'an empty email', email: '' },
     { what: 'a text that is no email', email: 'robert' },
     {
-      what: 'an email over 254 characters',
-      email: `${'r'.repeat(255 - '@example.test'.length)}@example.test`,
+      what: 'an email past the longest length',
+      email: emailOf(MAX_ADDRESS + 1),
     },
   ])(
     "refuses $what 400 email-invalid, mailing nothing and taking none of the account's changes",
@@ -224,10 +233,10 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
     },
   )
 
-  it('takes an email of 254 characters, the longest an address can be, and mails it', async () => {
+  it('takes an email of the longest length and mails it', async () => {
     const mounted = await consoleOnMount()
     const bob = await signedInOn(mounted, BOB, ['desk'])
-    const longest = `${'r'.repeat(254 - '@example.test'.length)}@example.test`
+    const longest = emailOf(MAX_ADDRESS)
 
     expect((await mounted.act(bob.identity, 'email', { email: longest })).status).toBe(204)
     expect((await mounted.outbox.next(longest)).subject).toBe('Confirm your new email for Perch')

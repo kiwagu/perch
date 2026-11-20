@@ -142,7 +142,7 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email of at most 254 characters (`MAX_EMAIL`) and a password that is not empty, as strings,
+an email of at most the `email` value's length and a password that is not empty, as strings,
 answers 400 `bad-request` before anything is read for the email, alike for any email (Better Auth
 would hash an empty password to time an unknown email's answer, which fails, and check a known
 one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
@@ -168,14 +168,14 @@ whether the email has an account. One email's sign-ups run one at a time (the ac
 otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
 sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
 address's verification mails, whatever its email (429 when they are spent); a body that names no
-email, no password or no name, or an email of more than 254 characters (`MAX_EMAIL`, as every
+email, no password or no name, or an email longer than the `email` value allows (as every
 body's email is held to), answers 400 `bad-request`. The password must keep the rules of a new
-password (`keepsPasswordRules` of `@workspace/kernel`: 10 to 35 characters, only Latin letters,
-digits and the 32 printable ASCII symbols, with at least one digit, one uppercase letter, one
-lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at once,
-before the email's turn, Better Auth and the directory, so the refusal reads nothing of the email.
-The name must keep the rule of a profile's name (`profileNameOf`: 1 to 80 characters once trimmed,
-as the directory's schema holds a profile's); one that breaks it answers 400 `name-required` or
+password (`keepsPasswordRules` of `@workspace/kernel`: the length of the `new-password` value, only
+Latin letters, digits and the 32 printable ASCII symbols, with at least one digit, one uppercase
+letter, one lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at
+once, before the email's turn, Better Auth and the directory, so the refusal reads nothing of the
+email. The name must keep the rule of a profile's name (`profileNameOf`: 1 to the `profile.name`
+field's length in characters once trimmed); one that breaks it answers 400 `name-required` or
 `name-too-long` at once, on the same terms, whatever the email.
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
 which it checks on a new password only: a sign-in checks no rule, so an account whose password was
@@ -404,8 +404,8 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
 its token and `X-Perch-Device`. After a credential check of its address, a body without a
 password (an empty one counts as none) answers 400 `bad-request` and a new email that is not
-an email (empty, longer than 254 characters, or of any other shape) answers 400 `email-invalid`;
-then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
+an email (empty, longer than the `email` value's length, or of any other shape) answers 400
+`email-invalid`; then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
 waited), with the account's email as it is then, and the password must find a place among that
@@ -554,8 +554,8 @@ holds, on the device the request names (the Bearer caller, `bearer-caller.ts`):
   Neither a token nor a device's own id is ever sent: a hello binds by that id.
 - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's sockets
   are closed with 4001. A session that ended already answers 204 with nothing closed, so the
-  device's later session keeps its sockets. An id of more than 64 characters (`MAX_PATH_ID`,
-  `src/path-id.ts`) answers 400 `bad-request` before any session is looked for; any other id that
+  device's later session keeps its sockets. An id longer than the `id` value allows
+  (`src/path-id.ts`) answers 400 `bad-request` before any session is looked for; any other id that
   is not one of the caller's sessions answers 404 `no-such-device`.
 - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller has ended, the
   asking one included, and every socket of the identity is closed with 4001.
@@ -635,12 +635,12 @@ error carries one.
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
   organisation routes, and the caller's email and session row besides), `accountEmail`
-  (`account-email.ts`, an email as the invitations take it) with `MAX_EMAIL`, the longest an
-  email in any body may be, `profileNameOf` (`profile-name.ts`: a name as a profile takes it, as
-  a sign-up and an operator's rename hold it) and `identityByEmail` (`identity-by-email.ts`: the
-  one lookup of an identity by its email, in any case, answering its key and email or none;
-  `AuthSessions.identityOf` and the organisations' invites use it, each deciding what none
-  means).
+  (`account-email.ts`, an email as the invitations take it, at most the `email` value's length, the
+  longest an email in any body may be), `profileNameOf` (`profile-name.ts`: a name as a profile
+  takes it, as a sign-up and an operator's rename hold it) and `identityByEmail`
+  (`identity-by-email.ts`: the one lookup of an identity by its email, in any case, answering its
+  key and email or none; `AuthSessions.identityOf` and the organisations' invites use it, each
+  deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session for a row written admitted, a sign-in's admission

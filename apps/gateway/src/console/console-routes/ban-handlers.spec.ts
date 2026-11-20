@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 
 import { sessionStates } from '../../auth/__fixtures__/account-ban'
@@ -30,6 +31,9 @@ afterEach(closeConsoleAuth)
 
 /** The client address every request comes from. */
 const ADDRESS = '203.0.113.1'
+
+/** The most characters a ban's reason has, as the contract says it. */
+const { maxLength: MAX_REASON } = CONTRACT_VALUES['ban-reason']
 
 /** A close the routes asked for, with what the directory held of the account as it was asked. */
 interface SeenClose {
@@ -181,16 +185,16 @@ describe('consoleRoutes: POST /console/accounts/:id/ban', () => {
     expect(await banOf(auth.local, bob.identity)).toEqual({ banned: true })
   })
 
-  it('takes a reason of 500 characters', async () => {
+  it('takes a reason of the limit', async () => {
     const { auth, bob, act } = await served()
-    const reason = 'x'.repeat(500)
+    const reason = 'x'.repeat(MAX_REASON)
 
     expect((await act('ban', { reason })).status).toBe(204)
     expect(await banOf(auth.local, bob.identity)).toEqual({ banned: true, ban_reason: reason })
   })
 
   it.each([
-    { name: 'a reason over 500 characters', body: { reason: 'x'.repeat(501) } },
+    { name: 'a reason past the limit', body: { reason: 'x'.repeat(MAX_REASON + 1) } },
     { name: 'a reason that is no text', body: { reason: 7 } },
     { name: 'a body that is not JSON', body: 'not json' },
     { name: 'no body', body: undefined },

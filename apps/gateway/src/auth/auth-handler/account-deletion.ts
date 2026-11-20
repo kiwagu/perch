@@ -3,6 +3,7 @@ import { match } from 'ts-pattern'
 
 import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -19,7 +20,7 @@ import { type MountCaller, signedIn } from './signed-in'
 
 /** The password is the account's own, so never empty: an empty one is no guess. */
 const requestBody = z.object({ password: z.string().min(1) })
-const deleteBody = z.object({ token: z.string().min(1).max(4096) })
+const deleteBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
 
 /** 409 `last-admin`: the account is the only admin of an organisation with other members. */
 const lastAdmin = (): Response => refused(409, 'last-admin')

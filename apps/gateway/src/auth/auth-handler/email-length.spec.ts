@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
+
 import {
   mountedOnFakeAuth,
   mountedOnRealAuth,
@@ -16,8 +18,8 @@ import { SIGN_UP_FLOOR_MS } from './sign-up'
 /** The client address a request comes from. */
 const FROM = '203.0.113.7'
 
-/** The longest email an address can be. */
-const LONGEST = 254
+/** The longest email an address can be, as the contract says it. */
+const LONGEST = CONTRACT_VALUES.email.maxLength
 
 /** An email of exactly `length` characters. */
 const emailOf = (length: number): string =>
@@ -27,7 +29,7 @@ const emailOf = (length: number): string =>
 const accepted = () => Response.json({ token: null, user: {}, status: true })
 
 describe('authHandler, the longest email a body names', () => {
-  it('takes the sign-up of an email of 254 characters and refuses one of 255, Better Auth not asked', async () => {
+  it('takes the sign-up of the longest email and refuses one a character longer, Better Auth not asked', async () => {
     const { route, clock, received } = mountedOnFakeAuth(accepted)
     const taken = route(signUpRequest(emailOf(LONGEST)), FROM)
 
@@ -42,7 +44,7 @@ describe('authHandler, the longest email a body names', () => {
     expect(received).toHaveLength(1)
   })
 
-  it('asks Better Auth to sign in an email of 254 characters and refuses one of 255 at once', async () => {
+  it('asks Better Auth to sign in the longest email and refuses one a character longer at once', async () => {
     const { route, received } = mountedOnFakeAuth(() =>
       Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 }),
     )
@@ -58,7 +60,7 @@ describe('authHandler, the longest email a body names', () => {
     expect(received).toHaveLength(1)
   })
 
-  it('takes the resend to an email of 254 characters and refuses one of 255, Better Auth not asked', async () => {
+  it('takes the resend to the longest email and refuses one a character longer, Better Auth not asked', async () => {
     const { route, received } = mountedOnFakeAuth(accepted)
 
     expect((await route(resendRequest(emailOf(LONGEST)), FROM))?.status).toBe(202)
@@ -71,7 +73,7 @@ describe('authHandler, the longest email a body names', () => {
     expect(received).toHaveLength(1)
   })
 
-  it('takes the request for a reset mail of an email of 254 characters and refuses one of 255', async () => {
+  it('takes the request for a reset mail of the longest email and refuses one a character longer', async () => {
     const mounted = await mountedOnRealAuth()
     const ask = (email: string) =>
       mounted.route(postTo('/auth/request-password-reset', { email }), FROM)

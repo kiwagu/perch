@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
@@ -16,14 +17,13 @@ import {
 } from '../organisation-http'
 import type { Organisations } from '../organisations'
 
-/** The longest value of a token or an invitation the routes read: far above a signed token. */
-const MAX_VALUE = 4096
-
 /** What a reader of an invitation's link sends: the link's token. */
-const readBodySchema = z.object({ token: z.string().min(1).max(MAX_VALUE) })
+const readBodySchema = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
 
 /** What an account sends to accept or decline: an invitation's id, or its link's token. */
-const answerBody = z.object({ invitation: z.string().min(1).max(MAX_VALUE) })
+const answerBody = z.object({
+  invitation: z.string().min(1).max(CONTRACT_VALUES['invitation-ref'].maxLength),
+})
 
 /** The paths the routes serve, each with the one method it takes. */
 const METHOD_OF = {

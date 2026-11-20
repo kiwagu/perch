@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
+import { CONTRACT_VALUES, PASSWORD_LENGTH } from '@workspace/kernel'
 
+import { passwordOfLength } from '../../__fixtures__/platform-values'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import { hashPassword } from '../password-hash'
@@ -31,6 +33,9 @@ const REAL_SIGN_UPS_MS = 30_000
 
 /** What Better Auth answers a sign-up it accepted, new email or taken. */
 const accepted = () => Response.json({ token: null, user: {} })
+
+/** The most characters a profile's name has, as the contract says it. */
+const { maxLength: MAX_NAME } = CONTRACT_VALUES['profile.name']
 
 describe('authHandler, the sign-up', () => {
   it(
@@ -136,8 +141,8 @@ describe('authHandler, the sign-up', () => {
 /** Passwords that break the rules of a new password, each by what it lacks or holds. */
 const BREAKING = [
   ['nothing typed', ''],
-  ['9 characters', 'Abcdefg1!'],
-  ['36 characters', `Abcdefghij1!${'k'.repeat(24)}`],
+  ['one character short of the length', passwordOfLength(PASSWORD_LENGTH.min - 1)],
+  ['one character past the length', passwordOfLength(PASSWORD_LENGTH.max + 1)],
   ['a space', 'Abcdefg hij1!'],
   ['an accented letter', 'Abcdefg\u00e9hij1!'],
   ['no digit', 'Abcdefghij!!'],
@@ -213,8 +218,8 @@ describe('authHandler, the rules of a new password', () => {
   })
 
   it.each([
-    ['10', 'Abcdefgh1!'],
-    ['35', `Ab1!${'c'.repeat(31)}`],
+    ['the fewest', passwordOfLength(PASSWORD_LENGTH.min)],
+    ['the most', passwordOfLength(PASSWORD_LENGTH.max)],
   ])(
     'accepts a password of %s characters that keeps every rule, Better Auth agreeing',
     async (_, password) => {
@@ -297,8 +302,8 @@ describe('authHandler, the rules of a new password', () => {
 const REFUSED_NAMES = [
   ['nothing typed', '', 'name-required'],
   ['spaces alone', '   ', 'name-required'],
-  ['81 characters', 'r'.repeat(81), 'name-too-long'],
-  ['81 characters once trimmed', ` ${'r'.repeat(81)} `, 'name-too-long'],
+  ['one character past the limit', 'r'.repeat(MAX_NAME + 1), 'name-too-long'],
+  ['one character past the limit once trimmed', ` ${'r'.repeat(MAX_NAME + 1)} `, 'name-too-long'],
 ] as const
 
 describe('authHandler, the name of a sign-up', () => {
@@ -316,9 +321,9 @@ describe('authHandler, the name of a sign-up', () => {
     },
   )
 
-  it('takes a name of 80 characters once trimmed', async () => {
+  it('takes a name of the limit once trimmed', async () => {
     const { route, clock, received } = mountedOnFakeAuth(accepted)
-    const pending = route(signUpRequest(ANN, PASSWORD, ` ${'r'.repeat(80)} `), FROM)
+    const pending = route(signUpRequest(ANN, PASSWORD, ` ${'r'.repeat(MAX_NAME)} `), FROM)
 
     await clock.advance(SIGN_UP_FLOOR_MS)
     expect((await pending)?.status).toBe(202)

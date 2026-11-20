@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
+
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { deviceHeaders } from '../__fixtures__/auth-instance'
 import pendingChangeStatement from '../__fixtures__/email-change-pending.surql'
@@ -26,6 +28,13 @@ import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
+
+/** The longest email an address can be, as the contract says it. */
+const LONGEST = CONTRACT_VALUES.email.maxLength
+
+/** An email of exactly `length` characters. */
+const emailOf = (length: number): string =>
+  `${'a'.repeat(length - '@example.test'.length)}@example.test`
 
 /** Another client address, which nothing from `FROM` charges. */
 const ELSEWHERE = '203.0.113.8'
@@ -161,7 +170,7 @@ describe('authHandler, the request to change the email', () => {
       '@example.test',
       '',
       '   ',
-      `${'a'.repeat(255 - '@example.test'.length)}@example.test`,
+      emailOf(LONGEST + 1),
     ]) {
       const refused = await mounted.route(changeTo(ann.on('laptop'), email), FROM)
 
@@ -172,10 +181,10 @@ describe('authHandler, the request to change the email', () => {
     expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
   })
 
-  it('takes a new email of 254 characters, the longest an address can be, and mails it', async () => {
+  it('takes a new email of the longest length and mails it', async () => {
     const mounted = await mountedOnRealAuth()
     const ann = await signedInOn(mounted, ANN, ['laptop'])
-    const longest = `${'a'.repeat(254 - '@example.test'.length)}@example.test`
+    const longest = emailOf(LONGEST)
 
     expect((await asked(mounted, ann, longest))?.status).toBe(202)
     // The mail starts after the answer: wait for it, then count.

@@ -1,13 +1,13 @@
 import { match } from 'ts-pattern'
 
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { SUPERSEDED } from '../../sync/sync-connection'
-import { MAX_EMAIL } from '../account-email'
 import { type SignInCredential, signInStands } from '../account-passwords'
 import type { MailedVerification, SignedInAccount } from '../auth-sessions'
 import { DEVICE_HEADER } from '../session-hooks'
@@ -23,8 +23,8 @@ import {
   withoutCredentials,
 } from './requests'
 
-const verifyBody = z.object({ token: z.string().min(1).max(4096) })
-const resendBody = z.object({ email: z.string().min(1).max(MAX_EMAIL) })
+const verifyBody = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
+const resendBody = z.object({ email: z.string().min(1).max(CONTRACT_VALUES.email.maxLength) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**

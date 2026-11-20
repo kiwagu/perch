@@ -76,7 +76,7 @@ function emailOfLength(length: number): string {
 }
 
 /** A new password of `length` characters that keeps the rules of one but for its length. */
-const passwordOfLength = (length: number): string => `Aa1!${'x'.repeat(length - 4)}`
+export const passwordOfLength = (length: number): string => `Aa1!${'x'.repeat(length - 4)}`
 
 /** The text of `length` characters a value takes but for its length, by the value's name. */
 const FITTED: Readonly<Record<string, (length: number) => string>> = {

@@ -18,10 +18,10 @@ import { type Target, targetOf } from './targets'
  * - `GET /organisations`: 200 `{ memberships }`.
  * - `POST /organisations` `{ key, name }`: 201 `{ membership }`, with the caller as admin; 10 an
  *   hour per identity and 30 per client address, counted once the key and the name keep their
- *   rules: `key-invalid` (400) for a key the pattern refuses, `name-required` (400) for a name
- *   with nothing left once trimmed and `name-too-long` (400) past 80 characters. A caller whose
- *   account was deleted while the creation waited for it answers 401 `unauthorized`, as a token
- *   that holds no session does, and nothing is created.
+ *   rules: `key-invalid` (400) for a key the pattern refuses, `name-required` (400) for a name with
+ *   nothing left once trimmed and `name-too-long` (400) past the `organisation-name` value's
+ *   length. A caller whose account was deleted while the creation waited for it answers 401
+ *   `unauthorized`, as a token that holds no session does, and nothing is created.
  * - `GET /organisations/:key/members`: 200 `{ members }`, for an admin (a member gets 403
  *   `not-admin`).
  * - `PATCH /organisations/:key/members/:identity` `{ role }`: 204, for an admin; `last-admin`

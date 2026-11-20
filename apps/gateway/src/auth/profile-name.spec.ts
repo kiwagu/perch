@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { MAX_PROFILE_NAME, profileNameOf } from './profile-name'
+import { CONTRACT_VALUES } from '@workspace/kernel'
+
+import { profileNameOf } from './profile-name'
+
+/** The most characters a profile's name has, as the contract says it. */
+const { maxLength: MAX } = CONTRACT_VALUES['profile.name']
 
 describe('profileNameOf', () => {
   it('answers the name trimmed', () => {
@@ -11,15 +16,13 @@ describe('profileNameOf', () => {
     expect(profileNameOf(name)._unsafeUnwrapErr()).toBe('name-required')
   })
 
-  it('takes 80 characters once trimmed and refuses 81', () => {
-    expect(profileNameOf(` ${'r'.repeat(MAX_PROFILE_NAME)} `).isOk()).toBe(true)
-    expect(profileNameOf(` ${'r'.repeat(MAX_PROFILE_NAME + 1)} `)._unsafeUnwrapErr()).toBe(
-      'name-too-long',
-    )
+  it('takes a name of the limit once trimmed and refuses one past it', () => {
+    expect(profileNameOf(` ${'r'.repeat(MAX)} `).isOk()).toBe(true)
+    expect(profileNameOf(` ${'r'.repeat(MAX + 1)} `)._unsafeUnwrapErr()).toBe('name-too-long')
   })
 
   it('counts a character outside the basic plane once, as the directory does', () => {
-    expect(profileNameOf('\u{1F600}'.repeat(MAX_PROFILE_NAME)).isOk()).toBe(true)
-    expect(profileNameOf('\u{1F600}'.repeat(MAX_PROFILE_NAME + 1)).isErr()).toBe(true)
+    expect(profileNameOf('\u{1F600}'.repeat(MAX)).isOk()).toBe(true)
+    expect(profileNameOf('\u{1F600}'.repeat(MAX + 1)).isErr()).toBe(true)
   })
 })

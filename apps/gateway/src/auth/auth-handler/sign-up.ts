@@ -1,10 +1,9 @@
-import { keepsPasswordRules } from '@workspace/kernel'
+import { CONTRACT_VALUES, keepsPasswordRules } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
-import { MAX_EMAIL } from '../account-email'
 import { profileNameOf } from '../profile-name'
 
 import type { AuthMountDeps } from './mount'
@@ -20,11 +19,11 @@ export const SIGN_UP_FLOOR_MS = 800
 
 /**
  * As much of a sign-up's body as the mount reads before Better Auth does: the email its turn is
- * taken by (at most `MAX_EMAIL` characters), the password the rules of a new password are checked
- * on, and the name the rule of a profile's name is.
+ * taken by (at most the `email` value's length), the password the rules of a new password are
+ * checked on, and the name the rule of a profile's name is.
  */
 const signUpBody = z.object({
-  email: z.string().min(1).max(MAX_EMAIL),
+  email: z.string().min(1).max(CONTRACT_VALUES.email.maxLength),
   password: z.string(),
   name: z.string(),
 })

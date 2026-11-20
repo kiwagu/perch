@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { device_sessionIdFactory, type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -27,6 +28,9 @@ const phone = { id: 'phone', label: 'Safari on iPhone' }
 
 /** The client address every request comes from. */
 const FROM = '203.0.113.7'
+
+/** The longest id a path carries, as the contract says it. */
+const { maxLength: MAX_ID } = CONTRACT_VALUES.id
 
 /** A device as `GET /devices` lists it: neither its session token nor the browser's id goes out. */
 const listedDevice = z.strictObject({
@@ -288,13 +292,13 @@ describe('deviceRoutes', () => {
     expect(closed).toEqual([])
   })
 
-  it('answers 400 bad-request to a session id of more than 64 characters, before looking for it', async () => {
+  it('answers 400 bad-request to a session id longer than the contract allows, before looking for it', async () => {
     const { ask, closed, annOnLaptop } = await harness()
 
-    expect(await ask('DELETE', `/devices/${'a'.repeat(64)}`, { as: annOnLaptop })).toEqual(
+    expect(await ask('DELETE', `/devices/${'a'.repeat(MAX_ID)}`, { as: annOnLaptop })).toEqual(
       noSuchDevice,
     )
-    expect(await ask('DELETE', `/devices/${'a'.repeat(65)}`, { as: annOnLaptop })).toEqual({
+    expect(await ask('DELETE', `/devices/${'a'.repeat(MAX_ID + 1)}`, { as: annOnLaptop })).toEqual({
       status: 400,
       body: { code: 'bad-request' },
     })

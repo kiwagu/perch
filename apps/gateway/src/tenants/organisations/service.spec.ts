@@ -12,6 +12,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
@@ -592,7 +593,7 @@ describe('Organisations', () => {
     ).toEqual(refused('key-taken'))
   })
 
-  it('refuses a key outside the pattern and a name outside 1..80 characters', async () => {
+  it('refuses a key outside the pattern and a name outside the length of an organisation name', async () => {
     const { organisations, ann, directory, heard } = await harness()
     const create = async (key: string, name: string) =>
       (await organisations.create({ identity: ann.id, key, name }))._unsafeUnwrapErr()
@@ -602,7 +603,9 @@ describe('Organisations', () => {
     expect(await create('acme-corp', 'Acme')).toEqual(refused('key-invalid'))
     expect(await create('acme', '')).toEqual(refused('name-required'))
     expect(await create('acme', '   ')).toEqual(refused('name-required'))
-    expect(await create('acme', 'x'.repeat(81))).toEqual(refused('name-too-long'))
+    expect(
+      await create('acme', 'x'.repeat(CONTRACT_VALUES['organisation-name'].maxLength + 1)),
+    ).toEqual(refused('name-too-long'))
     const [tenants, memberships] = await directory.db.query<[unknown[], unknown[]]>(directoryRows)
 
     expect(tenants).toEqual([])

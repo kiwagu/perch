@@ -9,9 +9,15 @@
  * form the gateway issues is not, and one it issued for a record is done.
  *
  * The gateway is asked over HTTP as a device asks it, every other parameter of a request valid.
- * The contract is read here and nowhere in the gateway's own code: this is where the two meet.
+ * The contract is read here and nowhere in the gateway's own code: this is where the two meet. The
+ * gateway takes its bounds from the kernel's generated values, so they are held to the contract
+ * those were emitted from: the contract now, or on a branch (`CONTRACT_AHEAD=1`, set by the
+ * pre-commit hook) the contract at the branch's merge base or at the commit the branch is at, so a
+ * business commit that changes a bound does not fail this spec before the implementation emits the
+ * values again (`held-contract.ts`).
  */
 
+import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -23,6 +29,7 @@ import {
   parameterValueOf,
 } from '@workspace/ui-contract'
 
+import { heldContract } from './__fixtures__/held-contract'
 import { census, stale, unnamed } from './__fixtures__/platform-census'
 import { idsOf } from './__fixtures__/platform-ids'
 import { type Param, requestFor, type World, worldFor } from './__fixtures__/platform-requests'
@@ -65,7 +72,17 @@ if (contract === undefined) {
 }
 
 const { platform } = contract.screens
-const { model } = contract
+
+/** The kernel's generated values, from which the gateway takes every bound. */
+const KERNEL_VALUES = join(ROOT, 'packages/kernel/src/contract-values.gen.ts')
+
+/** The contract the bounds of the parameters are held to. */
+const held = heldContract({
+  committed: readFileSync(KERNEL_VALUES, 'utf8'),
+  root: ROOT,
+  env: process.env,
+})
+const heldPlatform = held.screens.platform
 
 /** How a binding names a platform action: the engine reads actions as `platform.<name>`. */
 const bound = (action: string): string => `platform.${action}`
@@ -150,14 +167,14 @@ describe('the platform actions and the routes', () => {
   })
 })
 
-/** Every parameter of every routed action, as the contract declares it and resolves its value. */
+/** Every parameter of every routed action, as the held contract declares it and resolves it. */
 const parameters = Object.keys(ACTION_ROUTES).map((action) => {
-  const entries = Object.entries(platform.actions[action]?.params ?? {}).map(
+  const entries = Object.entries(heldPlatform.actions[action]?.params ?? {}).map(
     ([name, declared]) => ({
       name,
       declared,
       ref: declared.value ?? name,
-      value: parameterValueOf(bound(action), name, platform, model),
+      value: parameterValueOf(bound(action), name, heldPlatform, held.model),
     }),
   )
   const params: Param[] = entries.map(({ name, declared, value }) => ({
@@ -197,7 +214,7 @@ describe('the bounds of the parameters', () => {
     'holds $action $param to its $limit.name',
     async ({ action, params, param, ref, limit }) => {
       const wire = ACTION_ROUTES[action] ?? expect.unreachable('a routed action')
-      const roles = platform.actions[action]?.roles
+      const roles = heldPlatform.actions[action]?.roles
       const ask = async (value: string | undefined) =>
         stand.ask(
           requestFor(action, wire, params, await worldFor(stand, wire, roles), { param, value }),
@@ -207,7 +224,7 @@ describe('the bounds of the parameters', () => {
         ({ suffix, holds }) =>
           suffix !== 'taken' && suffix !== 'rejected' && holds(limit.constraint),
       ).map(({ suffix }) => `-${suffix}`)
-      const code = (attributedCodes(bound(action), platform)[param] ?? []).find((each) =>
+      const code = (attributedCodes(bound(action), heldPlatform)[param] ?? []).find((each) =>
         suffixes.some((suffix) => each.endsWith(suffix)),
       )
       const past = await ask(limit.past)
@@ -252,7 +269,7 @@ describe('the bounds of the parameters', () => {
     'holds $action $param to the length of an id',
     async ({ action, params, param, bounds }) => {
       const wire = ACTION_ROUTES[action] ?? expect.unreachable('a routed action')
-      const roles = platform.actions[action]?.roles
+      const roles = heldPlatform.actions[action]?.roles
       const ids =
         idsOf(action) ?? expect.unreachable(`name the ids of ${action} in platform-ids.ts`)
       const asking = async (id: (stand: Stand, world: World) => string | Promise<string>) => {
