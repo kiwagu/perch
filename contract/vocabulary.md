@@ -1,7 +1,5 @@
 # Vocabulary
 
-Contract version: 1
-
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
 value, role and screen name that the screen files (`contract/domain/screens/`) and the platform
 file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
