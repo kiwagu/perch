@@ -65,21 +65,29 @@ function originOf(event: object): string | undefined {
  * creating one or accepting an invitation starts them all afresh. One note is edited at a time,
  * the one acted on last, and one role is changed at a time. A control is enabled while a state
  * handles its event (`snapshot.can`). Its `show` keeps the code of the page's own errors for the
- * view and emits any other; its `clear` is emitted for the host to empty a field; its `read`
- * counts a read of the list it names, which the view makes.
+ * view and emits any other; its `clear` drops the code of one of the page's errors, or is emitted
+ * for the host to empty a field; its `read` counts a read of the list it names, which the view
+ * makes.
  */
 export function createOrganisationMachine(deps: OrganisationMachineDeps) {
   /**
    * A write of the page as an invoke, in the organisation current when it starts: it resolves
    * with that organisation once done, or rejects with its failure and that organisation, so a
-   * late outcome is kept away from another organisation that became current meanwhile.
+   * late outcome is kept away from another organisation that became current meanwhile. A write
+   * that makes another organisation current (`makesCurrent`, a creation) is done in the one it
+   * made, which it resolves with: the fields it empties are those of that organisation.
    */
-  const write = <I>(run: (input: I) => ResultAsync<unknown, BusError>) =>
+  const write = <I>(
+    run: (input: I) => ResultAsync<unknown, BusError>,
+    { makesCurrent = false }: { readonly makesCurrent?: boolean } = {},
+  ) =>
     fromPromise<Origin, I>(async ({ input }) => {
       const of = deps.current()
       const outcome = await run(input)
 
-      return outcome.isOk() ? { of } : Promise.reject({ ...outcome.error, of })
+      return outcome.isOk()
+        ? { of: makesCurrent ? deps.current() : of }
+        : Promise.reject({ ...outcome.error, of })
     })
 
   return setup({
@@ -95,7 +103,7 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
 
         return okAsync(undefined)
       }),
-      'platform.organisations.create': write(deps.create),
+      'platform.organisations.create': write(deps.create, { makesCurrent: true }),
       'note.updateNote': write(deps.editNote),
       'note.deleteNote': write(({ id }: { readonly id: NoteId }) => deps.deleteNote(id)),
       'note.createNote': write(({ text }: { readonly text: string }) => deps.addNote(text)),
@@ -151,25 +159,23 @@ export function createOrganisationMachine(deps: OrganisationMachineDeps) {
           errors: { of, codes: { ...kept, [part]: failureOf(event, UNKNOWN_FAILURE) } },
         })
       }),
-      // A change done in another organisation leaves the errors of this one as they are.
-      forget: assign(({ context, event }, params: { readonly part: ErrorPart }) =>
-        originOf(event) === context.errors.of
-          ? {
-              errors: {
-                ...context.errors,
-                codes: { ...context.errors.codes, [params.part]: undefined },
-              },
-            }
-          : {},
-      ),
-      // A field of the page is emptied by the host, which holds what it shows: the fields of the
-      // organisation current now, so a write made in another one leaves them as typed.
-      clear: enqueueActions(({ enqueue, event }, params: ClearParams) => {
-        if (originOf(event) !== deps.current()) {
-          return
-        }
+      // An error of the page shows no code any more, a field is emptied by the host, which holds
+      // what it shows: the fields of the organisation current now, so a write made in another
+      // one leaves them as typed, and a change done in another one leaves the errors of this one
+      // as they are.
+      clear: enqueueActions(({ enqueue, event, context }, params: ClearParams) => {
+        const of = originOf(event)
+        const part = ERROR_PARTS[params.anchor]
 
-        enqueue.emit({ type: 'clear', ...params })
+        if (part === undefined) {
+          if (of === deps.current()) {
+            enqueue.emit({ type: 'clear', ...params })
+          }
+        } else if (of === context.errors.of) {
+          enqueue.assign({
+            errors: { ...context.errors, codes: { ...context.errors.codes, [part]: undefined } },
+          })
+        }
       }),
       startAfresh: assign({
         errors: { of: undefined, codes: {} },

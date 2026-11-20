@@ -4,19 +4,24 @@
  */
 
 import { idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-export const PROFILE_NAME_MAX = 80
-
-/** The longest bio, in characters; the server's schema holds the same bound. */
-export const PROFILE_BIO_MAX = 2000
+import { textLength } from '../../../platform/text-length'
 
 export const ProfileSchema = z.object({
   id: idSchemas.profile.schema,
   identity: idSchemas.identity.schema,
-  name: z.string().trim().min(1).max(PROFILE_NAME_MAX),
+  name: z
+    .string()
+    .trim()
+    .min(1)
+    .refine((name) => textLength(name) <= CONTRACT_VALUES['profile.name'].maxLength),
   email: z.email(),
-  bio: z.string().max(PROFILE_BIO_MAX).optional(),
+  bio: z
+    .string()
+    .refine((bio) => textLength(bio) <= CONTRACT_VALUES['profile.bio'].maxLength)
+    .optional(),
   createdAt: z.date(),
 })
 

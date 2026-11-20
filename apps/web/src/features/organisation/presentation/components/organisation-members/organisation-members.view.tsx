@@ -65,7 +65,6 @@ export function OrganisationMembers(props: {
                       })
                     }
                     testId="organisation.members.role-select"
-                    holdsInput={false}
                   />
                   {member.removable ? (
                     <Button

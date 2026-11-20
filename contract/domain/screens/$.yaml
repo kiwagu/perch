@@ -11,11 +11,9 @@ anchors:
   not-found.page.sign-in-link:
     kind: link
     binding: { route: /sign-in }
-    roles: [ guest ]
   not-found.page.profile-link:
     kind: link
     binding: { route: /me }
-    roles: [ identity, member, admin ]
 wireframe: |-
   - heading "Page not found" [level=1]
   - link "Go to your profile"

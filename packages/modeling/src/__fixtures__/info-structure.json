@@ -1,5 +1,6 @@
 {
   "db": {
+    "params": [],
     "tables": [
       {
         "drop": false,

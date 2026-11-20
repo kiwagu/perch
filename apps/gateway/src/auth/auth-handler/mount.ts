@@ -149,6 +149,9 @@ const SERVED_PATHS: ReadonlyMap<
   [DELETE_ACCOUNT_PATH, deleteAccount],
 ])
 
+/** The paths the mount answers, each by `POST` only. */
+export const MOUNT_PATHS: readonly string[] = [...SERVED_PATHS.keys()]
+
 /** `answer` once the client address took one of its credential checks (429 when they are spent). */
 function credentialChecked(
   answer: (deps: AuthMountDeps, request: Request, from: string) => Promise<Response>,

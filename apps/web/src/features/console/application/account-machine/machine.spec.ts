@@ -3,6 +3,7 @@ import { createActor, waitFor } from 'xstate'
 
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { projected } from '@workspace/ui-contract/machines'
 
 import { fakeFetch, respond } from '../../../../composition/__fixtures__/gateway-fetch'
 import { accountsApi } from '../../../../composition/accounts-api'
@@ -191,6 +192,54 @@ describe('the account card as its flow says', () => {
     await settled(actor)
 
     expect(actor.getSnapshot().context.errors).toEqual({ reset: 'rate-limited' })
+  })
+
+  describe("clears an area's error through its flow", () => {
+    const machine = () =>
+      createAccountMachine({ id: una.id, accounts: new AccountsService(new FakeAccounts()) })
+    /** The effects of the flow on the success of the action `state` of `region`, in order. */
+    const effectsOnDone = (region: string, state: string) =>
+      projected(machine().config).states['viewing']?.regions?.[region]?.states[state]?.invoke
+        ?.onDone[0]?.effects
+
+    it.each([
+      ['name', 'running'],
+      ['email', 'running'],
+      ['ban', 'banning'],
+      ['ban', 'unbanning'],
+      ['sessions', 'running'],
+      ['reset', 'running'],
+      ['verification', 'running'],
+      ['removal', 'running'],
+    ])('on the success of the %s area\'s "%s", first of its effects', (region, state) => {
+      expect(effectsOnDone(region, state)?.[0]).toEqual({
+        type: 'clear',
+        params: { anchor: `console.account.${region}.error` },
+      })
+    })
+
+    it('has no action of its own that forgets an error', () => {
+      expect(Object.keys(machine().implementations.actions)).not.toContain('forget')
+    })
+
+    it.each(AREAS)(
+      'leaves no error in the area of $event.type once it is done after a refusal',
+      async ({ area, event, refuse }) => {
+        const accounts = new FakeAccounts()
+        const { actor } = running(accounts)
+
+        refuse(accounts)
+        actor.send(event)
+        await settled(actor)
+
+        expect(actor.getSnapshot().context.errors).toHaveProperty(area)
+
+        actor.send(event)
+        await settled(actor)
+
+        expect(actor.getSnapshot().context.errors).toEqual({})
+      },
+    )
   })
 
   it('runs one action of an area at a time, the other areas free meanwhile', () => {

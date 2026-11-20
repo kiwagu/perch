@@ -24,7 +24,8 @@ import { INVITE_FLOOR_MS, organisationRoutes } from '../organisation-routes'
 
 import { admitted } from './invitations'
 
-const PASSWORD = 'Pass-word-1'
+/** The password every account of these specs signs up with, which keeps the rules of a new password. */
+export const PASSWORD = 'Pass-word-1'
 
 /** An identity signed up on its device: its id and email, and its raw session token. */
 export interface SignedUp {

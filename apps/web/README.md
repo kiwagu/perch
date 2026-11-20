@@ -359,7 +359,10 @@ modeling stage.
   class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
   and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
   tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
-  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  views through `ThemeContext`, read with `useDeviceTheme()`), the length of a text as the gateway
+  and the database count it (`text-length.ts`, `textLength`: one for each code point, which every
+  domain rule judging a name, a bio or a note against its limit uses, though the native `maxLength`
+  of an input counts UTF-16 units), and this tab's own writes of
   the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
   frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
   earlier write is not taken for a value another tab or device stored; the start provides them
@@ -485,7 +488,7 @@ accounts and the organisations they created are swept; it applies the directory 
 gateway does, which leaves a stand that already has it alone. `openStandTenant()` opens an organisation's database on the stand the same way. `checkProfileName` is the profile name rule the seed catalog is checked against. Entry point `src/main.tsx`; `src/modules.ts` lists the feature modules;
 `src/test-utils.tsx` renders components with the application providers.
 `src/field-state-colour.test-support.ts` is the one assertion that a field the contract opts out draws no state colour.
-`src/platform/field-facts.gen.ts` (generated, `bun run emit`) holds what the contract says of each field by its anchor (its limit, input type, whether it marks its state, whether it holds input), and `src/main.tsx` gives it to the kit's `FieldFactsProvider` around the app, so the fields take it from there. `src/field-facts.test-support.ts` renders a view inside that provider (`renderWithFacts`) and holds each declared field it renders to the facts (`expectFieldFacts`).
+`src/platform/field-facts.gen.ts` (generated, `bun run emit`) holds what the contract says of each field by its anchor (its limit, input type, whether it marks its state, whether it holds input), and `src/main.tsx` gives it to the kit's `FieldFactsProvider` around the app, so the fields take it from there: a view gives its fields none of these itself, and the domain rules and the console's route search read their bounds from `CONTRACT_VALUES` of `@workspace/kernel`. `src/field-facts.test-support.ts` renders a view inside that provider (`renderWithFacts`) and holds each declared field it renders to the facts (`expectFieldFacts`).
 
 ## Commands
 

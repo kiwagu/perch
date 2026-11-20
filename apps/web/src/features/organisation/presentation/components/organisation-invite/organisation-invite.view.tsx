@@ -7,7 +7,12 @@ import { Field, FieldLabel } from '@workspace/ui/components/ui/field'
 import { Form } from '@workspace/ui/components/ui/form'
 import { Input } from '@workspace/ui/components/ui/input'
 
+import { concernsOf } from '../../../../../platform/concerns'
 import type { OrganisationEvent, TenantRole } from '../../../application/organisation-machine'
+import {
+  type OrganisationErrorCode,
+  organisationErrorOf,
+} from '../organisation-error-line/organisation-error'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 import { roleOptions } from '../role-words'
 
@@ -15,6 +20,11 @@ import { roleOptions } from '../role-words'
 export interface InviteDraft {
   readonly email: string
   readonly role: TenantRole
+}
+
+/** The field each code of `organisation.invite.error` concerns, as the screen's `fields` say. */
+const ERROR_FIELDS: Partial<Record<OrganisationErrorCode, 'email'>> = {
+  'email-invalid': 'email',
 }
 
 /**
@@ -33,23 +43,27 @@ export function OrganisationInvite(props: {
   const t = useT()
   const emailId = useId()
   const { draft } = props
+  const error = props.error ? organisationErrorOf(t, props.error) : undefined
+  const concerns = concernsOf(ERROR_FIELDS, error?.code)
+  // One message: under the email when its code concerns it, or above Submit when it concerns the form.
+  const message = <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
 
   return (
     <Form
       onSubmit={() => props.onInvite(draft.email, draft.role)}
       data-testid="organisation.invite.form"
     >
-      <Field data-invalid={props.error ? true : undefined}>
+      <Field data-invalid={concerns === 'email' ? true : undefined}>
         <FieldLabel htmlFor={emailId}>{t('organisation.invite.email')}</FieldLabel>
         <Input
           id={emailId}
-          type="email"
           value={draft.email}
           onChange={(event) => props.onChange({ ...draft, email: event.target.value })}
           autoComplete="off"
-          aria-invalid={props.error ? true : undefined}
+          aria-invalid={concerns === 'email' ? true : undefined}
           data-testid="organisation.invite.email-input"
         />
+        {concerns === 'email' ? message : null}
         <OptionSelect
           label={t('organisation.invite.role')}
           value={draft.role}
@@ -57,7 +71,7 @@ export function OrganisationInvite(props: {
           onChange={(role) => props.onChange({ ...draft, role })}
           testId="organisation.invite.role-select"
         />
-        <OrganisationErrorLine code={props.error} testId="organisation.invite.error" />
+        {concerns === undefined ? message : null}
         <Button
           type="submit"
           disabled={

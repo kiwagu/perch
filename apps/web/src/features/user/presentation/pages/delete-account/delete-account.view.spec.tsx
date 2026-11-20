@@ -22,7 +22,7 @@ function renderView(props: Partial<DeleteAccountViewProps> = {}, locale: 'en' | 
     <DeleteAccountView
       guest
       renders={only('user.delete-account.delete-button')}
-      canDelete
+      can={() => true}
       {...handlers}
       {...props}
     />,
@@ -57,10 +57,18 @@ describe('DeleteAccountView', () => {
     expect(screen.queryByTestId('user.delete-account.sign-in-link')).toBeNull()
   })
 
-  it('holds the button while the flow does not take it', () => {
-    renderView({ canDelete: false })
+  it('holds the button while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect((screen.getByTestId(BUTTON) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('asks the flow about the event of its own button', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ can })
+
+    expect(can).toHaveBeenCalledWith({ type: BUTTON })
   })
 
   it('says the account is gone beside the link to sign in, with the button gone', () => {

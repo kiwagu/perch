@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { recordId } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { invitationIdFactory, membershipIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
@@ -30,6 +31,10 @@ import { invitationRoutes } from './routes'
 afterEach(closeHarness)
 
 const DAY_MS = 24 * 60 * 60 * 1000
+
+/** The longest a link's token and an invitation's reference are, as the contract says it. */
+const { maxLength: MAX_TOKEN } = CONTRACT_VALUES.token
+const { maxLength: MAX_INVITATION } = CONTRACT_VALUES['invitation-ref']
 
 /** What the answer to a read of a link holds. */
 const read = (organisation: string, role: 'member' | 'admin', forYou: boolean) => ({
@@ -143,7 +148,7 @@ describe('invitationRoutes', () => {
         {},
         { token: '' },
         { token: 5 },
-        { token: 'x'.repeat(4097) },
+        { token: 'x'.repeat(MAX_TOKEN + 1) },
         '{"token":',
       ]) {
         expect(await ask('POST', '/invitations/read', { body })).toEqual(
@@ -405,7 +410,7 @@ describe('invitationRoutes', () => {
         {},
         { invitation: '' },
         { invitation: 5 },
-        { invitation: 'x'.repeat(4097) },
+        { invitation: 'x'.repeat(MAX_INVITATION + 1) },
         '{"invitation":',
       ]) {
         expect(await ask('POST', '/invitations/accept', { as: bob, body })).toEqual(

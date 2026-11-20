@@ -2,3 +2,4 @@
 
 export type { ConsoleRoutesOptions } from './options'
 export { consoleRoutes } from './routes'
+export { CONSOLE_PATHS } from './targets'

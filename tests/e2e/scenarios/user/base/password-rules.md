@@ -10,7 +10,7 @@ data:
   Lowercase only: "abcdefghij"
   Every rule: "Abcdefghij1!"
   With a space: "Abcdefg hij1!"
-  Too long: "Abcdefghij1!Abcdefghij1!Abcdefghij1!"
+  Too short: "Abcdef1!"
 ---
 # Sign up with a password that keeps the rules
 
@@ -24,7 +24,7 @@ Where: [/sign-in] then [user.sign-in.toggle-button]
 3. Enter the lowercase only into [user.sign-in.password-input]
 4. Enter the every rule into [user.sign-in.password-input]
 5. Enter the with a space into [user.sign-in.password-input]
-6. Enter the too long into [user.sign-in.password-input]
+6. Enter the too short into [user.sign-in.password-input]
 7. Enter the email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]
 
 ### Expected result

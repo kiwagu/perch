@@ -1,3 +1,5 @@
+import { matchPath } from '../../route-path'
+
 /** What an operator does to one account, each at its own path under the account's. */
 export const ACCOUNT_ACTIONS = [
   'rename',
@@ -22,32 +24,42 @@ export type Target =
   | { readonly kind: 'action'; readonly id: string; readonly action: AccountAction }
 
 /**
- * The console's paths: `/console/accounts`, `/console/accounts/:id` and
- * `/console/accounts/:id/:action`. An empty segment (`/console/accounts/`), an action the console
- * does not take and a longer path are not the console's.
+ * The path each kind of target is served under, an account's identity id written `:id` and an
+ * action `:action`, one of `ACCOUNT_ACTIONS`: `targetOf` answers a path only through these. An
+ * empty segment (`/console/accounts/`), an action the console does not take and a longer path are
+ * not the console's.
  */
-const PATH = /^\/console\/accounts(?:\/([^/]+)(?:\/([^/]+))?)?$/
+const PATH_OF = {
+  accounts: '/console/accounts',
+  account: '/console/accounts/:id',
+  action: '/console/accounts/:id/:action',
+} as const satisfies Readonly<Record<Target['kind'], string>>
+
+/** The paths the console answers, each action of `ACCOUNT_ACTIONS` at its own. */
+export const CONSOLE_PATHS: readonly string[] = [
+  PATH_OF.accounts,
+  PATH_OF.account,
+  ...ACCOUNT_ACTIONS.map((action) => PATH_OF.action.replace(':action', action)),
+]
 
 const isAction = (segment: string): segment is AccountAction =>
   ACCOUNT_ACTIONS.some((action) => action === segment)
 
 /** What `pathname` names, or `undefined` for a path that is not the console's. */
 export function targetOf(pathname: string): Target | undefined {
-  const found = PATH.exec(pathname)
-
-  if (!found) {
-    return undefined
-  }
-
-  const [, id, action] = found
-
-  if (id === undefined) {
+  if (matchPath(PATH_OF.accounts, pathname)) {
     return { kind: 'accounts' }
   }
 
-  if (action === undefined) {
-    return { kind: 'account', id }
+  const account = matchPath(PATH_OF.account, pathname)
+
+  if (account) {
+    return { kind: 'account', id: account.id }
   }
 
-  return isAction(action) ? { kind: 'action', id, action } : undefined
+  const action = matchPath(PATH_OF.action, pathname)
+
+  return action && isAction(action.action)
+    ? { kind: 'action', id: action.id, action: action.action }
+    : undefined
 }

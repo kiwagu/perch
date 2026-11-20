@@ -1,3 +1,4 @@
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -9,13 +10,13 @@ import type { Handler } from './operator-caller'
 import type { ConsoleRoutesOptions } from './options'
 
 /**
- * The longest reason a ban is given, once trimmed: the card's input takes no more, so a longer one
- * comes only from a request made by hand, and is refused rather than kept.
+ * What an operator sends to ban an account: why, for operators alone, or nothing. A reason is at
+ * most the `ban-reason` value's length once trimmed: the card's input takes no more, so a longer
+ * one comes only from a request made by hand, and is refused rather than kept.
  */
-const MAX_BAN_REASON = 500
-
-/** What an operator sends to ban an account: why, for operators alone, or nothing. */
-const banBody = z.object({ reason: z.string().trim().max(MAX_BAN_REASON).optional() })
+const banBody = z.object({
+  reason: z.string().trim().max(CONTRACT_VALUES['ban-reason'].maxLength).optional(),
+})
 
 /**
  * The console's actions on an account's standing, each for an operator, on the account the path's
@@ -25,9 +26,9 @@ const banBody = z.object({ reason: z.string().trim().max(MAX_BAN_REASON).optiona
  * of the account close only once what ended its sessions committed, still in its turn, so a lift
  * of the ban that follows cannot be overtaken by the ban's close.
  *
- * - ban: the account banned with the body's reason (`{ reason? }`, at most 500 characters once
- *   trimmed) and every session of it ended `banned` in one transaction (`AccountBans.ban`), then
- *   its sockets closed with 4004.
+ * - ban: the account banned with the body's reason (`{ reason? }`, at most the `ban-reason` value's
+ *   length once trimmed) and every session of it ended `banned` in one transaction
+ *   (`AccountBans.ban`), then its sockets closed with 4004.
  * - unban: the ban and its reason lifted (`AccountBans.unban`); nothing ends, nothing closes.
  * - sign-out: every session of the account ended `revoked`, as its own sign-out everywhere ends
  *   them (`AuthSessions.revokeAll`), then its sockets closed with 4001.

@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-import { ACCOUNT_SEARCH_MAX, AccountSearchSchema } from './account-search.entity'
+import { AccountSearchSchema } from './account-search.entity'
+
+/** The most characters a search text has, as the contract says it. */
+const { maxLength: SEARCH_MAX } = CONTRACT_VALUES['account-search']
 
 describe('AccountSearchSchema', () => {
   it('reads the first page of 25 for an address that names neither', () => {
@@ -24,7 +28,7 @@ describe('AccountSearchSchema', () => {
       { page: 1.5 },
       { size: 20 },
       { size: '25' },
-      { q: 'a'.repeat(ACCOUNT_SEARCH_MAX + 1) },
+      { q: 'a'.repeat(SEARCH_MAX + 1) },
     ]) {
       expect(z.safeParse(AccountSearchSchema, refused).success, JSON.stringify(refused)).toBe(false)
     }

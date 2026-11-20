@@ -9,7 +9,6 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import type { OrganisationEvent } from '../../../application/organisation-machine'
-import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 export interface NoteItem {
@@ -54,7 +53,6 @@ function NoteEditForm(props: {
       <Textarea
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        maxLength={NOTE_TEXT_MAX}
         aria-label={t('organisation.notes.edit')}
         data-testid="organisation.notes.edit-textarea"
       />
@@ -133,24 +131,16 @@ export function OrganisationNotes(
     /** The note whose edit form is shown; none while no note is edited. */
     readonly editing: NoteId | undefined
     readonly error: string | undefined
+    /** What the new note's field holds, and a change of it. */
+    readonly text: string
+    readonly onTextChange: (text: string) => void
     /** Resolves true once the note is written. */
     readonly onAdd: (text: string) => Promise<boolean>
   },
 ) {
   const t = useT()
-  const [text, setText] = useState('')
+  const { text } = props
   const state = props.notes === undefined ? 'loading' : props.notes.length > 0 ? 'ready' : 'empty'
-  const add = () => {
-    const added = props.onAdd(text)
-
-    void added.then((done) => {
-      if (done) {
-        setText('')
-      }
-    })
-
-    return added
-  }
 
   return (
     <Card>
@@ -188,15 +178,13 @@ export function OrganisationNotes(
             {t('organisation.notes.empty')}
           </p>
         ) : null}
-        <Form onSubmit={add}>
-          <Field data-invalid={props.error ? true : undefined}>
+        <Form onSubmit={() => props.onAdd(text)}>
+          <Field>
             <Textarea
               value={text}
-              onChange={(event) => setText(event.target.value)}
-              maxLength={NOTE_TEXT_MAX}
+              onChange={(event) => props.onTextChange(event.target.value)}
               placeholder={t('organisation.notes.placeholder')}
               aria-label={t('organisation.notes.placeholder')}
-              aria-invalid={props.error ? true : undefined}
               data-testid="organisation.notes.new-textarea"
             />
             <OrganisationErrorLine code={props.error} testId="organisation.notes.error" />

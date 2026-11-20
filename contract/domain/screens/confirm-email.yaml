@@ -7,16 +7,6 @@ bindings:
   - path: /confirm-email
     roles: [ guest, identity ]
     history: push
-    search:
-      type: object
-      properties:
-        token:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: The token the confirmation mail carries in its link.
-          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFubkBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJl ]
-      additionalProperties: false
 entry: [ user.confirm-email.status, user.confirm-email.message, user.confirm-email.error ]
 anchors:
   user.confirm-email.status:
@@ -31,12 +21,10 @@ anchors:
     kind: link
     description: Leads to the sign-in page.
     binding: { route: /sign-in }
-    roles: [ guest ]
   user.confirm-email.profile-link:
     kind: link
     description: Leads to the profile, which shows the new email.
     binding: { route: /me }
-    roles: [ identity ]
   user.confirm-email.error:
     kind: error
 states:

@@ -71,8 +71,8 @@ export function authOptions(options: AuthInstanceOptions) {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
       // A new password's length, as the rules of a new password set it (the auth mount checks
-      // the rest at sign-up). Better Auth checks it on a new password only, never at a sign-in, so
-      // an account whose password was set before the rules still signs in.
+      // the rest at sign-up). Better Auth checks it on a new password only: at a sign-in a
+      // password of another length is no account's, so it is refused as a wrong one.
       minPasswordLength: PASSWORD_LENGTH.min,
       maxPasswordLength: PASSWORD_LENGTH.max,
       // No session before the email is verified: a sign-up answers with no token, a taken email

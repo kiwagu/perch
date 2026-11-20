@@ -150,14 +150,14 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   `user.settings` in `contract/domain/screens/sign-in.yaml`, `verify-email.yaml`,
   `forgot-password.yaml`, `reset-password.yaml`, `confirm-email.yaml`, `delete-account.yaml`,
   `me.yaml` and `settings.yaml`.
-- Behaviour: the page runs its screen's flow as its machine (`application/profile.machine.ts`,
+- Behaviour: the page runs its screen's flow as its machine (`application/profile-machine/`,
   held to `contract/domain/screens/me.yaml` by `platform/machines.spec.ts`) through the
   platform's `useScreenMachine`, as the sign-in page runs its own: the flow's moves pass the
   frame's guard of unsaved input, the sign-out button asks it first, and both forms are the
   kit's `Form`, whose saved submit leaves the fields with nothing unsaved; the guest pages
   (sign-in, forgot-password, verify-email) follow another tab's sign-in to the profile through
   the router's guard, a sign-in of the page's own going on to its welcome. The name and the bio
-  (at most 2000 characters) each follow the stored value until typed into, then keep what was
+  (within the length of the contract's `profile.bio` field) each follow the stored value until typed into, then keep what was
   typed when another device stores another value, until it is saved (the name stored trimmed)
   or typed back; one Save writes what changed; a refused save is explained under the field its
   code concerns (the error's `fields`); Save and the sign-out button are enabled while the
@@ -180,7 +180,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   no longer how the password begins, the error says so under it (`sign-in:PASSWORDS_DIFFER`,
   `user.sign-in.error.passwords-differ`, code `passwords-differ`), marking it invalid, and the
   submit is disabled until the two agree again; a submit while only a part of it was typed asks for
-  nothing and says the same; the password typed again is never sent;
+  nothing and says the same; the password typed again is never sent; each button, the switch of
+  mode among them, is enabled while the machine's state handles its event, so none is while a
+  sign-in, a sign-up or a resend runs;
   a sign-up creates the account and has its verification mail sent, signing nothing in: the page
   stays on `/sign-in` in the mode sign-in with the email kept, asks to open the link of the mail
   (`user.sign-in.mail-message`, code `check-your-mail`) and offers to send it again

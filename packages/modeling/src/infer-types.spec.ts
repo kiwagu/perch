@@ -11,6 +11,8 @@ const schema: SchemaModel = {
   tables: {
     identity: {
       idPrefix: 'idn',
+      asserts: {},
+      indexes: {},
       fields: {
         name: S('string'),
         email: S('string'),
@@ -19,8 +21,15 @@ const schema: SchemaModel = {
         manager: { kind: 'record', tables: ['identity'] },
       },
     },
-    tenant: { idPrefix: 'tnt', fields: { name: S('string'), size: S('int') } },
+    tenant: {
+      idPrefix: 'tnt',
+      asserts: {},
+      indexes: {},
+      fields: { name: S('string'), size: S('int') },
+    },
     member_of: {
+      asserts: {},
+      indexes: {},
       fields: { role: S('string') },
       relation: { in: ['identity'], out: ['tenant'] },
     },

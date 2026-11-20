@@ -5,6 +5,7 @@
  * to its default stays out of the address, and a size chosen is kept across a new search.
  */
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 /** The sizes a page of accounts takes, the smallest first, as `accounts.list` pages them. */
@@ -16,11 +17,8 @@ export type AccountPageSize = (typeof ACCOUNT_PAGE_SIZES)[number]
 /** The size of a page of accounts while the address names none. */
 export const DEFAULT_ACCOUNT_PAGE_SIZE: AccountPageSize = 25
 
-/** The longest text accounts are searched with: the longest email. */
-export const ACCOUNT_SEARCH_MAX = 254
-
 export const AccountSearchSchema = z.object({
-  q: z.string().max(ACCOUNT_SEARCH_MAX).optional(),
+  q: z.string().max(CONTRACT_VALUES['account-search'].maxLength).optional(),
   page: z.int().min(1).default(1),
   // An integer among the sizes: the JSON Schema of a number literal says `number` by itself.
   size: z.literal(ACCOUNT_PAGE_SIZES).meta({ type: 'integer' }).default(DEFAULT_ACCOUNT_PAGE_SIZE),

@@ -87,7 +87,7 @@ export function SettingsContainer() {
       requestAccountDeletion: (password) => session.requestAccountDeletion(password),
     })
   }, [device.set, settings, writes, session])
-  const { state, send, submit, actor } = useScreenMachine('user.settings', machine)
+  const { state, send, submit, actor, can } = useScreenMachine('user.settings', machine)
 
   // A chosen language is spoken at once, while its store runs.
   useEffect(() => {
@@ -112,20 +112,14 @@ export function SettingsContainer() {
       <SettingsView
         theme={device.theme}
         locale={locale}
-        canChooseTheme={state.can({ type: 'user.settings.theme-select', theme: 'light' })}
-        canChooseLocale={state.can({ type: 'user.settings.locale-select', locale: 'en' })}
+        can={can}
         onTheme={(theme) => send({ type: 'user.settings.theme-select', theme })}
         onLocale={(chosen) => send({ type: 'user.settings.locale-select', locale: chosen })}
       />
       <PasswordFormView
         values={passwords}
         error={state.context.passwordError}
-        canSave={state.can({
-          type: 'user.settings.password.save-button',
-          currentPassword: '',
-          password: '',
-          confirmation: '',
-        })}
+        can={can}
         onChange={(field, next) => {
           setPasswords(next)
 
@@ -155,7 +149,7 @@ export function SettingsContainer() {
         error={state.context.emailError}
         message={state.context.emailMessage}
         sentTo={state.context.sentTo}
-        canSend={state.can({ type: 'user.settings.email.send-button', email: '', password: '' })}
+        can={can}
         onChange={setEmail}
         onSend={() =>
           submit({
@@ -169,7 +163,7 @@ export function SettingsContainer() {
         password={deletionPassword}
         error={state.context.deletionError}
         message={state.context.deletionMessage}
-        canSend={state.can({ type: 'user.settings.deletion.send-button', password: '' })}
+        can={can}
         onChange={setDeletionPassword}
         onSend={() =>
           submit({ type: 'user.settings.deletion.send-button', password: deletionPassword })

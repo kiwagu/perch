@@ -1,9 +1,20 @@
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { beforeEach, describe, expect, it } from 'vitest'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
+
+import { emitValueParams } from './emit-value-params'
 import { runModel } from './run-model'
 
 const schemaSource = new URL('../../../database/schema/', import.meta.url).pathname
@@ -72,6 +83,28 @@ describe('runModel', () => {
     )
     expect((await runModel({ ...options, check: false })).problems).toEqual([])
     expect(existsSync(join(options.root, page, 'old.model.gen.ts'))).toBe(false)
+  })
+
+  it("writes the contract's length limits into the common schema, and --check flags a drift or a missing file", async () => {
+    const file = join(options.schemaDir, 'common/contract-values.gen.surql')
+    const outOfDate = ['out of date: common/contract-values.gen.surql']
+
+    expect((await runModel({ ...options, check: false })).problems).toEqual([])
+    expect(readFileSync(file, 'utf8')).toBe(emitValueParams(CONTRACT_VALUES)._unsafeUnwrap())
+    expect((await runModel({ ...options, check: true })).problems).toEqual([])
+
+    writeFileSync(
+      file,
+      `${readFileSync(file, 'utf8')}DEFINE PARAM OVERWRITE $shelf_max_length VALUE 1;\n`,
+    )
+
+    expect((await runModel({ ...options, check: true })).problems).toEqual(outOfDate)
+
+    rmSync(file)
+
+    expect((await runModel({ ...options, check: true })).problems).toEqual(outOfDate)
+    expect((await runModel({ ...options, check: false })).problems).toEqual([])
+    expect(readFileSync(file, 'utf8')).toBe(emitValueParams(CONTRACT_VALUES)._unsafeUnwrap())
   })
 
   it('removes a replica schema left in the app sources, now that it lives in the database workspace', async () => {

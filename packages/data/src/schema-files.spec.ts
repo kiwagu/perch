@@ -8,7 +8,11 @@ const file = (path: string): string =>
   readFileSync(new URL(`../../../database/schema/${path}`, import.meta.url), 'utf8')
 
 /** The files every database shares, in name order: a new one is added here on purpose. */
-const COMMON = ['common/entity-id.surql', 'common/replica.surql']
+const COMMON = [
+  'common/contract-values.gen.surql',
+  'common/entity-id.surql',
+  'common/replica.surql',
+]
 
 describe('readSchema', () => {
   it('composes the directory database: every common file, then its own, each in name order', () => {

@@ -17,6 +17,6 @@ Where: The manifest the stand serves at /ui-manifest/manifest.json, then [/sign-
 3. Call the page helper window.__perch.ui.anchors()
 
 ### Expected result
-- After step 1 the manifest is valid against its schema and names contract version 1
+- After step 1 the manifest is valid against its schema and names the contract version the stand was built from
 - After step 3 every anchor the helper reports is in the manifest's ids with the same kind, or is derived from one of them with a suffix of that entry's derived
 - After step 3 the helper reports the page's URL, on [/sign-in], with [app-shell.status] in [state:ready]
