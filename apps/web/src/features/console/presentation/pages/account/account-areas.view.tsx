@@ -12,7 +12,6 @@ import type {
   AccountErrors,
   AccountEvent,
 } from '../../../application/account-machine/machine'
-import { BAN_REASON_MAX } from '../../../domain/account-card.entity'
 
 import { AreaError, areaErrorText } from './area-error.view'
 
@@ -76,6 +75,7 @@ function NameArea(props: AccountAreasProps) {
               id={ids.input}
               value={props.name}
               onChange={(event) => props.onName(event.target.value)}
+              maxLength={80}
               aria-invalid={underField ? true : undefined}
               aria-describedby={underField ? ids.error : undefined}
               data-testid="console.account.name.name-input"
@@ -126,6 +126,7 @@ function EmailArea(props: AccountAreasProps) {
           id={ids.input}
           type="email"
           autoComplete="off"
+          maxLength={254}
           value={props.email}
           onChange={(event) => props.onEmail(event.target.value)}
           aria-invalid={underField ? true : undefined}
@@ -183,7 +184,7 @@ function BanArea(props: AccountAreasProps) {
             <Input
               id={reasonId}
               value={props.reason}
-              maxLength={BAN_REASON_MAX}
+              maxLength={500}
               onChange={(event) => props.onReason(event.target.value)}
               data-testid="console.account.ban.reason-input"
             />

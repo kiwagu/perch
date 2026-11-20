@@ -140,6 +140,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
                 <FieldLabel htmlFor={ids.password}>{t('user.reset-password.password')}</FieldLabel>
                 <PasswordInput
                   {...password('password')}
+                  maxLength={35}
                   marksState={false}
                   testId="user.reset-password.password-input"
                 />

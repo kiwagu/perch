@@ -54,6 +54,7 @@ export function OrganisationCreate(props: {
                 onChange={(event) => setKey(event.target.value)}
                 autoCapitalize="none"
                 autoComplete="off"
+                maxLength={32}
                 aria-describedby={hintId}
                 data-testid="organisation.create.key-input"
               />
@@ -66,6 +67,7 @@ export function OrganisationCreate(props: {
                 value={name}
                 onChange={(event) => setName(event.target.value)}
                 autoComplete="organization"
+                maxLength={80}
                 data-testid="organisation.create.name-input"
               />
             </Field>

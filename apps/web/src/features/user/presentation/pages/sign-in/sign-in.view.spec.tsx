@@ -251,6 +251,22 @@ describe('SignInView', () => {
     })
   })
 
+  it('limits the email as its value does, and the password by no length', () => {
+    renderView()
+
+    expect(input('user.sign-in.email-input').maxLength).toBe(254)
+    expect(input('user.sign-in.email-input').type).toBe('email')
+    expect(input('user.sign-in.password-input').hasAttribute('maxlength')).toBe(false)
+  })
+
+  it('limits the name as its value does while creating an account, and both passwords by no length', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(input('user.sign-in.name-input').maxLength).toBe(80)
+    expect(input('user.sign-in.password-input').hasAttribute('maxlength')).toBe(false)
+    expect(input('user.sign-in.password-confirmation-input').hasAttribute('maxlength')).toBe(false)
+  })
+
   it('asks for the password again to create an account, both as a new password', () => {
     renderView({ mode: 'sign-up' })
 

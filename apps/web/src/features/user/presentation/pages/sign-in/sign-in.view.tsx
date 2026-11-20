@@ -225,6 +225,7 @@ export function SignInView(props: SignInViewProps) {
                 {...field('email')}
                 type="email"
                 autoComplete="email"
+                maxLength={254}
                 required
                 marksState={false}
                 data-testid="user.sign-in.email-input"
@@ -300,6 +301,7 @@ export function SignInView(props: SignInViewProps) {
                 <Input
                   {...field('name')}
                   autoComplete="name"
+                  maxLength={80}
                   required
                   marksState={false}
                   data-testid="user.sign-in.name-input"

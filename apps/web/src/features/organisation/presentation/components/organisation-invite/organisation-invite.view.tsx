@@ -47,6 +47,7 @@ export function OrganisationInvite(props: {
           value={draft.email}
           onChange={(event) => props.onChange({ ...draft, email: event.target.value })}
           autoComplete="off"
+          maxLength={254}
           aria-invalid={props.error ? true : undefined}
           data-testid="organisation.invite.email-input"
         />

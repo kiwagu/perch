@@ -51,6 +51,13 @@ describe('ForgotPasswordView', () => {
     )
   })
 
+  it('limits the email as its value does', () => {
+    renderView()
+
+    expect(input('user.forgot-password.email-input').maxLength).toBe(254)
+    expect(input('user.forgot-password.email-input').type).toBe('email')
+  })
+
   it('asks to open the link of the mail, naming where it went', () => {
     renderView({ message: 'check-your-mail', sentTo: 'ann@example.test' })
 

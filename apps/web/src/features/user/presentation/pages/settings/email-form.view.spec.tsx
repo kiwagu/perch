@@ -33,6 +33,14 @@ describe('EmailFormView', () => {
     expect(screen.getByTestId('user.settings.email.password-input.visibility-button')).toBeTruthy()
   })
 
+  it('limits the email as its value does, and the password by no length', () => {
+    renderView()
+
+    expect(input('user.settings.email.email-input').maxLength).toBe(254)
+    expect(input('user.settings.email.email-input').type).toBe('email')
+    expect(input('user.settings.email.password-input').hasAttribute('maxlength')).toBe(false)
+  })
+
   it('asks to open the link of the mail, naming the new email', () => {
     renderView({ message: 'check-your-mail', sentTo: 'ann.new@example.test' })
 

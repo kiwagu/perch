@@ -109,6 +109,7 @@ export function EmailFormView(props: EmailFormViewProps) {
                 onChange={(event) => props.onChange({ ...props.values, email: event.target.value })}
                 type="email"
                 autoComplete="email"
+                maxLength={254}
                 required
                 {...marked('email')}
                 data-testid="user.settings.email.email-input"

@@ -77,6 +77,13 @@ describe('ResetPasswordView', () => {
     expect(onSubmit).toHaveBeenCalledWith({ password: 'Secret-new1', confirmation: 'Secret-new1' })
   })
 
+  it('limits the password as its value does, and the confirmation by no length', () => {
+    renderView()
+
+    expect(input(PASSWORD).maxLength).toBe(35)
+    expect(input(CONFIRMATION).hasAttribute('maxlength')).toBe(false)
+  })
+
   it('renders the eye of both passwords', () => {
     renderView()
 

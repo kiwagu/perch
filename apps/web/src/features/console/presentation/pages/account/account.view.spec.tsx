@@ -200,6 +200,14 @@ describe('AccountView', () => {
     )
   })
 
+  it('limits the name and the email as their values do', () => {
+    renderView({ name: 'Una S' })
+
+    expect(byId<HTMLInputElement>('console.account.name.name-input').maxLength).toBe(80)
+    expect(byId<HTMLInputElement>('console.account.email.email-input').maxLength).toBe(254)
+    expect(byId<HTMLInputElement>('console.account.email.email-input').type).toBe('email')
+  })
+
   it('offers no rename to an account without a profile', () => {
     renderView({ account: bartCard, name: 'Bart' })
 

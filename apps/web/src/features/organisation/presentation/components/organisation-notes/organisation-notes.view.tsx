@@ -9,7 +9,6 @@ import { Form } from '@workspace/ui/components/ui/form'
 import { Textarea } from '@workspace/ui/components/ui/textarea'
 
 import type { OrganisationEvent } from '../../../application/organisation-machine'
-import { NOTE_TEXT_MAX } from '../../../domain/note.entity'
 import { OrganisationErrorLine } from '../organisation-error-line/organisation-error-line.view'
 
 export interface NoteItem {
@@ -54,7 +53,7 @@ function NoteEditForm(props: {
       <Textarea
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
-        maxLength={NOTE_TEXT_MAX}
+        maxLength={500}
         aria-label={t('organisation.notes.edit')}
         data-testid="organisation.notes.edit-textarea"
       />
@@ -193,7 +192,7 @@ export function OrganisationNotes(
             <Textarea
               value={text}
               onChange={(event) => setText(event.target.value)}
-              maxLength={NOTE_TEXT_MAX}
+              maxLength={500}
               placeholder={t('organisation.notes.placeholder')}
               aria-label={t('organisation.notes.placeholder')}
               aria-invalid={props.error ? true : undefined}

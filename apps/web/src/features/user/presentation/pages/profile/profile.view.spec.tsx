@@ -75,6 +75,15 @@ describe('ProfileView', () => {
     expect(screen.getByLabelText(en['user.profile.bio'])).toBe(field('user.profile.bio-textarea'))
   })
 
+  it('limits each field as its value does, and sets none on the email it only shows', () => {
+    renderView()
+
+    expect(field('user.profile.name-input').maxLength).toBe(80)
+    expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
+    expect(field('user.profile.email-input').type).toBe('email')
+    expect(field('user.profile.email-input').hasAttribute('maxlength')).toBe(false)
+  })
+
   it('tells what is typed into each field, and Save', () => {
     const { onType, onSave } = renderView()
 
@@ -136,7 +145,6 @@ describe('ProfileView', () => {
 
     rerender({ error: 'profile:BIO_TOO_LONG' })
 
-    expect(field('user.profile.bio-textarea').maxLength).toBe(2000)
     expect(screen.getByTestId('user.profile.error').textContent).toBe(
       en['user.profile.error.bio-too-long'],
     )

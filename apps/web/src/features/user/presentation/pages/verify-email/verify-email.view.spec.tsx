@@ -107,6 +107,15 @@ describe('VerifyEmailView', () => {
     },
   )
 
+  it('limits the email as its value does', () => {
+    renderView({ renders: only('user.verify-email.form') })
+
+    const email = screen.getByTestId('user.verify-email.email-input') as HTMLInputElement
+
+    expect(email.maxLength).toBe(254)
+    expect(email.type).toBe('email')
+  })
+
   it('sends a new link to the email typed', () => {
     const { onResend } = renderView({
       error: 'data:LINK_INVALID',

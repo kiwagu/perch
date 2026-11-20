@@ -157,6 +157,13 @@ describe('OrganisationView without memberships', () => {
     expect(screen.queryByTestId('organisation.create.toggle-button')).toBeNull()
   })
 
+  it('limits the key and the name as their values do', () => {
+    renderView({ organisations: [], current: undefined, notes: undefined })
+
+    expect(field('organisation.create.key-input').maxLength).toBe(32)
+    expect(field('organisation.create.name-input').maxLength).toBe(80)
+  })
+
   it('explains a key, a name or a creation the gateway refuses', () => {
     const { rerender } = renderView({ organisations: [], current: undefined, notes: undefined })
     const cases: ReadonlyArray<readonly [string, string, keyof typeof en]> = [
@@ -295,6 +302,12 @@ describe('OrganisationView of a member', () => {
     expect(screen.getByTestId('organisation.notes.error').textContent).toBe(
       en['organisation.error.text-too-long'],
     )
+  })
+
+  it('limits the note being edited as its value does', () => {
+    renderView({ editing: hello.id })
+
+    expect(field('organisation.notes.edit-textarea').maxLength).toBe(500)
   })
 
   it('edits a note in place', () => {
@@ -639,6 +652,7 @@ describe('OrganisationView of an administrator', () => {
       field('organisation.invite.email-input'),
     )
     expect(field('organisation.invite.email-input').type).toBe('email')
+    expect(field('organisation.invite.email-input').maxLength).toBe(254)
     expect(select.getAttribute('data-value')).toBe('member')
     expect(select.getAttribute('aria-label')).toBe(en['organisation.invite.role'])
 

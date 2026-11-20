@@ -57,6 +57,14 @@ describe('PasswordFormView', () => {
     }
   })
 
+  it('limits the new password as its value does, and the current one and the confirmation by no length', () => {
+    renderView()
+
+    expect(input(NEW).maxLength).toBe(35)
+    expect(input(CURRENT).hasAttribute('maxlength')).toBe(false)
+    expect(input(CONFIRMATION).hasAttribute('maxlength')).toBe(false)
+  })
+
   it.each([
     ['data:INVALID_CREDENTIALS', 'invalid-credentials', CURRENT],
     ['data:PASSWORD_REJECTED', 'password-rejected', NEW],

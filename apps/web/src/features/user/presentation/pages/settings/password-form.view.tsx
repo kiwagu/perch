@@ -137,6 +137,7 @@ export function PasswordFormView(props: PasswordFormViewProps) {
               <FieldLabel htmlFor={ids.password}>{t('user.settings.password.new')}</FieldLabel>
               <PasswordInput
                 {...field('password')}
+                maxLength={35}
                 testId="user.settings.password.new-password-input"
               />
               <PasswordRuleList
