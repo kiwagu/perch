@@ -176,7 +176,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
     (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
     of the file to what it declares (`sources/locals.ts`: an anchor a `<NAME>_TEST_ID` constant
-    holds, the props a spread on an element supplies, `sources/spreads.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
+    holds, the props a spread on an element supplies, `sources/spreads.ts`, the event a `disabled`
+    asks its machine about, `sources/asked-event.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
     and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and

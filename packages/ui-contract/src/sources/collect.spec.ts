@@ -164,6 +164,7 @@ describe('collectFromSource', () => {
         name: 'disabled',
         text: "!props.can({ type: 'x.form.save-button', })",
         line: 5,
+        asks: 'x.form.save-button',
       },
       { anchor: 'x.form.code-input', name: 'maxLength', text: '"6"', line: 12 },
       { anchor: 'x.form.code-input', name: 'disabled', text: '', line: 12 },
@@ -255,6 +256,29 @@ describe('collectFromSource', () => {
     ])
     expect(found.colours).toEqual([{ anchor: 'x.form.flag-input', marksState: false, line: 8 }])
     expect(found.problems).toEqual([])
+  })
+  it('reads the event a disabled asks about: written there, or held by a constant the scope sees', () => {
+    const found = collectFromSource(
+      [
+        "const revoke = { type: 'x.sessions.revoke-button' } as const",
+        "const reset = { type: 'x.reset.send-button' } as const",
+        'const a = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(revoke)} />',
+        'const b = <Button data-testid="x.sessions.revoke-button" disabled={!props.can(reset)} />',
+        "const c = <Button data-testid=\"x.help.confirm-button\" disabled={!can({ type: testIdFor('x.help', 'confirm-button') })} />",
+        'function View(revoke) { return <Button data-testid="x.sessions.revoke-button" disabled={!props.can(revoke)} /> }',
+        "const d = <Button data-testid=\"x.page.go-button\" disabled={!props.can(ok ? { type: 'x.page.go-button' } : { type: 'x.page.stop-button' })} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A parameter's event, or one of two, cannot be read: no `asks`.
+    expect(found.props.map(({ anchor, asks, line }) => ({ anchor, asks, line }))).toEqual([
+      { anchor: 'x.sessions.revoke-button', asks: 'x.sessions.revoke-button', line: 3 },
+      { anchor: 'x.sessions.revoke-button', asks: 'x.reset.send-button', line: 4 },
+      { anchor: 'x.help.confirm-button', asks: 'x.help.confirm-button', line: 5 },
+      { anchor: 'x.sessions.revoke-button', asks: undefined, line: 6 },
+      { anchor: 'x.page.go-button', asks: undefined, line: 7 },
+    ])
   })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(

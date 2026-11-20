@@ -262,8 +262,25 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['save']}: "sample.save-button" carries disabled={!props.can(<its event>)} by the contract: the state "saving" renders it and does not handle it`,
       ])
       expect(
-        problemsOf({ save: '<Button data-testid="sample.save-button" disabled={!can(save)} />' }),
+        problemsOf({
+          save: '<Button data-testid="sample.save-button" disabled={!can(saveEvent)} />',
+          saveEvent: "{ type: 'sample.save-button' } as const",
+        }),
       ).toEqual([])
+    })
+    it('refuses, in ahead mode too, a disabled that asks about another event, or one it cannot read', () => {
+      const changed = {
+        save: '<Button data-testid="sample.save-button" disabled={!props.can(other)} />',
+        other: "{ type: 'sample.a-button' } as const",
+        a: '<Button data-testid="sample.a-button" disabled={!props.can(props.event)} />',
+      }
+      const expected = [
+        `view.tsx:${LINE['save']}: "sample.save-button": disabled={!props.can(other)} asks about "sample.a-button", but the control sends "sample.save-button"`,
+        `view.tsx:${LINE['a']}: "sample.a-button": disabled={!props.can(props.event)}, but the event it asks about cannot be read; write can({ type: 'sample.a-button' }) or a constant of the file that holds it`,
+      ]
+
+      expect(problemsOf(changed)).toEqual(expected)
+      expect(problemsOf(changed, { ahead: true })).toEqual(expected)
     })
     it('refuses disabled written in another idiom', () => {
       expect(

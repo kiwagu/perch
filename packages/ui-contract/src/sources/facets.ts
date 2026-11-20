@@ -13,7 +13,9 @@
  * - `aria-invalid={concerns === '<key>' ? true : undefined}` on each field an error of its screen
  *   names in its `fields` (`form` names none), and on no other element;
  * - `disabled={!props.can(<its event>)}` on a control of `ENABLED_BY_STATE_KINDS` whose anchor is
- *   an event of its screen's flow (a declared anchor of the screen, or a part one lists in
+ *   an event of its screen's flow, asking about that event, the control's own, as its argument
+ *   names it (`{ type: '<anchor>' }` written there or held by a constant of the file,
+ *   `asked-event.ts`) (a declared anchor of the screen, or a part one lists in
  *   `derived`, of the kind its suffix ends with), called for where a state the machine can be in
  *   renders it and does not handle it (`unhandled.ts`); it may stand on such a control that every
  *   state handles too, as the machine's own answer; never on a link, a text field or a control no
@@ -66,6 +68,8 @@ interface Held {
   readonly pattern: RegExp
   /** Why the element carries it; none where it may stand and need not. */
   readonly because?: string
+  /** The event it must ask the machine about, the control's own (`disabled`). */
+  readonly event?: string
 }
 
 /** What the contract says of one prop: the anchors it stands on, and why it stands on no other. */
@@ -159,6 +163,7 @@ const enabling: Rule = ({ screens }) => ({
             {
               idiom: ENABLE_IDIOM,
               pattern: ENABLE,
+              event,
               ...(state === undefined
                 ? {}
                 : { because: `the state "${state}" renders it and does not handle it` }),
@@ -202,7 +207,7 @@ function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets
       .map((prop) => ({ ...prop, file })),
   )
   const carried = new Set(props.map(({ anchor }) => anchor))
-  const against = props.flatMap(({ anchor, text, file, line }) => {
+  const against = props.flatMap(({ anchor, text, file, line, asks }) => {
     const held = on.get(anchor)
     const as = written(name, text)
 
@@ -212,15 +217,30 @@ function problemsOf({ name, on, elsewhere, within, lags }: Facet, facets: Facets
         : []
     }
 
-    return held.pattern.test(text)
-      ? []
-      : [
-          {
-            file,
-            line,
-            message: `"${anchor}": ${as}, but the contract says ${name}={${held.idiom}}`,
-          },
-        ]
+    if (!held.pattern.test(text)) {
+      return [
+        {
+          file,
+          line,
+          message: `"${anchor}": ${as}, but the contract says ${name}={${held.idiom}}`,
+        },
+      ]
+    }
+
+    if (held.event === undefined || asks === held.event) {
+      return []
+    }
+
+    return [
+      {
+        file,
+        line,
+        message:
+          asks === undefined
+            ? `"${anchor}": ${as}, but the event it asks about cannot be read; write can({ type: '${held.event}' }) or a constant of the file that holds it`
+            : `"${anchor}": ${as} asks about "${asks}", but the control sends "${held.event}"`,
+      },
+    ]
   })
   const missing = facets.ahead
     ? []

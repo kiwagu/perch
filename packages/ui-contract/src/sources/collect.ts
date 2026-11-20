@@ -21,6 +21,7 @@ import { type Expression, type JSXAttributeValue, parseSync, Visitor } from 'oxc
 
 import type { Problem } from '../files'
 
+import { askedEventOf } from './asked-event'
 import { constantAnchorOf, localsOf } from './locals'
 import { spreadPropsOf } from './spreads'
 import {
@@ -74,7 +75,15 @@ export interface Collected {
    * written: an expression's source with each run of whitespace one space, a string with its
    * quotes, nothing for a bare attribute.
    */
-  props: Array<{ anchor: string; base?: string; name: FacetProp; text: string; line: number }>
+  props: Array<{
+    anchor: string
+    base?: string
+    name: FacetProp
+    text: string
+    line: number
+    /** For `disabled`, the event its `!props.can(…)` asks about, where the file says (`asked-event.ts`). */
+    asks?: string
+  }>
   problems: Problem[]
 }
 
@@ -199,6 +208,13 @@ export function collectFromSource(text: string, file: string): Collected {
       : (carriedAnchor(carrier.value) ?? constantAnchorOf(locals, carrier.value, carrier.start))
   }
 
+  /** The expression of an attribute's value, or the one a spread supplies; none for a string. */
+  const expressionOf = ({ value, spread }: ElementAttribute): Expression | undefined =>
+    spread ??
+    (value?.type === 'JSXExpressionContainer' && value.expression.type !== 'JSXEmptyExpression'
+      ? value.expression
+      : undefined)
+
   /** The source of an attribute's value: an expression's, a string's with its quotes, or none. */
   const sourceOf = ({ value, spread }: ElementAttribute): string => {
     const node = spread ?? (value?.type === 'JSXExpressionContainer' ? value.expression : value)
@@ -223,9 +239,7 @@ export function collectFromSource(text: string, file: string): Collected {
       return undefined
     }
 
-    const expression =
-      written.spread ??
-      (written.value?.type === 'JSXExpressionContainer' ? written.value.expression : undefined)
+    const expression = expressionOf(written)
     const passed = expression?.type === 'Identifier' || expression?.type === 'MemberExpression'
     const literal =
       expression?.type === 'Literal' && typeof expression.value === 'boolean'
@@ -263,9 +277,19 @@ export function collectFromSource(text: string, file: string): Collected {
       const prop = FACET_PROPS.find((facet) => facet === attribute.name)
 
       if (prop !== undefined) {
-        const at = line(attribute.start)
+        const expression = expressionOf(attribute)
+        const asks =
+          prop === 'disabled' && expression !== undefined
+            ? askedEventOf(locals, expression, attribute.start)
+            : undefined
 
-        collected.props.push({ ...carried, name: prop, text: sourceOf(attribute), line: at })
+        collected.props.push({
+          ...carried,
+          name: prop,
+          text: sourceOf(attribute),
+          line: line(attribute.start),
+          ...(asks === undefined ? {} : { asks }),
+        })
       }
     }
   }
