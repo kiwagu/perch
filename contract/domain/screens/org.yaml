@@ -304,6 +304,9 @@ flow:
                 onDone:
                   target: "#organisation.viewing"
                   description: The caller is the administrator of the new organisation, which becomes current; every area starts afresh and the form is closed.
+                  actions:
+                    - clear: organisation.create.key-input
+                    - clear: organisation.create.name-input
                 onError:
                   target: open
                   description: The form stays open with what was typed.
@@ -332,13 +335,19 @@ flow:
               invoke:
                 src: note.updateNote
                 input: { id: organisation.notes.item, text: organisation.notes.edit-textarea }
-                onDone: idle
+                onDone:
+                  target: idle
+                  actions:
+                    - clear: organisation.notes.error
                 onError: editing
             deleting:
               invoke:
                 src: note.deleteNote
                 input: { id: organisation.notes.item }
-                onDone: idle
+                onDone:
+                  target: idle
+                  actions:
+                    - clear: organisation.notes.error
                 onError: idle
         invite:
           by: organisation.invite.submit-button
@@ -353,6 +362,7 @@ flow:
           onDone:
             description: The removed member's devices lose the organisation without a reload.
             actions:
+              - clear: organisation.invite.error
               - read: organisation.members.list
           onError:
             description: The removal has no error of its own; it shows under the invitation.
@@ -374,9 +384,12 @@ flow:
                     guard: ownDemotion
                     read: false
                     description: The account is a member now, so the members list goes.
+                    actions:
+                      - clear: organisation.invite.error
                   - target: idle
                     description: The member's devices show the new role without a reload.
                     actions:
+                      - clear: organisation.invite.error
                       - read: organisation.members.list
                 onError:
                   target: idle
@@ -386,6 +399,9 @@ flow:
         sent-copy:
           by: organisation.sent.copy-button
           read: false
+          onDone:
+            actions:
+              - clear: organisation.invite.error
           onError:
             actions:
               - show: organisation.invite.error
@@ -393,6 +409,7 @@ flow:
           by: organisation.sent.revoke-button
           onDone:
             actions:
+              - clear: organisation.invite.error
               - read: organisation.sent.list
           onError:
             actions:
@@ -430,6 +447,12 @@ flow:
             actions:
               - show: organisation.received.error
               - read: organisation.received.list
+        notes-add:
+          by: organisation.notes.add-button
+          onDone:
+            description: The note is written; the new note's field empties.
+            actions:
+              - clear: organisation.notes.new-textarea
     selecting:
       description: The chosen organisation becomes current on this device.
       invoke:

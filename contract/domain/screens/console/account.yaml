@@ -16,6 +16,7 @@ bindings:
           maxLength: 64
           description: The identity id of the account, as the entry of the accounts list carries it.
           examples: [ idn_01jkq5x3y8z2h9m4n6p7r8s9t0 ]
+          x-perch: { key: account-gone }
       additionalProperties: false
 entry: [ console.account.heading, console.account.section, console.account.error ]
 anchors:
@@ -227,6 +228,7 @@ flow:
                   target: idle
                   description: The account is banned and its devices are signed out.
                   actions:
+                    - clear: console.account.ban.error
                     - clear: console.account.ban.reason-input
                     - read: console.account.section
                 onError:
@@ -241,6 +243,7 @@ flow:
                 onDone:
                   target: idle
                   actions:
+                    - clear: console.account.ban.error
                     - read: console.account.section
                 onError:
                   target: idle
