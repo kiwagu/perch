@@ -54,6 +54,8 @@ flow:
       nobodyHere: nobody is signed in on this device
       linkUnusable: { codes: [ link-invalid, link-expired ] }
       invitationGone: { codes: [ invitation-gone ] }
+    renders:
+      open: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ]
   states:
     checking:
       description: The token of the link is being read.
@@ -82,12 +84,12 @@ flow:
               - show: organisation.invitation.error
     asking:
       description: The organisation and the role, with the buttons that accept and decline.
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       on:
         organisation.invitation.accept-button: accepting
         organisation.invitation.decline-button: declining
     accepting:
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       entry:
         - clear: organisation.invitation.error
       invoke:
@@ -106,7 +108,7 @@ flow:
             actions:
               - show: organisation.invitation.error
     declining:
-      meta: { renders: [ organisation.invitation.heading, organisation.invitation.role-badge, organisation.invitation.accept-button, organisation.invitation.decline-button ] }
+      meta: { renders: [ open ] }
       entry:
         - clear: organisation.invitation.error
       invoke:
