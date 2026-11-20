@@ -40,8 +40,9 @@ const INFLIGHT_COMMAND = `bun run ${INFLIGHT_SCRIPT}`
 /**
  * What the check executes, as paths from the top of the checkout: the engine and the workspace
  * package it imports, the `.surql` preload that bunfig.toml registers for every bun run, the root
- * manifest, its lockfile and the bun configuration, and this gate, which runs from the working
- * tree as well.
+ * manifest, its lockfile and the bun configuration, and this gate with every module it imports,
+ * which run from the working tree as well (`scripts/gates` and the helper `staged-commit.ts`;
+ * the spec reads the gate's imports and holds each module to this list).
  */
 const CHECK_INPUTS = [
   ENGINE_DIR,
@@ -51,6 +52,7 @@ const CHECK_INPUTS = [
   'package.json',
   'bun.lock',
   'scripts/gates',
+  'scripts/staged-commit.ts',
 ] as const
 
 /**

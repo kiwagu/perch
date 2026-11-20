@@ -1,13 +1,33 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { type SpawnSyncReturns, spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { GATES } from './tree.ts'
 
 const CHECK_MAIN_GATES = fileURLToPath(new URL('./check-main-gates.ts', import.meta.url))
+
+const REPOSITORY = fileURLToPath(new URL('../../', import.meta.url))
+
+/**
+ * The repository files the gate loads, from the top of the repository: itself and, through its
+ * relative imports, every module it reaches.
+ */
+function gateModules(file = CHECK_MAIN_GATES, reached = new Set<string>()): Set<string> {
+  reached.add(relative(REPOSITORY, file))
+
+  for (const [, specifier = ''] of readFileSync(file, 'utf8').matchAll(/from '(\.[^']*)'/g)) {
+    const module = resolve(dirname(file), specifier)
+
+    if (!reached.has(relative(REPOSITORY, module))) {
+      gateModules(module, reached)
+    }
+  }
+
+  return reached
+}
 
 /**
  * The environment of every process here: without what a git hook would pass on, or the
@@ -360,6 +380,29 @@ describe('check-main-gates, the branches in flight', () => {
     expect(result.stderr).toContain(`did not run:\n  ${path}\n`)
     expect(inflightRan(root)).toBe(false)
   })
+
+  it('reaches the helper modules the protection below is written for', () => {
+    expect([...gateModules()]).toContain('scripts/staged-commit.ts')
+  })
+
+  it.each([...gateModules()])(
+    'refuses a landing whose staged %s, a module the gate loads, is replaced after staging',
+    (module) => {
+      const root = checkout('main')
+
+      stage(root, ENGINE_FILE)
+      stage(root, module, '// the staged one\n')
+      stubInflight(root, 0)
+      recordReceipts(root)
+      write(root, module, '// a replacement\n')
+
+      const result = run(root)
+
+      expect(result.status).toBe(1)
+      expect(result.stderr).toContain(`did not run:\n  ${module}\n`)
+      expect(inflightRan(root)).toBe(false)
+    },
+  )
 
   it('names every differing file, in path order', () => {
     const root = checkout('main')
