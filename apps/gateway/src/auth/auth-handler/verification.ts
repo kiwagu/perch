@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { SUPERSEDED } from '../../sync/sync-connection'
+import { MAX_EMAIL } from '../account-email'
 import { type SignInCredential, signInStands } from '../account-passwords'
 import type { MailedVerification, SignedInAccount } from '../auth-sessions'
 import { DEVICE_HEADER } from '../session-hooks'
@@ -23,7 +24,7 @@ import {
 } from './requests'
 
 const verifyBody = z.object({ token: z.string().min(1).max(4096) })
-const resendBody = z.object({ email: z.string().min(1).max(320) })
+const resendBody = z.object({ email: z.string().min(1).max(MAX_EMAIL) })
 const linkRefusal = z.object({ code: z.string() })
 
 /**

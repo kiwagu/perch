@@ -27,7 +27,7 @@ members, the earliest membership first, in the organisation's turn, once the org
 wants is deleted, one at a time, the first failure answering `data:WRITE_FAILED` and the next
 read settling the rest; the row of a membership whose identity is gone is kept and the identity
 is not listed), answers what it refuses
-with a refusal code (`invalid-key`, `key-taken`, `not-admin`, `already-member` and the like),
+with a refusal code (`key-invalid`, `key-taken`, `not-admin`, `already-member` and the like),
 and tells its listeners an identity's new memberships whenever they change: the composition root
 has the registry tell the identity's devices. A tell reads the memberships and runs every
 listener, waiting for all of them to settle before the change resolves; one that fails, at the
@@ -204,7 +204,9 @@ member (200 with the membership; 403 `other-account`, 409 `already-member`, 410
 accept is but for `already-member`).
 
 A body or an identity that does not follow its schema answers 400 (`bad-request`);
-a refusal answers its code, with 400 for `invalid-key`, `invalid-name` and `email-invalid`, 403
+a refusal answers its code, with 400 for `key-invalid`, `name-required`, `name-too-long` and
+`email-invalid` (a creation's key and name are judged by `newOrganisationOf`, before the attempt
+is counted), 403
 for `not-a-member`, `not-admin` and `other-account`, 404 for `no-such-tenant`, `no-such-identity`,
 `no-such-member` and `link-invalid`, 409 for `key-taken`, `already-member`, `self` and
 `last-admin`, and 410 for `link-expired` and `invitation-gone`, except a creation, an
@@ -248,5 +250,6 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `organisation-routes/limits.spec.ts`, `invitation-routes/routes.spec.ts`,
   `organisation-rows.spec.ts`, `region-databases.spec.ts`, `tenant-databases.spec.ts`,
   `organisations/invitations.spec.ts`, `invitations/token.spec.ts`, `invitations/pending.spec.ts`,
-  `invitations/mails.spec.ts`), each organisation on an embedded in-memory database of its own.
+  `invitations/mails.spec.ts`, `new-organisation.spec.ts`), each organisation on an embedded
+  in-memory database of its own.
 - `bun run test:db` (the smoke) drives the organisation path against a stand.

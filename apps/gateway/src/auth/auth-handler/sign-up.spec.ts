@@ -10,6 +10,7 @@ import {
   ANN,
   mountedOnFakeAuth,
   mountedOnRealAuth,
+  PASSWORD,
   resendRequest,
   signInRequest,
   signUpRequest,
@@ -290,4 +291,81 @@ describe('authHandler, the rules of a new password', () => {
       expect(await answer?.json()).toMatchObject({ user: { id: user.id, email: ANN } })
     },
   )
+})
+
+/** Names that break the rule of a profile's name, each by what it lacks or holds, with the code that says it. */
+const REFUSED_NAMES = [
+  ['nothing typed', '', 'name-required'],
+  ['spaces alone', '   ', 'name-required'],
+  ['81 characters', 'r'.repeat(81), 'name-too-long'],
+  ['81 characters once trimmed', ` ${'r'.repeat(81)} `, 'name-too-long'],
+] as const
+
+describe('authHandler, the name of a sign-up', () => {
+  it.each(REFUSED_NAMES)(
+    'refuses a name of %s at once, 400 %s, Better Auth not asked',
+    async (_, name, code) => {
+      const { route, clock, received } = mountedOnFakeAuth(accepted)
+      const answer = await route(signUpRequest(ANN, PASSWORD, name), FROM)
+
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code })
+      expect(received).toEqual([])
+      // No floor holds a refusal back.
+      expect(clock.pending()).toBe(0)
+    },
+  )
+
+  it('takes a name of 80 characters once trimmed', async () => {
+    const { route, clock, received } = mountedOnFakeAuth(accepted)
+    const pending = route(signUpRequest(ANN, PASSWORD, ` ${'r'.repeat(80)} `), FROM)
+
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await pending)?.status).toBe(202)
+    expect(received).toHaveLength(1)
+  })
+
+  it.each([
+    ['no name', { email: ANN, password: PASSWORD }],
+    ['a name that is no text', { name: 7, email: ANN, password: PASSWORD }],
+  ])('answers 400 bad-request to a body with %s, Better Auth not asked', async (_, body) => {
+    const { route, received } = mountedOnFakeAuth(accepted)
+    const answer = await route(
+      new Request('http://gateway.test/auth/sign-up/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      FROM,
+    )
+
+    expect(answer?.status).toBe(400)
+    expect(await answer?.json()).toEqual({ code: 'bad-request' })
+    expect(received).toEqual([])
+  })
+
+  it('refuses a name alike for an email that has an account and one that has none, mailing nothing', async () => {
+    const { route, clock, outbox } = await mountedOnRealAuth()
+    const up = route(signUpRequest(ANN), FROM)
+
+    await vi.waitFor(() => expect(clock.pending()).toBe(1), ARGON2_WAIT)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
+    await outbox.next(ANN)
+
+    const [taken, free] = await Promise.all(
+      [ANN, 'bob@example.test'].map((email) => route(signUpRequest(email, PASSWORD, ''), FROM)),
+    )
+
+    for (const answer of [taken, free]) {
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code: 'name-required' })
+      expect([...(answer?.headers.keys() ?? [])].sort()).toEqual(
+        [...(taken?.headers.keys() ?? [])].sort(),
+      )
+    }
+
+    expect(outbox.to(ANN)).toHaveLength(1)
+    expect(outbox.to('bob@example.test')).toEqual([])
+  })
 })

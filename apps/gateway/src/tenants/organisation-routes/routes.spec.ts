@@ -93,18 +93,10 @@ describe('organisationRoutes', () => {
     })
   })
 
-  it('answers 400 to a creation whose body does not follow the schema, and creates nothing', async () => {
+  it('answers 400 bad-request to a creation whose body does not follow the schema, and creates nothing', async () => {
     const { ann, ask } = await harness()
 
-    for (const body of [
-      { key: 'Acme', name: 'Acme' },
-      { key: 'a', name: 'Acme' },
-      { key: 'acme-corp', name: 'Acme' },
-      { key: 'acme', name: '   ' },
-      { key: 'acme', name: 'x'.repeat(81) },
-      { key: 'acme' },
-      '{"key":',
-    ]) {
+    for (const body of [{ key: 'acme' }, { name: 'Acme' }, { key: 7, name: 'Acme' }, '{"key":']) {
       expect(await ask('POST', '/organisations', { as: ann, body })).toEqual({
         status: 400,
         body: { code: 'bad-request' },
@@ -115,6 +107,47 @@ describe('organisationRoutes', () => {
       status: 200,
       body: { memberships: [] },
     })
+  })
+
+  it.each([
+    { what: 'a key with a capital', key: 'Acme', name: 'Acme', code: 'key-invalid' },
+    { what: 'a key of one character', key: 'a', name: 'Acme', code: 'key-invalid' },
+    { what: 'a key with a dash', key: 'acme-corp', name: 'Acme', code: 'key-invalid' },
+    {
+      what: 'a key of 33 characters',
+      key: `a${'b'.repeat(32)}`,
+      name: 'Acme',
+      code: 'key-invalid',
+    },
+    { what: 'an empty name', key: 'acme', name: '', code: 'name-required' },
+    { what: 'a name of spaces', key: 'acme', name: '   ', code: 'name-required' },
+    { what: 'a name of 81 characters', key: 'acme', name: 'x'.repeat(81), code: 'name-too-long' },
+  ])(
+    'answers 400 $code to a creation with $what, and creates nothing',
+    async ({ key, name, code }) => {
+      const { ann, ask } = await harness()
+
+      expect(await ask('POST', '/organisations', { as: ann, body: { key, name } })).toEqual({
+        status: 400,
+        body: { code },
+      })
+      expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+        status: 200,
+        body: { memberships: [] },
+      })
+    },
+  )
+
+  it('takes a name of 80 characters once trimmed', async () => {
+    const { ann, ask } = await harness()
+    const name = 'x'.repeat(80)
+    const { status, body } = await ask('POST', '/organisations', {
+      as: ann,
+      body: { key: 'acme', name: ` ${name} ` },
+    })
+
+    expect(status).toBe(201)
+    expect(created.parse(body).membership.tenant.name).toBe(name)
   })
 
   it('creates the organisation for the caller, whatever identity the body names', async () => {

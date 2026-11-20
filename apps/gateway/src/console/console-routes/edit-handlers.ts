@@ -4,6 +4,8 @@ import type { DataError } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { MAX_EMAIL } from '../../auth/account-email'
+import { profileNameOf } from '../../auth/profile-name'
 import { readBody } from '../../read-body'
 import { errorAnswer, rateLimited, refusalAnswer } from '../console-refusal'
 
@@ -11,27 +13,14 @@ import { accountOf, actionDone, inAccountTurn } from './account-action'
 import type { Handler } from './operator-caller'
 import type { ConsoleRoutesOptions } from './options'
 
-/** The longest name a profile takes, as the account's own profile page holds it. */
-const MAX_NAME = 80
-
-/** The longest email an account takes, as the account's own change of its email holds it. */
-const MAX_EMAIL = 320
-
-/** What an operator sends to rename an account: the name, held to its rule below. */
+/** What an operator sends to rename an account: the name, held to the profile page's rule. */
 const renameBody = z.object({ name: z.string() })
-
-/** The name a profile takes: 1 to 80 characters once trimmed, as on the profile page. */
-const profileName = z.string().trim().min(1).max(MAX_NAME)
 
 /** What an operator sends to change an account's email: the new email, held to its shape below. */
 const emailBody = z.object({ email: z.string() })
 
-/** A new email as the account's own change takes it: lower case, trimmed, at most 320 characters. */
+/** A new email as the account's own change takes it: lower case, trimmed, at most 254 characters. */
 const newEmailShape = z.email().max(MAX_EMAIL)
-
-/** Why a name breaks its rule: none left once trimmed, or longer than a profile takes. */
-const nameRefusal = (name: string) =>
-  name.trim().length === 0 ? ('name-required' as const) : ('name-too-long' as const)
 
 /**
  * The console's changes of an account, each for an operator, on the account the path's id names
@@ -46,7 +35,7 @@ const nameRefusal = (name: string) =>
  *   show it as any change of the profile; an account that has no profile yet (it never signed
  *   in) has no name to set: 409 `failed`, nothing written.
  * - email (`{ email }`): the account's own change of its email, without its password: a new
- *   email that is no email (in lower case and trimmed, at most 320 characters) answers 400
+ *   email that is no email (in lower case and trimmed, at most 254 characters) answers 400
  *   `email-invalid` before anything is taken; then one of the operator's address's mails and one
  *   of the account's three changes in a quarter of an hour are taken
  *   (`RequestLimits.emailChangeMail`, 429 `rate-limited`); in the account's turn, the account's
@@ -73,14 +62,14 @@ export function editHandlers(options: ConsoleRoutesOptions) {
         return refusalAnswer('bad-request')
       }
 
-      const name = profileName.safeParse(body.data.name)
+      const name = profileNameOf(body.data.name)
 
-      if (!name.success) {
-        return refusalAnswer(nameRefusal(body.data.name))
+      if (name.isErr()) {
+        return refusalAnswer(name.error)
       }
 
       return inAccountTurn(options, identity, async () =>
-        (await options.names.rename(identity, name.data)).match(
+        (await options.names.rename(identity, name.value)).match(
           (renamed) => (renamed === 'renamed' ? actionDone() : refusalAnswer('failed')),
           failed,
         ),

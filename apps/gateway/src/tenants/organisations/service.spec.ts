@@ -597,12 +597,12 @@ describe('Organisations', () => {
     const create = async (key: string, name: string) =>
       (await organisations.create({ identity: ann.id, key, name }))._unsafeUnwrapErr()
 
-    expect(await create('Acme', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('a', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('acme-corp', 'Acme')).toEqual(refused('invalid-key'))
-    expect(await create('acme', '')).toEqual(refused('invalid-name'))
-    expect(await create('acme', '   ')).toEqual(refused('invalid-name'))
-    expect(await create('acme', 'x'.repeat(81))).toEqual(refused('invalid-name'))
+    expect(await create('Acme', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('a', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('acme-corp', 'Acme')).toEqual(refused('key-invalid'))
+    expect(await create('acme', '')).toEqual(refused('name-required'))
+    expect(await create('acme', '   ')).toEqual(refused('name-required'))
+    expect(await create('acme', 'x'.repeat(81))).toEqual(refused('name-too-long'))
     const [tenants, memberships] = await directory.db.query<[unknown[], unknown[]]>(directoryRows)
 
     expect(tenants).toEqual([])

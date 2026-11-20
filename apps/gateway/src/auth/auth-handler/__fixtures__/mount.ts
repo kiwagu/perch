@@ -448,12 +448,12 @@ export async function annsLink(outbox: Outbox, email = ANN): Promise<string> {
   return linkToken(await outbox.next(email, seen))
 }
 
-/** A sign-up of `email` with `password`, as the web sends it from the front's origin. */
-export function signUpRequest(email: string, password = PASSWORD): Request {
+/** A sign-up of `email` with `password` and `name`, as the web sends it from the front's origin. */
+export function signUpRequest(email: string, password = PASSWORD, name = 'Ann'): Request {
   return new Request('http://gateway.test/auth/sign-up/email', {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: ORIGIN },
-    body: JSON.stringify({ name: 'Ann', email, password, locale: 'en' }),
+    body: JSON.stringify({ name, email, password, locale: 'en' }),
   })
 }
 

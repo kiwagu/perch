@@ -200,7 +200,10 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
   it.each([
     { what: 'an empty email', email: '' },
     { what: 'a text that is no email', email: 'robert' },
-    { what: 'an email over 320 characters', email: `${'r'.repeat(310)}@example.test` },
+    {
+      what: 'an email over 254 characters',
+      email: `${'r'.repeat(255 - '@example.test'.length)}@example.test`,
+    },
   ])(
     "refuses $what 400 email-invalid, mailing nothing and taking none of the account's changes",
     async ({ email }) => {
@@ -220,6 +223,15 @@ describe('consoleRoutes: POST /console/accounts/:id/email', () => {
       expect(mounted.limits.emailChangeMail(ELSEWHERE, bob.identity).allowed).toBe(true)
     },
   )
+
+  it('takes an email of 254 characters, the longest an address can be, and mails it', async () => {
+    const mounted = await consoleOnMount()
+    const bob = await signedInOn(mounted, BOB, ['desk'])
+    const longest = `${'r'.repeat(254 - '@example.test'.length)}@example.test`
+
+    expect((await mounted.act(bob.identity, 'email', { email: longest })).status).toBe(204)
+    expect((await mounted.outbox.next(longest)).subject).toBe('Confirm your new email for Perch')
+  })
 
   it.each([
     { what: 'an email another account holds', email: CAT },

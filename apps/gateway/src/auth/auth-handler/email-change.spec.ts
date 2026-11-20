@@ -161,7 +161,7 @@ describe('authHandler, the request to change the email', () => {
       '@example.test',
       '',
       '   ',
-      `${'a'.repeat(310)}@example.test`,
+      `${'a'.repeat(255 - '@example.test'.length)}@example.test`,
     ]) {
       const refused = await mounted.route(changeTo(ann.on('laptop'), email), FROM)
 
@@ -170,6 +170,15 @@ describe('authHandler, the request to change the email', () => {
     }
 
     expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
+  })
+
+  it('takes a new email of 254 characters, the longest an address can be, and mails it', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const longest = `${'a'.repeat(254 - '@example.test'.length)}@example.test`
+
+    expect((await asked(mounted, ann, longest))?.status).toBe(202)
+    expect(mounted.outbox.to(longest)).toHaveLength(1)
   })
 
   it('takes three changes of an account within a quarter of an hour; the fourth answers rate-limited and mails nothing', async () => {

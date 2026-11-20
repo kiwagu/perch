@@ -167,11 +167,15 @@ whether the email has an account. One email's sign-ups run one at a time (the ac
 otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
 sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
 address's verification mails, whatever its email (429 when they are spent); a body that names no
-email or no password answers 400 `bad-request`. The password must keep the rules of a new
+email, no password or no name, or an email of more than 254 characters (`MAX_EMAIL`, as every
+body's email is held to), answers 400 `bad-request`. The password must keep the rules of a new
 password (`keepsPasswordRules` of `@workspace/kernel`: 10 to 35 characters, only Latin letters,
 digits and the 32 printable ASCII symbols, with at least one digit, one uppercase letter, one
 lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at once,
 before the email's turn, Better Auth and the directory, so the refusal reads nothing of the email.
+The name must keep the rule of a profile's name (`profileNameOf`: 1 to 80 characters once trimmed,
+as the directory's schema holds a profile's); one that breaks it answers 400 `name-required` or
+`name-too-long` at once, on the same terms, whatever the email.
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
 which it checks on a new password only: a sign-in checks no rule, so an account whose password was
 set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
@@ -397,7 +401,7 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
 its token and `X-Perch-Device`. After a credential check of its address, a new email that is not
-an email (empty, longer than 320 characters, or of any other shape) answers 400 `email-invalid`;
+an email (empty, longer than 254 characters, or of any other shape) answers 400 `email-invalid`;
 then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
@@ -623,10 +627,13 @@ error carries one.
   `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
-  organisation routes, and the caller's email and session row besides), `accountEmail` (`account-email.ts`, an email as the invitations take
-  it) and `identityByEmail` (`identity-by-email.ts`: the one lookup of an identity by its email,
-  in any case, answering its key and email or none; `AuthSessions.identityOf` and the
-  organisations' invites use it, each deciding what none means).
+  organisation routes, and the caller's email and session row besides), `accountEmail`
+  (`account-email.ts`, an email as the invitations take it) with `MAX_EMAIL`, the longest an
+  email in any body may be, `profileNameOf` (`profile-name.ts`: a name as a profile takes it, as
+  a sign-up and an operator's rename hold it) and `identityByEmail` (`identity-by-email.ts`: the
+  one lookup of an identity by its email, in any case, answering its key and email or none;
+  `AuthSessions.identityOf` and the organisations' invites use it, each deciding what none
+  means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session for a row written admitted, a sign-in's admission
@@ -677,7 +684,9 @@ error carries one.
   closed only once it is admitted;
   `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
-  takes one of its address's verification mails; `auth-handler/sign-in.spec.ts`,
+  takes one of its address's verification mails, and that a name which breaks the rule of a
+  profile's name is refused at once, whatever the email; `auth-handler/email-length.spec.ts`,
+  which holds the longest email a body may name; `auth-handler/sign-in.spec.ts`,
   `auth-handler/password-reset.spec.ts`,
   `auth-handler/password-change.spec.ts` and `auth-handler/email-change.spec.ts`, which hold the
   uniform answers and their floors, each limit, the single use, the newest link only, the

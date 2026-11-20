@@ -4,6 +4,8 @@ import { z } from '@workspace/zod'
 import { until } from '../../floor'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
+import { MAX_EMAIL } from '../account-email'
+import { profileNameOf } from '../profile-name'
 
 import type { AuthMountDeps } from './mount'
 import { refusalOf, withJsonBody } from './requests'
@@ -18,9 +20,14 @@ export const SIGN_UP_FLOOR_MS = 800
 
 /**
  * As much of a sign-up's body as the mount reads before Better Auth does: the email its turn is
- * taken by, and the password the rules of a new password are checked on.
+ * taken by (at most `MAX_EMAIL` characters), the password the rules of a new password are checked
+ * on, and the name the rule of a profile's name is.
  */
-const signUpBody = z.object({ email: z.string().min(1).max(320), password: z.string() })
+const signUpBody = z.object({
+  email: z.string().min(1).max(MAX_EMAIL),
+  password: z.string(),
+  name: z.string(),
+})
 
 /**
  * Hands Better Auth a sign-up, once the client address's verification mails took it (every sign-up
@@ -28,7 +35,9 @@ const signUpBody = z.object({ email: z.string().min(1).max(320), password: z.str
  * email would answer a success and a failure), with the very JSON the email was read from. A
  * password that breaks the rules of a new password (`keepsPasswordRules`) is refused first, 400
  * `weak-password`, at once: before the email's turn, Better Auth and the directory, so the
- * refusal reads nothing of the email. Better Auth's answer names the account it made, or, for an
+ * refusal reads nothing of the email. So is a name that breaks the rule of a profile's name
+ * (`profileNameOf`): 400 `name-required` (nothing left once trimmed) or `name-too-long`. Better
+ * Auth's answer names the account it made, or, for an
  * email that has one, an account it made up whose fields differ: the client gets `202` with no
  * body for both, no sooner than `SIGN_UP_FLOOR_MS` after the request began. A refusal of Better
  * Auth's (a malformed email, a language the gateway does not speak) passes as its status and code
@@ -56,6 +65,12 @@ export async function signUp(
 
   if (!keepsPasswordRules(body.data.password)) {
     return Response.json({ code: 'weak-password' }, { status: 400 })
+  }
+
+  const name = profileNameOf(body.data.name)
+
+  if (name.isErr()) {
+    return Response.json({ code: name.error }, { status: 400 })
   }
 
   const answer = await deps.accounts.run(body.data.email.toLowerCase(), () =>

@@ -128,7 +128,7 @@ its allowance 429 `rate-limited` with `Retry-After`; a failure of the gateway an
     characters), 409 `failed` for an account that has no profile yet.
   - `POST /console/accounts/:id/email` with `{ email }`: 204 once the mail with the change's link
     is on its way to the new email (in lower case, trimmed); 400 `email-invalid` (no email, or past
-    320 characters, before any allowance is taken), 409 `email-taken` (another account's email or
+    254 characters, before any allowance is taken), 409 `email-taken` (another account's email or
     the account's own), 429 `rate-limited` past the account's three changes in a quarter of an hour.
   - `POST /console/accounts/:id/ban` with `{ reason? }` (at most 500 characters once trimmed,
     else 400 `bad-request`): 204 once the account is banned and its sessions ended, then its
