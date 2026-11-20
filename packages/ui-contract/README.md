@@ -174,8 +174,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     scenarios and the consumers check alike (`contract/REFERENCE.md#rule-scenario-brackets`).
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
-    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`); `scanSources(root)`
-    collects the sources under `SOURCE_ROOTS`;
+    (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
+    of the file to what it declares (`sources/locals.ts`: an anchor a `<NAME>_TEST_ID` constant
+    holds); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
     and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and

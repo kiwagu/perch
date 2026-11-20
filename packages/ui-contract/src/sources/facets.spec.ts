@@ -223,6 +223,20 @@ describe('facetProblems', () => {
         `view.tsx:${LINE['a']}: "sample.a-button": aria-invalid={concerns === 'a' ? true : undefined}, ${elsewhere}`,
       ])
     })
+    it('reads the mark of a field whose anchor a constant of the file holds, and wants it there', () => {
+      const held = { TITLE_TEST_ID: "'sample.title-input'" }
+      const constantLine = Object.keys(AGREEING).length + 1
+
+      expect(
+        problemsOf({
+          ...held,
+          title: `<Input data-testid={TITLE_TEST_ID} aria-invalid={${MARK}} />`,
+        }),
+      ).toEqual([])
+      expect(problemsOf({ ...held, title: '<Input data-testid={TITLE_TEST_ID} />' })).toEqual([
+        `view.tsx:${constantLine}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
+      ])
+    })
     it('in ahead mode lets a missing mark by', () => {
       expect(
         problemsOf({ title: '<Input data-testid="sample.title-input" />' }, { ahead: true }),

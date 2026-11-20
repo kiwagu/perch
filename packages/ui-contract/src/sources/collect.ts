@@ -11,7 +11,7 @@
  * beside a field's anchor, which the contract decides and the kit takes from its field facts: a
  * boolean literal, or a name or a member passed as written, on the element that carries the anchor
  * as a literal or as `testIdFor()` of two literals (a paged list's size select, with the base it
- * derives from); a prop passed through on an element that carries no anchor the check can read (a
+ * derives from), or through a `<NAME>_TEST_ID` constant the file declares (`locals.ts`); a prop passed through on an element that carries no anchor the check can read (a
  * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so.
  */
@@ -20,6 +20,7 @@ import { type Expression, type JSXAttributeValue, parseSync, Visitor } from 'oxc
 
 import type { Problem } from '../files'
 
+import { constantAnchorOf, localsOf } from './locals'
 import {
   type AnchorValue,
   anchorValue,
@@ -29,6 +30,7 @@ import {
   isTestIdFor,
   keyName,
   staticText,
+  TEST_ID_CONSTANT,
   unwrap,
 } from './values'
 
@@ -113,7 +115,6 @@ interface ElementAttribute {
   readonly start: number
 }
 
-const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
 const CODES_CONSTANT = /^[A-Z][A-Z0-9_]*_CODES$/
 
 /** The grammar of a contract code: `welcome`, `devices-read-failed`. */
@@ -178,11 +179,18 @@ export function collectFromSource(text: string, file: string): Collected {
     }
   }
 
-  /** The anchor an element carries as a literal or as `testIdFor()` of two literals, if any. */
+  const locals = localsOf(program)
+
+  /**
+   * The anchor an element carries as a literal or as `testIdFor()` of two literals, or through a
+   * `<NAME>_TEST_ID` constant of the file that holds one, if any.
+   */
   const carriedBy = (attributes: readonly ElementAttribute[]): CarriedAnchor | undefined => {
     const carrier = attributes.find((attribute) => isAnchorAttribute(attribute.name))
 
-    return carrier === undefined ? undefined : carriedAnchor(carrier.value)
+    return carrier === undefined
+      ? undefined
+      : (carriedAnchor(carrier.value) ?? constantAnchorOf(locals, carrier.value, carrier.start))
   }
 
   /** The source of an attribute's value: an expression's, a string's with its quotes, or none. */

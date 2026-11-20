@@ -206,6 +206,27 @@ describe('collectFromSource', () => {
     expect(found.props).toEqual([])
     expect(found.problems).toEqual([])
   })
+  it('follows a <NAME>_TEST_ID constant of the file, in the scope that sees it, to its anchor', () => {
+    const found = collectFromSource(
+      [
+        "const TITLE_TEST_ID = 'x.form.title-input'",
+        "const LIST_TEST_ID = 'x.list'",
+        'const a = <Input data-testid={TITLE_TEST_ID} maxLength={80} holdsInput={false} />',
+        "const b = <Select testId={testIdFor(LIST_TEST_ID, 'size-select')} disabled={busy} />",
+        'function View({ TITLE_TEST_ID }) { return <Input data-testid={TITLE_TEST_ID} maxLength={1} /> }',
+        'const c = <Input data-testid={OTHER_TEST_ID} maxLength={2} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    // A parameter hides the constant, and a constant the file does not declare is passed through.
+    expect(found.props).toEqual([
+      { anchor: 'x.form.title-input', name: 'maxLength', text: '80', line: 3 },
+      { anchor: 'x.list.size-select', base: 'x.list', name: 'disabled', text: 'busy', line: 4 },
+    ])
+    expect(found.inputs).toEqual([{ anchor: 'x.form.title-input', holdsInput: false, line: 3 }])
+    expect(found.problems).toEqual([])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [
