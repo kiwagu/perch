@@ -68,6 +68,12 @@ describe('suppliedBy', () => {
     'const groups = { email: { maxLength: 3 }, name: { id: 2 } }',
     'const memo = useMemo(() => ({ maxLength: 4 }), [])',
     'const wrapped = useCallback((name) => ({ name, type: name }), [])',
+    'const common = { a: 1 }',
+    'const fields = { ...common, ...{ email: { maxLength: 5 } } }',
+    "const events = { reset: { type: 'r' } }",
+    'const { reset: checkEvent } = events',
+    'function early(c) { if (c) return; return { mark: 1 } }',
+    'function maybe(c) { if (c) { return { mark: 1 } } }',
     'const at = 0',
   ].join('\n')
 
@@ -94,6 +100,16 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, "wrapped('x')", 'const at')).toEqual(['name', 'type'])
     expect(suppliedAt(text, 'ok && base', 'const at')).toEqual(['id'])
     expect(suppliedAt(text, 'base || groups.name', 'const at')).toEqual(['id', 'id'])
+  })
+  it('follows a member through the spreads of its object, and a destructured name to its key', () => {
+    expect(suppliedAt(text, 'fields.email', 'const at')).toEqual(['maxLength'])
+    expect(supplied(text, 'fields.email', 'const at').followed).toBe(true)
+    expect(suppliedAt(text, 'checkEvent', 'const at')).toEqual(['type'])
+  })
+  it('counts a bare return and a reachable end as supplying nothing', () => {
+    expect(suppliedAt(text, 'early(1)', 'const at')).toEqual(['mark'])
+    expect(supplied(text, 'early(1)', 'const at').certain.size).toBe(0)
+    expect(supplied(text, 'maybe(1)', 'const at').certain.size).toBe(0)
   })
   it('counts a prop as certain only where every branch supplies it, and says when a branch cannot be followed', () => {
     const either = supplied(

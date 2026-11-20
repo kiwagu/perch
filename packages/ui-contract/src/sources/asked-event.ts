@@ -12,7 +12,8 @@
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
 
-import { type Alternative, DEPTH, type Locals } from './locals'
+import { type Alternative, DEPTH } from './alternatives'
+import type { Locals } from './locals'
 import { derivedAnchorOf, keyName, staticText, unwrap } from './values'
 
 /** `can` or `props.can`, the machine's question as the facets idiom writes it. */

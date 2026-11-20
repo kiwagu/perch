@@ -7,18 +7,11 @@
  * the file cannot follow, which each reader decides about itself.
  */
 
-import type {
-  ArrowFunctionExpression,
-  Expression,
-  Function as FunctionNode,
-  ObjectExpression,
-  ParamPattern,
-  Program,
-} from 'oxc-parser'
+import type { Expression, ParamPattern, Program } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { namesIn } from './binding-names'
-import { keyName, unwrap } from './values'
+import { type Alternative, alternativesIn, type Callable } from './alternatives'
+import { namesIn, pathsIn } from './binding-names'
 
 /** A range of the source, `[start, end)`. */
 interface Span {
@@ -32,6 +25,8 @@ interface Binding {
   /** Where it is declared; its scope is the innermost scope around this place. */
   readonly at: Span
   readonly value?: Expression
+  /** For a destructured name, the value destructured and the keys that lead to it. */
+  readonly member?: { readonly object: Expression; readonly path: readonly string[] }
 }
 
 export interface Locals {
@@ -39,36 +34,9 @@ export interface Locals {
   valueNamed(name: string, at: number): Expression | undefined
   /** Whether the file binds `name` where it is written at `at`: declared, or a parameter. */
   declares(name: string, at: number): boolean
-  /**
-   * What `node`, written at `at`, may be, each alternative once: an object written there, either
-   * branch of a conditional, either side of `||` or `??` and the right of `&&` (or nothing), the
-   * one a constant holds, a member of such an object, or each one a function of the file returns
-   * where it is called (an arrow's expression, each `return` of its own body; a `useCallback` hands
-   * its function on, a `useMemo` holds what its function returns).
-   */
+  /** What `node`, written at `at`, may be, each alternative once (`alternatives.ts`). */
   objectsOf(node: Expression, at: number): Alternative[]
 }
-
-/**
- * One thing a value may be: an object, `null` for nothing (`null`, `false`, `undefined`, a function
- * that returns none), `undefined` for what the file cannot say (a parameter, an import, a value
- * built at runtime, a chain past `DEPTH`).
- */
-export type Alternative = ObjectExpression | null | undefined
-
-const isNothing = (value: Expression): boolean =>
-  (value.type === 'Literal' && (value.value === null || value.value === false)) ||
-  (value.type === 'Identifier' && value.name === 'undefined')
-
-/** How many names, calls and spreads in a row are followed before giving up: no cycle runs on. */
-export const DEPTH = 8
-
-type Callable = ArrowFunctionExpression | FunctionNode
-
-const isCallable = (value: Expression): value is Callable =>
-  value.type === 'ArrowFunctionExpression' ||
-  value.type === 'FunctionExpression' ||
-  value.type === 'FunctionDeclaration'
 
 const FILE: Span = { start: 0, end: Number.POSITIVE_INFINITY }
 
@@ -81,7 +49,7 @@ export function localsOf(program: Program): Locals {
   const scopes: Span[] = [FILE]
   const functions: Span[] = []
   const bindings: Binding[] = []
-  const returns: Array<{ readonly at: number; readonly argument: Expression }> = []
+  const returns: Array<{ readonly at: number; readonly argument: Expression | null }> = []
   const parameters = (node: Span & { readonly params: readonly ParamPattern[] }): void => {
     scopes.push(node)
     functions.push(node)
@@ -97,9 +65,7 @@ export function localsOf(program: Program): Locals {
       scopes.push(node)
     },
     ReturnStatement: (node) => {
-      if (node.argument !== null) {
-        returns.push({ at: node.start, argument: node.argument })
-      }
+      returns.push({ at: node.start, argument: node.argument })
     },
     ArrowFunctionExpression: parameters,
     FunctionExpression: parameters,
@@ -120,7 +86,15 @@ export function localsOf(program: Program): Locals {
           ...(node.init === null ? {} : { value: node.init }),
         })
       } else {
-        bindings.push(...namesIn(node.id).map((name) => ({ name, at })))
+        const { init } = node
+
+        bindings.push(
+          ...pathsIn(node.id).map(({ name, path }) => ({
+            name,
+            at,
+            ...(path === undefined || init === null ? {} : { member: { object: init, path } }),
+          })),
+        )
       }
     },
   }).visit(program)
@@ -154,131 +128,37 @@ export function localsOf(program: Program): Locals {
         undefined,
       )
 
-  /** What a function returns: an arrow's expression, or each `return` of its own body. */
-  const returnedBy = (fn: Callable): Expression[] =>
-    fn.body !== null && fn.body.type !== 'BlockStatement'
-      ? [fn.body]
-      : returns
-          .filter(({ at }) => {
-            const around = functionAround(at)
-
-            return around?.start === fn.start && around.end === fn.end
-          })
-          .map(({ argument }) => argument)
-
-  /** A hook that hands its function on (`useCallback`) or calls it (`useMemo`), if `node` is one. */
-  const hooked = (
-    node: Expression,
-  ): { readonly calls: boolean; readonly fn: Callable } | undefined => {
-    const call = unwrap(node)
-
-    if (call.type !== 'CallExpression' || call.callee.type !== 'Identifier') {
-      return undefined
-    }
-
-    const hook = call.callee.name
-    const [first] = call.arguments
-    const fn = first === undefined || first.type === 'SpreadElement' ? undefined : unwrap(first)
-
-    return (hook === 'useCallback' || hook === 'useMemo') && fn !== undefined && isCallable(fn)
-      ? { calls: hook === 'useMemo', fn }
-      : undefined
-  }
-
-  const objectsOf = (node: Expression, at: number, depth = 0): Alternative[] => {
-    const value = unwrap(node)
-    const next = (expression: Expression): Alternative[] =>
-      objectsOf(expression, expression.start, depth + 1)
-    const resultOf = (fn: Callable): Alternative[] => {
-      const returned = returnedBy(fn)
-
-      return returned.length === 0 ? [null] : returned.flatMap(next)
-    }
-
-    if (value.type === 'ObjectExpression') {
-      return [value]
-    }
-
-    if (isNothing(value)) {
+  /**
+   * What a function returns: an arrow's expression, or each `return` of its own body, `null` for a
+   * bare `return` and for a body whose end it can reach (its last statement no `return` or `throw`).
+   */
+  const returnedBy = (fn: Callable): Array<Expression | null> => {
+    if (fn.body === null) {
       return [null]
     }
 
-    if (depth >= DEPTH) {
-      return [undefined]
+    if (fn.body.type !== 'BlockStatement') {
+      return [fn.body]
     }
 
-    switch (value.type) {
-      case 'ConditionalExpression':
-        return [...next(value.consequent), ...next(value.alternate)]
-      case 'LogicalExpression':
-        return value.operator === '&&'
-          ? [...next(value.right), null]
-          : [...next(value.left), ...next(value.right)]
-      case 'MemberExpression': {
-        if (
-          value.computed ||
-          value.property.type !== 'Identifier' ||
-          value.object.type === 'Super'
-        ) {
-          return [undefined]
-        }
+    const last = fn.body.body.at(-1)
+    const ends = last?.type === 'ReturnStatement' || last?.type === 'ThrowStatement'
+    const own = returns.filter(({ at }) => {
+      const around = functionAround(at)
 
-        const key = value.property.name
+      return around?.start === fn.start && around.end === fn.end
+    })
 
-        return objectsOf(value.object, at, depth + 1).flatMap((object): Alternative[] => {
-          if (object === null || object === undefined) {
-            return [undefined]
-          }
-
-          const found = object.properties.findLast(
-            (property) =>
-              property.type === 'SpreadElement' ||
-              (property.kind === 'init' && keyName(property.key, property.computed) === key),
-          )
-
-          if (found === undefined) {
-            return [null]
-          }
-
-          return found.type === 'SpreadElement' ? [undefined] : next(found.value)
-        })
-      }
-      case 'Identifier': {
-        const declared = valueNamed(value.name, at)
-
-        if (declared === undefined || isCallable(declared)) {
-          return [undefined]
-        }
-
-        const hook = hooked(declared)
-
-        if (hook === undefined) {
-          return next(declared)
-        }
-
-        return hook.calls ? resultOf(hook.fn) : [undefined]
-      }
-      case 'CallExpression': {
-        const declared =
-          value.callee.type === 'Identifier' ? valueNamed(value.callee.name, at) : undefined
-        const hook = declared === undefined ? undefined : hooked(declared)
-        const fn =
-          declared !== undefined && isCallable(declared)
-            ? declared
-            : hook !== undefined && !hook.calls
-              ? hook.fn
-              : undefined
-
-        return fn === undefined ? [undefined] : resultOf(fn)
-      }
-      default:
-        return [undefined]
-    }
+    return [...own.map(({ argument }) => argument), ...(ends ? [] : [null])]
   }
 
   return {
     valueNamed,
     declares: (name, at) => bindingOf(name, at) !== undefined,
-    objectsOf: (node, at) => objectsOf(node, at),
+    objectsOf: alternativesIn({
+      valueNamed,
+      memberNamed: (name, at) => bindingOf(name, at)?.member,
+      returnedBy,
+    }),
   }
 }

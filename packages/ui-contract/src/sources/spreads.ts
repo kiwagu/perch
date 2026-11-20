@@ -9,7 +9,8 @@
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
 
-import { type Alternative, DEPTH, type Locals } from './locals'
+import { type Alternative, DEPTH } from './alternatives'
+import type { Locals } from './locals'
 import { keyName } from './values'
 
 /** A prop an object supplies, by its name, with the value it is written with. */

@@ -10,7 +10,8 @@ import type { Expression, JSXAttributeValue, JSXOpeningElement } from 'oxc-parse
 
 import { testIdFor } from '../anchors'
 
-import { DEPTH, type Locals } from './locals'
+import { DEPTH } from './alternatives'
+import type { Locals } from './locals'
 import { suppliedBy } from './spreads'
 import {
   type CarriedAnchor,

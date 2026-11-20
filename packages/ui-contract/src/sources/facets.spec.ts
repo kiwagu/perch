@@ -270,6 +270,20 @@ describe('facetProblems', () => {
         }),
       ).toEqual([])
     })
+    it('wants the mark when a helper returns early without it', () => {
+      const helper = {
+        markOf: `() => { if (concerns === 'title') return; return { 'aria-invalid': ${MARK} } }`,
+      }
+
+      expect(
+        problemsOf({
+          title: '<Input data-testid="sample.title-input" {...markOf()} />',
+          ...helper,
+        }),
+      ).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
+      ])
+    })
     it('reads the anchor a spread supplies, and the facts beside it', () => {
       const title = `<Input {...{ testId: 'sample.title-input', maxLength: 80, 'aria-invalid': ${MARK} }} />`
 
