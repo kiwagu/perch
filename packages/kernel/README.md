@@ -14,9 +14,10 @@ commands compile into and write paths interpret.
 - `ExceptionBase` (stable `code`), `applyRules`, `DomainRule`.
 - `QuerySpec` with `isSatisfiedBy`; `ChangeSpec`, `ValueRef`, `resolveValue`.
 - `compareText`, `byText`: the one text ordering of the workspace.
-- `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key, the pattern of
-  the contract's `organisation-key` (lowercase letters, digits and underscores, starting with a
-  letter), checked by the domain, the gateway and the replica.
+- `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key, the pattern and the
+  `maxLength` of the contract's `organisation-key` (lowercase letters, digits and underscores,
+  starting with a letter, no longer than the length), checked by the domain, the gateway and the
+  replica.
 - `checkPasswordRules`, `keepsPasswordRules`, `PASSWORD_RULES`, `PASSWORD_LENGTH`,
   `PASSWORD_SYMBOLS`: the one set of rules for a new password (the length of the contract's `new-password`,
   only Latin letters, digits and the 32 printable ASCII symbols, with at least one digit, one
