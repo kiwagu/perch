@@ -11,7 +11,8 @@
  * `marksState={false}` beside a field's anchor, for the opt-outs the contract decides: a
  * boolean literal on the element that carries the anchor as a literal or as `testIdFor()` of
  * two literals (a paged list's size select, with the base it derives from), or a prop passed
- * through.
+ * through. And the facets the contract decides on a control's element, `maxLength`,
+ * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so.
  */
 
 import { type Expression, type JSXAttributeValue, parseSync, Visitor } from 'oxc-parser'
@@ -58,8 +59,19 @@ export interface Collected {
   inputs: Array<{ anchor: string; base?: string; holdsInput: boolean; line: number }>
   /** `marksState` written as a literal on the element of an anchor, with the base of a derived one. */
   colours: Array<{ anchor: string; base?: string; marksState: boolean; line: number }>
+  /**
+   * A facet prop on the element of an anchor, with the base of a derived one, and its value as
+   * written: an expression's source with each run of whitespace one space, a string with its
+   * quotes, nothing for a bare attribute.
+   */
+  props: Array<{ anchor: string; base?: string; name: FacetProp; text: string; line: number }>
   problems: Problem[]
 }
+
+/** The props of a control's element whose value the contract decides (`facets.ts`). */
+export const FACET_PROPS = ['maxLength', 'aria-invalid', 'disabled'] as const
+
+export type FacetProp = (typeof FACET_PROPS)[number]
 
 type LiteralForm = Collected['literals'][number]['form']
 type CodeForm = Collected['codes'][number]['form']
@@ -110,6 +122,7 @@ export function collectFromSource(text: string, file: string): Collected {
     codes: [],
     inputs: [],
     colours: [],
+    props: [],
     problems: [],
   }
 
@@ -156,6 +169,20 @@ export function collectFromSource(text: string, file: string): Collected {
     }
   }
 
+  /** The anchor an element carries as a literal or as `testIdFor()` of two literals, if any. */
+  const carriedBy = (attributes: readonly ElementAttribute[]): CarriedAnchor | undefined => {
+    const carrier = attributes.find((attribute) => isAnchorAttribute(attribute.name))
+
+    return carrier === undefined ? undefined : carriedAnchor(carrier.value)
+  }
+
+  /** The source of an attribute's value: an expression's, a string's with its quotes, or none. */
+  const sourceOf = (value: JSXAttributeValue | null): string => {
+    const node = value?.type === 'JSXExpressionContainer' ? value.expression : value
+
+    return node === null ? '' : text.slice(node.start, node.end).replace(/\s+/g, ' ')
+  }
+
   /**
    * A boolean literal prop of an element, with the anchor the element carries as a literal or as
    * `testIdFor()` of two literals; a prop passed through is let by, any other value or an element
@@ -184,8 +211,7 @@ export function collectFromSource(text: string, file: string): Collected {
       return undefined
     }
 
-    const carrier = attributes.find((attribute) => isAnchorAttribute(attribute.name))
-    const carried = carrier === undefined ? undefined : carriedAnchor(carrier.value)
+    const carried = carriedBy(attributes)
 
     if (carried === undefined) {
       collected.problems.push({ file, line: line(written.start), message: anchorMessage })
@@ -194,6 +220,23 @@ export function collectFromSource(text: string, file: string): Collected {
     }
 
     return { ...carried, value: expression.value, line: line(written.start) }
+  }
+
+  /** The facet props of an element that carries its anchor so; an element passed one is let by. */
+  const facets = (attributes: readonly ElementAttribute[]): void => {
+    const carried = carriedBy(attributes)
+
+    if (carried === undefined) {
+      return
+    }
+
+    for (const { name, value, start } of attributes) {
+      const prop = FACET_PROPS.find((facet) => facet === name)
+
+      if (prop !== undefined) {
+        collected.props.push({ ...carried, name: prop, text: sourceOf(value), line: line(start) })
+      }
+    }
   }
 
   new Visitor({
@@ -218,6 +261,8 @@ export function collectFromSource(text: string, file: string): Collected {
       )
       const holds = flag(attributes, HOLDS_INPUT)
       const marks = flag(attributes, MARKS_STATE)
+
+      facets(attributes)
 
       if (holds !== undefined) {
         const { value: holdsInput, ...carried } = holds

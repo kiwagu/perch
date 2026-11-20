@@ -9,7 +9,7 @@ import { formatProblem, type ScreensFile } from '../files'
 import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
 import { compareWithContract } from './compare'
 
-const { vocabulary, screens: sample } = sampleContract()
+const { vocabulary, screens: sample, model } = sampleContract()
 
 /** A contract of two anchors on one screen. */
 const SCREENS: ScreensFile = {
@@ -39,6 +39,7 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   codes: [],
   inputs: [],
   colours: [],
+  props: [],
   problems: [],
   ...part,
 })
@@ -56,7 +57,7 @@ const agreeing = (): Collected[] => [
 ]
 
 const printed = (collected: readonly Collected[]): string[] =>
-  compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
+  compareWithContract(collected, SCREENS, vocabulary, model).map(formatProblem)
 
 /** The contract with a field that holds input and one whose own change runs its action. */
 const WITH_FIELDS: ScreensFile = {
@@ -155,7 +156,7 @@ const PAGED_VOCABULARY = {
 const pagedProblems = (
   collected: readonly Collected[],
   screens: ScreensFile = WITH_PAGED_LIST,
-): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY).map(formatProblem)
+): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY, model).map(formatProblem)
 
 /** The full check and ahead mode: a wrong opt-out is refused in both, and none is wanted in either. */
 const MODES = [
@@ -177,7 +178,9 @@ describe('compareWithContract', () => {
     ]
 
     expect(
-      compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
+      compareWithContract(collected, SCREENS, vocabulary, model, { ahead: true }).map(
+        formatProblem,
+      ),
     ).toEqual([
       'b.tsx:2: "sample.other-button" is not in contract/domain/screens; add it there or rename it',
     ])
@@ -197,7 +200,9 @@ describe('compareWithContract', () => {
     ]
 
     expect(
-      compareWithContract(collected, SCREENS, vocabulary, { ahead: true }).map(formatProblem),
+      compareWithContract(collected, SCREENS, vocabulary, model, { ahead: true }).map(
+        formatProblem,
+      ),
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
   })
@@ -212,6 +217,7 @@ describe('compareWithContract', () => {
           ]),
           WITH_FIELDS,
           vocabulary,
+          model,
           { ahead },
         ).map(formatProblem),
       ).toEqual([
@@ -228,6 +234,7 @@ describe('compareWithContract', () => {
           withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
           WITH_FIELDS,
           vocabulary,
+          model,
           { ahead },
         ),
       ).toEqual([])
@@ -245,6 +252,7 @@ describe('compareWithContract', () => {
           ]),
           WITH_COLOURS,
           vocabulary,
+          model,
           { ahead },
         ).map(formatProblem),
       ).toEqual([
@@ -262,6 +270,7 @@ describe('compareWithContract', () => {
           withColours([{ anchor: 'sample.form.code-input', marksState: false, line: 4 }]),
           WITH_COLOURS,
           vocabulary,
+          model,
           { ahead },
         ),
       ).toEqual([])
@@ -270,7 +279,9 @@ describe('compareWithContract', () => {
   it.each(MODES)(
     'leaves the state colour of a field the contract drops to the kit: no marksState is wanted, in $name',
     ({ ahead }) => {
-      expect(compareWithContract(withColours([]), WITH_COLOURS, vocabulary, { ahead })).toEqual([])
+      expect(
+        compareWithContract(withColours([]), WITH_COLOURS, vocabulary, model, { ahead }),
+      ).toEqual([])
     },
   )
   it('reports marksState on a field that holds no input, and on a kind the kit does not colour', () => {
@@ -305,6 +316,7 @@ describe('compareWithContract', () => {
         ],
         screens,
         vocabulary,
+        model,
       ).map(formatProblem),
     ).toEqual([
       'y.tsx:3: "sample.page.kind-select" is a select, not a field that holds input; only such a field shows a state colour',
@@ -314,9 +326,60 @@ describe('compareWithContract', () => {
   it.each(MODES)(
     'leaves a field that holds no input to the kit: no holdsInput is wanted once it is rendered, in $name',
     ({ ahead }) => {
-      expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead })).toEqual([])
+      expect(
+        compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, model, { ahead }),
+      ).toEqual([])
     },
   )
+  it("holds the facets of a control's element to the contract, the value of a field from the model", () => {
+    const limited = structuredClone(model)
+    const title = limited.entities['thing']?.fields['title']
+
+    if (title === undefined) {
+      throw new Error('the sample has the field thing.title')
+    }
+
+    title.maxLength = 80
+
+    const screens: ScreensFile = {
+      ...SCREENS,
+      screens: SCREENS.screens.map((screen) => ({
+        ...screen,
+        anchors: {
+          ...screen.anchors,
+          'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        },
+      })),
+    }
+    const rendering = (element: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(`const title = ${element}`, 'x.tsx'),
+    ]
+    const compared = (element: string, ahead: boolean): string[] =>
+      compareWithContract(rendering(element), screens, vocabulary, limited, { ahead }).map(
+        formatProblem,
+      )
+    const missing =
+      'x.tsx:1: "sample.title-input" carries maxLength={80} by the contract: its value takes at most 80 characters'
+    const wrong =
+      'x.tsx:1: "sample.title-input": maxLength={81}, but the contract says maxLength={80}'
+
+    expect(compared('<Input data-testid="sample.title-input" maxLength={80} />', false)).toEqual([])
+    expect(compared('<Input data-testid="sample.title-input" />', false)).toEqual([missing])
+    expect(compared('<Input data-testid="sample.title-input" />', true)).toEqual([])
+    expect(compared('<Input data-testid="sample.title-input" maxLength={81} />', true)).toEqual([
+      wrong,
+    ])
+    // Without the model's limit the field's value takes none, and the element carries none.
+    expect(
+      compareWithContract(
+        rendering('<Input data-testid="sample.title-input" />'),
+        screens,
+        vocabulary,
+        model,
+      ),
+    ).toEqual([])
+  })
 
   it("lets holdsInput={false} sit on a paged list's size select, which holds no input by its facet", () => {
     expect(
@@ -341,6 +404,7 @@ describe('compareWithContract', () => {
           }),
           WITH_PAGED_LIST,
           PAGED_VOCABULARY,
+          model,
           { ahead },
         ).map(formatProblem),
       ).toEqual([
@@ -462,7 +526,7 @@ describe('compareWithContract', () => {
     "leaves a paged list's size select to the kit: no holdsInput is wanted at its testIdFor(), in $name",
     ({ ahead }) => {
       expect(
-        compareWithContract(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY, { ahead }),
+        compareWithContract(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY, model, { ahead }),
       ).toEqual([])
     },
   )
@@ -502,6 +566,7 @@ describe('compareWithContract', () => {
         ],
         SCREENS,
         vocabulary,
+        model,
       ).map(formatProblem),
     ).toEqual(['a.tsx:3: "sample.page" is a page, not a field; only a field holds input'])
   })
@@ -576,7 +641,7 @@ describe('compareWithContract', () => {
 
     const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
     const compared = (collected: readonly Collected[]): string[] =>
-      compareWithContract(collected, screens, vocabulary).map(formatProblem)
+      compareWithContract(collected, screens, vocabulary, model).map(formatProblem)
 
     expect(compared([...rendered, eye()])).toEqual([])
     expect(compared([...rendered, eye('sample.form.name-input')])).toEqual([])
@@ -599,7 +664,9 @@ describe('compareWithContract', () => {
     const derived = collectFromSource(readFileSync(file, 'utf8'), 'sources/derived.tsx')
 
     expect(
-      compareWithContract([derived], screens, vocabulary, { ahead: true }).map(formatProblem),
+      compareWithContract([derived], screens, vocabulary, model, { ahead: true }).map(
+        formatProblem,
+      ),
     ).toEqual([
       `sources/derived.tsx:9: ${RUNTIME_SUFFIX}`,
       'sources/derived.tsx:21: testIdFor("sample.gone-dialog", "confirm-button"): "sample.gone-dialog" is not in contract/domain/screens',
@@ -632,6 +699,7 @@ describe('compareWithContract', () => {
           toasts: [{ anchor: 'sample.page', code: 'thing-created', action: 'thing.createThing' }],
         },
         vocabulary,
+        model,
       ).map(formatProblem),
     ).toEqual([])
   })
@@ -660,7 +728,7 @@ describe('compareWithContract', () => {
       }),
     ]
 
-    expect(compareWithContract(collected, screens, vocabulary).map(formatProblem)).toEqual([
+    expect(compareWithContract(collected, screens, vocabulary, model).map(formatProblem)).toEqual([
       'b.tsx:6: "sample.mode-select.option" is not in contract/domain/screens; add it there or rename it',
       'b.tsx:6: "sample.mode-select.option" is "sample.mode-select" plus the suffix "option"; derive it with testIdFor()',
     ])

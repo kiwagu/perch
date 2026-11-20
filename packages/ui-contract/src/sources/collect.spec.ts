@@ -126,8 +126,76 @@ describe('collectFromSource', () => {
       codes: [],
       inputs: [],
       colours: [],
+      props: [],
       problems: [],
     })
+  })
+  it('collects maxLength, aria-invalid and disabled beside the anchor of their element, as written', () => {
+    const found = collectFromSource(
+      [
+        '// A word of another script — ü — keeps the offsets of the text.',
+        'const a = <Input data-testid="x.form.name-input" maxLength={80} />',
+        "const b = <PasswordInput {...field('password')} aria-invalid={concerns === 'password' ? true : undefined} testId=\"x.form.password-input\" />",
+        'const c = <Button',
+        '  disabled={',
+        '    !props.can({',
+        "      type: 'x.form.save-button',",
+        '    })',
+        '  }',
+        '  data-testid="x.form.save-button"',
+        '/>',
+        'const d = <Input data-testid="x.form.code-input" maxLength="6" disabled />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.props).toEqual([
+      { anchor: 'x.form.name-input', name: 'maxLength', text: '80', line: 2 },
+      {
+        anchor: 'x.form.password-input',
+        name: 'aria-invalid',
+        text: "concerns === 'password' ? true : undefined",
+        line: 3,
+      },
+      {
+        anchor: 'x.form.save-button',
+        name: 'disabled',
+        text: "!props.can({ type: 'x.form.save-button', })",
+        line: 5,
+      },
+      { anchor: 'x.form.code-input', name: 'maxLength', text: '"6"', line: 12 },
+      { anchor: 'x.form.code-input', name: 'disabled', text: '', line: 12 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it("collects them beside a testIdFor() of two literals, with the derived anchor's base", () => {
+    const found = collectFromSource(
+      "const a = <OptionSelect testId={testIdFor('x.list', 'size-select')} disabled={!can(event)} />",
+      'x.tsx',
+    )
+
+    expect(found.props).toEqual([
+      {
+        anchor: 'x.list.size-select',
+        base: 'x.list',
+        name: 'disabled',
+        text: '!can(event)',
+        line: 1,
+      },
+    ])
+  })
+  it('leaves them out on an element whose anchor is passed through or missing, with no problem', () => {
+    const found = collectFromSource(
+      [
+        'const a = <Select data-testid={props.testId} disabled={props.disabled} />',
+        'const b = <Input maxLength={80} aria-invalid={invalid} />',
+        "const c = <Input data-testid={testIdFor(list, 'size-select')} disabled={busy} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(found.props).toEqual([])
+    expect(found.problems).toEqual([])
   })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(

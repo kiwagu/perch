@@ -5,14 +5,16 @@
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every code is in the
  * vocabulary, and every suffix of `testIdFor()` too, listed in the `derived` of an anchor of the
- * contract (of the base itself when the call writes it as a literal); and the `holdsInput` and the
- * `marksState` written in the sources are held to the contract (`opt-outs.ts`). The problems carry
- * `file:line`.
+ * contract (of the base itself when the call writes it as a literal); the `holdsInput` and the
+ * `marksState` written in the sources are held to the contract (`opt-outs.ts`), and so are the
+ * facets of a control's element, its `maxLength`, `aria-invalid` and `disabled` (`facets.ts`). The
+ * problems carry `file:line`.
  */
 
 import { baseOf } from '../anchors'
 import { codesOf, type DeclaredAnchor, declaredAnchors, locate } from '../check'
 import {
+  type Model,
   type Problem,
   SCREENS_DIR,
   type ScreensFile,
@@ -22,6 +24,7 @@ import {
 } from '../files'
 
 import type { Collected } from './collect'
+import { facetProblems } from './facets'
 import { optOutProblems } from './opt-outs'
 
 interface Place {
@@ -103,6 +106,7 @@ export function compareWithContract(
   collected: readonly Collected[],
   screens: ScreensFile,
   vocabulary: Vocabulary,
+  model: Model,
   options: { readonly ahead?: boolean } = {},
 ): Problem[] {
   const { first, problems: duplicates } = firstPlaces(collected)
@@ -145,6 +149,13 @@ export function compareWithContract(
   )
 
   const optOuts = optOutProblems({ collected, contract })
+  const facets = facetProblems({
+    collected,
+    screens,
+    model,
+    rendered: first,
+    ahead: options.ahead === true,
+  })
 
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
@@ -154,5 +165,6 @@ export function compareWithContract(
     ...partProblems(collected, contract, suffixes),
     ...codeProblems,
     ...optOuts,
+    ...facets,
   ])
 }
