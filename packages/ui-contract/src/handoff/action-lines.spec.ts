@@ -89,6 +89,28 @@ describe('actionLines', () => {
     ])
     expect(actionLines({ ...invite, changes: [] })).toEqual(['result: an invitation is pending'])
   })
+  it('says a parameter with the value it refers to, or its constraints, and whether it may be left out', () => {
+    expect(
+      actionLines({
+        description: 'Signs this device in.',
+        params: {
+          email: { value: 'email', description: 'The email of the account.' },
+          login: { value: 'email', maxLength: 100, description: 'A short email.' },
+          name: { type: 'string', minLength: 1, maxLength: 80, description: 'A name.' },
+          kind: { type: 'string', enum: ['a', 'b'], optional: true, description: 'A kind.' },
+        },
+        result: 'this device is signed in',
+        codes: [],
+        changes: [],
+      }),
+    ).toEqual([
+      'param email: value email',
+      'param login: value email, maxLength 100',
+      'param name: string, minLength 1, maxLength 80',
+      'param kind: string, enum ["a","b"], optional',
+      'result: this device is signed in',
+    ])
+  })
   it('has no line for an action one side lacks', () => {
     expect(actionLines(undefined)).toEqual([])
   })

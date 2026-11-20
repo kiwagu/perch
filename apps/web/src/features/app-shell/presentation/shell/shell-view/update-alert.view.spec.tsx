@@ -12,7 +12,7 @@ describe('UpdateAlert', () => {
   it('says a newer build is served, with a reload while the flow takes one', () => {
     const onUpdate = vi.fn()
 
-    renderWithProviders(<UpdateAlert update="new-version" canUpdate={true} onUpdate={onUpdate} />)
+    renderWithProviders(<UpdateAlert update="new-version" can={() => true} onUpdate={onUpdate} />)
 
     const message = screen.getByTestId('app-shell.update-message')
 
@@ -26,7 +26,11 @@ describe('UpdateAlert', () => {
 
   it('says a protocol the server no longer takes, its reload held while the flow takes none', () => {
     renderWithProviders(
-      <UpdateAlert update="protocol-outdated" canUpdate={false} onUpdate={() => {}} />,
+      <UpdateAlert
+        update="protocol-outdated"
+        can={(event) => event.type !== 'app-shell.update-button'}
+        onUpdate={() => {}}
+      />,
       { locale: 'es', es },
     )
 

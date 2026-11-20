@@ -55,9 +55,26 @@
       "type": "object",
       "properties": {
         "version": {
-          "type": "number",
-          "const": 1,
-          "description": "The version of the contract format."
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The version of the contract format the contract declares."
+        },
+        "defaults": {
+          "description": "From version 6, what a value takes where it writes nothing of its own, `platform.defaults`: the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+          "type": "object",
+          "properties": {
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+            }
+          },
+          "required": [
+            "maxLength"
+          ],
+          "additionalProperties": false
         },
         "idAttribute": {
           "type": "string",
@@ -596,7 +613,7 @@
                   "additionalProperties": false
                 },
                 "search": {
-                  "description": "The search parameters, as a flat JSON Schema.",
+                  "description": "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
                   "type": "object",
                   "properties": {
                     "type": {
@@ -722,10 +739,15 @@
                                   "additionalProperties": false,
                                   "description": "How a page sets one enum value of the parameter."
                                 }
+                              },
+                              "key": {
+                                "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                               }
                             },
                             "additionalProperties": false,
-                            "description": "The controls of the page that set the parameter."
+                            "description": "The controls of the page that set the parameter, and whether it is the screen's key."
                           }
                         },
                         "required": [
@@ -1060,10 +1082,10 @@
                       "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
                   ],
-                  "description": "What the anchor is bound to: one binding, or several in a non-empty list."
+                  "description": "What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares."
                 },
                 "roles": {
-                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1072,25 +1094,95 @@
                   }
                 },
                 "own": {
-                  "description": "Shown to a member only on the entries the member owns.",
+                  "description": "Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.",
                   "type": "boolean"
                 },
                 "holdsInput": {
-                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
+                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
                   "type": "boolean"
                 },
                 "marksState": {
-                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it.",
+                  "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The kit takes it from the generated field facts, so a view may leave `marksState={false}` out; one it writes is held to the contract (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
                   "type": "boolean",
                   "const": false
                 },
                 "secret": {
-                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+                  "description": "A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
                   "type": "boolean",
                   "const": true
                 },
+                "with": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                          "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                        },
+                        "additionalProperties": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "A code of the vocabulary (data-code)."
+                          }
+                        },
+                        "minProperties": 1,
+                        "maxProperties": 1,
+                        "description": "The anchor, with the codes it shows meanwhile."
+                      }
+                    ],
+                    "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+                  },
+                  "description": "The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`."
+                },
+                "without": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                          "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                        },
+                        "additionalProperties": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "A code of the vocabulary (data-code)."
+                          }
+                        },
+                        "minProperties": 1,
+                        "maxProperties": 1,
+                        "description": "The anchor, with the codes it shows meanwhile."
+                      }
+                    ],
+                    "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+                  },
+                  "description": "The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`."
+                },
                 "codes": {
-                  "description": "The data-code values the element carries.",
+                  "description": "The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1099,12 +1191,12 @@
                   }
                 },
                 "ranked": {
-                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.",
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.",
                   "type": "boolean",
                   "const": true
                 },
                 "fields": {
-                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).",
                   "type": "object",
                   "propertyNames": {
                     "type": "string",
@@ -1112,21 +1204,30 @@
                     "description": "A code of the vocabulary (data-code)."
                   },
                   "additionalProperties": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "string",
+                        "const": "form"
+                      }
+                    ],
+                    "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
                   }
                 },
                 "dataId": {
-                  "description": "What the data-id of the element holds: the id of the entity it shows.",
+                  "description": "What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.",
                   "type": "string"
                 },
                 "dataValue": {
-                  "description": "The element carries a data-value from the choice values.",
+                  "description": "The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries. A select always carries them, so from version 4 the loader derives `dataValue` on it and a file never writes it (see the rule `kind-parts`).",
                   "type": "boolean"
                 },
                 "states": {
-                  "description": "The data-state values the element takes.",
+                  "description": "The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1135,7 +1236,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.",
+                  "description": "The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks). The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`; the loaded base lists every suffix it renders here, and a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`). From version 4 so are the parts a kind brings by itself, `option` on a select, `visibility-button` on a secret input (the eye of a password input, presentation only: see the rule `visibility-button`), `confirm-button` and `cancel-button` on a dialog and a confirmation, and a screen file writes here only a suffix no kind brings (see the rule `kind-parts`). Before version 4 a file may list them here, and a secret `input` alone lists `visibility-button`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1224,7 +1325,7 @@
                           "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
                         },
                         "paged": {
-                          "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+                          "description": "The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the generated field facts carry for the kit, so a view may leave `holdsInput={false}` out. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.",
                           "type": "boolean",
                           "const": true
                         }
@@ -1236,7 +1337,7 @@
                       "description": "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`."
                     }
                   ],
-                  "description": "Where the entries of a list, a section or a table come from; no other kind has one."
+                  "description": "Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."
                 },
                 "asks": {
                   "type": "object",
@@ -1256,7 +1357,7 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
                 },
                 "leaves": {
                   "type": "object",
@@ -1284,7 +1385,7 @@
                   "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
                 },
                 "composite": {
-                  "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
+                  "description": "The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.",
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                 },
@@ -1307,6 +1408,11 @@
                   ],
                   "additionalProperties": false,
                   "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
+                },
+                "confirms": {
+                  "description": "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
                 }
               },
               "required": [
@@ -1318,7 +1424,7 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The container states of the screen, each with what is visible in it.",
+            "description": "The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -1350,7 +1456,7 @@
                 "type": "object",
                 "properties": {
                   "guards": {
-                    "description": "The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.",
+                    "description": "The guards by name, each with what it holds.",
                     "type": "object",
                     "propertyNames": {
                       "type": "string",
@@ -1382,9 +1488,43 @@
                           ],
                           "additionalProperties": false,
                           "description": "A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "confirms": {
+                              "type": "string",
+                              "enum": [
+                                "differs",
+                                "strays",
+                                "follows"
+                              ],
+                              "description": "What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`, each the meaning of the rule `pair-differs`, `pair-strays` or `pair-follows`."
+                            }
+                          },
+                          "required": [
+                            "confirms"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Derived: a guard on the confirmation of the screen's password pair, the input that writes `confirms`; a screen file never writes it. See the rule `password-pair`."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "composite": {
+                              "type": "string",
+                              "const": "breaks",
+                              "description": "The input the confirmation confirms breaks a rule of its composite: the meaning of the rule `composite-breaks`."
+                            }
+                          },
+                          "required": [
+                            "composite"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Derived: a guard on the composite of the input the screen's password pair confirms; a screen file never writes it. See the rule `password-pair`."
                         }
                       ],
-                      "description": "What a guard holds: a sentence, or the failure codes it holds for."
+                      "description": "What a guard holds: a sentence, the failure codes it holds for, or a guard the loader derives from the screen's password pair."
                     }
                   }
                 },
@@ -1443,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3335,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -4246,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                                          "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
@@ -6128,7 +6268,7 @@
             "description": "The flow of the screen: an XState v5 machine config."
           },
           "wireframe": {
-            "description": "A text sketch of the layout.",
+            "description": "A text sketch of the layout: the default state of the screen in Playwright's aria snapshot grammar.",
             "type": "string"
           }
         },
@@ -6571,7 +6711,7 @@
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
             ],
-            "description": "What the anchor is bound to: one binding, or several in a non-empty list."
+            "description": "What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares."
           },
           "codes": {
             "description": "The data-code values the element carries.",
@@ -6588,7 +6728,7 @@
             "const": true
           },
           "fields": {
-            "description": "An error's codes, each with the field it concerns.",
+            "description": "An error's codes, each with the field it concerns, or `form`, the form as a whole.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -6596,9 +6736,18 @@
               "description": "A code of the vocabulary (data-code)."
             },
             "additionalProperties": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-              "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "string",
+                  "const": "form"
+                }
+              ],
+              "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
             }
           },
           "dataId": {
@@ -6639,6 +6788,74 @@
             "description": "Shown to a member only on the entries it owns.",
             "type": "boolean"
           },
+          "with": {
+            "description": "It renders only while each of these renders (an anchor, or one showing these codes).",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                  },
+                  "additionalProperties": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    }
+                  },
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "description": "The anchor, with the codes it shows meanwhile."
+                }
+              ],
+              "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+            }
+          },
+          "without": {
+            "description": "It renders only while none of these renders (an anchor, or one showing these codes).",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                  },
+                  "additionalProperties": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    }
+                  },
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "description": "The anchor, with the codes it shows meanwhile."
+                }
+              ],
+              "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+            }
+          },
           "asks": {
             "type": "object",
             "properties": {
@@ -6657,7 +6874,7 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way."
           },
           "leaves": {
             "type": "object",
@@ -6733,6 +6950,65 @@
             "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",
             "type": "boolean",
             "const": true
+          },
+          "value": {
+            "description": "On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "description": "The type of the value: `string`, `integer`, `number`, `boolean`.",
+                "type": "string"
+              },
+              "enum": {
+                "description": "The values it takes, each a string or a number.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "description": "A string or a number.",
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "minLength": {
+                "description": "The fewest characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxLength": {
+                "description": "The most characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "pattern": {
+                "description": "A regular expression (ECMA-262) every value of a string matches.",
+                "type": "string"
+              },
+              "format": {
+                "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                "type": "string",
+                "enum": [
+                  "email"
+                ]
+              },
+              "minimum": {
+                "description": "The smallest value of a number or an integer.",
+                "type": "number"
+              },
+              "maximum": {
+                "description": "The largest value of a number or an integer.",
+                "type": "number"
+              },
+              "readOnly": {
+                "description": "The value is a field of the model that is read-only (`x-perch.readonly`).",
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
@@ -6747,6 +7023,109 @@
     "platform": {
       "type": "object",
       "properties": {
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+            }
+          },
+          "required": [
+            "maxLength"
+          ],
+          "additionalProperties": false,
+          "description": "What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`."
+        },
+        "values": {
+          "description": "The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "description": "The primitive type of the value.",
+                "type": "string",
+                "enum": [
+                  "string",
+                  "integer",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "enum": {
+                "description": "The values it takes, each a string or a number.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "description": "A string or a number.",
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "minLength": {
+                "description": "The fewest characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxLength": {
+                "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pattern": {
+                "description": "A regular expression (ECMA-262) every value of a string matches.",
+                "type": "string"
+              },
+              "format": {
+                "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                "type": "string",
+                "enum": [
+                  "email"
+                ]
+              },
+              "minimum": {
+                "description": "The smallest value of a number or an integer.",
+                "type": "number"
+              },
+              "maximum": {
+                "description": "The largest value of a number or an integer.",
+                "type": "number"
+              },
+              "description": {
+                "type": "string",
+                "description": "What the value holds, for every parameter that refers to it. At most 200 characters."
+              },
+              "examples": {
+                "description": "Fake values the value accepts, for a test or an example to use: any list.",
+                "type": "array",
+                "items": {}
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "additionalProperties": false,
+            "description": "A value declared once: its type and its constraints, which every parameter that refers to it by name takes. See the rule `declared-values`."
+          }
+        },
         "actions": {
           "type": "object",
           "propertyNames": {
@@ -6771,20 +7150,82 @@
                   "type": "object",
                   "properties": {
                     "type": {
+                      "description": "The type of the value: string, boolean, number; left out where `value` gives it.",
+                      "type": "string"
+                    },
+                    "value": {
                       "type": "string",
-                      "description": "The type of the value: string, boolean, number."
+                      "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
+                      "description": "The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`."
+                    },
+                    "enum": {
+                      "description": "The values it takes, each a string or a number.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string or a number.",
+                        "type": [
+                          "string",
+                          "number"
+                        ]
+                      }
+                    },
+                    "minLength": {
+                      "description": "The fewest characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "maxLength": {
+                      "description": "The most characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "description": "A regular expression (ECMA-262) every value of a string matches.",
+                      "type": "string"
+                    },
+                    "format": {
+                      "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                      "type": "string",
+                      "enum": [
+                        "email"
+                      ]
+                    },
+                    "minimum": {
+                      "description": "The smallest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "maximum": {
+                      "description": "The largest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "optional": {
+                      "description": "The action runs without the parameter: a field that passes it may stay empty.",
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "codes": {
+                      "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "description": "A code of the vocabulary (data-code)."
+                      }
                     },
                     "description": {
                       "type": "string",
-                      "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
+                      "description": "What the parameter is for. Its type or the value it refers to, and its constraints, are written beside it. At most 200 characters."
                     }
                   },
                   "required": [
-                    "type",
                     "description"
                   ],
                   "additionalProperties": false,
-                  "description": "One parameter of a platform action."
+                  "description": "One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`."
                 },
                 "description": "The parameters by name."
               },
@@ -6799,7 +7240,7 @@
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                   "description": "A code of the vocabulary (data-code)."
                 },
-                "description": "The codes a failure of the action shows."
+                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
               },
               "roles": {
                 "description": "The roles that may run the action.",
@@ -6871,7 +7312,7 @@
                       "search": {
                         "type": "string",
                         "pattern": "^[a-z][a-zA-Z0-9]*$",
-                        "description": "The search parameter of that screen's route the link carries its token in."
+                        "description": "The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`."
                       }
                     },
                     "required": [
@@ -7146,7 +7587,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "What the platform offers every screen."
+      "description": "The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out."
     },
     "activities": {
       "type": "array",
@@ -7475,7 +7916,36 @@
       "additionalProperties": {
         "description": "A keyword of the model document."
       },
-      "description": "`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12."
+      "description": "`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`)."
+    },
+    "rules": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The title of the rule."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The rule as the reference writes it, ending with a line \"Keys it concerns\": its links point into the reference, which the manifest does not carry, so read each key by its name."
+          }
+        },
+        "required": [
+          "title",
+          "text"
+        ],
+        "additionalProperties": false,
+        "description": "One rule of the engine."
+      },
+      "description": "The rules of the engine that this manifest and its schema name, each under its id: wherever a description says \"see the rule\" and an id in backticks, its text is here, because the reference that holds it is not part of the manifest. A rule they do not name is not carried, and neither is one that these texts name in turn."
     }
   },
   "required": [
@@ -7489,7 +7959,8 @@
     "platform",
     "activities",
     "scenarios",
-    "model"
+    "model",
+    "rules"
   ],
   "additionalProperties": false,
   "description": "The UI manifest: the contract of the application for tests and agents."

@@ -6,8 +6,11 @@
  * the scenarios parsed, every declared anchor by name with its screen (with a field's composite
  * opt-in, and on each anchor a composite derives where it comes from), each derived suffix with
  * the kind, meaning and values of the part it marks, the composites and the field states of the
- * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the description the
- * engine says of it.
+ * vocabulary, and the model document. An anchor the screen file leaves undescribed carries the
+ * description the engine says of it, and a text field the value it takes. The platform's values
+ * and the model document are those the contract loads, each length resolved, and from version 6
+ * the contract section names the default length they took. Last, the text of each rule of the
+ * engine that the manifest or its schema names (`rulesOf`).
  */
 
 import {
@@ -15,6 +18,7 @@ import {
   ANCHOR_PATTERN,
   kindOf,
   PAGE_HELPER,
+  TEXT_FIELD_KINDS,
   VISIBILITY_BUTTON,
   VISIBILITY_VALUES,
 } from '../anchors'
@@ -22,11 +26,14 @@ import { fieldStatesOf } from '../check'
 import {
   type Activity,
   CONFIRM_RULE_ROW,
+  DEFAULTS_EDITION,
   type DescriptionContext,
   derivedDescriptionOf,
   describedOf,
   failuresOf,
+  fieldValueOf,
   type Model,
+  type ResolvedValue,
   type Screen,
   type ScreensFile,
   TOAST_RULE_ROW,
@@ -37,9 +44,16 @@ import type { Scenario } from '../scenarios'
 
 import { instructionsOf } from './instructions'
 import type { Manifest, Product } from './manifest.types'
+import { rulesOf } from './rules'
 
 /** The app state in which a test may start. */
 const READY = 'ready'
+
+type WrittenValue = NonNullable<Manifest['ids'][string]['value']>
+
+/** A value as the manifest writes it: its enum a list of its own. */
+const writtenValue = ({ enum: values, ...rest }: ResolvedValue): WrittenValue =>
+  values === undefined ? rest : { ...rest, enum: [...values] }
 
 export interface ManifestInput {
   readonly vocabulary: Vocabulary
@@ -61,9 +75,9 @@ const mapValues = <T>(
 const located = ({ where, meaning }: { where: string; meaning: string }): string =>
   `${where}: ${meaning}`
 
-function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['ids'] {
+function idsOf(screens: ScreensFile, vocabulary: Vocabulary, model: Model): Manifest['ids'] {
   return Object.fromEntries(
-    screens.flatMap((screen) =>
+    screens.screens.flatMap((screen) =>
       Object.entries(screen.anchors).map(([anchor, def]) => {
         const {
           kind,
@@ -77,6 +91,8 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
           derived,
           roles,
           own,
+          with: withEntries,
+          without,
           holdsInput,
           marksState,
           secret,
@@ -86,6 +102,9 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
           derivedFrom,
         } = def
         const fieldStates = fieldStatesOf(def, vocabulary)
+        const value = TEXT_FIELD_KINDS.has(kind)
+          ? fieldValueOf(anchor, screen, screens.platform, model)
+          : undefined
 
         return [
           anchor,
@@ -102,6 +121,8 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
             ...(derived === undefined ? {} : { derived }),
             ...(roles === undefined ? {} : { roles }),
             ...(own === undefined ? {} : { own }),
+            ...(withEntries === undefined ? {} : { with: withEntries }),
+            ...(without === undefined ? {} : { without }),
             ...(holdsInput === undefined ? {} : { holdsInput }),
             ...(marksState === undefined ? {} : { marksState }),
             ...(secret === undefined ? {} : { secret }),
@@ -110,6 +131,7 @@ function idsOf(screens: readonly Screen[], vocabulary: Vocabulary): Manifest['id
             ...(composite === undefined ? {} : { composite }),
             ...(derivedFrom === undefined ? {} : { derivedFrom }),
             ...(fieldStates.length === 0 ? {} : { fieldStates: [...fieldStates] }),
+            ...(value === undefined ? {} : { value: writtenValue(value) }),
           },
         ]
       }),
@@ -160,8 +182,11 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
   )
 
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
+  const { defaults } = screens.platform
+
   return {
     version: screens.version,
+    ...(screens.version < DEFAULTS_EDITION || defaults === undefined ? {} : { defaults }),
     idAttribute: ANCHOR_ATTRIBUTES.anchor,
     idPattern: ANCHOR_PATTERN.source,
     kinds: vocabulary.kinds,
@@ -216,22 +241,24 @@ export function buildManifest({
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
-  return {
+  const document = {
     $schema: './manifest.schema.json',
-    manifestVersion: 1,
+    manifestVersion: 1 as const,
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,
-      failureOf: failuresOf(model, screens.platform.actions),
+      failureOf: failuresOf(model, screens.platform.actions, screens.version),
     }),
     routeParams: routeParamsOf(screens.screens),
-    ids: idsOf(screens.screens, vocabulary),
+    ids: idsOf(screens, vocabulary, model),
     platform: screens.platform,
     activities,
     scenarios,
     model: model.document,
   }
+
+  return { ...document, rules: rulesOf(document) }
 }

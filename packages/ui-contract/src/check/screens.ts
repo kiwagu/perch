@@ -3,8 +3,9 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen; only a field says whether it holds input; only a field that holds
- * input drops its state colour; only an input renders a visibility-button.
+ * fields of its own screen or to `form`, the form as a whole; only a field says whether it holds
+ * input; only a field that holds input drops its state colour; only an input renders a
+ * visibility-button.
  */
 
 import {
@@ -14,8 +15,9 @@ import {
   screenOf,
   VISIBILITY_BASE_KIND,
   VISIBILITY_BUTTON,
+  WHOLE_FORM,
 } from '../anchors'
-import type { Problem } from '../files'
+import type { Problem, Screen } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
 
@@ -136,6 +138,21 @@ function nameProblems({ screens }: Contract): Problem[] {
   ])
 }
 
+/** Why an error's code cannot concern `field` on `screen`: `form`, or a field the screen declares. */
+function placeProblem(field: string, screen: Screen): string | undefined {
+  if (field === WHOLE_FORM) {
+    return undefined
+  }
+
+  const target = screen.anchors[field]
+
+  if (target === undefined) {
+    return `"${field}" is not an anchor of the screen`
+  }
+
+  return FIELD_KINDS.has(target.kind) ? undefined : `"${field}" is a ${target.kind}, not a field`
+}
+
 function fieldsProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)
 
@@ -150,17 +167,13 @@ function fieldsProblems({ screens }: Contract): Problem[] {
 
     return Object.entries(def.fields).flatMap(([code, field]) => {
       const here = [...at, 'fields', code]
-      const target = screen.anchors[field]
+      const place = placeProblem(field, screen)
 
       return [
         ...((def.codes ?? []).includes(code)
           ? []
           : [inScreens(here, `"${code}" is not a code of the anchor`)]),
-        ...(target === undefined
-          ? [inScreens(here, `"${field}" is not an anchor of the screen`)]
-          : FIELD_KINDS.has(target.kind)
-            ? []
-            : [inScreens(here, `"${field}" is a ${target.kind}, not a field`)]),
+        ...(place === undefined ? [] : [inScreens(here, place)]),
       ]
     })
   })

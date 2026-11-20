@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VERSION } from '../../../anchors'
 import type { Expansion } from '../expansion'
 
 import { withDerivedToasts } from './derive'
@@ -20,6 +21,7 @@ const expansionWith = (
   screen,
   toast,
   platformToasts,
+  edition: CONTRACT_VERSION,
   codeGuards: new Map(),
   issues: [],
   toasts: [],

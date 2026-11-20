@@ -171,9 +171,33 @@ describe('pagingProblems', () => {
 
     expect(printed(contract)).toEqual([
       `${SAMPLE} bindings[0].search.properties.size: "size" is the page size of a paged list: an integer of 25, 10, 25 whose default is 30`,
-      `${PLATFORM} actions["accounts.list"].paged: a paged action takes "page" and "size" parameters of type number`,
+      `${PLATFORM} actions["accounts.list"].paged: a paged action takes "page" and "size" parameters whose type, written or of the value they refer to, is number or integer`,
       `${PLATFORM} actions["accounts.list"].paged.sizes: a paged action lists each page size once, the smallest first`,
       `${PLATFORM} actions["accounts.list"].paged.default: 30 is none of the sizes 25, 10, 25`,
+    ])
+  })
+
+  it('reads the type of page and size from the value they refer to', () => {
+    const contract = sample()
+    const paging = action(contract)
+
+    contract.screens.platform.values = {
+      'page-number': { type: 'integer', minimum: 1, description: 'A page, from 1.' },
+      'page-size': { type: 'number', description: 'The entries of a page.' },
+      label: { type: 'string', description: 'A label.' },
+    }
+    paging.params = {
+      q: { type: 'string', description: 'The text.' },
+      page: { value: 'page-number', description: 'The page.' },
+      size: { value: 'page-size', description: 'The size.' },
+    }
+
+    expect(printed(contract)).toEqual([])
+
+    paging.params['size'] = { value: 'label', description: 'The size.' }
+
+    expect(printed(contract)).toEqual([
+      `${PLATFORM} actions["accounts.list"].paged: a paged action takes "page" and "size" parameters whose type, written or of the value they refer to, is number or integer`,
     ])
   })
 })

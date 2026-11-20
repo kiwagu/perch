@@ -9,7 +9,9 @@
  * nesting, history, other targets by `#id`, `.child`, actions named by a string) is refused:
  * every object is strict. One key is the contract's alone, `read: false`, which XState ignores
  * and the machine comparison leaves out: on an invoke, nothing reads after its action; on a
- * branch of an invoke's `onDone` or `onError`, nothing reads after that outcome. This
+ * branch of an invoke's `onDone` or `onError`, nothing reads after that outcome. A guard of
+ * `meta.guards` may be one the loader derives from the screen's password pair, implemented by the
+ * app by its name as any other. This
  * is the flow every check, the walk in XState, the manifest and
  * an app's machine read; a screen file may author it shorter (`authored.ts`), and the loader
  * expands that into this.
@@ -17,6 +19,7 @@
 
 import { flowSchemaOf } from './build'
 import { effectSchema } from './effects'
+import { guardSchema } from './guards'
 import { transitionSchemaOf } from './transitions'
 
 export const transitionSchema = transitionSchemaOf(effectSchema)
@@ -24,6 +27,7 @@ export const transitionSchema = transitionSchemaOf(effectSchema)
 export const flowSchema = flowSchemaOf({
   transition: transitionSchema,
   effect: effectSchema,
+  guard: guardSchema,
   region: (parts) => parts.region,
   regions: { min: 2, description: 'The regions by name, two or more.' },
   description: 'The flow of the screen: an XState v5 machine config.',

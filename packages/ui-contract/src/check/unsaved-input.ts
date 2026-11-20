@@ -6,9 +6,10 @@
  * `leaving`.
  */
 
+import { ANSWERS } from '../anchors'
 import type { Problem } from '../files'
 
-import { ANSWERS, bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
+import { bindingRefsOf, type Contract, declaredAnchors, locate } from './contract'
 
 export function unsavedInputProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)

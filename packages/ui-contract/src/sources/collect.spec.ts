@@ -194,11 +194,65 @@ describe('collectFromSource', () => {
       [1, MARKS_STATE_ANCHOR],
       [2, MARKS_STATE_VALUE],
     ])
-    expect(MARKS_STATE_ANCHOR).toBe(
-      "marksState goes on the element that carries the field's anchor as a literal",
-    )
     expect(MARKS_STATE_VALUE).toBe(
       'marksState is {false} or left out; the contract decides it (a prop passed through is fine)',
+    )
+  })
+  it("collects holdsInput beside a testIdFor() of two literals, with the derived anchor's base", () => {
+    const found = collectFromSource(
+      [
+        "const a = <OptionSelect testId={testIdFor('x.list', 'size-select')} holdsInput={false} />",
+        'const b = <OptionSelect testId={testIdFor(`x.list`, `size-select`)} holdsInput={false} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+    const size = { anchor: 'x.list.size-select', base: 'x.list', holdsInput: false }
+
+    expect(found.inputs).toEqual([
+      { ...size, line: 1 },
+      { ...size, line: 2 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it("collects marksState beside a testIdFor() of two literals, with the derived anchor's base", () => {
+    const found = collectFromSource(
+      "const a = <OptionSelect testId={testIdFor('x.list', 'size-select')} marksState={false} />",
+      'x.tsx',
+    )
+
+    expect(found.colours).toEqual([
+      { anchor: 'x.list.size-select', base: 'x.list', marksState: false, line: 1 },
+    ])
+    expect(found.problems).toEqual([])
+  })
+  it('keeps the anchor problem for a testIdFor() whose base or suffix is not a literal', () => {
+    const found = collectFromSource(
+      [
+        "const a = <OptionSelect testId={testIdFor(list, 'size-select')} holdsInput={false} />",
+        'const b = <OptionSelect testId={testIdFor(list, suffix)} marksState={false} />',
+        "const c = <OptionSelect testId={testIdFor('x.list', suffix)} holdsInput={false} />",
+        "const d = <OptionSelect testId={testIdFor('x.list')} marksState={false} />",
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    const anchorProblems = found.problems.filter(({ message }) => message !== RUNTIME_SUFFIX)
+
+    expect(found.inputs).toEqual([])
+    expect(found.colours).toEqual([])
+    expect(anchorProblems.map(({ line, message }) => [line, message])).toEqual([
+      [1, HOLDS_INPUT_ANCHOR],
+      [2, MARKS_STATE_ANCHOR],
+      [3, HOLDS_INPUT_ANCHOR],
+      [4, MARKS_STATE_ANCHOR],
+    ])
+  })
+  it('words the anchor problems to name a testIdFor() of two literals', () => {
+    expect(HOLDS_INPUT_ANCHOR).toBe(
+      "holdsInput goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals",
+    )
+    expect(MARKS_STATE_ANCHOR).toBe(
+      "marksState goes on the element that carries the field's anchor as a literal or as testIdFor() of two literals",
     )
   })
   it('reports a file it cannot parse', () => {

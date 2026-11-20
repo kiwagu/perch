@@ -1,8 +1,11 @@
-/** One screen file's steps: its flow expanded, then the screen parsed and its file name checked. */
+/**
+ * One screen file's steps: its flow expanded, then the screen parsed and its file name checked,
+ * with the guards of its password pair (`derive/pairs.ts`).
+ */
 
 import { isRecord } from '../../records'
 import { screenFileSchema } from '../../schemas'
-import { controlsOf } from '../derive'
+import { controlsOf, withDerivedPairGuards } from '../derive'
 import { type DerivedToast, expandFlow } from '../expand-flow'
 import { parseFile } from '../parse-file'
 import { screenFile } from '../paths'
@@ -68,8 +71,15 @@ export function expandedOf(
   }
 }
 
-/** The screen of one file, expanded, parsed as every reader takes it. */
-export function parsedOf(file: string, value: unknown): { screen?: Screen; problems: Problem[] } {
+/**
+ * The screen of one file, expanded, parsed as every reader takes it, with the guards of its
+ * password pair its flow names, by the rules of the contract's version `edition`.
+ */
+export function parsedOf(
+  file: string,
+  value: unknown,
+  edition: number,
+): { screen?: Screen; problems: Problem[] } {
   const parsed = parseFile(file, screenFileSchema, value)
 
   if (parsed.value === undefined) {
@@ -78,5 +88,7 @@ export function parsedOf(file: string, value: unknown): { screen?: Screen; probl
 
   const misnamed = nameProblems(file, parsed.value)
 
-  return misnamed.length > 0 ? { problems: misnamed } : { screen: parsed.value, problems: [] }
+  return misnamed.length > 0
+    ? { problems: misnamed }
+    : withDerivedPairGuards(file, parsed.value, edition)
 }
