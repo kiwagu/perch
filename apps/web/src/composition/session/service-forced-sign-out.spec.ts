@@ -7,16 +7,14 @@ import { type FakeHintChannel, FakeLocks } from '@workspace/replica/testing'
 
 import { createProfile } from '../__fixtures__/profile'
 import { browserDatabases, openTestWorld, type TestWorld } from '../__fixtures__/session'
+import { signedIn, signedInElsewhere, signedOut } from '../__fixtures__/signed-in'
 import {
-  IDENTITY_KEY,
   type KeptDevice,
-  MEMBERSHIPS_KEY,
-  type MemoryStorage,
+  markSignIn,
   memoryStorage,
-  saveDevice,
   savedIdentity,
+  savedNotice,
   savedToken,
-  TOKEN_KEY,
 } from '../storage'
 
 const ann: KeptDevice = {
@@ -50,7 +48,7 @@ afterEach(async () => {
 async function annSyncing(locks: FakeLocks): Promise<TestWorld> {
   const storage = memoryStorage()
 
-  saveDevice(storage, ann)
+  signedIn(storage, ann)
 
   const booted = await openTestWorld({ storage, locks, online: true })
 
@@ -71,22 +69,6 @@ function holdWriteLock(locks: FakeLocks): () => void {
   void locks.request(writeLockName(ann.identity.id), { mode: 'exclusive' }, () => held)
 
   return release
-}
-
-/**
- * Saves `device` as another tab's sign-in does, in its order; as in a browser, only a key whose
- * value changed is heard as changed there.
- */
-function signedInElsewhere(storage: MemoryStorage, device: KeptDevice): void {
-  const theirs = memoryStorage()
-
-  saveDevice(theirs, device)
-
-  for (const key of [MEMBERSHIPS_KEY, TOKEN_KEY, IDENTITY_KEY]) {
-    if (storage.get(key) !== theirs.get(key)) {
-      storage.changeElsewhere(key, theirs.get(key))
-    }
-  }
 }
 
 /**
@@ -162,7 +144,7 @@ describe('a forced sign-out and a sign-in another tab made meanwhile', () => {
       online: true,
     }
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const a = await openTestWorld(shared)
 
@@ -209,6 +191,27 @@ describe('a forced sign-out and a sign-in another tab made meanwhile', () => {
     expect(savedIdentity(storage)?.id).toBe(bob.identity.id)
     // Ann's data is the call of the tab that signed her out.
     expect(destroyed()).toEqual([])
+    expect(session.notice()).toBeUndefined()
+  })
+
+  it('leaves the sign-in page no word once an account signed in and out while it waited', async () => {
+    const locks = new FakeLocks()
+    const world = await annSyncing(locks)
+    const { session, storage, destroyed } = world
+    const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+    const lock = writeLockName(ann.identity.id)
+    const letGo = holdWriteLock(locks)
+
+    world.stub.closeChannels(ann.identity.id, id, CLOSE.revoked)
+    await vi.waitFor(() => expect(locks.waiting(lock, 'exclusive')).toBe(true))
+    // Another tab ends the same session first, then Bob signs in there and out again; this tab
+    // hears of it only once its own sign-out goes on.
+    signedOut(storage)
+    markSignIn(storage)
+    letGo()
+
+    await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
+    expect(savedNotice(storage)).toBeUndefined()
     expect(session.notice()).toBeUndefined()
   })
 })

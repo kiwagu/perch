@@ -7,7 +7,7 @@
  * implementation's to compute, and `$id` is minted); a route is the path of a binding.
  */
 
-import type { ParamValue, Problem, Screen } from '../files'
+import type { AnchorDef, ParamValue, Problem, Screen } from '../files'
 
 import {
   bindingPaths,
@@ -73,6 +73,25 @@ export function searchOf(screen: Pick<Screen, 'bindings'>): ReadonlySet<string> 
   )
 
   return new Set([...(first ?? [])].filter((name) => rest.every((names) => names.has(name))))
+}
+
+/** A list's platform source: the action it reads, its `params` and whether it pages. */
+export type PlatformSource = Extract<NonNullable<AnchorDef['source']>, { platform: string }>
+
+/**
+ * The paged list of `screen`, the first anchor declared whose platform source says
+ * `paged: true` (rule 18 refuses a second), with that source; none where no list pages.
+ */
+export function pagedListOf(
+  screen: Pick<Screen, 'anchors'>,
+): { anchor: string; source: PlatformSource } | undefined {
+  for (const [anchor, { source }] of Object.entries(screen.anchors)) {
+    if (source !== undefined && 'platform' in source && source.paged === true) {
+      return { anchor, source }
+    }
+  }
+
+  return undefined
 }
 
 /**

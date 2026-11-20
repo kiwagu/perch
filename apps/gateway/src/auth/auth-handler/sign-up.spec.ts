@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
+import { CONTRACT_VALUES, PASSWORD_LENGTH } from '@workspace/kernel'
 
+import { passwordOfLength } from '../../__fixtures__/platform-values'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { betterAuthToken, deviceHeaders } from '../__fixtures__/auth-instance'
 import { hashPassword } from '../password-hash'
@@ -10,6 +12,7 @@ import {
   ANN,
   mountedOnFakeAuth,
   mountedOnRealAuth,
+  PASSWORD,
   resendRequest,
   signInRequest,
   signUpRequest,
@@ -30,6 +33,9 @@ const REAL_SIGN_UPS_MS = 30_000
 
 /** What Better Auth answers a sign-up it accepted, new email or taken. */
 const accepted = () => Response.json({ token: null, user: {} })
+
+/** The most characters a profile's name has, as the contract says it. */
+const { maxLength: MAX_NAME } = CONTRACT_VALUES['profile.name']
 
 describe('authHandler, the sign-up', () => {
   it(
@@ -135,8 +141,8 @@ describe('authHandler, the sign-up', () => {
 /** Passwords that break the rules of a new password, each by what it lacks or holds. */
 const BREAKING = [
   ['nothing typed', ''],
-  ['9 characters', 'Abcdefg1!'],
-  ['36 characters', `Abcdefghij1!${'k'.repeat(24)}`],
+  ['one character short of the length', passwordOfLength(PASSWORD_LENGTH.min - 1)],
+  ['one character past the length', passwordOfLength(PASSWORD_LENGTH.max + 1)],
   ['a space', 'Abcdefg hij1!'],
   ['an accented letter', 'Abcdefg\u00e9hij1!'],
   ['no digit', 'Abcdefghij!!'],
@@ -212,8 +218,8 @@ describe('authHandler, the rules of a new password', () => {
   })
 
   it.each([
-    ['10', 'Abcdefgh1!'],
-    ['35', `Ab1!${'c'.repeat(31)}`],
+    ['the fewest', passwordOfLength(PASSWORD_LENGTH.min)],
+    ['the most', passwordOfLength(PASSWORD_LENGTH.max)],
   ])(
     'accepts a password of %s characters that keeps every rule, Better Auth agreeing',
     async (_, password) => {
@@ -261,33 +267,81 @@ describe('authHandler, the rules of a new password', () => {
       expect((await route(signInRequest(ANN, other, 'laptop'), FROM))?.status).toBe(401)
     }
   })
+})
 
-  it.each([
-    ['8 characters', 'old-pass'],
-    ['128 characters', 'p'.repeat(128)],
-  ])(
-    'signs an account whose password was set before the rules in, its password of %s',
-    async (_, password) => {
-      const { auth, route } = await mountedOnRealAuth()
-      const context = await auth.$context
-      const user = await context.internalAdapter.createUser<{ readonly locale: string }>({
-        email: ANN,
-        name: 'Ann',
-        emailVerified: true,
-        locale: 'en',
-      })
+/** Names that break the rule of a profile's name, each by what it lacks or holds, with the code that says it. */
+const REFUSED_NAMES = [
+  ['nothing typed', '', 'name-required'],
+  ['spaces alone', '   ', 'name-required'],
+  ['one character past the limit', 'r'.repeat(MAX_NAME + 1), 'name-too-long'],
+  ['one character past the limit once trimmed', ` ${'r'.repeat(MAX_NAME + 1)} `, 'name-too-long'],
+] as const
 
-      await context.internalAdapter.linkAccount({
-        userId: user.id,
-        providerId: 'credential',
-        accountId: user.id,
-        password: await hashPassword(password),
-      })
+describe('authHandler, the name of a sign-up', () => {
+  it.each(REFUSED_NAMES)(
+    'refuses a name of %s at once, 400 %s, Better Auth not asked',
+    async (_, name, code) => {
+      const { route, clock, received } = mountedOnFakeAuth(accepted)
+      const answer = await route(signUpRequest(ANN, PASSWORD, name), FROM)
 
-      const answer = await route(signInRequest(ANN, password, 'laptop'), FROM)
-
-      expect(answer?.status).toBe(200)
-      expect(await answer?.json()).toMatchObject({ user: { id: user.id, email: ANN } })
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code })
+      expect(received).toEqual([])
+      // No floor holds a refusal back.
+      expect(clock.pending()).toBe(0)
     },
   )
+
+  it('takes a name of the limit once trimmed', async () => {
+    const { route, clock, received } = mountedOnFakeAuth(accepted)
+    const pending = route(signUpRequest(ANN, PASSWORD, ` ${'r'.repeat(MAX_NAME)} `), FROM)
+
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await pending)?.status).toBe(202)
+    expect(received).toHaveLength(1)
+  })
+
+  it.each([
+    ['no name', { email: ANN, password: PASSWORD }],
+    ['a name that is no text', { name: 7, email: ANN, password: PASSWORD }],
+  ])('answers 400 bad-request to a body with %s, Better Auth not asked', async (_, body) => {
+    const { route, received } = mountedOnFakeAuth(accepted)
+    const answer = await route(
+      new Request('http://gateway.test/auth/sign-up/email', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      }),
+      FROM,
+    )
+
+    expect(answer?.status).toBe(400)
+    expect(await answer?.json()).toEqual({ code: 'bad-request' })
+    expect(received).toEqual([])
+  })
+
+  it('refuses a name alike for an email that has an account and one that has none, mailing nothing', async () => {
+    const { route, clock, outbox } = await mountedOnRealAuth()
+    const up = route(signUpRequest(ANN), FROM)
+
+    await vi.waitFor(() => expect(clock.pending()).toBe(1), ARGON2_WAIT)
+    await clock.advance(SIGN_UP_FLOOR_MS)
+    expect((await up)?.status).toBe(202)
+    await outbox.next(ANN)
+
+    const [taken, free] = await Promise.all(
+      [ANN, 'bob@example.test'].map((email) => route(signUpRequest(email, PASSWORD, ''), FROM)),
+    )
+
+    for (const answer of [taken, free]) {
+      expect(answer?.status).toBe(400)
+      expect(await answer?.json()).toEqual({ code: 'name-required' })
+      expect([...(answer?.headers.keys() ?? [])].sort()).toEqual(
+        [...(taken?.headers.keys() ?? [])].sort(),
+      )
+    }
+
+    expect(outbox.to(ANN)).toHaveLength(1)
+    expect(outbox.to('bob@example.test')).toEqual([])
+  })
 })

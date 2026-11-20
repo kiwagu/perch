@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../../files'
-import { flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
+import { parallelIn, regionStateIn, withAreas } from '../areas.fixture'
+import { afterSave, flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
 import { flowProblems } from './problems'
 
@@ -13,6 +14,8 @@ const show = (anchor: string, codes: string[]) =>
   ({ type: 'show', params: { anchor, codes } }) as const
 
 const clear = (anchor: string) => ({ type: 'clear', params: { anchor } }) as const
+
+const read = (anchor: string) => ({ type: 'read', params: { anchor } }) as const
 
 describe('flowProblems', () => {
   it('finds nothing in a consistent contract', () => {
@@ -166,23 +169,22 @@ describe('flowProblems', () => {
     const editing = flowStateIn(contract, 'editing')
 
     editing.entry = [show('sample.gone-message', ['saved']), show('sample.save-button', ['gone'])]
-    editing.exit = [
+    afterSave(contract, [
       { type: 'navigate', params: { to: '/nowhere' } },
       { type: 'navigate', params: { to: '/sample/$key', search: { page: 2, tab: 'b' } } },
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.entry[0].params.anchor: "sample.gone-message" is not a declared anchor`,
       `${AT}.states.editing.entry[1].params.codes[0]: "sample.save-button" carries no code "gone"`,
-      `${AT}.states.editing.exit[0].params.to: "/nowhere" is the path of no binding`,
-      `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+      `${AT}.states.saving.invoke.onDone[0].actions[0].params.to: "/nowhere" is the path of no binding`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
   it('carries into a search what a field of the screen holds', () => {
     const contract = sampleContract()
-    const editing = flowStateIn(contract, 'editing')
 
-    editing.exit = [
+    afterSave(contract, [
       {
         type: 'navigate',
         params: { to: '/sample/$key', search: { tab: { anchor: 'sample.title-input' } } },
@@ -191,7 +193,7 @@ describe('flowProblems', () => {
         type: 'navigate',
         params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
       },
-    ]
+    ])
 
     expect(printed(contract)).toEqual([])
   })
@@ -203,22 +205,22 @@ describe('flowProblems', () => {
     Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
       derived: ['visibility-button'],
     })
-    flowStateIn(contract, 'editing').exit = [
+    afterSave(contract, [
       navigate({ tab: { anchor: 'sample.gone-input' } }),
       navigate({ tab: { anchor: 'sample.save-button' } }),
       navigate({ tab: { anchor: 'sample.list' } }),
       navigate({ tab: { anchor: 'sample.title-input.visibility-button' } }),
       navigate({ tab: { anchor: 'app-shell.status' } }),
       navigate({ page: { anchor: 'sample.title-input' } }),
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
-      `${AT}.states.editing.exit[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
-      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
-      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
-      `${AT}.states.editing.exit[3].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
-      `${AT}.states.editing.exit[4].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
-      `${AT}.states.editing.exit[5].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+      `${AT}.states.saving.invoke.onDone[0].actions[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
+      `${AT}.states.saving.invoke.onDone[2].actions[0].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
+      `${AT}.states.saving.invoke.onDone[3].actions[0].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[4].actions[0].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
+      `${AT}.states.saving.invoke.onDone[5].actions[0].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
   it('carries an email typed into a search, never a secret field', () => {
@@ -231,15 +233,15 @@ describe('flowProblems', () => {
       'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
       'sample.password-confirmation-input': { kind: 'input', secret: true },
     })
-    flowStateIn(contract, 'editing').exit = [
+    afterSave(contract, [
       navigate('sample.email-input'),
       navigate('sample.password-input'),
       navigate('sample.password-confirmation-input'),
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
-      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
-      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[2].actions[0].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
     ])
   })
   it('takes a clear of an anchor that carries codes, or of a field, a secret one included', () => {
@@ -313,6 +315,144 @@ describe('flowProblems', () => {
     ]
 
     expect(printed(contract)).toEqual([])
+  })
+  it('takes a read of a list of its own screen whose source is a platform action', () => {
+    const contract = sampleContract()
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-table': { kind: 'table', source: { platform: 'devices.list' } },
+    })
+    flowStateIn(contract, 'editing').entry = [read('sample.devices-list')]
+    Object.assign(flowStateIn(contract, 'saving').invoke ?? {}, {
+      onDone: { target: 'editing', actions: [read('sample.devices-table')] },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses a read of what has no platform source, or is not its own, and says what it may name', () => {
+    const contract = sampleContract()
+    const may =
+      'a read names a list of its own screen whose source is a platform action, which it reads again'
+
+    Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
+      derived: ['visibility-button'],
+    })
+    Object.assign(screenIn(contract, 'app-shell').anchors, {
+      'app-shell.devices-list': { kind: 'list', source: { platform: 'devices.list' } },
+    })
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-button': { kind: 'button', source: { platform: 'devices.list' } },
+      'sample.plain-list': { kind: 'list' },
+    })
+    flowStateIn(contract, 'editing').entry = [
+      read('sample.gone-list'),
+      read('sample.list'),
+      read('sample.page'),
+      read('sample.save-button'),
+      read('app-shell.devices-list'),
+      read('sample.title-input.visibility-button'),
+      read('sample.devices-button'),
+      read('sample.plain-list'),
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.entry[0].params.anchor: "sample.gone-list" is not a declared anchor`,
+      `${AT}.states.editing.entry[1].params.anchor: "sample.list" lists the entity thing, which it follows as the stored data changes and never reads: ${may}`,
+      `${AT}.states.editing.entry[2].params.anchor: "sample.page" is a page, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[3].params.anchor: "sample.save-button" is a button, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[4].params.anchor: "app-shell.devices-list" is an anchor of another screen: ${may}`,
+      `${AT}.states.editing.entry[5].params.anchor: "sample.title-input.visibility-button" is a visibility-button, presentation only: ${may}`,
+      `${AT}.states.editing.entry[6].params.anchor: "sample.devices-button" is a button, which lists nothing: ${may}`,
+      `${AT}.states.editing.entry[7].params.anchor: "sample.plain-list" is a list with no source: ${may}`,
+    ])
+  })
+  it('refuses an invoke that says read: false and reads in one of its outcomes', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(invoke, { read: false })
+
+    expect(printed(contract)).toEqual([])
+
+    invoke.onDone = { target: 'editing', actions: [read('sample.devices-list')] }
+    invoke.onError = [
+      { target: 'editing', guard: 'titleGiven' },
+      { target: 'editing', actions: [read('sample.devices-list')] },
+    ]
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onDone reads "sample.devices-list": a read after the action, or read: false, never both`,
+      `${AT}.states.saving.invoke.read: says nothing reads after thing.updateThing, and its onError[1] reads "sample.devices-list": a read after the action, or read: false, never both`,
+    ])
+  })
+  it('takes read: false on a branch of an onDone or an onError, a single outcome included', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    invoke.onDone = [
+      { target: 'editing', guard: 'titleGiven', read: false },
+      { target: 'editing', actions: [read('sample.devices-list')] },
+    ]
+    invoke.onError = { target: 'editing', read: false }
+
+    expect(printed(contract)).toEqual([])
+  })
+  it('refuses read: false on a transition of an event, of a root, a region or a parallel state', () => {
+    const contract = withAreas()
+
+    flowStateIn(contract, 'saving').on = { 'sample.b-button': { target: 'editing', read: false } }
+    parallelIn(contract).on = {
+      'sample.save-button': [
+        { guard: 'titleGiven', target: 'saving' },
+        { actions: [show('sample.save-button', ['failed'])], read: false },
+      ],
+    }
+    regionStateIn(contract, 'form', 'closed').on = {
+      'sample.a-button': { target: 'open', read: false },
+    }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.editing.on["sample.save-button"][1].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+      `${AT}.states.editing.states.form.states.closed.on["sample.a-button"].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+      `${AT}.states.saving.on["sample.b-button"].read: says nothing reads after it, which only an outcome of an action says: read: false sits on a branch of an invoke's onDone or onError`,
+    ])
+  })
+  it('refuses a branch that says read: false and reads, once per read', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(screenIn(contract, 'sample').anchors, {
+      'sample.devices-table': { kind: 'table', source: { platform: 'devices.list' } },
+    })
+    invoke.onDone = [
+      {
+        target: 'editing',
+        guard: 'titleGiven',
+        read: false,
+        actions: [read('sample.devices-list'), read('sample.devices-table')],
+      },
+      { target: 'editing' },
+    ]
+    invoke.onError = { target: 'editing', read: false, actions: [read('sample.devices-list')] }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-list": a read after this outcome, or read: false, never both`,
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-table": a read after this outcome, or read: false, never both`,
+      `${AT}.states.saving.invoke.onError.read: says nothing reads after this outcome of thing.updateThing, and the outcome reads "sample.devices-list": a read after this outcome, or read: false, never both`,
+    ])
+  })
+  it('refuses a branch that says read: false under an invoke that says it of every outcome', () => {
+    const contract = sampleContract()
+    const invoke = flowStateIn(contract, 'saving').invoke ?? expect.unreachable('an invoke')
+
+    Object.assign(invoke, { read: false })
+    invoke.onDone = [{ target: 'editing', guard: 'titleGiven', read: false }, { target: 'editing' }]
+    invoke.onError = { target: 'editing', read: false }
+
+    expect(printed(contract)).toEqual([
+      `${AT}.states.saving.invoke.onDone[0].read: says nothing reads after this outcome of thing.updateThing, and the invoke says it of every outcome already: read: false on the invoke or on its branch, never both`,
+      `${AT}.states.saving.invoke.onError.read: says nothing reads after this outcome of thing.updateThing, and the invoke says it of every outcome already: read: false on the invoke or on its branch, never both`,
+    ])
   })
   it('holds the effects of every transition, an invoke outcome included', () => {
     const contract = sampleContract()

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
 import { type DataError, dataError, type SignUpInput } from '@workspace/data'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import {
   openTestSession,
@@ -132,7 +133,7 @@ describe('the sign-in service', () => {
 
   it.each([
     ['  ', 'profile:NAME_REQUIRED'],
-    ['a'.repeat(81), 'profile:NAME_TOO_LONG'],
+    ['a'.repeat(CONTRACT_VALUES['profile.name'].maxLength + 1), 'profile:NAME_TOO_LONG'],
   ])('refuses the name %j before it asks anything', async (name, code) => {
     const { asked, port } = recordingSession()
 
@@ -147,6 +148,44 @@ describe('the sign-in service', () => {
 
     expect((await new SignInService(port).resend(ann.email)).isOk()).toBe(true)
     expect(asked).toEqual([{ resend: ann.email }])
+  })
+})
+
+describe('a sign-in past the limit of devices', () => {
+  it('asks before signing in, signing nothing in, and signs in once confirmed', async () => {
+    await annVerified()
+    opened.auth.atDeviceLimit(ann.email)
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+    expect(
+      opened.auth.requests.flatMap((request) =>
+        request.kind === 'sign-in' ? [request.signOutOldest ?? false] : [],
+      ),
+    ).toEqual([false, true])
+  })
+
+  it('signs nothing in once the question is cancelled', async () => {
+    await annVerified()
+    opened.auth.atDeviceLimit(ann.email)
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+    actor.send({ type: 'user.sign-in.device-limit-dialog.cancel-button' })
+
+    expect(actor.getSnapshot().value).toBe('sign-in')
+    expect(session.current()).toBeUndefined()
   })
 })
 

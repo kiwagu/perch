@@ -168,6 +168,26 @@ describe('gatewayAuth', () => {
     )
   })
 
+  it('reads 409 to a sign-in as the account at its limit of devices, nothing signed in', async () => {
+    const { fetcher } = fakeFetch(respond(409, { code: 'device-limit' }))
+
+    expect((await signIn(gatewayAuth(BASE, fetcher)))._unsafeUnwrapErr().code).toBe(
+      'data:DEVICE_LIMIT',
+    )
+  })
+
+  it('confirms a sign-in past the limit of devices in its body, only when asked to', async () => {
+    const { fetcher, sent } = fakeFetch(respond(200, signedIn), respond(200, signedIn))
+    const auth = gatewayAuth(BASE, fetcher)
+
+    expect((await auth.signIn({ ...credentials, signOutOldest: true }, device)).isOk()).toBe(true)
+    expect((await auth.signIn({ ...credentials, signOutOldest: false }, device)).isOk()).toBe(true)
+    expect(sent.map(({ body }) => body)).toEqual([
+      { ...credentials, signOutOldest: true },
+      credentials,
+    ])
+  })
+
   it('reads 400 and 422 to a sign-up as a refused sign-up, naming neither email nor password', async () => {
     for (const status of [400, 422]) {
       const { fetcher } = fakeFetch(respond(status, { code: 'sign-up-rejected' }))

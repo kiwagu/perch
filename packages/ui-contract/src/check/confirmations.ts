@@ -6,9 +6,10 @@
  * asks it, with a code it carries.
  */
 
+import { ANSWERS } from '../anchors'
 import type { Problem } from '../files'
 
-import { ANSWERS, type Contract, declaredAnchors, locate } from './contract'
+import { type Contract, declaredAnchors, locate } from './contract'
 
 export const confirmationsProblems = (contract: Contract): Problem[] => [
   ...declarationProblems(contract),

@@ -8,13 +8,15 @@ model no screen shows yet. The second is the code's: how many of the
 controls a user can act on carry an anchor, per feature module of the web app and for the UI
 kit, which are left unmarked and which are declared off the coverage by a marker, and how
 many anchors and scenarios each screen has. `bun run contract:coverage --write` rewrites the
-block below from the code and the contract; the text around it is written by hand.
+block below from the code and the contract; the text around it is written by hand. The block
+stays what that command writes: `bun run contract:coverage:check` fails when it is not, in `bun
+run check` and in the pre-commit hook on `main`.
 
 <!-- coverage:start -->
 
-The contract declares 12 screens, 157 anchors and 67 codes.
+The contract declares 15 screens, 232 anchors and 92 codes.
 
-Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 63/64, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 89/90, ignored 2.
 
 ## Model
 
@@ -67,12 +69,13 @@ Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5
 | Module | Controls | Marked | Ignored | Share |
 | --- | ---: | ---: | ---: | ---: |
 | app-shell | 10 | 10 | 0 | 100% |
+| console | 16 | 16 | 0 | 100% |
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
-| organisation | 14 | 14 | 0 | 100% |
-| user | 31 | 31 | 0 | 100% |
+| organisation | 23 | 23 | 0 | 100% |
+| user | 32 | 32 | 0 | 100% |
 | ui kit | 4 | 3 | 2 | 75% |
-| all | 64 | 63 | 2 | 98% |
+| all | 90 | 89 | 2 | 99% |
 
 ### Unmarked
 
@@ -91,18 +94,21 @@ packages/ui/src/components/ui/sheet.tsx:65: Button — no screen renders a sheet
 
 | Screen | Anchors | Scenarios |
 | --- | ---: | ---: |
-| not-found | 3 | 1 |
-| app-shell | 21 | 63 |
-| user.confirm-email | 5 | 4 |
-| user.delete-account | 4 | 5 |
-| device | 10 | 1 |
-| user.forgot-password | 6 | 11 |
-| user.profile | 10 | 50 |
-| organisation | 30 | 12 |
-| user.reset-password | 15 | 9 |
-| user.settings | 27 | 21 |
-| user.sign-in | 19 | 40 |
-| user.verify-email | 7 | 6 |
+| not-found | 3 | 3 |
+| app-shell | 22 | 91 |
+| user.confirm-email | 5 | 6 |
+| console.account | 36 | 8 |
+| console.users | 14 | 9 |
+| user.delete-account | 4 | 6 |
+| device | 10 | 6 |
+| user.forgot-password | 6 | 12 |
+| organisation.invitation | 8 | 7 |
+| user.profile | 10 | 77 |
+| organisation | 45 | 22 |
+| user.reset-password | 15 | 10 |
+| user.settings | 27 | 25 |
+| user.sign-in | 20 | 58 |
+| user.verify-email | 7 | 7 |
 
 <!-- coverage:end -->
 

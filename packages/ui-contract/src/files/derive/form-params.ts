@@ -9,14 +9,11 @@
  * error's fields see what a written button gives them.
  */
 
-import { FIELD_KINDS } from '../../anchors'
+import { FIELD_KINDS, partOf } from '../../anchors'
 import { entriesOf, isRecord, listOf, recordOf, sameValue } from '../../records'
 import { jsonPath, type Problem } from '../problems'
 
 const BUTTON = 'button'
-
-/** The part an anchor sits in: the anchor without its last segment. */
-export const partOf = (anchor: string): string => anchor.slice(0, anchor.lastIndexOf('.'))
 
 /** The fields declared in `part`: `<part>.<name>`, one segment more, of a field kind. */
 function fieldsOf(

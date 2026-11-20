@@ -27,13 +27,21 @@ export interface GatewayAuth {
    * `data:AUTH_FAILED` naming its status, never the email or the password.
    */
   signUp(input: SignUpInput): ResultAsync<void, DataError>
-  /** Signs `device` in; an account whose email is not verified yet fails as `data:EMAIL_NOT_VERIFIED`. */
+  /**
+   * Signs `device` in; an account whose email is not verified yet fails as
+   * `data:EMAIL_NOT_VERIFIED` (a 403 whose body does not name `account-banned`), one an operator
+   * banned, once its password is right, as `data:ACCOUNT_BANNED` (a 403 that names it), and one
+   * signed in on as many devices as it may be as
+   * `data:DEVICE_LIMIT`, nothing signed in, unless `input.signOutOldest` confirms signing out its
+   * device seen least recently.
+   */
   signIn(input: SignInInput, device: NamedDevice): ResultAsync<SignedInDevice, DataError>
   /**
    * Exchanges a verification link's `token`, naming `device`: the first exchange verifies the
    * email and signs the device in (`signed-in`, with the account's name and language), a later one
-   * signs nothing in (`verified-before`). A link past its lifetime fails as `data:LINK_EXPIRED`,
-   * any other the gateway refuses (an empty token too, without asking it) as `data:LINK_INVALID`,
+   * signs nothing in (`verified-before`). The link of an account an operator banned verifies its
+   * email, signs nothing in and fails as `data:ACCOUNT_BANNED` (a 403 that names `account-banned`).
+   * A link past its lifetime fails as `data:LINK_EXPIRED`, any other the gateway refuses (an empty token too, without asking it) as `data:LINK_INVALID`,
    * a request to wait as `data:RATE_LIMITED`, an unreachable gateway as `data:OFFLINE`, and any
    * other answer as `data:AUTH_FAILED` naming its status, never a token.
    */
@@ -211,7 +219,15 @@ export function gatewayAuth(baseUrl: string, fetcher: Fetcher = fetch): GatewayA
       }).andThen(signedUpOf),
     signIn: (input, device) =>
       ResultAsync.fromPromise(
-        client.signIn.email({ email: input.email, password: input.password }, callOptions(device)),
+        client.signIn.email(
+          {
+            email: input.email,
+            password: input.password,
+            // The confirmation goes only with a sign-in that confirms.
+            ...(input.signOutOldest === true ? { signOutOldest: true } : {}),
+          },
+          callOptions(device),
+        ),
         unreachable,
       ).andThen(signedIn),
     verifyEmail: (token, device) =>

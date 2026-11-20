@@ -11,7 +11,13 @@ import { type Locale, SUPPORTED_LOCALES } from '@workspace/i18n/translator'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
-import { answerBody, linkRefusedBy } from './answer-body'
+import {
+  ACCOUNT_BANNED_CODE,
+  accountBanned,
+  answerBody,
+  linkRefusedBy,
+  refusalCode,
+} from './answer-body'
 import type { SignedInDevice } from './signed-in'
 
 /** The account a first verification signed this device in to, as its sign-up named it. */
@@ -50,6 +56,9 @@ const verifiedAnswer = z.union([
 
 const linkInvalid = () => dataError('data:LINK_INVALID', 'the gateway refused the link')
 
+const couldNotVerify = (status: number) =>
+  dataError('data:AUTH_FAILED', `the gateway could not verify the link (${status})`)
+
 /** The outcome a verification's 200 carries. */
 function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
   const parsed = verifiedAnswer.safeParse(body)
@@ -81,8 +90,9 @@ function outcomeOf(body: unknown): ResultAsync<EmailVerification, DataError> {
 
 /**
  * What the gateway's answer to a verification means: its outcome (200); a link past its lifetime
- * (401 `link-expired`) or another it refused (any other 401, a 400); a request to wait (429); any
- * other answer fails naming its status.
+ * (401 `link-expired`) or another it refused (any other 401, a 400); the link of an account an
+ * operator banned, which verified its email and signed nothing in (403 `account-banned`); a
+ * request to wait (429); any other answer fails naming its status.
  */
 export function verificationOf(response: Response): ResultAsync<EmailVerification, DataError> {
   if (response.status === 200) {
@@ -99,9 +109,17 @@ export function verificationOf(response: Response): ResultAsync<EmailVerificatio
     return errAsync(linkInvalid())
   }
 
+  if (response.status === 403) {
+    return refusalCode(response).andThen((code) =>
+      errAsync<EmailVerification, DataError>(
+        code === ACCOUNT_BANNED_CODE ? accountBanned() : couldNotVerify(response.status),
+      ),
+    )
+  }
+
   return errAsync(
     response.status === 429
       ? dataError('data:RATE_LIMITED', 'the gateway asks to wait before the verification')
-      : dataError('data:AUTH_FAILED', `the gateway could not verify the link (${response.status})`),
+      : couldNotVerify(response.status),
   )
 }

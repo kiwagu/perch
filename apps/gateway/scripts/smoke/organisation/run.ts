@@ -16,6 +16,12 @@ import { removalSteps } from './removal'
 
 const createdOrganisation = z.object({ membership: membership })
 
+/** What an invite answers, as far as the smoke reads it: the invitation's id. */
+const invitedEmail = z.object({ invitation: z.object({ id: z.string() }) })
+
+/** What the signed-in account's invitations answer, as far as the smoke reads them: their ids. */
+const listedInvitations = z.object({ invitations: z.array(z.object({ id: z.string() })) })
+
 const listedMemberships = z.object({ memberships: z.array(membership) })
 
 /** Whether a welcome's regions name `region`. */
@@ -30,9 +36,10 @@ function rolesOf(memberships: readonly Membership[]): string {
 
 /**
  * The organisation path: `owner` creates an organisation and invites a second identity into
- * it, whose device writes into the organisation's region, is refused a note in another
- * member's name, and is removed. The organisation and the second identity stay on the stand,
- * for the sweep of `@example.test` accounts.
+ * it by email; the second identity accepts the invitation by the id the invite answered, never
+ * by finding it by the organisation's name, and its device then writes into the organisation's
+ * region, is refused a note in another member's name, and is removed. The organisation and the
+ * second identity stay on the stand, for the sweep of `@example.test` accounts.
  */
 export async function organisationSteps(
   base: string,
@@ -71,12 +78,36 @@ export async function organisationSteps(
     return signedUp
   })
 
-  await step('the second identity invited: 200', async () => {
-    const answer = await callAs(base, 'POST', `/organisations/${key}/members`, owner, {
-      email: guest.identity.email,
-    })
+  const invitation = await step(
+    'the second identity invited by email: 201 with its id',
+    async () => {
+      const answer = await callAs(base, 'POST', `/organisations/${key}/invitations`, owner, {
+        email: guest.identity.email,
+        role: 'member',
+      })
 
-    check(answer.status === 200, `answered ${reported(answer)}`)
+      check(answer.status === 201, `answered ${reported(answer)}`)
+
+      return invitedEmail.parse(answer.body).invitation.id
+    },
+  )
+
+  await step('the second identity accepted the invitation by its id: 200, a member', async () => {
+    const listed = await callAs(base, 'GET', '/invitations', guest)
+
+    check(listed.status === 200, `answered ${reported(listed)}`)
+    check(
+      listedInvitations.parse(listed.body).invitations.some((each) => each.id === invitation),
+      'the invitation is not listed for the second identity',
+    )
+
+    const accepted = await callAs(base, 'POST', '/invitations/accept', guest, { invitation })
+
+    check(accepted.status === 200, `answered ${reported(accepted)}`)
+
+    const { membership: joined } = createdOrganisation.parse(accepted.body)
+
+    check(joined.tenant.key === key && joined.role === 'member', 'not a member of the key')
   })
 
   const guestDoc = RegionDoc.inMemory('tenant', region)

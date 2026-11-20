@@ -10,6 +10,16 @@ export interface Member {
   readonly role: TenantRole
 }
 
+/**
+ * A membership of an organisation as the directory holds it: the identity, its role and the
+ * email of its identity; none once the identity is gone.
+ */
+export interface TenantMembership {
+  readonly identity: IdentityId
+  readonly role: TenantRole
+  readonly email: string | undefined
+}
+
 /** An organisation as the directory holds it. */
 export interface Tenant {
   readonly id: string

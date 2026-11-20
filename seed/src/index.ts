@@ -12,6 +12,7 @@ export {
   validateCatalog,
 } from './catalog'
 export {
+  type CommandRunner,
   openStand,
   openStandTenant,
   runSeed,
@@ -23,5 +24,6 @@ export {
   type StandTarget,
   type SweepOptions,
   type Swept,
+  spawnCommand,
   sweep,
 } from './seed'

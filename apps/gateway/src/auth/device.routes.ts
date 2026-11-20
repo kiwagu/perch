@@ -5,6 +5,8 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { CLOSE, deviceId } from '@workspace/replica/protocol'
 
+import { idTooLong } from '../path-id'
+import { matchPath } from '../route-path'
 import type { ConnectionRegistry } from '../sync/connections'
 
 import type { AuthSessions } from './auth-sessions'
@@ -12,15 +14,26 @@ import { bearerCaller, bearerRefused, bearerToken, DEVICE_HEADER } from './beare
 import { type DeviceSessionRow, endedAt } from './device-session-rows'
 import type { DeviceSessions } from './device-sessions'
 
-/** The paths of the device routes: every device of the caller, and one of them. */
-const DEVICE_PATH = /^\/devices(?:\/([^/]+))?$/
-
 /** What a path names. */
 type Target =
   | { readonly kind: 'devices' }
   | { readonly kind: 'device'; readonly id: string }
   | { readonly kind: 'everywhere' }
   | { readonly kind: 'sign-out' }
+
+/**
+ * The path each kind of target is served under, a device's session id written `:id`: `targetOf`
+ * answers a path only through these.
+ */
+const PATH_OF = {
+  devices: '/devices',
+  device: '/devices/:id',
+  everywhere: '/auth/sign-out-everywhere',
+  'sign-out': '/auth/sign-out',
+} as const satisfies Readonly<Record<Target['kind'], string>>
+
+/** The paths the device routes answer. */
+export const DEVICE_PATHS: readonly string[] = Object.values(PATH_OF)
 
 /** Who a call with a session token comes from: the identity, and the device of its live session. */
 interface Caller {
@@ -48,23 +61,21 @@ interface ListedDevice {
 }
 
 function targetOf(pathname: string): Target | undefined {
-  if (pathname === '/auth/sign-out-everywhere') {
+  const device = matchPath(PATH_OF.device, pathname)
+
+  if (device) {
+    return { kind: 'device', id: device.id }
+  }
+
+  if (matchPath(PATH_OF.devices, pathname)) {
+    return { kind: 'devices' }
+  }
+
+  if (matchPath(PATH_OF.everywhere, pathname)) {
     return { kind: 'everywhere' }
   }
 
-  if (pathname === '/auth/sign-out') {
-    return { kind: 'sign-out' }
-  }
-
-  const found = DEVICE_PATH.exec(pathname)
-
-  if (!found) {
-    return undefined
-  }
-
-  const [, id] = found
-
-  return id === undefined ? { kind: 'devices' } : { kind: 'device', id }
+  return matchPath(PATH_OF['sign-out'], pathname) ? { kind: 'sign-out' } : undefined
 }
 
 /** `row` as the list of `current`'s identity shows it at `now` (ms since the epoch). */
@@ -108,8 +119,9 @@ export interface DeviceRoutesOptions {
  *   came from; neither a session token nor a device's own id is ever sent.
  * - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's
  *   sockets are closed with 4001; a session that ended already answers 204 with nothing closed,
- *   so the device's later session keeps its sockets; 404 `no-such-device` for an id that is not
- *   one of the caller's sessions.
+ *   so the device's later session keeps its sockets; 400 `bad-request` for an id longer than the
+ *   `id` value allows, before any session is looked for; 404 `no-such-device` for any
+ *   other id that is not one of the caller's sessions.
  * - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller, the asking
  *   one included, has ended and every socket of the identity is closed with 4001.
  * - `POST /auth/sign-out`, with the device's token and its `X-Perch-Device` and no body: the token
@@ -151,6 +163,10 @@ export function deviceRoutes(
   const revoke =
     (id: string): Handler =>
     async ({ identity }) => {
+      if (idTooLong(id)) {
+        return badRequest()
+      }
+
       const parsed = idSchemas.device_session.schema.safeParse(id)
 
       // An id of another form names no session.

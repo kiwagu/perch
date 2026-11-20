@@ -13,7 +13,7 @@ import { describe, expect, it } from 'vitest'
 
 import { type AnchorDef, formatProblem, loadScreens } from '@workspace/ui-contract'
 
-import { LEAVE_POLICY, LEAVING_CONTROLS } from './leaving'
+import { LEAVE_POLICY, LEAVING_CONTROLS, NAVIGATING_CONTROLS } from './leaving'
 
 const ROOT = join(import.meta.dirname, '../../../..')
 const AHEAD = process.env['CONTRACT_AHEAD'] === '1'
@@ -51,6 +51,26 @@ describe('the leaves of the contract', () => {
     expect(leaving.size).toBeGreaterThan(0)
     expect(controls.sort()).toEqual(
       AHEAD ? contract.filter((anchor) => controls.includes(anchor)) : contract,
+    )
+  })
+
+  it('ask first at the controls whose flow leaves their screen, losing the fields the contract derives', () => {
+    const contract: Record<string, string[]> = Object.fromEntries(
+      (screens?.screens ?? []).flatMap((screen) =>
+        Object.entries(screen.anchors).flatMap(([anchor, def]) =>
+          def.leaves === undefined ? [] : [[anchor, [...def.leaves.loses]] as const],
+        ),
+      ),
+    )
+    const app: Record<string, string[]> = Object.fromEntries(
+      Object.entries(NAVIGATING_CONTROLS).map(([anchor, loses]) => [anchor, [...loses]]),
+    )
+
+    expect(Object.keys(contract).length).toBeGreaterThan(0)
+    expect(app).toEqual(
+      AHEAD
+        ? Object.fromEntries(Object.entries(contract).filter(([anchor]) => anchor in app))
+        : contract,
     )
   })
 })

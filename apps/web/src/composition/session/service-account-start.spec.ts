@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
 import type { GatewayAuth } from '../gateway-auth'
-import { savedIdentity } from '../storage'
+import { savedIdentity, savedSession } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'es' }
 
@@ -57,7 +57,7 @@ describe('the start a sign-in answers', () => {
     expect(savedIdentity(world.storage)?.id).toBe(user.id)
   })
 
-  it('names the account and what it starts from', async () => {
+  it('names the sign-in it is kept under, the account and what it starts from', async () => {
     const { starting } = await notStarted()
     const world = await openTestWorld({ auth: starting, online: false })
 
@@ -65,7 +65,10 @@ describe('the start a sign-in answers', () => {
 
     const user = (await world.session.signIn(annSignUp))._unsafeUnwrap()
 
-    expect(world.startsKept).toEqual([[user, { name: 'Ann', locale: 'es' }]])
+    // Kept under the sign-in's own id, the one its records are saved under.
+    expect(world.startsKept).toEqual([
+      [savedSession(world.storage)?.signIn, user, { name: 'Ann', locale: 'es' }],
+    ])
   })
 
   it('is not there when the account has started', async () => {
@@ -75,6 +78,81 @@ describe('the start a sign-in answers', () => {
     worlds.push(world)
 
     expect((await world.session.signIn(annSignUp)).isOk()).toBe(true)
+    expect(world.startsKept).toEqual([])
+  })
+})
+
+describe('the start a first verification answers', () => {
+  it('is kept before the device is saved, for the account the verification signed in', async () => {
+    const auth = fakeGatewayAuth()
+    let savedWhenKept: unknown = 'not kept'
+    const world = await openTestWorld({
+      auth,
+      online: false,
+      keepAccountStart: () => {
+        savedWhenKept = savedIdentity(world.storage)
+      },
+    })
+
+    worlds.push(world)
+    expect((await auth.signUp(annSignUp)).isOk()).toBe(true)
+
+    const verified = (
+      await world.session.verifyEmail(auth.linkFor(annSignUp.email))
+    )._unsafeUnwrap()
+    const user = verified.kind === 'signed-in' ? verified.user : expect.unreachable('signed in')
+
+    expect(savedWhenKept).toBeUndefined()
+    expect(savedIdentity(world.storage)?.id).toBe(user.id)
+  })
+
+  it('names the account and the name and language it signed up with', async () => {
+    const auth = fakeGatewayAuth()
+    const world = await openTestWorld({ auth, online: false })
+
+    worlds.push(world)
+    expect((await auth.signUp(annSignUp)).isOk()).toBe(true)
+
+    const verified = (
+      await world.session.verifyEmail(auth.linkFor(annSignUp.email))
+    )._unsafeUnwrap()
+
+    expect(verified).toMatchObject({ kind: 'signed-in' })
+    expect(world.startsKept).toEqual([
+      [
+        savedSession(world.storage)?.signIn,
+        verified.kind === 'signed-in' ? verified.user : undefined,
+        { name: 'Ann', locale: 'es' },
+      ],
+    ])
+  })
+
+  it('is not there for the link of a banned account, which signs nothing in', async () => {
+    const auth = fakeGatewayAuth()
+    const world = await openTestWorld({ auth, online: false })
+
+    worlds.push(world)
+    expect((await auth.signUp(annSignUp)).isOk()).toBe(true)
+    auth.ban(annSignUp.email)
+
+    expect(
+      (await world.session.verifyEmail(auth.linkFor(annSignUp.email)))._unsafeUnwrapErr().code,
+    ).toBe('data:ACCOUNT_BANNED')
+    expect(world.startsKept).toEqual([])
+  })
+
+  it('is not there for a link verified before', async () => {
+    const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+
+    const world = await openTestWorld({ auth, online: false })
+
+    worlds.push(world)
+
+    expect(
+      (await world.session.verifyEmail(auth.linkFor(annSignUp.email)))._unsafeUnwrap(),
+    ).toEqual({ kind: 'verified-before' })
     expect(world.startsKept).toEqual([])
   })
 })

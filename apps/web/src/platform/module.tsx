@@ -26,12 +26,30 @@ export interface ProviderDef<T> {
   readonly useFactory: (container: Container) => T
 }
 
+/**
+ * A page whose code loads when its route first opens for a device the route admits, after its
+ * guard and roles, rather than with the start: `load` gives its component. While it loads, the
+ * frame stays and the page's place is empty; a device the route refuses never loads it.
+ */
+export interface LazyPage {
+  readonly load: () => Promise<FunctionComponent>
+}
+
+/** A page of a module: its component, or a page whose code loads on demand. */
+export type PageDef = FunctionComponent | LazyPage
+
 export interface RouteDef {
   readonly path: string
-  /** The key of the page component in `declarations`. */
+  /** The key of the page in `declarations`. */
   readonly page: string
   /** Pages behind `authenticated` redirect to sign-in when nobody is signed in. */
   readonly guard?: 'authenticated' | 'guest'
+  /**
+   * The roles the page serves, its binding's in the contract: it opens for a device that holds
+   * one of them (`admits`), after its guard and before its search is read; any other device gets
+   * the not-found page at the same address.
+   */
+  readonly roles: readonly string[]
   /** The search parameters the page reads; one equal to its default leaves the URL. */
   readonly search?: z.ZodObject<z.ZodRawShape>
   /** The search parameters carried across navigations. */
@@ -44,7 +62,7 @@ export interface ModuleDef {
   readonly id: string
   readonly imports: readonly ModuleDef[]
   readonly providers: readonly ProviderDef<unknown>[]
-  readonly declarations: Readonly<Record<string, FunctionComponent>>
+  readonly declarations: Readonly<Record<string, PageDef>>
   readonly routes: readonly RouteDef[]
   readonly i18n?: { readonly en: () => Promise<Catalog>; readonly es: () => Promise<Catalog> }
 }

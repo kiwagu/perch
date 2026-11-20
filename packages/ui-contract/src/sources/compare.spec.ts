@@ -38,6 +38,8 @@ const source = (file: string, part: Partial<Omit<Collected, 'file'>>): Collected
   derived: [],
   codes: [],
   inputs: [],
+  colours: [],
+  props: [],
   problems: [],
   ...part,
 })
@@ -56,6 +58,19 @@ const agreeing = (): Collected[] => [
 
 const printed = (collected: readonly Collected[]): string[] =>
   compareWithContract(collected, SCREENS, vocabulary).map(formatProblem)
+
+/** Why a view writes none of the props the contract decides for a field, as the problems say it. */
+const KIT = "the kit takes it from the contract's field facts; leave it out"
+
+/** The problems of `collected` against `screens`, in strict mode and in ahead mode. */
+const strictAndAhead = (
+  collected: readonly Collected[],
+  screens: ScreensFile,
+  vocab: typeof vocabulary = vocabulary,
+): { strict: string[]; ahead: string[] } => ({
+  strict: compareWithContract(collected, screens, vocab).map(formatProblem),
+  ahead: compareWithContract(collected, screens, vocab, { ahead: true }).map(formatProblem),
+})
 
 /** The contract with a field that holds input and one whose own change runs its action. */
 const WITH_FIELDS: ScreensFile = {
@@ -81,6 +96,80 @@ const withInputs = (inputs: Collected['inputs']): Collected[] => [
     inputs,
   }),
 ]
+
+/** The contract with an input that shows its state colour, one that drops it, and a form. */
+const WITH_COLOURS: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.form': { kind: 'form' },
+      'sample.form.name-input': { kind: 'input', holdsInput: true },
+      'sample.form.code-input': { kind: 'input', holdsInput: true, marksState: false },
+    },
+  })),
+}
+
+/** The sources that render the form and its two inputs, with `colours` as their marksState. */
+const withColours = (colours: Collected['colours']): Collected[] => [
+  ...agreeing(),
+  source('x.tsx', {
+    literals: [
+      { anchor: 'sample.form.name-input', form: 'attribute', line: 3 },
+      { anchor: 'sample.form.code-input', form: 'attribute', line: 4 },
+      { anchor: 'sample.form', form: 'attribute', line: 5 },
+    ],
+    colours,
+  }),
+]
+
+/** The contract with a paged list: a list that derives the range, the two links and the size select. */
+const WITH_PAGED_LIST: ScreensFile = {
+  ...SCREENS,
+  screens: SCREENS.screens.map((screen) => ({
+    ...screen,
+    anchors: {
+      ...screen.anchors,
+      'sample.list': {
+        kind: 'list',
+        derived: ['range', 'previous-link', 'next-link', 'size-select'],
+      },
+    },
+  })),
+}
+
+/** The sources that render the paged list and derive its parts, with `flags` as the flags they carry. */
+const withPagedList = (
+  flags: Partial<Pick<Collected, 'inputs' | 'colours'>>,
+  suffixes: readonly string[] = ['size-select'],
+): Collected[] => [
+  ...agreeing(),
+  source('list.tsx', {
+    literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+    derived: suffixes.map((suffix, index) => ({ suffix, base: 'sample.list', line: 5 + index })),
+    ...flags,
+  }),
+]
+
+/** The vocabulary with the parts a paged list derives. */
+const PAGED_VOCABULARY = {
+  ...vocabulary,
+  suffixes: {
+    ...vocabulary.suffixes,
+    ...Object.fromEntries(
+      ['range', 'previous-link', 'next-link', 'size-select'].map((suffix) => [
+        suffix,
+        `the ${suffix}`,
+      ]),
+    ),
+  },
+}
+
+const pagedProblems = (
+  collected: readonly Collected[],
+  screens: ScreensFile = WITH_PAGED_LIST,
+): string[] => compareWithContract(collected, screens, PAGED_VOCABULARY).map(formatProblem)
 
 describe('compareWithContract', () => {
   it('finds nothing when the sources render exactly the anchors of the contract', () => {
@@ -120,43 +209,329 @@ describe('compareWithContract', () => {
     ).toEqual(printed(collected))
     expect(printed(collected).length).toBeGreaterThanOrEqual(5)
   })
-  it("holds a field's holdsInput to the contract", () => {
+  it('refuses a holdsInput a view writes on a declared field, true or false, in ahead mode too', () => {
+    // The contract says `name-input` holds input and `kind-select` holds none: neither is written.
+    const found = strictAndAhead(
+      withInputs([
+        { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
+        { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
+      ]),
+      WITH_FIELDS,
+    )
+    const expected = [
+      `x.tsx:3: "sample.form.name-input": holdsInput={false}, but ${KIT}`,
+      `x.tsx:4: "sample.page.kind-select": holdsInput={true}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+  })
+  it('refuses a holdsInput and a marksState a view writes as a name or a member, in ahead mode too', () => {
+    const inputs = strictAndAhead(
+      withInputs([
+        { anchor: 'sample.form.name-input', holdsInput: 'localFlag', line: 3 },
+        { anchor: 'sample.page.kind-select', holdsInput: 'props.hold', line: 4 },
+      ]),
+      WITH_FIELDS,
+    )
+    const colours = strictAndAhead(
+      withColours([
+        { anchor: 'sample.form.name-input', marksState: 'props.mark', line: 3 },
+        { anchor: 'sample.form.code-input', marksState: 'mark', line: 4 },
+      ]),
+      WITH_COLOURS,
+    )
+
+    for (const found of [inputs.strict, inputs.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+        `x.tsx:4: "sample.page.kind-select": holdsInput={props.hold}, but ${KIT}`,
+      ])
+    }
+
+    for (const found of [colours.strict, colours.ahead]) {
+      expect(found).toEqual([
+        `x.tsx:3: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+        `x.tsx:4: "sample.form.code-input": marksState={mark}, but ${KIT}`,
+      ])
+    }
+  })
+  it('refuses the flags of a field written from a source as a name or a member, and lets a wrapper through', () => {
+    const rendered = (flags: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(
+        [
+          '<form data-testid="sample.form">',
+          `<Input data-testid="sample.form.name-input" ${flags} />`,
+          '<Input data-testid="sample.form.code-input" />',
+          '<Input data-testid={testId} holdsInput={holdsInput} marksState={props.marksState} />',
+          '</form>',
+        ].join('\n'),
+        'x.tsx',
+      ),
+    ]
+    const found = strictAndAhead(
+      rendered('holdsInput={localFlag} marksState={props.mark}'),
+      WITH_COLOURS,
+    )
+    const expected = [
+      `x.tsx:2: "sample.form.name-input": holdsInput={localFlag}, but ${KIT}`,
+      `x.tsx:2: "sample.form.name-input": marksState={props.mark}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+    expect(strictAndAhead(rendered(''), WITH_COLOURS)).toEqual({ strict: [], ahead: [] })
+  })
+  it('wants no holdsInput on the element of a field that holds no input, rendered or not', () => {
+    const found = strictAndAhead(withInputs([]), WITH_FIELDS)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
+  it('refuses a marksState a view writes on a field that shows its state colour or drops it, in ahead mode too', () => {
+    // The contract says `name-input` shows its colour and `code-input` drops it: neither is written.
+    const found = strictAndAhead(
+      withColours([
+        { anchor: 'sample.form.name-input', marksState: false, line: 3 },
+        { anchor: 'sample.form.code-input', marksState: true, line: 4 },
+        { anchor: 'sample.form.code-input', marksState: false, line: 6 },
+        { anchor: 'sample.form', marksState: false, line: 5 },
+      ]),
+      WITH_COLOURS,
+    )
+    const expected = [
+      `x.tsx:3: "sample.form.name-input": marksState={false}, but ${KIT}`,
+      `x.tsx:4: "sample.form.code-input": marksState={true}, but ${KIT}`,
+      'x.tsx:5: "sample.form" is a form, not a field that holds input; only such a field shows a state colour',
+      `x.tsx:6: "sample.form.code-input": marksState={false}, but ${KIT}`,
+    ]
+
+    expect(found.strict).toEqual(expected)
+    expect(found.ahead).toEqual(expected)
+  })
+  it('wants no marksState on the element of a field that drops its state colour, rendered or not', () => {
+    const found = strictAndAhead(withColours([]), WITH_COLOURS)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
+  it('reports marksState on a field that holds no input, and on a kind the kit does not colour', () => {
+    const screens = structuredClone(WITH_COLOURS)
+
+    Object.assign(screens.screens[0]?.anchors ?? {}, {
+      'sample.page.kind-select': { kind: 'select', holdsInput: false },
+      'sample.form.agree-checkbox': { kind: 'checkbox', holdsInput: true },
+    })
+
+    const rendered = (anchor: string, line: number): Collected['literals'][number] => ({
+      anchor,
+      form: 'attribute',
+      line,
+    })
+
     expect(
       compareWithContract(
-        withInputs([
-          { anchor: 'sample.form.name-input', holdsInput: false, line: 3 },
-          { anchor: 'sample.page.kind-select', holdsInput: true, line: 4 },
-        ]),
-        WITH_FIELDS,
+        [
+          ...withColours([]),
+          source('y.tsx', {
+            literals: [
+              rendered('sample.page.kind-select', 3),
+              rendered('sample.form.agree-checkbox', 4),
+            ],
+            colours: [
+              { anchor: 'sample.page.kind-select', marksState: false, line: 3 },
+              { anchor: 'sample.form.agree-checkbox', marksState: false, line: 4 },
+            ],
+          }),
+        ],
+        screens,
         vocabulary,
       ).map(formatProblem),
     ).toEqual([
-      'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
-      'x.tsx:3: "sample.form.name-input" holds input by the contract; drop holdsInput={false}',
-      'x.tsx:4: "sample.page.kind-select": holdsInput={true} is the default; leave it out',
+      'y.tsx:3: "sample.page.kind-select" is a select, not a field that holds input; only such a field shows a state colour',
+      'y.tsx:4: "sample.form.agree-checkbox" is a checkbox, not a field that holds input; only such a field shows a state colour',
     ])
-    expect(
-      compareWithContract(
-        withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }]),
-        WITH_FIELDS,
-        vocabulary,
-      ),
-    ).toEqual([])
   })
-  it('wants the opt-out on the element of a field that holds no input, once it is rendered', () => {
-    expect(compareWithContract(withInputs([]), WITH_FIELDS, vocabulary).map(formatProblem)).toEqual(
-      [
-        'contract/domain/screens/__root.yaml:1: anchors["sample.page.kind-select"]: does not hold input by the contract; its element carries holdsInput={false}',
-      ],
-    )
-    // On a branch the contract may run ahead: the element gains its opt-out in the code's commit.
+  it('refuses the limit and the type of a text field written on its element, in ahead mode too', () => {
+    const screens: ScreensFile = {
+      ...SCREENS,
+      screens: SCREENS.screens.map((screen) => ({
+        ...screen,
+        anchors: {
+          ...screen.anchors,
+          'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        },
+      })),
+    }
+    const rendering = (element: string): Collected[] => [
+      ...agreeing(),
+      collectFromSource(`const title = ${element}`, 'x.tsx'),
+    ]
+
+    // The element as the kit wants it: no limit and no type, whatever the contract's value says.
     expect(
-      compareWithContract(withInputs([]), WITH_FIELDS, vocabulary, { ahead: true }).map(
-        formatProblem,
-      ),
-    ).toEqual([])
+      strictAndAhead(rendering('<Input data-testid="sample.title-input" />'), screens),
+    ).toEqual({
+      strict: [],
+      ahead: [],
+    })
+
+    const written = strictAndAhead(
+      rendering('<Input data-testid="sample.title-input" maxLength={80} type="email" />'),
+      screens,
+    )
+    const expected = [
+      `x.tsx:1: "sample.title-input": maxLength={80}, but ${KIT}`,
+      `x.tsx:1: "sample.title-input": type="email", but ${KIT}`,
+    ]
+
+    expect(written.strict).toEqual(expected)
+    expect(written.ahead).toEqual(expected)
   })
 
+  it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {
+    for (const holdsInput of [false, true]) {
+      const found = strictAndAhead(
+        withPagedList({
+          inputs: [{ anchor: 'sample.list.size-select', base: 'sample.list', holdsInput, line: 5 }],
+        }),
+        WITH_PAGED_LIST,
+        PAGED_VOCABULARY,
+      )
+      const expected = [
+        `list.tsx:5: "sample.list.size-select": holdsInput={${holdsInput}}, but ${KIT}`,
+      ]
+
+      expect(found.strict).toEqual(expected)
+      expect(found.ahead).toEqual(expected)
+    }
+  })
+  it("wants no holdsInput on a paged list's size select rendered without one, in strict mode too", () => {
+    const found = strictAndAhead(withPagedList({}), WITH_PAGED_LIST, PAGED_VOCABULARY)
+
+    expect(found.strict).toEqual([])
+    expect(found.ahead).toEqual([])
+  })
+  it("reports marksState on a paged list's size select, a select that holds no input", () => {
+    expect(
+      pagedProblems(
+        withPagedList({
+          colours: [
+            { anchor: 'sample.list.size-select', base: 'sample.list', marksState: false, line: 5 },
+          ],
+        }),
+      ),
+    ).toEqual([
+      'list.tsx:5: "sample.list.size-select" is a select, not a field that holds input; only such a field shows a state colour',
+    ])
+  })
+  it('leaves an undeclared base to the parts check, with holdsInput={false} on its size select', () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'size-select', base: 'missing.list', line: 5 }],
+          inputs: [
+            {
+              anchor: 'missing.list.size-select',
+              base: 'missing.list',
+              holdsInput: false,
+              line: 5,
+            },
+          ],
+        }),
+      ]),
+    ).toEqual([
+      'list.tsx:5: testIdFor("missing.list", "size-select"): "missing.list" is not in contract/domain/screens',
+    ])
+  })
+  it('leaves an undeclared base to the parts check, with marksState={false} on its size select', () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'size-select', base: 'missing.list', line: 5 }],
+          colours: [
+            {
+              anchor: 'missing.list.size-select',
+              base: 'missing.list',
+              marksState: false,
+              line: 5,
+            },
+          ],
+        }),
+      ]),
+    ).toEqual([
+      'list.tsx:5: testIdFor("missing.list", "size-select"): "missing.list" is not in contract/domain/screens',
+    ])
+  })
+  it('reports a flag on a derived part that is not a size select: it is no field', () => {
+    expect(
+      pagedProblems(
+        withPagedList(
+          {
+            inputs: [
+              {
+                anchor: 'sample.list.size-select',
+                base: 'sample.list',
+                holdsInput: false,
+                line: 5,
+              },
+              { anchor: 'sample.list.next-link', base: 'sample.list', holdsInput: false, line: 6 },
+              { anchor: 'sample.list.range', base: 'sample.list', holdsInput: true, line: 7 },
+            ],
+            colours: [
+              { anchor: 'sample.list.next-link', base: 'sample.list', marksState: false, line: 6 },
+            ],
+          },
+          ['size-select', 'next-link', 'range'],
+        ),
+      ),
+    ).toEqual([
+      `list.tsx:5: "sample.list.size-select": holdsInput={false}, but ${KIT}`,
+      'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field; only a field holds input',
+      'list.tsx:6: "sample.list.next-link" is derived from "sample.list", not a field that holds input; only such a field shows a state colour',
+      'list.tsx:7: "sample.list.range" is derived from "sample.list", not a field; only a field holds input',
+    ])
+  })
+  it('reports a flag on a size select of a list that is not paged', () => {
+    expect(
+      pagedProblems(
+        [
+          ...agreeing(),
+          source('select.tsx', {
+            derived: [{ suffix: 'size-select', base: 'sample.mode-select', line: 5 }],
+            inputs: [
+              {
+                anchor: 'sample.mode-select.size-select',
+                base: 'sample.mode-select',
+                holdsInput: false,
+                line: 5,
+              },
+            ],
+          }),
+        ],
+        SCREENS,
+      ),
+    ).toEqual([
+      'select.tsx:5: testIdFor("sample.mode-select", "size-select"): "sample.mode-select" does not list "size-select" in its derived',
+      'select.tsx:5: "sample.mode-select.size-select" is derived from "sample.mode-select", not a field; only a field holds input',
+    ])
+  })
+  it("wants no opt-out on a paged list's next link rendered without a flag", () => {
+    expect(
+      pagedProblems([
+        ...agreeing(),
+        source('list.tsx', {
+          literals: [{ anchor: 'sample.list', form: 'attribute', line: 3 }],
+          derived: [{ suffix: 'next-link', base: 'sample.list', line: 6 }],
+        }),
+      ]),
+    ).toEqual([])
+  })
   it('reports holdsInput on an anchor that is not a field', () => {
     expect(
       compareWithContract(
@@ -243,7 +618,7 @@ describe('compareWithContract', () => {
       derived: ['visibility-button'],
     })
 
-    const rendered = withInputs([{ anchor: 'sample.page.kind-select', holdsInput: false, line: 4 }])
+    const rendered = withInputs([])
     const compared = (collected: readonly Collected[]): string[] =>
       compareWithContract(collected, screens, vocabulary).map(formatProblem)
 

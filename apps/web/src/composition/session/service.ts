@@ -1,6 +1,7 @@
 import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
+import type { PlatformRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type {
@@ -12,13 +13,23 @@ import type {
 } from '../../platform/session.port'
 import { CurrentSpaceRunner, CurrentSpaceWritePath, type SpaceSource } from '../current-space'
 import type { IdentitySpace } from '../identity-space'
-import { IDENTITY_KEY, MEMBERSHIPS_KEY, savedIdentity } from '../storage'
+import {
+  isMembershipsKey,
+  isRolesKey,
+  isSessionKey,
+  type KeptSession,
+  type SignInOwner,
+  savedIdentity,
+} from '../storage'
 
 import { SessionAccount } from './account'
 import { SessionElsewhere } from './elsewhere'
+import { type MembershipAdopter, MembershipAdoption } from './membership-adoption'
+import type { OpenSpace } from './open-space'
 import type { SessionOptions } from './options'
 import { SessionOrganisations } from './organisations'
 import { PendingRevoke } from './pending-revoke'
+import { SessionRoles } from './roles'
 import { SessionSignIn } from './sign-in'
 import { SignInNotice } from './sign-in-notice'
 import { SessionSignOut, type SignOutOutcome } from './sign-out'
@@ -51,10 +62,12 @@ export class SessionService implements SessionPort {
   readonly #options: SessionOptions
   readonly #state: SessionState
   readonly #organisations: SessionOrganisations
+  readonly #roles: SessionRoles
   readonly #account: SessionAccount
   readonly #signingIn: SessionSignIn
   readonly #signingOut: SessionSignOut
   readonly #elsewhere: SessionElsewhere
+  readonly #adoption: MembershipAdoption
   readonly #unlisten: Array<() => void>
   readonly #transitions = new SessionTransitions()
   readonly #signInNotice: SignInNotice
@@ -64,16 +77,26 @@ export class SessionService implements SessionPort {
   constructor(options: SessionOptions) {
     this.#options = options
     this.#signInNotice = new SignInNotice(options.storage)
-    // The organisations follow every change of identity, once the subscribers heard of it.
-    this.#state = new SessionState(options, this.#transitions, () => this.#organisations.tell())
+    // The organisations and the roles follow every change of identity, once the subscribers
+    // heard of it.
+    this.#state = new SessionState(options, this.#transitions, () => {
+      this.#organisations.tell()
+      this.#roles.tell()
+    })
     this.#organisations = new SessionOrganisations({
       storage: options.storage,
       open: () => this.#state.open(),
     })
+    this.#roles = new SessionRoles({
+      storage: options.storage,
+      shown: () => this.#state.current()?.id,
+    })
     this.#account = new SessionAccount({
       auth: options.auth,
       storage: options.storage,
-      signedIn: () => this.#state.open() !== undefined,
+      // The account is signed in here while the start opens its space too: its own calls need only
+      // the session this browser keeps for it, never its data.
+      signedInAs: () => this.#state.current()?.id,
       signOutOf: (identity) => this.#elsewhere.accountDeleted(identity),
       resetHere: (token) => this.#elsewhere.resetHere(token),
     })
@@ -113,8 +136,14 @@ export class SessionService implements SessionPort {
     this.#elsewhere = new SessionElsewhere({
       host,
       organisations: this.#organisations,
+      roles: this.#roles,
       signingIn: this.#signingIn,
       signingOut: this.#signingOut,
+    })
+    this.#adoption = new MembershipAdoption({
+      host,
+      organisations: this.#organisations,
+      signingOut: (open) => barrier.signingOut(open.heard),
     })
 
     const spaces: SpaceSource = {
@@ -129,14 +158,15 @@ export class SessionService implements SessionPort {
     this.writePath = new CurrentSpaceWritePath(spaces)
     this.#unlisten = [
       options.storage.onChangeElsewhere((key) => {
-        if (key === undefined || key === IDENTITY_KEY) {
+        if (key === undefined || isSessionKey(key)) {
           this.#elsewhere.follow()
-        } else if (key === MEMBERSHIPS_KEY) {
+        } else if (isMembershipsKey(key)) {
           this.#organisations.followSaved()
+        } else if (isRolesKey(key)) {
+          this.#roles.followSaved()
         }
       }),
       options.visibility.onChange((state) => this.#state.open()?.space.visibility(state)),
-      this.subscribe((user) => user && this.#signInNotice.signedIn(user.id)),
     ]
   }
 
@@ -235,30 +265,35 @@ export class SessionService implements SessionPort {
   /**
    * Opens the space of the identity saved by an earlier sign-in; the network is not needed.
    * Online, a token a sign-out left to sign out is sent meanwhile. Until the space is open (or did
-   * not open), the saved identity is the current one and reads and writes wait for its space.
+   * not open), the saved identity is the current one and reads and writes wait for its space;
+   * another tab that signs it out meanwhile ends that at once, and the restore with nobody.
    */
   restore(): ResultAsync<AuthUser | undefined, DataError> {
     const saved = savedIdentity(this.#options.storage)
+    let produced: OpenSpace | undefined
     const restoring = this.#transitions.serially((generation) =>
-      this.#signingIn.restore(generation),
+      this.#signingIn.restore(generation).map((user) => {
+        // The space this restore opened: the one open as its own transition ends. A transition
+        // queued before it may have opened one meanwhile, which this restore closed on its way.
+        produced = user === undefined ? undefined : this.#state.open()
+
+        return user
+      }),
     )
 
-    if (saved) {
-      // The saved identity is current while its space opens, so the page renders for it at once.
-      this.#state.startOpening(saved, restoring)
-    }
-
-    return restoring
+    // The saved identity is current while its space opens, so the page renders for it at once.
+    return saved ? this.#state.startOpening(saved, restoring, () => produced) : restoring
   }
 
   /**
-   * The saved identity's space did not open: signs it out on this device without it. Its token
-   * is left to sign out (sent at once online) and its databases deleted, its own and every
-   * organisation one counted for it, with whatever they held that was not sent. Changes nothing
-   * while a space is open or nobody is saved.
+   * The saved sign-in's space did not open: signs `ended`, the sign-in the start tried to open,
+   * out on this device without it, while it is still the saved one. Its token is left to sign out
+   * (sent at once online) and its databases deleted, its own and every organisation one counted
+   * for it, with whatever they held that was not sent. Changes nothing while a space is open or
+   * another sign-in is saved, of the same account or not.
    */
-  signOutUnopened(): ResultAsync<void, DataError> {
-    return this.#transitions.serially(() => this.#signingOut.unopened())
+  signOutUnopened(ended: KeptSession): ResultAsync<void, DataError> {
+    return this.#transitions.serially(() => this.#signingOut.unopened(ended))
   }
 
   /** Resolves once every local write so far is durable and projected; reports one that is not durable. */
@@ -275,7 +310,11 @@ export class SessionService implements SessionPort {
   }
 
   leaveNotice(notice: SessionNotice): void {
-    this.#signInNotice.leave(notice, this.current()?.id)
+    this.#signInNotice.leave(notice)
+  }
+
+  dropNotice(): void {
+    this.#signInNotice.drop()
   }
 
   /** Runs a sign-in this tab started; `signingInHere` says so while it runs. */
@@ -309,19 +348,29 @@ export class SessionService implements SessionPort {
     this.#organisations.select(key)
   }
 
-  /**
-   * An organisation this device created joins the identity's memberships; see
-   * `SessionOrganisations.adopt`. One created while the start opens the saved identity's space
-   * joins once that space is open, and nobody else's.
-   */
-  adoptMembership(created: Membership): Promise<void> {
-    const opening = this.#state.opening()
+  roles(): ReadonlySet<PlatformRole> {
+    return this.#roles.current()
+  }
 
-    return opening
-      ? opening.settled.then(() =>
-          this.#state.openFor(opening) ? this.#organisations.adopt(created) : undefined,
-        )
-      : this.#organisations.adopt(created)
+  onRoles(listener: (roles: ReadonlySet<PlatformRole>) => void): () => void {
+    return this.#roles.subscribe(listener)
+  }
+
+  /**
+   * The gateway refused the sign-in `asker` a request for want of `role` (a console call's
+   * `not-operator`): the role goes from that sign-in's record, whichever sign-in is current now.
+   */
+  dropRole(asker: SignInOwner, role: PlatformRole): void {
+    this.#roles.drop(asker, role)
+  }
+
+  /**
+   * An adopter for a membership the gateway is about to answer (an organisation created, an
+   * invitation accepted), taken before the request: it adopts only into the space open now, or
+   * into the one the start's open under way produces; see `MembershipAdoption`.
+   */
+  membershipAdopter(): MembershipAdopter {
+    return this.#adoption.adopter()
   }
 
   /**

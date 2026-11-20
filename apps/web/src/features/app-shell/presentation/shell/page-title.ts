@@ -13,7 +13,10 @@ export const PAGE_TITLES: Readonly<Record<string, (t: Translate) => string>> = {
   '/delete-account': (t) => t('app.title.user.delete-account'),
   '/me': (t) => t('app.title.user.profile'),
   '/org': (t) => t('app.title.organisation'),
+  '/invitation': (t) => t('app.title.organisation.invitation'),
   '/devices': (t) => t('app.title.device'),
+  '/console/users': (t) => t('app.title.console.users'),
+  '/console/account': (t) => t('app.title.console.account'),
   '/settings': (t) => t('app.title.user.settings'),
   '/$': (t) => t('app.title.not-found'),
 }

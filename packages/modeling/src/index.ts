@@ -22,6 +22,7 @@ export {
   type GeneratedFile,
 } from './emit-model'
 export { emitPagesModel, emitSurrealkitSuites } from './emit-reports'
+export { valueParamName } from './emit-value-params'
 export { ModelingException } from './errors'
 export { checkIdRegistry } from './id-registry'
 export { idTypeOf, inferResultType, renderFieldType, tablesOf } from './infer-types'

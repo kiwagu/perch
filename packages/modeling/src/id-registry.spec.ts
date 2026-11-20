@@ -5,7 +5,12 @@ import { registry } from '@workspace/ids'
 import { checkIdRegistry } from './id-registry'
 import type { SchemaModel } from './schema-structure'
 
-const table = (idPrefix?: string) => ({ fields: {}, ...(idPrefix ? { idPrefix } : {}) })
+const table = (idPrefix?: string) => ({
+  fields: {},
+  asserts: {},
+  indexes: {},
+  ...(idPrefix ? { idPrefix } : {}),
+})
 
 describe('checkIdRegistry', () => {
   it('accepts a schema whose @id prefixes match the registry both ways', () => {
@@ -20,6 +25,7 @@ describe('checkIdRegistry', () => {
         settings: table('stg'),
         account: table('acc'),
         verification: table('vrf'),
+        invitation: table('inv'),
         member: table(),
         _replica_update: table(),
       },
@@ -40,6 +46,7 @@ describe('checkIdRegistry', () => {
         settings: table('stg'),
         account: table('acc'),
         verification: table('vrf'),
+        invitation: table('inv'),
         team: table('tem'),
       },
     }
@@ -63,6 +70,7 @@ describe('checkIdRegistry', () => {
       'the id registry declares settings = stg but the schema has no table settings',
       'the id registry declares account = acc but the schema has no table account',
       'the id registry declares verification = vrf but the schema has no table verification',
+      'the id registry declares invitation = inv but the schema has no table invitation',
     ])
   })
 })

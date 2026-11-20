@@ -69,9 +69,15 @@ function open(at: string) {
       Me: () => <p>profile</p>,
     },
     routes: [
-      { path: '/forgot-password', page: 'Forgot', guard: 'guest', search: EMAIL_SEARCH },
-      { path: '/sign-in', page: 'SignIn', guard: 'guest', search: EMAIL_SEARCH },
-      { path: '/me', page: 'Me', guard: 'authenticated' },
+      {
+        path: '/forgot-password',
+        page: 'Forgot',
+        guard: 'guest',
+        roles: ['guest'],
+        search: EMAIL_SEARCH,
+      },
+      { path: '/sign-in', page: 'SignIn', guard: 'guest', roles: ['guest'], search: EMAIL_SEARCH },
+      { path: '/me', page: 'Me', guard: 'authenticated', roles: ['identity'] },
     ],
   })
   const router = createAppRouter({

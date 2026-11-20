@@ -21,8 +21,10 @@ export interface OptionSelectProps<Value extends string> {
   readonly testId?: string
   /** Takes no choice: the trigger cannot be opened. */
   readonly disabled?: boolean
-  /** False for a choice that applies at once, as the contract derives for it. */
+  /** False for a choice that applies at once; its facts' say (by `testId`) when left out. */
   readonly holdsInput?: boolean
+  /** False for a choice whose border takes no color by its state; its facts' say (by `testId`), else its form's, when left out. */
+  readonly marksState?: boolean
 }
 
 /** A labelled choice between a few options; the trigger shows the chosen label from the first render. */
@@ -35,6 +37,8 @@ export function OptionSelect<Value extends string>(props: OptionSelectProps<Valu
       value={props.value}
       disabled={props.disabled}
       holdsInput={props.holdsInput}
+      marksState={props.marksState}
+      anchor={props.testId}
       onValueChange={(value) => {
         if (value !== null) {
           props.onChange(value as Value)

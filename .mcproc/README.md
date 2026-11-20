@@ -61,7 +61,9 @@ The profiles:
   file. `caddy-e2e` serves `apps/web/dist`, which only the e2e launcher writes, so the two stands
   never overwrite each other's build: the `e2e` profile has no web app of its own; `bun run
   test:e2e` writes the production build, then starts the profile with `--reload` (apps already
-  online restart, so a run never meets a stale stand) and waits for it.
+  online restart, so a run never meets a stale stand) and waits for it. `caddy-e2e` also names to
+  the gateway the client address each browser claims (`PERCH_CLIENT_ADDRESS=claimed`,
+  `infra/dev/`), so each Playwright worker spends request limits of its own.
 
 Both SurrealDB stands run the `surrealdb/surrealdb:v3.3.4` image with root/root credentials and
 no persistence. Apps in containers (SurrealDB, MailDev, Caddy) declare only a url: their ports
@@ -77,9 +79,10 @@ run a gateway of their own on that stand with the same secret, front origin and 
 its environment, with the mailboxes the suites, the smoke, the load test and the seed read the
 links from: `MAILBOX_URL`, the e2e stand's MailDev REST API, and `MAILBOX_DEV_URL`, the dev
 stand's (`exec.env`): `bun run test:db`, `bun run test:e2e`, `bun run seed` and `bun run
-seed:sweep` go through it, the e2e run under a 4G lease of its own. The `worktree` section names
-what a new worktree copies from the main checkout (the certificates, the local hook file, the
-screenshot baselines) and how it installs.
+seed:sweep` go through it, the e2e run under a 4G lease of its own and, with `bun run
+perf:measure`, in the `e2e` group (`--exclusive e2e`): one of them at a time on the host. The
+`worktree` section names what a new worktree copies from the main checkout (the certificates,
+the local hook file, the screenshot baselines) and how it installs.
 
 `mcproc start <profile> --reload` restarts the apps already online (a restarted SurrealDB stand
 is empty). pm2 keeps the command and the environment an app started with, so after a change of

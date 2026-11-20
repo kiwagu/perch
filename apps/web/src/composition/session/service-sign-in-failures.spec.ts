@@ -14,8 +14,10 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import { signedInElsewhere } from '../__fixtures__/signed-in'
 import { organisationsApi } from '../organisations-api'
 import {
+  CURRENT_KEY,
   deviceIdFrom,
   type MemoryStorage,
   memoryStorage,
@@ -80,36 +82,54 @@ function expectNobodySaved(storage: MemoryStorage): void {
 
 const unreachable = (): DataError => dataError('data:OFFLINE', 'could not reach the gateway')
 
+/** A sign-in's id, as a key names it: written `<id>` in the writes a test lists. */
+const SIGN_IN_ID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+
 /**
- * A browser storage that throws once on each write named (a `set` of a key, after the writes
- * before it landed, or a `remove`), and lists every write asked, the ones that threw included.
+ * A browser storage that throws once on each write named, by the start of its key (a `set`, after
+ * the writes before it landed, or a `remove`), and lists every write asked, the ones that threw
+ * included, a sign-in's id in a key written `<id>`. `kept(prefix)` lists the keys starting with
+ * `prefix` that hold a value now.
  */
 function brokenStorage(throwing: {
   readonly set?: readonly string[]
   readonly remove?: readonly string[]
-}): { readonly storage: MemoryStorage; readonly ops: readonly string[] } {
+}): {
+  readonly storage: MemoryStorage
+  readonly ops: readonly string[]
+  kept(prefix: string): string[]
+} {
   const memory = memoryStorage()
   const ops: string[] = []
-  const sets = new Set(throwing.set)
-  const removes = new Set(throwing.remove)
+  const touched = new Set<string>()
+  const sets = [...(throwing.set ?? [])]
+  const removes = [...(throwing.remove ?? [])]
+  const throws = (named: string[], key: string): boolean => {
+    const at = named.findIndex((prefix) => key.startsWith(prefix))
+
+    return at >= 0 && named.splice(at, 1).length > 0
+  }
 
   return {
     ops,
+    kept: (prefix) =>
+      [...touched].filter((key) => key.startsWith(prefix) && memory.get(key) !== undefined),
     storage: {
       ...memory,
       set: (key, value) => {
-        ops.push(`set ${key}`)
+        ops.push(`set ${key.replace(SIGN_IN_ID, '<id>')}`)
+        touched.add(key)
 
-        if (sets.delete(key)) {
+        if (throws(sets, key)) {
           throw new Error(`the storage is full: ${value}`)
         }
 
         memory.set(key, value)
       },
       remove: (key) => {
-        ops.push(`remove ${key}`)
+        ops.push(`remove ${key.replace(SIGN_IN_ID, '<id>')}`)
 
-        if (removes.delete(key)) {
+        if (throws(removes, key)) {
           throw new Error(`the storage would not let ${key} go`)
         }
 
@@ -119,9 +139,19 @@ function brokenStorage(throwing: {
   }
 }
 
-/** Of `ops`, the writes of the device's token and of the tokens left to sign out, in order. */
+/** Of `ops`, the writes of the sign-in's record, which holds its token, and of the tokens left to sign out, in order. */
 const tokenOps = (ops: readonly string[]) =>
-  ops.filter((op) => op.endsWith('.token') || op.endsWith('.pending-revoke'))
+  ops.filter((op) => op.includes('.signed-in.') || op.endsWith('.pending-revoke'))
+
+/** What a sign-in keeps under its id; none of it may stay once the sign-in is let go. */
+const SIGN_IN_RECORDS = [
+  'perch.session.signed-in.',
+  'perch.session.memberships.',
+  'perch.session.tenant.',
+  'perch.session.roles.',
+  'perch.session.account-start.',
+  'perch.session.email.',
+]
 
 /** The sign-in's answer once it threw or its cleanup did: it names nothing of the throw. */
 const broken = { code: 'data:AUTH_FAILED', message: 'the sign-in could not be completed' }
@@ -265,7 +295,9 @@ describe('a sign-in whose memberships cannot be read', () => {
 
     expect(sent).toHaveLength(1)
     expect(savedToken(storage)).toBe(ISSUED)
-    expect(savedMemberships(storage, user.id)).toEqual([acme])
+    expect(
+      savedMemberships(storage, { signIn: storage.get(CURRENT_KEY) ?? '', identity: user.id }),
+    ).toEqual([acme])
     expect(tab.session.memberships()).toEqual([acme])
     expect(pendingRevokes(storage)).toEqual([])
   })
@@ -296,8 +328,8 @@ describe('a sign-in whose space does not open', () => {
   })
 
   it('a cleanup that throws after removing the token: the token went to be signed out first, and the sign-in fails naming nothing', async () => {
-    // Of the cleanup, the token's removal lands and the identity's throws.
-    const { storage, ops } = brokenStorage({ remove: ['perch.session.identity'] })
+    // Of the cleanup, the record's removal lands and the memberships' throws.
+    const { storage, ops } = brokenStorage({ remove: ['perch.session.memberships.'] })
     const auth = fakeGatewayAuth()
 
     expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
@@ -312,9 +344,9 @@ describe('a sign-in whose space does not open', () => {
     // The token was left to sign out before the cleanup touched the storage: the cleanup's throw
     // could not keep it from the queue.
     expect(tokenOps(ops)).toEqual([
-      'set perch.session.token',
+      'set perch.session.signed-in.<id>',
       'set perch.session.pending-revoke',
-      'remove perch.session.token',
+      'remove perch.session.signed-in.<id>',
     ])
     expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
     expect(savedToken(storage)).toBeUndefined()
@@ -334,7 +366,7 @@ describe('a sign-in whose space does not open', () => {
       get: (key) => {
         if (armed && !thrown && key === 'perch.device.id') {
           thrown = true
-          throw new Error(`the storage broke beside ${memory.get('perch.session.token')}`)
+          throw new Error(`the storage broke beside ${savedToken(memory)}`)
         }
 
         return memory.get(key)
@@ -498,38 +530,41 @@ describe('a sign-in that throws while it holds its token', () => {
     await expectBrokenThenNext(tab, storage, 'token-2')
   })
 
-  it('a save that throws midway: undoes what it saved and has the token signed out', async () => {
-    // The memberships and the token land, then the identity's write throws.
-    const { storage } = brokenStorage({ set: ['perch.session.identity'] })
-    const auth = fakeGatewayAuth()
+  it.each([
+    ['its record', 'perch.session.signed-in.'],
+    ['its memberships', 'perch.session.memberships.'],
+    ['the pointer to it', CURRENT_KEY],
+    ["the sign-in page's mark", 'perch.session.sign-ins'],
+  ])(
+    'a save that throws at %s: undoes all it saved under its own id and has the token signed out',
+    async (_, breaking) => {
+      const { storage, kept } = brokenStorage({ set: [breaking] })
+      const auth = fakeGatewayAuth()
 
-    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
-    auth.requests.splice(0)
-    unreachableSignOuts(auth)
+      expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+      auth.requests.splice(0)
+      unreachableSignOuts(auth)
 
-    const tab = await world({ storage, auth, online: false })
-    const failed = (await tab.session.signIn(annSignUp))._unsafeUnwrapErr()
+      const tab = await world({ storage, auth, online: false })
+      const failed = (await tab.session.signIn(annSignUp))._unsafeUnwrapErr()
 
-    expect(failed.code).toBe('data:AUTH_FAILED')
-    expectNobodySaved(storage)
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
-    expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
-    expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
-  })
+      expect(failed.code).toBe('data:AUTH_FAILED')
+      expectNobodySaved(storage)
+      expect(SIGN_IN_RECORDS.flatMap(kept)).toEqual([])
+      expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
+      expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
+    },
+  )
 
-  it("a save that throws before its token landed: leaves another tab's token of the account alone", async () => {
-    const { storage } = brokenStorage({ set: ['perch.session.token'] })
+  it("a save that throws before its record landed: leaves another tab's sign-in of the account alone", async () => {
+    const { storage } = brokenStorage({ set: ['perch.session.signed-in.'] })
     const auth = fakeGatewayAuth()
     const made = (await verifiedElsewhere(auth, annSignUp))._unsafeUnwrap()
 
     auth.requests.splice(0)
     unreachableSignOuts(auth)
     // Another tab keeps Ann signed in with a token of its own.
-    storage.changeElsewhere('perch.session.token', 'token-of-the-other-tab')
-    storage.changeElsewhere(
-      'perch.session.identity',
-      JSON.stringify({ id: made.id, email: made.email }),
-    )
+    signedInElsewhere(storage, { identity: made, token: 'token-of-the-other-tab' })
 
     const tab = await world({ storage, auth, online: false })
 
@@ -540,11 +575,11 @@ describe('a sign-in that throws while it holds its token', () => {
   })
 
   it('a save that throws midway, then a cleanup that throws after removing the token: the token went to the queue first', async () => {
-    // The memberships and the token land, then the identity's write throws; of the cleanup, the
-    // token's removal lands and the identity's throws.
+    // The record and the memberships land, then the pointer's write throws; of the cleanup, the
+    // record's removal lands and the memberships' throws.
     const { storage, ops } = brokenStorage({
-      set: ['perch.session.identity'],
-      remove: ['perch.session.identity'],
+      set: [CURRENT_KEY],
+      remove: ['perch.session.memberships.'],
     })
     const auth = fakeGatewayAuth()
 
@@ -563,9 +598,9 @@ describe('a sign-in that throws while it holds its token', () => {
     // The token was left to sign out before the cleanup touched the storage: the cleanup's throw
     // could not keep it from the queue.
     expect(tokenOps(ops)).toEqual([
-      'set perch.session.token',
+      'set perch.session.signed-in.<id>',
       'set perch.session.pending-revoke',
-      'remove perch.session.token',
+      'remove perch.session.signed-in.<id>',
     ])
     expect(pendingRevokes(storage)).toEqual([{ token: 'token-2', device: deviceIdFrom(storage) }])
     expectNobodySaved(storage)
@@ -574,14 +609,15 @@ describe('a sign-in that throws while it holds its token', () => {
   })
 
   it('a save that throws midway, then a queue that throws taking the token: the token is held in memory and the partial save undone all the same', async () => {
-    // The identity's write throws, then so does the queue's: the token is held in memory for the
+    // The pointer's write throws, then so does the queue's: the token is held in memory for the
     // page's lifetime, which is reported, and the cleanup runs to its end.
-    const { storage, ops } = brokenStorage({
-      set: ['perch.session.identity', 'perch.session.pending-revoke'],
+    const { storage, ops, kept } = brokenStorage({
+      set: [CURRENT_KEY, 'perch.session.pending-revoke'],
     })
     const auth = fakeGatewayAuth()
 
     expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+
     auth.requests.splice(0)
     unreachableSignOuts(auth)
 
@@ -595,12 +631,12 @@ describe('a sign-in that throws while it holds its token', () => {
     expect(JSON.stringify(tab.failures)).not.toContain('token-2')
     // The queue was asked first, and its throw did not stop the cleanup.
     expect(tokenOps(ops)).toEqual([
-      'set perch.session.token',
+      'set perch.session.signed-in.<id>',
       'set perch.session.pending-revoke',
-      'remove perch.session.token',
+      'remove perch.session.signed-in.<id>',
     ])
     expectNobodySaved(storage)
-    expect(storage.get('perch.session.memberships')).toBeUndefined()
+    expect(SIGN_IN_RECORDS.flatMap(kept)).toEqual([])
     expect(pendingRevokes(storage)).toEqual([])
     expect(tab.failures).toContainEqual(unkept)
     // The lock was let go: the next sign-in is not held back, and sends the held token first.

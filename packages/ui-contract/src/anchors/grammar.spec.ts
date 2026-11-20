@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import { isAnchor, kindOf, screenOf, segmentsOf } from './grammar'
+import {
+  ENABLED_BY_STATE_KINDS,
+  isAnchor,
+  kindOf,
+  partOf,
+  screenOf,
+  segmentsOf,
+  TEXT_FIELD_KINDS,
+} from './grammar'
 
 describe('anchor grammar', () => {
   it('accepts 2 to 5 kebab-case segments', () => {
@@ -32,7 +40,17 @@ describe('anchor grammar', () => {
     expect(screenOf('user.sign-in.email-input', screens)).toBe('user.sign-in')
     expect(screenOf('user.profile.heading', screens)).toBe('user')
   })
+  it('reads the part an anchor sits in: the anchor without its last segment', () => {
+    expect(partOf('user.settings.password.save-button')).toBe('user.settings.password')
+    expect(partOf('user.sign-in.submit-button')).toBe('user.sign-in')
+  })
   it('splits segments', () => {
     expect(segmentsOf('a.b-c.d')).toEqual(['a', 'b-c', 'd'])
+  })
+  it('enables by state the controls a press or a choice drives, never a link or a text field', () => {
+    expect([...TEXT_FIELD_KINDS]).toEqual(['input', 'textarea'])
+    expect([...ENABLED_BY_STATE_KINDS].sort()).toEqual(
+      ['button', 'checkbox', 'radio', 'select', 'switch', 'tab'].sort(),
+    )
   })
 })

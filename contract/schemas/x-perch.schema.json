@@ -8,7 +8,7 @@
       "description": "Always \"object\"."
     },
     "description": {
-      "description": "What the entity is.",
+      "description": "What the entity is. Its fields and actions have descriptions of their own, and `x-perch` says where it lives and who may change it. At most 200 characters.",
       "type": "string"
     },
     "x-perch": {
@@ -68,7 +68,7 @@
             "type": "object",
             "properties": {
               "description": {
-                "description": "What the action does.",
+                "description": "What the action does. Its params say which fields it sets, and what it fails with is derived from them. At most 200 characters.",
                 "type": "string"
               },
               "params": {
@@ -80,10 +80,20 @@
                   "type": "string"
                 },
                 "description": "Per parameter, the field it sets (`$id` for a new id)."
+              },
+              "changes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Written on every action: the reads of the platform whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`. What another account reads for itself is never named. `[]`: it changes none."
               }
             },
             "required": [
-              "params"
+              "params",
+              "changes"
             ],
             "additionalProperties": false,
             "description": "One action on the entity."
@@ -140,7 +150,7 @@
             "type": "string"
           },
           "description": {
-            "description": "What the field holds.",
+            "description": "What the field holds. Its type, its constraints and `x-perch` say the rest, and the failure codes they give are derived. At most 200 characters.",
             "type": "string"
           },
           "enum": {

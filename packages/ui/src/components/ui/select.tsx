@@ -5,14 +5,33 @@ import { Select as SelectPrimitive } from '@base-ui/react/select'
 import { cn } from 'cn'
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from 'lucide-react'
 import type * as React from 'react'
+import { createContext, useContext } from 'react'
 
-import { useTracksInput } from '@workspace/ui/unsaved-input'
+import {
+  stateBorder,
+  useHoldsInput,
+  useMarksState,
+  useTracksInput,
+} from '@workspace/ui/unsaved-input'
+import type { FieldState } from '@workspace/ui-contract/anchors'
 
 export interface SelectProps<Value, Multiple extends boolean | undefined = false>
   extends SelectPrimitive.Root.Props<Value, Multiple> {
-  /** The field keeps what is chosen until an action takes it (the default); false for a choice that applies at once. */
+  /** The field keeps what is chosen until an action takes it (its facts' say, else the default); false for a choice that applies at once. */
   readonly holdsInput?: boolean | undefined
+  /** The anchor its trigger renders, which the select's root reports while it holds unsaved input, and by which it finds its facts. */
+  readonly anchor?: string | undefined
+  /** Whether the trigger colors its border by the select's state (its facts' say, else its form's, else true); `data-state` stays either way. */
+  readonly marksState?: boolean | undefined
 }
+
+/** What the root tells its trigger: the select's state, and whether the trigger colors it. */
+interface Marking {
+  readonly state: FieldState | undefined
+  readonly marks: boolean
+}
+
+const MarkingContext = createContext<Marking>({ state: undefined, marks: true })
 
 /** What a select holds: one value, several, or none chosen. */
 type Choice<Value> = Value | readonly Value[] | null
@@ -53,13 +72,18 @@ function sameChoice<Value>(
 
 /** The select's root, tracking what is chosen with the comparison of its one mode. */
 function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
-  holdsInput = true,
+  holdsInput,
+  anchor,
+  marksState,
   onValueChange,
   ...props
 }: SelectProps<Value, Multiple>) {
   const several = props.multiple === true
-  const { typed } = useTracksInput<Choice<Value>>({
-    holdsInput,
+  const marks = useMarksState(marksState, anchor)
+  const holds = useHoldsInput(holdsInput, anchor)
+  const { typed, state } = useTracksInput<Choice<Value>>({
+    holdsInput: holds,
+    anchor,
     value: props.value,
     // Base UI starts a multiple select with none chosen as an empty list, a single one as null.
     defaultValue: props.defaultValue ?? (several ? [] : null),
@@ -67,13 +91,15 @@ function TrackedSelect<Value, Multiple extends boolean | undefined = false>({
   })
 
   return (
-    <SelectPrimitive.Root
-      {...props}
-      onValueChange={(value, details) => {
-        typed(value)
-        onValueChange?.(value, details)
-      }}
-    />
+    <MarkingContext.Provider value={{ state, marks }}>
+      <SelectPrimitive.Root
+        {...props}
+        onValueChange={(value, details) => {
+          typed(value)
+          onValueChange?.(value, details)
+        }}
+      />
+    </MarkingContext.Provider>
   )
 }
 
@@ -112,12 +138,16 @@ function SelectTrigger({
 }: SelectPrimitive.Trigger.Props & {
   size?: 'sm' | 'default'
 }) {
+  const { state, marks } = useContext(MarkingContext)
+
   return (
     <SelectPrimitive.Trigger
       data-slot="select-trigger"
+      data-state={state}
       data-size={size}
       className={cn(
-        "flex w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "flex w-fit items-center justify-between gap-1.5 rounded-md border border-input bg-transparent py-2 pr-2 pl-2.5 text-sm whitespace-nowrap shadow-xs transition-[color,box-shadow] outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-placeholder:text-muted-foreground data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-1.5 dark:bg-input/30 dark:hover:bg-input/50 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        stateBorder(marks),
         className,
       )}
       {...props}

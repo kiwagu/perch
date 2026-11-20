@@ -18,8 +18,35 @@ routes of `src/tenants` share its Bearer caller. It has no domain rules of its o
 `domain/` or `application/` folders, and no `index.ts` yet: it predates the index rule and is
 imported file by file.
 
+Better Auth runs with its admin plugin as a hybrid (`adminPlugin`, `admin-plugin.ts`): the
+gateway takes its fields, its refusal of a banned account's session and its role on the session
+read, and none of its endpoints. An account keeps one platform role and a ban in the plugin's
+fields, stored in the directory's columns: `role` (`user`, which the plugin writes when Better Auth
+creates an account, or `operator`; the directory refuses any other), `banned` (false until a ban),
+`ban_reason` and `ban_expires` (which the gateway never sets) on `identity`, and `impersonated_by`
+on `device_session`, which stays empty. Only `operator` is a platform role (`PLATFORM_ROLES` of
+`@workspace/kernel`): `rolesOf` (`platform-roles.ts`) is the one mapping of the stored role to
+the account's platform roles, `user`, an empty role and any other value being none. The caller
+read (`AuthSessions.read`) gives every caller those roles (`SessionCaller.roles`, and the Bearer
+caller's `roles`), mapped from the role Better Auth's session answer carries, at every read and
+never kept: a role granted or taken back counts from the next call and the next hello, whose
+welcome carries them to the device (`sync/README.md`). The plugin's
+hook refuses a new session to a banned account with 403 `BANNED_USER`, after the password and
+the email's verification were checked, and before the gateway's own session hook: Better Auth
+runs a plugin's database hooks before the application's. The mount forwards that refusal as 403
+`account-banned` (`refusalOf`, the one place Better Auth's code is renamed), and a ban that commits
+after the plugin read the account unbanned is seen by the session's admission, which reads the
+ban in its own transaction (below). Every path of the plugin's endpoints
+(`ADMIN_PATHS`, `admin-paths.ts`, read from the configured plugin's own table, so one a later
+version adds is among them) is switched off in the instance's HTTP handler (`disabledPaths`), and
+the mount serves none of them (404 `not-found`), so no request sets a role, bans, lists or
+impersonates an account through the plugin; the gateway never calls them on the server either.
+Neither of the plugin's roles is granted any of its permissions, which would guard only those
+endpoints.
+
 A session is a `device_session` row, and its token is the device's one credential: a random
-value Better Auth mints at a sign-in and at the first verification of an email, sent as `Authorization: Bearer <token>` on every
+value Better Auth mints at a sign-in and at the first verification of an email, handed to the
+device only once the gateway admitted its session (below), and sent as `Authorization: Bearer <token>` on every
 route and in the hello of the sync channel. Only the raw token, as the sign-in's body answers it
 and the row holds it, names a session here. The signed form in Better Auth's `set-auth-token`
 header (`<token>.<signature>`) is refused, since the gateway ends a session by its raw token. A
@@ -40,28 +67,50 @@ any other label is stored empty), which the session hooks (`session-hooks.ts`) w
 new row. A request without a valid device is refused 400 `bad-request` when its session is about
 to be created, so a sign-in with wrong credentials answers 401 before its device is looked at; a
 sign-up creates no session, and the mount names a verification's device before it asks Better
-Auth (below). Once the row exists, every session of the
-identity on that device but the newest ends (the newest: created last, of the greater id among
-those created at the same instant), the new row itself when a newer one exists already: a device
-holds one live session, and its sign-ins converge on the newest whatever order their rows are
-inserted and their hooks run in. Sessions of the identity on other devices, and of other
+Auth (below). A sign-in's row and a verification's are written waiting for the gateway's
+admission (`pending`), and no caller reads a waiting row as a session (below). When a sign-in's
+row is admitted against the account's limit of devices, and when a verification's row is
+admitted (below), in the admission's transaction, every admitted session of the identity on that
+device but the newest ends (the newest: created last, of the greater id among those created at
+the same instant), the new row itself when a newer one exists already; the session hooks do the
+same once a row admitted as it is written exists (a sign-in Better Auth's own API wrote, without
+the gateway's sign-in route): a device holds one live session, and its sessions converge on the
+newest whatever order their rows are inserted and their statements run in. A row that waits for
+its admission is neither kept nor ended, so the device's earlier session stays live until the
+sign-in or the verification is admitted, and as it was when it is not (a sign-in asked about the
+limit, one or a verification that does not stand, an account banned). Sessions of the identity on other devices, and of other
 identities on a device of the same id, stay live.
-Once Better Auth accepted a sign-in, or signed a device in at the first verification of an
-email, and before its answer is returned, the mount closes the identity's sync sockets on that
-device with 1000 (a sign-up signs nothing in and closes nothing): a socket opened with the
-session just ended goes no further, the device connects again with the new token, and a hello
+Once the gateway admitted a sign-in Better Auth accepted, or the session the first verification
+of an email signed in (below), and before its answer is returned, the mount closes the identity's
+sync sockets on that device with 1000 (a sign-up signs nothing in and closes nothing, and neither
+does a sign-in asked about the limit of devices, a sign-in or a verification that does not stand,
+or one refused for a ban): a socket opened with the session just ended goes no further, the device connects again
+with the new token, and a hello
 with the earlier token whose session read was under way is refused 4001 at its registration.
 Every call with a token must name the device its session was opened on, so a token carried to
 another device is refused.
 
-A session ends and is never deleted: its row's `expires_at` and `ended_at` become the moment it
+A session ends and is never deleted once its device holds it (the one row deleted is the new
+session of a sign-in asked about the account's limit of devices, which no device ever held): its
+row's `expires_at` and `ended_at` become the moment it
 ended, on the gateway's clock, and the row stays, so a device signed out from another one stays
 listed with that moment. `ended_at` is set once and never moved or cleared, and empty only while
-the session is live or has expired with nothing having ended it. Every ending is the gateway's
+the session is live or has expired with nothing having ended it. An ending that finds the session
+live and comes from elsewhere also sets `ended_reason`, in the same update and as fixed: `revoked`
+(signed out from another device, or every device at once), `password-changed` (the account's
+password changed, on another device or through a reset link), `device-limit` (a sign-in past
+the account's limit of devices) or `banned` (an operator banned the account, which gives it to
+every session the ban ends, an expired one too; an admission that finds the account banned ends
+its waiting session so too); the device's own sign-out, a new sign-in of the same device and
+an expiry leave it empty. A hello whose token reads no live session is closed with the code of
+that reason, so a device offline when its session ended still learns why while the row is kept
+(`sync/README.md`). Every ending is the gateway's
 own update of `device_session` (`AuthSessions`: one session by its token, one session of an
-identity by its id, or every session of an identity; the session hooks: all but the newest
-session of a device at a sign-in), which leaves a session that ended already with its end and
-marks one that expired ended at its expiry, so a late extension, prepared while it was live,
+identity by its id, or every session of an identity; all but the newest session of a device, by
+the admissions of a sign-in and of a verification, and by the session hooks for a row written
+admitted; a waiting session of a banned account, by its admission), which leaves a session
+that ended already with its end and marks one that expired ended at its expiry, so a late
+extension, prepared while it was live,
 cannot bring it back once anything has ended it. Better Auth ends a session by deleting its row,
 at its own sign-out and when it reads an expired one; the session hooks turn such a delete of one
 row into the ending by its token and refuse the delete. The hooks run these endings on the
@@ -70,8 +119,8 @@ so it would drop `ended_at`, which is the gateway's column. A delete
 of several rows at once would stop at the first refusal, so Better Auth's bulk endings
 (`/revoke-sessions`, `/revoke-other-sessions`) and `/change-password`, which ends the other
 sessions that way when asked to, are switched off in the instance's HTTP handler
-(`auth-instance.ts`); the gateway changes a password itself, ending the other sessions in the
-same transaction (below). Rows whose session ended 30 days ago or more are forgotten when the
+(`auth-instance.ts`), as is every endpoint of the admin plugin (above); the gateway changes a
+password itself, ending the other sessions in the same transaction (below). Rows whose session ended 30 days ago or more are forgotten when the
 identity's devices are listed next.
 
 Better Auth's handler is mounted behind an allowlist (`auth-handler/`). Of the paths under
@@ -93,10 +142,15 @@ as a success does), a sign-up takes one of its address's 200 verification mails 
 whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
 minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
 any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email and a password that is not empty, as strings, answers 400 `bad-request` before anything
-is read for the email, alike for any email (Better Auth would hash an empty password to time an
-unknown email's answer, which fails, and check a known one's); one that is reaches Better Auth as that very JSON, so the email whose password is checked
-is the email counted. Better Auth's answers reach the client
+an email of at most the `email` value's length and a password, as strings, answers 400
+`bad-request` before anything is read for the email, alike for any email. One that is reaches
+Better Auth as that very JSON, so the email whose password is checked is the email counted, but
+for a password of a length no account's password has (outside the `password` value's, the empty
+one included): Better Auth gets `NO_ACCOUNTS_PASSWORD` in its place (`password-length.ts`), ten
+spaces, which no password set under the rules has, so it is refused, counted and timed as a
+wrong one, after the same checks of the request (its origin, the email's shape) as any other
+(Better Auth would fail to hash an empty password, which it hashes to time an unknown email's
+answer). Better Auth's answers reach the client
 without their `Set-Cookie` headers: the web signs in by bearer token alone. A refusal of Better
 Auth's reaches the client as its status and its code alone, `{ code }`, and a failure (500 or
 more) as `{ code: 'internal' }`: nothing of its message or the rest of its body, which can carry
@@ -118,18 +172,26 @@ whether the email has an account. One email's sign-ups run one at a time (the ac
 otherwise answer a success and a failure. The guarantee holds in one gateway process, and while a
 sign-up's work stays under the floor. Before anything else, a sign-up takes one of its client
 address's verification mails, whatever its email (429 when they are spent); a body that names no
-email or no password answers 400 `bad-request`. The password must keep the rules of a new
-password (`keepsPasswordRules` of `@workspace/kernel`: 10 to 35 characters, only Latin letters,
-digits and the 32 printable ASCII symbols, with at least one digit, one uppercase letter, one
-lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at once,
-before the email's turn, Better Auth and the directory, so the refusal reads nothing of the email.
+email, no password or no name, or an email longer than the `email` value allows (as every
+body's email is held to), answers 400 `bad-request`. The password must keep the rules of a new
+password (`keepsPasswordRules` of `@workspace/kernel`: the length of the `new-password` value, only
+Latin letters, digits and the 32 printable ASCII symbols, with at least one digit, one uppercase
+letter, one lowercase letter and one symbol); one that breaks them answers 400 `weak-password` at
+once, before the email's turn, Better Auth and the directory, so the refusal reads nothing of the
+email. The name must keep the rule of a profile's name (`profileNameOf`: 1 to the `profile.name`
+field's length in characters once trimmed); one that breaks it answers 400 `name-required` or
+`name-too-long` at once, on the same terms, whatever the email.
 Better Auth holds a new password to the same length (`minPasswordLength`, `maxPasswordLength`),
-which it checks on a new password only: a sign-in checks no rule, so an account whose password was
-set before the rules, of 8 to 128 characters, still signs in. Better Auth's refusals (a malformed
+which it checks on a new password only: a sign-in checks no rule, and a password of another
+length is no account's, so it is refused as a wrong one. Better Auth's refusals (a malformed
 email, a language the gateway does not speak) pass as their status and code alone; they do not
 depend on the email having an account. A sign-in takes `{ email, password }` with the device's headers and
-answers 200 with the raw session token (`token`) and the account (`user`, its `id` the
-identity's). While the account has not started, the answer also carries `start`:
+answers 200 with the raw session token (`token`) and the account (`user`: its `id`, the
+identity's, its `email`, its `name` and `emailVerified`). The answer is built by that allowlist
+from Better Auth's, parsed (`auth-handler/sign-in.ts`), never forwarded: nothing else of it
+reaches the device, neither the account's role nor its ban (`role`, `banned`, `banReason`,
+`banExpires`) nor any field a later version of Better Auth or a plugin adds, and an answer that
+names less is answered 500 `internal`. While the account has not started, the answer also carries `start`:
 `{ "start": { "name": "<the name it signed up with>", "locale": "en" | "es" } }`, the language it
 signed up in. The account has not started while its profile or its settings have not reached the
 directory: the region hub projects the rows of the identity's private region there, so a row a
@@ -194,18 +256,39 @@ link verifies only the account its mail went to: when another account holds the 
 none does, it answers 401 `link-invalid`, verifying and signing in nothing, Better Auth not asked.
 Otherwise Better Auth's own `GET /verify-email` is asked with its token alone (no `callbackURL`,
 so it never redirects) and without the request's `Authorization` and `Cookie`, so no session of
-the request is taken for the account's. When its answer carries a session, the identity's sockets
-on the device are closed with 1000 at once, before the session is read back for the answer, so a
-readback that fails (500 `internal`) still leaves no socket of the device's earlier session open.
-The session is then held to the account as a sign-in's is (`signInStands`): the email's account
+the request is taken for the account's. Better Auth's refusal reaches the client as its status and
+code alone, its own gate's refusal of an account banned before the session was written as 403
+`account-banned` (the email is verified all the same: Better Auth marks it before it creates the
+session); its failure, a 5xx its router answered or a promise that rejected (a failure it rethrows
+outside its router), answers 403 `account-banned` when the email's account, read again, is the
+link's and banned, else 500 `internal`, never with a token. When its answer carries a session,
+that session waits for the gateway's admission (`pending`, written so on Better Auth's
+`/verify-email` whatever the request names), and is read back by the signed token of Better
+Auth's answer (`AuthSessions.signedIn`, through Better Auth's own read, which takes a waiting
+session and gives its raw token: the one read of a waiting session but the admissions'). The
+session is then held to the account as a sign-in's is (`signInStands`): the email's account
 and its hash are read again, and the session stands only when both reads found the account the
-link was mailed to, with the same password, and Better Auth signed that account in. A
+link was mailed to, with the same password, and Better Auth signed that account in. A session
+that stands is admitted (`AuthSessions.admitVerified`, `surql/device-sessions-admit-verified.surql`,
+in the account's turn of admissions beside its sign-ins'), one transaction that finds the session
+by its token whatever its ending and reads the account's ban: a banned account answers 403
+`account-banned`, no token, the session ended `banned` unless the ban ended it already; a live
+session waits no more, the device's earlier sessions end as at a sign-in (no limit of devices is
+judged), and only then are the identity's sockets on the device closed with 1000 and the token
+handed out; a session a reset ended meanwhile answers as one that no longer reads (below). An
+admission that fails answers 500 `internal` and ends the session by its token; should that ending
+fail too, the session keeps waiting, never handed out. A readback that fails answers 500
+`internal`, the device's earlier session and its sockets left as they were. So whichever of a ban
+and the admission commits second sees the other: a ban before it ends the waiting session or is
+read by it, a ban after it ends the admitted session with every other. A
 verification holds the email's turn and a reset the account's, so a reset can run beside it, and
 one that commits while Better Auth verifies the email ends every session it finds before the
 verification's is written: then the password changed, so the session is ended at once by its token
 and the answer carries none, `{ token: null }` (the reset verified the email) or, when the email left
 the account meanwhile, 401 `link-invalid`. A reset that commits after the second read ends the
-session itself. So no session a verification wrote outlives a reset that completed meanwhile. It
+session itself. A session that no longer reads back, or that the admission finds ended, has
+nothing left to end and is answered by the second read: 403 `account-banned` when the link's
+account is banned (the ban ended it), else as above. So no session a verification wrote outlives a reset that completed meanwhile. It
 answers 200 `{ token, user: { id, email, name, locale } }` the first time (the raw token, the
 account's name and the language it signed up in), 200 `{ token: null }` for an account verified
 before, by an earlier opening or by a reset (Better Auth signs nothing in for a verified account),
@@ -262,11 +345,45 @@ Better Auth signed in (its answer's `user.id`), with a password, the same one
 (`signInStands`). Otherwise (a reset or a change gave the account a new password, or
 confirmations moved the email between accounts, however often and back again, while Better Auth
 looked it up or checked the password) the session is ended at once by its token, the device's
-sockets close, and the sign-in answers 401 as wrong credentials do; an acceptance that names no
-session of an account answers 500 `internal`. A sign-in's `start` is always that of the account it
+earlier session left as it was, and the sign-in answers 401 as wrong credentials do; an
+acceptance that names no session of an account answers 500 `internal`. A sign-in's `start` is
+always that of the account it
 stands for. Since a reset's or a change's transaction ends every session
 present at its commit, a session written before it is ended by it and one written after is ended
-by the sign-in itself: no session outlives the password it was opened with. Better Auth's
+by the sign-in itself: no session outlives the password it was opened with. A sign-in that
+stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (10, beside
+`SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
+`surql/device-sessions-admit.surql`), one admission of an account at a time in the gateway's
+process: the account's devices with a live admitted session are counted, the new session's
+device included and a device with several sessions once. A sign-in's session is written
+`pending` (the sign-in route asks for it with `X-Perch-Admission: pending`, whatever the client
+sent, and the session hooks honour it on Better Auth's path `/sign-in/email` only) and waits
+until its admission, counted by no other admission and listed among no devices, so a sign-in
+still under way takes no place from another. Within the limit the session is admitted, which
+ends the device's earlier session and closes the sockets it opened with 1000, as a confirmed
+one past it does. Past it, a sign-in whose body does not carry `signOutOldest: true` has its new session
+deleted, never handed to the device nor listed among its devices, and answers 409 `device-limit`,
+which the web asks the person about; once confirmed, the sign-in signs out the account's other
+device seen least recently (`last_seen_at`, then the device's id), whose session ends with
+`device-limit` as its reason and whose sockets close with 4003 (`CLOSE.deviceLimit`). The limit is
+judged when the sign-in is admitted, not when it was asked: a place freed meanwhile signs no
+device out, of two sign-ins for the last place one is admitted and the other asked, and a new
+sign-in of a device signed in already takes no place. A 409 counts as a right password for the
+email's failed sign-ins, and an admission that fails ends the new session and answers 500
+`internal`; should the ending fail too, the session keeps waiting, never handed out, counted,
+listed or read. The admission finds the session by its token whatever its ending, and reads the
+account's ban in its transaction: a banned account answers 403 `account-banned` with no token
+(a right password, so it clears the email's failed sign-ins), its session ended `banned` unless
+the ban ended it already, the device's earlier session left to the ban; a ban that commits after
+the admission ends the admitted session with every other. Before it, Better Auth's own gate
+refuses a session to an account it reads banned (403 `account-banned`); an unverified banned
+account is refused its right password as any unverified one (403 `EMAIL_NOT_VERIFIED`, which
+Better Auth answers before any session), and a wrong password answers 401 as for any account, so
+nobody without the password learns of a ban. A session that waits for its admission, a sign-in's
+or a verification's, is no session to a caller: the caller read (`AuthSessions.read`, behind the
+Bearer caller, the password confirmation and the sync hello) reads it as none, so a route answers
+401 and a hello closes 4401 as for an unknown token. `signOutOldest` is the gateway's: Better Auth gets the rest of the
+body. Better Auth's
 clean-up of expired rows is off (`verification.disableCleanup`), so a link past its hour reads as
 expired, not unknown: an account keeps one reset link and one pending change of its email at
 most, each replaced by the next.
@@ -274,10 +391,12 @@ most, each replaced by the next.
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
-credential checks, answers 400 `password-rejected` for a new password that breaks the rules,
+credential checks, answers 400 `bad-request` for a body without a current password, 400
+`password-rejected` for a new password that breaks the rules,
 and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
-`invalid-credentials`, a right one clears them. In the account's turn, the current password is
+`invalid-credentials`, as one of a length no account's password has does without being checked;
+a right one clears them. In the account's turn, the current password is
 checked against the credential row and the new one hashed (`AccountPasswords.change`); then one
 transaction (`surql/password-change-commit.surql`) makes sure the caller's session is still live
 (401 `unauthorized` when it ended while the change waited) and the row still holds the hash that
@@ -288,14 +407,16 @@ caller's own session and sockets staying, and the notice starts: 204 with no bod
 `/change-password` is not used: it sets the password apart from the endings.
 
 A signed-in device asks to change its email with `POST /auth/change-email` `{ email, password }`,
-its token and `X-Perch-Device`. After a credential check of its address, a new email that is not
-an email (empty, longer than 320 characters, or of any other shape) answers 400 `email-invalid`;
-then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
+its token and `X-Perch-Device`. After a credential check of its address, a body without a
+password answers 400 `bad-request` and a new email that is not
+an email (empty, longer than the `email` value's length, or of any other shape) answers 400
+`email-invalid`; then one of the address's mails and one of the account's 3 changes in 15 minutes are taken
 (429). Everything after runs in the account's turn, so no reset or change of the password runs in
 between: the caller's session is read again (401 `unauthorized` when it ended while the request
 waited), with the account's email as it is then, and the password must find a place among that
 email's failed sign-ins and match the credential row (`AccountPasswords.matches`), a wrong one
-answering 400 `invalid-credentials`. Its earlier pending change then ends; when no account has the
+answering 400 `invalid-credentials`, as one of a length no account's password has does without
+being checked. Its earlier pending change then ends; when no account has the
 new email (the account's own counts as taken), a new change
 is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
 key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
@@ -314,11 +435,14 @@ the account and then of the new email (so no sign-up of the new email runs meanw
 is judged again on the clock as it is then (401 `link-expired` when it expired while the
 confirmation waited), the pending change the token names is spent (`EmailChanges.claim`, once),
 and the account's email
-becomes the new one only while it is still the email the change was asked from, every reset link
-of the account ending with it in one transaction, since they went to the old email
+becomes the new one, verified, only while it is still the email the change was asked from, every
+reset link of the account ending with it in one transaction, since they went to the old email
 (`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
 by a newer one, or ended by a change of the password), when the account's email changed since, or
-when the new email has got an account meanwhile. Once it changed, the notice of a changed email
+when the new email has got an account meanwhile. The new email is verified because its link was
+opened from its mailbox: an account whose own email never was (a change an operator asked for,
+`src/console/README.md`) signs in with the new one from then on, and its first sign-in starts it.
+Once it changed, the notice of a changed email
 starts to the old email, written from the old email, the account's name and language alone
 (`AccountMails.emailChanged`), and it answers 200 `{ identity, email }`, the account whose email
 changed and its new email. Sessions stay: a session's caller reads the account's email afresh,
@@ -358,7 +482,7 @@ the addressee read before the account went (`AccountTeardown.addressee`) and rea
 
 A signed-in device asks to delete its account with `POST /auth/request-account-deletion`
 `{ password }`, its token and `X-Perch-Device`. After a credential check of its address (429) and
-a body it can read (400 `bad-request`), one of the address's mails and one of the account's 3
+a body it can read, with a password (400 `bad-request`), one of the address's mails and one of the account's 3
 requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
 change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
 it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
@@ -379,8 +503,8 @@ turn the token is judged again on the clock as it is then. The rest runs in the 
 account's memberships (`Organisations.leaveAll`, `src/tenants`), whose check, made from the rows
 as they are there, is the one that decides: an account that is the only admin of an organisation
 with other members answers 409 `last-admin` with nothing changed, its link still pending and its
-sessions alive, so the same link deletes it once those members are removed, an invitation that
-overtook the press included. Only once the departure is allowed, and before it writes anything,
+sessions alive, so the same link deletes it once another member is made an admin or those
+members are removed, an invitation that overtook the press included. Only once the departure is allowed, and before it writes anything,
 does the deletion take effect (the departure's `before` step): the token is judged once more on
 the gateway's clock, as the departure may have waited for an organisation's turn past the link's
 hour (401 `link-expired`, nothing changed), and the pending deletion is spent
@@ -436,8 +560,9 @@ holds, on the device the request names (the Bearer caller, `bearer-caller.ts`):
   Neither a token nor a device's own id is ever sent: a hello binds by that id.
 - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's sockets
   are closed with 4001. A session that ended already answers 204 with nothing closed, so the
-  device's later session keeps its sockets. An id that is not one of the caller's sessions
-  answers 404 `no-such-device`.
+  device's later session keeps its sockets. An id longer than the `id` value allows
+  (`src/path-id.ts`) answers 400 `bad-request` before any session is looked for; any other id that
+  is not one of the caller's sessions answers 404 `no-such-device`.
 - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller has ended, the
   asking one included, and every socket of the identity is closed with 4001.
 - `POST /auth/sign-out`: a device ends its own session with its token and its `X-Perch-Device`,
@@ -469,19 +594,25 @@ error carries one.
   confirmation (`email-change.ts`), the request to delete an account and the deletion
   (`account-deletion.ts`), the confirmation of a signed-in caller's password
   (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
-  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`floor.ts`), the close of a
+  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the close of a
   device's sockets, and the requests and refusals as Better Auth and the client get them),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
-  `device.routes.ts`).
+  `device.routes.ts`). The paths the mount answers (`MOUNT_PATHS`) and those the device routes
+  answer (`DEVICE_PATHS`) are listed beside their handlers, for the spec that holds the routes to
+  the platform's actions; the device routes answer a path only through their list
+  (`src/route-path.ts`).
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
-  a change of the password ended, so the device can tell its person why it was signed out; 4001
-  stays a sign-out from another device.
+  a change of the password ended, so the device can tell its person why it was signed out; 4003
+  (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
+  devices signed out; 4001 stays a sign-out from another device. 4004 (`CLOSE.banned`) is what a
+  hello hears for a session an operator's ban ended (`ended_reason` `banned`).
 - Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
   and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
-  which the schema check reads too, `SESSION_LIFETIME_MS` and `VERIFICATION_LINK_LIFETIME_S`),
+  which the schema check reads too, `SESSION_LIFETIME_MS`, `DEVICE_LIMIT` and
+  `VERIFICATION_LINK_LIFETIME_S`),
   `AUTH_MODELS` and `generateAuthId` (`auth-models.ts`), `hashPassword` and `verifyPassword`
   (`password-hash.ts`), `AuthLog`, `authLogger` and `authErrorReporter` (`auth-log.ts`),
   `verificationMailer`, `verificationLink` and `VERIFY_EMAIL_PATH` (`verification-mail.ts`),
@@ -495,30 +626,42 @@ error carries one.
   account, which a change of the password or of the email ends) and the token of a verification
   link (`signVerificationToken`, `readVerificationToken`, `verificationKey`) (`account-links/`),
   `ProfileEmails` (`profile-emails.ts`: `queue`, `reconcile`, `follow`), `accountLocale`
-  (`account-locale.ts`), `accountAddressee` (`account-addressee.ts`: whom a mail about an
-  account goes to), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
+  (`account-locale.ts`), `accountAddressee` and `addresseeFailure` (`account-addressee.ts`: whom a
+  mail about an account goes to, and the code logged when it could not be read), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
   `DeletedAccount`),
+  `adminPlugin` (`admin-plugin.ts`: Better Auth's admin plugin as the gateway runs it),
+  `ADMIN_PATHS` (`admin-paths.ts`: the path of every endpoint of that plugin), `rolesOf`
+  (`platform-roles.ts`: the platform roles of an account's stored role),
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
-  `signOut`, `revoke`, `revokeAll`, and for a verification `signedIn`,
+  `signOut`, `revoke`, `revokeAll`, `admit` a sign-in against the limit of devices and the ban
+  (`SignInAdmission`), `admitVerified` a verification's session against the ban
+  (`VerifiedAdmission`), and for a verification `signedIn`,
   `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
   (`bearerCaller`, `bearerToken` and `bearerRefused` in `bearer-caller.ts`, also used by the
-  organisation routes, and the caller's email and session row besides), `accountEmail` (`account-email.ts`, an email as the invitations take
-  it) and `identityByEmail` (`identity-by-email.ts`: the one lookup of an identity by its email,
-  in any case, answering its key and email or none; `AuthSessions.identityOf` and the
-  organisations' invites use it, each deciding what none means).
+  organisation routes, and the caller's email and session row besides), `accountEmail`
+  (`account-email.ts`, an email as the invitations take it, at most the `email` value's length, the
+  longest an email in any body may be), `profileNameOf` (`profile-name.ts`: a name as a profile
+  takes it, as a sign-up and an operator's rename hold it) and `identityByEmail`
+  (`identity-by-email.ts`: the one lookup of an identity by its email, in any case, answering its
+  key and email or none; `AuthSessions.identityOf` and the organisations' invites use it, each
+  deciding what none means).
 - Queries: `surql/` (a row by its token, the rows of an identity's devices, the sweep of rows
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
-  ending of all but a device's newest session at a sign-in, the language an account's settings
+  ending of all but a device's newest session for a row written admitted, a sign-in's admission
+  against the limit of devices and a verification's admission (each reading the account's ban and
+  ending the same), the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, an
   identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
   the move of an identity's email with the end of its reset links, the hash on a credential
-  row, an email's account, its hash and its start as a sign-in reads them, the two
+  row, an email's account, its hash, its ban and its start as a sign-in reads them, the two
   transactions of a
   new password: a reset's and a change's, and the removal of a deleted account's rows).
-- Tables: `identity`, `account`, `device_session` and `verification` of the directory schema
+- Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`
+  among its columns), `account`, `device_session` (the plugin's `impersonated_by` among its
+  columns) and `verification` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
   these options; a deleted account's rows of `profile`, `settings` and the `_replica_*` tables of
   its private region are removed here too.
@@ -533,17 +676,38 @@ error carries one.
   the account its mail went to (an email freed by a confirmation and taken by a new sign-up
   included), that a verification whose account a reset recovered, or whose email left the
   account, while Better Auth wrote the session leaves no session and answers none, that a device's
-  sockets close before a readback that fails, and that every resend answers no sooner than
-  Better Auth's floor; `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
+  sockets close only once its verification's session is admitted, and stay open when the readback
+  fails, that every resend answers no sooner than
+  Better Auth's floor, and that every endpoint of the admin plugin answers 404 `not-found`, by
+  GET and by POST; `auth-instance.spec.ts`, which also holds that every one of them is switched
+  off in Better Auth's handler, read from the configured plugin's table, and answers 404 there,
+  an operator's request included, changing nothing, and that a verification's session is written
+  waiting for its admission; `auth-handler/sign-in.spec.ts`, which also holds that a sign-in
+  answers its allowlist alone, whatever else Better Auth's answer carries, and the refusals of a
+  banned account (403 `account-banned` after the right password, before the device is looked at,
+  `EMAIL_NOT_VERIFIED` while unverified, 401 for a wrong password, the failed sign-ins cleared),
+  its admission held while a ban commits, before and after the session's insert, answering 403 with
+  no token and the session ended `banned`; `auth-handler/verification-ban.spec.ts`, which holds the
+  verification of a banned account through the real Better Auth: its gate's refusal with the email
+  verified, a ban committed while the insert, the readback or the admission is held answering 403
+  with no token and the session ended `banned`, a ban after the admission ending the admitted
+  session, an admission that fails (500, the session ended, or left waiting when that ending
+  fails too), Better Auth's 5xx and its rejected promise (403 for a banned account, 500 else, never
+  a token), and a waiting session neither listed nor ending the device's earlier one, its sockets
+  closed only once it is admitted;
+  `auth-handler/sign-up.spec.ts`, which holds that a new, a taken and a
   concurrently taken email answer alike and no sooner than the floor, and that every sign-up
-  takes one of its address's verification mails; `auth-handler/sign-in.spec.ts`,
+  takes one of its address's verification mails, and that a name which breaks the rule of a
+  profile's name is refused at once, whatever the email; `auth-handler/email-length.spec.ts`,
+  which holds the longest email a body may name; `auth-handler/sign-in.spec.ts`,
   `auth-handler/password-reset.spec.ts`,
   `auth-handler/password-change.spec.ts` and `auth-handler/email-change.spec.ts`, which hold the
   uniform answers and their floors, each limit, the single use, the newest link only, the
   expiry of a reset link and of a confirmation, judged again when a link waited for its account,
   the sessions ended with their sockets closed with 4002, every link ended after a reset, a
-  change and a confirmation, an empty password answered alike for any email before anything is
-  read, an empty current password answered `invalid-credentials`, a sign-in that checked the old
+  change and a confirmation, a password of no account's length (empty, 9 or 36 characters) refused
+  and counted as a wrong one at a sign-in, alike for any email, its origin and email's shape
+  checked first, and at a change of the password, of the email and a deletion's request, a sign-in that checked the old
   password beside a reset or a change, or whose email moved to another account meanwhile, or to
   one and away or back again, left with no working session and no other account's start, the
   start a
@@ -569,8 +733,13 @@ error carries one.
   `account-teardown.spec.ts` (every row of an account removed in one transaction and none of
   another's, a second removal changing nothing, a membership refusing it, the addressee),
   `reset-mail.spec.ts`, `profile-emails.spec.ts`, `auth-instance.spec.ts`, `auth-log.spec.ts`,
-  `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts`,
-  `bearer-caller.spec.ts`, `device.routes.spec.ts`, `device-sessions.spec.ts`,
+  `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts` (the admissions
+  of a sign-in and of a verification against a ban, by a session written live after it or ended by
+  it, `admitted` keeping the device's newest session, `gone` for a session ended meanwhile, and a
+  waiting session read as none until its admission, the account's platform roles read afresh at
+  every read), `platform-roles.spec.ts`,
+  `bearer-caller.spec.ts`, `device.routes.spec.ts` (a waiting session's token 401 until its
+  admission), `device-sessions.spec.ts` (a session a ban ended read with `banned` as why),
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).
 - `bun run test:db` (the smoke) checks the stand's mail server, then drives sign-up and the
   verification through the mail in the stand's mailbox, sign-in, the credential limits, the

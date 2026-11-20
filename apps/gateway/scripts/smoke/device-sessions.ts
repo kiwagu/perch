@@ -60,11 +60,12 @@ function signOut(base: string, token: string, device: string): Promise<Answer> {
  * Device sessions, on a fresh identity verified on a laptop and signed in on a phone: a hello under a device with no
  * session refused (4401) and a call that names no device refused (400); both devices listed, the
  * laptop as the current one; the phone signed out from the laptop (its socket closed with 4001,
- * its row showing when its session ended, its token's hello closed with 4401), then signed in
- * again (its old token refused at hello and on a call, its new token welcomed); a tablet signed
+ * its row showing when its session ended, its token's hello closed with 4001, why it ended), then
+ * signed in again (its old token's hello closed with 4001 all the same, a call with it refused,
+ * its new token welcomed); a tablet signed
  * in twice (the first session ended by the second); every device signed out from the laptop
  * (every socket closed with 4001, every token refused); a sign-in right after it works, the
- * laptop's old token is refused at hello, and a device signs itself out with its own token
+ * laptop's old token's hello is closed with 4001, and a device signs itself out with its own token
  * (204, again 204, a made-up token 401).
  */
 export async function deviceSessionSteps(
@@ -150,22 +151,22 @@ export async function deviceSessionSteps(
   )
 
   await step(
-    `the signed-out phone's hello with its token: closed with ${CLOSE.unauthorized}`,
+    `the signed-out phone's hello with its token: closed with ${CLOSE.revoked}, why its session ended`,
     async () => {
       const { code } = await refusedHello(base, opened, phone)
 
-      check(code === CLOSE.unauthorized, `closed with ${code}`)
+      check(code === CLOSE.revoked, `closed with ${code}`)
     },
   )
 
   const phoneAgain = await step(
-    `the phone signed in again: its old token refused at hello (${CLOSE.unauthorized}) and on a call (401), its new token welcomed`,
+    `the phone signed in again: its old token's hello closed with ${CLOSE.revoked} all the same and a call with it refused (401), its new token welcomed`,
     async () => {
       const again = await signIn('smoke-phone', 'Smoke phone')
       const { code } = await refusedHello(base, opened, phone)
       const old = await callAs(base, 'GET', '/devices', phone)
 
-      check(code === CLOSE.unauthorized, `the old token's hello closed with ${code}`)
+      check(code === CLOSE.revoked, `the old token's hello closed with ${code}`)
       check(refused(old), `the old token answered ${reported(old)}`)
 
       const { device } = await hello(base, opened, again)
@@ -228,11 +229,14 @@ export async function deviceSessionSteps(
     },
   )
 
-  await step(`hello with the laptop's old token: closed with ${CLOSE.unauthorized}`, async () => {
-    const { code } = await refusedHello(base, opened, laptop)
+  await step(
+    `hello with the laptop's old token: closed with ${CLOSE.revoked}, the sign-out everywhere having ended it`,
+    async () => {
+      const { code } = await refusedHello(base, opened, laptop)
 
-    check(code === CLOSE.unauthorized, `closed with ${code}`)
-  })
+      check(code === CLOSE.revoked, `closed with ${code}`)
+    },
+  )
 
   await step(
     `POST /auth/sign-out with the desktop's token: 204, its socket closed with ${CLOSE.revoked}`,

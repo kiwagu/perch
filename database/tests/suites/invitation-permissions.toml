@@ -1,0 +1,112 @@
+name = "invitation-permissions"
+tags = ["permissions", "invitation"]
+
+# An invitation is the gateway's own record: no record user reads or writes it. Root seeds the
+# rows as the gateway would. One per organisation and email, whatever the case the email is
+# written in; a role is `member` or `admin`. Refused writes return no rows; root then confirms
+# that nothing changed.
+
+[[cases]]
+name = "root seeds an organisation and an invitation to it of an email written in mixed case"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE tenant:orbit SET key = 'orbit', name = 'Orbit', database = 't_orbit', status = 'ready', created_by = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0]; CREATE invitation:first SET tenant = tenant:orbit, email = 'Carol@Example.test', role = 'member', inviter = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], token = 'token-first', expires_at = time::now() + 7d;"
+allow = true
+
+[[cases]]
+name = "root reads the email of the seeded invitation in lower case"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT VALUE email FROM invitation:first;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+equals = "carol@example.test"
+
+[[cases]]
+name = "alice sees no invitation"
+kind = "sql_expect"
+actor = "alice"
+sql = "SELECT * FROM invitation;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot create an invitation"
+kind = "sql_expect"
+actor = "alice"
+sql = "CREATE invitation:alice SET tenant = tenant:orbit, email = 'dave@example.test', role = 'admin', inviter = $auth.id, token = 'token-alice', expires_at = time::now() + 7d;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot change an invitation"
+kind = "sql_expect"
+actor = "alice"
+sql = "UPDATE invitation:first SET role = 'admin' RETURN AFTER;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "alice cannot delete an invitation"
+kind = "sql_expect"
+actor = "alice"
+sql = "DELETE invitation:first RETURN BEFORE;"
+allow = true
+
+[[cases.assertions]]
+path = "0"
+exists = false
+
+[[cases]]
+name = "a second invitation of the same email to the same organisation is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE invitation:second SET tenant = tenant:orbit, email = 'CAROL@example.test', role = 'admin', inviter = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], token = 'token-second', expires_at = time::now() + 7d;"
+allow = false
+error_contains = "invitation_tenant_email"
+
+[[cases]]
+name = "a role outside member and admin is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE invitation:owner SET tenant = tenant:orbit, email = 'erin@example.test', role = 'owner', inviter = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], token = 'token-owner', expires_at = time::now() + 7d;"
+allow = false
+error_contains = "role"
+
+[[cases]]
+name = "an email that is not an address is refused"
+kind = "sql_expect"
+actor = "root"
+sql = "CREATE invitation:nobody SET tenant = tenant:orbit, email = 'not-an-address', role = 'member', inviter = (SELECT VALUE id FROM identity WHERE email = 'alice@example.test')[0], token = 'token-nobody', expires_at = time::now() + 7d;"
+allow = false
+error_contains = "email"
+
+[[cases]]
+name = "the seeded invitation is unchanged"
+kind = "sql_expect"
+actor = "root"
+sql = "SELECT role, token FROM invitation;"
+allow = true
+
+[[cases.assertions]]
+path = "0.role"
+equals = "member"
+
+[[cases.assertions]]
+path = "0.token"
+equals = "token-first"
+
+[[cases.assertions]]
+path = "1"
+exists = false

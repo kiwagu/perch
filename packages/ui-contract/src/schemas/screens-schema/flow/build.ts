@@ -8,7 +8,8 @@
 
 import { z } from '@workspace/zod'
 
-import { anchorSchema, codeSchema, kebabNameSchema } from '../../../names.schema'
+import { anchorSchema, kebabNameSchema } from '../../../names.schema'
+import { DESCRIPTION_PURPOSES } from '../../description-purposes'
 import { actionNameSchema } from '../anchor'
 import { routePathSchema } from '../binding'
 import { actionParamsSchema } from '../params'
@@ -20,6 +21,7 @@ import {
   platformEventNameSchema,
   searchSchema,
 } from './names'
+import { renderSetNameSchema, renderSetsSchema } from './render-sets'
 import { transitionsSchemaOf } from './transitions'
 
 /** The opt-out of a derived toast, which only an authored flow writes and the loader takes away. */
@@ -30,23 +32,17 @@ export const toastOptOutSchema = z
   )
 
 /**
- * A guard by failure code: it holds when the action of the invoke whose `onError` it guards
- * failed with one of its codes, so a bare `show` on its branch shows exactly them.
+ * The opt-out of a read after the action: the invoke changes nothing a list of the screen shows,
+ * so nothing reads after it, in every outcome. A region written `by` its button passes it to its
+ * invoke; the canonical flow keeps it on the invoke, a statement for the checks that XState
+ * ignores and the machine comparison leaves out. One outcome alone says it on its branch
+ * (`branchReadOptOutSchema`, `transitions.ts`), never both.
  */
-export const codeGuardSchema = z
-  .strictObject({
-    codes: z
-      .array(codeSchema)
-      .min(1)
-      .describe('The codes it holds for: the action failed with one of them.'),
-  })
+export const readOptOutSchema = z
+  .literal(false)
   .describe(
-    'A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes.',
+    'Nothing reads after this action: it changes nothing a list of the screen shows. An invoke that says it and reads in one of its outcomes is refused.',
   )
-
-const guardSchema = z
-  .union([z.string().describe('What the guard holds, in a sentence.'), codeGuardSchema])
-  .describe('What a guard holds: a sentence, or the failure codes it holds for.')
 
 /** The parts of a flow below its parallel states, over one `transition` and one `effect`. */
 export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
@@ -54,6 +50,8 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
   effect: E
   /** The authored flow's invoke may say `toast: false`; the canonical one has no such key. */
   toastOptOut?: boolean
+  /** The authored flow's `meta.renders` may name a set of `flow.meta.renders` beside the anchors. */
+  renderSets?: boolean
 }) {
   const transitions = transitionsSchemaOf(parts.transition)
   const effects = z.array(parts.effect).min(1).describe('The effects, in order.')
@@ -64,13 +62,14 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       .describe('Per parameter, the anchor whose value it takes or a constant.'),
     onDone: transitions.describe('What follows when the action succeeds.'),
     onError: transitions.exactOptional().describe('What follows when the action fails.'),
+    read: readOptOutSchema.exactOptional(),
   }
   const invoke = (
     parts.toastOptOut === true
       ? z.strictObject({ ...invokeShape, toast: toastOptOutSchema.exactOptional() })
       : z.strictObject(invokeShape)
   ).describe('The action the state runs while the machine is in it.')
-  const description = z.string().exactOptional().describe('What the state is, for a reader.')
+  const description = z.string().exactOptional().describe(DESCRIPTION_PURPOSES.state)
   const entry = effects.exactOptional().describe('The effects on entering the state.')
   const exit = effects.exactOptional().describe('The effects on leaving the state.')
   const on = z
@@ -80,11 +79,11 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
       'Per event, what follows: an anchor (the user acts on it), a platform event of platform.events, or a data event of a field the screen shows.',
     )
   const renders = z
-    .array(anchorSchema)
+    .array(parts.renderSets === true ? z.union([anchorSchema, renderSetNameSchema]) : anchorSchema)
     .min(1)
     .exactOptional()
     .describe(
-      'Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.',
+      "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
     )
   const meta = z
     .strictObject({
@@ -130,7 +129,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     )
   const region = z
     .strictObject({
-      description: z.string().exactOptional().describe('What the area is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
       initial: flowStateNameSchema.describe('The state the region starts in.'),
       states: z
         .record(flowStateNameSchema, regionState)
@@ -159,20 +158,26 @@ export function flowSchemaOf<
   T extends z.ZodType,
   E extends z.ZodType,
   R extends z.ZodType,
+  G extends z.ZodType,
 >(options: {
   transition: T
   effect: E
   region: (parts: FlowParts<T, E>) => R
+  /** What a guard holds: as a screen file writes it, or as every reader takes it. */
+  guard: G
   regions: { min: number; description: string }
   description: string
   /** An invoke may say `toast: false` (the authored flow). */
   toastOptOut?: boolean
+  /** The flow may name sets of anchors several states render (the authored flow). */
+  renderSets?: boolean
 }) {
   const { min, description: regionsDescription } = options.regions
   const parts = flowPartsOf({
     transition: options.transition,
     effect: options.effect,
     ...(options.toastOptOut === undefined ? {} : { toastOptOut: options.toastOptOut }),
+    ...(options.renderSets === undefined ? {} : { renderSets: options.renderSets }),
   })
   const parallel = z
     .strictObject({
@@ -200,19 +205,22 @@ export function flowSchemaOf<
         .describe(
           'The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
         ),
-      description: z.string().exactOptional().describe('What the flow is, for a reader.'),
+      description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.flow),
       initial: flowStateNameSchema.describe('The state the screen opens in.'),
       meta: z
         .strictObject({
           guards: z
-            .record(guardNameSchema, guardSchema)
+            .record(guardNameSchema, options.guard)
             .exactOptional()
-            .describe(
-              'The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.',
-            ),
+            .describe('The guards by name, each with what it holds.'),
+          ...(options.renderSets === true ? { renders: renderSetsSchema.exactOptional() } : {}),
         })
         .exactOptional()
-        .describe('What the contract says of the flow beyond XState: its guards.'),
+        .describe(
+          options.renderSets === true
+            ? 'What the contract says of the flow beyond XState: its guards and the sets of anchors its states render.'
+            : 'What the contract says of the flow beyond XState: its guards.',
+        ),
       states: z
         .record(flowStateNameSchema, z.discriminatedUnion('type', [parts.state, parallel]))
         .describe('The states by name: plain states, and parallel states of regions.'),

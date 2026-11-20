@@ -57,8 +57,8 @@ const Pages = defineModule({
   id: 'pages',
   declarations: { One, Two: () => <p>two</p> },
   routes: [
-    { path: '/one', page: 'One' },
-    { path: '/two', page: 'Two' },
+    { path: '/one', page: 'One', roles: ['guest', 'identity'] },
+    { path: '/two', page: 'Two', roles: ['guest', 'identity'] },
   ],
 })
 

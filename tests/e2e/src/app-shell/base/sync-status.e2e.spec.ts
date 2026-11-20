@@ -3,11 +3,12 @@ import type { Page } from '@playwright/test'
 
 import { generate } from '../../support/data'
 import { appReady, expect, signUp, test, toast } from '../../support/fixtures'
-import { SyncNetwork } from '../../support/network'
+import { BACK_ONLINE_MS, SyncNetwork } from '../../support/network'
 
 /**
- * How long a tab may take to connect again: its reconnects back off up to 30 seconds, and the
- * record the leading tab shares follows within two.
+ * How long a tab may take to connect again once its connection dropped while the browser kept
+ * its network: its reconnects back off up to 30 seconds, and the record the leading tab shares
+ * follows within two.
  */
 const RECONNECT_MS = 35_000
 
@@ -21,7 +22,8 @@ test.describe("See the state of this device's sync in every tab", { tag: '@full'
   test('Both tabs of a browser say the same state of its sync through a dropped connection, the network going and an edit made offline', async ({
     page,
   }) => {
-    // Connecting again may wait out a reconnect delay of up to 30 seconds, twice.
+    // Connecting again after the dropped connection may wait out a reconnect delay of up to 30
+    // seconds.
     test.slow()
 
     const newName = generate.newName()
@@ -98,7 +100,7 @@ test.describe("See the state of this device's sync in every tab", { tag: '@full'
 
       // Expected: After step 7 [app-shell.sync-message] carries [code:synced] in both tabs:
       //   the new name was sent
-      await syncSays(page, 'synced', RECONNECT_MS)
+      await syncSays(page, 'synced', BACK_ONLINE_MS)
       await syncSays(second, 'synced')
     })
   })

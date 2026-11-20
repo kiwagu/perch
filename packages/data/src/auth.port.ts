@@ -21,4 +21,9 @@ export interface SignUpInput {
 export interface SignInInput {
   readonly email: string
   readonly password: string
+  /**
+   * Confirms a sign-in past the account's limit of devices, which signs out its device seen least
+   * recently; without it such a sign-in signs nothing in and fails as `data:DEVICE_LIMIT`.
+   */
+  readonly signOutOldest?: boolean
 }

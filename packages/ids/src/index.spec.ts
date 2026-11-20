@@ -5,8 +5,10 @@ import {
   type AccountId,
   accountIdFactory,
   type IdentityId,
+  type InvitationId,
   identityIdFactory,
   idSchemas,
+  invitationIdFactory,
   type MembershipId,
   membershipIdFactory,
   type NoteId,
@@ -50,6 +52,15 @@ describe('the entity id registry', () => {
     expect(account).toMatch(/^acc_[0-9a-z]{16}\.[0-9a-z]{10}$/)
     expect(verification).toMatch(/^vrf_[0-9a-z]{16}\.[0-9a-z]{10}$/)
     expect(registry.kindOf(account)).toBe('account')
+  })
+
+  it('mints the ids of the invitations to an organisation', () => {
+    const invitation: InvitationId = invitationIdFactory.create()
+
+    expect(registry.prefixes.invitation).toBe('inv')
+    expect(invitation).toMatch(/^inv_[0-9a-z]{16}\.[0-9a-z]{10}$/)
+    expect(registry.kindOf(invitation)).toBe('invitation')
+    expect(identityIdFactory.is(invitation)).toBe(false)
   })
 
   it('tells kinds apart', () => {

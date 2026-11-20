@@ -3,7 +3,7 @@
 import { z } from '@workspace/zod'
 
 import { roleSchema } from '../../names.schema'
-import { flatJsonSchema } from '../flat-json-schema'
+import { flatJsonSchema, searchJsonSchema } from '../flat-json-schema'
 
 const SEGMENT =
   '([a-z0-9][a-z0-9-]*|\\$[a-zA-Z_][a-zA-Z0-9_]*|\\{-\\$[a-zA-Z_][a-zA-Z0-9_]*\\}|\\$)'
@@ -22,11 +22,20 @@ export const bindingSchema = z
       .enum(['guest', 'authenticated'])
       .optional()
       .describe(
-        'Who may open the route: only a guest, or only a signed-in account; absent: anyone.',
+        'Where an account the route is not for is sent: a guest to sign-in (`authenticated`), or a signed-in account to the profile (`guest`); absent: nobody is sent.',
       ),
-    roles: z.array(roleSchema).min(1).describe('The roles the route serves.'),
+    roles: z
+      .array(roleSchema)
+      .min(1)
+      .describe(
+        'The roles the route serves: it opens for an account that holds one, after the guard and before the search is read, and the not-found screen opens at the same address for any other.',
+      ),
     params: flatJsonSchema.optional().describe('The path parameters, as a flat JSON Schema.'),
-    search: flatJsonSchema.optional().describe('The search parameters, as a flat JSON Schema.'),
+    search: searchJsonSchema
+      .optional()
+      .describe(
+        "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
+      ),
     history: z
       .enum(['push', 'replace'])
       .default('push')

@@ -4,6 +4,7 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 
 import { linkToken } from '../mail/__fixtures__/outbox'
 
+import { setBanned } from './__fixtures__/account-ban'
 import { accountServicesOf, deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
 import pendingChangeStatement from './__fixtures__/email-change-pending.surql'
 
@@ -82,6 +83,24 @@ describe('AccountPasswords', () => {
     expect((await passwords.requestReset(ANN))._unsafeUnwrap()).toBe('asked')
     expect((await passwords.requestReset('ghost@example.test'))._unsafeUnwrap()).toBe('asked')
     expect((await passwords.requestReset('not an email'))._unsafeUnwrap()).toBe('refused')
+  })
+
+  it("reads an email's account, in any case, with its hash, whether it is banned and its start, and none for an email no account has", async () => {
+    const { passwords, identity, local } = await harness()
+    const before = (await passwords.credentialOf('Ann@Example.test'))._unsafeUnwrap()
+
+    expect(before).toEqual({
+      identity,
+      hash: before?.hash,
+      banned: false,
+      start: { name: 'Ann', locale: 'en' },
+    })
+    expect(before?.hash).toMatch(/^\$argon2id\$/)
+
+    await setBanned(local, identity, true)
+
+    expect((await passwords.credentialOf(ANN))._unsafeUnwrap()).toEqual({ ...before, banned: true })
+    expect((await passwords.credentialOf('ghost@example.test'))._unsafeUnwrap()).toBeUndefined()
   })
 
   it("checks a password against the account's credential row", async () => {

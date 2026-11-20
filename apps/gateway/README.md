@@ -6,14 +6,19 @@ The server process in front of the central SurrealDB database (namespace `app`, 
 `directory`), and that database's only client: it connects as its own namespace user
 and applies the shared schema. It listens on `127.0.0.1` at `GATEWAY_PORT`. Its HTTP routes
 sign accounts up and verify their emails, sign devices in and out, list and sign out an
-identity's devices, and serve organisations and their members; devices sync over a WebSocket at `/sync`; `GET /health` answers `ok`.
+identity's devices, serve organisations and their members, and invite emails to organisations by
+a mailed link that the invited account accepts or declines, and serve the platform's operators its
+accounts under `/console`; devices sync over a WebSocket at
+`/sync`; `GET /health` answers `ok`.
 
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
-`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
-time (one identity's membership changes, one account's sign-ups, verifications, resets and
-changes). The modules that predate the index rule have no
-`index.ts` yet and are imported file by file.
+`src/composition/root.ts` builds them; `src/route-path.ts` reads a request's path against the path
+templates a route module lists (a segment `:name` is a parameter), so a module answers only the
+paths it lists, and `src/path-id.ts` holds the longest id a path may carry; `src/keyed-turns.ts`
+runs one key's work one turn at a time (one identity's membership changes, one account's sign-ups,
+verifications, resets and changes). The modules that
+predate the index rule have no `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an
   email and the resend of its mail behind the gateway's limits, the recovery and the change of a
@@ -22,7 +27,11 @@ changes). The modules that predate the index rule have no
 - [sync](src/sync/README.md): a device's WebSocket from hello to close, and the registry of open
   connections.
 - [tenants](src/tenants/README.md): organisations, their databases, memberships and members,
-  and their routes.
+  their invitations and roles, and their routes.
+- [console](src/console/README.md): the operators' console: the platform's accounts found a page at
+  a time, one account's card, and what an operator does to an account: its name, its email, its
+  ban and the lift of it, its sign-out everywhere, its reset and verification mails, and its
+  removal, for operators alone.
 - [limits](src/limits/README.md): the request limits and the 429 they answer.
 - [mail](src/mail/README.md): the mail port and its SMTP adapter; the mails themselves are
   written by `@workspace/email`.
@@ -39,6 +48,8 @@ one long-lived connection to the directory there), `GATEWAY_SURREAL_USER`,
 variable stops the gateway with an issue that names it, never its value. `scripts/smoke/cli.ts`
 is the entry point of the smoke test against a stand (the folder `scripts/smoke/`: the run, one
 module per path of steps, the HTTP helpers the load test reuses).
+`scripts/operator/cli.ts` is the host command that appoints operators
+(`bun run operator -- grant <email>`, `revoke <email>`; [its README](scripts/operator/README.md)).
 
 Auth secret and public origin: `GATEWAY_AUTH_SECRET` is the secret Better Auth signs and
 encrypts with, required, with no default and at least 32 characters: generate one with
@@ -87,7 +98,12 @@ the update; each device's next hello is then refused with 4401.
   `gateway` app has them) after `mcproc start services`; the pm2 stand's `gateway` app
   (`mcproc start dev`) is the other way to run it.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
-  one per organisation for the organisation services and routes.
+  one per organisation for the organisation services and routes. `src/platform-contract.spec.ts`
+  holds the whole server, asked over HTTP, to the actions of the platform the UI contract declares
+  (`contract/domain/platform.yaml`, read through `@workspace/ui-contract`, a dev dependency of
+  this package that no gateway source imports): each action is a route or the client's own, each
+  route has its action or its reason, and each bound of a parameter (a length, a pattern, a
+  format) is the bound of its route.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
@@ -116,22 +132,23 @@ the update; each device's next hello is then refused with 4401.
   identity with a phone's socket open (a reset request answered 202 with no body for it and for
   an unknown email, mailing it only; the link of its mail opening `/reset-password`, setting a
   new password with 200 and `signedOut` false, as opened with no session, which closes the
-  phone's socket with 4002 and refuses its token at
-  hello, refuses the old password, signs in with the new one and mails the notice of a changed
+  phone's socket with 4002 and closes its token's hello with 4002 too (why its session ended),
+  refuses the old password, signs in with the new one and mails the notice of a changed
   password; the same link again answered 401 `link-invalid`); then on another identity its device
   sessions: a hello
   under a device with no session closed with 4401 and a call without `X-Perch-Device` answered
   400, a laptop and a phone listed by `GET /devices` with the laptop as current, the phone
   signed out from the laptop (`DELETE /devices/:id`, its socket closed with 4001, its row
-  showing `revokedAt`, its token's hello closed with 4401) and signed in again (the old token
-  refused at hello with 4401 and by `GET /devices` with 401, the new one welcomed), a tablet
+  showing `revokedAt`, its token's hello closed with 4001) and signed in again (the old token's
+  hello closed with 4001 all the same, a call with it answered 401, the new one welcomed), a tablet
   signed in twice (the first session ended by the second), then every device signed out from
   the laptop (`POST /auth/sign-out-everywhere`, every socket closed with 4001 and every token
-  refused), a sign-in right after it answered 200 with a working token, the laptop's old token
-  refused at hello (4401), and a device signing itself out with `POST /auth/sign-out` (204 with
-  its socket closed with 4001, 204 again, 401 for a made-up token); and last, on the first
+  refused), a sign-in right after it answered 200 with a working token, the laptop's old token's
+  hello closed with 4001, and a device signing itself out with `POST /auth/sign-out` (204 with
+  its socket closed with 4001, 204 again, 401 for a made-up token); then, on the first
   identity, the organisation path (an organisation `smoke_<time>` created, a second identity
-  invited, each device welcomed with its membership and role, the invited device writing a note
+  invited by email and accepting the invitation by the id the invite answered, each device
+  welcomed with its membership and role, the invited device writing a note
   into the organisation's region that the owner's device receives, the owner editing that note
   as an admin, the invited device deleting its own note, a late device of the owner subscribing
   to a snapshot that holds the admin's note and not the deleted one, the invited device's edit
@@ -139,7 +156,13 @@ the update; each device's next hello is then refused with 4401.
   `foreign-owner`, a note under the owner device's Loro peer rejected as `foreign-peer` with the
   owner's next note still acknowledged and delivered, the member list refused to it with 403,
   the removal that closes the region with 4403, and the removed identity's sign-out, after
-  which its token is refused at hello with 4401); one line per step.
+  which its token is refused at hello with 4401); and last the console path (the first identity
+  appointed an operator through the host command's `setPlatformRole`, a fresh identity with an
+  open socket banned through `POST /console/accounts/:id/ban`, 204, its socket closed with 4004
+  and the ban's reason, its token's hello closed with 4004 and its right password answered 403
+  `account-banned`; the ban lifted, 204, and a sign-in working again; then every device of it
+  signed out through `POST /console/accounts/:id/sign-out`, 204, the new session's socket closed
+  with 4001); one line per step.
 - `bun run load`: the load test, see below (`bun run load -- <arguments>` at the repository
   root gives it the e2e stand through `mcproc exec`).
 - `bun run typecheck`, `bun run lint`.
@@ -155,7 +178,8 @@ step signs up the devices it adds (`load-<run>-<n>@example.test`, each device fr
 client address of its own, as in the smoke, so no address spends its verification mails) and
 verifies each through the link of its mail, as the smoke does, which signs the device in; it
 groups every `--members` of them
-into an organisation `load_<run>_<k>` (the first creates it and invites the rest), opens their
+into an organisation `load_<run>_<k>` (the first creates it and invites the rest by email, each
+accepting by the id its invite answered), opens their
 devices on the organisation's region and then holds the load for `--hold` seconds. A fraction
 `--writers` of the new devices are writers, spread over the step's organisations: each appends
 a note every `1 / --rate` seconds, at a random phase, and proposes a compaction when an ack asks
@@ -173,6 +197,7 @@ total. One table row is printed per step; a step's devices stay open for the nex
 | `--surreal-container` | by the stand's port | container `docker stats` reads for the surreal columns; the default is `perch-surrealdb-e2e` for port 8010 of `SURREAL_URL`, `perch-w<slot>-surrealdb-e2e` for port 8010 + 100 x slot, none (the columns show `-`) for any other port |
 | `--json <path>` | none | also writes the steps with the run id, arguments, host and start time |
 | `--stop-on-degrade` | off | stops after the first degraded step |
+| `--no-restart` | off | leaves out the restart of the gateway after the last step |
 
 Columns:
 
@@ -197,12 +222,49 @@ Columns:
   `undelivered` are not zero, pushes were made and no ack came, or no fan-out sample came
   though other devices were due one.
 
+After the last step's row, with every device still connected, the run restarts its gateway and
+measures how the devices come back (`--no-restart` leaves it out, and it does not run when a
+step failed or no device is live). No one writes meanwhile. `t0` is the moment the run stops the
+child gateway with SIGTERM, which closes every socket; as soon as that process has exited the run
+starts a new gateway on the same port and notes when its `/health` first answers 200 (polled every
+50 ms). The new gateway is the one the teardown and the signal handlers stop from then on, and one
+that does not start fails the run. A device whose socket closes is neither retired nor counted
+in `closes`: it reconnects as the client's `WebSocketTransport` does, with the delays drawn as the
+transport draws them (the replica's own `reconnectDelay` over `Math.random`, not a copy of its
+schedule) before each attempt, counted from 0 at the close, and the transport's
+`WELCOME_TIMEOUT_MS` for each open. An open that is refused, closed before the welcome or not
+welcomed in time is a failed hello, and the next attempt waits a delay drawn from the next step; a
+close that `endingOf` maps to an ending (a revoked or signed-out device, for one) stops the
+device's loop for good and counts the device as `ended`. On its welcome a device subscribes its
+region again with its copy's version, as the engine's first subscription of a connection does,
+and what it receives from then on does not feed the latency figures. The step ends when every
+device live at `t0` is back or ended, or 120 s after `t0`, by a timer: a welcome after the
+deadline does not count, an open still waiting for its welcome is cancelled with its socket
+closed, and the devices still trying then count as not back. Meanwhile a sampler reads CPU time
+every 250 ms, of the new gateway from its spawn and of the stand container from `t0` (the
+`usage_usec` of its cgroup v2 `cpu.stat`, found by the id `docker inspect` gives), and a peak is
+the largest CPU-seconds delta over wall-seconds delta between two consecutive samples, in
+percent, so it may pass 100 on several cores. The step prints a blank line, its own header and
+one row, and `--json` gains `restart` beside `steps`:
+
+- `devices`: live at `t0`. `back s`: from `t0` to the last welcome. `down s`: from `t0` to the
+  new gateway's first 200 on `/health`. `after health s`: from that 200 to the last welcome.
+  `back s` and `after health s` show `-` when no device came back.
+- `failed hellos`: opens that were rejected, over all the devices.
+- `gw CPU peak %`, `surreal CPU peak %`: the peaks over the new gateway and the stand container
+  (`-` when the container is not known or its cgroup cannot be read); `gw RSS MiB`: the new
+  gateway's resident memory at the step's end.
+- `not back`, `ended`: devices that were not welcomed again by the end of the step, and devices
+  the gateway ended with a close no reconnect follows. `degraded` is `yes` when either is not
+  zero.
+
 A device has 30 s to open its socket, say hello and be welcomed, and 30 s more to get its
 snapshot; one that fails is counted as an error and dropped. The arguments are checked: devices
 positive integers that grow, members a positive integer, writers from 0 to 1, rate and hold
 above 0, the port 1-65535; a violation names the flag.
 
-The run exits 0, or 1 when the setup or a step failed; SIGINT and SIGTERM stop the devices and
-the child gateway and exit 130. The load accounts live on the in-memory e2e stand and vanish
-when it restarts: afterwards `mcproc restart surrealdb-e2e`, then `mcproc restart gateway-e2e`.
-The seed sweep (`bun run seed:sweep`) targets the dev stand, not this one.
+The run exits 0, or 1 when the setup, a step or the restart failed; SIGINT and SIGTERM stop the
+devices and the child gateway, the latest one, and exit 130. The load accounts live on the
+in-memory e2e stand and vanish when it restarts: afterwards `mcproc restart surrealdb-e2e`, then
+`mcproc restart gateway-e2e`. The seed sweep (`bun run seed:sweep`) targets the dev stand, not
+this one.

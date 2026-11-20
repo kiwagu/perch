@@ -1,14 +1,15 @@
 /**
  * Changes of a connection's regions told from outside its message queue: the identity's
- * memberships changed, or one region was revoked. They do not wait for the device's messages;
+ * memberships changed, one region was revoked, or the identity's role in one was changed. They do
+ * not wait for the device's messages;
  * one told while the hello is under way applies right after the welcome, before any later
  * message is handled.
  */
 
 import type { ReplicaSchema } from '@workspace/replica'
-import type { Membership } from '@workspace/replica/protocol'
+import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
-import { regionsFor } from './device-regions'
+import { memberActor, regionsFor } from './device-regions'
 import type { ConnectionHost } from './host'
 import { answerFailed } from './reasons'
 import type { RegionSubscriptions } from './region-subscriptions'
@@ -51,6 +52,17 @@ export class RegionChanges {
   /** The identity left the organisation of `region`; resolves at once. */
   revoke(region: string): Promise<void> {
     void this.#change(() => this.#leave(region))
+
+    return Promise.resolve()
+  }
+
+  /**
+   * The identity's role in the organisation of `region` is now `role`; resolves at once. The
+   * device's next pushes there are judged by it, and so are those of a subscription it makes
+   * later.
+   */
+  rerole(region: string, role: TenantRole): Promise<void> {
+    void this.#change(() => this.#rerole(region, role))
 
     return Promise.resolve()
   }
@@ -106,8 +118,32 @@ export class RegionChanges {
     const regions = regionsFor(device.identity.id, next, this.#schema)
 
     this.#subscriptions.keepOnly(regions)
+    // The kept regions push as the new memberships allow from the next batch the hub takes in,
+    // before the device hears them: a role changed is judged at once.
+    this.#subscriptions.changeActors(regions)
     this.#host.ready({ ...device, regions })
     this.#host.send({ type: 'memberships', memberships: [...next] })
+  }
+
+  /**
+   * The device pushes into `region` as its `role` allows, in the regions it may name and at the
+   * hub when it subscribed to the region; a region it may not name (it was revoked, or the device
+   * does not know it yet) is left as it is.
+   */
+  #rerole(region: string, role: TenantRole): void {
+    const device = this.#host.device()
+    const entry = device?.regions.get(region)
+
+    if (device === undefined || entry === undefined) {
+      return
+    }
+
+    const actor = memberActor(device.identity.id, role, this.#schema)
+    const regions = new Map(device.regions)
+
+    regions.set(region, { ref: entry.ref, actor })
+    this.#host.ready({ ...device, regions })
+    this.#subscriptions.changeActor(region, actor)
   }
 
   /** Takes `region` from the regions the device may name, and leaves it at the hub. */

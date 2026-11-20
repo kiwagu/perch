@@ -29,6 +29,7 @@
   "devDependencies": {
     "@types/bun": "catalog:",
     "@workspace/mailbox": "workspace:*",
+    "@workspace/ui-contract": "workspace:*",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

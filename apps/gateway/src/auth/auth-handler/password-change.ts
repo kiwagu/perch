@@ -5,30 +5,34 @@ import type { SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { bearerRefused } from '../bearer-caller'
+import { hasPasswordLength } from '../password-length'
 
 import type { AuthMountDeps } from './mount'
 import { afterPasswordChange } from './password-changed'
 import { badRequest, internal, refused } from './requests'
 import { type MountCaller, signedIn } from './signed-in'
 
+/** The current password is checked as typed: one of no account's length is a wrong one. */
 const changeBody = z.object({ currentPassword: z.string(), password: z.string() })
 
 /**
  * Changes the caller's password (`{ currentPassword, password }`, with the device's token and
  * `X-Perch-Device`). After the caller is read (`signedIn`), it takes one of the client address's
- * credential checks (429), then: a body it cannot read answers 400 `bad-request`, a new password
- * that breaks the rules 400 `password-rejected` at once. The current password must find a place
- * among its account's failed sign-ins, as a sign-in's does (`RequestLimits.signInAttempt`, by the
- * caller's email; 429 when they are spent), and a wrong one keeps its place there: 400
- * `invalid-credentials`; a right one clears them. In the account's turn, the current password is
- * checked against the credential row and the new one hashed; then one transaction makes sure the
- * caller's session is still live (401 `unauthorized` when it ended meanwhile) and the row still
- * holds the hash that was checked, and sets the new password, ends every other session of the
- * account, every reset link and the pending change of its email, all or none
- * (`AccountPasswords.change`; 500 `internal` with nothing changed when it fails). Once it
+ * credential checks (429), then: a body it cannot read, or one with no current password, answers
+ * 400 `bad-request`, a new password that breaks the rules 400 `password-rejected` at once. The
+ * current password must find a place among its account's failed sign-ins, as a sign-in's does
+ * (`RequestLimits.signInAttempt`, by the caller's email; 429 when they are spent), and a wrong one
+ * keeps its place there: 400 `invalid-credentials`, as a current password of a length no
+ * account's password has (`hasPasswordLength`) does without being checked; a right one clears
+ * them. In the account's turn,
+ * the current password is checked against the credential row and the new one hashed; then one
+ * transaction makes sure the caller's session is still live (401 `unauthorized` when it ended
+ * meanwhile) and the row still holds the hash that was checked, and sets the new password, ends
+ * every other session of the account, every reset link and the pending change of its email, all or
+ * none (`AccountPasswords.change`; 500 `internal` with nothing changed when it fails). Once it
  * committed, the sockets of the devices whose session it ended close with 4002, the caller's own
- * session and sockets staying, and the notice of a changed password starts
- * (`afterPasswordChange`): 204 with no body.
+ * session and sockets staying, and the notice of a changed password starts (`afterPasswordChange`):
+ * 204 with no body.
  */
 export function changePassword(
   deps: AuthMountDeps,
@@ -69,6 +73,12 @@ async function changed(
   let outcome: SignInOutcome = 'unjudged'
 
   try {
+    if (!hasPasswordLength(body.data.currentPassword)) {
+      outcome = 'failed'
+
+      return refused(400, 'invalid-credentials')
+    }
+
     return await deps.accounts.run(caller.identity, async () => {
       const change = await deps.passwords.change(
         caller.identity,

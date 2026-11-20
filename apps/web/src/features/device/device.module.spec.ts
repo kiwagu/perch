@@ -32,7 +32,7 @@ describe('DeviceModule', () => {
 
   it('routes signed-in users to the devices page', () => {
     expect(DeviceModule.routes).toEqual([
-      { path: '/devices', page: 'DevicesPage', guard: 'authenticated' },
+      { path: '/devices', page: 'DevicesPage', guard: 'authenticated', roles: ['identity'] },
     ])
     expect(Object.keys(DeviceModule.declarations)).toEqual(['DevicesPage'])
   })
