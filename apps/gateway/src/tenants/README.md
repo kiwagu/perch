@@ -227,7 +227,8 @@ statuses, and `organisation-http.ts` the answers both route folders share.
   `POST /invitations/decline` (`invitation-routes/`, through its `index.ts`);
   `organisation-http.ts` holds the answers both share. The paths each answers
   (`ORGANISATION_PATHS`, `INVITATION_PATHS`) are listed beside their handlers, for the spec that
-  holds the routes to the platform's actions.
+  holds the routes to the platform's actions; both answer a path only through their list
+  (`src/route-path.ts` reads the organisation routes' templates, a key held to the kernel's rule).
 - Services: `Organisations` (`organisations/`, through its `index.ts`; `leaveAll` among its
   commands),
   `AccountDeparture` (`account-departure.ts`: `blocked`, `leave`), `TenantDatabases`

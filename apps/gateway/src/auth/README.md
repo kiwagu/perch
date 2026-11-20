@@ -594,7 +594,8 @@ error carries one.
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
   `device.routes.ts`). The paths the mount answers (`MOUNT_PATHS`) and those the device routes
   answer (`DEVICE_PATHS`) are listed beside their handlers, for the spec that holds the routes to
-  the platform's actions.
+  the platform's actions; the device routes answer a path only through their list
+  (`src/route-path.ts`).
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
   a change of the password ended, so the device can tell its person why it was signed out; 4003
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of

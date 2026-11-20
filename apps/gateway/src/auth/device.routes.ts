@@ -5,15 +5,13 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { CLOSE, deviceId } from '@workspace/replica/protocol'
 
+import { matchPath } from '../route-path'
 import type { ConnectionRegistry } from '../sync/connections'
 
 import type { AuthSessions } from './auth-sessions'
 import { bearerCaller, bearerRefused, bearerToken, DEVICE_HEADER } from './bearer-caller'
 import { type DeviceSessionRow, endedAt } from './device-session-rows'
 import type { DeviceSessions } from './device-sessions'
-
-/** The paths of the device routes: every device of the caller, and one of them. */
-const DEVICE_PATH = /^\/devices(?:\/([^/]+))?$/
 
 /** What a path names. */
 type Target =
@@ -22,13 +20,16 @@ type Target =
   | { readonly kind: 'everywhere' }
   | { readonly kind: 'sign-out' }
 
-/** The path each kind of target is served under, a device's session id written `:id`. */
-const PATH_OF: Readonly<Record<Target['kind'], string>> = {
+/**
+ * The path each kind of target is served under, a device's session id written `:id`: `targetOf`
+ * answers a path only through these.
+ */
+const PATH_OF = {
   devices: '/devices',
   device: '/devices/:id',
   everywhere: '/auth/sign-out-everywhere',
   'sign-out': '/auth/sign-out',
-}
+} as const satisfies Readonly<Record<Target['kind'], string>>
 
 /** The paths the device routes answer. */
 export const DEVICE_PATHS: readonly string[] = Object.values(PATH_OF)
@@ -59,23 +60,21 @@ interface ListedDevice {
 }
 
 function targetOf(pathname: string): Target | undefined {
-  if (pathname === PATH_OF.everywhere) {
+  const device = matchPath(PATH_OF.device, pathname)
+
+  if (device) {
+    return { kind: 'device', id: device.id }
+  }
+
+  if (matchPath(PATH_OF.devices, pathname)) {
+    return { kind: 'devices' }
+  }
+
+  if (matchPath(PATH_OF.everywhere, pathname)) {
     return { kind: 'everywhere' }
   }
 
-  if (pathname === PATH_OF['sign-out']) {
-    return { kind: 'sign-out' }
-  }
-
-  const found = DEVICE_PATH.exec(pathname)
-
-  if (!found) {
-    return undefined
-  }
-
-  const [, id] = found
-
-  return id === undefined ? { kind: 'devices' } : { kind: 'device', id }
+  return matchPath(PATH_OF['sign-out'], pathname) ? { kind: 'sign-out' } : undefined
 }
 
 /** `row` as the list of `current`'s identity shows it at `now` (ms since the epoch). */

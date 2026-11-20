@@ -1,5 +1,7 @@
 import { TENANT_KEY_PATTERN } from '@workspace/kernel'
 
+import { matchPath } from '../../route-path'
+
 /** What a path names. */
 export type Target =
   | { readonly kind: 'organisations' }
@@ -10,52 +12,53 @@ export type Target =
 
 /**
  * The path each kind of target is served under, an organisation's key, a member's identity and an
- * invitation's id written `:key`, `:identity` and `:invitation`.
+ * invitation's id written `:key`, `:identity` and `:invitation`: `targetOf` answers a path only
+ * through these. An organisation's own path (`/organisations/:key`) is not one of them.
  */
-const PATH_OF: Readonly<Record<Target['kind'], string>> = {
+const PATH_OF = {
   organisations: '/organisations',
   members: '/organisations/:key/members',
   member: '/organisations/:key/members/:identity',
   invitations: '/organisations/:key/invitations',
   invitation: '/organisations/:key/invitations/:invitation',
-}
+} as const satisfies Readonly<Record<Target['kind'], string>>
 
 /** The paths the organisation routes answer. */
 export const ORGANISATION_PATHS: readonly string[] = Object.values(PATH_OF)
 
-/** An organisation's key in a path: the kernel's key rule without its anchors. */
-const KEY = TENANT_KEY_PATTERN.source.replace(/^\^/, '').replace(/\$$/, '')
+/** A key in a path keeps the kernel's key rule: a path with another is not the organisations'. */
+const KEY = { key: TENANT_KEY_PATTERN }
 
 /**
- * The organisation paths: every organisation, an organisation's members and invitations, one of
- * its members or invitations. A key outside the rule makes a path that is not the organisations'
- * own, and so does an empty last segment (`.../members/`).
+ * What `pathname` names, or `undefined` for a path that is not one of `PATH_OF`'s: a key outside
+ * the rule, an empty segment (`.../members/`) and an organisation's own path included.
  */
-const PATH = new RegExp(`^/organisations(?:/(${KEY})(?:/(members|invitations)(?:/([^/]+))?)?)?$`)
-
-/** What `pathname` names; an organisation's own path (`/organisations/:key`) is not served. */
 export function targetOf(pathname: string): Target | undefined {
-  const found = PATH.exec(pathname)
-
-  if (!found) {
-    return undefined
-  }
-
-  const [, key, resource, id] = found
-
-  if (key === undefined) {
+  if (matchPath(PATH_OF.organisations, pathname)) {
     return { kind: 'organisations' }
   }
 
-  if (resource === undefined) {
-    return undefined
+  const members = matchPath(PATH_OF.members, pathname, KEY)
+
+  if (members) {
+    return { kind: 'members', key: members.key }
   }
 
-  if (resource === 'members') {
-    return id === undefined ? { kind: 'members', key } : { kind: 'member', key, identity: id }
+  const member = matchPath(PATH_OF.member, pathname, KEY)
+
+  if (member) {
+    return { kind: 'member', key: member.key, identity: member.identity }
   }
 
-  return id === undefined
-    ? { kind: 'invitations', key }
-    : { kind: 'invitation', key, invitation: id }
+  const invitations = matchPath(PATH_OF.invitations, pathname, KEY)
+
+  if (invitations) {
+    return { kind: 'invitations', key: invitations.key }
+  }
+
+  const invitation = matchPath(PATH_OF.invitation, pathname, KEY)
+
+  return invitation
+    ? { kind: 'invitation', key: invitation.key, invitation: invitation.invitation }
+    : undefined
 }

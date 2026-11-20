@@ -23,7 +23,7 @@ import {
 
 import { type Param, requestFor, type Wire, worldFor } from './__fixtures__/platform-requests'
 import { boundsOf, isChecked, isIssued } from './__fixtures__/platform-values'
-import { openStand, type Stand } from './__fixtures__/stand'
+import { type Account, openStand, type Stand } from './__fixtures__/stand'
 import { MOUNT_PATHS } from './auth/auth-handler'
 import { DEVICE_PATHS } from './auth/device.routes'
 import { CONSOLE_PATHS } from './console'
@@ -119,6 +119,60 @@ afterAll(async () => {
   await stand.close()
 })
 
+/** Every path the route modules list. */
+const PATHS = [
+  ...DEVICE_PATHS,
+  ...ORGANISATION_PATHS,
+  ...INVITATION_PATHS,
+  ...CONSOLE_PATHS,
+  ...MOUNT_PATHS,
+]
+
+/** The routes the actions and the reasons name, each as `METHOD path`. */
+const named = [
+  ...Object.values(ACTION_ROUTES).map(({ method, path }) => `${method} ${path}`),
+  ...Object.keys(NO_ACTION_ROUTES),
+]
+
+/** The routes of `served` no action and no reason names. */
+const unnamed = (served: readonly string[]): string[] =>
+  served.filter((route) => !named.includes(route))
+
+/** The routes an action or a reason names that `served` lacks, the server's own aside. */
+const stale = (served: readonly string[]): string[] =>
+  named.filter((route) => !served.includes(route) && !SERVER_ROUTES.includes(route))
+
+/**
+ * The `Allow` header the server answers a method no route takes with, as the operator asks it of
+ * a path of a module's list, its parameters given a text.
+ */
+const allowedAt = (operator: Account) => async (path: string) =>
+  (
+    await stand.ask({
+      method: 'PURGE',
+      path: path.replace(/:key/g, 'probe').replace(/:\w+/g, 'x'),
+      as: operator,
+    })
+  ).allow
+
+/** The routes the paths answer, each as `METHOD path`, and the paths that answer none. */
+async function census(
+  paths: readonly string[],
+  allow: (path: string) => Promise<string | null>,
+): Promise<{ served: string[]; unserved: string[] }> {
+  const served: string[] = []
+  const unserved: string[] = []
+
+  for (const path of paths) {
+    const methods = ((await allow(path)) ?? '').split(', ').filter((method) => method !== '')
+
+    unserved.push(...(methods.length === 0 ? [path] : []))
+    served.push(...methods.map((method) => `${method} ${path}`))
+  }
+
+  return { served, unserved }
+}
+
 describe('the platform actions and the routes', () => {
   const declared = Object.keys(platform.actions)
 
@@ -145,42 +199,22 @@ describe('the platform actions and the routes', () => {
   })
 
   it('serves each route an action names, and no route without an action or a reason', async () => {
-    const served: string[] = []
-    const unserved: string[] = []
-    const operator = await stand.operator()
-
-    for (const path of [
-      ...DEVICE_PATHS,
-      ...ORGANISATION_PATHS,
-      ...INVITATION_PATHS,
-      ...CONSOLE_PATHS,
-      ...MOUNT_PATHS,
-    ]) {
-      // A method no route takes is answered with the methods the path takes.
-      const { allow } = await stand.ask({
-        method: 'PURGE',
-        path: path.replace(/:key/g, 'probe').replace(/:\w+/g, 'x'),
-        as: operator,
-      })
-
-      const methods = (allow ?? '').split(', ').filter((method) => method !== '')
-
-      unserved.push(...(methods.length === 0 ? [path] : []))
-      served.push(...methods.map((method) => `${method} ${path}`))
-    }
+    const { served, unserved } = await census(PATHS, allowedAt(await stand.operator()))
 
     // A path the modules list is one they answer.
     expect(unserved).toEqual([])
+    expect(unnamed(served)).toEqual([])
+    expect(stale(served)).toEqual([])
+  })
 
-    const named = [
-      ...Object.values(ACTION_ROUTES).map(({ method, path }) => `${method} ${path}`),
-      ...Object.keys(NO_ACTION_ROUTES),
-    ]
+  it('asks an action or a reason of a route a module gains', async () => {
+    const operator = await stand.operator()
+    const gained = '/devices/:id/alias'
+    const { served } = await census([...PATHS, gained], async (path) =>
+      path === gained ? 'GET' : allowedAt(operator)(path),
+    )
 
-    expect(served.filter((route) => !named.includes(route))).toEqual([])
-    expect(
-      named.filter((route) => !served.includes(route) && !SERVER_ROUTES.includes(route)),
-    ).toEqual([])
+    expect(unnamed(served)).toEqual([`GET ${gained}`])
   })
 })
 
