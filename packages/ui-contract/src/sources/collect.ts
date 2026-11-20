@@ -2,10 +2,11 @@
  * Collects the anchors and codes one source file declares, as the contract check reads
  * them: `data-testid`, `testId` and `*TestId` attributes, `testId:` keys and
  * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`, each with
- * its base when that is a literal; the
+ * its base when that is a literal or such a constant of the file; the
  * `data-code` attributes, `code:` keys and `<NAME>_CODES` maps. A name or a `testIdFor()`
  * call passes through (its literal is declared elsewhere); an anchor built at runtime is a
- * problem, since no check can follow it. A key or a map value is a contract code only in
+ * problem, since no check can follow it, and so is a `<NAME>_TEST_ID` constant the file does not
+ * declare (an import), since no check reads another file's names. A key or a map value is a contract code only in
  * the code grammar (kebab-case): `note:TEXT_REQUIRED` is a domain code and is left out,
  * while a `data-code` literal outside the grammar is a problem. And `holdsInput` and `marksState`
  * beside a field's anchor, which the contract decides and the kit takes from its field facts: a
@@ -24,11 +25,15 @@ import type { Problem } from '../files'
 
 import { askedEventOf } from './asked-event'
 import {
+  anchorIn,
   type ElementAttribute,
   expressionOf,
   isAnchorAttribute,
   type ReadElement,
   readElement,
+  UNDECLARED_ANCHOR,
+  UNFOLLOWED_SPREAD,
+  undeclaredAnchorOf,
 } from './element'
 import { localsOf } from './locals'
 import {
@@ -42,6 +47,8 @@ import {
   TEST_ID_CONSTANT,
   unwrap,
 } from './values'
+
+export { UNDECLARED_ANCHOR, UNFOLLOWED_SPREAD } from './element'
 
 export const RUNTIME_ANCHOR =
   'an anchor built at runtime; declare a literal, pass a prop or a <NAME>_TEST_ID constant, or derive it with testIdFor()'
@@ -59,10 +66,6 @@ export const HOLDS_INPUT_VALUE = `holdsInput is neither a boolean literal nor a 
 export const MARKS_STATE_ANCHOR = `marksState on an element that carries no anchor as a literal or as testIdFor() of two literals: ${LEFT_TO_THE_KIT}`
 
 export const MARKS_STATE_VALUE = `marksState is neither a boolean literal nor a prop passed through: ${LEFT_TO_THE_KIT}`
-
-/** A spread on an element whose anchor the check reads, when the file cannot say what it supplies. */
-export const UNFOLLOWED_SPREAD = (anchor: string): string =>
-  `a spread on the element of "${anchor}" that the check cannot follow (a parameter, an import, a value built at runtime); write its props on the element, or build them in this file`
 
 /**
  * What a view writes for a flag the contract decides: a boolean literal's value, or the source of
@@ -194,6 +197,15 @@ export function collectFromSource(text: string, file: string): Collected {
 
   const locals = localsOf(program)
 
+  /** An anchor constant the file does not declare (an import) is read nowhere: it is refused. */
+  const undeclared = (node: Expression, at: number): void => {
+    const name = undeclaredAnchorOf(locals, node, at)
+
+    if (name !== undefined) {
+      collected.problems.push({ file, line: line(at), message: UNDECLARED_ANCHOR(name) })
+    }
+  }
+
   /** The source of an attribute's value: an expression's, a string's with its quotes, or none. */
   const sourceOf = ({ value, spread }: ElementAttribute): string => {
     const node = spread ?? (value?.type === 'JSXExpressionContainer' ? value.expression : value)
@@ -286,6 +298,13 @@ export function collectFromSource(text: string, file: string): Collected {
         const form = name === 'data-testid' ? 'attribute' : 'prop'
 
         anchor(attributeValue(node.value), form, node.start)
+
+        if (
+          node.value?.type === 'JSXExpressionContainer' &&
+          node.value.expression.type !== 'JSXEmptyExpression'
+        ) {
+          undeclared(node.value.expression, node.start)
+        }
       }
     },
     JSXOpeningElement(node) {
@@ -345,8 +364,18 @@ export function collectFromSource(text: string, file: string): Collected {
         return
       }
 
-      const base = staticText(node.arguments[0])
+      const [first] = node.arguments
+      // A literal base, or one a `<NAME>_TEST_ID` constant of the file holds (`element.ts`).
+      const read =
+        first === undefined || first.type === 'SpreadElement'
+          ? undefined
+          : anchorIn(locals, first, node.start)
+      const base = read?.base === undefined ? read?.anchor : undefined
       const suffix = staticText(node.arguments[1])
+
+      if (first !== undefined && first.type !== 'SpreadElement') {
+        undeclared(first, node.start)
+      }
 
       if (suffix === undefined) {
         collected.problems.push({ file, line: line(node.start), message: RUNTIME_SUFFIX })

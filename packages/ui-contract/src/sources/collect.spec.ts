@@ -13,6 +13,7 @@ import {
   MARKS_STATE_VALUE,
   RUNTIME_ANCHOR,
   RUNTIME_SUFFIX,
+  UNDECLARED_ANCHOR,
   UNFOLLOWED_SPREAD,
 } from './collect'
 
@@ -224,13 +225,17 @@ describe('collectFromSource', () => {
       'x.tsx',
     )
 
-    // A parameter hides the constant, and a constant the file does not declare is passed through.
+    // A parameter hides the constant and passes its anchor on; a constant the file does not
+    // declare (an import) is read nowhere, so it is refused.
     expect(found.props).toEqual([
       { anchor: 'x.form.title-input', name: 'maxLength', text: '80', line: 3 },
       { anchor: 'x.list.size-select', base: 'x.list', name: 'disabled', text: 'busy', line: 4 },
     ])
     expect(found.inputs).toEqual([{ anchor: 'x.form.title-input', holdsInput: false, line: 3 }])
-    expect(found.problems).toEqual([])
+    expect(found.derived).toEqual([{ suffix: 'size-select', base: 'x.list', line: 4 }])
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:6: ${UNDECLARED_ANCHOR('OTHER_TEST_ID')}`,
+    ])
   })
   it('collects what a spread on the element supplies: an object written there, held, or returned by a helper', () => {
     const found = collectFromSource(

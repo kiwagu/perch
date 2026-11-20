@@ -22,6 +22,29 @@ import {
   unwrap,
 } from './values'
 
+/** An anchor written as a `<NAME>_TEST_ID` constant its file does not declare (an import). */
+export const UNDECLARED_ANCHOR = (name: string): string =>
+  `"${name}" is no constant of this file: an anchor constant is read only in the file that declares it; declare it here, or write the anchor`
+
+/** A spread on an element whose anchor the check reads, when the file cannot say what it supplies. */
+export const UNFOLLOWED_SPREAD = (anchor: string): string =>
+  `a spread on the element of "${anchor}" that the check cannot follow (a parameter, an import, a value built at runtime); write its props on the element, or build them in this file`
+
+/** The name of a `<NAME>_TEST_ID` constant `node`, written at `at`, uses that its file does not bind. */
+export function undeclaredAnchorOf(
+  locals: Locals,
+  node: Expression,
+  at: number,
+): string | undefined {
+  const written = unwrap(node)
+
+  return written.type === 'Identifier' &&
+    TEST_ID_CONSTANT.test(written.name) &&
+    !locals.declares(written.name, at)
+    ? written.name
+    : undefined
+}
+
 export interface ElementAttribute {
   readonly name: string
   readonly value: JSXAttributeValue | null

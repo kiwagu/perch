@@ -396,6 +396,16 @@ describe('facetProblems', () => {
       ])
       expect(problemsOf(confirm(''), { contract: withDialog(), ahead: true })).toEqual([])
     })
+    it('wants the enabling on a part whose base a constant of the file holds, too', () => {
+      const held = {
+        confirm: "<Button testId={testIdFor(DIALOG_TEST_ID, 'confirm-button')} />",
+        DIALOG_TEST_ID: "'sample.help-dialog'",
+      }
+
+      expect(problemsOf(held, { contract: withDialog() })).toEqual([
+        `view.tsx:${CONFIRM_LINE}: "sample.help-dialog.confirm-button" carries disabled={!props.can(<its event>)} by the contract: the state "saving" renders it and does not handle it`,
+      ])
+    })
     it('refuses the enabling of such a part written in another idiom, in ahead mode too', () => {
       const expected = [
         `view.tsx:${CONFIRM_LINE}: "sample.help-dialog.confirm-button": disabled={busy}, but the contract says disabled={!props.can(<its event>)}`,

@@ -9,8 +9,6 @@
 
 import type {
   ArrowFunctionExpression,
-  BindingPattern,
-  BindingRestElement,
   Expression,
   Function as FunctionNode,
   ObjectExpression,
@@ -19,6 +17,7 @@ import type {
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
+import { namesIn } from './binding-names'
 import { keyName, unwrap } from './values'
 
 /** A range of the source, `[start, end)`. */
@@ -38,6 +37,8 @@ interface Binding {
 export interface Locals {
   /** What `name`, written at `at`, is declared with in the file (a function too), if it says. */
   valueNamed(name: string, at: number): Expression | undefined
+  /** Whether the file binds `name` where it is written at `at`: declared, or a parameter. */
+  declares(name: string, at: number): boolean
   /**
    * What `node`, written at `at`, may be, each alternative once: an object written there, either
    * branch of a conditional, either side of `||` or `??` and the right of `&&` (or nothing), the
@@ -75,28 +76,6 @@ const contains = (outer: Span, inner: Span): boolean =>
   outer.start <= inner.start && inner.end <= outer.end
 
 const sizeOf = ({ start, end }: Span): number => end - start
-
-/** The names a binding pattern binds: `a`, `{ a, b: c }` binds `a` and `c`, `[a, ...b]` both. */
-function namesIn(pattern: BindingPattern | ParamPattern | BindingRestElement): string[] {
-  switch (pattern.type) {
-    case 'Identifier':
-      return [pattern.name]
-    case 'AssignmentPattern':
-      return namesIn(pattern.left)
-    case 'RestElement':
-      return namesIn(pattern.argument)
-    case 'ObjectPattern':
-      return pattern.properties.flatMap((property) =>
-        namesIn(property.type === 'RestElement' ? property : property.value),
-      )
-    case 'ArrayPattern':
-      return pattern.elements.flatMap((element) => (element === null ? [] : namesIn(element)))
-    case 'TSParameterProperty':
-      return namesIn(pattern.parameter)
-    default:
-      return []
-  }
-}
 
 export function localsOf(program: Program): Locals {
   const scopes: Span[] = [FILE]
@@ -154,14 +133,17 @@ export function localsOf(program: Program): Locals {
 
   const scoped = bindings.map((binding) => ({ ...binding, scope: scopeOf(binding.at) }))
 
-  const valueNamed = (name: string, at: number): Expression | undefined =>
+  /** The binding of `name` that a place sees: the one of the innermost scope around it. */
+  const bindingOf = (name: string, at: number): (typeof scoped)[number] | undefined =>
     scoped
       .filter((binding) => binding.name === name && contains(binding.scope, { start: at, end: at }))
       .reduce<(typeof scoped)[number] | undefined>(
         (inner, binding) =>
           inner === undefined || sizeOf(binding.scope) < sizeOf(inner.scope) ? binding : inner,
         undefined,
-      )?.value
+      )
+  const valueNamed = (name: string, at: number): Expression | undefined =>
+    bindingOf(name, at)?.value
 
   /** The innermost function around a place. */
   const functionAround = (at: number): Span | undefined =>
@@ -294,5 +276,9 @@ export function localsOf(program: Program): Locals {
     }
   }
 
-  return { valueNamed, objectsOf: (node, at) => objectsOf(node, at) }
+  return {
+    valueNamed,
+    declares: (name, at) => bindingOf(name, at) !== undefined,
+    objectsOf: (node, at) => objectsOf(node, at),
+  }
 }
