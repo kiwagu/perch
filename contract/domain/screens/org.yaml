@@ -125,6 +125,9 @@ anchors:
   organisation.notes.error:
     kind: error
     description: Why the last change of a note failed, under the new note.
+    fields:
+      text-required: form
+      text-too-long: form
     roles: [ member, admin ]
   organisation.notes.add-button:
     kind: button
@@ -170,7 +173,7 @@ anchors:
     roles: [ admin ]
   organisation.invite.email-input:
     kind: input
-    description: The email to invite, with an account or without one (type email).
+    description: The email to invite, with an account or without one.
     binding:
       action: platform.organisations.invite
       params:

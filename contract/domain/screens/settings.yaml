@@ -63,14 +63,13 @@ anchors:
     kind: error
     fields:
       invalid-credentials: user.settings.password.current-password-input
-      password-rejected: user.settings.password.new-password-input
       passwords-differ: user.settings.password.password-confirmation-input
   user.settings.email.form:
     kind: form
     description: Asks to change the account's email.
   user.settings.email.email-input:
     kind: input
-    description: The new email (type email).
+    description: The new email.
     binding:
       action: platform.change-email
       params:
@@ -96,7 +95,6 @@ anchors:
     kind: error
     fields:
       invalid-credentials: user.settings.email.password-input
-      email-invalid: user.settings.email.email-input
   user.settings.deletion.form:
     kind: form
     description: "Asks to delete the account: a mail to its email carries the link of the page that deletes it."

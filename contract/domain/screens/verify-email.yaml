@@ -39,7 +39,7 @@ anchors:
     description: Sends a new verification link to the email typed.
   user.verify-email.email-input:
     kind: input
-    description: The email to send a new verification link to (type email).
+    description: The email to send a new verification link to.
     marksState: false
     binding:
       action: platform.resend-verification

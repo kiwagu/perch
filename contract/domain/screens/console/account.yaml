@@ -91,15 +91,12 @@ anchors:
         id: { search: id }
   console.account.name.error:
     kind: error
-    fields:
-      name-required: console.account.name.name-input
-      name-too-long: console.account.name.name-input
   console.account.email.form:
     kind: form
     description: Asks to change the account's email; the account keeps its email until the link sent to the new one is opened.
   console.account.email.email-input:
     kind: input
-    description: The new email (type email).
+    description: The new email.
     binding:
       action: platform.accounts.change-email
       params:
@@ -113,9 +110,6 @@ anchors:
         id: { search: id }
   console.account.email.error:
     kind: error
-    fields:
-      email-invalid: console.account.email.email-input
-      email-taken: console.account.email.email-input
   console.account.ban.form:
     kind: form
     description: Bans the account with an optional reason, or lifts its ban.

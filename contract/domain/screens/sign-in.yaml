@@ -34,10 +34,11 @@ anchors:
   user.sign-in.error:
     kind: error
     fields:
+      sign-up-rejected: form
       passwords-differ: user.sign-in.password-confirmation-input
   user.sign-in.email-input:
     kind: input
-    description: "The email of the account (type email); it starts with the email a page carried over, when there is one."
+    description: "The email of the account; it starts with the email a page carried over, when there is one."
     marksState: false
     binding:
       - search: email
