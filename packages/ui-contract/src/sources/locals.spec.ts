@@ -70,6 +70,15 @@ describe('suppliedBy', () => {
     'const wrapped = useCallback((name) => ({ name, type: name }), [])',
     'const common = { a: 1 }',
     'const fields = { ...common, ...{ email: { maxLength: 5 } } }',
+    "const nameProps = { 'aria-invalid': true }",
+    'const emailOverrides = { email: { maxLength: 3 } }',
+    'const overrides = { ...emailOverrides }',
+    'const grouped = { name: nameProps, ...overrides }',
+    'const gated = { name: nameProps, ...{ ...(ok && emailOverrides) } }',
+    'const opaque = { name: nameProps, ...{ ...props } }',
+    'const first = { id: 1 }',
+    "const second = { type: 'b' }",
+    'const decided = { name: first, ...{ ...{ name: second } } }',
     "const events = { reset: { type: 'r' } }",
     'const { reset: checkEvent } = events',
     'function early(c) { if (c) return; return { mark: 1 } }',
@@ -105,6 +114,26 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, 'fields.email', 'const at')).toEqual(['maxLength'])
     expect(supplied(text, 'fields.email', 'const at').followed).toBe(true)
     expect(suppliedAt(text, 'checkEvent', 'const at')).toEqual(['type'])
+  })
+  it('goes on to the property before a spread, at any depth, that lacks the key', () => {
+    const nested = supplied(text, 'grouped.name', 'const at')
+
+    expect(nested.props.map(({ name }) => name)).toEqual(['aria-invalid'])
+    expect(nested.certain.has('aria-invalid')).toBe(true)
+    expect(nested.followed).toBe(true)
+    // Each branch of the spread, an object that lacks the key and nothing, goes on to it.
+    expect(suppliedAt(text, 'gated.name', 'const at')).toEqual(['aria-invalid', 'aria-invalid'])
+    expect(supplied(text, 'gated.name', 'const at').certain.has('aria-invalid')).toBe(true)
+  })
+  it('supplies nothing for a key no level has, and lets a nested branch that has the key decide', () => {
+    expect(suppliedAt(text, 'grouped.other', 'const at')).toEqual([])
+    expect(supplied(text, 'grouped.other', 'const at').certain.size).toBe(0)
+    expect(supplied(text, 'grouped.other', 'const at').followed).toBe(true)
+    expect(suppliedAt(text, 'decided.name', 'const at')).toEqual(['type'])
+    expect(suppliedAt(text, 'grouped.email', 'const at')).toEqual(['maxLength'])
+  })
+  it('still says a nested branch it cannot follow cannot be followed, rather than going on past it', () => {
+    expect(supplied(text, 'opaque.name', 'const at').followed).toBe(false)
   })
   it('counts a bare return and a reachable end as supplying nothing', () => {
     expect(suppliedAt(text, 'early(1)', 'const at')).toEqual(['mark'])

@@ -270,6 +270,23 @@ describe('facetProblems', () => {
         }),
       ).toEqual([])
     })
+    /** A title that spreads `fields.name`, whose object spreads one that lacks `name`, with the props of `name`. */
+    const grouped = (nameProps: string): Record<string, string> => ({
+      title: '<Input data-testid="sample.title-input" {...fields.name} />',
+      nameProps,
+      emailOverrides: '{ email: { maxLength: 3 } }',
+      overrides: '{ ...emailOverrides }',
+      fields: '{ name: nameProps, ...overrides }',
+    })
+
+    it('reads the mark of a member that a nested spread, lacking the key, lets the scan go on past', () => {
+      expect(problemsOf(grouped(`{ 'aria-invalid': ${MARK} }`))).toEqual([])
+    })
+    it('still wants the mark of such a member when no level of it carries one', () => {
+      expect(problemsOf(grouped("{ id: 'title' }"))).toEqual([
+        `view.tsx:${LINE['title']}: "sample.title-input" carries aria-invalid={concerns === '<key>' ? true : undefined} by the contract: the code "title-taken" of "sample.error" concerns it`,
+      ])
+    })
     it('wants the mark when a helper returns early without it', () => {
       const helper = {
         markOf: `() => { if (concerns === 'title') return; return { 'aria-invalid': ${MARK} } }`,

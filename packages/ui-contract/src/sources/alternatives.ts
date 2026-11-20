@@ -2,9 +2,10 @@
  * Every object a value may be, as far as its file says, the names read in their scopes
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
  * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
- * member of such an object (through the spreads it writes), or each object a function of the file
- * returns where it is called (each `return` of its own body, a bare one or a reachable end giving
- * nothing; a `useCallback` hands its function on, a `useMemo` holds what its function returns).
+ * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
+ * key lets the scan go on before it), or each object a function of the file returns where it is
+ * called (each `return` of its own body, a bare one or a reachable end giving nothing; a
+ * `useCallback` hands its function on, a `useMemo` holds what its function returns).
  */
 
 import type {
@@ -77,30 +78,30 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
       names.returnedBy(fn).flatMap((returned) => (returned === null ? [null] : next(returned)))
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from`: a property
-     * with the key decides; a spread decides for each branch it may take that has the key, and the
-     * scan goes on for a branch that lacks it; `undefined` when no property before `from` has it.
+     * with the key decides; a spread decides for each branch it may take that has the key, and for
+     * a branch that lacks it, at any depth, the scan goes on with the properties before the spread.
+     * `absent` says what holds where no property has the key: the scan of the object that spread
+     * this one goes on, and only the outermost scan, of the member itself, says nothing.
      */
     const memberIn = (
       properties: ObjectExpression['properties'],
       from: number,
       key: string,
-    ): Alternative[] | undefined => {
+      absent: () => Alternative[],
+    ): Alternative[] => {
       for (let index = from; index >= 0; index -= 1) {
         const property = properties[index]
 
         if (property?.type === 'SpreadElement') {
-          return objectsOf(property.argument, property.start, depth + 1).flatMap((branch) => {
-            if (branch === undefined) {
-              return [undefined]
-            }
+          const before = (): Alternative[] => memberIn(properties, index - 1, key, absent)
 
-            const inner =
-              branch === null
-                ? undefined
-                : memberIn(branch.properties, branch.properties.length - 1, key)
-
-            return inner ?? memberIn(properties, index - 1, key) ?? [null]
-          })
+          return objectsOf(property.argument, property.start, depth + 1).flatMap((branch) =>
+            branch === undefined
+              ? [undefined]
+              : branch === null
+                ? before()
+                : memberIn(branch.properties, branch.properties.length - 1, key, before),
+          )
         }
 
         if (property?.kind === 'init' && keyName(property.key, property.computed) === key) {
@@ -108,13 +109,13 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
         }
       }
 
-      return undefined
+      return absent()
     }
     const membersOf = (alternatives: readonly Alternative[], key: string): Alternative[] =>
       alternatives.flatMap((object) =>
         object === null || object === undefined
           ? [undefined]
-          : (memberIn(object.properties, object.properties.length - 1, key) ?? [null]),
+          : memberIn(object.properties, object.properties.length - 1, key, () => [null]),
       )
 
     if (value.type === 'ObjectExpression') {
