@@ -185,8 +185,10 @@ function credentialChecked(
  *   answer by that allowlist, without its cookies (`signIn`). It must first find a place among
  *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
  *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a
- *   failure, 200 and 403 (the password was right, but the email is not verified or the account
- *   is banned) clear the email's, and any other answer, or a handler that threw, gives it back.
+ *   failure, 200, 409 and a 403 `EMAIL_NOT_VERIFIED` or `account-banned` (the password was right)
+ *   clear the email's, and any other answer (any other 403 included: Better Auth refused the
+ *   request's origin, Fetch Metadata or callback before it checked the password), or a handler
+ *   that threw, gives it back.
  *   A sign-in whose body is not
  *   JSON naming an email answers 400 `bad-request`; one that is reaches Better Auth as that JSON,
  *   whatever content type it came with, so the email Better Auth checks is the one counted. A

@@ -613,6 +613,26 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
     60_000,
   )
 
+  it("counts a lockout from the email's first wrong password, not from a refusal before it that found no failures", async () => {
+    const mounted = await mountedOnRealAuth()
+    const [, , forged] = REFUSED_BEFORE_THE_PASSWORD[0]
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+
+    await signedInOn(mounted, ANN, ['laptop'])
+    expect((await mounted.route(forged(), FROM))?.status).toBe(403)
+
+    // A second before a quarter hour after the refusal, the first wrong passwords come.
+    await mounted.clock.advance(15 * 60_000 - 1_000)
+
+    for (let failed = 0; failed < 10; failed += 1) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    // Past the quarter hour of the refusal, still within that of the first wrong password.
+    await mounted.clock.advance(2_000)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+
   it("forgets the email's failed sign-ins at the right password of an account whose email is not verified, which Better Auth refuses after it checked it", async () => {
     const mounted = await mountedOnRealAuth()
 

@@ -9,7 +9,8 @@ predates the index rule and is imported file by file.
 
 `RequestLimits` (`request-limits.ts`) keeps fixed windows (`fixed-window.ts`, their sizes in
 `windows.ts`) in the gateway
-process's memory, each starting at its key's first attempt; every gateway process keeps its own, so several processes
+process's memory, each starting at its key's first attempt that still counts (an attempt given back
+leaves no window behind); every gateway process keeps its own, so several processes
 multiply them. Credential checks, `POST /auth/sign-up/email`, `POST /auth/sign-in/email` and
 `POST /auth/verify-email` together (a sign-up and a sign-in are each one argon2 run; a
 verification signs a device in as a sign-in does), are limited to 20 per client address in 10 s

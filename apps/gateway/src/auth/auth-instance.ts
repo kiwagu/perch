@@ -152,8 +152,8 @@ export function authOptions(options: AuthInstanceOptions) {
     advanced: {
       database: { generateId: generateAuthId },
       // Better Auth checks a request's origin, its Fetch Metadata and its callback URLs in every
-      // environment, a test run included: its default skips them whenever `NODE_ENV` is `test` or
-      // `TEST` is set, which would leave a spec unable to meet the 403s it refuses with.
+      // environment, a test run included: its default skips them when `NODE_ENV` is `test` or
+      // `TEST` is true, which would leave a spec unable to meet the 403s it refuses with.
       disableOriginCheck: false,
     },
     // Better Auth's bulk revocations end sessions by deleting their rows. `/revoke-sessions` deletes
