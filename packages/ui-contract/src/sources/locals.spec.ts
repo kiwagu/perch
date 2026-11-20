@@ -157,6 +157,8 @@ describe('suppliedBy', () => {
     'function* generatedFalls() { yield 1 }',
     'const fallbackMap = { search: searchProps, ...asyncFalls() }',
     'const extraMap = { search: searchProps, ...props.extra }',
+    'async function asyncSearch() { await load(); return { search: searchProps } }',
+    "const overridden = { label: 'Search', ...asyncSearch() }",
     'const listed = [searchProps]',
     'for (const row of listed) { inRow() }',
     'for (let letRow of [searchProps] as const) { inLetRow() }',
@@ -192,6 +194,40 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, "wrapped('x')", 'const at')).toEqual(['name', 'type'])
     expect(suppliedAt(text, 'ok && base', 'const at')).toEqual(['id'])
     expect(suppliedAt(text, 'base || groups.name', 'const at')).toEqual(['id', 'id'])
+  })
+  it('takes the right of ?? and || where the left is nothing: a nothing on the left adds no branch', () => {
+    for (const argument of [
+      'null ?? base',
+      'undefined ?? base',
+      '(ok ? null : base) || groups.name',
+      '(ok ? null : base) ?? groups.name',
+    ]) {
+      const either = supplied(text, argument, 'const at')
+
+      expect([...either.certain]).toEqual(['id'])
+      expect(either.followed).toBe(true)
+    }
+
+    // An absent member selects the right too, while the unknown branch before it stays.
+    const absent = supplied(text, 'overridden.search ?? searchProps', 'const at')
+
+    expect(absent.followed).toBe(false)
+    expect([...absent.followedCertain]).toEqual(['data-testid'])
+  })
+  it('keeps the nothing of && and an unknown left of ?? and ||', () => {
+    const gated = supplied(text, 'ok && base', 'const at')
+
+    expect(gated.props.map(({ name }) => name)).toEqual(['id'])
+    expect(gated.certain.size).toBe(0)
+    expect(gated.followed).toBe(true)
+
+    for (const argument of ['props.extra ?? base', 'props.extra || base']) {
+      const unknown = supplied(text, argument, 'const at')
+
+      expect(unknown.followed).toBe(false)
+      expect(unknown.certain.size).toBe(0)
+      expect([...unknown.followedCertain]).toEqual(['id'])
+    }
   })
   it('follows a member through the spreads of its object, and a destructured name to its key', () => {
     expect(suppliedAt(text, 'fields.email', 'const at')).toEqual(['maxLength'])

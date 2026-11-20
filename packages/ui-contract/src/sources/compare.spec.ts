@@ -518,6 +518,42 @@ describe('compareWithContract', () => {
       expect(found.ahead).toEqual(refused)
     }
   })
+  it('holds the element to its field facts when the member on the left of ?? or || may be absent, in ahead mode too', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:10: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:10: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // An absent `search` selects the fallback at runtime, which writes the anchor: no branch
+    // supplies nothing, so the element carries the anchor and the limit beside the spread is refused.
+    for (const operator of ['??', '||']) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              "const searchProps = { 'data-testid': 'sample.title-input' }",
+              'async function loadFieldOverrides() {',
+              '  await loadSuggestions()',
+              '  return { search: searchProps }',
+              '}',
+              'const fieldProps: { label: string; search?: typeof searchProps } = {',
+              "  label: 'Search',",
+              '  ...loadFieldOverrides(),',
+              '}',
+              `const title = <Input {...(fieldProps.search ${operator} searchProps)} maxLength={80} />`,
+            ].join('\n'),
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
   it('holds the element a for…of renders to the anchor each element of its array supplies, in ahead mode too', () => {
     const found = strictAndAhead(
       [

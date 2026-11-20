@@ -1,7 +1,8 @@
 /**
  * Every object a value may be, as far as its file says, the names read in their scopes
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
- * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key,
+ * `??` (a left that is nothing selects the right, so it adds no branch) and the right of `&&` (or
+ * nothing), the one a constant holds, a destructured name's key,
  * each element of an array the file states for the variable of a `for…of` over it, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
  * key lets the scan go on before it, a property whose key the file does not state or a spread the
@@ -209,9 +210,15 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
       case 'ConditionalExpression':
         return [...next(value.consequent), ...next(value.alternate)]
       case 'LogicalExpression':
+        // A left of `||` or `??` that is nothing selects the right, so it is no branch of its own
+        // (a `false` before `??` is taken so too: nothing here tells it from `null`); a left the
+        // file cannot say may be either, and stays.
         return value.operator === '&&'
           ? [...next(value.right), null]
-          : [...next(value.left), ...next(value.right)]
+          : [
+              ...next(value.left).filter((alternative) => alternative !== null),
+              ...next(value.right),
+            ]
       case 'MemberExpression': {
         if (
           value.computed ||
