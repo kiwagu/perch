@@ -7,9 +7,12 @@
  * none); this check looks the index tree up there. A landing that also stages a file of the
  * contract engine must pass `bun run contract:inflight` too: no branch in flight may break under
  * the engine it lands, and the refusal names the branches that would. The round is read from the
- * staged files against HEAD, which on `main` is what the landing adds. On any other branch, or on
- * a detached HEAD, the check does nothing. The branch is told by its full ref, so a tag named
- * `main` changes nothing, and a commit git cannot tell the branch or the staged files of fails.
+ * staged files against HEAD, which on `main` is what the landing adds. The check runs from the
+ * working tree, so it runs only when every file it executes is the staged one: a file of those
+ * (`CHECK_INPUTS`) that differs from the index, untracked ones included, refuses the landing
+ * before the check runs, naming it. On any other branch, or on a detached HEAD, the check does
+ * nothing. The branch is told by its full ref, so a tag named `main` changes nothing, and a commit
+ * git cannot tell the branch, the staged files or the working tree's differences of fails.
  *
  * Usage: bun run scripts/gates/check-main-gates.ts [--branch <name>]
  */
@@ -17,7 +20,7 @@
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 
-import { stagedFiles } from '../staged-commit.ts'
+import { git, stagedFiles } from '../staged-commit.ts'
 
 import { FULL_RUN_SCRIPT } from './full-run.ts'
 import { GATES, headRef, indexTreeId, receiptPath, topLevel } from './tree.ts'
@@ -33,6 +36,22 @@ const ENGINE_DIR = 'packages/ui-contract'
 const INFLIGHT_SCRIPT = 'contract:inflight'
 
 const INFLIGHT_COMMAND = `bun run ${INFLIGHT_SCRIPT}`
+
+/**
+ * What the check executes, as paths from the top of the checkout: the engine and the workspace
+ * package it imports, the `.surql` preload that bunfig.toml registers for every bun run, the root
+ * manifest, its lockfile and the bun configuration, and this gate, which runs from the working
+ * tree as well.
+ */
+const CHECK_INPUTS = [
+  ENGINE_DIR,
+  'packages/zod',
+  'packages/data/src',
+  'bunfig.toml',
+  'package.json',
+  'bun.lock',
+  'scripts/gates',
+] as const
 
 /**
  * Whether the commit lands: on the branch `--branch` names, or else on the branch HEAD is on,
@@ -59,12 +78,62 @@ function brokenBranches(report: string): string[] {
   })
 }
 
+/** The paths of `-z` output from git, without the empty tail. */
+const pathsOf = (out: string): string[] => out.split('\0').filter((path) => path !== '')
+
+/**
+ * The files of `CHECK_INPUTS` whose working tree differs from the index, a deleted one and an
+ * untracked one (an ignored one not) included, in path order; undefined when git fails.
+ */
+function unstagedInputs(): string[] | undefined {
+  const paths = CHECK_INPUTS.map((path) => `:/${path}`)
+  const changed = git([
+    'diff',
+    '--name-only',
+    '--no-renames',
+    '--ignore-submodules=none',
+    '-z',
+    '--',
+    ...paths,
+  ])
+  const untracked = git([
+    'ls-files',
+    '--others',
+    '--exclude-standard',
+    '--full-name',
+    '-z',
+    '--',
+    ...paths,
+  ])
+
+  if (changed.status !== 0 || untracked.status !== 0) {
+    return undefined
+  }
+
+  return [...pathsOf(changed.out), ...pathsOf(untracked.out)].sort()
+}
+
 /**
  * Runs the check of the branches in flight and says why the landing is refused, as lines;
- * none when it passes. A run that names no broken branch (it did not finish, or failed) is
- * refused as well, with what it printed.
+ * none when it passes. The check runs only when nothing it executes differs from the index. A
+ * run that names no broken branch (it did not finish, or failed) is refused as well, with what
+ * it printed.
  */
 function inflightRefusal(): string[] {
+  const unstaged = unstagedInputs()
+
+  if (unstaged === undefined) {
+    return ['gates: git cannot compare the working tree with the index.']
+  }
+
+  if (unstaged.length > 0) {
+    return [
+      `gates: this landing changes ${ENGINE_DIR}, and the working tree differs from the index in what the in-flight check runs, so it did not run:`,
+      ...unstaged.map((path) => `  ${path}`),
+      'gates: stage each, or restore it to the index (git restore, git clean), then commit again.',
+    ]
+  }
+
   const run = spawnSync(process.execPath, ['run', '--silent', INFLIGHT_SCRIPT], {
     cwd: topLevel(),
     encoding: 'utf8',

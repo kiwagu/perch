@@ -68,25 +68,37 @@ const REPORT = [
   '',
 ].join('\n')
 
-/** Stages a new file `path` in `root`. */
-function stage(root: string, path: string, content = 'content\n'): void {
+/** Writes `content` to `path` in `root`, in the working tree only. */
+function write(root: string, path: string, content = 'content\n'): void {
   mkdirSync(dirname(join(root, path)), { recursive: true })
   writeFileSync(join(root, path), content)
+}
+
+/** Stages a new file `path` in `root`. */
+function stage(root: string, path: string, content?: string): void {
+  write(root, path, content)
   git(root, 'add', path)
 }
 
 /**
- * Gives `root` a `contract:inflight` script of its own, in place of the engine's: it marks each
- * run in `ran.txt`, prints `report` and exits with `status`. Untracked, so the index keeps its tree.
+ * Writes a `contract:inflight` script of its own into the working tree of `root`, in place of the
+ * engine's: it marks each run in `ran.txt`, prints `report` and exits with `status`.
  */
-function stubInflight(root: string, status: number, report = ''): void {
-  writeFileSync(join(root, 'report.txt'), report)
-  writeFileSync(
-    join(root, 'package.json'),
+function writeStub(root: string, status: number, report = ''): void {
+  write(root, 'report.txt', report)
+  write(
+    root,
+    'package.json',
     JSON.stringify({
       scripts: { 'contract:inflight': `echo ran >> ran.txt; cat report.txt; exit ${status}` },
     }),
   )
+}
+
+/** The stub staged, as the check the landing's tree holds. */
+function stubInflight(root: string, status: number, report = ''): void {
+  writeStub(root, status, report)
+  git(root, 'add', 'package.json', 'report.txt')
 }
 
 /** Whether the stub of `root` ran. */
@@ -210,8 +222,8 @@ describe('check-main-gates, the branches in flight', () => {
     const root = checkout('main')
 
     stage(root, ENGINE_FILE)
-    recordReceipts(root)
     stubInflight(root, 1, REPORT)
+    recordReceipts(root)
 
     const result = run(root)
 
@@ -229,9 +241,9 @@ describe('check-main-gates, the branches in flight', () => {
 
     stage(root, ENGINE_FILE)
 
-    const tree = recordReceipts(root)
-
     stubInflight(root, 0, 'feat/clean: OK (version 1)\ninflight: 1 branch, 0 broken\n')
+
+    const tree = recordReceipts(root)
 
     const result = run(root)
 
@@ -246,8 +258,8 @@ describe('check-main-gates, the branches in flight', () => {
     const root = checkout('main')
 
     stage(root, 'packages/ui-contract-extras/notes.md')
-    recordReceipts(root)
     stubInflight(root, 1, REPORT)
+    recordReceipts(root)
 
     const result = run(root)
 
@@ -279,13 +291,118 @@ describe('check-main-gates, the branches in flight', () => {
     expect(inflightRan(root)).toBe(false)
   })
 
+  it('refuses a landing whose staged check breaks branches while an unstaged one passes', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 1, REPORT)
+    recordReceipts(root)
+    writeStub(root, 0)
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(
+      'gates: this landing changes packages/ui-contract, and the working tree differs from the index in what the in-flight check runs, so it did not run:\n  package.json\n',
+    )
+    expect(inflightRan(root)).toBe(false)
+    expect(result.stdout).not.toContain('landing allowed')
+  })
+
+  it('refuses a landing whose engine file is edited after it was staged', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(root, ENGINE_FILE, 'edited\n')
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(`did not run:\n  ${ENGINE_FILE}\n`)
+    expect(inflightRan(root)).toBe(false)
+  })
+
+  it('refuses a landing whose staged engine file is gone from the working tree', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0)
+    recordReceipts(root)
+    rmSync(join(root, ENGINE_FILE))
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(`did not run:\n  ${ENGINE_FILE}\n`)
+    expect(inflightRan(root)).toBe(false)
+  })
+
+  it.each([
+    'packages/ui-contract/src/extra.ts',
+    'packages/zod/src/extra.ts',
+    'packages/data/src/extra.ts',
+    'bunfig.toml',
+    'bun.lock',
+    'scripts/gates/extra.ts',
+  ])('refuses a landing with an untracked %s, a file the check may run', (path) => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(root, path, '# untracked\n')
+
+    const result = run(root)
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain(`did not run:\n  ${path}\n`)
+    expect(inflightRan(root)).toBe(false)
+  })
+
+  it('names every differing file, in path order', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(root, ENGINE_FILE, 'edited\n')
+    write(root, 'scripts/gates/extra.ts')
+    write(root, 'packages/ui-contract/src/another.ts')
+
+    const result = run(root)
+
+    expect(result.stderr).toContain(
+      'did not run:\n  packages/ui-contract/src/another.ts\n  packages/ui-contract/src/index.ts\n  scripts/gates/extra.ts\n',
+    )
+  })
+
+  it('runs the check for a landing whose working tree differs only where the check does not run', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stage(root, '.gitignore', 'coverage/\n')
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(root, 'notes.md', 'edited after staging\n')
+    write(root, 'scratch.txt')
+    write(root, 'apps/web/extra.ts')
+    write(root, 'packages/ui-contract/coverage/lcov.info')
+
+    const result = run(root)
+
+    expect(result.status).toBe(0)
+    expect(inflightRan(root)).toBe(true)
+  })
+
   it('runs the check from the top of the checkout, whichever folder the gate starts in', () => {
     const root = checkout('main')
 
     stage(root, ENGINE_FILE)
     stage(root, 'apps/web/package.json', '{ "name": "web" }\n')
-    recordReceipts(root)
     stubInflight(root, 0)
+    recordReceipts(root)
 
     const result = run(root, [], {}, join(root, 'apps/web'))
 
@@ -293,12 +410,27 @@ describe('check-main-gates, the branches in flight', () => {
     expect(inflightRan(root)).toBe(true)
   })
 
+  it('names a differing file from the top of the checkout, whichever folder the gate starts in', () => {
+    const root = checkout('main')
+
+    stage(root, ENGINE_FILE)
+    stage(root, 'apps/web/package.json', '{ "name": "web" }\n')
+    stubInflight(root, 0)
+    recordReceipts(root)
+    write(root, 'packages/ui-contract/src/extra.ts')
+
+    const result = run(root, [], {}, join(root, 'apps/web'))
+
+    expect(result.status).toBe(1)
+    expect(result.stderr).toContain('did not run:\n  packages/ui-contract/src/extra.ts\n')
+  })
+
   it('refuses a landing when the check fails without naming a branch, showing what it printed', () => {
     const root = checkout('main')
 
     stage(root, ENGINE_FILE)
-    recordReceipts(root)
     stubInflight(root, 2, 'boom\n')
+    recordReceipts(root)
 
     const result = run(root)
 
