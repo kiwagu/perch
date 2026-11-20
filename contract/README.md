@@ -641,7 +641,9 @@ gap is fixed in the contract files first, never worked around in a test
   schema drift, the reference's drift and each link of a guide into the reference
   ([the files](REFERENCE.md#rule-check-files), [the bindings](REFERENCE.md#rule-check-bindings),
   [the flows](REFERENCE.md#rule-check-flows), [the platform](REFERENCE.md#rule-check-platform),
-  [the access](REFERENCE.md#rule-check-access)).
+  [the access](REFERENCE.md#rule-check-access)). A commit on `main`, and `bun run check`, which
+  checks the tip of a branch before it lands, also check that the contract is at the version the
+  engine reads (`contract:check --current`).
 - `bun run contract:check:sources`: the JSX of `apps/web/src` and `packages/ui/src` against the
   contract ([the rule](REFERENCE.md#rule-check-sources)).
 - `bun run contract:check:consumers`: the e2e tests under `tests/e2e/src` against the contract
