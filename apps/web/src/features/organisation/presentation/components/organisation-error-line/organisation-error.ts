@@ -18,18 +18,24 @@ export type OrganisationErrorCode =
   | 'text-too-long'
   | 'failed'
 
-/** The contract code of a refused change (a domain code or the gateway's), with its text. */
+/**
+ * The contract code of a refused change, with its text: the gateway's code, which is the contract's
+ * as it is sent, or the code of a domain rule the app holds the form to itself (`organisation:…`,
+ * `note:…`).
+ */
 export function organisationErrorOf(
   t: ReturnType<typeof useT>,
   code: string,
 ): { code: OrganisationErrorCode; text: string } {
   switch (code) {
     case 'organisation:KEY_INVALID':
-    case 'invalid-key':
+    case 'key-invalid':
       return { code: 'key-invalid', text: t('organisation.error.key-invalid') }
     case 'organisation:NAME_REQUIRED':
+    case 'name-required':
       return { code: 'name-required', text: t('organisation.error.name-required') }
     case 'organisation:NAME_TOO_LONG':
+    case 'name-too-long':
       return { code: 'name-too-long', text: t('organisation.error.name-too-long') }
     case 'key-taken':
       return { code: 'key-taken', text: t('organisation.error.key-taken') }

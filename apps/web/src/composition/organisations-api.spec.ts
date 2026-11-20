@@ -62,7 +62,7 @@ describe('organisationsApi', () => {
   })
 
   it.each([
-    [400, 'invalid-key'],
+    [400, 'key-invalid'],
     [403, 'not-admin'],
     [404, 'no-such-tenant'],
   ])('maps %i %s to data:WRITE_REJECTED with the code as message', async (status, code) => {

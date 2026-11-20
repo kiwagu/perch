@@ -169,9 +169,13 @@ describe('OrganisationView without memberships', () => {
     const { rerender } = renderView({ organisations: [], current: undefined, notes: undefined })
     const cases: ReadonlyArray<readonly [string, string, keyof typeof en]> = [
       ['organisation:KEY_INVALID', 'key-invalid', 'organisation.error.key-invalid'],
-      ['invalid-key', 'key-invalid', 'organisation.error.key-invalid'],
+      ['key-invalid', 'key-invalid', 'organisation.error.key-invalid'],
       ['organisation:NAME_REQUIRED', 'name-required', 'organisation.error.name-required'],
+      ['name-required', 'name-required', 'organisation.error.name-required'],
       ['organisation:NAME_TOO_LONG', 'name-too-long', 'organisation.error.name-too-long'],
+      ['name-too-long', 'name-too-long', 'organisation.error.name-too-long'],
+      ['invalid-key', 'failed', 'organisation.error.failed'],
+      ['invalid-name', 'failed', 'organisation.error.failed'],
       ['key-taken', 'key-taken', 'organisation.error.key-taken'],
       ['rate-limited', 'rate-limited', 'organisation.error.rate-limited'],
       ['not-a-member', 'failed', 'organisation.error.failed'],
@@ -213,9 +217,12 @@ describe('OrganisationView without memberships', () => {
 
   it.each([
     ['organisation:KEY_INVALID', 'key-invalid', 'organisation.create.key-input'],
+    ['key-invalid', 'key-invalid', 'organisation.create.key-input'],
     ['key-taken', 'key-taken', 'organisation.create.key-input'],
     ['organisation:NAME_REQUIRED', 'name-required', 'organisation.create.name-input'],
+    ['name-required', 'name-required', 'organisation.create.name-input'],
     ['organisation:NAME_TOO_LONG', 'name-too-long', 'organisation.create.name-input'],
+    ['name-too-long', 'name-too-long', 'organisation.create.name-input'],
   ])(
     'shows %s once, under the field it concerns and not beside Submit',
     (refusal, code, anchor) => {
