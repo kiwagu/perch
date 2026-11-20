@@ -32,6 +32,9 @@ const COMBINING_ACUTE = String.fromCodePoint(0x0301)
 /** A high surrogate on its own, with no low surrogate after it: no character at all. */
 const LONE_SURROGATE = String.fromCharCode(0xd800)
 
+/** The length bounds of a new password, as the contract says them. */
+const { minLength: MIN, maxLength: MAX } = CONTRACT_VALUES['new-password']
+
 /** A password of `length` characters that keeps every other rule. */
 const ofLength = (length: number): string => `Ab1!${'c'.repeat(length - 4)}`
 
@@ -57,7 +60,7 @@ describe('the rules of a new password', () => {
     expect(PASSWORD_SYMBOLS).toBe('!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~')
   })
 
-  it('keeps all of them with a letter of each case, a digit and a symbol, 10 to 35 characters', () => {
+  it('keeps all of them with a letter of each case, a digit and a symbol, within the length', () => {
     expect(checkPasswordRules(KEEPS_ALL)).toEqual({
       length: true,
       characters: true,
@@ -82,10 +85,10 @@ describe('the rules of a new password', () => {
   })
 
   it.each([
-    [9, false],
-    [10, true],
-    [35, true],
-    [36, false],
+    [MIN - 1, false],
+    [MIN, true],
+    [MAX, true],
+    [MAX + 1, false],
   ])('counts %i characters as keeping the length: %s', (length, kept) => {
     const password = ofLength(length)
 
@@ -145,8 +148,8 @@ describe('the rules of a new password', () => {
   })
 
   it('counts an emoji as one character', () => {
-    expect(checkPasswordRules(`Ab1!cdefg\u{1F600}`).length).toBe(true)
-    expect(checkPasswordRules(`Ab1!cdef\u{1F600}`).length).toBe(false)
+    expect(checkPasswordRules(`${ofLength(MIN - 1)}\u{1F600}`).length).toBe(true)
+    expect(checkPasswordRules(`${ofLength(MIN - 2)}\u{1F600}`).length).toBe(false)
   })
 
   it.each([
@@ -162,7 +165,7 @@ describe('the rules of a new password', () => {
   })
 
   it('marks what a password typed so far keeps', () => {
-    expect(checkPasswordRules('abcdefghij')).toEqual({
+    expect(checkPasswordRules('a'.repeat(MIN))).toEqual({
       length: true,
       characters: true,
       digit: false,

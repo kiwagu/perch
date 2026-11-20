@@ -14,13 +14,13 @@ commands compile into and write paths interpret.
 - `ExceptionBase` (stable `code`), `applyRules`, `DomainRule`.
 - `QuerySpec` with `isSatisfiedBy`; `ChangeSpec`, `ValueRef`, `resolveValue`.
 - `compareText`, `byText`: the one text ordering of the workspace.
-- `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key (2 to 32
-  lowercase letters, digits and underscores, starting with a letter), checked by the domain,
-  the gateway and the replica.
+- `TENANT_KEY_PATTERN`, `isTenantKey`: the one rule for an organisation's key, the pattern of
+  the contract's `organisation-key` (lowercase letters, digits and underscores, starting with a
+  letter), checked by the domain, the gateway and the replica.
 - `checkPasswordRules`, `keepsPasswordRules`, `PASSWORD_RULES`, `PASSWORD_LENGTH`,
-  `PASSWORD_SYMBOLS`: the one set of rules for a new password (10 to 35 characters, only Latin
-  letters, digits and the 32 printable ASCII symbols, with at least one digit, one uppercase
-  letter, one lowercase letter and one symbol), which rules a password keeps and whether it keeps
+  `PASSWORD_SYMBOLS`: the one set of rules for a new password (the length of the contract's `new-password`,
+  only Latin letters, digits and the 32 printable ASCII symbols, with at least one digit, one
+  uppercase letter, one lowercase letter and one symbol), which rules a password keeps and whether it keeps
   them all, checked by the sign-up form as it is typed and by the gateway's sign-up. A sign-in
   checks none of them.
 - `CONTRACT_VALUES`: every value of the contract's platform by its name and every field of the
@@ -51,10 +51,11 @@ region), `NO_ABILITY` nothing (nobody signed in). Reading is not an ability.
 ## Commands
 
 - `bun run test`, `bun run typecheck`, `bun run lint`. `bun run test` holds
-  `src/contract-values.gen.ts` to the contract: what the engine emits for the contract now, or,
-  in the pre-commit hook on a branch (`CONTRACT_AHEAD`), also for the contract at the branch's
-  merge base with `main` or at its commit, so a change of a value in the contract does not fail
-  the hook before the module is generated again.
+  `src/contract-values.gen.ts` to the contract through `heldModule` of the engine's
+  `@workspace/ui-contract/testing`: what the engine emits for the contract now, or, in the
+  pre-commit hook on a branch (`CONTRACT_AHEAD`), also for the contract at the branch's merge
+  base with `main` or at its commit, so a change of a value in the contract does not fail the
+  hook before the module is generated again.
 - `bun run emit` (or `bun run contract:emit` from the root): writes `src/contract-values.gen.ts`
   from the contract (`ui-contract emit values`). The package devDepends on `@workspace/ui-contract`
   for this script and that spec alone: the code of the kernel imports nothing from it, and the

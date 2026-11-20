@@ -44,9 +44,10 @@ const isAllowed = (character: string): boolean =>
   isSymbol(character)
 
 /**
- * Which rules `password` keeps: 10 to 35 characters (counted as typed, an emoji one); every
- * character a Latin letter, a digit or one of the symbols, once something is typed; and at least
- * one digit, one uppercase letter, one lowercase letter and one symbol. Nothing typed keeps none.
+ * Which rules `password` keeps: within the length of a new password (counted as typed, an emoji
+ * one); every character a Latin letter, a digit or one of the symbols, once something is typed;
+ * and at least one digit, one uppercase letter, one lowercase letter and one symbol. Nothing typed
+ * keeps none.
  */
 export function checkPasswordRules(password: string): PasswordRulesKept {
   const characters = [...password]
