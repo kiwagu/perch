@@ -259,26 +259,32 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, 'cases(1)', 'const at')).toEqual(['mark', 'mark'])
     expect(supplied(text, 'cases(1)', 'const at').certain.size).toBe(0)
   })
-  it('does not follow what an async function or a generator returns: a Promise and an iterator are no object the file writes', () => {
-    for (const call of [
-      'asyncBoth(1)',
-      'generated()',
-      'asyncArrow()',
-      'memoAsync',
-      "wrappedAsync('x')",
-    ]) {
+  it('does not follow what an async function or a generator returns, but still reads the objects its returns write', () => {
+    // A Promise and an iterator are no object the file writes: nothing is certain, the call is
+    // not followed, and what the returns write stays among the props.
+    const calls: Array<[string, string[]]> = [
+      ['asyncBoth(1)', ['mark', 'mark']],
+      ['generated()', ['mark']],
+      ['asyncArrow()', ['mark']],
+      ['memoAsync', ['mark']],
+      ["wrappedAsync('x')", ['name']],
+    ]
+
+    for (const [call, names] of calls) {
       const result = supplied(text, call, 'const at')
 
       expect(result.followed).toBe(false)
-      expect(result.props).toEqual([])
+      expect(result.props.map(({ name }) => name)).toEqual(names)
       expect(result.certain.size).toBe(0)
+      expect([...result.followedCertain]).toEqual([names[0]])
     }
 
     // A spread of such a call inside an object leaves the object not followed, its own props known.
     const via = supplied(text, 'viaAsync()', 'const at')
 
     expect(via.followed).toBe(false)
-    expect(via.props.map(({ name }) => name)).toEqual(['id'])
+    expect(via.props.map(({ name }) => name)).toEqual(['id', 'mark'])
+    expect([...via.certain]).toEqual(['id'])
   })
   it('counts a prop as certain only where every branch supplies it, and says when a branch cannot be followed', () => {
     const either = supplied(

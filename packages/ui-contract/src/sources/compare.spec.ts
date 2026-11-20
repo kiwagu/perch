@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import { type Collected, collectFromSource, RUNTIME_SUFFIX } from './collect'
+import { type Collected, collectFromSource, RUNTIME_SUFFIX, UNFOLLOWED_SPREAD } from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -388,6 +388,45 @@ describe('compareWithContract', () => {
 
     expect(written.strict).toEqual(expected)
     expect(written.ahead).toEqual(expected)
+  })
+  it('holds an element whose anchor an async helper or a generator supplies to its field facts, and refuses the spread, in ahead mode too', () => {
+    const screens: ScreensFile = {
+      ...SCREENS,
+      screens: SCREENS.screens.map((screen) => ({
+        ...screen,
+        anchors: {
+          ...screen.anchors,
+          'sample.title-input': { kind: 'input', binding: { model: 'thing.title' } },
+        },
+      })),
+    }
+    const anchor = "{ 'data-testid': 'sample.title-input' }"
+    const refused = [
+      `x.tsx:2: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:2: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // The helper is the sole source of the anchor: a Promise and an iterator are no object, yet
+    // the anchor it writes is read, so the limit the view adds beside the spread is still refused.
+    for (const helper of [
+      `const searchProps = async () => (${anchor})`,
+      `async function searchProps() { return ${anchor} }`,
+      `function* searchProps() { return ${anchor} }`,
+    ]) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            `${helper}\nconst title = <Input {...searchProps()} maxLength={80} />`,
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
   })
 
   it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {
