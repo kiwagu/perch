@@ -3,13 +3,14 @@
  * (`locals.ts`): an object written there, either branch of a conditional, either side of `||` or
  * `??` and the right of `&&` (or nothing), the one a constant holds, a destructured name's key, a
  * member of such an object (through the spreads it writes, at any depth: a spread that lacks the
- * key lets the scan go on before it, a property whose key the file does not state is one more
- * alternative, unknown), or each object a function of the file returns where it is called (each
- * `return` of its own body, a bare one or a reachable end giving nothing, an end no `return` or
- * `throw` reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
- * `useCallback` hands its function on, a `useMemo` holds what its function returns; an `async`
- * function or a generator gives a Promise or an iterator, which is no object the file writes: the
- * call is one the file cannot say, beside the objects its returns write, never nothing).
+ * key lets the scan go on before it, a property whose key the file does not state or a spread the
+ * file cannot follow is one more alternative, unknown, and the scan goes on before it too), or each
+ * object a function of the file returns where it is called (each `return` of its own body, a bare
+ * one or a reachable end giving nothing, an end no `return` or `throw` reaches being one a block or
+ * both arms of an `if` and `else` end, `reachable-end.ts`; a `useCallback` hands its function on, a
+ * `useMemo` holds what its function returns; an `async` function or a generator gives a Promise or
+ * an iterator, which is no object the file writes: the call is one the file cannot say, beside the
+ * objects its returns write, never nothing).
  */
 
 import type {
@@ -102,7 +103,8 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
      * `level`: a property with the key decides; a spread decides for each branch it may take that
      * has the key, and for a branch that lacks it, at any depth, the scan goes on with the
      * properties before the spread. A getter or a setter with the key is the key and leaves the
-     * member unknown. A property whose key the file does not state (`[props.name]`) may be the key
+     * member unknown. A property whose key the file does not state (`[props.name]`), or a branch of
+     * a spread the file cannot follow (`...props.extra`, an `async` helper's call), may be the key
      * or not: the member is unknown there and the scan goes on, so the properties before it stand
      * as more alternatives. `absent` says what holds where no property has the key: the scan of
      * the object that spread this one goes on, and only the outermost scan, of the member itself,
@@ -128,7 +130,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
 
           return objectsOf(property.argument, property.start, level + 1).flatMap((branch) =>
             branch === undefined
-              ? [undefined]
+              ? [undefined, ...before()]
               : branch === null
                 ? before()
                 : memberIn(branch.properties, branch.properties.length - 1, key, level + 1, before),

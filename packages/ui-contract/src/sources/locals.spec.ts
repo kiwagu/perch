@@ -155,6 +155,8 @@ describe('suppliedBy', () => {
     'async function asyncNull(c) { if (c) { return null } return false }',
     'async function asyncMaybe(c) { if (c) { return null } return { mark: 1 } }',
     'function* generatedFalls() { yield 1 }',
+    'const fallbackMap = { search: searchProps, ...asyncFalls() }',
+    'const extraMap = { search: searchProps, ...props.extra }',
     'const at = 0',
   ].join('\n')
 
@@ -204,8 +206,26 @@ describe('suppliedBy', () => {
     expect(suppliedAt(text, 'decided.name', 'const at')).toEqual(['type'])
     expect(suppliedAt(text, 'grouped.email', 'const at')).toEqual(['maxLength'])
   })
-  it('still says a nested branch it cannot follow cannot be followed, rather than going on past it', () => {
+  it('still says a nested branch it cannot follow cannot be followed, though the scan goes on past it', () => {
     expect(supplied(text, 'opaque.name', 'const at').followed).toBe(false)
+  })
+  it('goes on past a spread it cannot follow, with the property before it as one more alternative', () => {
+    // The spread may supply the key or not: what the property before it supplies stays visible,
+    // and nothing is certain.
+    const members: Array<[string, string]> = [
+      ['fallbackMap.search', 'data-testid'],
+      ['extraMap.search', 'data-testid'],
+      ['opaque.name', 'aria-invalid'],
+    ]
+
+    for (const [member, before] of members) {
+      const read = supplied(text, member, 'const at')
+
+      expect(read.followed).toBe(false)
+      expect(read.props.map(({ name }) => name)).toEqual([before])
+      expect(read.certain.size).toBe(0)
+      expect([...read.followedCertain]).toEqual([before])
+    }
   })
   it('leaves a member unknown where a property whose key it cannot read, or a getter or a setter, may supply it', () => {
     for (const member of ['unsure.name', 'getter.name', 'setter.name']) {

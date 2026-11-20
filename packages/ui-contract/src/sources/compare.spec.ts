@@ -487,6 +487,37 @@ describe('compareWithContract', () => {
       expect(found.ahead).toEqual(refused)
     }
   })
+  it('holds the element to its field facts when a spread the file cannot follow comes after the member in a props map', () => {
+    const screens = withTitleInput()
+    const refused = [
+      `x.tsx:4: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:4: "sample.title-input": maxLength={80}, but ${KIT}`,
+    ]
+
+    // The later spread may supply `search` or not: the property before it stays one more
+    // alternative, so the anchor it writes is read and the limit beside the spread is refused.
+    for (const rest of ['fallbackProps()', 'props.extra']) {
+      const found = strictAndAhead(
+        [
+          ...agreeing(),
+          collectFromSource(
+            [
+              'async function fallbackProps() { await loadSuggestions() }',
+              'function Search(props) {',
+              `  const fieldProps = { search: { 'data-testid': 'sample.title-input' }, ...${rest} }`,
+              '  return <Input {...fieldProps.search} maxLength={80} />',
+              '}',
+            ].join('\n'),
+            'x.tsx',
+          ),
+        ],
+        screens,
+      )
+
+      expect(found.strict).toEqual(refused)
+      expect(found.ahead).toEqual(refused)
+    }
+  })
 
   it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {
     for (const holdsInput of [false, true]) {
