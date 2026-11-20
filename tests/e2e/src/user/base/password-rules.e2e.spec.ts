@@ -22,7 +22,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       lowercaseOnly: 'abcdefghij',
       everyRule: 'Abcdefghij1!',
       withASpace: 'Abcdefg hij1!',
-      tooLong: 'Abcdefghij1!Abcdefghij1!Abcdefghij1!',
+      tooShort: 'Abcdef1!',
     }
     const list = page.getByTestId('user.sign-in.password-rule-list')
     const items: Readonly<Record<Rule, Locator>> = {
@@ -92,8 +92,8 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
       await expect(submit).toBeDisabled()
     })
 
-    await test.step('6. Enter the too long into [user.sign-in.password-input]', async () => {
-      await password.fill(data.tooLong)
+    await test.step('6. Enter the too short into [user.sign-in.password-input]', async () => {
+      await password.fill(data.tooShort)
       // Expected: After step 6 [user.sign-in.password-rule-list.length-item] no longer carries
       //   [state:met], [user.sign-in.password-rule-list.characters-item] carries it again, and
       //   [user.sign-in.submit-button] is disabled
