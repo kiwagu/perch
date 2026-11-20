@@ -7,16 +7,6 @@ bindings:
   - path: /invitation
     roles: [ guest, identity ]
     history: push
-    search:
-      type: object
-      properties:
-        token:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: The token the invitation mail carries in its link.
-          examples: [ eyJhbG...dXJl ]
-      additionalProperties: false
 entry: [ organisation.invitation.status, organisation.invitation.heading, organisation.invitation.error ]
 anchors:
   organisation.invitation.status:
@@ -37,7 +27,6 @@ anchors:
   organisation.invitation.sign-in-link:
     kind: link
     binding: { route: /sign-in }
-    roles: [ guest ]
   organisation.invitation.accept-button:
     kind: button
     description: Makes the account a member with the role shown, and opens the organisation.

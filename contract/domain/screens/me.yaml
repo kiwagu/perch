@@ -55,7 +55,6 @@ anchors:
         forgetUnsent:
           value: true
     codes: [ unsent-changes ]
-    derived: [ confirm-button, cancel-button ]
 states:
   loading: "user.profile.status in loading: the profile is being read."
   ready: user.profile.heading with the name, the email, the form with the name, the bio and Save, and the sign-out button.

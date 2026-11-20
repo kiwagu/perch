@@ -64,13 +64,12 @@ anchors:
       - action: platform.sign-up
         params:
           password: user.sign-in.password-input
-    derived: [ visibility-button ]
   user.sign-in.password-confirmation-input:
     kind: input
     secret: true
     marksState: false
     description: The password typed again; never sent.
-    derived: [ visibility-button ]
+    confirms: user.sign-in.password-input
   user.sign-in.name-input:
     kind: input
     description: The name of the new account.
@@ -107,7 +106,6 @@ anchors:
         signOutOldest:
           value: true
     codes: [ device-limit ]
-    derived: [ confirm-button, cancel-button ]
 states:
   ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
 flow:
@@ -116,10 +114,6 @@ flow:
     guards:
       emailNotVerified: { codes: [ email-not-verified ] }
       atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
-      passwordBreaksRules: the password breaks one of the rules of user.sign-in.password-rule-list
-      passwordsDiffer: the password typed again is not the same as the password
-      confirmationStrays: "the password typed again is no longer how the password begins: a character differs, or it is longer"
-      confirmationFollows: the password typed again is how the password begins, all of it or a part, or is empty
   states:
     sign-in:
       description: The form in the mode sign-in.

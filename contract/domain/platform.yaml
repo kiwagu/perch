@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=../schemas/platform.schema.json
-version: 3
+version: 4
 values:
   email:
     type: string

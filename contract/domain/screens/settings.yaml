@@ -16,8 +16,6 @@ anchors:
       - action: settings.updateTheme
         params:
           theme: user.settings.theme-select
-    dataValue: true
-    derived: [ option ]
   user.settings.locale-select:
     kind: select
     description: "The language of the account, stored in its settings, so its other devices speak it too; it takes no choice before the settings are on this device."
@@ -26,8 +24,6 @@ anchors:
       - action: settings.updateLocale
         params:
           locale: user.settings.locale-select
-    dataValue: true
-    derived: [ option ]
   user.settings.password.form:
     kind: form
     description: Changes the account's password.
@@ -39,7 +35,6 @@ anchors:
       action: platform.change-password
       params:
         currentPassword: user.settings.password.current-password-input
-    derived: [ visibility-button ]
   user.settings.password.new-password-input:
     kind: input
     secret: true
@@ -49,12 +44,11 @@ anchors:
       action: platform.change-password
       params:
         password: user.settings.password.new-password-input
-    derived: [ visibility-button ]
   user.settings.password.password-confirmation-input:
     kind: input
     secret: true
     description: The new password typed again; never sent.
-    derived: [ visibility-button ]
+    confirms: user.settings.password.new-password-input
   user.settings.password.save-button:
     kind: button
     description: Changes the password.
@@ -82,7 +76,6 @@ anchors:
       action: platform.change-email
       params:
         password: user.settings.email.password-input
-    derived: [ visibility-button ]
   user.settings.email.send-button:
     kind: button
     description: Sends the mail that confirms the new email.
@@ -106,7 +99,6 @@ anchors:
       action: platform.request-account-deletion
       params:
         password: user.settings.deletion.password-input
-    derived: [ visibility-button ]
   user.settings.deletion.send-button:
     kind: button
     description: Sends the mail whose link leads to deleting the account.
@@ -126,10 +118,6 @@ flow:
     guards:
       settingsHeld: the account's settings are on this device
       accountLeft: the account the store was for has signed out since it began
-      passwordBreaksRules: the new password breaks one of the rules of user.settings.password-rule-list
-      passwordsDiffer: the new password typed again is not the same as the new password
-      confirmationStrays: "the new password typed again is no longer how the new password begins: a character differs, or it is longer"
-      confirmationFollows: the new password typed again is how the new password begins, all of it or a part, or is empty
       deletionBlocked: { codes: [ last-admin ] }
   states:
     viewing:

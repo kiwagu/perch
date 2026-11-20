@@ -28,8 +28,6 @@ anchors:
       params:
         key: organisation.page.current-select
     roles: [ member, admin ]
-    dataValue: true
-    derived: [ option ]
   organisation.create.toggle-button:
     kind: button
     description: Opens or closes the create form; shown with a current organisation.
@@ -157,8 +155,6 @@ anchors:
         identity: organisation.members.item
         role: organisation.members.role-select
     roles: [ admin ]
-    dataValue: true
-    derived: [ option ]
   organisation.members.remove-button:
     kind: button
     description: Removes the member; not on the administrator's own row.
@@ -187,8 +183,6 @@ anchors:
       params:
         role: organisation.invite.role-select
     roles: [ admin ]
-    dataValue: true
-    derived: [ option ]
   organisation.invite.error:
     kind: error
     description: Why the last invitation, copy of a link, revoke, change of a role, removal, or read of the members or the invitations failed.
