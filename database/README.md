@@ -43,9 +43,9 @@ only the gateway's own writes change it (the profile's email through the confirm
   an email is an address, and a name and a bio hold at most the lengths the contract states,
   `$profile_name_max_length` and `$profile_bio_max_length`), `settings` (an account's settings, today its language and its theme, one row per identity in
   its private region; its owner reads it, only the gateway writes it, through replication),
-  `tenant` (an organisation: its key of 2 to 32 lowercase letters, digits and underscores, its
-  name (at most `$organisation_name_max_length` characters), namespace, database and status; closed
-  to every record user), `membership` (an
+  `tenant` (an organisation: its key of lowercase letters, digits and underscores, at most
+  `$organisation_key_max_length` characters, its name (at most `$organisation_name_max_length`
+  characters), namespace, database and status; closed to every record user), `membership` (an
   identity's role in an organisation, `member` or `admin`; an identity reads only its own rows,
   and only the gateway writes them) and `invitation` (the pending invitations of an email to an
   organisation: the role the account takes on accepting, who invited it, the token its link
@@ -76,7 +76,8 @@ only the gateway's own writes change it (the profile's email through the confirm
   the branch's base or head, so this spec needs no contract of its own to follow a business
   commit. An upper length bound is the parameter of a contract value, never a number, except on
   the two columns that hold no value (`device_session.device` and `.label`, listed in the spec);
-  `tenant.name`, which no model field states, is held to the platform value `organisation-name`.
+  `tenant.key` and `tenant.name`, which no model field states, are held to the platform values
+  `organisation-key` and `organisation-name`.
   It reads the schema as an embedded database reports it, so it needs no stand.
 - `src/assert-limits.ts` and `src/length-bounds.ts`: what the spec reads an `ASSERT` with
   (`readAssert`: its limits, the parameters it names, the length bounds it writes as numbers) and

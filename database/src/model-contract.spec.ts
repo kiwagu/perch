@@ -52,7 +52,10 @@ const NO_CONTRACT_VALUE = ['device_session.device', 'device_session.label']
  * The columns that hold a value of the platform, not a field of the model, so no entity holds them:
  * the schema's own column and the value it is held to.
  */
-const PLATFORM_VALUE_COLUMNS = [{ table: 'tenant', column: 'name', value: 'organisation-name' }]
+const PLATFORM_VALUE_COLUMNS = [
+  { table: 'tenant', column: 'key', value: 'organisation-key' },
+  { table: 'tenant', column: 'name', value: 'organisation-name' },
+]
 
 /** What the contract's value of a field limits it to, in the form an assert is read in. */
 function valueLimits(value: ResolvedValue): Limits {
