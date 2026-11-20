@@ -312,8 +312,8 @@ links to as `contract/REFERENCE.md#<slug>`.
   reference; prints `file:line: message` per
   problem and exits 1, or a one-line summary, followed for a contract older than the engine by
   `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;
-  part of `bun run check` and the pre-commit hook). `ui-contract check --current` fails on such a
-  contract instead.
+  part of the pre-commit hook on a branch). `ui-contract check --current`, which `bun run check`
+  and a commit on `main` run, fails on such a contract instead.
 - From the root: `bun run contract:migrate` (`ui-contract migrate [--write]`: each step from the
   version the contract declares to the engine's, `<n> -> <n+1>: <note>`, with the files it
   changes and the work it leaves by hand, `by hand: <work>`; `--write` rewrites those files,
