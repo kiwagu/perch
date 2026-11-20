@@ -3,8 +3,10 @@
  * directory's schema holds the same rule.
  */
 
-/** 2 to 32 lowercase letters, digits and underscores, starting with a letter. */
-export const TENANT_KEY_PATTERN = /^[a-z][a-z0-9_]{1,31}$/
+import { CONTRACT_VALUES } from './contract-values.gen'
+
+/** What a key is: the pattern of the contract's `organisation-key`. */
+export const TENANT_KEY_PATTERN = new RegExp(CONTRACT_VALUES['organisation-key'].pattern)
 
 export function isTenantKey(value: string): boolean {
   return TENANT_KEY_PATTERN.test(value)

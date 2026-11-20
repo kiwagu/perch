@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_VALUES } from './contract-values.gen'
 import {
   checkPasswordRules,
   keepsPasswordRules,
@@ -44,7 +45,10 @@ describe('the rules of a new password', () => {
       'lowercase',
       'symbol',
     ])
-    expect(PASSWORD_LENGTH).toEqual({ min: 10, max: 35 })
+    expect(PASSWORD_LENGTH).toEqual({
+      min: CONTRACT_VALUES['new-password'].minLength,
+      max: CONTRACT_VALUES['new-password'].maxLength,
+    })
   })
 
   it('names the 32 printable ASCII symbols, each once', () => {

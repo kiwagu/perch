@@ -4,8 +4,13 @@
  * for a new password only: a sign-in checks none, so a password chosen before them still signs in.
  */
 
-/** The fewest and the most characters a new password has. */
-export const PASSWORD_LENGTH = { min: 10, max: 35 } as const
+import { CONTRACT_VALUES } from './contract-values.gen'
+
+/** The fewest and the most characters a new password has: the bounds of the contract's `new-password`. */
+export const PASSWORD_LENGTH = {
+  min: CONTRACT_VALUES['new-password'].minLength,
+  max: CONTRACT_VALUES['new-password'].maxLength,
+} as const
 
 /** The 32 printable ASCII symbols a password may hold, beside Latin letters and digits. */
 export const PASSWORD_SYMBOLS = '!"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~'

@@ -91,6 +91,12 @@ screen file, the scenario, the code and the tests.
   sources (`-- --check` fails on drift).
 - `bun run contract:manifest`: builds the UI manifest from `contract/` and the scenario files
   into `ui-manifest/`.
+- `bun run contract:emit`: runs the `emit` script of every package that keeps one, which writes
+  the module of plain data a layer below the contract reads instead of restating a value (the
+  kernel's `src/contract-values.gen.ts`). A package's unit tests hold its module to the
+  contract of the working tree, and in the pre-commit hook on a branch to the contract at the
+  merge base or at the branch's commit as well, so a business commit that changes a value does
+  not fail the hook before the module is generated again.
 - `bun run contract:diff <ref>`: what the contract adds, removes and renames against a git
   ref, each written description changed with its length before and after among it; a change to
   the contract hands over the output of `bun run contract:diff main`.
