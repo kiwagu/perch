@@ -10,9 +10,9 @@ values:
     examples: [ ann@example.test ]
   password:
     type: string
-    minLength: 1
-    maxLength: null
-    description: A password as the account has it now, whatever rules it was made under.
+    minLength: 10
+    maxLength: 35
+    description: A password as the account has it now, of the length the password rules allow.
   new-password:
     type: string
     minLength: 10
@@ -67,7 +67,7 @@ actions:
       password:
         value: new-password
         codes: [ sign-up-rejected ]
-        description: The password of the new account, kept to the composite password-rules; one that breaks them is refused with sign-up-rejected. An account made before these rules keeps signing in with its password.
+        description: The password of the new account, kept to the composite password-rules; one that breaks them is refused with sign-up-rejected.
       name:
         value: profile.name
         description: The name of the profile.
