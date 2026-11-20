@@ -30,4 +30,13 @@ describe('ProfileSchema', () => {
       false,
     )
   })
+
+  it('counts a character outside the basic plane once in a name and a bio', () => {
+    const emoji = '\u{1F600}'
+
+    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(80) }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, name: emoji.repeat(81) }).success).toBe(false)
+    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(2000) }).success).toBe(true)
+    expect(ProfileSchema.safeParse({ ...valid, bio: emoji.repeat(2001) }).success).toBe(false)
+  })
 })

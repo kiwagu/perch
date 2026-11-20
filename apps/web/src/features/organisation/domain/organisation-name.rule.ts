@@ -2,13 +2,15 @@ import type { Result } from 'neverthrow'
 
 import { applyRules, type DomainRule, type RuleViolation } from '@workspace/kernel'
 
+import { textLength } from '../../../platform/text-length'
+
 import { ORGANISATION_NAME_MAX } from './organisation.entity'
 
 const nameRules: readonly DomainRule<string>[] = [
   { code: 'organisation:NAME_REQUIRED', isSatisfiedBy: (name) => name.length > 0 },
   {
     code: 'organisation:NAME_TOO_LONG',
-    isSatisfiedBy: (name) => name.length <= ORGANISATION_NAME_MAX,
+    isSatisfiedBy: (name) => textLength(name) <= ORGANISATION_NAME_MAX,
   },
 ]
 

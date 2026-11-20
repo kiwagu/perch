@@ -359,7 +359,10 @@ modeling stage.
   class `dark` on `<html>` and following the device's setting under the system's; a guest's choice
   and the account's theme a signed-in tab shows are kept there, and `follow()` shows one another
   tab kept, keeping nothing itself; the start makes it before the first frame and gives it to
-  views through `ThemeContext`, read with `useDeviceTheme()`), and this tab's own writes of
+  views through `ThemeContext`, read with `useDeviceTheme()`), the length of a text as the gateway
+  and the database count it (`text-length.ts`, `textLength`: one for each code point, which every
+  domain rule judging a name, a bio or a note against its limit uses, though the native `maxLength`
+  of an input counts UTF-16 units), and this tab's own writes of
   the account's settings (`settings-writes.ts`: the settings screen's store of a setting tells the
   frame of each write before it starts and when it failed, `trackedStore`, so a late echo of an
   earlier write is not taken for a value another tab or device stored; the start provides them

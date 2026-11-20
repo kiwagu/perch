@@ -137,6 +137,32 @@ describe('AccountStartService', () => {
     expect(kept.now()).toBeUndefined()
   })
 
+  it('keeps the start of a name of 80 characters outside the basic plane, as the gateway takes it, and creates its profile', async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+    const name = '\u{1F600}'.repeat(80)
+
+    expect(starts.keepAfterPull(kept.signIn, ann, { name, locale: 'en' }).isOk()).toBe(true)
+    expect(kept.now()).toEqual({ identity: ann.id, name, locale: 'en' })
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.profileRows()).toMatchObject([{ identity: ann.id, name }])
+  })
+
+  it('keeps nothing for a name of 81 characters outside the basic plane', () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+
+    expect(
+      starts
+        .keepAfterPull(kept.signIn, ann, { name: '\u{1F600}'.repeat(81), locale: 'en' })
+        ._unsafeUnwrapErr().code,
+    ).toBe('profile:NAME_TOO_LONG')
+    expect(kept.now()).toBeUndefined()
+  })
+
   it('creates only what the pull left missing', async () => {
     const kept = keptHere()
     const held = records()

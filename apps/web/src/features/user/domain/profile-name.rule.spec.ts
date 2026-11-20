@@ -10,4 +10,11 @@ describe('checkProfileName', () => {
       { code: 'profile:NAME_TOO_LONG' },
     ])
   })
+
+  it('counts a character outside the basic plane once, as the gateway and the database do', () => {
+    expect(checkProfileName('\u{1F600}'.repeat(80)).isOk()).toBe(true)
+    expect(checkProfileName('\u{1F600}'.repeat(81))._unsafeUnwrapErr()).toEqual([
+      { code: 'profile:NAME_TOO_LONG' },
+    ])
+  })
 })

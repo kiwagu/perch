@@ -18,4 +18,11 @@ describe('checkOrganisationName', () => {
       { code: 'organisation:NAME_TOO_LONG' },
     ])
   })
+
+  it('counts a character outside the basic plane once, as the gateway does', () => {
+    expect(checkOrganisationName('\u{1F600}'.repeat(80)).isOk()).toBe(true)
+    expect(checkOrganisationName('\u{1F600}'.repeat(81))._unsafeUnwrapErr()).toEqual([
+      { code: 'organisation:NAME_TOO_LONG' },
+    ])
+  })
 })

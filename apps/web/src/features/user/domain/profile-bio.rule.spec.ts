@@ -11,4 +11,11 @@ describe('checkProfileBio', () => {
       { code: 'profile:BIO_TOO_LONG' },
     ])
   })
+
+  it('counts a character outside the basic plane once, as the database does', () => {
+    expect(checkProfileBio('\u{1F600}'.repeat(2000)).isOk()).toBe(true)
+    expect(checkProfileBio('\u{1F600}'.repeat(2001))._unsafeUnwrapErr()).toEqual([
+      { code: 'profile:BIO_TOO_LONG' },
+    ])
+  })
 })

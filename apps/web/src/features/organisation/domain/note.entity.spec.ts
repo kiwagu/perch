@@ -15,4 +15,11 @@ describe('checkNoteText', () => {
       { code: 'note:TEXT_TOO_LONG' },
     ])
   })
+
+  it('counts a character outside the basic plane once, as the database does', () => {
+    expect(checkNoteText('\u{1F600}'.repeat(500)).isOk()).toBe(true)
+    expect(checkNoteText('\u{1F600}'.repeat(501))._unsafeUnwrapErr()).toEqual([
+      { code: 'note:TEXT_TOO_LONG' },
+    ])
+  })
 })
