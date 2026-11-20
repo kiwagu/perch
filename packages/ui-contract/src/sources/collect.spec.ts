@@ -320,6 +320,31 @@ describe('collectFromSource', () => {
       { asks: 'x.sessions.revoke-button', line: 9 },
     ])
   })
+  it('reads a hoisted part through its constant base, and an anchor key of a spread, held to the import rule', () => {
+    const found = collectFromSource(
+      [
+        "const DIALOG_TEST_ID = 'x.help-dialog'",
+        "const CONFIRM_TEST_ID = testIdFor(DIALOG_TEST_ID, 'confirm-button')",
+        'const a = <Button testId={CONFIRM_TEST_ID} disabled={!props.can(confirm)} />',
+        "const b = <Input {...{ 'data-testid': 'x.form.email-input', maxLength: 1 }} />",
+        'const c = <Input {...{ testId: IMPORTED_TEST_ID }} />',
+      ].join('\n'),
+      'x.tsx',
+    )
+
+    expect(
+      found.props.map(({ anchor, base, name, line }) => ({ anchor, base, name, line })),
+    ).toEqual([
+      { anchor: 'x.help-dialog.confirm-button', base: 'x.help-dialog', name: 'disabled', line: 3 },
+      { anchor: 'x.form.email-input', base: undefined, name: 'maxLength', line: 4 },
+    ])
+    expect(found.literals.filter(({ form }) => form === 'key')).toEqual([
+      { anchor: 'x.form.email-input', form: 'key', line: 4 },
+    ])
+    expect(found.problems.map(formatProblem)).toEqual([
+      `x.tsx:5: ${UNDECLARED_ANCHOR('IMPORTED_TEST_ID')}`,
+    ])
+  })
   it('collects holdsInput beside the anchor of its element, and lets a passed value through', () => {
     const found = collectFromSource(
       [

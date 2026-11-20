@@ -1,6 +1,6 @@
 /**
  * Collects the anchors and codes one source file declares, as the contract check reads
- * them: `data-testid`, `testId` and `*TestId` attributes, `testId:` keys and
+ * them: `data-testid`, `testId` and `*TestId` attributes and object keys, and
  * `<NAME>_TEST_ID` constants with a literal value; the suffixes of `testIdFor()`, each with
  * its base when that is a literal or such a constant of the file; the
  * `data-code` attributes, `code:` keys and `<NAME>_CODES` maps. A name or a `testIdFor()`
@@ -335,8 +335,9 @@ export function collectFromSource(text: string, file: string): Collected {
 
         const key = keyName(property.key, property.computed)
 
-        if (key === 'testId') {
+        if (key !== undefined && isAnchorAttribute(key)) {
           anchor(anchorValue(property.value), 'key', property.start)
+          undeclared(property.value, property.start)
         } else if (key === 'code') {
           code(staticText(property.value), 'key', property.start)
         }

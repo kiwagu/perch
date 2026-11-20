@@ -10,12 +10,11 @@ import type { Expression, JSXAttributeValue, JSXOpeningElement } from 'oxc-parse
 
 import { testIdFor } from '../anchors'
 
-import type { Locals } from './locals'
+import { DEPTH, type Locals } from './locals'
 import { suppliedBy } from './spreads'
 import {
   type CarriedAnchor,
   carriedAnchor,
-  derivedAnchorOf,
   isTestIdFor,
   staticText,
   TEST_ID_CONSTANT,
@@ -79,7 +78,12 @@ export const expressionOf = ({ value, spread }: ElementAttribute): Expression | 
  * `<NAME>_TEST_ID` constant of the file that holds either, or `testIdFor()` of such a constant and a
  * literal suffix, which comes with its base; none for anything else, a name passed through included.
  */
-export function anchorIn(locals: Locals, node: Expression, at: number): CarriedAnchor | undefined {
+export function anchorIn(
+  locals: Locals,
+  node: Expression,
+  at: number,
+  depth = 0,
+): CarriedAnchor | undefined {
   const text = staticText(node)
 
   if (text !== undefined) {
@@ -87,15 +91,18 @@ export function anchorIn(locals: Locals, node: Expression, at: number): CarriedA
   }
 
   const written = unwrap(node)
-  const declared =
-    written.type === 'Identifier' && TEST_ID_CONSTANT.test(written.name)
-      ? locals.valueNamed(written.name, at)
-      : undefined
 
-  if (declared !== undefined) {
-    const held = staticText(declared)
+  if (depth >= DEPTH) {
+    return undefined
+  }
 
-    return held === undefined ? derivedAnchorOf(declared) : { anchor: held }
+  if (written.type === 'Identifier' && TEST_ID_CONSTANT.test(written.name)) {
+    // A constant may hold a literal, `testIdFor()` of two literals, or one of another constant.
+    const declared = locals.valueNamed(written.name, at)
+
+    return declared === undefined
+      ? undefined
+      : anchorIn(locals, declared, declared.start, depth + 1)
   }
 
   if (written.type !== 'CallExpression' || !isTestIdFor(written.callee)) {
@@ -104,7 +111,9 @@ export function anchorIn(locals: Locals, node: Expression, at: number): CarriedA
 
   const [base, suffix] = written.arguments
   const from =
-    base === undefined || base.type === 'SpreadElement' ? undefined : anchorIn(locals, base, at)
+    base === undefined || base.type === 'SpreadElement'
+      ? undefined
+      : anchorIn(locals, base, at, depth + 1)
   const part = staticText(suffix)
 
   return from === undefined || from.base !== undefined || part === undefined
