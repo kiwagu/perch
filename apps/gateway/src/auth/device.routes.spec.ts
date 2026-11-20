@@ -288,6 +288,19 @@ describe('deviceRoutes', () => {
     expect(closed).toEqual([])
   })
 
+  it('answers 400 bad-request to a session id of more than 64 characters, before looking for it', async () => {
+    const { ask, closed, annOnLaptop } = await harness()
+
+    expect(await ask('DELETE', `/devices/${'a'.repeat(64)}`, { as: annOnLaptop })).toEqual(
+      noSuchDevice,
+    )
+    expect(await ask('DELETE', `/devices/${'a'.repeat(65)}`, { as: annOnLaptop })).toEqual({
+      status: 400,
+      body: { code: 'bad-request' },
+    })
+    expect(closed).toEqual([])
+  })
+
   it('signs every device of the caller out, its own included', async () => {
     const { ask, clock, closed, live, signIn, annsDevices, annOnLaptop, annOnPhone, bob } =
       await harness()

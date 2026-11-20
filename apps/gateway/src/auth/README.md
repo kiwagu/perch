@@ -554,8 +554,9 @@ holds, on the device the request names (the Bearer caller, `bearer-caller.ts`):
   Neither a token nor a device's own id is ever sent: a hello binds by that id.
 - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's sockets
   are closed with 4001. A session that ended already answers 204 with nothing closed, so the
-  device's later session keeps its sockets. An id that is not one of the caller's sessions
-  answers 404 `no-such-device`.
+  device's later session keeps its sockets. An id of more than 64 characters (`MAX_PATH_ID`,
+  `src/path-id.ts`) answers 400 `bad-request` before any session is looked for; any other id that
+  is not one of the caller's sessions answers 404 `no-such-device`.
 - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller has ended, the
   asking one included, and every socket of the identity is closed with 4001.
 - `POST /auth/sign-out`: a device ends its own session with its token and its `X-Perch-Device`,

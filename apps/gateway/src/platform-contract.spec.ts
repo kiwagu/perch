@@ -4,7 +4,9 @@
  * has its reason. Each bound a parameter of an action states (a length, a pattern, a format) is a
  * bound of its route: a value just past it is refused, with the code the contract attributes to
  * that parameter for that bound where it attributes one, and a value just inside it is answered
- * otherwise than the one past it, with that code or none.
+ * otherwise than the one past it, with that code or none. The text of an id is held apart from
+ * the record it names: past its bound it is refused before any record is looked for, an id of the
+ * form the gateway issues is not, and one it issued for a record is done.
  *
  * The gateway is asked over HTTP as a device asks it, every other parameter of a request valid.
  * The contract is read here and nowhere in the gateway's own code: this is where the two meet.
@@ -21,7 +23,15 @@ import {
   parameterValueOf,
 } from '@workspace/ui-contract'
 
-import { type Param, requestFor, type Wire, worldFor } from './__fixtures__/platform-requests'
+import { census, stale, unnamed } from './__fixtures__/platform-census'
+import { idsOf } from './__fixtures__/platform-ids'
+import { type Param, requestFor, type World, worldFor } from './__fixtures__/platform-requests'
+import {
+  ACTION_ROUTES,
+  CLIENT_ONLY,
+  NO_ACTION_ROUTES,
+  SERVER_ROUTES,
+} from './__fixtures__/platform-routes'
 import { boundsOf, isChecked, isIssued } from './__fixtures__/platform-values'
 import { type Account, openStand, type Stand } from './__fixtures__/stand'
 import { MOUNT_PATHS } from './auth/auth-handler'
@@ -30,68 +40,22 @@ import { CONSOLE_PATHS } from './console'
 import { INVITATION_PATHS } from './tenants/invitation-routes'
 import { ORGANISATION_PATHS } from './tenants/organisation-routes'
 
-/** Where each platform action is served; the actions the client answers on its own are below. */
-const ACTION_ROUTES: Readonly<Record<string, Wire>> = {
-  'sign-up': { method: 'POST', path: '/auth/sign-up/email' },
-  'sign-in': { method: 'POST', path: '/auth/sign-in/email' },
-  'verify-email': { method: 'POST', path: '/auth/verify-email' },
-  'resend-verification': { method: 'POST', path: '/auth/send-verification-email' },
-  'request-password-reset': { method: 'POST', path: '/auth/request-password-reset' },
-  'reset-password': { method: 'POST', path: '/auth/reset-password' },
-  'change-password': { method: 'POST', path: '/auth/change-password' },
-  'change-email': { method: 'POST', path: '/auth/change-email' },
-  'confirm-email': { method: 'POST', path: '/auth/confirm-email' },
-  'request-account-deletion': { method: 'POST', path: '/auth/request-account-deletion' },
-  'delete-account': { method: 'POST', path: '/auth/delete-account' },
-  'sign-out': { method: 'POST', path: '/auth/sign-out' },
-  'sign-out-everywhere': { method: 'POST', path: '/auth/sign-out-everywhere' },
-  'devices.list': { method: 'GET', path: '/devices' },
-  'devices.revoke': { method: 'DELETE', path: '/devices/:id', segments: { id: 'device' } },
-  'organisations.create': { method: 'POST', path: '/organisations' },
-  'organisations.members': { method: 'GET', path: '/organisations/:key/members' },
-  'organisations.invite': { method: 'POST', path: '/organisations/:key/invitations' },
-  'organisations.invitations': { method: 'GET', path: '/organisations/:key/invitations' },
-  'organisations.revoke-invitation': {
-    method: 'DELETE',
-    path: '/organisations/:key/invitations/:invitation',
-  },
-  'organisations.set-role': { method: 'PATCH', path: '/organisations/:key/members/:identity' },
-  'organisations.remove': { method: 'DELETE', path: '/organisations/:key/members/:identity' },
-  'invitations.read': { method: 'POST', path: '/invitations/read' },
-  'invitations.mine': { method: 'GET', path: '/invitations' },
-  'invitations.accept': { method: 'POST', path: '/invitations/accept' },
-  'invitations.decline': { method: 'POST', path: '/invitations/decline' },
-  'accounts.list': { method: 'GET', path: '/console/accounts' },
-  'accounts.read': { method: 'GET', path: '/console/accounts/:id' },
-  'accounts.rename': { method: 'POST', path: '/console/accounts/:id/rename' },
-  'accounts.change-email': { method: 'POST', path: '/console/accounts/:id/email' },
-  'accounts.ban': { method: 'POST', path: '/console/accounts/:id/ban' },
-  'accounts.unban': { method: 'POST', path: '/console/accounts/:id/unban' },
-  'accounts.revoke-sessions': { method: 'POST', path: '/console/accounts/:id/sign-out' },
-  'accounts.send-reset': { method: 'POST', path: '/console/accounts/:id/reset' },
-  'accounts.resend-verification': { method: 'POST', path: '/console/accounts/:id/verification' },
-  'accounts.remove': { method: 'POST', path: '/console/accounts/:id/removal' },
-}
+/**
+ * The code of a request that does not follow its schema, which the contract attributes to no
+ * parameter: the answer to the text of an id past its bound.
+ */
+const SHAPE_REFUSAL = 'bad-request'
 
-/** The actions the client answers on its own: no request of the gateway is made for them. */
-const CLIENT_ONLY: readonly string[] = [
-  'theme.set',
-  'reload',
-  'install.prompt',
-  'install.postpone',
-  'organisations.select',
-  'organisations.copy-invitation',
+/**
+ * The actions whose route takes the id's form (its entity's schema) before it looks for the record,
+ * so any text that is not an issued id of that form is refused as a request that does not follow
+ * its schema, whatever its length.
+ */
+const FORM_CHECKED = [
+  'organisations.set-role',
+  'organisations.remove',
+  'organisations.revoke-invitation',
 ]
-
-/** The routes the gateway serves that no platform action names, each with its reason. */
-const NO_ACTION_ROUTES: Readonly<Record<string, string>> = {
-  'GET /health': 'the liveness answer of the server: no screen asks it',
-  'GET /sync': "the upgrade to a device's sync connection, which the sync protocol carries",
-  'GET /organisations': 'Contract gap: the memberships read has no platform action',
-}
-
-/** The routes the server answers itself, before any module is asked. */
-const SERVER_ROUTES = ['GET /health', 'GET /sync']
 
 const ROOT = join(import.meta.dirname, '../../..')
 const { contract, problems } = loadContract(ROOT)
@@ -128,20 +92,6 @@ const PATHS = [
   ...MOUNT_PATHS,
 ]
 
-/** The routes the actions and the reasons name, each as `METHOD path`. */
-const named = [
-  ...Object.values(ACTION_ROUTES).map(({ method, path }) => `${method} ${path}`),
-  ...Object.keys(NO_ACTION_ROUTES),
-]
-
-/** The routes of `served` no action and no reason names. */
-const unnamed = (served: readonly string[]): string[] =>
-  served.filter((route) => !named.includes(route))
-
-/** The routes an action or a reason names that `served` lacks, the server's own aside. */
-const stale = (served: readonly string[]): string[] =>
-  named.filter((route) => !served.includes(route) && !SERVER_ROUTES.includes(route))
-
 /**
  * The `Allow` header the server answers a method no route takes with, as the operator asks it of
  * a path of a module's list, its parameters given a text.
@@ -154,24 +104,6 @@ const allowedAt = (operator: Account) => async (path: string) =>
       as: operator,
     })
   ).allow
-
-/** The routes the paths answer, each as `METHOD path`, and the paths that answer none. */
-async function census(
-  paths: readonly string[],
-  allow: (path: string) => Promise<string | null>,
-): Promise<{ served: string[]; unserved: string[] }> {
-  const served: string[] = []
-  const unserved: string[] = []
-
-  for (const path of paths) {
-    const methods = ((await allow(path)) ?? '').split(', ').filter((method) => method !== '')
-
-    unserved.push(...(methods.length === 0 ? [path] : []))
-    served.push(...methods.map((method) => `${method} ${path}`))
-  }
-
-  return { served, unserved }
-}
 
 describe('the platform actions and the routes', () => {
   const declared = Object.keys(platform.actions)
@@ -219,17 +151,15 @@ describe('the platform actions and the routes', () => {
 })
 
 /** Every parameter of every routed action, as the contract declares it and resolves its value. */
-const parameters = Object.keys(ACTION_ROUTES).map((action) => ({
-  action,
-  entries: Object.entries(platform.actions[action]?.params ?? {}).map(([name, declared]) => ({
-    name,
-    declared,
-    value: parameterValueOf(bound(action), name, platform, model),
-  })),
-}))
-
-/** Each bound each parameter of a routed action states, with what the probes need of it. */
-const probes = parameters.flatMap(({ action, entries }) => {
+const parameters = Object.keys(ACTION_ROUTES).map((action) => {
+  const entries = Object.entries(platform.actions[action]?.params ?? {}).map(
+    ([name, declared]) => ({
+      name,
+      declared,
+      ref: declared.value ?? name,
+      value: parameterValueOf(bound(action), name, platform, model),
+    }),
+  )
   const params: Param[] = entries.map(({ name, declared, value }) => ({
     name,
     ref: declared.value,
@@ -238,20 +168,29 @@ const probes = parameters.flatMap(({ action, entries }) => {
     type: value.type,
   }))
 
-  return entries.flatMap(({ name, declared, value }) =>
-    boundsOf(declared.value ?? name, value).map((limit) => ({
-      action,
-      params,
-      param: name,
-      ref: declared.value ?? name,
-      limit,
-    })),
-  )
+  return { action, params, entries }
 })
+
+/** Each bound a parameter states of the text it takes, with what the probes need of it. */
+const probes = parameters.flatMap(({ action, params, entries }) =>
+  entries
+    .filter(({ ref }) => !isIssued(ref))
+    .flatMap(({ name, ref, value }) =>
+      boundsOf(ref, value).map((limit) => ({ action, params, param: name, ref, limit })),
+    ),
+)
+
+/** The parameters whose value names a record the gateway issued, with the bounds of its text. */
+const idProbes = parameters.flatMap(({ action, params, entries }) =>
+  entries
+    .filter(({ ref }) => isIssued(ref))
+    .map(({ name, ref, value }) => ({ action, params, param: name, bounds: boundsOf(ref, value) })),
+)
 
 describe('the bounds of the parameters', () => {
   it('has bounds to hold the gateway to', () => {
     expect(probes.length).toBeGreaterThan(0)
+    expect(idProbes.length).toBeGreaterThan(0)
   })
 
   it.each(probes)(
@@ -280,12 +219,6 @@ describe('the bounds of the parameters', () => {
         expect(past.code).toBe(code)
       }
 
-      // The gateway issues the records such a value names, so a text of the bound's length is never
-      // one: only the side past the bound is held.
-      if (isIssued(ref)) {
-        return
-      }
-
       const inside = await ask(limit.inside)
 
       expect(inside.status).toBeLessThan(500)
@@ -309,6 +242,55 @@ describe('the bounds of the parameters', () => {
       if (code !== undefined) {
         expect(inside.code).not.toBe(code)
       }
+    },
+  )
+
+  // The text of an id is held apart from the record it names: a text past the bound is refused
+  // before any record is looked for, with the code of a request that does not follow its schema,
+  // the contract attributing none; one of the form the gateway issues, known or not, is not.
+  it.each(idProbes)(
+    'holds $action $param to the length of an id',
+    async ({ action, params, param, bounds }) => {
+      const wire = ACTION_ROUTES[action] ?? expect.unreachable('a routed action')
+      const roles = platform.actions[action]?.roles
+      const ids =
+        idsOf(action) ?? expect.unreachable(`name the ids of ${action} in platform-ids.ts`)
+      const asking = async (id: (stand: Stand, world: World) => string | Promise<string>) => {
+        const world = await worldFor(stand, wire, roles)
+
+        return stand.ask(
+          requestFor(action, wire, params, world, { param, value: await id(stand, world) }),
+        )
+      }
+      const longest = bounds.find(({ constraint }) => constraint.maxLength !== undefined)
+      const shortest = bounds.find(({ constraint }) => constraint.minLength !== undefined)
+      const past = await asking(() => longest?.past ?? expect.unreachable('a longest id'))
+
+      expect({ status: past.status, code: past.code }).toEqual({ status: 400, code: SHAPE_REFUSAL })
+
+      // No path carries an empty id: nothing answers it.
+      const empty = await asking(() => shortest?.past ?? expect.unreachable('a shortest id'))
+
+      expect(empty.status).toBe(404)
+
+      const unknown = await asking(() => ids.unknown())
+
+      expect(unknown.status).toBeLessThan(500)
+      expect(unknown.code).not.toBe(SHAPE_REFUSAL)
+
+      // A text of the bound's length is no id of the form: where the route takes the form before it
+      // looks for the record, it is refused as the text past the bound is.
+      if (!FORM_CHECKED.includes(action)) {
+        const atBound = await asking(() => longest?.inside ?? expect.unreachable('a longest id'))
+
+        expect(atBound.status).toBeLessThan(500)
+        expect(atBound.code).not.toBe(SHAPE_REFUSAL)
+      }
+
+      const done = await asking((owner, world) => ids.issued(owner, world))
+
+      expect(done.status).toBeGreaterThanOrEqual(200)
+      expect(done.status).toBeLessThan(300)
     },
   )
 })

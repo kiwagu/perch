@@ -123,7 +123,9 @@ its allowance 429 `rate-limited` with `Retry-After`; a failure of the gateway an
   - `GET /console/accounts/:id`: 200 `{ account }`, `{ id, name, email, emailVerified, createdAt,
     hasProfile, lastSeenAt, operator, banned, banReason, organisations }`, `lastSeenAt` and
     `banReason` null when the account has none, `organisations` each `{ key, name, role }`; 404
-    `account-gone` for an id no account has, of the form of an identity id or not.
+    `account-gone` for an id no account has, of the form of an identity id or not, 400
+    `bad-request` for an id of more than 64 characters (`MAX_PATH_ID`, `src/path-id.ts`), at every
+    path of an account, before any account is looked for.
   - `POST /console/accounts/:id/rename` with `{ name }`: 204 once the profile carries the name,
     trimmed; 400 `name-required` (nothing left once trimmed) or `name-too-long` (past 80
     characters), 409 `failed` for an account that has no profile yet.

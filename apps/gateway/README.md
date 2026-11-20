@@ -15,8 +15,9 @@ The source is one module per mechanism of the platform under `src/`, each with i
 for its role, surface and commands. `src/server.ts` routes each request to its module and
 `src/composition/root.ts` builds them; `src/route-path.ts` reads a request's path against the path
 templates a route module lists (a segment `:name` is a parameter), so a module answers only the
-paths it lists; `src/keyed-turns.ts` runs one key's work one turn at a time (one identity's
-membership changes, one account's sign-ups, verifications, resets and changes). The modules that
+paths it lists, and `src/path-id.ts` holds the longest id a path may carry; `src/keyed-turns.ts`
+runs one key's work one turn at a time (one identity's membership changes, one account's sign-ups,
+verifications, resets and changes). The modules that
 predate the index rule have no `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an

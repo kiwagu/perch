@@ -1,6 +1,7 @@
 import { match } from 'ts-pattern'
 
 import { bearerRefused } from '../../auth/bearer-caller'
+import { idTooLong } from '../../path-id'
 import { errorAnswer, refusalAnswer } from '../console-refusal'
 
 import { banHandlers } from './ban-handlers'
@@ -64,8 +65,9 @@ import { type Target, targetOf } from './targets'
  * answers 400 `bad-request`, one whose token holds no live session (a sign-in still waiting for its
  * admission among them) or one of another device 401 `unauthorized` with `WWW-Authenticate:
  * Bearer`, an account without `operator` 403 `not-operator`. Then a method a path does not take
- * answers 405 with the one it does in `Allow`; a query or a body that does not follow its schema
- * 400 `bad-request`; a failure of the gateway 500 `internal`, the failure itself handed to
+ * answers 405 with the one it does in `Allow`; an id of more than 64 characters (`MAX_PATH_ID`), a
+ * query or a body that does not follow its schema 400 `bad-request`, the id before any account is
+ * looked for; a failure of the gateway 500 `internal`, the failure itself handed to
  * `onFailure`. A request for another path is not answered here (`undefined`), so the server can
  * try its other routes.
  */
@@ -136,6 +138,11 @@ export function consoleRoutes(
         { code: 'method-not-allowed' },
         { status: 405, headers: { Allow: [...handlers.keys()].join(', ') } },
       )
+    }
+
+    // An id past the bound names no account: refused before any account is looked for.
+    if (target.kind !== 'accounts' && idTooLong(target.id)) {
+      return refusalAnswer('bad-request')
     }
 
     return handler(caller, request, from)

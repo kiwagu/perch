@@ -5,10 +5,16 @@
  * gateway reads is moved past every floor an answer waits on.
  */
 
-import type { IdentityId } from '@workspace/ids'
+import { expect } from 'vitest'
 
+import { type IdentityId, idSchemas } from '@workspace/ids'
+import { z } from '@workspace/zod'
+
+import { deviceHeaders } from '../auth/__fixtures__/auth-instance'
 import identityRoleSetStatement from '../auth/__fixtures__/identity-role-set.surql'
+import { profiledOn } from '../console/__fixtures__/profiles'
 import { startServer } from '../server'
+import { admitted } from '../tenants/__fixtures__/invitations'
 import {
   closeHarness,
   deviceOf,
@@ -30,30 +36,41 @@ export interface Asked {
   readonly method: string
   readonly path: string
   readonly as?: Account
+  /** The device the request names, instead of the sender's own. */
+  readonly device?: string
   readonly body?: unknown
 }
 
-/** An answer: its status, the `code` of its JSON body and its `Allow` header. */
+/** An answer: its status, its JSON body, the `code` of that body and its `Allow` header. */
 export interface Answered {
   readonly status: number
+  readonly body: unknown
   readonly code: string | undefined
   readonly allow: string | null
 }
 
-/** The `code` of a JSON body that has one. */
-function codeOf(text: string): string | undefined {
-  try {
-    const body: unknown = JSON.parse(text)
+/** The devices of an account as `GET /devices` lists them, as far as a stand reads them. */
+const listedDevices = z.object({
+  devices: z.array(z.object({ id: z.string(), current: z.boolean() })),
+})
 
-    return typeof body === 'object' &&
-      body !== null &&
-      'code' in body &&
-      typeof body.code === 'string'
-      ? body.code
-      : undefined
+/** The JSON a body holds, or none when it holds none. */
+function jsonOf(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
   } catch {
     return undefined
   }
+}
+
+/** The `code` of a JSON body that has one. */
+function codeOf(body: unknown): string | undefined {
+  return typeof body === 'object' &&
+    body !== null &&
+    'code' in body &&
+    typeof body.code === 'string'
+    ? body.code
+    : undefined
 }
 
 /** Opens the gateway and its server; `close` stops both. */
@@ -74,6 +91,29 @@ export async function openStand() {
     const { identity, token } = await base.signUp(email)
 
     return { identity: identity.id, email, device: deviceOf(email), token, password: PASSWORD }
+  }
+
+  /** An account that signed up and has not verified its email: it signs in on no device. */
+  const unverified = async (): Promise<Account> => {
+    issued++
+
+    const email = `account-${issued}@example.test`
+    const device = deviceOf(email)
+
+    await base.root.auth.api.signUpEmail({
+      body: { name: email, email, password: PASSWORD, locale: 'en' },
+      headers: deviceHeaders(device),
+    })
+
+    const identity = (await base.root.sessions.identityOf(email))._unsafeUnwrap()
+
+    return {
+      identity: idSchemas.identity.schema.parse(identity),
+      email,
+      device,
+      token: '',
+      password: PASSWORD,
+    }
   }
 
   /** An account that holds the platform role of an operator. */
@@ -102,14 +142,14 @@ export async function openStand() {
   }
 
   /** Sends the request and answers once the gateway did, moving its clock past every floor. */
-  const ask = async ({ method, path, as, body }: Asked): Promise<Answered> => {
+  const ask = async ({ method, path, as, device, body }: Asked): Promise<Answered> => {
     issued++
 
     const headers = new Headers({ 'X-Forwarded-For': address() })
 
     if (as !== undefined) {
       headers.set('Authorization', `Bearer ${as.token}`)
-      headers.set('X-Perch-Device', as.device)
+      headers.set('X-Perch-Device', device ?? as.device)
     }
 
     if (body !== undefined) {
@@ -141,18 +181,71 @@ export async function openStand() {
     }
 
     const response = await pending
+    const answered = jsonOf(await response.text())
 
     return {
       status: response.status,
-      code: codeOf(await response.text()),
+      body: answered,
+      code: codeOf(answered),
       allow: response.headers.get('Allow'),
     }
   }
 
+  /** The session id of a device of `owner` other than the one it asks from, signed in just now. */
+  const otherDevice = async (owner: Account): Promise<string> => {
+    const device = `${owner.device}-other`
+    const signedIn = await ask({
+      method: 'POST',
+      path: '/auth/sign-in/email',
+      as: owner,
+      device,
+      body: { email: owner.email, password: owner.password },
+    })
+
+    if (signedIn.status !== 200) {
+      throw new Error(`the second device did not sign in: ${signedIn.status}`)
+    }
+
+    const { devices } = listedDevices.parse(
+      (await ask({ method: 'GET', path: '/devices', as: owner })).body,
+    )
+
+    return devices.find((listed) => !listed.current)?.id ?? expect.unreachable('another device')
+  }
+
+  /** The id of an invitation of the organisation `key`, which `admin` administers. */
+  const invitation = async (admin: Account, key: string): Promise<string> => {
+    issued++
+
+    return (
+      await base.root.organisations.invitations.invite({
+        actor: admin.identity,
+        key,
+        email: `invited-${issued}@example.test`,
+        role: 'member',
+      })
+    )._unsafeUnwrap().id
+  }
+
   return {
     account,
+    unverified,
     operator,
     organisation,
+    /** `member` joins the organisation `key` as a member, `admin` having invited it. */
+    join: async (admin: Account, key: string, member: Account): Promise<void> => {
+      await admitted(base.root.organisations, {
+        actor: admin.identity,
+        key,
+        invitee: { id: member.identity, email: member.email },
+      })
+    },
+    /** `owner` has its profile, as it has once a device of it started. */
+    profile: async (owner: Account): Promise<void> => {
+      await profiledOn(base.root.hub, owner.identity, owner.email, owner.email)
+    },
+    otherDevice,
+    invitation,
     ask,
     close: async () => {
       await server.stop()

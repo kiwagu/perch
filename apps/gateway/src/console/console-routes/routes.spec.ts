@@ -309,6 +309,45 @@ describe('consoleRoutes: GET /console/accounts/:id', () => {
   })
 })
 
+describe('consoleRoutes: an id past the bound', () => {
+  it('answers 400 bad-request to an id of more than 64 characters at every path of an account, before looking for an account', async () => {
+    const { ask, reads } = await served()
+    const [shorter, longer] = ['a'.repeat(64), 'a'.repeat(65)]
+
+    for (const [method, suffix] of [
+      ['GET', ''],
+      ['POST', '/rename'],
+      ['POST', '/email'],
+      ['POST', '/ban'],
+      ['POST', '/unban'],
+      ['POST', '/sign-out'],
+      ['POST', '/reset'],
+      ['POST', '/verification'],
+      ['POST', '/removal'],
+    ] as const) {
+      expect(await ask(method, `/console/accounts/${shorter}${suffix}`)).toMatchObject({
+        status: 404,
+        body: { code: 'account-gone' },
+      })
+      expect(await ask(method, `/console/accounts/${longer}${suffix}`)).toMatchObject({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+    }
+
+    expect(reads).toEqual([])
+  })
+
+  it('judges who sends the request before the id: a caller that is no operator answers 403', async () => {
+    const { ask, bob } = await served()
+
+    expect(await ask('GET', `/console/accounts/${'a'.repeat(65)}`, { as: bob })).toMatchObject({
+      status: 403,
+      body: { code: 'not-operator' },
+    })
+  })
+})
+
 describe('consoleRoutes: the operator gate', () => {
   it('refuses an account that is no operator 403 not-operator at every path, and reads no account for it', async () => {
     const { ask, ann, bob, reads } = await served()

@@ -5,6 +5,7 @@ import { type IdentityId, idSchemas } from '@workspace/ids'
 import type { Clock } from '@workspace/replica'
 import { CLOSE, deviceId } from '@workspace/replica/protocol'
 
+import { idTooLong } from '../path-id'
 import { matchPath } from '../route-path'
 import type { ConnectionRegistry } from '../sync/connections'
 
@@ -118,8 +119,9 @@ export interface DeviceRoutesOptions {
  *   came from; neither a session token nor a device's own id is ever sent.
  * - `DELETE /devices/:id`: 204 once session `:id` of the caller has ended and its device's
  *   sockets are closed with 4001; a session that ended already answers 204 with nothing closed,
- *   so the device's later session keeps its sockets; 404 `no-such-device` for an id that is not
- *   one of the caller's sessions.
+ *   so the device's later session keeps its sockets; 400 `bad-request` for an id of more than 64
+ *   characters (`MAX_PATH_ID`), before any session is looked for; 404 `no-such-device` for any
+ *   other id that is not one of the caller's sessions.
  * - `POST /auth/sign-out-everywhere`: 204 once every live session of the caller, the asking
  *   one included, has ended and every socket of the identity is closed with 4001.
  * - `POST /auth/sign-out`, with the device's token and its `X-Perch-Device` and no body: the token
@@ -161,6 +163,10 @@ export function deviceRoutes(
   const revoke =
     (id: string): Handler =>
     async ({ identity }) => {
+      if (idTooLong(id)) {
+        return badRequest()
+      }
+
       const parsed = idSchemas.device_session.schema.safeParse(id)
 
       // An id of another form names no session.
