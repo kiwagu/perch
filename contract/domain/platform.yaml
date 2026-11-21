@@ -339,10 +339,11 @@ actions:
       code:
         value: second-factor-code
         description: The code the authenticator app shows now for that key.
-    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code, and so does a code of a key that a later two-factor.enable replaced"
+    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code; a code given for a key that a later two-factor.enable replaced, on this device or another, or once the second factor was turned on from another device, answers two-factor-changed whatever the code, and nothing changes"
     changes: [ two-factor.read ]
     codes:
       - invalid-code
+      - two-factor-changed
       - rate-limited
       - failed
   two-factor.disable:

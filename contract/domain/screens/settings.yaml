@@ -97,6 +97,9 @@ anchors:
   user.settings.two-factor.on-badge:
     kind: badge
     description: Marks the account's second factor as on.
+  user.settings.two-factor.off-badge:
+    kind: badge
+    description: Marks the account's second factor as off, once it was read.
   user.settings.two-factor.password-input:
     kind: input
     secret: true
@@ -114,7 +117,7 @@ anchors:
   user.settings.two-factor.enable-button:
     kind: button
     description: Starts turning the second factor on.
-    without: [ user.settings.two-factor.on-badge ]
+    with: [ user.settings.two-factor.off-badge ]
     binding: { action: platform.two-factor.enable }
   user.settings.two-factor.key-cell:
     kind: cell
@@ -402,9 +405,16 @@ flow:
                     - clear: user.settings.two-factor.code-input
                     - read: user.settings.two-factor.section
                 onError:
-                  target: confirming
-                  actions:
-                    - show: user.settings.two-factor.error
+                  - target: idle
+                    guard: factorChanged
+                    description: The key shown was replaced or the second factor turned on elsewhere; the page leaves the key and reads the section as it is now.
+                    actions:
+                      - show: user.settings.two-factor.error
+                      - clear: user.settings.two-factor.code-input
+                      - read: user.settings.two-factor.section
+                  - target: confirming
+                    actions:
+                      - show: user.settings.two-factor.error
             codes:
               description: The backup codes just made show until they are hidden or the page closes.
               meta: { renders: [ user.settings.two-factor.codes-cell, user.settings.two-factor.hide-codes-button ] }

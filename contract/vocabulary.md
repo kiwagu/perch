@@ -215,7 +215,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `code-expired` | `user.sign-in.error` | the sign-in waited ten minutes for its code, took five wrong ones, or the account's password or email changed meanwhile, so it starts again from the password |
 | `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
 | `passkey-unknown` | `user.sign-in.error` | the passkey picked is no account's here: removed from its account, or never added to one |
-| `two-factor-changed` | `user.settings.two-factor.error` | another device of the account turned the second factor on or off meanwhile, so nothing changed here; the section shows it as it is now |
+| `two-factor-changed` | `user.settings.two-factor.error` | the second factor changed meanwhile from elsewhere: turned on or off, or its key replaced, so nothing changed here; the section shows it as it is now |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
