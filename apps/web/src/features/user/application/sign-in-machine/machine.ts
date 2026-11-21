@@ -11,6 +11,8 @@ import {
   type SignInContext,
   UNKNOWN_FAILURE,
 } from './context'
+import { DEVICE_LIMIT_STATES } from './device-limit-states'
+import { askPastTheLimit, clearError, refusedSignIn, showError, welcomed } from './effects'
 import type { ClearParams, NavigateParams, ShowParams, SignInEmitted, SignInEvent } from './events'
 import { signInGuards } from './guards'
 
@@ -27,20 +29,11 @@ interface SignInAttempt {
   readonly signOutOldest: boolean
 }
 
-/**
- * The sign-in the submit button asks for, or the one the dialog past the limit of devices
- * confirms, which signs out the account's device seen least recently.
- */
+/** The sign-in the submit button asks for. */
 function signInInput({ event }: { readonly event: SignInEvent }): SignInAttempt {
-  assertEvent(event, [
-    'user.sign-in.submit-button',
-    'user.sign-in.device-limit-dialog.confirm-button',
-  ])
+  assertEvent(event, 'user.sign-in.submit-button')
 
-  return {
-    form: event.form,
-    signOutOldest: event.type === 'user.sign-in.device-limit-dialog.confirm-button',
-  }
+  return { form: event.form, signOutOldest: false }
 }
 
 /** The email the resend button sent, which the resend takes. */
@@ -64,45 +57,11 @@ const toForgotPassword = {
   ],
 } as const
 
-/** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
-const showError = (...codes: readonly string[]) =>
-  ({ type: 'show', params: { anchor: SIGN_IN_ERROR, codes } }) as const
-const clearError = { type: 'clear', params: { anchor: SIGN_IN_ERROR } } as const
 const clearMail = { type: 'clear', params: { anchor: MAIL_MESSAGE } } as const
 const showMail = {
   type: 'show',
   params: { anchor: MAIL_MESSAGE, codes: [CHECK_YOUR_MAIL] },
 } as const
-
-/** The welcome a sign-in that went through says, and the move to the profile. */
-const welcomed = [
-  { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-  { type: 'navigate', params: { to: '/me' } },
-] as const
-
-/** The dialog asking whether to sign in past the limit of devices. */
-const askPastTheLimit = {
-  type: 'show',
-  params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
-} as const
-
-/**
- * A refused sign-in: one of an email not verified yet offers the resend, any other goes back with
- * its code, a banned account's (`account-banned`) among them: no resend is offered for it.
- */
-const refusedSignIn = [
-  {
-    target: 'unverified',
-    guard: 'emailNotVerified',
-    actions: [showError('email-not-verified')],
-  },
-  {
-    target: 'sign-in',
-    actions: [
-      showError('invalid-credentials', 'account-banned', 'rate-limited', 'other-account', 'failed'),
-    ],
-  },
-] as const
 
 /**
  * The switch into the mode sign-up, judging the passwords as typed with `clear` on the way: to
@@ -278,23 +237,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           onError: refusedSignIn,
         },
       },
-      // Nothing is signed in unless the dialog is confirmed.
-      'device-limit': {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.device-limit-dialog'] },
-        on: {
-          'user.sign-in.device-limit-dialog.confirm-button': { target: 'signing-in-anyway' },
-          'user.sign-in.device-limit-dialog.cancel-button': { target: 'sign-in' },
-        },
-      },
-      'signing-in-anyway': {
-        meta: { renders: ['user.sign-in.forgot-link'] },
-        invoke: {
-          src: 'platform.sign-in',
-          input: signInInput,
-          onDone: { target: 'done', actions: welcomed },
-          onError: refusedSignIn,
-        },
-      },
+      ...DEVICE_LIMIT_STATES,
       'signing-up': {
         meta: {
           renders: [

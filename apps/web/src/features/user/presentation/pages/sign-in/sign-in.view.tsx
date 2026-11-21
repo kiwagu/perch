@@ -1,7 +1,6 @@
 import { useId, useState } from 'react'
 
 import { useLocale, useT } from '@workspace/i18n'
-import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -15,6 +14,8 @@ import type { SessionNotice } from '../../../../../platform/session.port'
 import type { SignInEvent } from '../../../application/sign-in-machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
+
+import { DeviceLimitDialog } from './sign-in-dialogs.view'
 
 /** The rules of a new password the list shows at sign-up, each with its item's anchor. */
 const RULES = [
@@ -369,17 +370,10 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
           </FieldGroup>
         </Form>
-        <ConfirmDialog
+        <DeviceLimitDialog
           open={props.renders('user.sign-in.device-limit-dialog')}
-          title={t('user.sign-in.device-limit.title')}
-          description={t('user.sign-in.device-limit.body')}
-          confirmLabel={t('user.sign-in.device-limit.confirm')}
-          cancelLabel={t('user.sign-in.device-limit.cancel')}
-          destructive
           onConfirm={() => props.onConfirmDeviceLimit(values)}
           onCancel={() => props.onCancelDeviceLimit()}
-          testId="user.sign-in.device-limit-dialog"
-          code="device-limit"
         />
       </CardContent>
     </Card>
