@@ -633,22 +633,31 @@ describe('compareWithContract', () => {
     ).toEqual({ strict: refused, ahead: refused })
   })
   it('lets a wrapper a for…of renders pass where an element of its array cannot be followed, in ahead mode too', () => {
+    /** The tagged rows' loop, rendering `search` for the search row. */
+    const tagged = (search: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { 'data-testid': TITLE_TEST_ID }",
+      'function Fields(props) {',
+      "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
+      '  const out = []',
+      '  for (const row of rows) {',
+      `    out.push(row.kind === 'wrapper' ? <Wrapper {...row.props} /> : ${search})`,
+      '  }',
+      '  return out',
+      '}',
+    ]
+    const refused = [
+      `x.tsx:7: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:7: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
     // The wrapper row's props are the component's own: the loop's variable is unknown as a whole,
     // so neither element takes the search row's anchor, as for any spread of a parameter.
+    expect(titleViewOf(tagged('<Input {...row.props} />'))).toEqual({ strict: [], ahead: [] })
+    // An element that writes its anchor beside such a spread is still held to it.
     expect(
-      titleViewOf([
-        "const TITLE_TEST_ID = 'sample.title-input'",
-        "const searchProps = { 'data-testid': TITLE_TEST_ID }",
-        'function Fields(props) {',
-        "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
-        '  const out = []',
-        '  for (const row of rows) {',
-        "    out.push(row.kind === 'wrapper' ? <Wrapper {...row.props} /> : <Input {...row.props} />)",
-        '  }',
-        '  return out',
-        '}',
-      ]),
-    ).toEqual({ strict: [], ahead: [] })
+      titleViewOf(tagged('<Input data-testid={TITLE_TEST_ID} {...row.props} maxLength={3} />')),
+    ).toEqual({ strict: refused, ahead: refused })
   })
   it('refuses a spread the check stops following at its depth, whatever the element carries, and follows a shallower one', () => {
     /** The title's props under `search`, spread through `layers` objects in a row. */
