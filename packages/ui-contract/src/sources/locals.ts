@@ -21,6 +21,7 @@ import { Visitor } from 'oxc-parser'
 import { type Alternative, alternativesIn, DEPTH } from './alternatives'
 import { type Binding, bindingsIn } from './bindings'
 import type { Callable } from './callable'
+import { changingUses } from './changing-uses'
 import { type DeclaredTypes, declaredTypesIn } from './declared-type'
 import { endIsReachable } from './reachable-end'
 import { contains, type Span, scopesIn, sizeOf } from './scopes'
@@ -137,6 +138,15 @@ export function localsOf(program: Program): Locals {
     return [...own.map(({ argument }) => argument), ...(endIsReachable(fn.body) ? [null] : [])]
   }
 
+  const uses = changingUses(program)
+  const changed = (name: string, at: number): boolean => {
+    const bound = boundAt(name, at)
+
+    return uses.some(
+      (use) => use.name === name && boundAt(name, use.start).some((one) => bound.includes(one)),
+    )
+  }
+
   const types = declaredTypesIn(program)
   const declaredTypeOf = (node: Expression, at: number, depth = 0): TSType | undefined => {
     if (depth >= DEPTH) {
@@ -184,6 +194,6 @@ export function localsOf(program: Program): Locals {
     declares: (name, at) => visible(name, at).length > 0,
     declaredTypeOf: (node, at) => declaredTypeOf(node, at),
     types,
-    objectsOf: alternativesIn({ boundTo: boundAt, constantNamed, returnedBy }),
+    objectsOf: alternativesIn({ boundTo: boundAt, constantNamed, changed, returnedBy }),
   }
 }

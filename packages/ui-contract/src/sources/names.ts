@@ -30,5 +30,10 @@ export interface Names {
   boundTo(name: string, at: number): readonly Bound[]
   /** The value of a name a `const` declares, as `Locals.constantNamed`. */
   constantNamed(name: string, at: number): Expression | undefined
+  /**
+   * Whether the file may change the array a name, written at a place, holds: a use of the same
+   * binding that is no plain read (`changing-uses.ts`).
+   */
+  changed(name: string, at: number): boolean
   returnedBy(fn: Callable): Array<Expression | null>
 }

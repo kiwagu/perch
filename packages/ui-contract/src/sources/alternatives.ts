@@ -5,16 +5,17 @@
  * one, since `false ?? x` is `false`) and the right of `&&` (or a nothing that may be `false`), the
  * one a constant holds (each one a variable that several `var`s or a parameter declare may hold), a
  * destructured name's key, each element of an array the file states for the `const` of a `for…of`
- * over it (where it can say every element), a member of such an object (through the spreads it
- * writes: a spread that lacks the key lets the scan go on before it, a property whose key the file
- * does not state or a spread the file cannot follow is one more alternative, unknown, and the scan
- * goes on before it too), or each object a function of the file returns where it is called (each
- * `return` of its own body, a bare one or a reachable end giving nothing, an end no `return` or
- * `throw` reaches being one a block or both arms of an `if` and `else` end, `reachable-end.ts`; a
- * `useCallback` hands its function on, a `useMemo` holds what its function returns; an `async`
- * function or a generator gives a Promise or an iterator, which is no object the file writes: the
- * call is one the file cannot say, beside the objects its returns write, never nothing). A chain of
- * names, calls and spreads is followed `DEPTH` steps, and given up there (`DEEP`).
+ * over it (where it can say every element and does not change the array), a member of such an
+ * object (through the spreads it writes: a spread that lacks the key lets the scan go on before it,
+ * a property whose key the file does not state or a spread the file cannot follow is one more
+ * alternative, unknown, and the scan goes on before it too), or each object a function of the file
+ * returns where it is called (each `return` of its own body, a bare one or a reachable end giving
+ * nothing, an end no `return` or `throw` reaches being one a block or both arms of an `if` and
+ * `else` end, `reachable-end.ts`; a `useCallback` hands its function on, a `useMemo` holds what its
+ * function returns; an `async` function or a generator gives a Promise or an iterator, which is no
+ * object the file writes: the call is one the file cannot say, beside the objects its returns
+ * write, never nothing). A chain of names, calls and spreads is followed `DEPTH` steps, and given
+ * up there (`DEEP`).
  */
 
 import type { Expression, ObjectExpression, Super } from 'oxc-parser'
@@ -29,8 +30,9 @@ export const DEEP = 'deep'
 /**
  * One thing a value may be: an object; `null` for a nullish nothing (`null`, `undefined`, an absent
  * member, a function that returns none); `false` for a nothing that may not be nullish (`false`,
- * `0`, `''`, the left of `&&` where it is falsy), which `??` keeps; `undefined` for what the file
- * cannot say (a parameter, an import, a value built at runtime, a Promise or an iterator); `DEEP`.
+ * the left of `&&` where it is falsy), which `??` keeps; `undefined` for what the file cannot say
+ * (a parameter, an import, a value built at runtime, a `0` or a `''`, a Promise or an iterator);
+ * `DEEP`.
  */
 export type Alternative = ObjectExpression | null | false | undefined | typeof DEEP
 
@@ -42,8 +44,7 @@ const isNullish = (value: Expression): boolean =>
   (value.type === 'Literal' && value.value === null) ||
   (value.type === 'Identifier' && value.name === 'undefined')
 
-const isFalse = (value: Expression): boolean =>
-  value.type === 'Literal' && (value.value === false || value.value === 0 || value.value === '')
+const isFalse = (value: Expression): boolean => value.type === 'Literal' && value.value === false
 
 /** Unknown as a whole where one of them is unknown, given up where one is: else each of them. */
 const settled = (alternatives: Alternative[]): Alternative[] =>
@@ -78,8 +79,9 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
     }
     /**
      * What each element of an array may be, for the variable of a `for…of` over it: the array
-     * written there or held by a name of the file, each element followed. A spread element, a hole
-     * or a value the file does not state as an array may be anything.
+     * written there or held by a name of the file that the file does not change (`Names.changed`),
+     * each element followed. A spread element, a hole or a value the file does not state as an
+     * array may be anything.
      */
     const elementsOf = (iterated: Expression, level: number): Alternative[] => {
       const array = unwrap(iterated)
@@ -98,7 +100,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
 
       const bound = names.boundTo(array.name, array.start)
 
-      return bound.length === 0
+      return bound.length === 0 || names.changed(array.name, array.start)
         ? [undefined]
         : bound.flatMap(({ value }) =>
             value === undefined ? [undefined] : elementsOf(value, level + 1),

@@ -632,6 +632,43 @@ describe('compareWithContract', () => {
       ]),
     ).toEqual({ strict: refused, ahead: refused })
   })
+  it('refuses the spread of a for…of over an array the file may change, in ahead mode too', () => {
+    /** The loop over `fields`, `use` written before it. */
+    const looping = (use: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { placeholder: 'Search' }",
+      'function Fields(props) {',
+      '  const fields = [searchProps]',
+      `  ${use}`,
+      '  const inputs = []',
+      '  for (const field of fields) {',
+      '    inputs.push(<Input data-testid={TITLE_TEST_ID} {...field} />)',
+      '  }',
+      '  return inputs',
+      '}',
+    ]
+    const refused = [`x.tsx:8: ${UNFOLLOWED_SPREAD('sample.title-input')}`]
+
+    // A method that changes it, an index or its length assigned, the array passed to a function or
+    // handed on to another name: it may hold another object by the loop, one with a limit.
+    for (const use of [
+      'fields.push(props.extra)',
+      'fields.unshift(props.extra)',
+      'fields.splice(0, 1, props.extra)',
+      "fields['push'](props.extra)",
+      'fields[1] = props.extra',
+      'fields.length = 0',
+      'addExtra(fields)',
+      'const same = fields',
+    ]) {
+      expect(titleViewOf(looping(use)), use).toEqual({ strict: refused, ahead: refused })
+    }
+
+    // Only read besides, its length or a spread of it, it yields the elements it declares.
+    for (const use of ['const count = fields.length', 'const copy = [...fields]']) {
+      expect(titleViewOf(looping(use)), use).toEqual({ strict: [], ahead: [] })
+    }
+  })
   it('lets a wrapper a for…of renders pass where an element of its array cannot be followed, in ahead mode too', () => {
     /** The tagged rows' loop, rendering `search` for the search row. */
     const tagged = (search: string): string[] => [
