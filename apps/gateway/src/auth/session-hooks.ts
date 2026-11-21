@@ -6,6 +6,7 @@ import type { Clock } from '@workspace/replica'
 import { deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { noteSessionWritten } from './session-writes'
 import sessionEndByTokenStatement from './surql/device-session-end-by-token.surql'
 import sessionsKeepNewestStatement from './surql/device-sessions-keep-newest.surql'
 
@@ -82,7 +83,8 @@ const BETTER_AUTH_VERIFY_PATH = '/verify-email'
  * same in its transaction: a device holds one live session. Each keeps the newest, its own row
  * included when a newer one exists already, so the device converges on its newest session whatever
  * order the rows are inserted and the statements run in: a session whose row is inserted late ends
- * itself, and two that end the others at once never end each other. A row that waits for its
+ * itself, and two that end the others at once never end each other. Every row written is noted
+ * for the gateway's call that wrote it (`noteSessionWritten`). A row that waits for its
  * admission is neither kept nor ended, so the device's earlier session stays live until the
  * sign-in or the verification is admitted, and as it was when it is not.
  *
@@ -127,6 +129,9 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
         }
       },
       after: async (session: SessionRow) => {
+        // The gateway's call that wrote it learns of it, so a call that fails afterwards ends it.
+        noteSessionWritten(session.token)
+
         const device = session['device']
 
         // A row that waits for its admission ends nothing yet: its admission keeps the device's

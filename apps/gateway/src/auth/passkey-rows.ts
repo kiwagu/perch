@@ -17,9 +17,10 @@ export interface ListedPasskey {
 }
 
 /**
- * How many expired ceremonies one start of a ceremony reclaims at most: each start leaves one row
- * at most behind, so a backlog of abandoned ones drains over the next starts, and no start's work
- * grows with it.
+ * How many expired ceremonies one start of a ceremony deletes at most: each start leaves one row at
+ * most behind, so a backlog of abandoned ones drains over the next starts. This bounds the
+ * deletions only: finding them reads the rows of `verification` by their expiry and value, which no
+ * index holds, so that read grows with the table (every row of it while fewer than this many match).
  */
 export const RECLAIMED_PER_CEREMONY = 10
 

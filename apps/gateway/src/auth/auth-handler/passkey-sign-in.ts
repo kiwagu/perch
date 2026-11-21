@@ -7,6 +7,7 @@ import { z } from '@workspace/zod'
 import { readBody } from '../../read-body'
 import { USER_NOT_VERIFIED } from '../passkey-plugin'
 import { DEVICE_HEADER, DEVICE_LABEL_HEADER, deviceLabel } from '../session-hooks'
+import { watchingSessionWrites } from '../session-writes'
 
 import { acceptedSession, admitted } from './admitted'
 import { challengeValue, internalRequest } from './challenge-cookie'
@@ -56,7 +57,8 @@ const failed = (): Response => refused(400, 'failed')
  * plugin's refusal of a banned account's session; an authenticator that did not verify its user, a
  * signature that does not verify, and a challenge spent, ended, of a registration or past its five
  * minutes. Any other refusal is a failure of the gateway's, a sign-in the directory did not take
- * among them (Better Auth's `STORAGE_FAILED`, `storageFailuresTold`).
+ * among them (Better Auth's `STORAGE_FAILED`, `storageFailuresTold`), and so is any refusal that
+ * came once the plugin wrote the session (`verified`).
  */
 const REFUSALS: ReadonlyMap<string, () => Response> = new Map([
   [PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND.code, unknownPasskey],
@@ -125,23 +127,44 @@ export async function passkeyOptions(deps: AuthMountDeps, request: Request): Pro
  * reset and a change of the account commit wholly before it or after it: the assertion goes to the
  * plugin's verifier with the challenge as the call's only cookie, the session it writes waiting for
  * its admission, and the plugin reads the passkey itself (one removed before the turn: 401
- * `passkey-unknown`). A verified passkey is a sign-in's last step: the account's email, in lower case,
+ * `passkey-unknown`); a verifier that wrote the session and then failed verified the passkey, so the
+ * gateway ends that session, which nobody was handed, and answers 500 `internal` (the sessions it
+ * wrote are noted for the call, `watchingSessionWrites`). A verified passkey is a sign-in's last
+ * step: the account's email, in lower case,
  * forgets its failed sign-ins whatever the admission answers. The session is then admitted
  * (`admitted`) with the start of the account that email names, past the limit of devices only
  * when the person confirmed it for this very account (`signOutOldestFor`); a sign-in the limit
  * asks about answers 409 `{ code: 'device-limit', consentFor }`, naming that account.
  */
 async function verified(deps: AuthMountDeps, request: Request, step: Step): Promise<Response> {
-  const answer = await deps.auth.handler(
-    internalRequest({
-      publicUrl: deps.publicUrl,
-      path: '/passkey/verify-authentication',
-      device: step.device,
-      challenge: { name: await deps.passkeyChallenges.cookieName(), value: step.challenge },
-      pending: true,
-      body: { response: step.response },
-    }),
+  const cookie = await deps.passkeyChallenges.cookieName()
+  const { answer, written } = await watchingSessionWrites(() =>
+    deps.auth.handler(
+      internalRequest({
+        publicUrl: deps.publicUrl,
+        path: '/passkey/verify-authentication',
+        device: step.device,
+        challenge: { name: cookie, value: step.challenge },
+        pending: true,
+        body: { response: step.response },
+      }),
+    ),
   )
+
+  if (answer.status !== 200 && written.length > 0) {
+    // The plugin wrote the session, so the passkey was verified, then failed (a read of the account
+    // to answer with): a failure of the service, whatever code it gave. The session was handed to
+    // nobody and waits for an admission: it is ended, and the answer is 500 either way.
+    for (const token of written) {
+      // An ending that failed leaves the session waiting, counted by no admission, handed to nobody.
+      await deps.sessions.signOut(token).match(
+        () => undefined,
+        () => undefined,
+      )
+    }
+
+    return internal()
+  }
 
   if (answer.status !== 200) {
     return REFUSALS.get((await refusalCodeOf(answer)) ?? '')?.() ?? internal()

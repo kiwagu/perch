@@ -6,7 +6,7 @@ import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
 import { SUPERSEDED } from '../../sync/sync-connection'
-import { ban } from '../__fixtures__/account-ban'
+import { ban, sessionStates } from '../__fixtures__/account-ban'
 import { DeviceSessions } from '../device-sessions'
 
 import {
@@ -375,6 +375,52 @@ describe('authHandler, a passkey sign-in the directory cannot keep', () => {
       refusing.now = false
       expect(await devicesOf(mounted, ann.identity)).toEqual(['laptop'])
       expect(mounted.logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'answers 500 internal to a verified passkey whose account the directory could not read once its session was written, that session ended',
+    async () => {
+      const refusing = { now: false, written: false }
+      const mounted = await mountedOnRealAuth({
+        directory: (local) =>
+          interceptQueries(local, (text) => {
+            if (!refusing.now) {
+              return
+            }
+
+            // Better Auth wrote the session waiting for its admission, then reads the account to
+            // answer with it: that read fails.
+            if (isSessionInsert(text)) {
+              refusing.written = true
+            } else if (
+              refusing.written &&
+              text.startsWith('SELECT') &&
+              text.includes('FROM `identity`')
+            ) {
+              throw new Error('the directory failed a read')
+            }
+          }),
+      })
+      const { ann, held } = await annWithPasskey(mounted)
+      const assertion = await assertionOf(mounted, 'desk', held)
+
+      refusing.now = true
+      expect(
+        await answered(await mounted.route(passkeySignInRequest(assertion, 'desk'), '198.18.4.2')),
+      ).toEqual({ status: 500, body: { code: 'internal' } })
+      refusing.now = false
+      expect(refusing.written).toBe(true)
+
+      // The session the request wrote was never handed out, and is ended, not left waiting.
+      const desk = (await sessionStates(mounted.local, ann.identity)).filter(
+        (row) => row.device === 'desk',
+      )
+
+      expect(desk).toHaveLength(1)
+      expect(desk.map((row) => row.ended_at instanceof Date)).toEqual([true])
+      expect(await devicesOf(mounted, ann.identity)).toEqual(['laptop'])
     },
     ARGON2_RUNS_MS,
   )

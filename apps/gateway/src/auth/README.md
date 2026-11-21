@@ -508,7 +508,12 @@ the start of the account its email names). A sign-in the limit of devices asks a
 `{ code: 'device-limit', consentFor }`, naming the account it asked about; a retry signs the
 device seen least recently out only when `signOutOldestFor` names the account of the passkey it
 verifies, so a passkey of another account picked on the confirmation is asked about afresh. A
-removal whose turn came after the sign-in's ends no session.
+removal whose turn came after the sign-in's ends no session. A verifier that wrote the session and
+then failed (its read of the account to answer with, say) verified the passkey: the failure is the
+service's, so the gateway ends that session, which nobody was handed (the session hooks note each
+session written for the gateway's call that wrote it, `noteSessionWritten` and
+`watchingSessionWrites` in `session-writes.ts`), and answers 500 `internal`, whatever code the
+plugin gave.
 
 A ceremony a device starts and leaves (its browser window closed) leaves the plugin's row in
 `verification`, which expires after five minutes but which nothing deletes, Better Auth's own
@@ -517,7 +522,9 @@ registration's options and a guest's alike, first reclaims at most `RECLAIMED_PE
 of the passkey ceremonies that expired more than a minute ago (`PasskeyRows.reclaim`, one
 statement: the rows whose JSON value is the plugin's registration or sign-in, the minute keeping a
 ceremony Better Auth still takes out of reach of a database clock a little ahead), so a backlog of
-abandoned ones drains over the next starts and no start's work grows with it. No row of another
+abandoned ones drains over the next starts. That bounds the deletions, not the read that finds
+them: `verification` is indexed by its identifier alone, so the statement reads its rows by expiry
+and value, all of them while fewer than ten match, a cost that grows with the table. No row of another
 kind (a reset link, a pending change of an email or deletion of an account, a two-factor challenge)
 is touched.
 
@@ -879,6 +886,8 @@ its challenge cookie carried by the device as `challenge`.
   `USER_NOT_VERIFIED` (`passkey-plugin.ts`: Better Auth's passkey plugin as the gateway runs it, its
   two hooks and the code of their refusal), `storageFailuresTold` and `STORAGE_FAILED`
   (`storage-failures.ts`: the adapter with a failed write of a passkey or a session told apart),
+  `noteSessionWritten` and `watchingSessionWrites` (`session-writes.ts`: the sessions Better Auth
+  wrote during a call of the gateway's, noted by the session hooks),
   `PasskeyRows` (`passkey-rows.ts`: `list` an account's passkeys, `ownerOf` a credential, `remove`,
   `reclaim` the ceremonies left unfinished; `ListedPasskey`, `PasskeyRemoval`,
   `RECLAIMED_PER_CEREMONY`; the root's `passkeyRows`, which the mount reads at a passkey sign-in and
@@ -1002,7 +1011,8 @@ its challenge cookie carried by the device as `challenge`.
   turn before each registration call and after it, both orders forced by the turn and by a held
   query, and a session ended between the gateway's read and the plugin's, or after the plugin's);
   `auth-handler/passkey-sign-in.spec.ts` (the guest's options and their policy, the guest
-  ceremony, an account whose second factor is on signed in with no code, the email's failed
+  ceremony, a verified passkey whose account could not be read once its session was written
+  answering 500 with that session ended, an account whose second factor is on signed in with no code, the email's failed
   sign-ins never keeping it out and forgotten by it, an unverified user, a forged signature and a
   replayed assertion refused, a sign-in whose count or session the directory refused to write
   answering 500, a removed or unknown passkey answering 401, the device checked
