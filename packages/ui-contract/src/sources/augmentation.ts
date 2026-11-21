@@ -7,8 +7,10 @@
  * alias; or the package of a root (`@workspace/web`, `@workspace/ui`). An ambient module
  * (`'*.surql'`), a virtual one (`'virtual:perch-build'`), another package's
  * (`'@tanstack/react-router'`), a relative one that names no file of a root and `declare global`
- * stand. Each declaration is read from the parsed file, whatever comment or line it holds between
- * its words; only a file without the word `module` is not parsed.
+ * stand. A backslash in a specifier separates its segments as `/` does, the way TypeScript reads
+ * it, so `'..\\src\\x'` names what `'../src/x'` names. Each declaration is read from the parsed
+ * file, whatever comment or line it holds between its words; only a file without the word `module`
+ * is not parsed.
  */
 
 import { posix } from 'node:path'
@@ -62,11 +64,14 @@ export function augmentationProblems(
   }
 
   const named = (specifier: string): boolean => {
-    if (!RELATIVE.test(specifier)) {
-      return SOURCE_SPECIFIER.test(specifier)
+    // TypeScript takes a backslash for a separator when it resolves the specifier.
+    const path = specifier.replaceAll('\\', '/')
+
+    if (!RELATIVE.test(path)) {
+      return SOURCE_SPECIFIER.test(path)
     }
 
-    const resolved = posix.join(posix.dirname(file), specifier)
+    const resolved = posix.join(posix.dirname(file), path)
 
     return roots.some((root) => resolved === root || resolved.startsWith(`${root}/`))
   }

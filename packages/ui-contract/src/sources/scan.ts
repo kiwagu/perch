@@ -5,7 +5,10 @@
  * the repository git lists (`.ts`, `.tsx`, `.mts`, `.cts`, declarations, tests and the files of
  * any package or folder included; ignored build output and `node_modules` not) is held to the
  * module declarations it may write (`augmentation.ts`): any of them could add to a source's types
- * through a path, the web app's alias or a root's package.
+ * through a path, the web app's alias or a root's package. Only a file under a `__fixtures__`
+ * folder outside the web app and the UI kit is left out: it belongs to a fixture project of its
+ * own, whose stand-in for a kit module reaches no view, while the two projects compile their own
+ * fixtures with their sources.
  */
 
 import { execFileSync } from 'node:child_process'
@@ -20,6 +23,15 @@ export const SOURCE_ROOTS = ['apps/web/src', 'packages/ui/src'] as const
 const SOURCE = /\.tsx?$/
 const TYPED = /\.[cm]?tsx?$/
 const EXCLUDED = /\.(spec|test)\.[^/]*$|\.d\.ts$|\.gen\.ts$|(^|\/)(__fixtures__|__snapshots__)\//
+
+/** The projects whose programs hold the source roots: a fixture inside one is read like any file. */
+const SOURCE_PROJECTS = ['apps/web/', 'packages/ui/'] as const
+
+const FIXTURE = /(^|\/)__fixtures__\//
+
+/** Whether `path` is a file of a fixture project that holds no source. */
+const outsideFixture = (path: string): boolean =>
+  FIXTURE.test(path) && !SOURCE_PROJECTS.some((project) => path.startsWith(project))
 
 /** The repository paths git lists under `under` (the whole repository for none) that `kind` takes. */
 function listedPaths(root: string, kind: RegExp, under: readonly string[]): string[] {
@@ -44,6 +56,7 @@ export function scanSources(root: string): Collected[] {
   const read = (path: string): string => readFileSync(join(root, path), 'utf8')
   const refused = new Map(
     listedPaths(root, TYPED, [])
+      .filter((path) => !outsideFixture(path))
       .map((path) => [path, augmentationProblems(read(path), path, SOURCE_ROOTS)] as const)
       .filter(([, problems]) => problems.length > 0),
   )

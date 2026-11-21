@@ -52,6 +52,32 @@ describe('augmentationProblems', () => {
       `apps/web/src/augment.d.ts:1: ${UNREAD_DECLARATIONS('Expected `}` but found `EOF`')}`,
     ])
   })
+  it('reads a backslash as the path separator it is: such a path into a root is refused as written', () => {
+    for (const [file, specifier] of [
+      ['apps/web/build/augment.d.ts', '..\\\\src\\\\features\\\\organisation-create.view'],
+      ['apps/web/build/augment.d.ts', '..\\\\src/features\\\\organisation-create.view'],
+      ['apps/web/src/augment.d.ts', '.\\\\organisation-create.view'],
+      ['tests/e2e/augment.d.ts', '..\\\\..\\\\packages\\\\ui\\\\src\\\\components\\\\input'],
+      ['apps/web/build/augment.d.ts', '@\\\\features\\\\organisation-create.view'],
+      ['tests/augment.d.ts', '@workspace\\\\ui\\\\components\\\\input'],
+    ] as const) {
+      // The file writes each backslash escaped; the problem says the specifier as it reads.
+      expect(problemsOf(declaring(specifier), file), `${file}: ${specifier}`).toEqual([
+        `${file}:3: ${AUGMENTED_MODULE(specifier.replaceAll('\\\\', '\\'))}`,
+      ])
+    }
+
+    // A backslash path that names no file of a root, and a name with no separator, stand.
+    for (const [file, specifier] of [
+      ['apps/web/build/augment.d.ts', '.\\\\pwa'],
+      ['tests/e2e/augment.d.ts', '..\\\\helpers'],
+      ['apps/web/build/augment.d.ts', 'surrealdb'],
+      ['apps/web/build/augment.d.ts', 'src'],
+      ['tests/augment.d.ts', '@tanstack\\\\react-router'],
+    ] as const) {
+      expect(problemsOf(declaring(specifier), file), `${file}: ${specifier}`).toEqual([])
+    }
+  })
   it('lets a relative declaration stand that names no file of a root', () => {
     for (const [file, specifier] of [
       ['tests/e2e/augment.d.ts', './helpers'],

@@ -183,8 +183,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     asks its machine about, `sources/asked-event.ts`, with what the file's type declarations say of
     a spread it cannot follow, `sources/declared-type.ts`, whether a function body can run off its
     end, `sources/reachable-end.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`,
-    refusing in any typed file of the repository a `declare module` that names one
-    (`sources/augmentation.ts`);
+    refusing in any typed file of the repository a `declare module` that names one, a backslash
+    read as a separator (`sources/augmentation.ts`; a `__fixtures__` folder outside the web app and
+    the UI kit is left out);
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
     and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and

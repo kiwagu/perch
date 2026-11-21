@@ -99,6 +99,41 @@ describe('scanSources', () => {
       `apps/web/build/augment.d.ts:3: ${AUGMENTED_MODULE(view)}`,
     ])
   })
+  it('leaves a fixture project outside the web app and the UI kit to its own module declarations', () => {
+    const kit = '@workspace/ui/components/input'
+    const standIn = `declare module '${kit}' {\n  export const Input: (props: object) => null\n}\n`
+    const root = repository(
+      {
+        'apps/web/src/view.tsx': ANCHOR,
+        'packages/eslint-config/src/__fixtures__/project/modules.d.ts': standIn,
+        'tests/__fixtures__/modules.d.ts': standIn,
+        'apps/web/build/x.d.ts': standIn,
+        'apps/web/src/__fixtures__/modules.d.ts': standIn,
+        'apps/web/build/__fixtures__/modules.d.ts': standIn,
+        'packages/ui/src/__fixtures__/modules.d.ts': standIn,
+        'packages/eslint-config/src/fixtures/modules.d.ts': standIn,
+      },
+      [],
+    )
+    const found = scanSources(root)
+
+    // A stand-in for the kit in a fixture project of another package reaches no view: not read.
+    // Inside the web app or the kit, whose programs hold the sources, a fixture is read like any
+    // file, and so is a file of another package that sits under no `__fixtures__`.
+    expect(
+      found.map(({ file, literals, problems }) => [file, literals.length, problems.length]),
+    ).toEqual([
+      ['apps/web/build/__fixtures__/modules.d.ts', 0, 1],
+      ['apps/web/build/x.d.ts', 0, 1],
+      ['apps/web/src/__fixtures__/modules.d.ts', 0, 1],
+      ['apps/web/src/view.tsx', 1, 0],
+      ['packages/eslint-config/src/fixtures/modules.d.ts', 0, 1],
+      ['packages/ui/src/__fixtures__/modules.d.ts', 0, 1],
+    ])
+    expect(found[1]?.problems.map(formatProblem)).toEqual([
+      `apps/web/build/x.d.ts:1: ${AUGMENTED_MODULE(kit)}`,
+    ])
+  })
   it('skips a staged file that is gone from the working tree', () => {
     const root = repository({ 'apps/web/src/page.tsx': ANCHOR }, ['apps/web/src/page.tsx'])
 
