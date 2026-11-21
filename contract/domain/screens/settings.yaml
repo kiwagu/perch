@@ -1,10 +1,10 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: its theme and language, its password, email and second factor, and the request that deletes the account."
+description: "The signed-in account's settings: its theme and language, its password, email, second factor and passkeys, and the request that deletes the account."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
-entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.two-factor.section, user.settings.deletion.form ]
+entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.two-factor.section, user.settings.passkeys.list, user.settings.deletion.form ]
 anchors:
   user.settings.heading:
     kind: heading
@@ -154,6 +154,31 @@ anchors:
     fields:
       invalid-credentials: user.settings.two-factor.password-input
       invalid-code: user.settings.two-factor.code-input
+  user.settings.passkeys.list:
+    kind: list
+    description: "The account's passkeys, the earliest added first: each signs the account in from the sign-in page, with no password and no code."
+    source:
+      platform: passkeys.list
+  user.settings.passkeys.passkey-item:
+    kind: item
+    description: One passkey, shown by when it was added.
+    dataId: passkey
+  user.settings.passkeys.added-cell:
+    kind: cell
+    description: When the passkey was added.
+  user.settings.passkeys.remove-button:
+    kind: button
+    description: Removes that passkey; it signs nothing in from then on.
+    binding:
+      action: platform.passkeys.remove
+      params:
+        passkey: user.settings.passkeys.passkey-item
+  user.settings.passkeys.add-button:
+    kind: button
+    description: Asks the browser to make a passkey of the account, on this device or on a security key.
+    binding: { action: platform.passkeys.add }
+  user.settings.passkeys.error:
+    kind: error
   user.settings.deletion.form:
     kind: form
     description: "Asks to delete the account: a mail to its email carries the link of the page that deletes it."
@@ -407,6 +432,25 @@ flow:
                   target: idle
                   actions:
                     - show: user.settings.two-factor.error
+        passkey-add:
+          description: Adding a passkey.
+          by: user.settings.passkeys.add-button
+          onDone:
+            actions:
+              - read: user.settings.passkeys.list
+          onError:
+            actions:
+              - show: user.settings.passkeys.error
+        passkey-remove:
+          description: Removing a passkey.
+          by: user.settings.passkeys.remove-button
+          onDone:
+            actions:
+              - read: user.settings.passkeys.list
+          onError:
+            actions:
+              - show: user.settings.passkeys.error
+              - read: user.settings.passkeys.list
         deletion:
           description: Asking to delete the account.
           initial: idle
@@ -455,5 +499,7 @@ wireframe: |-
   - button "Send the confirmation"
   - textbox "Password"
   - button "Turn on the second factor"
+  - list
+  - button "Add a passkey"
   - textbox "Password"
   - button "Send the deletion link"

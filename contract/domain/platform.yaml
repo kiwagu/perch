@@ -43,7 +43,7 @@ values:
     type: string
     minLength: 1
     maxLength: 64
-    description: "The id of a platform record: an identity, a device session, an invitation."
+    description: "The id of a platform record: an identity, a device session, an invitation, a passkey."
   invitation-ref:
     type: string
     minLength: 1
@@ -350,6 +350,31 @@ actions:
     codes:
       - invalid-credentials
       - rate-limited
+      - failed
+  passkeys.list:
+    description: Reads the passkeys of the signed-in account.
+    params: {}
+    result: "the account's passkeys, the earliest added first: for each its id and when it was added"
+    changes: []
+    codes:
+      - failed
+  passkeys.add:
+    description: Adds a passkey to the signed-in account, which the browser makes on this device or on a security key.
+    params: {}
+    result: "the browser asks to make a passkey for this site and to unlock it; the account then signs in with it from the sign-in page, with no password and no code; the browser's window closed or timed out answers passkey-cancelled, and nothing is added"
+    changes: [ passkeys.list ]
+    codes:
+      - passkey-cancelled
+      - failed
+  passkeys.remove:
+    description: Removes a passkey of the signed-in account.
+    params:
+      passkey:
+        value: id
+        description: The id of the passkey.
+    result: "the passkey signs nothing in from now on; the devices it signed in stay signed in"
+    changes: [ passkeys.list ]
+    codes:
       - failed
   sign-out:
     description: Signs this device out, after sending what it can.
@@ -807,6 +832,8 @@ toasts:
   change-password: password-changed
   two-factor.confirm: two-factor-enabled
   two-factor.disable: two-factor-disabled
+  passkeys.add: passkey-added
+  passkeys.remove: passkey-removed
   accounts.rename: name-saved
   accounts.change-email: email-change-sent
   accounts.ban: ban-set

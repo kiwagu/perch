@@ -213,6 +213,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `invalid-code` | `user.settings.two-factor.error`, `user.sign-in.code.error` | the code is not one the authenticator app shows now for the account's key, nor a backup code of the account not used yet |
 | `code-required` | `user.sign-in.code.dialog` | the dialog asks for a code of the account's authenticator app, or one of its backup codes, since its second factor is on: the right password alone signs nothing in |
 | `code-expired` | `user.sign-in.error` | the sign-in waited ten minutes for its code, or took five wrong ones, so it starts again from the password |
+| `passkey-cancelled` | `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing changed |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
@@ -227,7 +228,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `name-required` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is empty |
 | `name-too-long` | `user.sign-in.error`, `user.profile.error`, `organisation.create.error`, `console.account.name.error` | the name is longer than its value allows |
 | `bio-too-long` | `user.profile.error` | the bio is longer than its value allows |
-| `failed` | `user.sign-in.error`, `user.sign-in.code.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
+| `failed` | `user.sign-in.error`, `user.sign-in.code.error`, `user.verify-email.error`, `user.forgot-password.error`, `user.reset-password.error`, `user.confirm-email.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.passkeys.error`, `user.settings.deletion.error`, `user.delete-account.error`, `user.profile.error`, `organisation.create.error`, `organisation.notes.error`, `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error`, `console.users.error`, `console.account.error`, `console.account.name.error`, `console.account.email.error`, `console.account.ban.error`, `console.account.sessions.error`, `console.account.reset.error`, `console.account.verification.error`, `console.account.removal.error` | the action failed for any other reason |
 | `key-invalid` | `organisation.create.error` | the key is not 2 to 32 lowercase letters, digits and underscores starting with a letter |
 | `key-taken` | `organisation.create.error` | another organisation already has this key |
 | `already-member` | `organisation.invite.error`, `organisation.invitation.error`, `organisation.received.error` | the account is already a member of the organisation |
@@ -308,7 +309,7 @@ screen name of its own.
 | `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account: the theme, the language, the password, the email and the second factor, and the deletion of the account (`/settings`) |
+| `user.settings` | the settings of the signed-in account: the theme, the language, the password, the email, the second factor and the passkeys, and the deletion of the account (`/settings`) |
 | `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
 | `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
 | `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
