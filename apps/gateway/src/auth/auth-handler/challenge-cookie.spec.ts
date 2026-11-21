@@ -10,6 +10,7 @@ import { ADMISSION_HEADER, DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session
 
 import {
   challengeOwner,
+  challengeValue,
   internalRequest,
   setCookieValue,
   twoFactorChallenges,
@@ -166,6 +167,53 @@ describe('internalRequest', () => {
       [DEVICE_LABEL_HEADER.toLowerCase()]: 'Firefox on Android',
     })
   })
+})
+
+/**
+ * Values a device may send as its challenge that are not one cookie value on the wire: each would
+ * add a cookie, split one, or carry what a cookie value cannot.
+ */
+const NOT_ONE_COOKIE_VALUE = [
+  ['a second cookie after a semicolon', '2fa-abc.c2ln%3D; better-auth.session_token=forged'],
+  ['a second cookie after a comma', '2fa-abc.c2ln%3D,better-auth.session_token=forged'],
+  ['a space', '2fa-abc. c2ln%3D'],
+  ['a quote', '"2fa-abc.c2ln%3D"'],
+  ['a backslash', '2fa-abc.c2ln\\%3D'],
+  ['a line break', '2fa-abc.c2ln%3D\r\nx-perch-admission: none'],
+  ['nothing', ''],
+] as const
+
+describe('the boundary of one cookie', () => {
+  it.each(NOT_ONE_COOKIE_VALUE)(
+    'refuses to build a call whose challenge holds %s, so no value adds a cookie',
+    (_, value) => {
+      expect(challengeValue.safeParse(value).success).toBe(false)
+      expect(() =>
+        internalRequest({
+          publicUrl: ORIGIN,
+          path: '/two-factor/verify-totp',
+          device: PHONE,
+          challenge: { name: 'better-auth.two_factor', value },
+          pending: true,
+          body: { code: '123456' },
+        }),
+      ).toThrow(/one cookie value/)
+    },
+  )
+
+  it("takes Better Auth's own challenge as it set it, byte for byte, and builds a call with that one cookie", async () => {
+    const { name, challenge } = await challenged()
+    const request = internalRequest({
+      publicUrl: ORIGIN,
+      path: '/two-factor/verify-totp',
+      device: PHONE,
+      challenge: { name, value: challenge },
+      body: { code: '123456' },
+    })
+
+    expect(challengeValue.parse(challenge)).toBe(challenge)
+    expect(request.headers.get('cookie')).toBe(`${name}=${challenge}`)
+  }, 30_000)
 })
 
 describe('a challenge carried by the device', () => {

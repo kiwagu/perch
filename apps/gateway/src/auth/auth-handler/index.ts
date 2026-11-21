@@ -1,4 +1,5 @@
 export {
+  challengeValue,
   type InternalCall,
   internalRequest,
   setCookieValue,

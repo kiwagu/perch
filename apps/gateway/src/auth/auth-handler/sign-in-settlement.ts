@@ -3,10 +3,19 @@ import { z } from '@workspace/zod'
 import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 
 import type { AuthMountDeps } from './mount'
-import { secondFactorAnswer } from './second-factor-asked'
 
 /** A sign-in the limits let through, to settle once Better Auth answered it. */
 export type AllowedAttempt = Extract<SignInAttempt, { readonly allowed: true }>
+
+/**
+ * An answer whose meaning for the email's failed sign-ins was known where it was made, carried with
+ * it so nothing read later can change it: the answers of a password step that met the second factor
+ * (`secondFactorAsked`).
+ */
+export interface JudgedAnswer {
+  readonly response: Response
+  readonly outcome: SignInOutcome
+}
 
 /** The code of the mount's own refusal, as far as `outcomeOf` reads it. */
 const refusalCode = z.object({ code: z.string() })
@@ -31,14 +40,14 @@ function secondFactorOn(deps: AuthMountDeps, email: string): Promise<boolean> {
 }
 
 /**
- * What the mount's answer to a sign-in means for its email's limit: 200 signed in, and 409, a
- * sign-in asked about the account's limit of devices once Better Auth accepted it, both judged the
- * password right, and so does a 403 coded `EMAIL_NOT_VERIFIED` or `account-banned` for an account
- * whose second factor is off. A password step answered with a challenge (`secondFactorAnswer`)
- * judged nothing: the right password of an account whose second factor is on is not a sign-in's
- * last step, so it neither counts nor forgets; nor does a 403 after the password for such an
- * account, whose second factor is read again when the refusal is judged (`secondFactorOn`), so a
- * factor turned on meanwhile counts. Any other 403 judged nothing: a refusal of the request's
+ * What the mount's answer to a sign-in means for its email's limit, for an answer not judged where
+ * it was made (`JudgedAnswer`): 200 signed in, and 409, a sign-in asked about the account's limit
+ * of devices once Better Auth accepted it, both judged the password right, and so does a 403 coded
+ * `EMAIL_NOT_VERIFIED` or `account-banned`, a refusal Better Auth made after the password and before
+ * any challenge, for an account whose second factor is off. For one whose second factor is on it
+ * judged nothing: the right password of such an account is not a sign-in's last step, so it neither
+ * counts nor forgets; its second factor is read again when the refusal is judged (`secondFactorOn`),
+ * so a factor turned on meanwhile counts. Any other 403 judged nothing: a refusal of the request's
  * origin, of its Fetch Metadata or of its callback comes before Better Auth checks the password, so
  * a forged request would otherwise clear the failed sign-ins of any email it names; nor does a 403
  * whose code cannot be read. A 401 judged the password wrong, any other status nothing. The body is
@@ -64,16 +73,7 @@ async function outcomeOf(
     return (await secondFactorOn(deps, email)) ? 'unjudged' : 'succeeded'
   }
 
-  if (response.status === 200) {
-    const body: unknown = await response
-      .clone()
-      .json()
-      .catch(() => undefined)
-
-    return secondFactorAnswer.safeParse(body).success ? 'unjudged' : 'succeeded'
-  }
-
-  if (response.status === 409) {
+  if (response.status === 200 || response.status === 409) {
     return 'succeeded'
   }
 
@@ -82,23 +82,30 @@ async function outcomeOf(
 
 /**
  * Asks Better Auth for the sign-in of `email`, then settles its `attempt` exactly once with what
- * the answer means for the email's failed sign-ins (`outcomeOf`), a throw included: a sign-in
- * nobody answered was not judged, and gives its place back.
+ * the answer means for the email's failed sign-ins: the outcome a judged answer carries
+ * (`JudgedAnswer`), else what `outcomeOf` reads, a throw included: a sign-in nobody answered was
+ * not judged, and gives its place back.
  */
 export async function settling(
   deps: AuthMountDeps,
   email: string,
   attempt: AllowedAttempt,
-  ask: () => Promise<Response>,
+  ask: () => Promise<Response | JudgedAnswer>,
 ): Promise<Response> {
   let outcome: SignInOutcome = 'unjudged'
 
   try {
-    const response = await ask()
+    const answer = await ask()
 
-    outcome = await outcomeOf(deps, email, response)
+    if (answer instanceof Response) {
+      outcome = await outcomeOf(deps, email, answer)
 
-    return response
+      return answer
+    }
+
+    outcome = answer.outcome
+
+    return answer.response
   } finally {
     attempt.settle(outcome)
   }

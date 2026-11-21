@@ -61,7 +61,10 @@ gateway's own calls (`internalRequest`, `auth-handler/challenge-cookie.ts`): a r
 Auth's path behind the front, from the front's origin, with the device's headers, the plugin's
 challenge as its only cookie, in the wire form Better Auth set it (`setCookieValue` reads it from
 Better Auth's `set-cookie`, never decoded and encoded again), a bearer only for a call made while
-signed in, and `X-Perch-Admission: pending` when the call writes a session.
+signed in, and `X-Perch-Admission: pending` when the call writes a session. A challenge is one
+cookie value on the wire (`challengeValue`: no separator, whitespace, quote or backslash), which a
+route parses from what a device sends; a call whose challenge is not one is refused with an error
+and never built, so no value can add a second cookie, a session's among them.
 
 A session is a `device_session` row, and its token is the device's one credential: a random
 value Better Auth mints at a sign-in and at the first verification of an email, handed to the
@@ -418,11 +421,14 @@ token and no cookie; one that does not (a password changed, an email moved meanw
 challenge's rows deleted (`endChallenge`) and answers 401 as wrong credentials; one whose account
 the second read finds banned has them deleted and answers 403 `account-banned`. A challenge the
 answer does not carry, or a read or an ending that failed, answers 500 `internal`, the challenge
-handed to nobody. The right password of such an account neither counts among its email's failed
-sign-ins nor forgets them (the right code will), and neither does a refusal after the password (403
-`account-banned` or `EMAIL_NOT_VERIFIED`) of an account whose second factor is on, read again
-when the refusal is judged (`auth-handler/sign-in-settlement.ts`), a read that failed counting as
-on; for an account whose second factor is off such a refusal clears them, as before. A session that
+handed to nobody. Each of these answers carries what it means for the email's failed sign-ins,
+decided where it is made and read again nowhere (`JudgedAnswer`, `auth-handler/sign-in-settlement.ts`):
+the challenge and the ban's refusal judge nothing, whatever becomes of the account afterwards (the
+right password of such an account is not a sign-in's last step; the right code will be), the 401
+counts as a failure. A refusal Better Auth makes after the password and before any challenge (403
+`account-banned` or `EMAIL_NOT_VERIFIED`) judges nothing either for an account whose second factor
+is on, read again when the refusal is judged, a read that failed counting as on; for an account
+whose second factor is off it clears them, as before. A session that
 waits for its admission, a sign-in's
 or a verification's, is no session to a caller: the caller read (`AuthSessions.read`, behind the
 Bearer caller, the password confirmation and the sync hello) reads it as none, so a route answers
@@ -679,10 +685,11 @@ error carries one.
   `adminPlugin` (`admin-plugin.ts`: Better Auth's admin plugin as the gateway runs it),
   `passkeyPlugin`, `refuseUnverifiedRegistration` and `refuseUnverifiedAuthentication`
   (`passkey-plugin.ts`: Better Auth's passkey plugin as the gateway runs it, and its two hooks),
-  `setCookieValue`, `challengeOwner`, `endChallenge`, `internalRequest` (`InternalCall`) and
+  `challengeValue`, `setCookieValue`, `challengeOwner`, `endChallenge`, `internalRequest`
+  (`InternalCall`) and
   `twoFactorChallenges` (`TwoFactorChallenges`: `cookieName`, `ownerOf`, `end`; the mount's
-  `challenges`, built by the composition root) (`auth-handler/challenge-cookie.ts`, the first,
-  the fourth and the fifth also through the folder's index), `secondFactorAsked`
+  `challenges`, built by the composition root) (`auth-handler/challenge-cookie.ts`; all but
+  `challengeOwner` and `endChallenge` also through the folder's index), `secondFactorAsked`
   (`auth-handler/second-factor-asked.ts`),
   `ADMIN_PATHS` (`admin-paths.ts`: the path of every endpoint of that plugin), `rolesOf`
   (`platform-roles.ts`: the platform roles of an account's stored role),
@@ -749,11 +756,13 @@ error carries one.
   is on: the challenge alone, no token and no cookie, the right password neither counted nor
   forgetting, a device signed in keeping its session, the session Better Auth writes and deletes
   left ended and waiting, a password changed or a ban committed between Better Auth's answer and the
-  second read (held) answering 401 or 403 with the challenge gone, and a banned account's refusal
+  second read (held) answering 401 or 403 with the challenge gone, that 403 judging nothing even
+  when the account is deleted before the step is settled (held), and a banned account's refusal
   forgetting nothing, its second factor read when the refusal is judged;
   `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, a challenge's account by
-  its row and none for any other value, the internal requests, and one round trip of a challenge
-  whose signature is encoded); `session-hooks.spec.ts` (which paths write a session waiting);
+  its row and none for any other value, the internal requests, a challenge that is not one cookie
+  value refused before any call is built, and one round trip of a challenge whose signature is
+  encoded); `session-hooks.spec.ts` (which paths write a session waiting);
   `two-factor-adapter.spec.ts` (Better Auth's enable, a code on a challenge without a session and
   a backup code spent once, through the patched adapter); `passkey-plugin.spec.ts`; `auth-handler/verification-ban.spec.ts`, which holds the
   verification of a banned account through the real Better Auth: its gate's refusal with the email

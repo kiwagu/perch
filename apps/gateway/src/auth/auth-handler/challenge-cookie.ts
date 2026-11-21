@@ -2,6 +2,7 @@ import { okAsync, type ResultAsync } from 'neverthrow'
 
 import type { DataError, LocalDb } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { z } from '@workspace/zod'
 
 import { FRONT_PREFIX } from '../../config'
 import type { AuthInstance } from '../auth-instance'
@@ -18,9 +19,27 @@ import challengeOwnerStatement from '../surql/two-factor-challenge-owner.surql'
 const TWO_FACTOR_COOKIE = 'two_factor'
 
 /**
+ * One cookie value as it stands on the wire: only the octets a cookie value may hold (visible
+ * ASCII but the quote, the comma, the semicolon and the backslash; no whitespace, no control
+ * character). Better Auth's signed value, percent-encoded, is one; a value holding a separator
+ * would add a cookie to a call, or split the one it carries.
+ */
+const COOKIE_VALUE = /^[\x21\x23-\x2B\x2D-\x3A\x3C-\x5B\x5D-\x7E]+$/
+
+/** A cookie's name: an HTTP token. */
+const COOKIE_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+
+/**
+ * A challenge as a device carries it back: one cookie value on the wire (`COOKIE_VALUE`), kept byte
+ * for byte. A route parses what the device sent with it before the challenge reaches a call.
+ */
+export const challengeValue = z.string().regex(COOKIE_VALUE)
+
+/**
  * The value cookie `name` is set to by `answer`'s `set-cookie`, as it stands there: never decoded,
  * so it goes back to Better Auth exactly as Better Auth set it, which decodes it on its read. The
- * last setting of the name counts; none when the answer sets no such cookie, or empties it.
+ * last setting of the name counts; none when the answer sets no such cookie, empties it, or sets it
+ * to what is not one cookie value (`challengeValue`).
  */
 export function setCookieValue(answer: Response, name: string): string | undefined {
   let value: string | undefined
@@ -30,9 +49,9 @@ export function setCookieValue(answer: Response, name: string): string | undefin
     const equals = pair.indexOf('=')
 
     if (equals > 0 && pair.slice(0, equals).trim() === name) {
-      const set = pair.slice(equals + 1).trim()
+      const set = challengeValue.safeParse(pair.slice(equals + 1).trim())
 
-      value = set === '' ? undefined : set
+      value = set.success ? set.data : undefined
     }
   }
 
@@ -140,7 +159,10 @@ export interface InternalCall {
   readonly path: string
   /** The device the call is made for, its headers validated before the call. */
   readonly device: { readonly id: string; readonly label: string }
-  /** The challenge the device carried, the call's only cookie, in the wire form Better Auth set. */
+  /**
+   * The challenge the device carried, the call's only cookie, in the wire form Better Auth set:
+   * one cookie value (`challengeValue`) under a cookie's name, else no call is built.
+   */
   readonly challenge?: { readonly name: string; readonly value: string }
   /** The caller's validated session token, for a call made while signed in; a guest's has none. */
   readonly bearer?: string
@@ -156,9 +178,19 @@ export interface InternalCall {
  * label, the challenge as the only cookie (its value as Better Auth set it, never decoded and
  * encoded again), the bearer when the call is made while signed in, and the ask to wait for the
  * admission when the call writes a session. No other header of the device's own request is
- * carried.
+ * carried. A challenge that is not one cookie value under a cookie's name is refused with an error
+ * and no request is built: such a value could carry a second cookie, a session's among them, which
+ * would change what Better Auth does with the call.
  */
 export function internalRequest(call: InternalCall): Request {
+  if (
+    call.challenge !== undefined &&
+    (!COOKIE_NAME.test(call.challenge.name) ||
+      !challengeValue.safeParse(call.challenge.value).success)
+  ) {
+    throw new Error('the challenge of an internal call must be one cookie value under a name')
+  }
+
   const headers = new Headers({
     origin: call.publicUrl,
     [DEVICE_HEADER]: call.device.id,

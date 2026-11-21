@@ -5,6 +5,7 @@ import { type SignInCredential, signInStands } from '../account-passwords'
 import { setCookieValue } from './challenge-cookie'
 import type { AuthMountDeps } from './mount'
 import { internal, notSignedIn, refused } from './requests'
+import type { JudgedAnswer } from './sign-in-settlement'
 
 /**
  * What Better Auth answers a password step of an account whose second factor is on, once it
@@ -12,9 +13,6 @@ import { internal, notSignedIn, refused } from './requests'
  * key or for one of its backup codes.
  */
 export const asksSecondFactor = z.object({ twoFactorRedirect: z.literal(true) })
-
-/** The gateway's answer to such a step: the challenge alone, which the device sends with its code. */
-export const secondFactorAnswer = z.object({ secondFactor: z.object({ challenge: z.string() }) })
 
 /**
  * Answers a password step of an account whose second factor is on, once Better Auth checked the
@@ -34,35 +32,43 @@ export const secondFactorAnswer = z.object({ secondFactor: z.object({ challenge:
  * change that commits after the second read ends the challenge itself or is met at the code step.
  * A challenge the answer does not carry, a read that failed, or an ending that failed answers 500
  * `internal`, the challenge handed to nobody.
+ *
+ * Each answer carries what it means for the email's failed sign-ins (`JudgedAnswer`), decided here
+ * and not read again later: the challenge and the ban's refusal judged nothing (the right password
+ * of an account whose second factor is on is not a sign-in's last step, whatever becomes of the
+ * account after), the wrong credentials' 401 counts as a failure, a 500 judged nothing.
  */
 export async function secondFactorAsked(
   deps: AuthMountDeps,
   answer: Response,
   email: string,
   before: SignInCredential | undefined,
-): Promise<Response> {
+): Promise<JudgedAnswer> {
+  const unjudged = (response: Response): JudgedAnswer => ({ response, outcome: 'unjudged' })
   const challenge = setCookieValue(answer, await deps.challenges.cookieName())
 
   if (challenge === undefined) {
-    return internal()
+    return unjudged(internal())
   }
 
   const owner = await deps.challenges.ownerOf(challenge)
   const after = await deps.passwords.credentialOf(email)
 
   if (owner.isErr() || after.isErr()) {
-    return internal()
+    return unjudged(internal())
   }
 
   const stands = owner.value !== undefined && signInStands(before, after.value, owner.value)
 
   if (stands && after.value?.banned === false) {
-    return Response.json({ secondFactor: { challenge } }, { status: 200 })
+    return unjudged(Response.json({ secondFactor: { challenge } }, { status: 200 }))
   }
 
   if ((await deps.challenges.end(challenge)).isErr()) {
-    return internal()
+    return unjudged(internal())
   }
 
-  return stands ? refused(403, 'account-banned') : notSignedIn()
+  return stands
+    ? unjudged(refused(403, 'account-banned'))
+    : { response: notSignedIn(), outcome: 'failed' }
 }

@@ -23,6 +23,7 @@ import {
   holdTurn,
   isAccountLookup,
   isAdmission,
+  isChallengeEnd,
   isChallengeLookup,
   isSessionInsert,
   mountedOnFakeAuth,
@@ -819,6 +820,47 @@ describe('authHandler, the password step of an account whose second factor is on
     expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
     expect(await challengeRows(mounted)).toEqual([])
     // The refusal judged nothing: the next wrong password is the tenth, which spends them.
+    expect((await wrong())?.status).toBe(401)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+})
+
+describe('authHandler, the judgement of a password step that met the second factor', () => {
+  it("keeps the email's failed sign-ins when the account its step found banned is deleted before the step is judged", async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await annWithSecondFactor(mounted)
+    // A deletion link mailed to the account before the sign-in.
+    const link = (await mounted.accountDeletions.ask(ann.identity))._unsafeUnwrap()
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    const lookup = queries.hold(isChallengeLookup)
+    const ending = queries.hold(isChallengeEnd)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    // Better Auth answered with its challenge; the ban commits before the gateway reads the
+    // account again.
+    await vi.waitFor(() => expect(lookup.paused()).toBe(true), ARGON2_WAIT)
+    await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+    lookup.release()
+
+    // The second read found the account banned; while the challenge is ended, before the step is
+    // judged, the account is deleted by its link.
+    await vi.waitFor(() => expect(ending.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (await mounted.route(postTo('/auth/delete-account', { token: link }), FROM))?.status,
+    ).toBe(200)
+    ending.release()
+
+    const answer = await signingIn
+
+    expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
+    // The refusal judged nothing, though the email has no account any more: the next wrong
+    // password is the tenth, which spends them.
     expect((await wrong())?.status).toBe(401)
     expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
   }, 60_000)

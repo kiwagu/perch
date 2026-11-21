@@ -39,6 +39,7 @@ import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
+import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
 import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surql'
 import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
@@ -761,6 +762,9 @@ export const isSessionLookup = (text: string): boolean =>
 
 /** The gateway's read of the account a two-factor challenge belongs to. */
 export const isChallengeLookup = (text: string): boolean => text === challengeOwnerStatement
+
+/** The gateway's end of a two-factor challenge: its rows deleted. */
+export const isChallengeEnd = (text: string): boolean => text === challengeEndStatement
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

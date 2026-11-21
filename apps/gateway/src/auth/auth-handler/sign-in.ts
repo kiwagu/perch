@@ -15,7 +15,7 @@ import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
 import { notSignedIn, refusalOf, withJsonBody } from './requests'
 import { asksSecondFactor, secondFactorAsked } from './second-factor-asked'
-import { settling } from './sign-in-settlement'
+import { type JudgedAnswer, settling } from './sign-in-settlement'
 
 /** The sign-in each email's failed sign-ins are counted on. */
 export const SIGN_IN_PATH = '/auth/sign-in/email'
@@ -94,7 +94,7 @@ async function handedOver(
   email: string,
   before: SignInCredential | undefined,
   signOutOldest: boolean,
-): Promise<Response> {
+): Promise<Response | JudgedAnswer> {
   const response = await deps.auth.handler(request)
 
   if (response.status !== 200) {
