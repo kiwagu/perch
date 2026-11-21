@@ -5,6 +5,7 @@ import { type IdentityId, idSchemas, type PasskeyId } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import { reading, writing } from './device-session-rows'
+import passkeyCeremoniesReclaimStatement from './surql/passkey-ceremonies-reclaim.surql'
 import passkeyOwnerStatement from './surql/passkey-owner.surql'
 import passkeyRemoveStatement from './surql/passkey-remove.surql'
 import passkeysOfStatement from './surql/passkeys-of.surql'
@@ -14,6 +15,13 @@ export interface ListedPasskey {
   readonly id: PasskeyId
   readonly createdAt: Date
 }
+
+/**
+ * How many expired ceremonies one start of a ceremony reclaims at most: each start leaves one row
+ * at most behind, so a backlog of abandoned ones drains over the next starts, and no start's work
+ * grows with it.
+ */
+export const RECLAIMED_PER_CEREMONY = 10
 
 /** What a removal did: removed the account's passkey, or found none of the account by that id. */
 export type PasskeyRemoval = 'removed' | 'missing'
@@ -32,8 +40,8 @@ const unknownShape = (what: string): DataError =>
  * The passkeys of accounts in the directory, as the gateway reads and removes them itself: Better
  * Auth's passkey plugin writes a passkey at a registration and checks one at a sign-in, while the
  * list of an account's passkeys, the account a credential belongs to (read before a sign-in takes
- * that account's turn) and a removal are each one statement of the gateway's. Neither a public key
- * nor a credential id is ever in a failure's text.
+ * that account's turn), a removal, and the reclaim of the ceremonies left unfinished are each one
+ * statement of the gateway's. Neither a public key nor a credential id is ever in a failure's text.
  */
 export class PasskeyRows {
   readonly #directory: LocalDb
@@ -66,6 +74,21 @@ export class PasskeyRows {
 
       return parsed.success ? ok(parsed.data[0]) : err(unknownShape('the account of a passkey'))
     })
+  }
+
+  /**
+   * Deletes the rows Better Auth's passkey plugin wrote for the options of a registration or of a
+   * sign-in whose ceremony was left unfinished, once they expired more than a minute ago, at most
+   * `RECLAIMED_PER_CEREMONY` of them: Better Auth's own clean-up of expired rows is off, so nothing
+   * else reclaims them. No row of another kind is touched.
+   */
+  reclaim(): ResultAsync<void, DataError> {
+    return writing(
+      this.#directory.db
+        .query(passkeyCeremoniesReclaimStatement, { limit: RECLAIMED_PER_CEREMONY })
+        .retry(),
+      'the expired passkey ceremonies could not be reclaimed',
+    ).map(() => undefined)
   }
 
   /** Removes passkey `passkey` of `identity`; one of another account, or none, is `missing`. */

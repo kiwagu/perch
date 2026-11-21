@@ -18,6 +18,8 @@ import {
 } from '../../../__fixtures__/software-authenticator'
 import { linkToken } from '../../../mail/__fixtures__/outbox'
 import passkeyRegistrationsStatement from '../../__fixtures__/passkey-registrations.surql'
+import verificationAgeStatement from '../../__fixtures__/verification-age.surql'
+import verificationRowsStatement from '../../__fixtures__/verification-rows.surql'
 import { passkeyRoutes } from '../../passkey.routes'
 import { PasskeyRows } from '../../passkey-rows'
 import { passkeyChallenges } from '../passkey-ceremony'
@@ -45,6 +47,14 @@ export const PASSKEY_SIGN_IN_PATH = '/auth/sign-in/passkey'
 /** The client address a guest's requests come from. */
 const FROM = '198.18.9.2'
 
+/** Better Auth's adapter writes a passkey with an insert into its table. */
+export const isPasskeyInsert = (text: string): boolean =>
+  text.startsWith('INSERT') && text.includes('`passkey`')
+
+/** Better Auth's adapter moves a passkey's count of signatures on with an update of its table. */
+export const isPasskeyUpdate = (text: string): boolean =>
+  text.startsWith('UPDATE') && text.includes('passkey')
+
 /** An authenticator for the mount's front: its passkey is bound to the front's host and origin. */
 export const authenticator = (): SoftwareAuthenticator =>
   new SoftwareAuthenticator({ rpId: new URL(ORIGIN).hostname, origin: ORIGIN })
@@ -65,6 +75,41 @@ const registrations = z.object({
   passkeys: z.array(z.string()),
   registrations: z.array(z.string()),
 })
+
+/** A row of `verification` as a spec reads it: its identifier and its value. */
+const verificationRows = z.array(z.object({ identifier: z.string(), value: z.string() }))
+
+/** What a row of `verification` holds, as the passkey specs tell them apart. */
+export type VerificationKind = 'registration' | 'authentication' | 'other'
+
+/** The kind of a row of `verification`, read from its value as Better Auth's plugins write it. */
+const kindOf = (value: string): VerificationKind =>
+  value.startsWith('{"type":"registration",')
+    ? 'registration'
+    : value.startsWith('{"type":"authentication",')
+      ? 'authentication'
+      : 'other'
+
+/** Every row of `verification`, the earliest first: its identifier and its kind. */
+export async function verificationsOf(mounted: Mounted) {
+  const [rows] = await mounted.local.db.query<[unknown]>(verificationRowsStatement)
+
+  return verificationRows
+    .parse(fromDriverValue(rows))
+    .map(({ identifier, value }) => ({ identifier, kind: kindOf(value) }))
+}
+
+/** Moves the expiry of the rows of `verification` named by `identifiers` to `agoMs` ago. */
+export async function ageVerifications(
+  mounted: Mounted,
+  identifiers: readonly string[],
+  agoMs: number,
+): Promise<void> {
+  await mounted.local.db.query(verificationAgeStatement, {
+    identifiers,
+    at: new Date(Date.now() - agoMs),
+  })
+}
 
 /** The passkeys of `identity`, by id, and its pending registrations, by identifier. */
 export async function registrationsOf(mounted: Mounted, identity: IdentityId) {

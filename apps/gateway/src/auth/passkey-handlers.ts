@@ -31,7 +31,7 @@ export interface PasskeyRoutesDeps {
   readonly sessions: Pick<AuthSessions, 'read'>
   /** One account's work, one turn at a time (`GatewayRoot.accountTurns`, by the identity's key). */
   readonly accounts: Pick<KeyedTurns<string>, 'run'>
-  readonly rows: Pick<PasskeyRows, 'list' | 'remove'>
+  readonly rows: Pick<PasskeyRows, 'list' | 'remove' | 'reclaim'>
   /** The name of the cookie a registration's challenge comes in. */
   readonly challenges: PasskeyChallenges
   /** The front's public origin, the base and the origin of the gateway's calls of the plugin. */
@@ -55,7 +55,10 @@ const addBody = z.object({
   challenge: challengeValue,
 })
 
-/** Better Auth's codes of a registration it refused for what the device sent. */
+/**
+ * Better Auth's codes of a registration it refused for what the device sent; a passkey the
+ * directory did not take is Better Auth's `STORAGE_FAILED` (`storageFailuresTold`), a 500.
+ */
 const REFUSED_REGISTRATIONS: ReadonlySet<string> = new Set([
   USER_NOT_VERIFIED,
   PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND.code,
@@ -103,6 +106,11 @@ const options: PasskeyHandler = async (deps, _request, caller) =>
 
     if (live instanceof Response) {
       return live
+    }
+
+    // Each start of a ceremony reclaims some of those left unfinished, which nothing else does.
+    if ((await deps.rows.reclaim()).isErr()) {
+      return internal()
     }
 
     const answer = await deps.auth.handler(

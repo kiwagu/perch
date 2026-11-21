@@ -55,7 +55,8 @@ const failed = (): Response => refused(400, 'failed')
  * Better Auth's refusals of an assertion, by their code: a passkey no account holds; the admin
  * plugin's refusal of a banned account's session; an authenticator that did not verify its user, a
  * signature that does not verify, and a challenge spent, ended, of a registration or past its five
- * minutes. Any other refusal is a failure of the gateway's.
+ * minutes. Any other refusal is a failure of the gateway's, a sign-in the directory did not take
+ * among them (Better Auth's `STORAGE_FAILED`, `storageFailuresTold`).
  */
 const REFUSALS: ReadonlyMap<string, () => Response> = new Map([
   [PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND.code, unknownPasskey],
@@ -84,13 +85,19 @@ function deviceOf(request: Request): Step['device'] | undefined {
  * it holds, each a discoverable one) with the user's verification required, where the plugin only
  * prefers it, and their challenge, the value of the plugin's cookie, which the gateway never sets
  * on its answer. 400 `bad-request` for a request that names no valid device, before the plugin is
- * asked; 500 `internal` when the plugin answers otherwise.
+ * asked; 500 `internal` when the plugin answers otherwise. Before the plugin writes the new
+ * ceremony, some of those left unfinished and expired are reclaimed (`PasskeyRows.reclaim`).
  */
 export async function passkeyOptions(deps: AuthMountDeps, request: Request): Promise<Response> {
   const device = deviceOf(request)
 
   if (device === undefined) {
     return badRequest()
+  }
+
+  // Each start of a ceremony reclaims some of those left unfinished, which nothing else does.
+  if ((await deps.passkeys.reclaim()).isErr()) {
+    return internal()
   }
 
   const answer = await deps.auth.handler(

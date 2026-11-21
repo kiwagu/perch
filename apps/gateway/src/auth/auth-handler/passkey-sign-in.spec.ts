@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
+import { interceptQueries } from '@workspace/data/testing'
 import type { IdentityId } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
@@ -32,6 +33,7 @@ import {
   assertionOf,
   authenticator,
   guestOptionsRequest,
+  isPasskeyUpdate,
   passkeySignIn,
   passkeySignInRequest,
   passkeysOf,
@@ -342,6 +344,37 @@ describe('authHandler, a passkey sign-in', () => {
       admission.release()
 
       expect(await answered(await signing)).toEqual(accountBanned)
+    },
+    ARGON2_RUNS_MS,
+  )
+})
+
+describe('authHandler, a passkey sign-in the directory cannot keep', () => {
+  it.each([
+    { what: 'the count of its signatures moved on', failing: isPasskeyUpdate },
+    { what: 'its session written', failing: isSessionInsert },
+  ])(
+    'answers 500 internal to a verified passkey whose sign-in the directory could not keep, $what, signing nothing in',
+    async ({ failing }) => {
+      const refusing = { now: false }
+      const mounted = await mountedOnRealAuth({
+        directory: (local) =>
+          interceptQueries(local, (text) => {
+            if (refusing.now && failing(text)) {
+              throw new Error('the directory refused the write')
+            }
+          }),
+      })
+      const { ann, held } = await annWithPasskey(mounted)
+      const assertion = await assertionOf(mounted, 'desk', held)
+
+      refusing.now = true
+      expect(
+        await answered(await mounted.route(passkeySignInRequest(assertion, 'desk'), '198.18.4.1')),
+      ).toEqual({ status: 500, body: { code: 'internal' } })
+      refusing.now = false
+      expect(await devicesOf(mounted, ann.identity)).toEqual(['laptop'])
+      expect(mounted.logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     },
     ARGON2_RUNS_MS,
   )

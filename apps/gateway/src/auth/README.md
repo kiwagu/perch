@@ -54,7 +54,13 @@ in `passkey`. The two-factor plugin's own lockout is off (`accountLockout`): a s
 codes are the email's failed sign-ins, as its wrong passwords are. A passkey is bound to the
 front's host and origin, is a discoverable credential and asks for its user's verification at
 its registration; the plugin's hooks refuse a registration or a sign-in whose authenticator did
-not verify its user (`USER_NOT_VERIFIED`), before a passkey is kept or a session written.
+not verify its user (`USER_NOT_VERIFIED`), before a passkey is kept or a session written. The
+plugin turns any failure inside a ceremony that is not Better Auth's own error into a refusal of
+what the device sent, a database that failed among them, so the adapter Better Auth runs on tells
+a failed write of a passkey (kept, or its count of signatures moved on) or of a session apart
+(`storageFailuresTold`, `storage-failures.ts`): it is thrown as Better Auth's own 500
+`STORAGE_FAILED`, nothing of its cause kept, and logged as `auth:STORAGE_FAILED`, so the gateway
+answers it 500 `internal`, a malformed or mismatched answer staying 400 `failed`.
 Sessions have no freshness limit (`session.freshAge: 0`), so a device signed in for months may
 add a passkey. Neither the mount nor the passkey routes hand any of the plugins' endpoints over
 HTTP: they reach them through the gateway's own calls (`internalRequest`, `auth-handler/challenge-cookie.ts`): a request to Better
@@ -504,6 +510,17 @@ device seen least recently out only when `signOutOldestFor` names the account of
 verifies, so a passkey of another account picked on the confirmation is asked about afresh. A
 removal whose turn came after the sign-in's ends no session.
 
+A ceremony a device starts and leaves (its browser window closed) leaves the plugin's row in
+`verification`, which expires after five minutes but which nothing deletes, Better Auth's own
+clean-up being off to keep a reset link readable as expired. So each start of a ceremony, a
+registration's options and a guest's alike, first reclaims at most `RECLAIMED_PER_CEREMONY` (10)
+of the passkey ceremonies that expired more than a minute ago (`PasskeyRows.reclaim`, one
+statement: the rows whose JSON value is the plugin's registration or sign-in, the minute keeping a
+ceremony Better Auth still takes out of reach of a database clock a little ahead), so a backlog of
+abandoned ones drains over the next starts and no start's work grows with it. No row of another
+kind (a reset link, a pending change of an email or deletion of an account, a two-factor challenge)
+is touched.
+
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
@@ -669,7 +686,9 @@ none), with a fixed message; its words, its arguments and an error's cause are d
 warnings (a wrong password, an unknown email) are not logged. A failure that is not one of
 Better Auth's answers, such as a query that failed, is answered by Better Auth 500 with no body,
 which the mount passes on as `internal`: Better Auth's router would otherwise print it whole to
-stderr, the query's bindings with it. SurrealDB's
+stderr, the query's bindings with it. A write of a passkey or of a session the directory did not
+take is logged as `auth:STORAGE_FAILED` where it failed (`storageFailuresTold`), since Better Auth
+answers its own errors without handing them to its error hook. SurrealDB's
 adapter, which printed a failed join the same way, is patched to leave it to its caller.
 
 The device routes (`device.routes.ts`) come before the mount in the server, so the two sign-outs
@@ -771,13 +790,15 @@ its challenge cookie carried by the device as `challenge`.
   (`PasskeyRows.list`).
 - `POST /passkeys/options`: 200 `{ options, challenge }`, the plugin's options of a registration
   (`/passkey/generate-register-options`, a bodyless GET; a discoverable credential, its user
-  verified, the account's passkeys excluded) and their challenge.
+  verified, the account's passkeys excluded) and their challenge, once some of the ceremonies left
+  unfinished were reclaimed.
 - `POST /passkeys` `{ response, challenge }`: the authenticator's answer to the plugin's verifier
   (`/passkey/verify-registration`, the challenge its only cookie): 201 once it is the account's
   passkey; 400 `failed` for an answer the plugin refused (an authenticator that did not verify its
   user, a challenge spent, of another account or past its five minutes, an answer that does not
-  verify), nothing kept; 400 `bad-request` for a body that names no answer or no challenge of one
-  cookie value.
+  verify), nothing kept; 500 `internal` for an answer that verified but whose passkey the directory
+  did not take; 400 `bad-request` for a body that names no answer or no challenge of one cookie
+  value.
 - `DELETE /passkeys/:id`: 204 once the account's passkey is removed (`PasskeyRows.remove`; it signs
   nothing in from then on, and the devices it signed in stay signed in); 404 `failed` for an id that
   names none of the account's, another account's included; 400 `bad-request` for a text that is not
@@ -856,9 +877,12 @@ its challenge cookie carried by the device as `challenge`.
   folder's index, which the second factor's routes use beside the mount),
   `passkeyPlugin`, `refuseUnverifiedRegistration`, `refuseUnverifiedAuthentication` and
   `USER_NOT_VERIFIED` (`passkey-plugin.ts`: Better Auth's passkey plugin as the gateway runs it, its
-  two hooks and the code of their refusal), `PasskeyRows` (`passkey-rows.ts`: `list` an account's
-  passkeys, `ownerOf` a credential, `remove`; `ListedPasskey`, `PasskeyRemoval`; the root's
-  `passkeyRows`, which the mount reads at a passkey sign-in as `AuthMountDeps.passkeys`),
+  two hooks and the code of their refusal), `storageFailuresTold` and `STORAGE_FAILED`
+  (`storage-failures.ts`: the adapter with a failed write of a passkey or a session told apart),
+  `PasskeyRows` (`passkey-rows.ts`: `list` an account's passkeys, `ownerOf` a credential, `remove`,
+  `reclaim` the ceremonies left unfinished; `ListedPasskey`, `PasskeyRemoval`,
+  `RECLAIMED_PER_CEREMONY`; the root's `passkeyRows`, which the mount reads at a passkey sign-in and
+  at a guest's options as `AuthMountDeps.passkeys`),
   `passkeyChallenges` (`PasskeyChallenges`: `cookieName`; the root's `passkeyChallenges`, the
   mount's too) and `ceremonyOf` (`Ceremony`) (`auth-handler/passkey-ceremony.ts`, through the
   folder's index),
@@ -900,8 +924,8 @@ its challenge cookie carried by the device as `challenge`.
   factor read (its flag and its key), the confirmation of a code of its key and the turning off of
   the factor (each one transaction), the two transactions of a
   new password: a reset's and a change's, each ending the account's two-factor challenges, an
-  account's passkeys, the account of a passkey's credential and the removal of a passkey, and the
-  removal of a deleted account's rows).
+  account's passkeys, the account of a passkey's credential, the removal of a passkey and the
+  reclaim of the passkey ceremonies left unfinished, and the removal of a deleted account's rows).
 - Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`, and
   the two-factor plugin's `two_factor_enabled`, among its columns), `account`, `device_session`
   (the admin plugin's `impersonated_by` among its columns), `verification`, `two_factor` (with
@@ -971,18 +995,23 @@ its challenge cookie carried by the device as `challenge`.
   `passkey-plugin.spec.ts`; `passkey.routes.spec.ts` (with an authenticator in software against the
   real plugin: the registration's options and their policy, a passkey added and listed with its
   date, from a session two days old too, one whose authenticator did not verify its user or whose
-  challenge another account's options made refused with nothing kept, the list's order, a removal,
-  another account's passkey and an unknown one answering 404, an id of another form 400);
+  challenge another account's options made refused with nothing kept, a passkey the directory
+  refused to write answering 500 while an answer for another origin stays 400, the list's order, a
+  removal, another account's passkey and an unknown one answering 404, an id of another form 400);
   `passkey-registration-races.spec.ts` (a deletion, a ban and a reset committed in the account's
   turn before each registration call and after it, both orders forced by the turn and by a held
   query, and a session ended between the gateway's read and the plugin's, or after the plugin's);
   `auth-handler/passkey-sign-in.spec.ts` (the guest's options and their policy, the guest
   ceremony, an account whose second factor is on signed in with no code, the email's failed
   sign-ins never keeping it out and forgotten by it, an unverified user, a forged signature and a
-  replayed assertion refused, a removed or unknown passkey answering 401, the device checked
+  replayed assertion refused, a sign-in whose count or session the directory refused to write
+  answering 500, a removed or unknown passkey answering 401, the device checked
   before the challenge is spent, a ban before the turn, in it and at the admission, a removal
   committed before the sign-in's turn and after it, and the limit of devices: 409 naming the
   account, a retry confirmed for it, and one confirmed for another account asked again);
+  `auth-handler/passkey-ceremonies.spec.ts` (the ceremonies of both kinds left unfinished
+  reclaimed once expired at the next options, no row of another kind, no unexpired ceremony and
+  none expired under a minute ago touched, and a backlog drained a bounded number at a time);
   `auth-handler/verification-ban.spec.ts`, which holds the
   verification of a banned account through the real Better Auth: its gate's refusal with the email
   verified, a ban committed while the insert, the readback or the admission is held answering 403

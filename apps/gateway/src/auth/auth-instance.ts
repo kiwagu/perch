@@ -21,6 +21,7 @@ import { passkeyPlugin } from './passkey-plugin'
 import { hashPassword, verifyPassword } from './password-hash'
 import { RESET_LINK_LIFETIME_S, resetMailer } from './reset-mail'
 import { sessionHooks } from './session-hooks'
+import { storageFailuresTold } from './storage-failures'
 import { verificationMailer } from './verification-mail'
 
 /**
@@ -65,7 +66,9 @@ export function authOptions(options: AuthInstanceOptions) {
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...options.trustedOrigins],
-    database: surrealAuthAdapter(options.local),
+    // A passkey or a session the directory did not take is a failure of the service, which the
+    // passkey plugin would otherwise answer as a refusal of the device's ceremony.
+    database: storageFailuresTold(surrealAuthAdapter(options.local), options.log),
     // The admin plugin keeps an account's role and ban and refuses a banned account a session;
     // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below). The two-factor
     // plugin keeps an account's second factor and answers a sign-in by password of an account

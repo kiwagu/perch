@@ -1,10 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { interceptQueries } from '@workspace/data/testing'
 import { passkeyIdFactory } from '@workspace/ids'
+
+import { SoftwareAuthenticator } from '../__fixtures__/software-authenticator'
 
 import { challengeValue } from './auth-handler'
 import { ANN, mountedOnRealAuth, signedInOn } from './auth-handler/__fixtures__/mount'
-import { authenticator, passkeysOf, registrationsOf } from './auth-handler/__fixtures__/passkey'
+import {
+  authenticator,
+  isPasskeyInsert,
+  passkeysOf,
+  registrationsOf,
+} from './auth-handler/__fixtures__/passkey'
 
 /** A second account, whose passkeys are not Ann's. */
 const BOB = 'bob@example.test'
@@ -141,6 +149,47 @@ describe('passkeyRoutes, the registration of a passkey', () => {
         status: 400,
         body: { code: 'bad-request' },
       })
+      expect(await passkeys.listed(ann.on('laptop'))).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+})
+
+describe('passkeyRoutes, a registration the directory cannot keep', () => {
+  it(
+    'answers 500 internal to a registration whose answer verified but whose passkey the directory refused, and still 400 failed to one whose answer does not verify',
+    async () => {
+      const refusing = { now: false }
+      const mounted = await mountedOnRealAuth({
+        directory: (local) =>
+          interceptQueries(local, (text) => {
+            if (refusing.now && isPasskeyInsert(text)) {
+              throw new Error('the directory refused the write')
+            }
+          }),
+      })
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
+      const passkeys = passkeysOf(mounted)
+      const body = await passkeys.made(ann.on('laptop'), authenticator())
+
+      refusing.now = true
+      expect(await passkeys.add(ann.on('laptop'), body)).toEqual({
+        status: 500,
+        body: { code: 'internal' },
+      })
+      refusing.now = false
+      // The failure is logged by its code alone, as a failure of the service.
+      expect(mounted.logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
+
+      // An answer made for another origin than the front's does not verify: the device's refusal.
+      const elsewhere = new SoftwareAuthenticator({
+        rpId: 'localhost',
+        origin: 'https://elsewhere.test',
+      })
+
+      expect(
+        await passkeys.add(ann.on('laptop'), await passkeys.made(ann.on('laptop'), elsewhere)),
+      ).toEqual(failed(400))
       expect(await passkeys.listed(ann.on('laptop'))).toEqual([])
     },
     ARGON2_RUNS_MS,

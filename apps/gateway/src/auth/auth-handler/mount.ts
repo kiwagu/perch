@@ -92,8 +92,11 @@ export interface AuthMountDeps {
   readonly challenges: TwoFactorChallenges
   /** Whether an account's second factor is on and its key confirmed, read at a sign-in's code. */
   readonly twoFactor: Pick<TwoFactorRows, 'read'>
-  /** The account a passkey belongs to, read by its credential at a passkey sign-in. */
-  readonly passkeys: Pick<PasskeyRows, 'ownerOf'>
+  /**
+   * The account a passkey belongs to, read by its credential at a passkey sign-in, and the reclaim
+   * of the passkey ceremonies left unfinished, at each guest's options.
+   */
+  readonly passkeys: Pick<PasskeyRows, 'ownerOf' | 'reclaim'>
   /** Better Auth's passkey challenges: the name of the cookie a ceremony's challenge comes in. */
   readonly passkeyChallenges: PasskeyChallenges
   /**

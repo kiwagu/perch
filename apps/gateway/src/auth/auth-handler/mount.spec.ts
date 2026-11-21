@@ -878,7 +878,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     expect(printed).not.toMatch(MARKED)
   })
 
-  it('answers a sign-in whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a sign-in whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bINSERT\s+INTO\s+`?device_session`?/
@@ -887,7 +887,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     )
 
     expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
   })

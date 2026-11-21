@@ -186,7 +186,7 @@ export const noAccounts: Pick<
     end: notHere,
   },
   twoFactor: { read: notHere },
-  passkeys: { ownerOf: notHere },
+  passkeys: { ownerOf: notHere, reclaim: notHere },
   passkeyChallenges: { cookieName: () => Promise.reject(new Error('no passkey is read here')) },
   resets: { read: notHere },
   emailChanges: {

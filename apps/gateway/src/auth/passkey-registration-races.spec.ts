@@ -21,6 +21,7 @@ import {
 import {
   authenticator,
   deletionLinkOf,
+  isPasskeyInsert,
   passkeysOf,
   registrationsOf,
   resetLinkOf,
@@ -35,10 +36,6 @@ const ARGON2_RUNS_MS = 60_000
 const unauthorized = { status: 401, body: { code: 'unauthorized' } }
 
 type Mounted = Awaited<ReturnType<typeof mountedOnRealAuth>>
-
-/** Better Auth's adapter writes a passkey with an insert into its table. */
-const isPasskeyInsert = (text: string): boolean =>
-  text.startsWith('INSERT') && text.includes('`passkey`')
 
 /**
  * A change of Ann's account that takes the account's turn and ends its sessions, and whether her

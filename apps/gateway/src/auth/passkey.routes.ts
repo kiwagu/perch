@@ -56,12 +56,14 @@ function targetOf(pathname: string): { readonly target: Target; readonly id: str
  *
  * - `GET /passkeys`: 200 `[{ id, createdAt }]`, the account's passkeys, the earliest added first.
  * - `POST /passkeys/options`: 200 `{ options, challenge }`, the options of a registration for the
- *   browser's authenticator (a discoverable credential, its user verified) and their challenge;
+ *   browser's authenticator (a discoverable credential, its user verified) and their challenge,
+ *   once some of the ceremonies left unfinished and expired were reclaimed (`PasskeyRows.reclaim`);
  *   401 `unauthorized` when the session ended before the plugin read it.
  * - `POST /passkeys` `{ response, challenge }`: 201 once the authenticator's answer to those
  *   options is the account's passkey; 400 `failed` for an answer the plugin refused (an
  *   authenticator that did not verify its user, a challenge spent, of another account or past its
- *   five minutes, an answer that does not verify), nothing kept; 400 `bad-request` for a body that
+ *   five minutes, an answer that does not verify), nothing kept; 500 `internal` for an answer that
+ *   verified but whose passkey the directory did not take; 400 `bad-request` for a body that
  *   names no answer or no challenge of one cookie value; 401 `unauthorized` as for the options. A
  *   sign-out or a revocation, which take no turn, that ends the session once the plugin read it
  *   lets the passkey be added, as one added just before it would be.
