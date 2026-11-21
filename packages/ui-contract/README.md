@@ -175,11 +175,17 @@ links to as `contract/REFERENCE.md#<slug>`.
   - The sources check: `collectFromSource(text, file)` reads one file with oxc-parser and returns
     its `Collected` anchors, `testIdFor()` suffixes, codes, `inputs` (`holdsInput`), `colours`
     (`marksState`) and `props` (`maxLength`, `type`, `aria-invalid`, `disabled`), following a name
-    of the file to what it declares (`sources/locals.ts`, every object a value may be in
+    of the file to what it declares (`sources/locals.ts`, in the scope that binds it,
+    `sources/bindings.ts`, `sources/scopes.ts`, every object a value may be in
     `sources/alternatives.ts`: an anchor a `<NAME>_TEST_ID` constant
     holds, the props a spread on an element supplies, `sources/spreads.ts`, read per element in
     `sources/element.ts`, the event a `disabled`
-    asks its machine about, `sources/asked-event.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
+    asks its machine about, `sources/asked-event.ts`, with what the file's type declarations say of
+    a spread it cannot follow, `sources/declared-type.ts`, whether a function body can run off its
+    end, `sources/reachable-end.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`,
+    refusing in any typed file of the repository a `declare module` that names one, a backslash
+    read as a separator (`sources/augmentation.ts`; only a fixture project outside the web app
+    and the UI kit with a `tsconfig.json` of its own inside its `__fixtures__` folder is left out);
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
     and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
@@ -365,7 +371,10 @@ links to as `contract/REFERENCE.md#<slug>`.
 - From the root: `bun run contract:inflight` (`ui-contract inflight`: the contract of
   `contract/trunk` and of each local `feat/*`, `fix/*`, `chore/*` and `refactor/*` branch, loaded
   with this engine from the refs alone, each printed as OK or with its problems; exits 1 when any
-  has one). Not part of `bun run check`.
+  has one; a branch whose tree is that of its one merge base with `main`, so with nothing `main`
+  lacks, is left out as `<branch>: nothing unlanded, left out` and counted apart in the summary;
+  one with several merge bases, none, or a failing git call is checked). Not part of
+  `bun run check`.
 - From the root: `bun run contract:coverage` (`ui-contract coverage [--write | --check]
   [--json] [--unmarked] [--descriptions]`: the coverage block, first the fields and actions of each entity of the
   model with the anchors bound to them and the transitions of each activity its scenarios
