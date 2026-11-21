@@ -213,7 +213,8 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `invalid-code` | `user.settings.two-factor.error`, `user.sign-in.code.error` | the code is not one the authenticator app shows now for the account's key, nor a backup code of the account not used yet |
 | `code-required` | `user.sign-in.code.dialog` | the dialog asks for a code of the account's authenticator app, or one of its backup codes, since its second factor is on: the right password alone signs nothing in |
 | `code-expired` | `user.sign-in.error` | the sign-in waited ten minutes for its code, or took five wrong ones, so it starts again from the password |
-| `passkey-cancelled` | `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing changed |
+| `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
+| `passkey-unknown` | `user.sign-in.error` | the passkey picked signs in to no account: it was removed from its account |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |

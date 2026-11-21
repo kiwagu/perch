@@ -90,6 +90,10 @@ anchors:
     kind: button
     description: Switches between signing in and creating an account.
     dataValue: true
+  user.sign-in.passkey-button:
+    kind: button
+    description: Signs in with a passkey of the account, which the browser asks for; no password and no code.
+    binding: { action: platform.sign-in-passkey }
   user.sign-in.forgot-link:
     kind: link
     description: Leads to asking for a mail that sets a new password.
@@ -122,10 +126,14 @@ anchors:
     kind: dialog
     description: Asks whether to sign in all the same and sign out the account's device seen least recently.
     binding:
-      action: platform.sign-in
-      params:
-        signOutOldest:
-          value: true
+      - action: platform.sign-in
+        params:
+          signOutOldest:
+            value: true
+      - action: platform.sign-in-passkey
+        params:
+          signOutOldest:
+            value: true
     codes: [ device-limit ]
 states:
   ready: The form in the mode sign-in, with the notice of the last session above it when there is one.
@@ -140,8 +148,9 @@ flow:
   states:
     sign-in:
       description: The form in the mode sign-in.
-      meta: { renders: [ user.sign-in.forgot-link ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button: signing-in-passkey
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
@@ -342,6 +351,46 @@ flow:
           - target: code-anyway
             actions:
               - show: user.sign-in.code.error
+    signing-in-passkey:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
+      entry:
+        - clear: user.sign-in.error
+      invoke:
+        src: platform.sign-in-passkey
+        onDone:
+          - target: passkey-device-limit
+            guard: atDeviceLimit
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          target: sign-in
+          actions:
+            - show: user.sign-in.error
+    passkey-device-limit:
+      description: The form in the mode sign-in with the dialog; nothing is signed in unless it is confirmed, and its confirmation asks for the passkey again.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button, user.sign-in.device-limit-dialog ] }
+      on:
+        user.sign-in.device-limit-dialog.confirm-button: signing-in-passkey-anyway
+        user.sign-in.device-limit-dialog.cancel-button: sign-in
+    signing-in-passkey-anyway:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.passkey-button ] }
+      invoke:
+        src: platform.sign-in-passkey
+        input: { signOutOldest: { value: true } }
+        onDone:
+          target: done
+          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+          actions:
+            - show: { app-shell.notice-message: [ welcome ] }
+            - navigate: /me
+        onError:
+          target: sign-in
+          actions:
+            - show: user.sign-in.error
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
@@ -430,4 +479,5 @@ wireframe: |-
   - textbox "Email"
   - textbox "Password"
   - button "Sign in"
+  - button "Sign in with a passkey"
   - button "Create account"

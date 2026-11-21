@@ -114,6 +114,21 @@ actions:
       - rate-limited
       - other-account
       - failed
+  sign-in-passkey:
+    description: Signs this device in to an account with one of its passkeys, which the browser asks for, with no password and no code.
+    params:
+      signOutOldest:
+        type: boolean
+        optional: true
+        description: Sign in past the account's limit of devices as for sign-in, once the dialog device-limit is confirmed.
+    result: "the browser asks to pick a passkey of this site and to unlock it; the device is then signed in to that passkey's account as by sign-in with the right password, the limit of devices (dialog device-limit) and the ban judged alike, and its second factor asks nothing; while the email's failed sign-ins keep a sign-in by password out (rate-limited), they keep this one out too, and a sign-in by passkey forgets them; a passkey removed from its account answers passkey-unknown; the browser's window closed or timed out answers passkey-cancelled; nothing is signed in on a refusal"
+    changes: [ devices.list, accounts.read ]
+    codes:
+      - passkey-cancelled
+      - passkey-unknown
+      - account-banned
+      - rate-limited
+      - failed
   confirm-sign-in:
     description: Signs this device in to the account whose sign-in by password asked for a code, with a code of its second factor.
     params:
