@@ -7,7 +7,7 @@ import type { SignInForm } from '../sign-in.service'
  * carries both as typed, and so does the switch of mode, which judges them on the way into sign-up;
  * the submit carries the password typed again beside the form, never sent with it, and the
  * confirmation of the dialog past the limit of devices carries the form as typed, which signs in
- * all the same.
+ * all the same; the confirmation of the dialog of the code carries the code as typed.
  */
 export type SignInEvent =
   | ({ readonly type: 'user.sign-in.toggle-button' } & Passwords)
@@ -26,6 +26,9 @@ export type SignInEvent =
     }
   | { readonly type: 'user.sign-in.device-limit-dialog.confirm-button'; readonly form: SignInForm }
   | { readonly type: 'user.sign-in.device-limit-dialog.cancel-button' }
+  | { readonly type: 'user.sign-in.passkey-button' }
+  | { readonly type: 'user.sign-in.code.dialog.confirm-button'; readonly code: string }
+  | { readonly type: 'user.sign-in.code.dialog.cancel-button' }
 
 /** The params of the flow's effects: an anchor shows one of the codes or goes; the app moves to a path. */
 export interface ShowParams {

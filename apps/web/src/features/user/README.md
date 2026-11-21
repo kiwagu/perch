@@ -30,14 +30,23 @@ and commands beside it), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
-`platform.sign-in`, `platform.sign-up` or `platform.resend-verification`, a sign-in that finds the
-account at its limit of devices (its outcome `device-limit`, the guard `atDeviceLimit`) asks in its
-dialog and, confirmed, invokes `platform.sign-in` again with `signOutOldest`, at sign-up it holds the
+`platform.sign-in`, `platform.sign-in-passkey`, `platform.confirm-sign-in`, `platform.sign-up` or
+`platform.resend-verification`, a sign-in that finds the account at its limit of devices (its
+outcome `device-limit`, the guard `atDeviceLimit`) asks in its dialog and, confirmed, invokes
+`platform.sign-in` again with `signOutOldest`, a sign-in of an account whose second factor is on
+(its outcome `code-required`, the guard `codeRequired`) asks the code in its dialog and keeps the
+challenge and the email typed until the step ends, a refusal that ends the step (the guard
+`codeStepEnded`) goes back to the form and any other stays in the dialog, a passkey signs in from
+the states that offer its button with no password and no code, and past the limit of devices
+names the account its dialog asked about (`consentFor`), at sign-up it holds the
 password to the rules of a new password (the kernel's `keepsPasswordRules`, the gateway's too)
 and compares the password typed again as either password is typed and on the switch into
-sign-up, it keeps the codes of the form's error and mail message, and the address the last
-sign-up or resend mailed, and emits `show` and `navigate` for the page; `machine.ts` builds it,
-`guards.ts` holds the flow's guards, `events.ts` and `context.ts` what it takes and keeps), the
+sign-up, it keeps the codes of the form's error and mail message and of the code's error, and the
+address the last sign-up or resend mailed, and emits `show` and `navigate` for the page;
+`machine.ts` builds it, its states of the limit of devices are `device-limit-states.ts`, those
+of the code and of the passkey `second-steps.ts` (their actors `second-step-actors.ts`),
+`effects.ts` holds the effects the states share, `guards.ts` the flow's guards, `outcome.ts`
+reads what a step answered, `events.ts` and `context.ts` what it takes and keeps), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -198,8 +207,24 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   name) signs nothing in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
   `user.sign-in.device-limit.*`) whether to sign in all the same, which signs out the device used
   least recently, its cancel going back to the form; a sign-in of an account whose second factor is
-  on answers `code-required` from the session, which the screen has no step for yet:
-  `SignInService` fails it as `data:AUTH_FAILED` (`failed`), signing nothing in;
+  on answers `code-required` from the session (`SignInService` answers its outcomes as the session
+  does, and takes the code step in `confirmSignIn`), which asks the code in a dialog
+  (`user.sign-in.code.dialog`, code `code-required`, texts `user.sign-in.code.*`, the field
+  `user.sign-in.code.code-input` in it, the `InputDialog` of the kit: Enter confirms, Escape
+  cancels, the confirmation is held while the flow does not take it) and signs in once a code is
+  taken; a wrong code (`data:INVALID_CODE`) shows under the field
+  (`user.sign-in.code.error`, code `invalid-code`) and the dialog stays for another, any other
+  failure of the step shows in the dialog (`failed`), and a step that is over, or an account that
+  cannot sign in now (`data:CODE_EXPIRED`, `data:ACCOUNT_BANNED`, `data:RATE_LIMITED`,
+  `data:OTHER_ACCOUNT`) goes back to the form with its reason on `user.sign-in.error`, the dialog's
+  cancel the same without one, the container holding what is typed in the code and emptying it as
+  the flow clears it; past the limit of devices the right code asks about it, and its
+  confirmation signs in again from the password, which asks the code again; the button
+  `user.sign-in.passkey-button` ("Sign in with a passkey", in the states sign-in, check-mail and
+  unverified, never at sign-up) signs in with a passkey the browser picks, a window closed
+  (`data:PASSKEY_CANCELLED`) or a passkey no account holds (`data:PASSKEY_UNKNOWN`) showing on
+  `user.sign-in.error` (`passkey-cancelled`, `passkey-unknown`), its limit of devices asking in
+  the same dialog and signing in again for the account it named;
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to

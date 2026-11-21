@@ -5,6 +5,7 @@ import type { SignInForm, SignInService } from '../sign-in.service'
 
 import {
   CHECK_YOUR_MAIL,
+  CODE_ERROR,
   MAIL_MESSAGE,
   PASSWORDS_DIFFER,
   SIGN_IN_ERROR,
@@ -12,9 +13,12 @@ import {
   UNKNOWN_FAILURE,
 } from './context'
 import { DEVICE_LIMIT_STATES } from './device-limit-states'
-import { askPastTheLimit, clearError, refusedSignIn, showError, welcomed } from './effects'
+import { askCode, askPastTheLimit, clearError, refusedSignIn, showError, welcomed } from './effects'
 import type { ClearParams, NavigateParams, ShowParams, SignInEmitted, SignInEvent } from './events'
 import { signInGuards } from './guards'
+import { outcomeOf } from './outcome'
+import { secondStepActors } from './second-step-actors'
+import { SECOND_STEPS } from './second-steps'
 
 /** The form the submit button sent, which a sign-in or a sign-up takes. */
 function formInput({ event }: { readonly event: SignInEvent }): { readonly form: SignInForm } {
@@ -82,7 +86,10 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * asking to check the mail, and a sign-in of an account not verified yet offers the resend. A
  * sign-in that finds the account signed in on as many devices as it may be signs nothing in and
  * asks in its dialog; confirmed, it signs in all the same, signing out the account's device seen
- * least recently, and the cancel goes back to the form. At
+ * least recently, and the cancel goes back to the form. A sign-in of an account whose second
+ * factor is on asks a code in its dialog once the password is right, and signs in when the code
+ * is taken (`second-steps.ts`); a passkey signs in with no password and no code, from every state
+ * that offers its button. At
  * sign-up the password is held to the rules of a new password and the password typed again is
  * compared, as either is typed and on the switch into sign-up, and the submit is held while the
  * password breaks a rule or the two differ. In the mode sign-in the forgot-link moves to the page
@@ -90,7 +97,12 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * the form's own error and mail message for the view and emit any other; its `navigate` emits the
  * path with the fields its event carries, for the host to move with.
  */
-export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'signUp' | 'resend'>) {
+export function createSignInMachine(
+  service: Pick<
+    SignInService,
+    'signIn' | 'signUp' | 'resend' | 'confirmSignIn' | 'signInWithPasskey'
+  >,
+) {
   return setup({
     types: {
       context: {} as SignInContext,
@@ -112,6 +124,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         ({ input }: { readonly input: { readonly email: string } }) =>
           settled(service.resend(input.email).map(() => input.email)),
       ),
+      ...secondStepActors(service),
     },
     actions: {
       show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
@@ -126,6 +139,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.assign({
             mail: params.codes.includes(CHECK_YOUR_MAIL) ? CHECK_YOUR_MAIL : undefined,
           })
+        } else if (params.anchor === CODE_ERROR) {
+          enqueue.assign({ codeError: failureOf(event, UNKNOWN_FAILURE) })
         } else {
           enqueue.emit({ type: 'show', ...params })
         }
@@ -135,6 +150,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.assign({ error: undefined })
         } else if (params.anchor === MAIL_MESSAGE) {
           enqueue.assign({ mail: undefined, sentTo: undefined })
+        } else if (params.anchor === CODE_ERROR) {
+          enqueue.assign({ codeError: undefined })
         } else {
           enqueue.emit({ type: 'clear', ...params })
         }
@@ -145,15 +162,36 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         ...params,
         ...('fields' in event ? { fields: event.fields } : {}),
       })),
+      // The code step and the account a passkey dialog asked about follow the last answer.
+      keepOutcome: assign(({ event }) => {
+        const outcome = outcomeOf(event)
+
+        return {
+          step:
+            outcome?.kind === 'code-required'
+              ? { challenge: outcome.challenge, email: outcome.email }
+              : undefined,
+          consentFor: outcome?.kind === 'device-limit' ? outcome.consentFor : undefined,
+        }
+      }),
+      forgetSteps: assign({ step: undefined, consentFor: undefined }),
     },
   }).createMachine({
     id: 'user.sign-in',
     initial: 'sign-in',
-    context: { error: undefined, mail: undefined, sentTo: undefined },
+    context: {
+      error: undefined,
+      mail: undefined,
+      sentTo: undefined,
+      step: undefined,
+      codeError: undefined,
+      consentFor: undefined,
+    },
     states: {
       'sign-in': {
-        meta: { renders: ['user.sign-in.forgot-link'] },
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.passkey-button'] },
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.toggle-button': intoSignUp(clearError),
           'user.sign-in.submit-button': { target: 'signing-in' },
@@ -231,6 +269,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           src: 'platform.sign-in',
           input: signInInput,
           onDone: [
+            { target: 'code', guard: 'codeRequired', actions: ['keepOutcome', askCode] },
             { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
             { target: 'done', actions: welcomed },
           ],
@@ -238,6 +277,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       ...DEVICE_LIMIT_STATES,
+      ...SECOND_STEPS,
       'signing-up': {
         meta: {
           renders: [
@@ -269,8 +309,15 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'check-mail': {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
+        meta: {
+          renders: [
+            'user.sign-in.forgot-link',
+            'user.sign-in.resend-button',
+            'user.sign-in.passkey-button',
+          ],
+        },
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey', actions: [clearMail] },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in', actions: [clearMail] },
@@ -278,8 +325,15 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       unverified: {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
+        meta: {
+          renders: [
+            'user.sign-in.forgot-link',
+            'user.sign-in.resend-button',
+            'user.sign-in.passkey-button',
+          ],
+        },
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in' },

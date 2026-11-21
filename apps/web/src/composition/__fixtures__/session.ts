@@ -438,11 +438,15 @@ export interface TestSession {
 
 /**
  * A session with the command bus, as the root wires them, for feature tests: accounts at a
- * gateway without a network, each identity's own embedded database, synced through the stub.
+ * gateway without a network, each identity's own embedded database, synced through the stub; its
+ * browser's passkey window is `options.ceremony`, one that nobody answers by default.
  */
-export async function openTestSession(logger: CommandLogger = silent): Promise<TestSession> {
+export async function openTestSession(
+  logger: CommandLogger = silent,
+  options: Pick<TestWorldOptions, 'ceremony'> = {},
+): Promise<TestSession> {
   const auth = fakeGatewayAuth()
-  const world = await openTestWorld({ logger, auth })
+  const world = await openTestWorld({ logger, auth, ...options })
 
   return {
     session: world.session,

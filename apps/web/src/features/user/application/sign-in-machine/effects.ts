@@ -1,4 +1,4 @@
-import { SIGN_IN_ERROR } from './context'
+import { CODE_DIALOG, SIGN_IN_ERROR } from './context'
 
 /** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
 export const showError = (...codes: readonly string[]) =>
@@ -16,6 +16,12 @@ export const welcomed = [
 export const askPastTheLimit = {
   type: 'show',
   params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
+} as const
+
+/** The dialog asking the code of the account's second factor, once its password is right. */
+export const askCode = {
+  type: 'show',
+  params: { anchor: CODE_DIALOG, codes: ['code-required'] },
 } as const
 
 /**
