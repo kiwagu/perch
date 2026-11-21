@@ -326,10 +326,11 @@ actions:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each good for one sign-in; the second factor stays off until two-factor.confirm takes a code of that key, and asking again replaces the key and the codes; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result: "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each good for one sign-in; the second factor stays off until two-factor.confirm takes a code of that key, and asking again replaces the key and the codes; while the second factor is on, turned on meanwhile from another device, it answers two-factor-changed and changes nothing; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
     changes: []
     codes:
       - invalid-credentials
+      - two-factor-changed
       - rate-limited
       - failed
   two-factor.confirm:
@@ -338,7 +339,7 @@ actions:
       code:
         value: second-factor-code
         description: The code the authenticator app shows now for that key.
-    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code"
+    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code, and so does a code of a key that a later two-factor.enable replaced"
     changes: [ two-factor.read ]
     codes:
       - invalid-code
@@ -350,7 +351,7 @@ actions:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone; this device and the account's other devices stay signed in; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result: "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone; one off already, turned off meanwhile from another device, gets the same answer; this device and the account's other devices stay signed in; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
     changes: [ two-factor.read ]
     codes:
       - invalid-credentials
@@ -362,10 +363,11 @@ actions:
       password:
         value: password
         description: The password the account has now, which confirms the request.
-    result: "the answer carries ten new backup codes, each good for one sign-in, and the earlier ones stop working; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    result: "the answer carries ten new backup codes, each good for one sign-in, and the earlier ones stop working; while the second factor is off, turned off meanwhile from another device, it answers two-factor-changed and makes none; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
     changes: []
     codes:
       - invalid-credentials
+      - two-factor-changed
       - rate-limited
       - failed
   passkeys.list:

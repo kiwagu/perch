@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: its theme and language, its password, email, second factor and passkeys, and the request that deletes the account."
+description: Where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted.
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
 entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.two-factor.section, user.settings.passkeys.list, user.settings.deletion.form ]
@@ -93,7 +93,7 @@ anchors:
     description: "The account's second factor as read, on or off: a code of an authenticator app, or a backup code, asked after the password at each sign-in."
     source:
       platform: two-factor.read
-    states: [ loading, ready ]
+    states: [ loading, ready, error ]
   user.settings.two-factor.on-badge:
     kind: badge
     description: Marks the account's second factor as on.
@@ -159,6 +159,7 @@ anchors:
     description: "The account's passkeys, the earliest added first: each signs the account in from the sign-in page, with no password and no code."
     source:
       platform: passkeys.list
+    states: [ loading, ready, empty, error ]
   user.settings.passkeys.passkey-item:
     kind: item
     description: One passkey, shown by when it was added.
@@ -210,6 +211,7 @@ flow:
       settingsHeld: the account's settings are on this device
       accountLeft: the account the store was for has signed out since it began
       deletionBlocked: { codes: [ last-admin ] }
+      factorChanged: { codes: [ two-factor-changed ] }
   states:
     viewing:
       type: parallel
@@ -367,9 +369,16 @@ flow:
                   actions:
                     - clear: user.settings.two-factor.password-input
                 onError:
-                  target: idle
-                  actions:
-                    - show: user.settings.two-factor.error
+                  - target: idle
+                    guard: factorChanged
+                    description: The section reads the second factor as it is now.
+                    actions:
+                      - show: user.settings.two-factor.error
+                      - clear: user.settings.two-factor.password-input
+                      - read: user.settings.two-factor.section
+                  - target: idle
+                    actions:
+                      - show: user.settings.two-factor.error
             confirming:
               description: The key shows and waits for a code of it; the second factor is still off.
               meta: { renders: [ user.settings.two-factor.key-cell, user.settings.two-factor.code-input, user.settings.two-factor.confirm-button, user.settings.two-factor.stop-button ] }
@@ -429,9 +438,16 @@ flow:
                   actions:
                     - clear: user.settings.two-factor.password-input
                 onError:
-                  target: idle
-                  actions:
-                    - show: user.settings.two-factor.error
+                  - target: idle
+                    guard: factorChanged
+                    description: The section reads the second factor as it is now.
+                    actions:
+                      - show: user.settings.two-factor.error
+                      - clear: user.settings.two-factor.password-input
+                      - read: user.settings.two-factor.section
+                  - target: idle
+                    actions:
+                      - show: user.settings.two-factor.error
         passkey-add:
           description: Adding a passkey.
           by: user.settings.passkeys.add-button

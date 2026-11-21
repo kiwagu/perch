@@ -215,6 +215,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `code-expired` | `user.sign-in.error` | the sign-in waited ten minutes for its code, took five wrong ones, or the account's password or email changed meanwhile, so it starts again from the password |
 | `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
 | `passkey-unknown` | `user.sign-in.error` | the passkey picked is no account's here: removed from its account, or never added to one |
+| `two-factor-changed` | `user.settings.two-factor.error` | another device of the account turned the second factor on or off meanwhile, so nothing changed here; the section shows it as it is now |
 | `sign-up-rejected` | `user.sign-in.error` | no account can be created with these details: the email is not an email, or the password breaks the password rules (the page's list of rules says which) |
 | `password-rejected` | `user.reset-password.error`, `user.settings.password.error` | the new password breaks the password rules, so the password stays what it was |
 | `email-invalid` | `user.settings.email.error`, `organisation.invite.error`, `console.account.email.error` | the email typed is not an email |
@@ -310,7 +311,7 @@ screen name of its own.
 | `organisation` | the organisations of the account and the invitations to it: the current one with its notes, and its members and invitations for an administrator (`/org`) |
 | `device` | the devices of the signed-in account (`/devices`) |
 | `not-found` | what an address no other route takes opens (`/$`) |
-| `user.settings` | the settings of the signed-in account: the theme, the language, the password, the email, the second factor and the passkeys, and the deletion of the account (`/settings`) |
+| `user.settings` | where the signed-in account sets how it looks and speaks, guards and changes how it signs in, and asks to be deleted (`/settings`) |
 | `user.delete-account` | the page the link of an account deletion mail opens, which deletes the account on a press (`/delete-account`) |
 | `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
 | `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
