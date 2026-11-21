@@ -119,7 +119,7 @@ anchors:
         code: user.sign-in.code.code-input
   user.sign-in.code.error:
     kind: error
-    codes: [ invalid-code, rate-limited, failed ]
+    codes: [ invalid-code, failed ]
     fields:
       invalid-code: user.sign-in.code.code-input
   user.sign-in.device-limit-dialog:
@@ -144,7 +144,7 @@ flow:
       emailNotVerified: { codes: [ email-not-verified ] }
       atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
       codeRequired: the account's second factor is on, so the right password signed nothing in and a code is asked
-      codeStepEnded: { codes: [ code-expired, account-banned ] }
+      codeStepEnded: { codes: [ code-expired, account-banned, rate-limited, other-account ] }
   states:
     sign-in:
       description: The form in the mode sign-in.
@@ -382,11 +382,16 @@ flow:
         src: platform.sign-in-passkey
         input: { signOutOldest: { value: true } }
         onDone:
-          target: done
-          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
-          actions:
-            - show: { app-shell.notice-message: [ welcome ] }
-            - navigate: /me
+          - target: passkey-device-limit
+            guard: atDeviceLimit
+            description: A passkey of another account was picked, which is at its limit too; the dialog asks about it afresh.
+            actions:
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
         onError:
           target: sign-in
           actions:
@@ -403,8 +408,12 @@ flow:
             - show: { user.sign-in.mail-message: [ check-your-mail ] }
     check-mail:
       description: The form in the mode sign-in with the email kept.
-      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button:
+          target: signing-in-passkey
+          actions:
+            - clear: user.sign-in.mail-message
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
@@ -429,8 +438,9 @@ flow:
               - clear: user.sign-in.mail-message
     unverified:
       description: The form in the mode sign-in with the error.
-      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button ] }
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.resend-button, user.sign-in.passkey-button ] }
       on:
+        user.sign-in.passkey-button: signing-in-passkey
         user.sign-in.forgot-link:
           target: forgot-password
           actions:
