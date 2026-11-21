@@ -28,15 +28,17 @@ const branchesOf = (root: string): string[] =>
 
 /**
  * Whether `branch` carries nothing `main` lacks: its tree is the tree of its one merge base with
- * `main`, so `git diff main...branch` is empty. Several merge bases, none or a failing git call
- * leave that unknown, and a branch not known to carry nothing is checked, never left out.
+ * `main`, so `git diff main...branch` is empty. Several merge bases, none, no local `main` (read by
+ * its exact ref, never a tag of that name) or a failing git call leave that unknown, and a branch
+ * not known to carry nothing is checked, never left out.
  */
 function hasNothingUnlanded(branch: string, root: string): boolean {
   const ref = `${HEADS}${branch}`
   const treeOf = (rev: string): string => git(root, ['rev-parse', `${rev}^{tree}`]).trim()
 
   try {
-    const [base, ...others] = git(root, ['merge-base', '--all', MAIN, ref])
+    const main = git(root, ['show-ref', '--verify', '--hash', MAIN]).trim()
+    const [base, ...others] = git(root, ['merge-base', '--all', main, ref])
       .split('\n')
       .filter((line) => line !== '')
 

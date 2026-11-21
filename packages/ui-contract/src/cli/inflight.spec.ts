@@ -295,6 +295,17 @@ describe('inflight', () => {
     expect(lines).toContain('feat/x: OK (version 1)')
     expect(lines.at(-1)).toBe('inflight: 2 branches, 0 broken')
   })
+  it('reads main by its exact ref: a tag named as its ref stands for no main', () => {
+    const root = fixtureRepository({ 'feat/x': () => {} })
+
+    git(root, 'branch', '--move', 'main', 'trunkless')
+    git(root, 'tag', 'refs/heads/main', 'feat/x')
+
+    const lines = run(root).out.split('\n')
+
+    expect(lines).toContain('feat/x: OK (version 1)')
+    expect(lines.at(-1)).toBe('inflight: 2 branches, 0 broken')
+  })
 
   it('reads the refs only: the checkout, the index and every branch stay as they were', () => {
     const root = fixtureRepository({ 'feat/breaks': breakRule })
