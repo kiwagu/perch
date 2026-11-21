@@ -13,7 +13,11 @@ export type Allowance = { readonly allowed: true } | Refusal
 export type Reservation =
   | {
       readonly allowed: true
-      /** Uncounts the attempt once, while the window that counted it still holds its key. */
+      /**
+       * Uncounts the attempt once, while the window that counted it still holds its key. A window
+       * left with no attempt is dropped, so a key whose attempts were all given back is as if it
+       * had never been counted: its next attempt starts a fresh window.
+       */
       giveBack(): void
     }
   | Refusal
@@ -37,11 +41,12 @@ interface Counter {
 const defaultMaxKeys = 100_000
 
 /**
- * Counts attempts per key in fixed windows that start at a key's first attempt. The table is
- * bounded: an unseen key at a full table evicts the window that started first, even a live one,
- * rather than being refused. Availability wins over a marginal gain: refusing unseen keys would
- * let anyone who fills a table with cheap requests lock every other key out, while an evicted
- * key only starts a fresh window.
+ * Counts attempts per key in fixed windows that start at a key's first attempt that still counts:
+ * a window whose every attempt was given back (`reserve`) leaves nothing behind, neither a count
+ * nor a deadline. The table is bounded: an unseen key at a full table evicts the window that
+ * started first, even a live one, rather than being refused. Availability wins over a marginal
+ * gain: refusing unseen keys would let anyone who fills a table with cheap requests lock every
+ * other key out, while an evicted key only starts a fresh window.
  */
 export class FixedWindow {
   /** The windows in the order they started, the first started first. */
@@ -59,7 +64,12 @@ export class FixedWindow {
     return 'allowed' in counted ? counted : { allowed: true }
   }
 
-  /** Counts one attempt of `key` like `take`, for its holder to give back if it does not count. */
+  /**
+   * Counts one attempt of `key` like `take`, for its holder to give back if it does not count.
+   * An attempt given back that leaves its window empty takes the window with it, so an attempt
+   * that opened it and was given back does not leave its deadline to cut short the window of the
+   * attempts that follow.
+   */
   reserve(key: string): Reservation {
     const counted = this.countIn(key)
 
@@ -76,6 +86,10 @@ export class FixedWindow {
         // reservation given back once holds nothing more.
         if (!given && this.live(key) === counted && counted.count > 0) {
           counted.count -= 1
+
+          if (counted.count === 0) {
+            this.counters.delete(key)
+          }
         }
 
         given = true

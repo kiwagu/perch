@@ -1,11 +1,6 @@
-export {
-  type Collected,
-  collectFromSource,
-  isAnchorAttribute,
-  RUNTIME_ANCHOR,
-  RUNTIME_SUFFIX,
-} from './collect'
+export { type Collected, collectFromSource, RUNTIME_ANCHOR, RUNTIME_SUFFIX } from './collect'
 export { compareWithContract } from './compare'
+export { isAnchorAttribute } from './element'
 export {
   IGNORE_MALFORMED,
   IGNORE_NO_CONTROL,

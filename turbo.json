@@ -103,6 +103,9 @@
     "//#contract:check": {
       "cache": false
     },
+    "//#contract:check:current": {
+      "cache": false
+    },
     "//#contract:check:sources": {
       "cache": false
     },

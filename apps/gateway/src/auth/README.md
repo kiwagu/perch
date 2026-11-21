@@ -137,17 +137,20 @@ requests from that origin only; the front strips its `/backend` prefix, so the m
 before it hands a request over. In front of Better Auth, the mount applies the gateway's own
 limits (see `src/limits/README.md`): every sign-up, sign-in and verification takes one of its
 client address's 20 credential checks in 10 s, a sign-in must find a place among its email's 10
-failed sign-ins in 15 minutes (a 403, the password right and the email not verified, clears them
-as a success does), a sign-up takes one of its address's 200 verification mails in 15 minutes,
-whatever its email, and a resend takes one of those and one of its email's 3 resends in 15
-minutes. A refusal answers 429 `rate-limited` with `Retry-After` before
-any password is checked; Better Auth's own limiter is off. A sign-in whose body is not JSON naming
-an email of at most the `email` value's length and a password, as strings, answers 400
+failed sign-ins in 15 minutes (a 403 `EMAIL_NOT_VERIFIED` or `account-banned`, the password right,
+clears them as a success does; any other 403, Better Auth's refusal of the request's origin, its
+Fetch Metadata or its callback, comes before the password is checked and counts nothing), a
+sign-up takes one of its address's 200 verification mails in 15 minutes, whatever its email, and a
+resend takes one of those and one of its email's 3 resends in 15 minutes. A refusal answers 429
+`rate-limited` with `Retry-After` before any password is checked; Better Auth's own limiter is off.
+A sign-in whose body is not JSON naming an email of at most the `email` value's length and a
+password, as strings, answers 400
 `bad-request` before anything is read for the email, alike for any email. One that is reaches
 Better Auth as that very JSON, so the email whose password is checked is the email counted, but
 for a password of a length no account's password has (outside the `password` value's, the empty
 one included): Better Auth gets `NO_ACCOUNTS_PASSWORD` in its place (`password-length.ts`), ten
-spaces, which no password set under the rules has, so it is refused, counted and timed as a
+spaces, which no password set under the rules has and which the password verifier
+(`verifyPassword`, `password-hash.ts`) never accepts, so it is refused, counted and timed as a
 wrong one, after the same checks of the request (its origin, the email's shape) as any other
 (Better Auth would fail to hash an empty password, which it hashes to time an unknown email's
 answer). Better Auth's answers reach the client
@@ -686,6 +689,7 @@ error carries one.
   answers its allowlist alone, whatever else Better Auth's answer carries, and the refusals of a
   banned account (403 `account-banned` after the right password, before the device is looked at,
   `EMAIL_NOT_VERIFIED` while unverified, 401 for a wrong password, the failed sign-ins cleared),
+  and the refusals before the password (origin, Fetch Metadata, callback) that keep them,
   its admission held while a ban commits, before and after the session's insert, answering 403 with
   no token and the session ended `banned`; `auth-handler/verification-ban.spec.ts`, which holds the
   verification of a banned account through the real Better Auth: its gate's refusal with the email

@@ -47,6 +47,9 @@ export function staticText(node: Expression | Argument | undefined): string | un
   return undefined
 }
 
+/** A constant that holds an anchor: `<NAME>_TEST_ID`. */
+export const TEST_ID_CONSTANT = /^[A-Z][A-Z0-9_]*_TEST_ID$/
+
 export const isTestIdFor = (node: Expression): boolean =>
   node.type === 'Identifier' && node.name === 'testIdFor'
 
@@ -132,4 +135,29 @@ export function keyName(key: PropertyKey, computed: boolean): string | undefined
   }
 
   return key.type === 'Literal' && typeof key.value === 'string' ? key.value : undefined
+}
+
+/**
+ * The name of a property key the file states: a name or a string (`keyName`), a number as the
+ * string JavaScript makes of it (`0` is `'0'`), or a computed name a `const` of the file declares
+ * with a string, read where the key is written (`[LABEL_PROP]` with `const LABEL_PROP =
+ * 'aria-label'`; `Locals.constantNamed`). None for any other computed key: a `let` or a `var`, a
+ * parameter, a destructured name, an import, a call, a member.
+ */
+export function statedKeyName(
+  key: PropertyKey,
+  computed: boolean,
+  constantNamed: (name: string, at: number) => Expression | undefined,
+): string | undefined {
+  const named = keyName(key, computed)
+
+  if (key.type === 'Literal' && typeof key.value === 'number') {
+    return String(key.value)
+  }
+
+  if (named !== undefined || !computed || key.type !== 'Identifier') {
+    return named
+  }
+
+  return staticText(constantNamed(key.name, key.start))
 }
