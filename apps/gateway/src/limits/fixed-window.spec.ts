@@ -190,6 +190,21 @@ describe('FixedWindow', () => {
     expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
   })
 
+  it('counts a reservation kept after its key was forgotten even once newer attempts filled the window, so a later give-back leaves it counted', () => {
+    const { window } = windowOf(2, 10_000)
+    const queued = reservedOf(window, 'a')
+
+    window.forget('a')
+
+    const newer = [reservedOf(window, 'a'), reservedOf(window, 'a')]
+
+    queued.keep()
+    newer[0]?.giveBack()
+
+    // The kept attempt and the newer one still under way fill the window.
+    expect(window.take('a').allowed).toBe(false)
+  })
+
   it('forgets a key', () => {
     const { window } = windowOf(1, 10_000)
 

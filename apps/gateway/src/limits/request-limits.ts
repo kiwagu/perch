@@ -103,8 +103,8 @@ export class RequestLimits {
    * forgets the email's window (its failures and the places of those under way), and an answer
    * that judged no password gives the place back. A failure judged once a success forgot the
    * window it held its place in (a wrong code that waited for the account's turn while another
-   * device's code signed in) counts in the email's window as it is then: every wrong password or
-   * code counts. The email comes in lower case, as the auth mount takes it and the directory
+   * device's code signed in) counts in the email's window as it is then, even a full one: every
+   * wrong password or code counts once. The email comes in lower case, as the auth mount takes it and the directory
    * matches it, so a sign-in in any case counts against one account.
    */
   signInAttempt(email: string): SignInAttempt {

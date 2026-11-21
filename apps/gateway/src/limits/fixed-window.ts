@@ -26,8 +26,9 @@ export type Reservation =
        * Keeps the attempt counted for good. While the window that counted it still holds its key
        * it stays there; once that window is gone (the key forgotten while the attempt was under
        * way, its window passed or evicted), the attempt counts in the key's window as it is now,
-       * opening one if there is none, so an attempt judged after a forgetting still counts. A full
-       * window counts nothing more.
+       * opening one if there is none, past its limit when newer attempts filled it: an attempt
+       * judged after a forgetting always counts, once, so a newer attempt given back later leaves
+       * it counted.
        */
       keep(): void
     }
@@ -108,7 +109,7 @@ export class FixedWindow {
       keep: () => {
         // Its own window still counts it; any other window, or none, has not counted it yet.
         if (!settled && this.live(key) !== counted) {
-          this.countIn(key)
+          this.record(key)
         }
 
         settled = true
@@ -119,6 +120,20 @@ export class FixedWindow {
   /** Forgets `key`'s window (a success that clears its failures). */
   forget(key: string): void {
     this.counters.delete(key)
+  }
+
+  /**
+   * Counts one attempt of `key` that was judged already, which no window refuses: past the limit
+   * of a full window, or in a window it opens.
+   */
+  private record(key: string): void {
+    const counter = this.live(key)
+
+    if (counter) {
+      counter.count += 1
+    } else {
+      this.open(key)
+    }
   }
 
   /** Counts one attempt of `key`: the window that counted it, or the refusal of a full window. */

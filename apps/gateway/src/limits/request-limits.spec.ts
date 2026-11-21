@@ -139,6 +139,26 @@ describe('RequestLimits', () => {
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
+  it("keeps a failure judged after a success counted when newer sign-ins filled the email's new window and one of them gives its place back", () => {
+    const { limits } = limitsOn()
+    const waiting = limits.signInAttempt('ann@example.test')
+
+    settle(limits.signInAttempt('ann@example.test'), 'succeeded')
+
+    const newer = answers(10, () => limits.signInAttempt('ann@example.test'))
+
+    expect(newer.map((attempt) => attempt.allowed)).toEqual(answers(10, () => true))
+
+    settle(waiting, 'failed')
+
+    const [first] = newer
+
+    settle(first ?? expect.unreachable('a newer sign-in'), 'unjudged')
+
+    // Nine newer sign-ins under way and the failure fill the window.
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
   it("clears an email's failures and sign-ins under way once it signs in", () => {
     const { limits } = limitsOn()
 
