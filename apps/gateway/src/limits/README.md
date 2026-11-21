@@ -86,8 +86,10 @@ client address in 10 minutes (`ADDRESS_LINK_ATTEMPTS`), the resets of a password
 (`invitationLink`, `POST /invitations/read`) each on their own, every attempt counted,
 refused or not, before anything is read: a link's token is too long to guess, so the limit keeps
 one client from hammering the directory. A change of a password or of an email and a request to
-delete an account take one of their address's credential checks, and the current password a
-place among its account's failed sign-ins, as a sign-in does.
+delete an account, and each change of the second factor with its password, take one of their
+address's credential checks, and the password a place among its account's failed sign-ins, as a
+sign-in does: a wrong one keeps its place, a right one gives it back and forgets none of the
+failures, which only a sign-in's last step clears.
 Invitations, `POST /organisations/:key/invitations`, are limited to 30 attempts per inviting
 identity and 60 per client address in 10 minutes, so probing the invites stays slow, and each
 takes one of the client address's 200 mails too (`inviteMail`): the address's mail is reserved

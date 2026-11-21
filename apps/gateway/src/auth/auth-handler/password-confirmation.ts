@@ -21,8 +21,9 @@ export interface ConfirmedAccount {
  * failed sign-ins (`RequestLimits.signInAttempt`, 429 when they are spent) and match the
  * credential row, as a sign-in's does: a wrong one keeps its place and answers 400
  * `invalid-credentials`, as one of a length no account's password has (`hasPasswordLength`) does
- * without being checked; a right one clears them. Answers the account once the password matched,
- * or the answer that refuses the work.
+ * without being checked; a right one gives its place back and forgets none of the failures, which
+ * only a sign-in's last step does. Answers the account once the password matched, or the answer
+ * that refuses the work.
  */
 export async function confirmPassword(
   deps: {
@@ -58,7 +59,9 @@ export async function confirmPassword(
         return internal()
       }
 
-      outcome = matches.value ? 'succeeded' : 'failed'
+      // A right password settles nothing: only a sign-in's last step forgets the email's failed
+      // sign-ins, so the place it held goes back and the failures stay.
+      outcome = matches.value ? 'unjudged' : 'failed'
     }
   } finally {
     attempt.settle(outcome)

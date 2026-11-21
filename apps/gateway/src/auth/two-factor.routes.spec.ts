@@ -145,11 +145,12 @@ async function harness(policy: SecondFactorPolicy = accountChoicePolicy) {
   const sessions = new AuthSessions({ auth, directory: local, clock, secret: AUTH_SECRET })
   const turns = new KeyedTurns<string>()
   const rows = new TwoFactorRows(local)
+  const limits = new RequestLimits({ clock })
   const routes = twoFactorRoutes({
     auth,
     sessions,
     passwords: accountServicesOf(opened).passwords,
-    limits: new RequestLimits({ clock }),
+    limits,
     accounts: turns,
     rows,
     policy,
@@ -225,6 +226,7 @@ async function harness(policy: SecondFactorPolicy = accountChoicePolicy) {
     read,
     turnedOn,
     rows,
+    limits,
     state: (caller: Caller = ann) => stateOf(opened, caller.identity),
   }
 }
@@ -419,6 +421,43 @@ describe('twoFactorRoutes', () => {
     expect(await requiring.read()).toBe(true)
     expect((await requiring.state()).rows.map((row) => row.id)).toEqual([started.enrolment])
   }, 60_000)
+
+  it.each([
+    ['renews the backup codes', 'renew-codes', 200],
+    ['asks for a new key while the factor is on, which answers 409', 'enable', 409],
+    ['turns the factor off', 'disable', 204],
+  ] as const)(
+    "forgets none of the email's failed sign-ins when a right password %s",
+    async (_, name, status) => {
+      const { ann, ask, limits, turnedOn } = await harness()
+
+      await turnedOn()
+
+      // Nine failed sign-ins of the account: one short of the ten the limit allows.
+      for (let failures = 0; failures < 9; failures += 1) {
+        const attempt = limits.signInAttempt(ANN)
+
+        if (!attempt.allowed) {
+          expect.unreachable('nine failures are within the limit')
+        }
+
+        attempt.settle('failed')
+      }
+
+      expect(
+        (await ask('POST', `/two-factor/${name}`, { as: ann, body: { password: PASSWORD } }))
+          .status,
+      ).toBe(status)
+      // The right password forgot nothing: the next failure is the tenth, and the limit holds.
+      expect(
+        await ask('POST', '/two-factor/disable', { as: ann, body: { password: 'Wrong-pass-1' } }),
+      ).toEqual(invalidCredentials)
+      expect(
+        await ask('POST', '/two-factor/disable', { as: ann, body: { password: PASSWORD } }),
+      ).toEqual({ status: 429, body: { code: 'rate-limited' } })
+    },
+    60_000,
+  )
 
   it("runs each change in the account's turn, and a read in none", async () => {
     const { ann, turns, enable, confirm, renew, disable, read } = await harness()

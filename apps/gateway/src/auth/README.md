@@ -446,7 +446,8 @@ credential checks, answers 400 `bad-request` for a body without a current passwo
 and must find a place among the account's 10 failed sign-ins in 15 minutes, as a sign-in does
 (429 when they are spent): a wrong current password keeps its place there and answers 400
 `invalid-credentials`, as one of a length no account's password has does without being checked;
-a right one clears them. In the account's turn, the current password is
+a right one gives its place back and forgets none of the failures (only a sign-in's last step
+does). In the account's turn, the current password is
 checked against the credential row and the new one hashed (`AccountPasswords.change`); then one
 transaction (`surql/password-change-commit.surql`) makes sure the caller's session is still live
 (401 `unauthorized` when it ended while the change waited) and the row still holds the hash that
@@ -466,7 +467,8 @@ between: the caller's session is read again (401 `unauthorized` when it ended wh
 waited), with the account's email as it is then, and the password must find a place among that
 email's failed sign-ins and match the credential row (`AccountPasswords.matches`), a wrong one
 answering 400 `invalid-credentials`, as one of a length no account's password has does without
-being checked. Its earlier pending change then ends; when no account has the
+being checked, and a right one giving its place back and forgetting none of the failures. Its
+earlier pending change then ends; when no account has the
 new email (the account's own counts as taken), a new change
 is kept (`EmailChanges.ask`: one row per identity in `verification`, `change-email:<identity
 key>`, a random `jti` as its value) and the mail to the new email starts, its link the front's
@@ -536,7 +538,8 @@ a body it can read, with a password (400 `bad-request`), one of the address's ma
 requests in 15 minutes are taken (429). In the account's turn the password is confirmed as for a
 change of the email (`password-confirmation.ts`, shared by both: the session read again, 401 when
 it ended meanwhile; a place among the email's failed sign-ins, 429; a wrong password 400
-`invalid-credentials`, kept as a failure). An account that is the only admin of a ready
+`invalid-credentials`, kept as a failure; a right one gives its place back and forgets none of the
+failures). An account that is the only admin of a ready
 organisation with other members answers 409 `last-admin` and gets no mail. Any other keeps its
 deletion as the pending one (`AccountDeletions.ask`: one row per identity in `verification`,
 `delete-account:<identity key>`, replacing an earlier one), and the mail to the account's own
@@ -644,7 +647,8 @@ Here the caller's session is never touched, and a spec holds that the same Beare
 (`GatewayRoot.accountTurns`, by the identity's key), the session read again inside it, so a sign-in's
 code step, a change of the password and another change of the factor do not interleave with it. A
 password the request confirms is checked as a change of the password's is (`confirmPassword`: 400
-`invalid-credentials`, counted among the email's failed sign-ins, 429 once they are spent).
+`invalid-credentials`, counted among the email's failed sign-ins, 429 once they are spent; a right one gives its place
+back and forgets none of them, as at every confirmation of a password in the settings).
 
 - `GET /two-factor`: 200 `{ enabled }`.
 - `POST /two-factor/enable` `{ password }`: 403 `failed` when the policy does not allow the account

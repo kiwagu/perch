@@ -124,6 +124,25 @@ describe('authHandler, the change of a password', () => {
     ARGON2_RUNS_MS,
   )
 
+  it(
+    "forgets none of the account's failed sign-ins at a right current password",
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+      await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+      expect((await mounted.route(change(ann.on('laptop'), PASSWORD), FROM))?.status).toBe(204)
+      // The change forgot nothing: the next failure is the tenth, and the new password waits.
+      expect(
+        (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+      ).toBe(401)
+      expect((await mounted.route(signInRequest(ANN, NEW_PASSWORD, 'desk'), FROM))?.status).toBe(
+        429,
+      )
+    },
+    ARGON2_RUNS_MS,
+  )
+
   it.each(OUT_OF_LENGTH)(
     'refuses %s as the current one as a wrong one, counted, changing nothing',
     async (_, current) => {
