@@ -97,6 +97,27 @@ anchors:
     kind: button
     description: Sends the verification mail again.
     binding: { action: platform.resend-verification }
+  user.sign-in.code.dialog:
+    kind: dialog
+    description: Asks for a code of the account's second factor once its password is right; nothing is signed in until a code is taken.
+    binding:
+      action: platform.confirm-sign-in
+      params:
+        code: user.sign-in.code.code-input
+    codes: [ code-required ]
+  user.sign-in.code.code-input:
+    kind: input
+    description: A code the account's authenticator app shows now, or one of its backup codes.
+    marksState: false
+    binding:
+      action: platform.confirm-sign-in
+      params:
+        code: user.sign-in.code.code-input
+  user.sign-in.code.error:
+    kind: error
+    codes: [ invalid-code, rate-limited, failed ]
+    fields:
+      invalid-code: user.sign-in.code.code-input
   user.sign-in.device-limit-dialog:
     kind: dialog
     description: Asks whether to sign in all the same and sign out the account's device seen least recently.
@@ -114,6 +135,8 @@ flow:
     guards:
       emailNotVerified: { codes: [ email-not-verified ] }
       atDeviceLimit: the account is signed in on as many devices as it may be at once, so this device was not signed in
+      codeRequired: the account's second factor is on, so the right password signed nothing in and a code is asked
+      codeStepEnded: { codes: [ code-expired, account-banned ] }
   states:
     sign-in:
       description: The form in the mode sign-in.
@@ -197,6 +220,10 @@ flow:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input }
         onDone:
+          - target: code
+            guard: codeRequired
+            actions:
+              - show: { user.sign-in.code.dialog: [ code-required ] }
           - target: device-limit
             guard: atDeviceLimit
             actions:
@@ -225,11 +252,15 @@ flow:
         src: platform.sign-in
         input: { email: user.sign-in.email-input, password: user.sign-in.password-input, signOutOldest: { value: true } }
         onDone:
-          target: done
-          description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
-          actions:
-            - show: { app-shell.notice-message: [ welcome ] }
-            - navigate: /me
+          - target: code-anyway
+            guard: codeRequired
+            actions:
+              - show: { user.sign-in.code.dialog: [ code-required ] }
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
         onError:
           - target: unverified
             guard: emailNotVerified
@@ -238,6 +269,79 @@ flow:
           - target: sign-in
             actions:
               - show: user.sign-in.error
+    code:
+      description: The form in the mode sign-in with the dialog of the code.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      on:
+        user.sign-in.code.dialog.confirm-button: confirming-code
+        user.sign-in.code.dialog.cancel-button:
+          target: sign-in
+          description: The sign-in starts again from the password.
+          actions:
+            - clear: user.sign-in.code.code-input
+            - clear: user.sign-in.code.error
+    confirming-code:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      entry:
+        - clear: user.sign-in.code.error
+      invoke:
+        src: platform.confirm-sign-in
+        input: { code: user.sign-in.code.code-input }
+        onDone:
+          - target: device-limit
+            guard: atDeviceLimit
+            description: The code was right but nothing is signed in; the dialog's confirmation signs in again from the password, which asks for a code again.
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.device-limit-dialog
+          - target: done
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: sign-in
+            guard: codeStepEnded
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.error
+          - target: code
+            actions:
+              - show: user.sign-in.code.error
+    code-anyway:
+      description: The form in the mode sign-in with the dialog of the code; the device-limit dialog was confirmed already.
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      on:
+        user.sign-in.code.dialog.confirm-button: confirming-code-anyway
+        user.sign-in.code.dialog.cancel-button:
+          target: sign-in
+          description: The sign-in starts again from the password.
+          actions:
+            - clear: user.sign-in.code.code-input
+            - clear: user.sign-in.code.error
+    confirming-code-anyway:
+      meta: { renders: [ user.sign-in.forgot-link, user.sign-in.code.dialog, user.sign-in.code.code-input ] }
+      entry:
+        - clear: user.sign-in.code.error
+      invoke:
+        src: platform.confirm-sign-in
+        input: { code: user.sign-in.code.code-input, signOutOldest: { value: true } }
+        onDone:
+          - target: done
+            description: This device is signed in; the account's device seen least recently is signed out only when the account would otherwise be on more than ten devices.
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: { app-shell.notice-message: [ welcome ] }
+              - navigate: /me
+        onError:
+          - target: sign-in
+            guard: codeStepEnded
+            actions:
+              - clear: user.sign-in.code.code-input
+              - show: user.sign-in.error
+          - target: code-anyway
+            actions:
+              - show: user.sign-in.code.error
     signing-up:
       meta: { renders: [ user.sign-in.password-rule-list, user.sign-in.password-confirmation-input, user.sign-in.name-input ] }
       invoke:
