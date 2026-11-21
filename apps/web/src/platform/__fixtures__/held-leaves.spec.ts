@@ -111,7 +111,19 @@ describe('heldLeaves', () => {
     ).toEqual({ [LINK]: AFTER })
   })
 
-  it('lets a control the app does not list yet wait, in the ahead mode', () => {
+  it('requires a control the base had too, so the app dropping it fails, in the ahead mode', () => {
+    const held = heldLeaves({
+      app: {},
+      now: { [LINK]: AFTER },
+      base: { [LINK]: BEFORE },
+      ahead: true,
+    })
+
+    expect(held).toEqual({ [LINK]: AFTER })
+    expect({}).not.toEqual(held)
+  })
+
+  it('lets a control the base did not have and the app does not list yet wait, in the ahead mode', () => {
     expect(heldLeaves({ app: {}, now: { [LINK]: AFTER }, base: {}, ahead: true })).toEqual({})
   })
 
@@ -130,6 +142,7 @@ describe('leavesAtBase', () => {
       {},
       { CONTRACT_AHEAD: '1' },
       { CONTRACT_AHEAD: '1', CONTRACT_AHEAD_BASE: '' },
+      { CONTRACT_AHEAD: '0', CONTRACT_AHEAD_BASE: 'no-such-ref' },
     ]) {
       expect(leavesAtBase(ROOT, env)).toEqual({})
     }
@@ -140,8 +153,8 @@ describe('leavesAtBase', () => {
     const { screens } = loadScreens(root)
     const atBase = leavesAtBase(root, { CONTRACT_AHEAD: '1', CONTRACT_AHEAD_BASE: 'base' })
 
+    expect(Object.keys(atBase).length).toBeGreaterThan(0)
     expect(atBase).toEqual(leavesOf(screens?.screens ?? []))
-    expect(atBase[LINK]).toContain('user.sign-in.password-input')
   })
 
   it('fails when the base names no commit', () => {

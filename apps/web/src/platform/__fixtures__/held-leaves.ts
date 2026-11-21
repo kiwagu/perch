@@ -1,12 +1,14 @@
 /**
  * The fields the app's navigating controls are held to lose, for the spec that holds the frame's
  * leave question to the contract (`leaving-contract.spec.ts`). A control whose flow moves to
- * another screen loses the fields of its screen that hold input (`leaves.loses`, which the engine
- * derives across the whole screen). On a branch the pre-commit hook sets `CONTRACT_AHEAD=1` and
- * names the branch's merge base with `main` (`CONTRACT_AHEAD_BASE`): a business commit may add a
- * navigating control before the app renders it, or a field that an existing control's leave now
- * loses before the app asks for it. So a control the app does not list yet waits, and a control the
- * app lists as the contract had it at the base, and not as it has it now, is held to the base. On
+ * another screen loses the fields the engine derives for it (`leaves.loses`: the fields of its
+ * screen that hold input, but those its move carries in its search and the control itself). On a
+ * branch the pre-commit hook sets `CONTRACT_AHEAD=1` and names the branch's merge base with `main`
+ * (`CONTRACT_AHEAD_BASE`): a business commit may add a navigating control before the app renders
+ * it, or a field that an existing control's leave now loses before the app asks for it. So a
+ * control the base did not have and the app does not list yet waits, and a control the app lists
+ * as the contract had it at the base, and not as it has it now, is held to the base; a control the
+ * base had too never waits, so the app dropping it fails. On
  * `main` and in `bun run check` every control is held as the contract says it now. A control the
  * app lists that the contract does not have, or lists with fields neither contract derives, fails
  * either way.
@@ -68,9 +70,9 @@ export interface HeldLeavesInput {
 }
 
 /**
- * The leaves the app's are held to: without the ahead mode, the contract's now; in it, only the
- * controls the app lists, each as the contract derives it now unless the app lists it as the base
- * derived it and not as now, then as the base.
+ * The leaves the app's are held to: without the ahead mode, the contract's now; in it, the controls
+ * of now that the app lists or the base had, each as the contract derives it now unless the app
+ * lists it as the base derived it and not as now, then as the base.
  */
 export function heldLeaves({ app, now, base, ahead }: HeldLeavesInput): Leaves {
   if (!ahead) {
@@ -79,7 +81,7 @@ export function heldLeaves({ app, now, base, ahead }: HeldLeavesInput): Leaves {
 
   return Object.fromEntries(
     Object.entries(now)
-      .filter(([anchor]) => Object.hasOwn(app, anchor))
+      .filter(([anchor]) => Object.hasOwn(app, anchor) || Object.hasOwn(base, anchor))
       .map(([anchor, loses]) => {
         const listed = app[anchor]
         const was = base[anchor]
