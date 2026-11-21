@@ -60,8 +60,13 @@ modeling stage.
   step, the assertion) runs inside the browser's sign-in lock right after the check that no other
   account is saved (`data:OTHER_ACCOUNT` before the gateway is asked: for the code step, an account
   other than the email typed; for a passkey, any saved account); the browser's passkey window
-  runs before the lock, with the same check before it opens, so it never holds another tab's
-  sign-in up, and the check is made again in the lock before the assertion is sent.
+  runs before the lock, so it never holds another tab's sign-in up: a passkey sign-in checks
+  before the options are asked for, again once they arrived and before the window opens, and again
+  in the lock before the assertion is sent. The gateway's answers are recognised by their status
+  and code (`401 INVALID_EMAIL_OR_PASSWORD`, `403 EMAIL_NOT_VERIFIED` or `account-banned`,
+  `409 device-limit`, `429 rate-limited`; the code step's `400 invalid-code` and `401 code-expired`;
+  the passkey's `401 passkey-unknown` and a `409` that names the account): any other answer, a 403
+  of Better Auth's origin check included, is `data:AUTH_FAILED` naming its status.
   A verification link's token signs the device in the same way the first time it is exchanged
   (`SessionService.verifyEmail`, the gateway's own `POST /backend/auth/verify-email` with
   `{ token }` and the device's headers, its answer read through a zod schema): in the same lock,

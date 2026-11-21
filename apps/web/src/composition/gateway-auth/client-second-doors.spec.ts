@@ -158,6 +158,23 @@ describe('the code step', () => {
     ).toBe('data:AUTH_FAILED')
   })
 
+  it.each([
+    ['a 409 that names another code', 409, { code: 'account-banned' }],
+    ['a 409 that names no code', 409, {}],
+    ['a 400 that names the code of a dead challenge', 400, { code: 'code-expired' }],
+    ['a 401 that names the code of a wrong code', 401, { code: 'invalid-code' }],
+    ['a 403 Better Auth refused for the origin', 403, { code: 'INVALID_ORIGIN' }],
+    ['a 401 that names the ban', 401, { code: 'account-banned' }],
+    ['a 429 that names no code', 429, {}],
+    ['a 429 that names another code', 429, { code: 'invalid-code' }],
+  ] as const)('fails as an attempt that did not go through on %s', async (_, status, body) => {
+    const { fetcher } = fakeFetch(respond(status, body))
+
+    expect(
+      (await gatewayAuth(BASE, fetcher).confirmSignIn(step, device))._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
+  })
+
   it('answers the limit of devices as an outcome', async () => {
     const { fetcher } = fakeFetch(respond(409, { code: 'device-limit' }))
 
@@ -297,6 +314,25 @@ describe('the passkey sign-in', () => {
 
     expect(refused.code).toBe(code)
     namesNone(refused, challenge, assertion.rawId)
+  })
+
+  it.each([
+    ['a 409 that names no account', 409, { code: 'device-limit' }],
+    ['a 409 that names another code', 409, { code: 'account-banned', consentFor: ann }],
+    ['a 409 that names no code', 409, { consentFor: ann }],
+    ['a 409 whose account is no identity', 409, { code: 'device-limit', consentFor: 'abc' }],
+    ['a 401 that names the code of a dead challenge', 401, { code: 'code-expired' }],
+    ['a 401 that names no code', 401, {}],
+    ['a 400 that names the code of a wrong code', 400, { code: 'invalid-code' }],
+    ['a 403 Better Auth refused for the origin', 403, { code: 'INVALID_ORIGIN' }],
+    ['a 403 that names no code', 403, {}],
+    ['a 429, which this door never answers', 429, { code: 'rate-limited' }],
+  ] as const)('fails as an attempt that did not go through on %s', async (_, status, body) => {
+    const { fetcher } = fakeFetch(respond(status, body))
+
+    expect(
+      (await gatewayAuth(BASE, fetcher).signInWithPasskey(asked, device))._unsafeUnwrapErr().code,
+    ).toBe('data:AUTH_FAILED')
   })
 
   it('reads a body that is no JSON as the failure of its status', async () => {

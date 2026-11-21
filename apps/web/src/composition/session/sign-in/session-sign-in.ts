@@ -91,7 +91,7 @@ export class SignInDoors {
   }
 
   signInWithPasskey(signOutOldestFor?: string): ResultAsync<SignInResult, DataError> {
-    // No browser window is opened for a sign-in that cannot be kept.
+    // The gateway is not asked for options for a sign-in that cannot be kept.
     if (anyAccountSaved(this.#storage)) {
       return errAsync(otherAccountSignedIn())
     }
@@ -99,7 +99,11 @@ export class SignInDoors {
     return this.#auth
       .passkeyOptions(this.#signingIn.device())
       .andThen(({ options, challenge }) =>
-        this.#ceremony.authenticate(options).map((response) => ({ response, challenge })),
+        // The options took time: another tab may have saved an account meanwhile, and no window is
+        // opened for a sign-in that cannot be kept.
+        anyAccountSaved(this.#storage)
+          ? errAsync(otherAccountSignedIn())
+          : this.#ceremony.authenticate(options).map((response) => ({ response, challenge })),
       )
       .andThen((assertion) =>
         // Another tab may have saved an account while the window was open: checked again in the lock.

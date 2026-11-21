@@ -54,22 +54,32 @@ async function accounts(auth: FakeGatewayAuth) {
 
 const kinds = (auth: FakeGatewayAuth) => auth.requests.map(({ kind }) => kind)
 
-/** A gateway call the test releases itself, once it was made. */
+/**
+ * A gateway call the test releases itself: `entered` settles once the call reached the gateway
+ * double (inside the sign-in lock, for a call that takes it), `release` lets it go on.
+ */
 function held() {
   let release: () => void = () => {}
+  let enter: () => void = () => {}
   const released = new Promise<void>((resolve) => {
     release = resolve
   })
+  const entered = new Promise<void>((resolve) => {
+    enter = resolve
+  })
 
-  return { released, release: () => release() }
+  return { entered, enter: () => enter(), released, release: () => release() }
 }
 
 /** `auth` with its code step held until `hold` is released: the gateway has the request meanwhile. */
 function holdingConfirm(auth: FakeGatewayAuth, hold: ReturnType<typeof held>): GatewayAuth {
   return {
     ...auth,
-    confirmSignIn: (step, device) =>
-      new ResultAsync(hold.released.then(() => auth.confirmSignIn(step, device))),
+    confirmSignIn: (step, device) => {
+      hold.enter()
+
+      return new ResultAsync(hold.released.then(() => auth.confirmSignIn(step, device)))
+    },
   }
 }
 
@@ -77,8 +87,25 @@ function holdingConfirm(auth: FakeGatewayAuth, hold: ReturnType<typeof held>): G
 function holdingPasskey(auth: FakeGatewayAuth, hold: ReturnType<typeof held>): GatewayAuth {
   return {
     ...auth,
-    signInWithPasskey: (input, device) =>
-      new ResultAsync(hold.released.then(() => auth.signInWithPasskey(input, device))),
+    signInWithPasskey: (input, device) => {
+      hold.enter()
+
+      return new ResultAsync(hold.released.then(() => auth.signInWithPasskey(input, device)))
+    },
+  }
+}
+
+/** `auth` whose options of a passkey sign-in are made at once and answered once `hold` is released. */
+function holdingOptions(auth: FakeGatewayAuth, hold: ReturnType<typeof held>): GatewayAuth {
+  return {
+    ...auth,
+    passkeyOptions: (device) => {
+      const options = auth.passkeyOptions(device)
+
+      hold.enter()
+
+      return new ResultAsync(hold.released.then(() => options))
+    },
   }
 }
 
@@ -377,7 +404,7 @@ describe("the browser's tabs while a second door signs in", () => {
       false,
     )
 
-    await vi.waitFor(() => expect(a.session.signingInHere()).toBe(true))
+    await hold.entered
     // The second tab signs another account in meanwhile: it waits for the lock.
     const second = b.session.signIn(bobSignUp)
 
@@ -406,7 +433,7 @@ describe("the browser's tabs while a second door signs in", () => {
     )
     const signingIn = a.session.signInWithPasskey()
 
-    await vi.waitFor(() => expect(a.session.signingInHere()).toBe(true))
+    await hold.entered
 
     const second = b.session.signIn(bobSignUp)
 
@@ -446,6 +473,32 @@ describe("the browser's tabs while a second door signs in", () => {
 
     // The window answers once Bob is saved: nothing is sent, no device of anyone is ended.
     expect((await signingIn)._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
+    expect(kinds(auth)).toEqual(['passkey-options', 'sign-in'])
+    expect(savedIdentity(storage)).toEqual(bob)
+    expect(pendingRevokes(storage)).toEqual([])
+  })
+
+  it('opens no passkey window when an account was saved while the options were on their way, and sends no assertion', async () => {
+    const auth = fakeGatewayAuth()
+    const { bob } = await accounts(auth)
+    const credential = auth.passkeyOf(annSignUp.email)
+    const hold = held()
+    const browser = fakeCeremony(() => okAsync(assertionOf(credential)))
+    const { a, b, storage } = await twoTabs(holdingOptions(auth, hold), auth, browser)
+    const signingIn = a.session.signInWithPasskey()
+
+    // The gateway has the request for the options; its answer is held.
+    await hold.entered
+    // Another tab signs Bob in meanwhile and saves him.
+    expect((await b.session.signIn(bobSignUp))._unsafeUnwrap()).toEqual({
+      kind: 'signed-in',
+      user: bob,
+    })
+
+    hold.release()
+
+    expect((await signingIn)._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
+    expect(browser.windows).toBe(0)
     expect(kinds(auth)).toEqual(['passkey-options', 'sign-in'])
     expect(savedIdentity(storage)).toEqual(bob)
     expect(pendingRevokes(storage)).toEqual([])

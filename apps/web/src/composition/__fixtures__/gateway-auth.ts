@@ -94,8 +94,8 @@ export interface FakeGatewayAuth extends GatewayAuth {
   blockDeletion(email: string, blocked?: boolean): void
   /**
    * Puts the account of `email` at its limit of devices (`at`, by default) or takes it off: a
-   * sign-in of it that does not confirm signing out its device seen least recently is then refused
-   * as `data:DEVICE_LIMIT`, nothing signed in, and one that confirms signs in.
+   * sign-in of it that does not confirm signing out its device seen least recently answers the
+   * outcome `device-limit`, nothing signed in, and one that confirms signs in.
    */
   atDeviceLimit(email: string, at?: boolean): void
   /**

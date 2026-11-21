@@ -190,21 +190,36 @@ describe('a sign-in past the limit of devices', () => {
 })
 
 describe('a sign-in whose account asks for a code', () => {
-  it('fails as data:AUTH_FAILED, signing nothing in, until the screen has a step for the code', async () => {
-    const asking: Pick<SessionPort, 'signIn' | 'signUp' | 'resendVerification'> = {
-      ...recordingSession().port,
-      signIn: () =>
-        okAsync<SignInResult, DataError>({
-          kind: 'code-required',
-          challenge: 'challenge',
-          email: ann.email,
-        }),
-    }
+  /** A session whose password step always asks for a code of the account's second factor. */
+  const asking = (): Pick<SessionPort, 'signIn' | 'signUp' | 'resendVerification'> => ({
+    ...recordingSession().port,
+    signIn: () =>
+      okAsync<SignInResult, DataError>({
+        kind: 'code-required',
+        challenge: 'challenge',
+        email: ann.email,
+      }),
+  })
 
-    expect((await new SignInService(asking).signIn(ann, false))._unsafeUnwrapErr().code).toBe(
+  it('fails as data:AUTH_FAILED, signing nothing in, until the screen has a step for the code', async () => {
+    expect((await new SignInService(asking()).signIn(ann, false))._unsafeUnwrapErr().code).toBe(
       'data:AUTH_FAILED',
     )
-    expect(session.current()).toBeUndefined()
+  })
+
+  it('shows the form a failure and sends nobody to the welcome or the profile', async () => {
+    const actor = start(new SignInService(asking()))
+    const emitted: unknown[] = []
+
+    actor.on('show', (event) => emitted.push(event))
+    actor.on('navigate', (event) => emitted.push(event))
+    actor.send(submitted(ann))
+
+    const failed = await settled(actor)
+
+    expect(failed.value).toBe('sign-in')
+    expect(failed.context.error).toBe('data:AUTH_FAILED')
+    expect(emitted).toEqual([])
   })
 
   it('answers the limit of devices as the outcome the form asks about', async () => {

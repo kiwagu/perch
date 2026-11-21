@@ -30,31 +30,52 @@ describe('what a refused sign-in means', () => {
     namesNone(refused, credentials.email, credentials.password)
   })
 
-  it.each([
-    ['the code of Better Auth', 'EMAIL_NOT_VERIFIED'],
-    ['the gateway’s own code', 'email-not-verified'],
-    ['a code nobody knows', 'something-else'],
-    ['a code that is no string', 42],
-    ['no code', undefined],
-  ] as const)('keeps reading a 403 with %s as an email not verified yet', async (_, code) => {
-    expect((await signedIn(refusal(403, code)))._unsafeUnwrapErr().code).toBe(
+  it('reads a 403 that names EMAIL_NOT_VERIFIED, the code the gateway sends, as an email not verified yet', async () => {
+    expect((await signedIn(refusal(403, 'EMAIL_NOT_VERIFIED')))._unsafeUnwrapErr().code).toBe(
       'data:EMAIL_NOT_VERIFIED',
     )
   })
 
-  it('reads the code only of a 403: the other refusals keep their meaning', async () => {
-    for (const [status, code] of [
-      [401, 'data:INVALID_CREDENTIALS'],
-      [429, 'data:RATE_LIMITED'],
-      [500, 'data:AUTH_FAILED'],
-    ] as const) {
-      expect((await signedIn(refusal(status, 'account-banned')))._unsafeUnwrapErr().code).toBe(code)
-    }
+  it.each([
+    ['an origin Better Auth does not trust', 'INVALID_ORIGIN'],
+    ['a cross-site navigation', 'CROSS_SITE_NAVIGATION_LOGIN_BLOCKED'],
+    ['a callback URL it does not trust', 'INVALID_CALLBACK_URL'],
+    ['a code the gateway never sends for it', 'email-not-verified'],
+    ['a code that is no string', 42],
+    ['no code', undefined],
+  ] as const)(
+    'reads a 403 refused for %s as a failed attempt, never as an email to verify: the password was not checked',
+    async (_, code) => {
+      expect((await signedIn(refusal(403, code)))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    },
+  )
 
-    // The limit of devices is an answer, whatever code the body names.
-    expect((await signedIn(refusal(409, 'account-banned')))._unsafeUnwrap()).toEqual({
+  it.each([
+    [401, 'INVALID_EMAIL_OR_PASSWORD', 'data:INVALID_CREDENTIALS'],
+    [429, 'rate-limited', 'data:RATE_LIMITED'],
+  ] as const)('reads %i with the code %s as its own outcome', async (status, code, expected) => {
+    expect((await signedIn(refusal(status, code)))._unsafeUnwrapErr().code).toBe(expected)
+  })
+
+  it.each([
+    [401, undefined],
+    [401, 'account-banned'],
+    [401, 'code-expired'],
+    [429, undefined],
+    [429, 'account-banned'],
+    [500, 'account-banned'],
+  ] as const)('reads %i with the code %s as a failed attempt', async (status, code) => {
+    expect((await signedIn(refusal(status, code)))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+  })
+
+  it('reads the limit of devices only from a 409 that names device-limit', async () => {
+    expect((await signedIn(refusal(409, 'device-limit')))._unsafeUnwrap()).toEqual({
       kind: 'device-limit',
     })
+
+    for (const code of ['account-banned', 'INVALID_ORIGIN', undefined]) {
+      expect((await signedIn(refusal(409, code)))._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    }
   })
 
   it("carries the body's code through Better Auth's client: 403 account-banned is a banned account", async () => {
@@ -64,17 +85,19 @@ describe('what a refused sign-in means', () => {
     namesNone(refused, credentials.email, credentials.password)
   })
 
-  it("keeps a 403 whose body names another code, or is no JSON, an email not verified yet through Better Auth's client", async () => {
-    const other = await refusedWith(403, {
-      code: 'EMAIL_NOT_VERIFIED',
-      message: 'Email not verified',
-    })
+  it("reads a 403 whose body is no JSON, or that Better Auth refused before it checked the password, as a failed attempt through Better Auth's client", async () => {
+    const origin = await refusedWith(403, { code: 'INVALID_ORIGIN', message: 'Invalid origin' })
     const noBody = await gatewayAuth(
       BASE,
       fakeFetch(respondText(403, '<html>forbidden</html>')).fetcher,
     ).signIn(credentials, device)
+    const unverified = await refusedWith(403, {
+      code: 'EMAIL_NOT_VERIFIED',
+      message: 'Email not verified',
+    })
 
-    expect(other._unsafeUnwrapErr().code).toBe('data:EMAIL_NOT_VERIFIED')
-    expect(noBody._unsafeUnwrapErr().code).toBe('data:EMAIL_NOT_VERIFIED')
+    expect(origin._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect(noBody._unsafeUnwrapErr().code).toBe('data:AUTH_FAILED')
+    expect(unverified._unsafeUnwrapErr().code).toBe('data:EMAIL_NOT_VERIFIED')
   })
 })

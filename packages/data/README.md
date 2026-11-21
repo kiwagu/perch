@@ -16,8 +16,9 @@ ids and datetimes do not leave it.
   `LocalDbPort` / `LOCAL_DB`.
 - Account types: `AuthUser` (an identity's id and email), `SignUpInput` (email, password, the
   account's own name and its language), `SignInInput` (email, password, and `signOutOldest`, which
-  confirms a sign-in past the account's limit of devices; unconfirmed, such a sign-in fails as
-  `data:DEVICE_LIMIT`), `CodeStep` (the challenge a password step answered and the email typed
+  confirms a sign-in past the account's limit of devices; unconfirmed, such a sign-in signs nothing
+  in and answers the outcome `device-limit` at the gateway and session boundaries, which the seed
+  client's facade keeps as the error `data:DEVICE_LIMIT`), `CodeStep` (the challenge a password step answered and the email typed
   there, which the code step of the sign-in carries). The second factor and the passkeys have
   their codes: `data:INVALID_CODE`, `data:CODE_EXPIRED`, `data:TWO_FACTOR_CHANGED`,
   `data:PASSKEY_UNKNOWN` and `data:PASSKEY_CANCELLED`.

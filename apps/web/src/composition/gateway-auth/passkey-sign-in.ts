@@ -9,8 +9,8 @@ import { z } from '@workspace/zod'
 
 import { passkeyRequestOptions } from '../passkey-ceremony'
 
-import { answerBody } from './answer-body'
-import { type StepRefusals, signInStepOf } from './sign-in-step'
+import { ACCOUNT_BANNED_CODE, accountBanned, answerBody } from './answer-body'
+import { type StepReading, signInStepOf } from './sign-in-step'
 import type { StepAnswer } from './signed-in'
 
 /** The options the browser's window takes, with the challenge that goes back with its answer. */
@@ -56,30 +56,35 @@ export function passkeyOptionsOf(response: Response): ResultAsync<PasskeyOptions
 /** What the limit of devices names for a passkey: the account the dialog asks about. */
 const consent = z.object({ consentFor: idSchemas.identity.schema })
 
-/** A passkey no account holds is its own answer; the other refusals are the step's common ones. */
-const REFUSALS: StepRefusals = new Map([
-  ['401 passkey-unknown', () => dataError('data:PASSKEY_UNKNOWN', 'no account holds the passkey')],
-])
+/**
+ * What the passkey sign-in answers besides a device signed in, by status and code: a passkey no
+ * account holds, and the ban of its account. The email's failed sign-ins never keep a passkey out,
+ * so this door answers no 429, and an assertion the gateway refused (400 `failed`) is a failed
+ * attempt like any other answer.
+ */
+const STEP: StepReading = {
+  refusals: new Map([
+    [
+      '401 passkey-unknown',
+      () => dataError('data:PASSKEY_UNKNOWN', 'no account holds the passkey'),
+    ],
+    [`403 ${ACCOUNT_BANNED_CODE}`, accountBanned],
+  ]),
+  // A confirmation holds only for the account the dialog asked about: one that names none cannot
+  // be confirmed, so it is no outcome.
+  deviceLimit: (body) => {
+    const named = consent.safeParse(body)
+
+    return named.success ? { kind: 'device-limit', consentFor: named.data.consentFor } : undefined
+  },
+}
 
 /**
  * The sign-in's answer: the device signed in (200); the limit of devices with the account it
- * asked about (409 `consentFor`; one that names none cannot be confirmed, so it fails); a passkey
- * no account holds (401 `passkey-unknown`); the account's ban (403 `account-banned`); a request to
- * wait (429); any other answer, an assertion the gateway refused included (400 `failed`), fails
- * naming its status.
+ * asked about (409 `device-limit` with `consentFor`, the account's identity); a passkey no
+ * account holds (401 `passkey-unknown`); the account's ban (403 `account-banned`); any other
+ * answer, an assertion the gateway refused (400 `failed`) included, fails naming its status.
  */
 export function passkeySignedInOf(response: Response): ResultAsync<StepAnswer, DataError> {
-  if (response.status !== 409) {
-    return signInStepOf(response, REFUSALS)
-  }
-
-  return answerBody(response).andThen((body) => {
-    const named = consent.safeParse(body)
-
-    return named.success
-      ? okAsync<StepAnswer, DataError>({ kind: 'device-limit', consentFor: named.data.consentFor })
-      : errAsync<StepAnswer, DataError>(
-          dataError('data:AUTH_FAILED', 'the limit of devices named no account'),
-        )
-  })
+  return signInStepOf(response, STEP)
 }
