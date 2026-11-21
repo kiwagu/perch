@@ -16,7 +16,8 @@
  * wrapper handing its own anchor on) is let by. And the facets the contract decides on a control's element, `maxLength`, `type`,
  * `aria-invalid` and `disabled`, as their source text on an element that carries its anchor so. A
  * prop a spread on the element supplies counts as written there, at the spread, and one a spread
- * the file cannot follow is refused on an element whose anchor the check reads (`element.ts`).
+ * the file cannot follow is refused on an element whose anchor the check reads, one the check gives
+ * up following at its depth on any element (`element.ts`).
  */
 
 import { type Expression, parseSync, Visitor } from 'oxc-parser'
@@ -32,7 +33,6 @@ import {
   type ReadElement,
   readElement,
   UNDECLARED_ANCHOR,
-  UNFOLLOWED_SPREAD,
   undeclaredAnchorOf,
 } from './element'
 import { localsOf } from './locals'
@@ -48,7 +48,7 @@ import {
   unwrap,
 } from './values'
 
-export { UNDECLARED_ANCHOR, UNFOLLOWED_SPREAD } from './element'
+export { DEEP_SPREAD, UNDECLARED_ANCHOR, UNFOLLOWED_SPREAD } from './element'
 
 export const RUNTIME_ANCHOR =
   'an anchor built at runtime; declare a literal, pass a prop or a <NAME>_TEST_ID constant, or derive it with testIdFor()'
@@ -256,14 +256,14 @@ export function collectFromSource(text: string, file: string): Collected {
     return { ...carried, value: literal ?? sourceOf(written), line: line(written.start) }
   }
 
-  /** The facet props of an element that carries its anchor so; an element passed one is let by. */
-  const facets = ({ attributes, carried, unfollowed }: ReadElement): void => {
-    if (carried === undefined) {
-      return
+  /** What is refused of an element's spreads; its facet props, where it carries its anchor so. */
+  const facets = ({ attributes, carried, refused }: ReadElement): void => {
+    for (const { at, message } of refused) {
+      collected.problems.push({ file, line: line(at), message })
     }
 
-    for (const at of unfollowed) {
-      collected.problems.push({ file, line: line(at), message: UNFOLLOWED_SPREAD(carried.anchor) })
+    if (carried === undefined) {
+      return
     }
 
     for (const attribute of attributes) {

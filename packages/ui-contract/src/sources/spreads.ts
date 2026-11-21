@@ -6,12 +6,14 @@
  * wanted; a branch the file cannot follow, or an object with a key the file does not state, is said
  * as such, for the collector to refuse on an element whose anchor it reads. What every branch it
  * can follow supplies is said too, so an anchor all of those supply is the element's, and so is the
- * value under each key the file does not state, which may be the anchor's.
+ * value under each key the file does not state, which may be the anchor's. A spread whose chain the
+ * check gives up following at `DEPTH` is said as abandoned, for the collector to refuse whatever
+ * the element's anchor: the anchor itself may lie past the limit.
  */
 
 import type { Expression, ObjectExpression } from 'oxc-parser'
 
-import { type Alternative, DEPTH } from './alternatives'
+import { type Alternative, DEEP, DEPTH, isNothing } from './alternatives'
 import type { Locals } from './locals'
 import { statedKeyName } from './values'
 
@@ -32,6 +34,8 @@ export interface Supplied {
   readonly followed: boolean
   /** The value of each property whose key the file does not state: it may supply any prop. */
   readonly unstated: readonly Expression[]
+  /** Whether some branch was given up at `DEPTH`: what it supplies, an anchor too, is unread. */
+  readonly abandoned: boolean
 }
 
 const NOTHING: Supplied = {
@@ -40,6 +44,7 @@ const NOTHING: Supplied = {
   followedCertain: new Set(),
   followed: true,
   unstated: [],
+  abandoned: false,
 }
 const UNKNOWN: Supplied = {
   props: [],
@@ -47,7 +52,9 @@ const UNKNOWN: Supplied = {
   followedCertain: new Set(),
   followed: false,
   unstated: [],
+  abandoned: false,
 }
+const ABANDONED: Supplied = { ...UNKNOWN, abandoned: true }
 
 /** The names every one of `sets` has; none for no set. */
 const commonTo = (sets: ReadonlyArray<ReadonlySet<string>>): Set<string> => {
@@ -60,7 +67,13 @@ const commonTo = (sets: ReadonlyArray<ReadonlySet<string>>): Set<string> => {
 export function suppliedBy(locals: Locals, argument: Expression, at: number): Supplied {
   const ofAlternatives = (alternatives: readonly Alternative[], depth: number): Supplied => {
     const each = alternatives.map((object) =>
-      object === undefined ? UNKNOWN : object === null ? NOTHING : ofObject(object, depth),
+      object === undefined
+        ? UNKNOWN
+        : object === DEEP
+          ? ABANDONED
+          : isNothing(object)
+            ? NOTHING
+            : ofObject(object, depth),
     )
 
     return {
@@ -68,16 +81,17 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
       certain: commonTo(each.map(({ certain }) => certain)),
       followedCertain: commonTo(
         each
-          .filter((_, index) => alternatives[index] !== undefined)
+          .filter((_, index) => alternatives[index] !== undefined && alternatives[index] !== DEEP)
           .map((it) => it.followedCertain),
       ),
       followed: each.every(({ followed }) => followed),
       unstated: each.flatMap(({ unstated }) => unstated),
+      abandoned: each.some(({ abandoned }) => abandoned),
     }
   }
   const ofObject = (object: ObjectExpression, depth: number): Supplied => {
     if (depth >= DEPTH) {
-      return UNKNOWN
+      return ABANDONED
     }
 
     const parts = object.properties.map((property): Supplied => {
@@ -105,6 +119,7 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
         followedCertain: new Set([name]),
         followed: true,
         unstated: [],
+        abandoned: false,
       }
     })
 
@@ -114,6 +129,7 @@ export function suppliedBy(locals: Locals, argument: Expression, at: number): Su
       followedCertain: new Set(parts.flatMap(({ followedCertain }) => [...followedCertain])),
       followed: parts.every(({ followed }) => followed),
       unstated: parts.flatMap(({ unstated }) => unstated),
+      abandoned: parts.some(({ abandoned }) => abandoned),
     }
   }
 

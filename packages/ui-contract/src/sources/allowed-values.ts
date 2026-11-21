@@ -9,10 +9,13 @@
  * member of an `as const` object with too): the one string a string literal or a template without
  * expressions writes, in parentheses, `as const` or `satisfies`, or another such const by its name;
  * under any other assertion (`<value> as <T>`, `<T><value>`) the value has the type `T`, which may
- * allow more than the value holds, so `T` is read as an annotation is. Anything else says nothing
- * of which values it allows, so none are read: `string`, an import, a generic, a template, a query
- * of another member or of a longer path, or one of a `let`, a `var`, a parameter, an import, or a
- * const declared with another value (a `testIdFor()` call is typed `string`, which allows any).
+ * allow more than the value holds, so `T` is read as an annotation is, but only where the value
+ * itself reads as strings `T` states: an assertion may narrow as well, so one of a value the file
+ * does not state, or of another string, says nothing (`testIdFor('sample', 'a-button') as
+ * 'sample.save-button'`). Anything else says nothing of which values it allows, so none are read:
+ * `string`, an import, a generic, a template, a query of another member or of a longer path, or one
+ * of a `let`, a `var`, a parameter, an import, or a const declared with another value (a
+ * `testIdFor()` call is typed `string`, which allows any).
  */
 
 import type { Expression, IdentifierReference, TSType } from 'oxc-parser'
@@ -96,8 +99,9 @@ function constantValues(
 /**
  * The values the type of a value the file writes allows, as an unannotated const or a member of an
  * `as const` object keeps it: the one string it writes, or what the type an assertion other than
- * `as const` gives it allows (`'x' as 'x' | 'y'` both, `'x' as string` none); none for any other
- * value, a call included.
+ * `as const` gives it allows (`'x' as 'x' | 'y'` both, `'x' as string` none), where the value it
+ * asserts reads as strings that type allows (`'y' as 'x'` none); none for any other value, a call
+ * included.
  */
 export function valueAllows(
   value: Expression,
@@ -110,10 +114,21 @@ export function valueAllows(
     case 'TSSatisfiesExpression':
       return valueAllows(value.expression, key, locals, depth)
     case 'TSAsExpression':
-    case 'TSTypeAssertion':
-      return isConstType(value.typeAnnotation)
-        ? valueAllows(value.expression, key, locals, depth)
-        : allowedValues(value.typeAnnotation, key, locals, depth)
+    case 'TSTypeAssertion': {
+      const held = valueAllows(value.expression, key, locals, depth)
+
+      if (isConstType(value.typeAnnotation)) {
+        return held
+      }
+
+      const typed = allowedValues(value.typeAnnotation, key, locals, depth)
+      const allows = (text: string): boolean =>
+        typed?.some((each) => each.kind === 'literal' && each.text === text) === true
+
+      return held?.every((each) => each.kind === 'literal' && allows(each.text)) === true
+        ? typed
+        : undefined
+    }
     case 'Identifier':
       return constantValues(value, key, locals, depth)
     case 'Literal':

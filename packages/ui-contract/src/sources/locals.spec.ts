@@ -351,9 +351,14 @@ describe('suppliedBy', () => {
     'for (const { search: pickedRow } of [inputProps]) { inPickedRow() }',
     'for (const spreadRow of [...more, searchProps]) { inSpreadRow() }',
     'for (const holeRow of [, searchProps]) { inHoleRow() }',
+    'for (const callRow of [searchProps, rowOf()]) { inCallRow() }',
+    'for (const tagged of [{ props: searchProps }, { props: props.extra }]) { inTagged() }',
     'function overParam(list) { for (const paramRow of list) { inParamRow() } }',
     'for (const keyRow in searchProps) { inKeyRow() }',
     'for (var varRow of listed) { inVarRow() }',
+    'const numbered = { search: searchProps, ...{ 0: base, [1]: base } }',
+    'const deep0 = { search: searchProps }',
+    ...Array.from({ length: 8 }, (_, at) => `const deep${at + 1} = { ...deep${at} }`),
     'const at = 0',
   ].join('\n')
 
@@ -413,6 +418,32 @@ describe('suppliedBy', () => {
       expect(unknown.followed).toBe(false)
       expect(unknown.certain.size).toBe(0)
       expect([...unknown.followedCertain]).toEqual(['id'])
+    }
+  })
+  it('keeps a nothing that may be false before ??, which only a nullish one passes, and drops it before ||', () => {
+    // `false ?? x` is `false`, which supplies nothing; `false || x` is `x`.
+    for (const argument of [
+      '(ok && base) ?? groups.name',
+      'false ?? base',
+      "('' ?? base)",
+      '0 ?? base',
+    ]) {
+      const kept = supplied(text, argument, 'const at')
+
+      expect(kept.certain.size, argument).toBe(0)
+      expect(kept.followed, argument).toBe(true)
+    }
+
+    for (const argument of [
+      '(ok && base) || groups.name',
+      'false || base',
+      "'' || base",
+      '0 || base',
+    ]) {
+      const right = supplied(text, argument, 'const at')
+
+      expect([...right.certain], argument).toEqual(['id'])
+      expect(right.followed, argument).toBe(true)
     }
   })
   it('follows a member through the spreads of its object, and a destructured name to its key', () => {
@@ -643,10 +674,9 @@ describe('suppliedBy', () => {
     expect(supplied(text, '{ ...props, id: 1 }', 'const at').followed).toBe(false)
     expect(supplied(text, 'ok ? base : props', 'const at').followed).toBe(false)
   })
-  it('follows the variable of a for…of to each element of the array the file states it iterates', () => {
+  it('follows the const of a for…of head to each element of the array the file states it iterates', () => {
     for (const [row, marker] of [
       ['row', 'inRow('],
-      ['letRow', 'inLetRow('],
       ['pickedRow', 'inPickedRow('],
     ] as const) {
       const read = supplied(text, row, marker)
@@ -656,21 +686,18 @@ describe('suppliedBy', () => {
       expect(read.followed).toBe(true)
     }
   })
-  it('keeps an element of a for…of it cannot say unknown: a spread element, a hole, a parameter', () => {
-    // The element the array states beside it stays one more alternative.
+  it('keeps the variable of a for…of unknown where an element of its array cannot be said, or it may be reassigned', () => {
+    // A spread element, a hole or a call it cannot follow makes the variable unknown as a whole,
+    // and so does a member of it that one element leaves unknown: the element the array states
+    // beside it is no alternative of its own, since the body may guard which element reaches it.
+    // A parameter iterated, the key of a for…in, the var of a loop, which outlives it, and the let
+    // of its head, which the loop may reassign, say nothing either.
     for (const [row, marker] of [
       ['spreadRow', 'inSpreadRow('],
       ['holeRow', 'inHoleRow('],
-    ] as const) {
-      const read = supplied(text, row, marker)
-
-      expect(read.followed).toBe(false)
-      expect(read.certain.size).toBe(0)
-      expect([...read.followedCertain]).toEqual(['data-testid'])
-    }
-
-    // A parameter iterated, the key of a for…in and the var of a loop, which outlives it, say nothing.
-    for (const [row, marker] of [
+      ['callRow', 'inCallRow('],
+      ['tagged.props', 'inTagged('],
+      ['letRow', 'inLetRow('],
       ['paramRow', 'inParamRow('],
       ['keyRow', 'inKeyRow('],
       ['varRow', 'inVarRow('],
@@ -694,6 +721,27 @@ describe('suppliedBy', () => {
     ])
     expect(read.followed).toBe(false)
     expect(supplied(text, 'searchProps', 'const at').unstated).toEqual([])
+  })
+  it('reads a numeric key as its string, so a member of another name goes on past it', () => {
+    const read = supplied(text, 'numbered.search', 'const at')
+
+    expect(read.props.map(({ name }) => name)).toEqual(['data-testid'])
+    expect(read.followed).toBe(true)
+    expect(suppliedAt(text, '{ 0: 1, [1]: 2 }', 'const at')).toEqual(['0', '1'])
+    expect(supplied(text, '{ 0: 1, [1]: 2 }', 'const at').unstated).toEqual([])
+  })
+  it('says a spread it stops following at its depth is abandoned there, and follows a shallower one', () => {
+    const deep = supplied(text, 'deep8.search', 'const at')
+
+    expect(deep.abandoned).toBe(true)
+    expect(deep.followed).toBe(false)
+    expect(deep.props).toEqual([])
+
+    const shallow = supplied(text, 'deep3.search', 'const at')
+
+    expect(shallow.abandoned).toBe(false)
+    expect(shallow.props.map(({ name }) => name)).toEqual(['data-testid'])
+    expect(supplied(text, 'props', 'const at').abandoned).toBe(false)
   })
   it('follows never a cycle, a parameter or a name the file does not declare', () => {
     expect(suppliedAt(text, 'loop()', 'const at')).toEqual([])

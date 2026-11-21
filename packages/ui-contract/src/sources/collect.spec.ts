@@ -473,16 +473,9 @@ describe('collectFromSource', () => {
     expect(looped.props).toEqual([limit])
     expect(looped.problems).toEqual([])
 
-    // A spread element beside it cannot be followed: the anchor is still read, the spread refused.
-    const spread = view('[...more, inputProps]')
-
-    expect(spread.props).toEqual([limit])
-    expect(spread.problems.map(formatProblem)).toEqual([
-      `x.tsx:6: ${UNFOLLOWED_SPREAD('x.users.search-input')}`,
-    ])
-
-    // An array the file says nothing of leaves the anchor unread, as a wrapper's.
-    for (const fields of ['[...more]', 'props.fields']) {
+    // An array the file says nothing of, or an element of it the file cannot follow, a spread
+    // element beside the one it states among them, leaves the anchor unread, as a wrapper's.
+    for (const fields of ['[...more]', 'props.fields', '[...more, inputProps]']) {
       const found = view(fields)
 
       expect(found.props).toEqual([])
@@ -502,18 +495,34 @@ describe('collectFromSource', () => {
     const limit = { anchor: 'x.users.search-input', name: 'maxLength', text: '3', line: 6 }
     const refused = `x.tsx:6: ${UNFOLLOWED_SPREAD('x.users.search-input')}`
 
-    // The key may be the anchor's: the element is held to it, and both spreads are refused.
-    for (const value of ['SEARCH_TEST_ID', "'x.users.search-input'"]) {
-      const found = view([
+    /** The element of `anchorProps`, its key unstated and its value `value`, and of labels. */
+    const spreading = (value: string) =>
+      view([
         `const anchorProps = { ...{ [prop]: ${value} } }`,
         "prop = 'aria-label'",
         "const labelProps = { [prop]: t('x.users.search') }",
         'const a = <Input {...anchorProps} {...labelProps} maxLength={3} />',
       ])
 
-      expect(found.props).toEqual([limit])
-      expect(found.problems.map(formatProblem)).toEqual([refused, refused])
-    }
+    // The key may be the anchor's: the element is held to it, and both spreads are refused.
+    const named = spreading('SEARCH_TEST_ID')
+
+    expect(named.props).toEqual([limit])
+    expect(named.problems.map(formatProblem)).toEqual([refused, refused])
+
+    // So is a part testIdFor() builds there, with its base.
+    const part = 'x.users.search-input.clear-button'
+    const derived = spreading("testIdFor(SEARCH_TEST_ID, 'clear-button')")
+
+    expect(derived.props).toEqual([{ ...limit, anchor: part, base: 'x.users.search-input' }])
+    expect(derived.problems.map(formatProblem)).toEqual([
+      `x.tsx:6: ${UNFOLLOWED_SPREAD(part)}`,
+      `x.tsx:6: ${UNFOLLOWED_SPREAD(part)}`,
+    ])
+
+    // A literal there is no anchor named so: it may be any id, an ARIA one's, and changes nothing.
+    expect(spreading("'x.users.search-input'").props).toEqual([])
+    expect(spreading("'x.users.search-input'").problems).toEqual([])
 
     // An anchor the element carries otherwise stays its anchor.
     const written = view([
@@ -535,7 +544,8 @@ describe('collectFromSource', () => {
         "let prop: string = 'data-testid'",
         "const labelProps = { [prop]: t('x.users.search'), [props.key]: 'Search users' }",
         'const a = <Input {...labelProps} {...{ [prop]: 3 }} maxLength={3} />',
-        "const b = <Input {...{ [prop]: SEARCH_TEST_ID }} {...{ [prop]: 'x.users.other-input' }} maxLength={3} />",
+        "const OTHER_TEST_ID = 'x.users.other-input'",
+        'const b = <Input {...{ [prop]: SEARCH_TEST_ID }} {...{ [prop]: OTHER_TEST_ID }} maxLength={3} />',
       ].join('\n'),
       'x.tsx',
     )

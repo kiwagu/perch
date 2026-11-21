@@ -3,7 +3,7 @@
  * with what the file declares it with, for `locals.ts` to resolve a name where it is written: a
  * parameter (typed where its annotation says, `binding-names.ts`), a `catch` parameter, a function
  * declaration's name, and each name a variable declaration binds, with the value it is declared
- * with, or the value it is a part of (a destructured name, the variable of a `for…of`), and its
+ * with, or the value it is a part of (a destructured name, the `const` of a `for…of`), and its
  * written type. Only a `let` or a `const` binds in the cases of a `switch` or a class `static`
  * block; a `var` binds in the body of the function around it, a class `static` block or the file,
  * where the function's parameters are bound once more, since JavaScript takes a `var` and a
@@ -22,8 +22,8 @@ import type {
 } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import type { Member } from './alternatives'
 import { namesIn, pathsIn, typedNamesIn, type WrittenType } from './binding-names'
+import type { Member } from './names'
 import { type Scopes, type Span, scopeAround } from './scopes'
 
 /** A name a scope binds, with the value the file declares it with; none for a parameter. */
@@ -52,7 +52,7 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
   const bindings: Binding[] = []
   /** Where each declarator of a variable declaration starts, with its kind. */
   const kinds = new Map<number, VariableDeclaration['kind']>()
-  /** Where each `let` or `const` declarator of a `for…of` head starts, with the value it iterates. */
+  /** Where each `const` declarator of a `for…of` head starts, with the value it iterates. */
   const iterated = new Map<number, Expression>()
   /** Where each `var` declarator of a `for…in` or a `for…of` head starts: the loop assigns it. */
   const looped = new Set<number>()
@@ -100,8 +100,9 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
     ForOfStatement: (node) => {
       loop(node)
 
-      // Its variable is each element of the value it iterates; a `var` outlives the loop.
-      if (node.left.type === 'VariableDeclaration' && node.left.kind !== 'var') {
+      // Its `const` is each element of the value it iterates: the loop may assign a `let`
+      // another value, and a `var` outlives it, so neither is followed.
+      if (node.left.type === 'VariableDeclaration' && node.left.kind === 'const') {
         for (const declarator of node.left.declarations) {
           iterated.set(declarator.start, node.right)
         }
@@ -131,7 +132,7 @@ export function bindingsIn(program: Program, scopes: Scopes): Binding[] {
       }
     },
     VariableDeclarator: (node) => {
-      // A `for…of` head's name is each element of the value it iterates, not a value of its own.
+      // A `for…of` head's `const` is each element of the value it iterates, no value of its own.
       const each = iterated.get(node.start)
       const object = each ?? node.init
       const part = each === undefined ? {} : { iterated: true as const }

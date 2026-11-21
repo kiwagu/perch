@@ -6,7 +6,13 @@ import { describe, expect, it } from 'vitest'
 import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, type ScreensFile } from '../files'
 
-import { type Collected, collectFromSource, RUNTIME_SUFFIX, UNFOLLOWED_SPREAD } from './collect'
+import {
+  type Collected,
+  collectFromSource,
+  DEEP_SPREAD,
+  RUNTIME_SUFFIX,
+  UNFOLLOWED_SPREAD,
+} from './collect'
 import { compareWithContract } from './compare'
 
 const { vocabulary, screens: sample } = sampleContract()
@@ -604,6 +610,87 @@ describe('compareWithContract', () => {
 
     expect(found.strict).toEqual(refused)
     expect(found.ahead).toEqual(refused)
+  })
+  /** What both modes find in the file `lines` write, beside the agreeing sources, with the title input. */
+  const titleViewOf = (lines: readonly string[]): { strict: string[]; ahead: string[] } =>
+    strictAndAhead([...agreeing(), collectFromSource(lines.join('\n'), 'x.tsx')], withTitleInput())
+
+  it('refuses the spread of a let a for…of head binds, which the loop may reassign, in ahead mode too', () => {
+    const refused = [`x.tsx:7: ${UNFOLLOWED_SPREAD('sample.title-input')}`]
+
+    // The loop may give its `let` another object, here one with a limit: it is not followed.
+    expect(
+      titleViewOf([
+        "const TITLE_TEST_ID = 'sample.title-input'",
+        "const searchProps = { placeholder: 'Search' }",
+        'const fields = [searchProps]',
+        'const inputs = []',
+        'for (let field of fields) {',
+        '  if (compact) field = { ...field, maxLength: 3 }',
+        '  inputs.push(<Input data-testid={TITLE_TEST_ID} {...field} />)',
+        '}',
+      ]),
+    ).toEqual({ strict: refused, ahead: refused })
+  })
+  it('lets a wrapper a for…of renders pass where an element of its array cannot be followed, in ahead mode too', () => {
+    // The wrapper row's props are the component's own: the loop's variable is unknown as a whole,
+    // so neither element takes the search row's anchor, as for any spread of a parameter.
+    expect(
+      titleViewOf([
+        "const TITLE_TEST_ID = 'sample.title-input'",
+        "const searchProps = { 'data-testid': TITLE_TEST_ID }",
+        'function Fields(props) {',
+        "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
+        '  const out = []',
+        '  for (const row of rows) {',
+        "    out.push(row.kind === 'wrapper' ? <Wrapper {...row.props} /> : <Input {...row.props} />)",
+        '  }',
+        '  return out',
+        '}',
+      ]),
+    ).toEqual({ strict: [], ahead: [] })
+  })
+  it('refuses a spread the check stops following at its depth, whatever the element carries, and follows a shallower one', () => {
+    /** The title's props under `search`, spread through `layers` objects in a row. */
+    const layered = (layers: number): string[] => [
+      "const group0 = { search: { 'data-testid': 'sample.title-input' } }",
+      ...Array.from({ length: layers }, (_, at) => `const group${at + 1} = { ...group${at} }`),
+      `const title = <Input {...group${layers}.search} maxLength={3} />`,
+    ]
+    const deep = [`x.tsx:10: ${DEEP_SPREAD}`]
+    const shallow = [`x.tsx:5: "sample.title-input": maxLength={3}, but ${KIT}`]
+
+    // Past the depth the anchor itself is not reached: the spread is refused, never let by.
+    expect(titleViewOf(layered(8))).toEqual({ strict: deep, ahead: deep })
+    expect(titleViewOf(layered(3))).toEqual({ strict: shallow, ahead: shallow })
+  })
+  it('takes no anchor from a literal under a key the file does not state: it may be an ARIA id, in ahead mode too', () => {
+    const view = (value: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      'function Help(props: { labelProp: "aria-describedby" | "aria-labelledby"; testId: string }) {',
+      `  return <Wrapper data-testid={props.testId} {...{ [props.labelProp]: ${value} }} maxLength={3} />`,
+      '}',
+    ]
+    const held = [
+      `x.tsx:3: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:3: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    expect(titleViewOf(view("'sample.title-help'"))).toEqual({ strict: [], ahead: [] })
+    // A named anchor there may be the anchor's own: the element is held to it.
+    expect(titleViewOf(view('TITLE_TEST_ID'))).toEqual({ strict: held, ahead: held })
+  })
+  it('goes on past a numeric key to the member before it, in ahead mode too', () => {
+    // `0` is no `search`: the member is the search props, followed.
+    expect(
+      titleViewOf([
+        "const TITLE_TEST_ID = 'sample.title-input'",
+        "const searchProps = { placeholder: 'Search' }",
+        "const otherProps = { placeholder: 'Other' }",
+        'const fields = { search: searchProps, ...{ 0: otherProps } }',
+        'const title = <Input data-testid={TITLE_TEST_ID} {...fields.search} />',
+      ]),
+    ).toEqual({ strict: [], ahead: [] })
   })
 
   it("refuses a holdsInput a view writes on a paged list's size select, which the field facts carry, in ahead mode too", () => {

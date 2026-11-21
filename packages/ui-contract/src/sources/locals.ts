@@ -18,8 +18,9 @@
 import type { Expression, Program, TSType, TSUnionType } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { type Alternative, alternativesIn, type Callable, DEPTH } from './alternatives'
+import { type Alternative, alternativesIn, DEPTH } from './alternatives'
 import { type Binding, bindingsIn } from './bindings'
+import type { Callable } from './callable'
 import { type DeclaredTypes, declaredTypesIn } from './declared-type'
 import { endIsReachable } from './reachable-end'
 import { contains, type Span, scopesIn, sizeOf } from './scopes'

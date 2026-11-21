@@ -3,9 +3,10 @@
  * on it supplies counted as written there, at the spread (`spreads.ts`), and marked partial where
  * some branch of the spread leaves it out; the anchor it carries, written on it or supplied by a
  * spread (in every branch of it the file can follow, where another cannot be followed, or, where
- * it carries none so, as the value under a key the file does not state), as a literal, as
- * `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of its file (`locals.ts`);
- * and where each spread on it the file cannot follow is written.
+ * it carries none so, as the value under a key the file does not state that names an anchor), as
+ * a literal, as `testIdFor()` of two literals, or through a `<NAME>_TEST_ID` constant of its file
+ * (`locals.ts`); and what is refused of its spreads: one the file cannot follow, where the element's
+ * anchor is read, and one the check gives up following at `DEPTH`, whatever the element carries.
  */
 
 import type { Expression, JSXAttributeValue, JSXOpeningElement } from 'oxc-parser'
@@ -34,6 +35,9 @@ export const UNDECLARED_ANCHOR = (name: string): string =>
 /** A spread on an element whose anchor the check reads, when the file cannot say what it supplies. */
 export const UNFOLLOWED_SPREAD = (anchor: string): string =>
   `a spread on the element of "${anchor}" that the check cannot follow (a parameter, an import, a value built at runtime); write its props on the element, or build them in this file`
+
+/** A spread on any element whose chain the check gives up at `DEPTH`: its anchor may lie past it. */
+export const DEEP_SPREAD = `a spread the check gives up following: its chain of names, calls and spreads runs past ${DEPTH} steps; write its props on the element, or build them in fewer steps`
 
 /** The name of a `<NAME>_TEST_ID` constant `node`, written at `at`, uses that its file does not bind. */
 export function undeclaredAnchorOf(
@@ -66,8 +70,12 @@ export interface ReadElement {
   readonly attributes: readonly ElementAttribute[]
   /** The anchor it carries in a form the check reads; none for one passed through. */
   readonly carried?: CarriedAnchor
-  /** Where each spread on it that the file cannot follow is written. */
-  readonly unfollowed: readonly number[]
+  /**
+   * What is refused of the spreads on it, where each is written: one the file cannot follow, on an
+   * element whose anchor the check reads (`UNFOLLOWED_SPREAD`; one passed its anchor is let by),
+   * and one the check gives up following at `DEPTH`, on any element (`DEEP_SPREAD`).
+   */
+  readonly refused: ReadonlyArray<{ readonly at: number; readonly message: string }>
 }
 
 /** An attribute that carries an anchor: `data-testid`, `testId` or a `*TestId` prop. */
@@ -134,7 +142,8 @@ export function anchorIn(
 }
 
 export function readElement(node: JSXOpeningElement, locals: Locals): ReadElement {
-  const unfollowed: number[] = []
+  /** Each spread that is not followed, where it is written, and whether it was given up. */
+  const unfollowed: Array<{ readonly at: number; readonly abandoned: boolean }> = []
   const unstated: Expression[] = []
   const attributes = node.attributes.flatMap((attribute): ElementAttribute[] => {
     if (attribute.type === 'JSXAttribute') {
@@ -147,7 +156,7 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
     const { props, certain, followedCertain } = supplied
 
     if (!supplied.followed) {
-      unfollowed.push(attribute.start)
+      unfollowed.push({ at: attribute.start, abandoned: supplied.abandoned })
     }
 
     unstated.push(...supplied.unstated)
@@ -197,10 +206,20 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
    * The anchor a value under a key the file does not state reads as (`{ [prop]: SEARCH_TEST_ID }`),
    * one in the anchor grammar and the same for each such value that reads as one: the key may be
    * the anchor's, so where the element carries no other, its facets are held to it and the spread
-   * the file cannot follow is refused. A value that reads as no anchor (`t('...')`) changes nothing.
+   * the file cannot follow is refused. Only a value that names an anchor, a `<NAME>_TEST_ID`
+   * constant or a `testIdFor()` call, is read so: a literal may be any id (an ARIA one's,
+   * `{ [labelProp]: 'users.search-help' }`), and changes nothing, as a value that reads as no
+   * anchor (`t('...')`) does.
    */
   const possibleAnchor = (): CarriedAnchor | undefined => {
     const found = unstated
+      .filter((value) => {
+        const written = unwrap(value)
+
+        return written.type === 'Identifier'
+          ? TEST_ID_CONSTANT.test(written.name)
+          : written.type === 'CallExpression' && isTestIdFor(written.callee)
+      })
       .flatMap((value) => anchorIn(locals, value, value.start) ?? [])
       .filter(({ anchor }) => isAnchor(anchor))
     const [one] = found
@@ -219,6 +238,13 @@ export function readElement(node: JSXOpeningElement, locals: Locals): ReadElemen
   )
   const carrier = written ?? certainly
   const carried = (carrier === undefined ? sharedAnchor() : anchorOf(carrier)) ?? possibleAnchor()
+  const refused = unfollowed.flatMap(({ at, abandoned }) =>
+    abandoned
+      ? [{ at, message: DEEP_SPREAD }]
+      : carried === undefined
+        ? []
+        : [{ at, message: UNFOLLOWED_SPREAD(carried.anchor) }],
+  )
 
-  return { attributes, ...(carried === undefined ? {} : { carried }), unfollowed }
+  return { attributes, ...(carried === undefined ? {} : { carried }), refused }
 }

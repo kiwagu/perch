@@ -1,6 +1,7 @@
 /**
  * What a member of an object type the file writes says of a key: whether a value of the type may
- * carry it, for `declared-type.ts`. A member of that name does, so does one whose key the file
+ * carry it, for `declared-type.ts`. A member of that name does (but a property typed `never`,
+ * `type?: never`, which no value holds, shows nothing either way), so does one whose key the file
  * cannot read (a computed name) and an index signature of strings, of symbols or of a template; one
  * of numbers (`[slot: number]`, `0: string`) says nothing of a name.
  */
@@ -22,8 +23,11 @@ export function mayBeKey(member: TSSignature, key: string): boolean {
   }
 
   const named = keyName(member.key, member.computed)
+  const never =
+    member.type === 'TSPropertySignature' &&
+    member.typeAnnotation?.typeAnnotation.type === 'TSNeverKeyword'
 
   return named === undefined
     ? !(member.key.type === 'Literal' && typeof member.key.value === 'number')
-    : named === key
+    : named === key && !never
 }

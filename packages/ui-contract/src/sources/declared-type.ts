@@ -5,8 +5,8 @@
  * object type is a type literal or an interface, its own members and those of each interface or
  * alias it extends, read only where every member is a property or a method whose key the file
  * states (no index, call or construct signature); `canCarry` needs less, since one member that is
- * the key, a string index signature or a key the file cannot read shows a type may carry it
- * (`member-key.ts`), whatever else the type extends. A name stands for an interface or an alias
+ * the key (not a property typed `never`), a string index signature or a key the file cannot read
+ * shows a type may carry it (`member-key.ts`), whatever else the type extends. A name stands for an interface or an alias
  * only where the file declares it once, at its top, with no type parameters, and nothing else of
  * the file binds that name as a type (a type parameter, an import, a class, an enum, a namespace, a
  * declaration in a block); and only in a module (an `import` or an `export`), since a script's
@@ -39,8 +39,9 @@ export interface DeclaredTypes {
   cannotCarry(type: TSType, key: string): boolean
   /**
    * Whether the file shows a value of `type` may carry `key`: an object type with a member of that
-   * name, a string index signature or a key the file cannot read, or a union or an intersection of
-   * which one type does. A type it cannot tell (an import, a generic, `any`) is none that shows it.
+   * name (not typed `never`), a string index signature or a key the file cannot read, or a union or
+   * an intersection of which one type does. A type it cannot tell (an import, a generic, `any`) is
+   * none that shows it.
    */
   canCarry(type: TSType, key: string): boolean
 }

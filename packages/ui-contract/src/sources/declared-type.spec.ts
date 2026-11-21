@@ -282,6 +282,25 @@ describe('declaredTypesIn', () => {
         true,
       )
     })
+    it('says a member of the key typed never shows no value carries it, and tells nothing more', () => {
+      for (const type of [
+        '{ readonly title: string; readonly type?: never }',
+        '{ type: never }',
+        'Draft',
+      ]) {
+        const lines = [
+          'export {}',
+          'interface Draft { readonly type?: never }',
+          `let probe: ${type}`,
+        ]
+
+        expect(carriesType(...lines), type).toBe(false)
+        // A member of the key is no proof that the type cannot carry it: that stays untold.
+        expect(carriesNoType(...lines), type).toBe(false)
+      }
+
+      expect(carriesType('export {}', 'let probe: { type?: never | string }')).toBe(true)
+    })
     it('cannot tell, so says no, of a type without it, an import, a generic, a mapped or utility type, any or unknown', () => {
       for (const type of [
         'Draft',

@@ -138,10 +138,11 @@ export function keyName(key: PropertyKey, computed: boolean): string | undefined
 }
 
 /**
- * The name of a property key the file states: a name or a string (`keyName`), or a computed name
- * a `const` of the file declares with a string, read where the key is written (`[LABEL_PROP]` with
- * `const LABEL_PROP = 'aria-label'`; `Locals.constantNamed`). None for any other computed key: a
- * `let` or a `var`, a parameter, a destructured name, an import, a call, a member.
+ * The name of a property key the file states: a name or a string (`keyName`), a number as the
+ * string JavaScript makes of it (`0` is `'0'`), or a computed name a `const` of the file declares
+ * with a string, read where the key is written (`[LABEL_PROP]` with `const LABEL_PROP =
+ * 'aria-label'`; `Locals.constantNamed`). None for any other computed key: a `let` or a `var`, a
+ * parameter, a destructured name, an import, a call, a member.
  */
 export function statedKeyName(
   key: PropertyKey,
@@ -149,6 +150,10 @@ export function statedKeyName(
   constantNamed: (name: string, at: number) => Expression | undefined,
 ): string | undefined {
   const named = keyName(key, computed)
+
+  if (key.type === 'Literal' && typeof key.value === 'number') {
+    return String(key.value)
+  }
 
   if (named !== undefined || !computed || key.type !== 'Identifier') {
     return named

@@ -436,6 +436,22 @@ describe('facetProblems', () => {
         problemsOf({ title: '<Input data-testid="sample.title-input" />' }, { ahead: true }),
       ).toEqual([])
     })
+    it('wants the mark where the falsy left of && reaches past ??, and reads it where || takes the right', () => {
+      const marks = {
+        primaryMark: `{ 'aria-invalid': ${MARK} }`,
+        fallbackMark: `{ 'aria-invalid': ${MARK}, id: 'title' }`,
+      }
+      const grouped = (operator: string): Record<string, string> => ({
+        title: `<Input data-testid="sample.title-input" {...((usePrimary && primaryMark) ${operator} fallbackMark)} />`,
+        ...marks,
+      })
+
+      // `false ?? fallbackMark` is `false`: the field gets no mark where `usePrimary` is false.
+      expect(problemsOf(grouped('??'))).toEqual([missing])
+      expect(problemsOf(grouped('??'), { ahead: true })).toEqual([])
+      // `false || fallbackMark` is the fallback, which carries the mark.
+      expect(problemsOf(grouped('||'))).toEqual([])
+    })
   })
 
   describe('the enabling of a control by its machine', () => {
@@ -514,6 +530,29 @@ describe('facetProblems', () => {
           saveEvent: "(draft) => ({ type: 'sample.save-button', ...draft })",
         }),
       ).toEqual([])
+    })
+    it('refuses, in ahead mode too, a question whose override may be false before ??, keeping the event before it', () => {
+      const can = '!props.can({ ...signOut, ...(saveOverride() ?? saveEvent) })'
+      const unread = [
+        `view.tsx:${LINE['save']}: "sample.save-button": disabled={${can}}, but the event it asks about cannot be read; write can({ type: 'sample.save-button' }) or a constant of the file that holds it`,
+      ]
+
+      // Where the override is `false`, `??` keeps it, the spread adds nothing and the question
+      // asks about the a-button event the object spreads first.
+      for (const saveOverride of [
+        '() => editing && saveEvent',
+        '() => (editing ? saveEvent : false)',
+      ]) {
+        const changed = {
+          save: `<Button data-testid="sample.save-button" disabled={${can}} />`,
+          signOut: "{ type: 'sample.a-button' } as const",
+          saveEvent: "{ type: 'sample.save-button' } as const",
+          saveOverride,
+        }
+
+        expect(problemsOf(changed), saveOverride).toEqual(unread)
+        expect(problemsOf(changed, { ahead: true }), saveOverride).toEqual(unread)
+      }
     })
     it('passes a question whose event type an anchor constant of the view holds, in ahead mode too', () => {
       const held = {
@@ -822,6 +861,58 @@ describe('facetProblems', () => {
           }
         }
       })
+      it('trusts an assertion that types a value only where the value reads as one of its events, in ahead mode too', () => {
+        const SAVE = "'sample.save-button'"
+        const entries = {
+          saveEvent: `{ type: ${SAVE} } as const`,
+          withExtra: '(extra: { type: typeof eventType }) => ({ ...saveEvent, ...extra })',
+          save: '<Button data-testid="sample.save-button" disabled={!props.can(withExtra({ type: eventType }))} />',
+        }
+
+        // The value asserted is the a-button event, or one the check cannot read: the assertion
+        // alone does not make it the save event.
+        for (const [declared, refused] of [
+          [`const eventType = testIdFor('sample', 'a-button') as ${SAVE}`, true],
+          [`const eventType = 'sample.a-button' as ${SAVE}`, true],
+          [`const eventType = props.event as ${SAVE}`, true],
+          [`const eventType = ${SAVE} as ${SAVE}`, false],
+        ] as const) {
+          for (const ahead of [false, true]) {
+            expect(
+              problemsOf(entries, { declarations: [declared], ahead }),
+              `${declared}${ahead ? ' (ahead)' : ''}`,
+            ).toEqual(refused ? cannotRead('withExtra({ type: eventType })') : [])
+          }
+        }
+      })
+      it('reads a typeof of a member a template keeps past a spread that sets no type, in ahead mode too', () => {
+        const event = 'withExtra(defaults)'
+        const entries = {
+          defaults: "{ type: 'sample.save-button', ...labels } as const",
+          withExtra:
+            "(extra: { type?: typeof defaults.type }) => ({ type: 'sample.save-button', ...extra })",
+          save: `<Button data-testid="sample.save-button" disabled={!props.can(${event})} />`,
+        }
+
+        // A spread whose object the view writes without a type keeps the template's own; one that
+        // may set a type, one typed so, or one the check cannot follow leaves it unread.
+        for (const [declared, refused] of [
+          ["const labels = { label: 'Save' }", false],
+          ["const labels = { label: 'Save', ...{ hint: 'Saves' } }", false],
+          ["const labels = { label: 'Save', type: 'sample.a-button' }", true],
+          ["const labels: { label: string; type?: string } = { label: 'Save' }", true],
+          ["const labels = { label: 'Save' } as { label: string; type?: string }", true],
+          ['const labels = props.labels', true],
+          ["const labels = labelsOf('save')", true],
+        ] as const) {
+          for (const ahead of [false, true]) {
+            expect(
+              problemsOf(entries, { declarations: [declared], ahead }),
+              `${declared}${ahead ? ' (ahead)' : ''}`,
+            ).toEqual(refused ? cannotRead(event) : [])
+          }
+        }
+      })
       it('passes it, in ahead mode too, where the type the view gives it is indexed by numbers only', () => {
         const changed = {
           save: '<Button data-testid="sample.save-button" disabled={!props.can(saveEvent(payload))} />',
@@ -831,6 +922,17 @@ describe('facetProblems', () => {
 
         expect(problemsOf(changed)).toEqual([])
         expect(problemsOf(changed, { ahead: true })).toEqual([])
+      })
+      it('passes it, in ahead mode too, where the type the view gives it says its type is never there', () => {
+        const changed = {
+          save: '(props: { readonly draft: Draft; readonly can: (event: unknown) => boolean }) => { const { draft } = props; return <Button data-testid="sample.save-button" disabled={!props.can({ type: \'sample.save-button\', ...draft })} /> }',
+        }
+        const declarations = [
+          'export interface Draft { readonly title: string; readonly type?: never }',
+        ]
+
+        expect(problemsOf(changed, { declarations })).toEqual([])
+        expect(problemsOf(changed, { declarations, ahead: true })).toEqual([])
       })
       it('refuses it, in ahead mode too, where an interface of the view gives it a type, or an index', () => {
         const changed = {

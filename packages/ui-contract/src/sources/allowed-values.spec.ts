@@ -155,12 +155,12 @@ describe('allowedValues', () => {
   })
   it('reads a query of a const whose value an assertion other than as const types by that type', () => {
     // `<value> as <T>` and `<T><value>` are typed `T`, which may allow more than the value: `T` is
-    // read as an annotation; `as const` keeps the value's own string.
+    // read as an annotation, where the value reads as strings `T` allows; `as const` keeps the
+    // value's own string.
     const reads: ReadonlyArray<readonly [string, readonly string[], Lang?]> = [
       [`const SAVE_TEST_ID = ${SAVE} as ${SAVE}`, ['sample.save-button']],
       [`const SAVE_TEST_ID = (${SAVE} as (${SAVE})) satisfies string`, ['sample.save-button']],
       [`const SAVE_TEST_ID = ${SAVE} as ${SAVE} | ${A}`, ['sample.save-button', 'sample.a-button']],
-      [`const SAVE_TEST_ID = ${SAVE} as typeof reset.type`, ['typeof reset']],
       [`const SAVE_TEST_ID = <${SAVE}>${SAVE}`, ['sample.save-button'], 'ts'],
       [`const SAVE_TEST_ID = <const>${SAVE}`, ['sample.save-button'], 'ts'],
       [
@@ -174,11 +174,16 @@ describe('allowedValues', () => {
       expect(valuesOf('typeof SAVE_TEST_ID', after(declared), lang), declared).toEqual(values)
     }
 
-    // A type the file does not state as strings says nothing, whatever the value holds.
+    // A type the file does not state as strings says nothing, whatever the value holds; nor does
+    // one whose value does not read as strings it states: another string, a call, a query.
     const unread: ReadonlyArray<readonly [string, Lang?]> = [
       [`const SAVE_TEST_ID = ${SAVE} as Anchor`],
       [`const SAVE_TEST_ID = ${SAVE} as ${SAVE} | string`],
       [`const SAVE_TEST_ID = <string>${SAVE}`, 'ts'],
+      [`const SAVE_TEST_ID = ${A} as ${SAVE}`],
+      [`const SAVE_TEST_ID = testIdFor('sample', 'a-button') as ${SAVE}`],
+      [`const SAVE_TEST_ID = <${SAVE}>testIdFor('sample', 'a-button')`, 'ts'],
+      [`const SAVE_TEST_ID = ${SAVE} as typeof reset.type`],
     ]
 
     for (const [declared, lang] of unread) {
@@ -271,6 +276,10 @@ describe('valueAllows', () => {
     const unread: ReadonlyArray<readonly [string, string?]> = [
       [`${SAVE} as string`],
       [`${SAVE} as Anchor`],
+      [`${A} as ${SAVE}`],
+      [`${SAVE} as ${A}`],
+      [`testIdFor('sample', 'a-button') as ${SAVE}`],
+      [`props.event as ${SAVE}`],
       ["testIdFor('sample', 'save-button')"],
       ['SAVE_TEST_ID', `const SAVE_TEST_ID: string = ${SAVE}`],
       ['SAVE_TEST_ID', `let SAVE_TEST_ID = ${SAVE}`],
