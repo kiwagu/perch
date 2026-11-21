@@ -27,3 +27,13 @@ export interface SignInInput {
    */
   readonly signOutOldest?: boolean
 }
+
+/**
+ * What the code step of a sign-in carries from the password step that asked for a code: the
+ * gateway's challenge, opaque to the device, and the email typed there, which the code step is
+ * judged by.
+ */
+export interface CodeStep {
+  readonly challenge: string
+  readonly email: string
+}

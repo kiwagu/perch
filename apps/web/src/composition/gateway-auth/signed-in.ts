@@ -1,4 +1,7 @@
-/** What a sign-in answers: the device the gateway signed in, or why it did not. */
+/**
+ * What a step of a sign-in answers: the device the gateway signed in, or why it did not. The
+ * limit of devices and the ask for a code are answers, not failures: nothing is signed in.
+ */
 
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
@@ -31,6 +34,26 @@ export interface SignedInDevice {
   readonly start?: AccountSignedUpAs
 }
 
+/**
+ * What a step of a sign-in that follows the password (the code step, a passkey) came to when the
+ * gateway took it.
+ */
+export type StepAnswer =
+  | { readonly kind: 'signed-in'; readonly device: SignedInDevice }
+  /**
+   * The account is signed in on as many devices as it may be; a passkey sign-in names the account
+   * it asked about (`consentFor`), which a confirmation must name.
+   */
+  | { readonly kind: 'device-limit'; readonly consentFor?: string }
+
+/**
+ * What the password step came to: a step's answer, or the ask for a code of an account whose
+ * second factor is on, with the challenge its code step carries; nothing is signed in then.
+ */
+export type SignInAnswer =
+  | StepAnswer
+  | { readonly kind: 'code-required'; readonly challenge: string }
+
 /** The device a sign-in or verification names: the browser's own id, and a label for people to read. */
 export interface NamedDevice {
   readonly id: string
@@ -62,18 +85,13 @@ const signedInAccount = z.object({
   start: z.object({ name: z.string().min(1), locale: z.enum(SUPPORTED_LOCALES) }).optional(),
 })
 
-/** The statuses the gateway refuses a sign-in with, and what each means here; a 403 is read apart. */
+/** What the password step answers when the account asks for a code: its challenge, signing nothing in. */
+const codeAsked = z.object({ secondFactor: z.object({ challenge: z.string().min(1) }) })
+
+/** The statuses the gateway refuses a password sign-in with, and what each means here; a 403 is read apart. */
 const REFUSALS: ReadonlyMap<number, { readonly code: DataErrorCode; readonly message: string }> =
   new Map([
     [401, { code: 'data:INVALID_CREDENTIALS', message: 'wrong email or password' }],
-    // The account is signed in on as many devices as it may be: nothing is signed in.
-    [
-      409,
-      {
-        code: 'data:DEVICE_LIMIT',
-        message: 'the account is signed in on as many devices as it may be',
-      },
-    ],
     [429, { code: 'data:RATE_LIMITED', message: 'too many attempts' }],
   ])
 
@@ -101,21 +119,20 @@ function refused({ status, code }: NonNullable<ClientAnswer['error']>): DataErro
 }
 
 /**
- * The device a sign-in's answer signed in; a refusal keeps its meaning. An answer that is not a
- * signed-in account fails without the parser's account of it, which could quote the answer.
+ * The device the body of a sign-in step's 200 signed in. A body that is not a signed-in account
+ * fails without the parser's account of it, which could quote the body.
  */
-export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, DataError> {
-  if (answer.error) {
-    return errAsync(refused(answer.error))
-  }
-
-  const parsed = signedInAccount.safeParse(answer.data)
+export function signedInBody(body: unknown): ResultAsync<StepAnswer, DataError> {
+  const parsed = signedInAccount.safeParse(body)
 
   return parsed.success
     ? okAsync({
-        identity: { id: parsed.data.user.id, email: parsed.data.user.email },
-        token: parsed.data.token,
-        ...(parsed.data.start === undefined ? {} : { start: parsed.data.start }),
+        kind: 'signed-in',
+        device: {
+          identity: { id: parsed.data.user.id, email: parsed.data.user.email },
+          token: parsed.data.token,
+          ...(parsed.data.start === undefined ? {} : { start: parsed.data.start }),
+        },
       })
     : errAsync(
         dataError(
@@ -123,4 +140,23 @@ export function signedIn(answer: ClientAnswer): ResultAsync<SignedInDevice, Data
           'the gateway answered with something other than a signed-in account',
         ),
       )
+}
+
+/**
+ * What the password step answers: the device the gateway signed in, a challenge for the code of an
+ * account whose second factor is on, the limit of devices as an answer; any other refusal keeps
+ * its meaning.
+ */
+export function signedIn(answer: ClientAnswer): ResultAsync<SignInAnswer, DataError> {
+  if (answer.error) {
+    return answer.error.status === 409
+      ? okAsync({ kind: 'device-limit' })
+      : errAsync(refused(answer.error))
+  }
+
+  const asked = codeAsked.safeParse(answer.data)
+
+  return asked.success
+    ? okAsync({ kind: 'code-required', challenge: asked.data.secondFactor.challenge })
+    : signedInBody(answer.data)
 }

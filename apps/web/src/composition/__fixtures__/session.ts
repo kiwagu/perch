@@ -1,4 +1,5 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
+import { expect } from 'vitest'
 
 import { EventBus } from '@workspace/cqrs'
 import {
@@ -26,14 +27,17 @@ import {
 
 import type { CommandsPort } from '../../platform/commands.port'
 import type { AppEvent } from '../../platform/events.port'
+import type { SignInResult } from '../../platform/session.port'
 import { type CommandLogger, createCommandBus } from '../commands'
 import type { GatewayAuth } from '../gateway-auth'
 import type { SyncState, Visibility } from '../identity-space'
+import type { PasskeyCeremony } from '../passkey-ceremony'
 import type { SessionOptions, TransportContext } from '../session'
 import { SessionService } from '../session'
 import { type MemoryStorage, memoryStorage } from '../storage'
 
 import { type FakeGatewayAuth, fakeGatewayAuth } from './gateway-auth'
+import { fakeCeremony } from './passkey-ceremony'
 import { QueryTracker } from './query-tracker'
 
 export interface TestWorldOptions {
@@ -68,6 +72,8 @@ export interface TestWorldOptions {
   readonly memberships?: readonly Membership[]
   /** Signs accounts up and devices in in place of the fake gateway's accounts. */
   readonly auth?: GatewayAuth
+  /** The browser's passkey window; by default one that nobody answers. */
+  readonly ceremony?: PasskeyCeremony
   /**
    * Reads the signed-in identity's memberships after a sign-in; by default every account belongs
    * to `memberships`, as the stub welcomes it.
@@ -232,6 +238,7 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
   let visibility: Visibility = 'visible'
   const session = new SessionService({
     auth,
+    ceremony: options.ceremony ?? fakeCeremony(),
     keepAccountStart:
       options.keepAccountStart ?? ((signIn, user, from) => startsKept.push([signIn, user, from])),
     listMemberships: options.listMemberships ?? (() => okAsync(memberships)),
@@ -394,6 +401,13 @@ export async function openTestWorld(options: TestWorldOptions = {}): Promise<Tes
       }
     },
   }
+}
+
+/** The user a sign-in signed in; the test fails when it signed nobody in. */
+export function signedInUser(result: SignInResult): AuthUser {
+  return result.kind === 'signed-in'
+    ? result.user
+    : expect.unreachable(`the sign-in answered ${result.kind}`)
 }
 
 /** Signs `input` up and opens its verification link on this service's device, as a person does. */

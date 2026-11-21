@@ -45,12 +45,16 @@ describe('what a refused sign-in means', () => {
   it('reads the code only of a 403: the other refusals keep their meaning', async () => {
     for (const [status, code] of [
       [401, 'data:INVALID_CREDENTIALS'],
-      [409, 'data:DEVICE_LIMIT'],
       [429, 'data:RATE_LIMITED'],
       [500, 'data:AUTH_FAILED'],
     ] as const) {
       expect((await signedIn(refusal(status, 'account-banned')))._unsafeUnwrapErr().code).toBe(code)
     }
+
+    // The limit of devices is an answer, whatever code the body names.
+    expect((await signedIn(refusal(409, 'account-banned')))._unsafeUnwrap()).toEqual({
+      kind: 'device-limit',
+    })
   })
 
   it("carries the body's code through Better Auth's client: 403 account-banned is a banned account", async () => {

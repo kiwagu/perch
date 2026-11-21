@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import {
   browserDatabases,
   openTestWorld,
@@ -212,7 +212,7 @@ describe('the confirmation of a new email', () => {
 
     // Bob asks for the change on his own device, and his link is opened in Ann's browser.
     const bobDevice = await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' })
-    const bobSession = bobDevice._unsafeUnwrap()
+    const bobSession = signedDevice(bobDevice._unsafeUnwrap())
 
     expect(
       (

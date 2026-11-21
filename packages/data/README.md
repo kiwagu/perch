@@ -6,8 +6,8 @@ The only package that depends on the SurrealDB driver. It opens the local databa
 (applying the schema only when its text changed since the last opening), runs shapes and
 commands compiled from `.surql` files, announces table changes so watched shapes rerun, and
 gives the gateway's accounts their database through SurrealDB's Better Auth adapter. The
-account types (`AuthUser`, `SignUpInput`, `SignInInput`) are shared by the gateway and the web
-application. Above this package ids are entity id strings and times are `Date`s; driver record
+account types (`AuthUser`, `SignUpInput`, `SignInInput`, `CodeStep`) are shared by the gateway and
+the web application. Above this package ids are entity id strings and times are `Date`s; driver record
 ids and datetimes do not leave it.
 
 ## Key exports
@@ -17,7 +17,10 @@ ids and datetimes do not leave it.
 - Account types: `AuthUser` (an identity's id and email), `SignUpInput` (email, password, the
   account's own name and its language), `SignInInput` (email, password, and `signOutOldest`, which
   confirms a sign-in past the account's limit of devices; unconfirmed, such a sign-in fails as
-  `data:DEVICE_LIMIT`).
+  `data:DEVICE_LIMIT`), `CodeStep` (the challenge a password step answered and the email typed
+  there, which the code step of the sign-in carries). The second factor and the passkeys have
+  their codes: `data:INVALID_CODE`, `data:CODE_EXPIRED`, `data:TWO_FACTOR_CHANGED`,
+  `data:PASSKEY_UNKNOWN` and `data:PASSKEY_CANCELLED`.
 - Adapters: `openLocalDb`, `applySchema`, `ShapeRunner`, `runCommand`, `SurrealWritePath`.
   `applySchema(local, schema)` applies a schema to an open database and remembers it, as
   `openLocalDb` does when the schema changed, failing with `data:QUERY_FAILED`. A

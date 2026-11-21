@@ -194,10 +194,12 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   that names it), signs nothing in, keeps the form in the mode sign-in with the email typed and
   offers no resend;
   a sign-in that finds the account signed in on as many devices as it may be at once
-  (`data:DEVICE_LIMIT`, which `SignInService` answers as the outcome `device-limit`) signs nothing
-  in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
+  (the session's outcome `device-limit`, which `SignInService` answers as its outcome of the same
+  name) signs nothing in and asks in a dialog (`user.sign-in.device-limit-dialog`, code `device-limit`, texts
   `user.sign-in.device-limit.*`) whether to sign in all the same, which signs out the device used
-  least recently, its cancel going back to the form;
+  least recently, its cancel going back to the form; a sign-in of an account whose second factor is
+  on answers `code-required` from the session, which the screen has no step for yet:
+  `SignInService` fails it as `data:AUTH_FAILED` (`failed`), signing nothing in;
   the account's settings and profile are created where its link is first opened, from the name
   and the language it signed up with and the theme that device shows; the verify page says the link is being checked
   (`user.verify-email.status`), says a link opened again is verified already beside the link to

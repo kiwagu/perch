@@ -1,6 +1,6 @@
 import type { ResultAsync } from 'neverthrow'
 
-import type { AuthUser, DataError, SignInInput, SignUpInput } from '@workspace/data'
+import type { AuthUser, CodeStep, DataError, SignInInput, SignUpInput } from '@workspace/data'
 import { token } from '@workspace/di'
 import type { IdentityId } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
@@ -74,6 +74,17 @@ export interface EmailConfirmed {
   readonly email: string
 }
 
+/**
+ * What a step of signing in came to: the device signed in, the account's second factor asking for
+ * a code (`code-required`, with what the code step carries: nothing is signed in), or the limit of
+ * devices asking first (`device-limit`, nothing signed in; a passkey sign-in names the account it
+ * asked about in `consentFor`, which its confirmation must name).
+ */
+export type SignInResult =
+  | { readonly kind: 'signed-in'; readonly user: AuthUser }
+  | ({ readonly kind: 'code-required' } & CodeStep)
+  | { readonly kind: 'device-limit'; readonly consentFor?: string }
+
 /** The signed-in user of the application and the transitions between users. */
 export interface SessionPort {
   /**
@@ -83,12 +94,39 @@ export interface SessionPort {
   signUp(input: SignUpInput): ResultAsync<void, DataError>
   /**
    * Signs this device in to the account of `input`. A sign-in that finds the account signed in on
-   * as many devices as it may be at once signs nothing in and fails as `data:DEVICE_LIMIT`, unless
+   * as many devices as it may be at once signs nothing in and answers `device-limit`, unless
    * `input.signOutOldest` confirms it, which signs out the account's device seen least recently.
-   * An account an operator banned fails as `data:ACCOUNT_BANNED` once its password is right,
-   * nothing signed in.
+   * An account whose second factor is on answers `code-required` once its password is right,
+   * nothing signed in, and `confirmSignIn` takes the code. An account an operator banned fails as
+   * `data:ACCOUNT_BANNED` once its password is right, nothing signed in. Another account signed in
+   * on this browser fails as `data:OTHER_ACCOUNT` before the gateway is asked.
    */
-  signIn(input: SignInInput): ResultAsync<AuthUser, DataError>
+  signIn(input: SignInInput): ResultAsync<SignInResult, DataError>
+  /**
+   * The code step of a sign-in that answered `code-required`, with the code the account's
+   * authenticator app shows now or a backup code not used yet; `signOutOldest` confirms signing in
+   * past the limit of devices, as for `signIn`. Refused as `data:OTHER_ACCOUNT`, without asking
+   * the gateway, when another account than the step's is signed in on this browser by the time
+   * the browser's sign-in lock is taken. A wrong code fails as `data:INVALID_CODE` and a dead
+   * challenge as `data:CODE_EXPIRED` (the sign-in starts again from the password), a banned
+   * account as `data:ACCOUNT_BANNED`, an email whose failed sign-ins are spent as
+   * `data:RATE_LIMITED`.
+   */
+  confirmSignIn(
+    step: CodeStep,
+    code: string,
+    signOutOldest: boolean,
+  ): ResultAsync<SignInResult, DataError>
+  /**
+   * Signs this device in with a passkey the browser picks, no password and no code: the browser's
+   * window runs outside the sign-in lock, its assertion goes to the gateway inside it. Refused as
+   * `data:OTHER_ACCOUNT` when any account is signed in on this browser, before the browser is
+   * asked and again before the assertion is sent. A window closed or timed out fails as
+   * `data:PASSKEY_CANCELLED`, a passkey no account holds as `data:PASSKEY_UNKNOWN`. A sign-in past
+   * the limit of devices answers `device-limit` with the account it asked about, and is confirmed
+   * by naming that account again as `signOutOldestFor`.
+   */
+  signInWithPasskey(signOutOldestFor?: string): ResultAsync<SignInResult, DataError>
   /**
    * Exchanges the token of a verification link: the first exchange verifies the account's email
    * and signs this device in, as a sign-in does, keeping the start of the account, which has none

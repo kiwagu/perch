@@ -1,4 +1,4 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
@@ -11,7 +11,7 @@ import {
   type TestSession,
 } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
-import type { SessionPort } from '../../../platform/session.port'
+import type { SessionPort, SignInResult } from '../../../platform/session.port'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
 import { ProfileService } from './profile.service'
@@ -186,6 +186,36 @@ describe('a sign-in past the limit of devices', () => {
 
     expect(actor.getSnapshot().value).toBe('sign-in')
     expect(session.current()).toBeUndefined()
+  })
+})
+
+describe('a sign-in whose account asks for a code', () => {
+  it('fails as data:AUTH_FAILED, signing nothing in, until the screen has a step for the code', async () => {
+    const asking: Pick<SessionPort, 'signIn' | 'signUp' | 'resendVerification'> = {
+      ...recordingSession().port,
+      signIn: () =>
+        okAsync<SignInResult, DataError>({
+          kind: 'code-required',
+          challenge: 'challenge',
+          email: ann.email,
+        }),
+    }
+
+    expect((await new SignInService(asking).signIn(ann, false))._unsafeUnwrapErr().code).toBe(
+      'data:AUTH_FAILED',
+    )
+    expect(session.current()).toBeUndefined()
+  })
+
+  it('answers the limit of devices as the outcome the form asks about', async () => {
+    const limited: Pick<SessionPort, 'signIn' | 'signUp' | 'resendVerification'> = {
+      ...recordingSession().port,
+      signIn: () => okAsync<SignInResult, DataError>({ kind: 'device-limit' }),
+    }
+
+    expect((await new SignInService(limited).signIn(ann, false))._unsafeUnwrap()).toEqual({
+      kind: 'device-limit',
+    })
   })
 })
 

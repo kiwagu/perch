@@ -22,7 +22,8 @@ export type SignInError = DataError | BusError
 /**
  * What a sign-in did: signed the device in, or signed nothing in because the account is signed in
  * on as many devices as it may be at once (`device-limit`), which the form asks about before it
- * signs in all the same.
+ * signs in all the same. An account whose second factor is on asks for a code, which the form has
+ * no step for yet: that is a failure (`data:AUTH_FAILED`).
  */
 export type SignInOutcome =
   | { readonly kind: 'signed-in'; readonly user: AuthUser }
@@ -46,12 +47,20 @@ export class SignInService {
         password: form.password,
         ...(signOutOldest ? { signOutOldest } : {}),
       })
-      .map((user): SignInOutcome => ({ kind: 'signed-in', user }))
-      .orElse((error) =>
-        error.code === 'data:DEVICE_LIMIT'
-          ? okAsync<SignInOutcome, SignInError>({ kind: 'device-limit' })
-          : errAsync<SignInOutcome, SignInError>(error),
-      )
+      .andThen((result): ResultAsync<SignInOutcome, SignInError> => {
+        switch (result.kind) {
+          case 'signed-in':
+            return okAsync({ kind: 'signed-in', user: result.user })
+          case 'device-limit':
+            return okAsync({ kind: 'device-limit' })
+          case 'code-required':
+            // The screen has no step for the code yet: it shows a failure, signing nothing in.
+            return errAsync({
+              code: 'data:AUTH_FAILED',
+              message: 'the account asks for a code the sign-in cannot take',
+            })
+        }
+      })
   }
 
   /**

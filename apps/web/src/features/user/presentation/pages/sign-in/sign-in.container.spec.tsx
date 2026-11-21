@@ -14,7 +14,7 @@ import { defineModule } from '../../../../../platform/module'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
-import type { SessionPort } from '../../../../../platform/session.port'
+import type { SessionPort, SignInResult } from '../../../../../platform/session.port'
 import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { SIGN_IN_SERVICE, SignInService } from '../../../application/sign-in.service'
 
@@ -45,10 +45,10 @@ function switchableSession() {
     here = true
 
     return ResultAsync.fromSafePromise(
-      new Promise<AuthUser>((resolve) => {
+      new Promise<SignInResult>((resolve) => {
         answer = (result) => {
           here = false
-          resolve(result)
+          resolve({ kind: 'signed-in', user: result })
         }
       }),
     )
@@ -334,19 +334,16 @@ describe('SignInContainer', () => {
     const session: SessionPort = {
       ...fakeSession().session,
       current: () => user,
-      signIn: (input) => {
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
         confirmations.push(input.signOutOldest)
 
         if (input.signOutOldest !== true) {
-          return errAsync({
-            code: 'data:DEVICE_LIMIT',
-            message: 'the account is on as many devices as it may be',
-          })
+          return okAsync({ kind: 'device-limit' })
         }
 
         user = ann
 
-        return okAsync(ann)
+        return okAsync({ kind: 'signed-in', user: ann })
       },
     }
     const router = renderSignIn(session)
