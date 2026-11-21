@@ -38,9 +38,11 @@
         "useLiteralKeys": "off"
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noVar": "error"
       },
       "style": {
+        "noNamespace": "error",
         "noRestrictedImports": {
           "level": "error",
           "options": {
@@ -85,6 +87,10 @@
     }
   },
   "overrides": [
+    {
+      "includes": ["packages/eslint-config/src/__fixtures__/**"],
+      "linter": { "rules": { "style": { "noNamespace": "off" } } }
+    },
     {
       "includes": ["packages/data/**"],
       "linter": {
