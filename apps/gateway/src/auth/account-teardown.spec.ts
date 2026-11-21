@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
-import { type IdentityId, idSchemas, profileIdFactory, tenantIdFactory } from '@workspace/ids'
+import {
+  type IdentityId,
+  idSchemas,
+  passkeyIdFactory,
+  profileIdFactory,
+  tenantIdFactory,
+} from '@workspace/ids'
 import { privateRegionId } from '@workspace/replica'
 import { z } from '@workspace/zod'
 
@@ -16,8 +22,10 @@ import {
 } from './__fixtures__/auth-instance'
 import identityDeleteRefuseStatement from './__fixtures__/identity-delete-refuse.surql'
 import membershipRowStatement from './__fixtures__/membership-row.surql'
+import passkeyRowStatement from './__fixtures__/passkey-row.surql'
 import profileRowStatement from './__fixtures__/profile-row.surql'
 import regionRowsStatement from './__fixtures__/region-rows.surql'
+import { passwordStepRequest, secondFactorOn } from './__fixtures__/second-factor'
 import settingsLocaleStatement from './__fixtures__/settings-locale.surql'
 import { AccountTeardown } from './account-teardown'
 
@@ -34,8 +42,14 @@ const BOB = 'bob@example.test'
 const FURNISHED = {
   identity: 1,
   account: 1,
-  device_session: 2,
-  verification: 3,
+  // The laptop's first session and the one its confirmation of the second factor replaced it
+  // with, the phone's, and the one a password step wrote and deleted (ended) on the desk.
+  device_session: 4,
+  // A change of its email, a deletion, a reset link, a pending two-factor challenge with the row
+  // counting its codes, and a passkey's registration challenge.
+  verification: 6,
+  two_factor: 1,
+  passkey: 1,
   profile: 1,
   settings: 1,
   membership: 0,
@@ -61,20 +75,31 @@ async function harness() {
 
 /**
  * Signs `email` up under the account's own name `Account name`, and gives it every row an account
- * keeps in the directory: two device sessions, a pending change of its email, a pending deletion,
- * a reset link, a profile under another name, settings in Spanish, and the server's copy of its
- * private region.
+ * keeps in the directory: device sessions, a pending change of its email, a pending deletion, a
+ * reset link, its second factor (turned on, with a pending challenge of a password step), a
+ * passkey and a passkey's pending registration, a profile under another name, settings in Spanish,
+ * and the server's copy of its private region.
  */
 async function furnish(opened: OpenedAuth, email: string): Promise<IdentityId> {
   const { auth, local, outbox } = opened
   const { emailChanges, accountDeletions, passwords } = accountServicesOf(opened)
-  const { user } = await signUpOn(auth, email, deviceHeaders('laptop'), { name: 'Account name' })
+  const { token, user } = await signUpOn(auth, email, deviceHeaders('laptop'), {
+    name: 'Account name',
+  })
   const identity = idSchemas.identity.schema.parse(user.id)
 
   await auth.api.signInEmail({
     body: { email, password: 'Pass-word-1' },
     headers: deviceHeaders('phone'),
   })
+
+  const factor = await secondFactorOn(auth, 'laptop', token)
+  const laptop = deviceHeaders('laptop')
+
+  laptop.set('authorization', `Bearer ${factor.token}`)
+  expect((await auth.handler(passwordStepRequest(email, 'Pass-word-1', 'desk'))).status).toBe(200)
+  await auth.api.generatePasskeyRegistrationOptions({ headers: laptop })
+  await local.db.query(passkeyRowStatement, { key: passkeyIdFactory.create(), identity })
   ;(await emailChanges.ask(identity, email, `new.${email}`))._unsafeUnwrap()
   ;(await accountDeletions.ask(identity))._unsafeUnwrap()
 

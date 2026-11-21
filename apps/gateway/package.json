@@ -12,6 +12,7 @@
     "load": "bun scripts/load/ws-clients.ts"
   },
   "dependencies": {
+    "@better-auth/passkey": "catalog:",
     "@workspace/data": "workspace:*",
     "@workspace/database": "workspace:*",
     "@workspace/email": "workspace:*",
@@ -27,6 +28,7 @@
     "ts-pattern": "catalog:"
   },
   "devDependencies": {
+    "@better-auth/utils": "catalog:",
     "@types/bun": "catalog:",
     "@workspace/mailbox": "workspace:*",
     "@workspace/ui-contract": "workspace:*",

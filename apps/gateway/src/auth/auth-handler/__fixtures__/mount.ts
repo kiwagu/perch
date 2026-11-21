@@ -39,6 +39,8 @@ import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
+import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surql'
+import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
 
 /** The account most specs sign up and verify. */
@@ -138,13 +140,14 @@ export const noSessions: AuthMountDeps['sessions'] = {
 }
 
 /**
- * Stand-ins for the passwords, account links, mails and an account's deletion, for the specs of
- * the sign-up, the sign-in and the verification over a stand-in for Better Auth: every one of them
- * fails, as none is meant to be asked.
+ * Stand-ins for the passwords, account links, two-factor challenges, mails and an account's
+ * deletion, for the specs of the sign-up, the sign-in and the verification over a stand-in for
+ * Better Auth: every one of them fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
   | 'passwords'
+  | 'challenges'
   | 'resets'
   | 'emailChanges'
   | 'deletions'
@@ -166,8 +169,14 @@ export const noAccounts: Pick<
         identity: STAND_IN_ACCOUNT,
         hash: 'stand-in-hash',
         banned: false,
+        secondFactor: false,
         start: undefined,
       }),
+  },
+  challenges: {
+    cookieName: () => Promise.reject(new Error('no challenge is read here')),
+    ownerOf: notHere,
+    end: notHere,
   },
   resets: { read: notHere },
   emailChanges: {
@@ -363,6 +372,9 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
       admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
+    // The challenges reach the directory as the instance does: a test holds their reads by the
+    // same hook.
+    challenges: twoFactorChallenges(opened.auth, opened.directory),
     deletions: accounts.accountDeletions,
     departure: {
       blocked: (identity) => departure.blocked(identity),
@@ -746,6 +758,9 @@ export const isVerifiedAdmission = (text: string): boolean =>
 /** Better Auth's adapter reads a session by its token from its table, as at a session's read. */
 export const isSessionLookup = (text: string): boolean =>
   text.startsWith('SELECT') && text.includes('FROM `device_session`')
+
+/** The gateway's read of the account a two-factor challenge belongs to. */
+export const isChallengeLookup = (text: string): boolean => text === challengeOwnerStatement
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

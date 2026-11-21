@@ -18,6 +18,7 @@ import type { AuthSessions } from '../auth-sessions'
 import type { ProfileEmails } from '../profile-emails'
 
 import { deleteAccount, requestAccountDeletion } from './account-deletion'
+import type { TwoFactorChallenges } from './challenge-cookie'
 import { changeEmail, confirmEmail } from './email-change'
 import { changePassword } from './password-change'
 import { requestPasswordReset, resetPassword } from './password-reset'
@@ -74,6 +75,11 @@ export interface AuthMountDeps {
     AccountPasswords,
     'requestReset' | 'hash' | 'reset' | 'change' | 'matches' | 'credentialOf'
   >
+  /**
+   * Better Auth's two-factor challenges: the name of the cookie a password step's challenge comes
+   * in, the account a challenge belongs to, and the end of one.
+   */
+  readonly challenges: TwoFactorChallenges
   /** The reset links of accounts, which Better Auth keeps. */
   readonly resets: Pick<ResetLinks, 'read'>
   /** The pending changes of accounts' emails, and the change itself. */
@@ -182,11 +188,14 @@ function credentialChecked(
  *   or no password; 400 `weak-password` at once for a password that breaks the rules of a new
  *   password, before its email's turn and Better Auth; it signs nothing in and closes no socket. A sign-in answers 200 with the raw session token and
  *   the account, its id, email, name and whether its email is verified, built from Better Auth's
- *   answer by that allowlist, without its cookies (`signIn`). It must first find a place among
- *   its email's failed sign-ins and those still under way (`RequestLimits.signInAttempt`, the
- *   email in lower case), held until Better Auth answers: 401 (wrong credentials) keeps it as a
- *   failure, 200, 409 and a 403 `EMAIL_NOT_VERIFIED` or `account-banned` (the password was right)
- *   clear the email's, and any other answer (any other 403 included: Better Auth refused the
+ *   answer by that allowlist, without its cookies (`signIn`); for an account whose second factor
+ *   is on, 200 `{ secondFactor: { challenge } }` instead, no token and nothing signed in
+ *   (`secondFactorAsked`). It must first find a place among its email's failed sign-ins and those
+ *   still under way (`RequestLimits.signInAttempt`, the email in lower case), held until Better
+ *   Auth answers: 401 (wrong credentials) keeps it as a failure, 200 signed in, 409 and a 403
+ *   `EMAIL_NOT_VERIFIED` or `account-banned` (the password was right) clear the email's for an
+ *   account whose second factor is off, and any other answer (a challenge, a 403 after the
+ *   password for an account whose second factor is on, any other 403: Better Auth refused the
  *   request's origin, Fetch Metadata or callback before it checked the password), or a handler
  *   that threw, gives it back.
  *   A sign-in whose body is not

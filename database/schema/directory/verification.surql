@@ -1,6 +1,7 @@
 -- One-time tokens with an expiry: Better Auth's verification model (email verification, password
--- reset, email change, deletion), each a value kept under an identifier until it is spent or
--- expires. Server-only, written by the gateway as the namespace user.
+-- reset, email change, deletion, a sign-in's two-factor challenge and the count of its codes, a
+-- passkey's registration or sign-in challenge), each a value kept under an identifier until it is
+-- spent or expires. Server-only, written by the gateway as the namespace user.
 
 -- @replicate none
 -- @id vrf

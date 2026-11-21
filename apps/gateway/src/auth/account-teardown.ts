@@ -16,8 +16,10 @@ export type DeletedAccount = AccountAddressee
  * the deletion goes to, as every mail about the account reads it (`accountAddressee`), so it is
  * read before the rows go. `remove` deletes every row of the account in one transaction, the
  * identity last: its sessions, its credential row, every pending link of it (a change of its
- * email, a deletion of the account, its reset links), its profile and settings, and the server's
- * copy of its private region (head, snapshots, update log, projected records, bound peers). All
+ * email, a deletion of the account, its reset links), every pending challenge of it (a sign-in's
+ * two-factor challenge and the count of its codes, a passkey's registration), its second factor,
+ * its passkeys, its profile and settings, and the server's copy of its private region (head,
+ * snapshots, update log, projected records, bound peers). All
  * of them go or none does, and removing an account that is gone already deletes nothing and
  * succeeds, so a deletion that stopped half way can run again.
  *

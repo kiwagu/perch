@@ -28,16 +28,22 @@ only the gateway's own writes change it (the profile's email through the confirm
   as (bound at its first accepted batch), the pull cursor; a number is unique per region in the
   log and the outbox; on a device `_replica_head` also holds the region's generation, which a
   reset of its local copy moves), closed to every record user and never replicated.
-- `schema/directory/`: the four account tables, Better Auth's models, written only by the
-  gateway as its namespace user and never replicated: `identity` (an account: its email, kept
-  and matched in lower case, so an address in any case is one account, the account's own name
-  and `locale`, the language it signed up in, which its mails speak until its settings name one,
-  `en` when nothing named one; an identity reads only its own row), `account` (how an identity
-  signs in: the credential row holds the argon2id hash of the password), `device_session` (one
-  row per sign-in of a device of an identity, with the device's own id, its label and the session
-  token it holds; a sign-out ends the row, which stays listed for 30 days) and `verification`
-  (one-time tokens with an expiry), the last three closed to every record user; their reference
-  columns hold the identity's key as a string, as Better Auth's adapter writes it. The product
+- `schema/directory/`: the account tables, Better Auth's models and its two-factor and passkey
+  plugins', written only by the gateway as its namespace user and never replicated: `identity`
+  (an account: its email, kept and matched in lower case, so an address in any case is one
+  account, the account's own name and `locale`, the language it signed up in, which its mails
+  speak until its settings name one, `en` when nothing named one, and whether its second factor
+  is on; an identity reads only its own row), `account` (how an identity signs in: the credential
+  row holds the argon2id hash of the password), `device_session` (one row per sign-in of a device
+  of an identity, with the device's own id, its label and the session token it holds; a sign-out
+  ends the row, which stays listed for 30 days), `verification` (one-time tokens with an expiry,
+  a sign-in's two-factor challenge among them), `two_factor` (an account's second factor: its
+  key's secret and its backup codes, encrypted, and whether a code confirmed the key, with the
+  functions `fn::two_factor_challenge_end` and `fn::two_factor_challenges_end`, which end one
+  pending two-factor challenge or every one of an identity) and `passkey` (an account's passkeys:
+  each credential's id, unique, its public key and its counter), all but `identity` closed to
+  every record user; their reference columns hold the identity's key as a string, as Better
+  Auth's adapter writes it. The product
   schema defines no access method, so no record user signs in to a server. Then `profile` (its
   owner reads it; only the gateway writes it, through replication; a name is not empty,
   an email is an address, and a name and a bio hold at most the lengths the contract states,
@@ -60,7 +66,8 @@ only the gateway's own writes change it (the profile's email through the confirm
   into `src/replica.schema.gen.ts`, so every runtime that replicates reads the same one.
 - `tests/suites/*.toml`: SurrealKit suites, run on one ephemeral database that holds every
   schema folder: the permissions of `identity` (with `account`), `profile`, `settings`,
-  `membership` (with `tenant`), `device_session` and `invitation`, the structure of the tenant
+  `membership` (with `tenant`), `device_session`, `invitation`, `two_factor` and `passkey`, the
+  structure of the tenant
   tables (`tenant-structure`), and the generated suites of the shapes.
   `setup.surql`, which SurrealKit runs in each test database before it applies the schema,
   defines a record access method `identity` for that database only: the suites' record actors

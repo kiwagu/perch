@@ -14,4 +14,5 @@ DEFINE PARAM OVERWRITE $organisation_name_max_length VALUE 80;
 DEFINE PARAM OVERWRITE $password_max_length VALUE 35;
 DEFINE PARAM OVERWRITE $profile_bio_max_length VALUE 2000;
 DEFINE PARAM OVERWRITE $profile_name_max_length VALUE 80;
+DEFINE PARAM OVERWRITE $second_factor_code_max_length VALUE 11;
 DEFINE PARAM OVERWRITE $token_max_length VALUE 4096;

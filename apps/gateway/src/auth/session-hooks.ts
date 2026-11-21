@@ -14,10 +14,11 @@ export const DEVICE_HEADER = 'X-Perch-Device'
 export const DEVICE_LABEL_HEADER = 'X-Perch-Device-Label'
 
 /**
- * Set to `pending` by the gateway's sign-in route on the request it hands Better Auth, whatever
- * the client sent: the session that sign-in writes waits for its admission against the account's
- * limit of devices. Read on Better Auth's sign-in path only; a verification's session waits for
- * its own admission whatever its request names, and no other way in writes a session that waits.
+ * Set to `pending` by the gateway on each request it hands Better Auth that signs a device in,
+ * whatever the client sent: the session that request writes waits for its admission against the
+ * account's limit of devices and its ban. Read on the paths of `ADMITTED_PATHS` only; a
+ * verification's session waits for its own admission whatever its request names, and no other way
+ * in writes a session that waits.
  */
 export const ADMISSION_HEADER = 'X-Perch-Admission'
 
@@ -25,13 +26,31 @@ const label = z.string().max(60)
 
 type SessionRow = Session & Record<string, unknown>
 
+/**
+ * As much of Better Auth's context of the request a hook runs for as the hooks read: its path and
+ * its headers. A server-side call without a request has no headers.
+ */
+type HookContext = Pick<GenericEndpointContext, 'path' | 'headers'> & {
+  readonly request?: { readonly headers: Headers } | undefined
+}
+
 /** The headers of the request a hook runs for; a server-side call without a request has none. */
-function headersOf(ctx: GenericEndpointContext | null): Headers | undefined {
+function headersOf(ctx: HookContext | null): Headers | undefined {
   return ctx?.headers ?? ctx?.request?.headers
 }
 
-/** Better Auth's path of a sign-in by email and password, whose session the gateway admits. */
-const BETTER_AUTH_SIGN_IN_PATH = '/sign-in/email'
+/**
+ * Better Auth's paths whose session the gateway admits once the gateway's own request asks it to
+ * wait (`ADMISSION_HEADER`): a sign-in by email and password, the second step of one whose
+ * account's second factor is on (a code of its key, or a backup code), and a sign-in by passkey.
+ * Better Auth's API called on the server writes them admitted.
+ */
+const ADMITTED_PATHS: ReadonlySet<string> = new Set([
+  '/sign-in/email',
+  '/two-factor/verify-totp',
+  '/two-factor/verify-backup-code',
+  '/passkey/verify-authentication',
+])
 
 /**
  * Better Auth's path of the verification of an email, whose session the gateway admits too: the
@@ -41,15 +60,18 @@ const BETTER_AUTH_SIGN_IN_PATH = '/sign-in/email'
 const BETTER_AUTH_VERIFY_PATH = '/verify-email'
 
 /**
- * Better Auth's `databaseHooks.session`: a session is created at a sign-in and at the first
- * verification of an email. Better Auth runs the admin plugin's hook first, which refuses a banned
- * account's session (403 `BANNED_USER`), so the creation hooks here run only for an account the
- * plugin read unbanned. Before
- * the row exists, the device the request names (`X-Perch-Device`, 1 to 64 characters) and its
- * label (`X-Perch-Device-Label`, at most 60) go into it; a request without a valid device is
+ * Better Auth's `databaseHooks.session`: a session is created at a sign-in (by password, by the
+ * code of a second factor, by a passkey) and at the first verification of an email. Better Auth
+ * runs the admin plugin's hook first, which refuses a banned account's session (403
+ * `BANNED_USER`), so the creation hooks here run only for an account the plugin read unbanned.
+ * Before the row exists, the device the request names (`X-Perch-Device`, 1 to 64 characters) and
+ * its label (`X-Perch-Device-Label`, at most 60) go into it; a request without a valid device is
  * refused 400 `bad-request`, as the routes refuse it. A sign-in's row is written `pending` when the
- * gateway's sign-in route asks for it (`ADMISSION_HEADER`): the gateway admits it against the
- * account's limit of devices before it hands it out (`AuthSessions.admit`). A verification's row
+ * gateway's request asks for it (`ADMISSION_HEADER`, on the paths of `ADMITTED_PATHS`): the
+ * gateway admits it against the account's limit of devices before it hands it out
+ * (`AuthSessions.admit`). The session Better Auth writes at the password step of an account whose
+ * second factor is on, and deletes at once, waits too, so it ends no session of the device's
+ * before the delete ends it. A verification's row
  * is always written `pending`: the gateway admits it before it hands it out
  * (`AuthSessions.admitVerified`), each admission reading the account's ban in its transaction,
  * so a ban that commits after the plugin's read is still seen. After a row admitted as it is
@@ -79,7 +101,7 @@ const BETTER_AUTH_VERIFY_PATH = '/verify-email'
 export function sessionHooks(clock: Clock, directory: LocalDb) {
   return {
     create: {
-      before: async (session: SessionRow, ctx: GenericEndpointContext | null) => {
+      before: async (session: SessionRow, ctx: HookContext | null) => {
         const headers = headersOf(ctx)
         const device = deviceId.safeParse(headers?.get(DEVICE_HEADER))
 
@@ -99,8 +121,7 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
             label: parsedLabel.success ? parsedLabel.data : '',
             pending:
               ctx?.path === BETTER_AUTH_VERIFY_PATH ||
-              (ctx?.path === BETTER_AUTH_SIGN_IN_PATH &&
-                headers?.get(ADMISSION_HEADER) === 'pending'),
+              (ADMITTED_PATHS.has(ctx?.path ?? '') && headers?.get(ADMISSION_HEADER) === 'pending'),
           },
         }
       },

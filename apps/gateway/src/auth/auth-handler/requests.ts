@@ -91,3 +91,6 @@ export const internal = (): Response => Response.json({ code: 'internal' }, { st
 /** A refusal by `code` with `status`, nothing else in its body. */
 export const refused = (status: number, code: string): Response =>
   Response.json({ code }, { status })
+
+/** What Better Auth answers wrong credentials: the refusal a sign-in that could not stand gets. */
+export const notSignedIn = (): Response => refused(401, 'INVALID_EMAIL_OR_PASSWORD')

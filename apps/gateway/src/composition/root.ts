@@ -22,7 +22,11 @@ import { AccountDeletions, EmailChanges, ResetLinks } from '../auth/account-link
 import { AccountMails } from '../auth/account-mails'
 import { AccountPasswords } from '../auth/account-passwords'
 import { AccountTeardown } from '../auth/account-teardown'
-import type { AccountDepartures } from '../auth/auth-handler'
+import {
+  type AccountDepartures,
+  type TwoFactorChallenges,
+  twoFactorChallenges,
+} from '../auth/auth-handler'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
@@ -51,6 +55,11 @@ export interface GatewayRoot {
   readonly deviceSessions: DeviceSessions
   /** The reset, the change and the check of a password, through Better Auth on the server. */
   readonly passwords: AccountPasswords
+  /**
+   * Better Auth's two-factor challenges: the cookie a password step's challenge comes in, the
+   * account a challenge belongs to, the end of one.
+   */
+  readonly challenges: TwoFactorChallenges
   /** The reset links Better Auth keeps: read by token, ended for an account. */
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
@@ -240,6 +249,7 @@ export function createGatewayRoot(
       }),
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       passwords: new AccountPasswords({ auth, directory: local, clock: options.clock }),
+      challenges: twoFactorChallenges(auth, local),
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,

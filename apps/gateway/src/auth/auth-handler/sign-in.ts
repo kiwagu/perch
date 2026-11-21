@@ -5,7 +5,6 @@ import { CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
-import type { SignInAttempt, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
 import { readBody } from '../../read-body'
 import { type AccountStart, type SignInCredential, signInStands } from '../account-passwords'
@@ -14,7 +13,9 @@ import { ADMISSION_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
-import { refusalOf, withJsonBody } from './requests'
+import { notSignedIn, refusalOf, withJsonBody } from './requests'
+import { asksSecondFactor, secondFactorAsked } from './second-factor-asked'
+import { settling } from './sign-in-settlement'
 
 /** The sign-in each email's failed sign-ins are counted on. */
 export const SIGN_IN_PATH = '/auth/sign-in/email'
@@ -53,67 +54,6 @@ const acceptedSession = z.object({
 
 type AcceptedSession = z.infer<typeof acceptedSession>
 
-/** What Better Auth answers wrong credentials: the refusal a sign-in that could not stand gets. */
-const notSignedIn = (): Response =>
-  Response.json({ code: 'INVALID_EMAIL_OR_PASSWORD' }, { status: 401 })
-
-/** A sign-in the limits let through, to settle once Better Auth answered it. */
-type AllowedAttempt = Extract<SignInAttempt, { readonly allowed: true }>
-
-/** The code of the mount's own refusal, as far as `outcomeOf` reads it. */
-const refusalCode = z.object({ code: z.string() })
-
-/**
- * The 403 codes that come after Better Auth checked the password: its refusal of an account whose
- * email is not verified yet, and of a banned account (`BANNED_USER`, or the admission's own,
- * answered `account-banned` either way).
- */
-const AFTER_THE_PASSWORD: ReadonlySet<string> = new Set(['EMAIL_NOT_VERIFIED', 'account-banned'])
-
-/**
- * What the mount's answer to a sign-in means for its email's limit: 200 signed in, and 409, a
- * sign-in asked about the account's limit of devices once Better Auth accepted it, both judged the
- * password right, and so does a 403 coded `EMAIL_NOT_VERIFIED` or `account-banned`. Any other 403
- * judged nothing: a refusal of the request's origin, of its Fetch Metadata or of its callback
- * comes before Better Auth checks the password, so a forged request would otherwise clear the
- * failed sign-ins of any email it names; nor does a 403 whose code cannot be read. A 401 judged
- * the password wrong, any other status nothing. The code is read from a copy of the answer: the
- * client gets its body untouched.
- */
-async function outcomeOf(response: Response): Promise<SignInOutcome> {
-  if (response.status === 403) {
-    const copy = response.clone()
-    const body = refusalCode.safeParse(await copy.json().catch(() => undefined))
-
-    return body.success && AFTER_THE_PASSWORD.has(body.data.code) ? 'succeeded' : 'unjudged'
-  }
-
-  if (response.status === 200 || response.status === 409) {
-    return 'succeeded'
-  }
-
-  return response.status === 401 ? 'failed' : 'unjudged'
-}
-
-/**
- * Asks Better Auth, then settles the sign-in `attempt` exactly once with what it answered
- * (`outcomeOf`), a throw included: a sign-in nobody answered was not judged, and gives its place
- * back.
- */
-async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): Promise<Response> {
-  let outcome: SignInOutcome = 'unjudged'
-
-  try {
-    const response = await ask()
-
-    outcome = await outcomeOf(response)
-
-    return response
-  } finally {
-    attempt.settle(outcome)
-  }
-}
-
 /**
  * Hands a sign-in to Better Auth and holds what it signed in to the account Better Auth names
  * (the answer's `user.id`): the email's account and the hash of its password are read again once
@@ -144,7 +84,9 @@ async function settling(attempt: AllowedAttempt, ask: () => Promise<Response>): 
  * in to signed up with) while that account has not started: its profile or its settings have not reached the
  * directory, so the device that signs in creates them, as the device that verifies the email by
  * the sign-up mail's link does. An accepted answer that names less of them is one that names no
- * session (500 `internal`).
+ * session (500 `internal`). An account whose second factor is on gets no session from its password:
+ * Better Auth answers with a challenge, which the gateway holds to the same second read
+ * (`secondFactorAsked`).
  */
 async function handedOver(
   deps: AuthMountDeps,
@@ -163,6 +105,11 @@ async function handedOver(
     .clone()
     .json()
     .catch(() => undefined)
+
+  if (asksSecondFactor.safeParse(answer).success) {
+    return secondFactorAsked(deps, response, email, before)
+  }
+
   const accepted = acceptedSession.safeParse(answer)
   const after = await deps.passwords.credentialOf(email)
   const stands =
@@ -243,11 +190,13 @@ function signedIn(
  * lower case, must find a place among its failed sign-ins and those still under way
  * (`RequestLimits.signInAttempt`; else 429). Better Auth gets that very JSON, a password of a
  * length no account's password has replaced by `NO_ACCOUNTS_PASSWORD`, and the place is settled
- * once with what it answered (`outcomeOf`): a 401 counts as a failed sign-in; an accepted one, one
+ * once with what it answered (`settling`): a 401 counts as a failed sign-in; an accepted one, one
  * asked about the account's limit of devices, and a refusal that came after the password was
- * checked (403 `EMAIL_NOT_VERIFIED` or `account-banned`) clear the email's failed sign-ins; a
- * refusal that came before it (403 for the request's origin, its Fetch Metadata or its callback)
- * and any other answer count nothing and give the place back. A sign-in takes no turn of the
+ * checked (403 `EMAIL_NOT_VERIFIED` or `account-banned`) of an account whose second factor is off
+ * clear the email's failed sign-ins; the challenge of an account whose second factor is on
+ * (`secondFactorAsked`), a refusal after the password for such an account, a refusal that came
+ * before the password (403 for the request's origin, its Fetch Metadata or its callback) and any
+ * other answer count nothing and give the place back. A sign-in takes no turn of the
  * account: it runs alike, and as soon, whether the email has an account and whatever work of that
  * account is under way. Instead the email's account and the hash of its password are read before
  * Better Auth checks the password (`AccountPasswords.credentialOf`, the same read for an email
@@ -276,7 +225,7 @@ export async function signIn(deps: AuthMountDeps, request: Request): Promise<Res
     return tooMany(attempt)
   }
 
-  return settling(attempt, async () => {
+  return settling(deps, email, attempt, async () => {
     const before = await deps.passwords.credentialOf(email)
     // The session Better Auth writes waits for its admission, whatever the client sent.
     const headers = new Headers(request.headers)

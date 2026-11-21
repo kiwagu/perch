@@ -215,9 +215,11 @@ describe('loadSchemaModel', () => {
       'identity',
       'invitation',
       'membership',
+      'passkey',
       'profile',
       'settings',
       'tenant',
+      'two_factor',
       'verification',
     ])
     expect(model.tables['profile']?.region).toBe('private')

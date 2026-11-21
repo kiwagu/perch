@@ -6,10 +6,14 @@ import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
+import { deviceHeaders } from '../__fixtures__/auth-instance'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
 import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
+import { secondFactorOn } from '../__fixtures__/second-factor'
+import secondFactorConfirmStatement from '../__fixtures__/second-factor-confirm.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
+import challengeRowsStatement from '../__fixtures__/two-factor-challenge-rows.surql'
 
 import {
   ANN,
@@ -19,6 +23,7 @@ import {
   holdTurn,
   isAccountLookup,
   isAdmission,
+  isChallengeLookup,
   isSessionInsert,
   mountedOnFakeAuth,
   mountedOnRealAuth,
@@ -654,4 +659,225 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
       (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
     ).toBe(429)
   }, 90_000)
+})
+
+/** The identifiers of every row of a pending two-factor challenge in the directory. */
+async function challengeRows(mounted: Mounted): Promise<unknown[]> {
+  const [rows] = await mounted.local.db.query<[unknown[]]>(challengeRowsStatement)
+
+  return rows
+}
+
+/** The challenge a password step answered: Better Auth's own, which no test can know beforehand. */
+const challengeOf = (body: unknown): string =>
+  z.object({ secondFactor: z.object({ challenge: z.string().min(1) }) }).parse(body).secondFactor
+    .challenge
+
+/**
+ * Ann signed up and verified on her laptop, then on her phone, her second factor turned on from
+ * the laptop (which replaced the laptop's session: `laptop` is its new token).
+ */
+async function annWithSecondFactor(mounted: Mounted) {
+  const ann = await signedInOn(mounted, ANN, ['laptop', 'phone'])
+  const factor = await secondFactorOn(
+    mounted.auth,
+    'laptop',
+    ann.tokens.get('laptop') ?? expect.unreachable('a session of the laptop'),
+  )
+
+  return {
+    ...ann,
+    laptop: factor.token,
+    phone: ann.tokens.get('phone') ?? expect.unreachable('a session of the phone'),
+  }
+}
+
+describe('authHandler, the password step of an account whose second factor is on', () => {
+  it('answers the right password with a challenge alone: no token, no cookie, nothing signed in', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await annWithSecondFactor(mounted)
+    const answer = await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+    const body: unknown = await answer?.json()
+
+    expect(answer?.status).toBe(200)
+    expect(body).toEqual({ secondFactor: { challenge: challengeOf(body) } })
+    expect(answer?.headers.get('set-cookie')).toBeNull()
+    expect(answer?.headers.get('set-auth-token')).toBeNull()
+    // Better Auth keeps the challenge, and the row counting its codes, until a code comes.
+    expect(await challengeRows(mounted)).toHaveLength(2)
+    expect((await liveSessions(mounted, ann.identity)).sort()).toEqual(['laptop', 'phone'])
+    expect(mounted.closes).toEqual([])
+  }, 30_000)
+
+  it("neither counts the right password among the email's failed sign-ins nor forgets them", async () => {
+    const mounted = await mountedOnRealAuth()
+
+    await annWithSecondFactor(mounted)
+
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    expect((await right())?.status).toBe(200)
+    // The tenth failure: the right password counted none.
+    expect((await wrong())?.status).toBe(401)
+    // And it forgot none: the ten keep the right password out.
+    expect((await right())?.status).toBe(429)
+  }, 60_000)
+
+  it('keeps the session of a device already signed in to the account through the password step', async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await annWithSecondFactor(mounted)
+
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(200)
+
+    expect((await mounted.sessions.read(ann.laptop)).kind).toBe('session')
+    expect((await liveSessions(mounted, ann.identity)).sort()).toEqual(['laptop', 'phone'])
+  }, 30_000)
+
+  it("leaves the session Better Auth writes and deletes at the step ended and waiting, and the asking device's earlier session live", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await annWithSecondFactor(mounted)
+
+    // The phone signed in before; its password step now meets the second factor.
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'phone'), FROM))?.status).toBe(200)
+
+    const phone = (await sessionStates(mounted.local, ann.identity)).filter(
+      (row) => row.device === 'phone',
+    )
+
+    const [earlier, provisional, ...more] = phone
+
+    expect(more).toEqual([])
+    expect([earlier?.token, earlier?.pending, earlier?.ended_at]).toEqual([
+      ann.phone,
+      false,
+      undefined,
+    ])
+    expect(provisional?.token).not.toBe(ann.phone)
+    expect([provisional?.pending, provisional?.ended_reason]).toEqual([true, undefined])
+    expect(provisional?.ended_at).toBeInstanceOf(Date)
+    expect((await mounted.sessions.read(ann.phone)).kind).toBe('session')
+    expect(mounted.closes).toEqual([])
+  }, 30_000)
+
+  it("answers 401 to a password step whose password changed between Better Auth's answer and the second read, its challenge gone", async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await annWithSecondFactor(mounted)
+    const lookup = queries.hold(isChallengeLookup)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    // Better Auth checked the password and answered with its challenge; the laptop changes the
+    // password before the gateway reads the account again.
+    await vi.waitFor(() => expect(lookup.paused()).toBe(true), ARGON2_WAIT)
+    expect(
+      (
+        await mounted.route(
+          postTo(
+            '/auth/change-password',
+            { currentPassword: PASSWORD, password: 'New-pass-word-2' },
+            { device: 'laptop', token: ann.laptop },
+          ),
+          FROM,
+        )
+      )?.status,
+    ).toBe(204)
+    lookup.release()
+
+    const answer = await signingIn
+
+    expect([answer?.status, await answer?.json()]).toEqual([
+      401,
+      { code: 'INVALID_EMAIL_OR_PASSWORD' },
+    ])
+    expect(await challengeRows(mounted)).toEqual([])
+  }, 30_000)
+
+  it("answers 403 account-banned to a password step whose account was banned between Better Auth's answer and the second read, its challenge gone and its failed sign-ins kept", async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await annWithSecondFactor(mounted)
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    const lookup = queries.hold(isChallengeLookup)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    await vi.waitFor(() => expect(lookup.paused()).toBe(true), ARGON2_WAIT)
+    await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+    lookup.release()
+
+    const answer = await signingIn
+
+    expect([answer?.status, await answer?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect(await challengeRows(mounted)).toEqual([])
+    // The refusal judged nothing: the next wrong password is the tenth, which spends them.
+    expect((await wrong())?.status).toBe(401)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+})
+
+describe('authHandler, the password step of a banned account whose second factor is on', () => {
+  it("forgets none of the email's failed sign-ins at its right password, refused 403 account-banned", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await annWithSecondFactor(mounted)
+
+    await mounted.clock.advance(60_000)
+    await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+    const right = () => mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    const refused = await right()
+
+    expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect(await challengeRows(mounted)).toEqual([])
+    expect((await wrong())?.status).toBe(401)
+    // Ten failures stand: the refusal of the banned account forgot none of them.
+    expect((await right())?.status).toBe(429)
+  }, 60_000)
+
+  it('reads whether the second factor is on when the refusal is judged: one confirmed after the first read of the account forgets nothing', async () => {
+    const queries = heldQueries()
+    const mounted = await mountedOnRealAuth({ directory: queries.directory })
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+    const headers = deviceHeaders('laptop')
+
+    headers.set('authorization', `Bearer ${ann.tokens.get('laptop') ?? ''}`)
+    // The key is made but not confirmed yet: the second factor is off.
+    await mounted.auth.api.enableTwoFactor({ body: { password: PASSWORD }, headers })
+    await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+
+    const wrong = () => mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM)
+
+    for (let failed = 0; failed < 9; failed++) {
+      expect((await wrong())?.status).toBe(401)
+    }
+
+    // The gateway read the account with the factor off; Better Auth looks it up once the code of
+    // the key was confirmed.
+    const lookup = queries.hold(isAccountLookup)
+    const signingIn = mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM)
+
+    await vi.waitFor(() => expect(lookup.paused()).toBe(true), ARGON2_WAIT)
+    await mounted.local.db.query(secondFactorConfirmStatement, { identity: ann.identity })
+    lookup.release()
+
+    const refused = await signingIn
+
+    expect([refused?.status, await refused?.json()]).toEqual([403, { code: 'account-banned' }])
+    expect((await wrong())?.status).toBe(401)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
 })
