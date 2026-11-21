@@ -30,6 +30,6 @@ Where: [/settings], the section [user.settings.two-factor.section]
 - After step 3 [user.settings.two-factor.error] carries [code:invalid-code] under [user.settings.two-factor.code-input], and [user.settings.two-factor.on-badge] is not shown
 - After step 4 [app-shell.toast] carries [code:two-factor-enabled], [user.settings.two-factor.codes-cell] shows ten different backup codes, and [user.settings.two-factor.on-badge] is shown
 - After step 5 [user.settings.two-factor.codes-cell] is gone, and [user.settings.two-factor.disable-button] and [user.settings.two-factor.renew-codes-button] are shown
-- After step 6 [user.settings.two-factor.on-badge] is shown and [user.settings.two-factor.codes-cell] is not: the codes showed once
+- After step 6 the URL is still [/settings], so the device stayed signed in through turning the second factor on; [user.settings.two-factor.on-badge] is shown and [user.settings.two-factor.codes-cell] is not: the codes showed once
 - After step 7 [user.settings.two-factor.codes-cell] shows ten backup codes, none of them one of step 4's
-- After step 8 [app-shell.toast] carries [code:two-factor-disabled], [user.settings.two-factor.on-badge] is gone and [user.settings.two-factor.enable-button] is shown
+- After step 8 [app-shell.toast] carries [code:two-factor-disabled], [user.settings.two-factor.on-badge] is gone, [user.settings.two-factor.enable-button] is shown, and the URL is still [/settings]: the device stayed signed in
