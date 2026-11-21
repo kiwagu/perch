@@ -38,6 +38,7 @@ import { type Param, requestFor, type World, worldFor } from './__fixtures__/pla
 import {
   ACTION_ROUTES,
   CLIENT_ONLY,
+  INSIDE_CODES,
   NO_ACTION_ROUTES,
   SERVER_ROUTES,
 } from './__fixtures__/platform-routes'
@@ -45,6 +46,7 @@ import { boundsOf, isChecked, isIssued } from './__fixtures__/platform-values'
 import { type Account, openStand, type Stand } from './__fixtures__/stand'
 import { MOUNT_PATHS } from './auth/auth-handler'
 import { DEVICE_PATHS } from './auth/device.routes'
+import { TWO_FACTOR_PATHS } from './auth/two-factor.routes'
 import { CONSOLE_PATHS } from './console'
 import { INVITATION_PATHS } from './tenants/invitation-routes'
 import { ORGANISATION_PATHS } from './tenants/organisation-routes'
@@ -105,6 +107,7 @@ afterAll(async () => {
 /** Every path the route modules list. */
 const PATHS = [
   ...DEVICE_PATHS,
+  ...TWO_FACTOR_PATHS,
   ...ORGANISATION_PATHS,
   ...INVITATION_PATHS,
   ...CONSOLE_PATHS,
@@ -245,6 +248,12 @@ describe('the bounds of the parameters', () => {
       const inside = await ask(limit.inside)
 
       expect(inside.status).toBeLessThan(500)
+
+      const reached = INSIDE_CODES[action]
+
+      if (reached !== undefined) {
+        expect(inside.code).toBe(reached)
+      }
 
       // A value the account checks is refused past its bounds as a wrong one is: the text inside
       // the bound is not the account's either, so both answer the same.

@@ -1,10 +1,11 @@
 /**
- * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the organisation
- * routes, the invitation routes, the console's routes for operators under `/console` and the auth
- * mount under `/auth` (Better Auth's sign-up, sign-in, verification and resend, and the gateway's
- * own recovery and changes of a password and an email and deletion of an account), the device
- * routes in front so the two sign-outs under `/auth` are the gateway's own; and the sync
- * connection of each device over a WebSocket at `/sync`.
+ * The gateway's HTTP and WebSocket server: health; over HTTP, the device routes, the routes of the
+ * signed-in account's second factor, the organisation routes, the invitation routes, the console's
+ * routes for operators under `/console` and the auth mount under `/auth` (Better Auth's sign-up,
+ * sign-in, verification and resend, and the gateway's own recovery and changes of a password and
+ * an email and deletion of an account), the device routes in front so the two sign-outs under
+ * `/auth` are the gateway's own; and the sync connection of each device over a WebSocket at
+ * `/sync`.
  */
 
 import type { DataError } from '@workspace/data'
@@ -13,6 +14,7 @@ import { createLogger } from '@workspace/logger'
 
 import { authHandler } from './auth/auth-handler'
 import { deviceRoutes } from './auth/device.routes'
+import { twoFactorRoutes } from './auth/two-factor.routes'
 import type { GatewayRoot } from './composition/root'
 import { consoleRoutes } from './console'
 import { clientAddress } from './limits/client-address'
@@ -41,8 +43,8 @@ interface SocketData {
 /**
  * The largest request body the server reads: a body is a sign-up's name, email and password, a
  * sign-in's email and password, a link's token, an email to send a link to again, a password with
- * a new password or a new email, an organisation's key and name, an email to invite with its role,
- * an invitation's token or id, or a member's new role.
+ * a new password or a new email, a second factor's code with its enrolment, an organisation's key
+ * and name, an email to invite with its role, an invitation's token or id, or a member's new role.
  */
 const MAX_REQUEST_BODY = 16 * 1024
 
@@ -90,6 +92,15 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
     deviceRoutes(root.sessions, root.deviceSessions, root.connections, {
       onFailure,
       clock: root.clock,
+    }),
+    twoFactorRoutes({
+      auth: root.auth,
+      sessions: root.sessions,
+      passwords: root.passwords,
+      limits: root.limits,
+      accounts: root.accountTurns,
+      rows: root.twoFactorRows,
+      policy: root.secondFactorPolicy,
     }),
     organisationRoutes(root.sessions, root.organisations, {
       onFailure,

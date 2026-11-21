@@ -1,5 +1,6 @@
 -- Whether the second factor of identity $identity (its key) is on, and its two-factor rows as
--- Better Auth's adapter wrote them: verified or not, the encrypted secret and backup codes.
+-- Better Auth's adapter wrote them: each row's key, verified or not, the encrypted secret and
+-- backup codes.
 RETURN {
   enabled: (
     SELECT VALUE two_factor_enabled
@@ -7,6 +8,7 @@ RETURN {
   ),
   rows: (
     SELECT
+      record::id(id) AS id,
       verified,
       secret,
       backup_codes

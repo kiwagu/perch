@@ -13,6 +13,12 @@ export interface Wire {
   readonly path: string
   /** The parameter each segment carries where it is not the one the segment is named after. */
   readonly segments?: Readonly<Record<string, string>>
+  /**
+   * What the request carries beyond the action's parameters, which the contract does not name:
+   * fields of the body (of the query, for a `GET`) that need something of the stand, made for the
+   * sender before it asks.
+   */
+  readonly carries?: (stand: Stand, sender: Account) => Promise<Readonly<Record<string, Sample>>>
 }
 
 /** A parameter of an action as the contract declares it, as far as its valid values need it. */
@@ -31,6 +37,8 @@ export interface World {
   readonly sender: Account
   readonly target: Account
   readonly key: string
+  /** What the wire carries beyond the parameters (`Wire.carries`), made for the sender. */
+  readonly extra: Readonly<Record<string, Sample>>
 }
 
 type Sample = string | number | boolean
@@ -42,6 +50,7 @@ const FIXED: Readonly<Record<string, string>> = {
   token: 'token-0123456789abcdef',
   'invitation-ref': 'invitation-0123456789',
   'profile.name': 'Ann',
+  'second-factor-code': '123456',
 }
 
 /** The actions whose email is the sender's own, since the account they ask about must exist. */
@@ -59,6 +68,7 @@ export async function worldFor(
     sender,
     target: await stand.account(),
     key: wire.path.includes(':key') ? await stand.organisation(sender) : '',
+    extra: (await wire.carries?.(stand, sender)) ?? {},
   }
 }
 
@@ -127,6 +137,10 @@ export function requestFor(
 
     return encodeURIComponent(String(value))
   })
+
+  for (const [name, value] of Object.entries(world.extra)) {
+    values.set(name, value)
+  }
 
   if (wire.method === 'GET') {
     const query = new URLSearchParams()

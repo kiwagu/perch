@@ -1,14 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fromDriverValue } from '@workspace/data'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
 import { sessionStates } from './__fixtures__/account-ban'
-import { deviceHeaders, type OpenedAuth, openAuth, signUpOn } from './__fixtures__/auth-instance'
-import { codeOf, passwordStepRequest, secondFactorOn } from './__fixtures__/second-factor'
-import twoFactorStateStatement from './__fixtures__/two-factor-state.surql'
-import { internalRequest, setCookieValue, twoFactorChallenges } from './auth-handler'
+import { deviceHeaders, openAuth, signUpOn } from './__fixtures__/auth-instance'
+import { codeOf, secondFactorOn, secondStep, stateOf } from './__fixtures__/second-factor'
 
 const closers: Array<() => Promise<void>> = []
 
@@ -17,51 +14,6 @@ afterEach(async () => {
 })
 
 const ANN = 'ann@example.test'
-
-/** The front's origin the fixture's instance trusts and serves its routes behind. */
-const ORIGIN = 'http://localhost'
-
-/** The account's flag and its two-factor row, as the directory keeps them. */
-const twoFactorState = z.object({
-  enabled: z.boolean().nullish(),
-  rows: z.array(z.object({ verified: z.boolean(), secret: z.string(), backup_codes: z.string() })),
-})
-
-/** The second-factor flag of `identity` and its two-factor rows. */
-async function stateOf(opened: OpenedAuth, identity: string) {
-  const [state] = await opened.local.db.query<[unknown]>(twoFactorStateStatement, { identity })
-
-  return twoFactorState.parse(fromDriverValue(state))
-}
-
-/** A password step from `device`, through Better Auth's handler: the challenge its cookie carries. */
-async function challengeOf(opened: OpenedAuth, device: string): Promise<string> {
-  const answer = await opened.auth.handler(passwordStepRequest(ANN, 'Pass-word-1', device))
-
-  expect(await answer.json()).toEqual({ twoFactorRedirect: true, twoFactorMethods: ['totp'] })
-
-  return (
-    setCookieValue(answer, await twoFactorChallenges(opened.auth, opened.local).cookieName()) ??
-    expect.unreachable('a challenge cookie')
-  )
-}
-
-/** The second step of a sign-in from `device`: `code` sent to `path` with the challenge. */
-async function verified(opened: OpenedAuth, device: string, path: string, code: string) {
-  const challenge = await challengeOf(opened, device)
-  const name = await twoFactorChallenges(opened.auth, opened.local).cookieName()
-
-  return opened.auth.handler(
-    internalRequest({
-      publicUrl: ORIGIN,
-      path,
-      device: { id: device, label: 'Firefox on Linux' },
-      challenge: { name, value: challenge },
-      pending: true,
-      body: { code },
-    }),
-  )
-}
 
 const signedIn = z.object({ token: z.string().min(1), user: z.object({ id: z.string() }) })
 
@@ -103,7 +55,7 @@ describe("Better Auth's second factor on the directory, through the patched adap
 
     const { token, user } = await signUpOn(opened.auth, ANN, deviceHeaders('laptop'))
     const factor = await secondFactorOn(opened.auth, 'laptop', token)
-    const answer = await verified(
+    const answer = await secondStep(
       opened,
       'phone',
       '/two-factor/verify-totp',
@@ -128,14 +80,14 @@ describe("Better Auth's second factor on the directory, through the patched adap
     const { token, user } = await signUpOn(opened.auth, ANN, deviceHeaders('laptop'))
     const factor = await secondFactorOn(opened.auth, 'laptop', token)
     const [code = ''] = factor.backupCodes
-    const first = await verified(opened, 'phone', '/two-factor/verify-backup-code', code)
+    const first = await secondStep(opened, 'phone', '/two-factor/verify-backup-code', code)
 
     expect(first.status).toBe(200)
     expect(signedIn.parse(await first.json()).user.id).toBe(
       idSchemas.identity.schema.parse(user.id),
     )
 
-    const again = await verified(opened, 'desk', '/two-factor/verify-backup-code', code)
+    const again = await secondStep(opened, 'desk', '/two-factor/verify-backup-code', code)
 
     expect(again.status).toBe(401)
     expect(z.object({ code: z.string() }).parse(await again.json()).code).toBe(

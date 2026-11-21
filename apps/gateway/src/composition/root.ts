@@ -31,6 +31,9 @@ import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
 import { ProfileEmails } from '../auth/profile-emails'
+import { accountChoicePolicy } from '../auth/second-factor-policy.account-choice'
+import type { SecondFactorPolicy } from '../auth/second-factor-policy.port'
+import { TwoFactorRows } from '../auth/two-factor-rows'
 import { DIRECTORY, FRONT_PREFIX, NAMESPACE } from '../config'
 import { AccountBans, AccountDirectory, ProfileNames } from '../console'
 import { KeyedTurns } from '../keyed-turns'
@@ -60,6 +63,13 @@ export interface GatewayRoot {
    * account a challenge belongs to, the end of one.
    */
   readonly challenges: TwoFactorChallenges
+  /**
+   * The second factor of accounts in the directory, as the settings read, confirm and turn it off
+   * without rotating the caller's session.
+   */
+  readonly twoFactorRows: TwoFactorRows
+  /** Whether an account may turn its second factor on, and whether it must keep it on. */
+  readonly secondFactorPolicy: SecondFactorPolicy
   /** The reset links Better Auth keeps: read by token, ended for an account. */
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
@@ -250,6 +260,8 @@ export function createGatewayRoot(
       deviceSessions: new DeviceSessions({ directory: local, clock: options.clock }),
       passwords: new AccountPasswords({ auth, directory: local, clock: options.clock }),
       challenges: twoFactorChallenges(auth, local),
+      twoFactorRows: new TwoFactorRows(local),
+      secondFactorPolicy: accountChoicePolicy,
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,

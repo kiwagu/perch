@@ -1,11 +1,11 @@
-import type { SignInOutcome } from '../../limits/request-limits'
+import type { RequestLimits, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
-import { bearerRefused } from '../bearer-caller'
+import type { AccountPasswords } from '../account-passwords'
+import type { AuthSessions } from '../auth-sessions'
 import { hasPasswordLength } from '../password-length'
 
-import type { AuthMountDeps } from './mount'
 import { internal, refused } from './requests'
-import type { MountCaller } from './signed-in'
+import { type MountCaller, stillSignedIn } from './signed-in'
 
 /** The caller's account once its password matched: its email as it is now, in lower case. */
 export interface ConfirmedAccount {
@@ -25,25 +25,21 @@ export interface ConfirmedAccount {
  * or the answer that refuses the work.
  */
 export async function confirmPassword(
-  deps: Pick<AuthMountDeps, 'sessions' | 'limits' | 'passwords'>,
+  deps: {
+    readonly sessions: Pick<AuthSessions, 'read'>
+    readonly limits: Pick<RequestLimits, 'signInAttempt'>
+    readonly passwords: Pick<AccountPasswords, 'matches'>
+  },
   caller: MountCaller,
   password: string,
 ): Promise<Response | ConfirmedAccount> {
-  const read = await deps.sessions.read(caller.token)
+  const live = await stillSignedIn(deps, caller)
 
-  if (read.kind === 'failed') {
-    return internal()
+  if (live instanceof Response) {
+    return live
   }
 
-  if (
-    read.kind === 'none' ||
-    read.caller.identity !== caller.identity ||
-    read.caller.device !== caller.device
-  ) {
-    return bearerRefused()
-  }
-
-  const email = read.caller.email.toLowerCase()
+  const { email } = live
   const attempt = deps.limits.signInAttempt(email)
 
   if (!attempt.allowed) {

@@ -633,6 +633,56 @@ the gateway, or a session the directory could not read, answers 500 `internal` a
 nothing; the failure is logged by its code, without its cause. Nothing here logs a token, and no
 error carries one.
 
+The routes of the signed-in account's second factor (`two-factor.routes.ts`, `TWO_FACTOR_PATHS`)
+come right after the device routes in the server and act for the same Bearer caller. They are the
+gateway's own and call none of Better Auth's endpoints that replace the caller's session: its
+turning off of a factor and its confirmation of a code, made while signed in, each write a new
+session and delete the caller's, so the account's other devices' bearers would no longer match.
+Here the caller's session is never touched, and a spec holds that the same Bearer reads
+`GET /devices` after each change. Each change takes one of the client address's credential checks
+(429 `rate-limited`) and a body it can read (400 `bad-request`), then runs in the account's turn
+(`GatewayRoot.accountTurns`, by the identity's key), the session read again inside it, so a sign-in's
+code step, a change of the password and another change of the factor do not interleave with it. A
+password the request confirms is checked as a change of the password's is (`confirmPassword`: 400
+`invalid-credentials`, counted among the email's failed sign-ins, 429 once they are spent).
+
+- `GET /two-factor`: 200 `{ enabled }`.
+- `POST /two-factor/enable` `{ password }`: 403 `failed` when the policy does not allow the account
+  a second factor (`SecondFactorPolicy.decide`), before the password is looked at; then the
+  password, then 409 `two-factor-changed` while the factor is on. Otherwise Better Auth, called on
+  the server with the caller's session (`auth.api.enableTwoFactor`, which checks the password too
+  and rotates nothing), makes a new key and ten backup codes and replaces the account's key of an
+  earlier enable that was never confirmed; the answer is 200 `{ key, uri, backupCodes, enrolment }`:
+  the key as the text an authenticator app is given (the base32 `secret` of the `otpauth://` URI,
+  `keyShown`), the URI, the ten codes, shown once, and the enrolment, the id of the account's new
+  two-factor row read after Better Auth answered. The factor stays off.
+- `POST /two-factor/confirm` `{ code, enrolment }`: a code outside the contract's length for a
+  code of the second factor, or an enrolment that is not an id of a two-factor row, answers 400
+  `bad-request`. In the turn, an enrolment that is not the account's row (replaced by a later
+  enable, deleted by a turning off, never written) or a factor that is on already answers 409
+  `two-factor-changed` whatever the code. The code is then checked against the row's key: the
+  secret decrypted with Better Auth's `symmetricDecrypt` and the code compared by its `createOTP`
+  (`keyAccepts`, the check of Better Auth's own verification without the session it replaces), a
+  wrong one answering 400 `invalid-code`; a right one turns the account's flag on and marks the row
+  verified in one transaction (`two-factor-confirm-commit.surql`, which checks the row and the flag
+  once more): 204.
+- `POST /two-factor/disable` `{ password }`: 403 `failed` while the policy requires the factor,
+  then the password; one transaction turns the flag off, deletes the account's two-factor row and
+  ends its pending sign-in challenges with the rows counting their codes
+  (`two-factor-disable-commit.surql`, calling `fn::two_factor_challenges_end`): 204, and 204 alike
+  for an account whose factor was off already.
+- `POST /two-factor/renew-codes` `{ password }`: the password, then 409 `two-factor-changed` while
+  the factor is off (a key waiting for its code included); otherwise Better Auth makes ten new
+  codes (`auth.api.generateBackupCodes`, on the server with the caller's session) and the earlier
+  ones are refused from then on: 200 `{ backupCodes }`.
+
+The policy of the second factor is a port (`SecondFactorPolicy`, `second-factor-policy.port.ts`):
+`decide(identity)` answers `{ allowed, required }`, asked before a turning on (`allowed`) and a
+turning off (`required`). Its one adapter, `accountChoicePolicy`
+(`second-factor-policy.account-choice.ts`), lets each account choose: allowed, never required; a
+later policy, an organisation's, replaces it in the composition root. A refusal by the policy is a
+403 `failed`: the contract names no code for it until an organisation can require the factor.
+
 ## Surface
 
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
@@ -652,10 +702,13 @@ error carries one.
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
-  `device.routes.ts`). The paths the mount answers (`MOUNT_PATHS`) and those the device routes
-  answer (`DEVICE_PATHS`) are listed beside their handlers, for the spec that holds the routes to
-  the platform's actions; the device routes answer a path only through their list
-  (`src/route-path.ts`).
+  `device.routes.ts`); `GET /two-factor`, `POST /two-factor/enable`, `POST /two-factor/confirm`,
+  `POST /two-factor/disable` and `POST /two-factor/renew-codes` (`twoFactorRoutes` and
+  `TwoFactorRoutesDeps`, `two-factor.routes.ts`). The paths the mount answers (`MOUNT_PATHS`),
+  those the device routes answer (`DEVICE_PATHS`) and those of the second factor's routes
+  (`TWO_FACTOR_PATHS`) are listed beside their handlers, for the spec that holds the routes to the
+  platform's actions; the device routes and the second factor's answer a path only through their
+  list (`src/route-path.ts`).
 - Close code: 4002 (`CLOSE.passwordChanged`) on the sockets of a device whose session a reset or
   a change of the password ended, so the device can tell its person why it was signed out; 4003
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
@@ -683,6 +736,13 @@ error carries one.
   mail about an account goes to, and the code logged when it could not be read), `AccountTeardown` (`account-teardown.ts`: `addressee`, `remove`;
   `DeletedAccount`),
   `adminPlugin` (`admin-plugin.ts`: Better Auth's admin plugin as the gateway runs it),
+  `SecondFactorPolicy` and `SecondFactorDecision` (`second-factor-policy.port.ts`) with its adapter
+  `accountChoicePolicy` (`second-factor-policy.account-choice.ts`, built by the composition root as
+  `GatewayRoot.secondFactorPolicy`), `TwoFactorRows` (`two-factor-rows.ts`: `read` the account's flag
+  and key, `confirm`, `disable`; `TwoFactorState`, `TwoFactorKey`, `TwoFactorConfirmation`; the
+  root's `twoFactorRows`), `keyShown` and `keyAccepts` (`two-factor-key.ts`),
+  `confirmPassword`, `signedIn`, `stillSignedIn` and `MountCaller` (`auth-handler/`, through the
+  folder's index, which the second factor's routes use beside the mount),
   `passkeyPlugin`, `refuseUnverifiedRegistration` and `refuseUnverifiedAuthentication`
   (`passkey-plugin.ts`: Better Auth's passkey plugin as the gateway runs it, and its two hooks),
   `challengeValue`, `setCookieValue`, `challengeOwner`, `endChallenge`, `internalRequest`
@@ -718,8 +778,9 @@ error carries one.
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
   the move of an identity's email with the end of its reset links, the hash on a credential
   row, an email's account, its hash, its ban, whether its second factor is on and its start as a
-  sign-in reads them, the account of a two-factor challenge and the end of one, the two
-  transactions of a
+  sign-in reads them, the account of a two-factor challenge and the end of one, an account's second
+  factor read (its flag and its key), the confirmation of a code of its key and the turning off of
+  the factor (each one transaction), the two transactions of a
   new password: a reset's and a change's, and the removal of a deleted account's rows).
 - Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`, and
   the two-factor plugin's `two_factor_enabled`, among its columns), `account`, `device_session`
@@ -764,7 +825,15 @@ error carries one.
   value refused before any call is built, and one round trip of a challenge whose signature is
   encoded); `session-hooks.spec.ts` (which paths write a session waiting);
   `two-factor-adapter.spec.ts` (Better Auth's enable, a code on a challenge without a session and
-  a backup code spent once, through the patched adapter); `passkey-plugin.spec.ts`; `auth-handler/verification-ban.spec.ts`, which holds the
+  a backup code spent once, through the patched adapter); `two-factor.routes.spec.ts` (the
+  settings of the second factor over a real Better Auth on an embedded directory: the key, its URI,
+  the ten codes and the enrolment an enable answers, a confirmation by a code of the key, a code of
+  another key refused, a replaced enrolment answering 409 whatever its code, an enable while on and
+  a renewal while off answering 409, the earlier backup codes refused after a renewal, a turning
+  off twice alike with its challenges ended, a wrong password counted among the failed sign-ins up
+  to the 429, a stub policy's 403 at an enable and at a turning off, each change in the account's
+  turn and the state read inside it, and the same Bearer reading its devices after every change);
+  `passkey-plugin.spec.ts`; `auth-handler/verification-ban.spec.ts`, which holds the
   verification of a banned account through the real Better Auth: its gate's refusal with the email
   verified, a ban committed while the insert, the readback or the admission is held answering 403
   with no token and the session ended `banned`, a ban after the admission ending the admitted

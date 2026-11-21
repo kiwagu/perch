@@ -7,10 +7,15 @@
 import { base32 } from '@better-auth/utils/base32'
 import { createOTP } from '@better-auth/utils/otp'
 
+import { fromDriverValue } from '@workspace/data'
+import { z } from '@workspace/zod'
+
+import { internalRequest, setCookieValue, twoFactorChallenges } from '../auth-handler'
 import type { AuthInstance } from '../auth-instance'
 import { ADMISSION_HEADER } from '../session-hooks'
 
-import { AUTH_URL, deviceHeaders } from './auth-instance'
+import { AUTH_URL, deviceHeaders, type OpenedAuth } from './auth-instance'
+import twoFactorStateStatement from './two-factor-state.surql'
 
 /** A second factor that is on: its key and its backup codes, and the device's session. */
 export interface SecondFactor {
@@ -95,4 +100,81 @@ export function passwordStepRequest(email: string, password: string, device: str
     headers,
     body: JSON.stringify({ email, password }),
   })
+}
+
+/**
+ * A code that is none of the codes the key of `secret` accepts now: not the code of the previous,
+ * the current or the next step of 30 seconds, nor of the two steps beyond, which a moment's wait
+ * across a step's edge could bring in. It is the code of another key, drawn again until it is
+ * none of them.
+ */
+export async function wrongCodeOf(secret: string): Promise<string> {
+  const enrolled = createOTP(secret)
+  const counter = Math.floor(Date.now() / 30_000)
+  const accepted = new Set(
+    await Promise.all([-2, -1, 0, 1, 2].map((step) => enrolled.hotp(counter + step))),
+  )
+  let code: string
+
+  do {
+    code = await createOTP(crypto.randomUUID()).totp()
+  } while (accepted.has(code))
+
+  return code
+}
+
+/** The account's flag and its two-factor rows, as the directory keeps them. */
+const twoFactorState = z.object({
+  enabled: z.boolean().nullish(),
+  rows: z.array(
+    z.object({
+      id: z.string(),
+      verified: z.boolean(),
+      secret: z.string(),
+      backup_codes: z.string(),
+    }),
+  ),
+})
+
+/** The second-factor flag of `identity` (its key) and its two-factor rows. */
+export async function stateOf(opened: OpenedAuth, identity: string) {
+  const [state] = await opened.local.db.query<[unknown]>(twoFactorStateStatement, { identity })
+
+  return twoFactorState.parse(fromDriverValue(state))
+}
+
+/**
+ * The second step of a sign-in by `email` from `device`: its password step run through Better
+ * Auth's handler for the challenge, then `code` sent to `path` (`/two-factor/verify-totp` or
+ * `/two-factor/verify-backup-code`) with that challenge, as the gateway sends it.
+ */
+export async function secondStep(
+  opened: OpenedAuth,
+  device: string,
+  path: string,
+  code: string,
+  email = 'ann@example.test',
+): Promise<Response> {
+  const challenges = twoFactorChallenges(opened.auth, opened.local)
+  const asked = await opened.auth.handler(passwordStepRequest(email, 'Pass-word-1', device))
+
+  // The password's answer is a challenge, not a session.
+  z.object({ twoFactorRedirect: z.literal(true) }).parse(await asked.clone().json())
+
+  const challenge = setCookieValue(asked, await challenges.cookieName())
+
+  if (challenge === undefined) {
+    throw new Error('the password step answered no challenge')
+  }
+
+  return opened.auth.handler(
+    internalRequest({
+      publicUrl: 'http://localhost',
+      path,
+      device: { id: device, label: 'Firefox on Linux' },
+      challenge: { name: await challenges.cookieName(), value: challenge },
+      pending: true,
+      body: { code },
+    }),
+  )
 }
