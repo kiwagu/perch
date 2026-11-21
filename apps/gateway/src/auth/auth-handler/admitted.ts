@@ -1,10 +1,12 @@
 import { match } from 'ts-pattern'
 
 import { idSchemas } from '@workspace/ids'
-import { CLOSE } from '@workspace/replica/protocol'
+import { CLOSE, deviceId } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import { SUPERSEDED } from '../../sync/sync-connection'
 import type { AccountStart } from '../account-passwords'
+import { DEVICE_HEADER } from '../session-hooks'
 
 import { closeDevice } from './close-device'
 import type { AuthMountDeps } from './mount'
@@ -40,11 +42,12 @@ export type AcceptedSession = z.infer<typeof acceptedSession>
  * 403 `account-banned`, no token, the new session ended `banned`. An admission that failed answers
  * 500 `internal` and ends the new session by its token; should that ending fail too, the session
  * keeps waiting, counted by no admission, listed nowhere and handed to nobody. An admitted session
- * ends the device's earlier one, so the device's sockets close (`closeDevice`), and the answer is
- * built here from the allowlist alone, no header of Better Auth's answer copied (its cookies and
- * its `set-auth-token` stay with the gateway): 200 `{ token, user: { id, email, name,
- * emailVerified } }`, with `start` (`{ name, locale }`, what the account signed up with) while the
- * account has not started, which tells the device to start it.
+ * ends the device's earlier one, so the device's sockets close (`closeDevice`, with the device the
+ * request names, the identity admitted and `SUPERSEDED`), and the answer is built here from the
+ * allowlist alone, no header of Better Auth's answer copied (its cookies and its `set-auth-token`
+ * stay with the gateway): 200 `{ token, user: { id, email, name, emailVerified } }`, with `start`
+ * (`{ name, locale }`, what the account signed up with) while the account has not started, which
+ * tells the device to start it.
  */
 export async function admitted(
   deps: Pick<AuthMountDeps, 'sessions' | 'connections'>,
@@ -66,8 +69,13 @@ export async function admitted(
     .with({ kind: 'asked' }, () => refused(409, 'device-limit'))
     .with({ kind: 'banned' }, () => refused(403, 'account-banned'))
     .with({ kind: 'admitted' }, { kind: 'signed-out' }, async (done) => {
-      // The admission ended the device's earlier session: the sockets it opened with it close.
-      await closeDevice(request, user.id, deps.connections)
+      // The admission ended the device's earlier session: the sockets it opened with it close. A
+      // session was written only for a request naming a valid device, which is parsed here.
+      const device = deviceId.safeParse(request.headers.get(DEVICE_HEADER))
+
+      if (device.success) {
+        await closeDevice(deps.connections, device.data, user.id, SUPERSEDED)
+      }
 
       if (done.kind === 'signed-out') {
         await deps.connections.close(user.id, done.device, CLOSE.deviceLimit)

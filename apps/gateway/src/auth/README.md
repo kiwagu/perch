@@ -744,7 +744,8 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
   Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the
   admission and answer of an accepted sign-in (`admitted` and `acceptedSession`, `admitted.ts`),
-  the close of a device's sockets (`closeDevice`, by the verified identity), and the requests and
+  the close of a device's sockets (`closeDevice`, given the parsed device, the verified identity
+  and the reason), and the requests and
   refusals as Better Auth and the client get them (`refusalOf`, `refusalCodeOf`, `BANNED_USER`)),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,

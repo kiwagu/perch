@@ -410,7 +410,7 @@ describe("authHandler, a sign-in's backup code spent beside another use of the c
   )
 
   it(
-    'signs one of two challenges in with one backup code and answers the other 400 invalid-code',
+    'signs one of two challenges in with one backup code and answers the other 400 invalid-code, a failed sign-in counted in the window the success left',
     async () => {
       const queries = heldQueries()
       const mounted = await mountedOnRealAuth({ directory: queries.directory })
@@ -424,6 +424,8 @@ describe("authHandler, a sign-in's backup code spent beside another use of the c
 
       await vi.waitFor(() => expect(spend.paused()).toBe(true), ARGON2_WAIT)
 
+      // The second step holds its place among the email's failed sign-ins while it waits for the
+      // turn, in which the first one's success forgets them.
       const again = mounted.route(codeStep(second, backup, 'tablet'), FROM)
 
       await turnsReach(asked, ann.identity, 2)
@@ -431,6 +433,9 @@ describe("authHandler, a sign-in's backup code spent beside another use of the c
 
       expect((await answered(await spending)).status).toBe(200)
       expect(await answered(await again)).toEqual(invalidCode)
+      // That wrong code is the first failure of the new count: nine more spend it.
+      await wrongPasswords(mounted, 9, FROM)
+      expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
     },
     ARGON2_RUNS_MS,
   )

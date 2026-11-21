@@ -30,7 +30,11 @@ email's 10 places from the moment it is let through until Better Auth answers, s
 guesses are counted while under way: wrong credentials (401) keep the place, a success (200, 409,
 or a 403 `EMAIL_NOT_VERIFIED` or `account-banned`) clears the email's window, and any other answer
 (any other 403 included), or a handler that threw instead of answering,
-gives the place back; each sign-in is settled once. A sign-in whose body is not JSON naming an
+gives the place back; each sign-in is settled once. A failure judged after a success cleared the
+window it held its place in (a sign-in's wrong code that waited for the account's turn while
+another device's code signed in) counts in the email's window as it is then
+(`Reservation.keep` of `FixedWindow`), so every wrong password or code counts. A sign-in whose
+body is not JSON naming an
 email answers 400 and counts against no email (its address's check, taken first, stays taken, as
 every sign-up's does whatever Better Auth answers); one that is reaches Better Auth as that very
 JSON, whatever content type it came with, so the email whose password is checked is the email
