@@ -1,15 +1,16 @@
 diff --git a/dist/index.js b/dist/index.js
-index f050fc4..9546fea 100644
+index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..f3f52ece73b1d62a903354f4571cfa81cca7fff4 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -1,4 +1,6 @@
+@@ -1,4 +1,7 @@
  import { createRequire } from "node:module";
-+// The adapter below uses the classes of its surrealdb dependency, the ones the connection decodes into.
-+import { DateTime as SurrealDateTime, RecordId as SurrealRecordId } from "surrealdb";
++// The adapter below uses the classes of its surrealdb dependency, the ones the connection decodes into,
++// and its test for the conflict the database reports to a writer that lost a race for a row.
++import { DateTime as SurrealDateTime, RecordId as SurrealRecordId, isRetryableConflict as isSurrealConflict } from "surrealdb";
  var __create = Object.create;
  var __getProtoOf = Object.getPrototypeOf;
  var __defProp = Object.defineProperty;
-@@ -3062,7 +3064,8 @@ var createAdapterFactory = ({ adapter: customAdapter, config: cfg }) => (options
+@@ -3062,7 +3065,8 @@ var createAdapterFactory = ({ adapter: customAdapter, config: cfg }) => (options
          where,
          limit: joinConfig.limit
        });
@@ -19,7 +20,108 @@ index f050fc4..9546fea 100644
        throw error;
      }
      return result;
-@@ -9687,9 +9690,9 @@ function isTableNotFoundError(err) {
+@@ -3375,6 +3379,100 @@ var createAdapterFactory = ({ adapter: customAdapter, config: cfg }) => (options
+       });
+       return res;
+     },
++    // The two single-row operations Better Auth 1.6.33 calls for a spent verification row, a
++    // backup code and a guarded counter. This copy of the factory predates them, so it carries
++    // them as the factory of that release has them, minus the fallback it keeps for an adapter
++    // that implements neither: the adapter below implements both, so there is one path.
++    consumeOne: async ({ model: unsafeModel, where: unsafeWhere }) => {
++      transactionId++;
++      const thisTransactionId = transactionId;
++      const model = getModelName(unsafeModel);
++      const where = transformWhereClause({
++        model: unsafeModel,
++        where: unsafeWhere,
++        action: "consumeOne"
++      });
++      unsafeModel = getDefaultModelName(unsafeModel);
++      debugLog({ method: "consumeOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`, `${formatMethod("consumeOne")} ${formatAction("ConsumeOne")}:`, {
++        model,
++        where
++      });
++      const res = await withSpan(`db consumeOne ${model}`, {
++        [import_semantic_conventions.ATTR_DB_OPERATION_NAME]: "consumeOne",
++        [import_semantic_conventions.ATTR_DB_COLLECTION_NAME]: model
++      }, () => adapterInstance.consumeOne({
++        model,
++        where
++      }));
++      debugLog({ method: "consumeOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`, `${formatMethod("consumeOne")} ${formatAction("DB Result")}:`, {
++        model,
++        data: res
++      });
++      let transformed = res;
++      if (!config.disableTransformOutput && res)
++        transformed = await transformOutput(res, unsafeModel, undefined, undefined);
++      debugLog({ method: "consumeOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`, `${formatMethod("consumeOne")} ${formatAction("Parsed Result")}:`, {
++        model,
++        data: transformed
++      });
++      return transformed;
++    },
++    incrementOne: async ({ model: unsafeModel, where: unsafeWhere, increment: unsafeIncrement, set: unsafeSet }) => {
++      const hasIncrement = Object.keys(unsafeIncrement).length > 0;
++      const hasSet = !!unsafeSet && Object.keys(unsafeSet).length > 0;
++      if (!hasIncrement && !hasSet)
++        throw new BetterAuthError("incrementOne requires a non-empty `increment` or `set`; both were empty.");
++      transactionId++;
++      const thisTransactionId = transactionId;
++      const model = getModelName(unsafeModel);
++      const where = transformWhereClause({
++        model: unsafeModel,
++        where: unsafeWhere,
++        action: "incrementOne"
++      });
++      unsafeModel = getDefaultModelName(unsafeModel);
++      debugLog({ method: "incrementOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(1, 3)}`, `${formatMethod("incrementOne")} ${formatAction("IncrementOne")}:`, {
++        model,
++        where,
++        increment: unsafeIncrement,
++        set: unsafeSet
++      });
++      const mappedKeys = config.mapKeysTransformInput ?? {};
++      const increment = {};
++      for (const [field, delta] of Object.entries(unsafeIncrement))
++        increment[mappedKeys[field] || getFieldName({
++          model: unsafeModel,
++          field
++        })] = delta;
++      let set;
++      if (unsafeSet && !config.disableTransformInput)
++        set = await transformInput(unsafeSet, unsafeModel, "update");
++      else
++        set = unsafeSet;
++      if (Object.keys(increment).length === 0 && (!set || Object.keys(set).length === 0))
++        throw new BetterAuthError("incrementOne resolved to an empty update: every increment/set field was unknown to the schema or transformed away.");
++      const res = await withSpan(`db incrementOne ${model}`, {
++        [import_semantic_conventions.ATTR_DB_OPERATION_NAME]: "incrementOne",
++        [import_semantic_conventions.ATTR_DB_COLLECTION_NAME]: model
++      }, () => adapterInstance.incrementOne({
++        model,
++        where,
++        increment,
++        set
++      }));
++      debugLog({ method: "incrementOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(2, 3)}`, `${formatMethod("incrementOne")} ${formatAction("DB Result")}:`, {
++        model,
++        data: res
++      });
++      let transformed = res;
++      if (!config.disableTransformOutput && res)
++        transformed = await transformOutput(res, unsafeModel, undefined, undefined);
++      debugLog({ method: "incrementOne" }, `${formatTransactionId(thisTransactionId)} ${formatStep(3, 3)}`, `${formatMethod("incrementOne")} ${formatAction("Parsed Result")}:`, {
++        model,
++        data: transformed
++      });
++      return transformed;
++    },
+     count: async ({ model: unsafeModel, where: unsafeWhere }) => {
+       transactionId++;
+       const thisTransactionId = transactionId;
+@@ -9687,9 +9785,9 @@ function isTableNotFoundError(err) {
    return msg.includes("does not exist") || e.kind === "NotFound";
  }
  function deserializeValue(val) {
@@ -31,7 +133,7 @@ index f050fc4..9546fea 100644
      return val.toDate();
    return val;
  }
-@@ -9734,9 +9737,9 @@ function buildWhereClause(where, model) {
+@@ -9734,9 +9832,9 @@ function buildWhereClause(where, model) {
      const param = `pw${paramIdx++}`;
      if (field === "id") {
        if (operator === "in" || operator === "not_in") {
@@ -43,8 +145,12 @@ index f050fc4..9546fea 100644
        }
      } else if (isInsensitive) {
        if (typeof value === "string") {
-@@ -9820,11 +9823,14 @@ function mapFieldTypeToSurreal(type, required) {
+@@ -9818,13 +9916,27 @@ function mapFieldTypeToSurreal(type, required) {
+     return "option<any>";
+   return `option<${base} | null>`;
  }
++// How many times a transaction that lost a race for a row runs, the first run included.
++var TRANSACTION_ATTEMPTS = 5;
  var surrealAdapter = (config) => {
    let lazyOptions = null;
 -  let activeDb = config.db;
@@ -58,51 +164,76 @@ index f050fc4..9546fea 100644
    const runQuery = async (sql, bindings) => {
 -    const result = await activeDb.query(sql, bindings);
 +    const result = await db.query(sql, bindings);
++    return result[0] ?? [];
++  };
++  // A statement that two callers can race on. The database refuses the later of two overlapping
++  // writers of one row with a conflict it says can be retried. A statement of the connection
++  // stands alone, so the driver sends it again until it runs without one, and it then finds the
++  // row as the earlier caller left it. Inside a transaction the conflict fails the transaction,
++  // which `transaction` below runs again from its start.
++  const runAtomic = async (sql, bindings) => {
++    const result = await (created === null ? db.query(sql, bindings).retry() : db.query(sql, bindings));
      return result[0] ?? [];
    };
    const findManyRaw = async (model, where, limit) => {
-@@ -9876,34 +9882,26 @@ var surrealAdapter = (config) => {
+@@ -9876,34 +9988,32 @@ var surrealAdapter = (config) => {
        supportsArrays: true,
        supportsNumericIds: false,
        supportsUUIDs: false,
 -      transaction: async (cb) => {
-+      // Inside a transaction, a nested one (Better Auth asks for none) joins it on the same handle.
-+      transaction: created !== null ? async (cb) => cb(adapterCreator(lazyOptions)) : async (cb) => {
-         const trx = await config.db.beginTransaction();
+-        const trx = await config.db.beginTransaction();
 -        const previousDb = activeDb;
 -        activeDb = trx;
 -        txCreated = [];
-+        const toRollback = [];
-         try {
+-        try {
 -          const result = await cb(adapterCreator(lazyOptions));
-+          const result = await cb(forDb(trx, toRollback)(lazyOptions));
-           await trx.commit();
+-          await trx.commit();
 -          txCreated = null;
-           return result;
-         } catch (err) {
+-          return result;
+-        } catch (err) {
 -          const toRollback = txCreated ?? [];
 -          txCreated = null;
++      // Inside a transaction, a nested one (Better Auth asks for none) joins it on the same handle.
++      // A transaction the database refuses because another one wrote the same row first runs again
++      // from its start, a few times, with a new transaction each time: the refusal says it can be
++      // retried, and the run that follows sees what the winner left.
++      transaction: created !== null ? async (cb) => cb(adapterCreator(lazyOptions)) : async (cb) => {
++        for (let attempt = 1;; attempt++) {
++          const trx = await config.db.beginTransaction();
++          const toRollback = [];
            try {
-             await trx.cancel();
-           } catch {}
+-            await trx.cancel();
+-          } catch {}
 -          activeDb = previousDb;
-           for (const { model, id: id2 } of toRollback) {
+-          for (const { model, id: id2 } of toRollback) {
++            const result = await cb(forDb(trx, toRollback)(lazyOptions));
++            await trx.commit();
++            return result;
++          } catch (err) {
              try {
 -              await activeDb.query("DELETE $rid", {
 -                rid: new _RecordId(model, id2)
-+              await config.db.query("DELETE $rid", {
-+                rid: new SurrealRecordId(model, id2)
-               });
+-              });
++              await trx.cancel();
              } catch {}
++            for (const { model, id: id2 } of toRollback) {
++              try {
++                await config.db.query("DELETE $rid", {
++                  rid: new SurrealRecordId(model, id2)
++                });
++              } catch {}
++            }
++            if (attempt >= TRANSACTION_ATTEMPTS || !isSurrealConflict(err))
++              throw err;
            }
-           throw err;
+-          throw err;
 -        } finally {
 -          txCreated = null;
 -          activeDb = previousDb;
          }
        }
      },
-@@ -9914,13 +9912,13 @@ var surrealAdapter = (config) => {
+@@ -9914,13 +10024,13 @@ var surrealAdapter = (config) => {
        }) => {
          const insertData = { ...data };
          if (insertData.id && typeof insertData.id === "string") {
@@ -119,7 +250,7 @@ index f050fc4..9546fea 100644
          }
          return record;
        },
-@@ -10017,7 +10015,7 @@ var surrealAdapter = (config) => {
+@@ -10017,7 +10127,7 @@ var surrealAdapter = (config) => {
        }) => {
          const { sql: whereSql, bindings } = buildWhereClause(where, model);
          try {
@@ -128,7 +259,59 @@ index f050fc4..9546fea 100644
          } catch (err) {
            if (!isTableNotFoundError(err))
              throw err;
-@@ -10170,6 +10168,9 @@ var surrealAdapter = (config) => {
+@@ -10037,6 +10147,51 @@ var surrealAdapter = (config) => {
+           throw err;
+         }
+       },
++      // Take one row, or change one, in one statement: the predicate picks the row and guards the
++      // change in the same step, so of two callers racing for a row only one finds it as it was.
++      // Several rows matching the predicate leave all but one alone.
++      consumeOne: async ({
++        model,
++        where
++      }) => {
++        const { sql: whereSql, bindings } = buildWhereClause(where, model);
++        try {
++          const rows = await runAtomic(`DELETE (SELECT VALUE id FROM ${tbl(model)} ${whereSql} LIMIT 1) RETURN BEFORE`, bindings);
++          return rows.length ? deserializeRecord(rows[0]) : null;
++        } catch (err) {
++          if (isTableNotFoundError(err))
++            return null;
++          throw err;
++        }
++      },
++      incrementOne: async ({
++        model,
++        where,
++        increment,
++        set
++      }) => {
++        const { sql: whereSql, bindings } = buildWhereClause(where, model);
++        const assignments = [];
++        let i = 0;
++        for (const [field, delta] of Object.entries(increment)) {
++          const param = `fi${i++}`;
++          bindings[param] = delta;
++          assignments.push(`${field} = (${field} ?? 0) + $${param}`);
++        }
++        for (const [field, value] of Object.entries(set ?? {})) {
++          const param = `fs${i++}`;
++          bindings[param] = value;
++          assignments.push(`${field} = $${param}`);
++        }
++        try {
++          const rows = await runAtomic(`UPDATE (SELECT VALUE id FROM ${tbl(model)} ${whereSql} LIMIT 1) SET ${assignments.join(", ")} RETURN AFTER`, bindings);
++          return rows.length ? deserializeRecord(rows[0]) : null;
++        } catch (err) {
++          if (isTableNotFoundError(err))
++            return null;
++          throw err;
++        }
++      },
+       count: async ({
+         model,
+         where
+@@ -10170,6 +10325,9 @@ var surrealAdapter = (config) => {
        }
      })
    });
