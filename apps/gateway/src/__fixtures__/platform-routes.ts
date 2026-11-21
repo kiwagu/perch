@@ -36,6 +36,12 @@ export const ACTION_ROUTES: Readonly<Record<string, Wire>> = {
   'two-factor.confirm': { method: 'POST', path: '/two-factor/confirm', carries: enrolmentOf },
   'two-factor.disable': { method: 'POST', path: '/two-factor/disable' },
   'two-factor.renew-codes': { method: 'POST', path: '/two-factor/renew-codes' },
+  'passkeys.list': { method: 'GET', path: '/passkeys' },
+  'passkeys.add': { method: 'POST', path: '/passkeys' },
+  'passkeys.remove': { method: 'DELETE', path: '/passkeys/:id', segments: { id: 'passkey' } },
+  // A guest's step: a sign-in by passkey; its only parameter is an optional confirmation, so no
+  // probe asks it (`passkey-sign-in.spec.ts` runs its whole ceremony).
+  'sign-in-passkey': { method: 'POST', path: '/auth/sign-in/passkey', guest: true },
   'devices.list': { method: 'GET', path: '/devices' },
   'devices.revoke': { method: 'DELETE', path: '/devices/:id', segments: { id: 'device' } },
   'organisations.create': { method: 'POST', path: '/organisations' },
@@ -90,6 +96,10 @@ export const NO_ACTION_ROUTES: Readonly<Record<string, string>> = {
   'GET /health': 'the liveness answer of the server: no screen asks it',
   'GET /sync': "the upgrade to a device's sync connection, which the sync protocol carries",
   'GET /organisations': 'Contract gap: the memberships read has no platform action',
+  'POST /passkeys/options':
+    'the first half of a passkey ceremony, whose second half is the action (passkeys.add)',
+  'POST /auth/passkey-options':
+    'the first half of a passkey ceremony, whose second half is the action (sign-in-passkey)',
 }
 
 /** The routes the server answers itself, before any module is asked. */

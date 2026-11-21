@@ -138,6 +138,15 @@ export class RequestLimits {
   }
 
   /**
+   * Forgets the failed sign-ins of `email` (in lower case) and the places of those under way, as a
+   * sign-in that succeeded does, without taking a place itself: a sign-in that no failed sign-in
+   * keeps out (a passkey's, which cannot be guessed) forgets them once it passes.
+   */
+  forgetFailedSignIns(email: string): void {
+    this.failedSignIns.forget(email)
+  }
+
+  /**
    * Takes one verification mail of the client at `address` before anything is asked: a sign-up
    * (no `email`) or a resend to `email` (in lower case), which also takes one of that email's
    * resends. The address's place is reserved first and given back when the email refuses, so a

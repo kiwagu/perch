@@ -46,6 +46,7 @@ import { boundsOf, isChecked, isIssued } from './__fixtures__/platform-values'
 import { type Account, openStand, type Stand } from './__fixtures__/stand'
 import { MOUNT_PATHS } from './auth/auth-handler'
 import { DEVICE_PATHS } from './auth/device.routes'
+import { PASSKEY_PATHS } from './auth/passkey.routes'
 import { TWO_FACTOR_PATHS } from './auth/two-factor.routes'
 import { CONSOLE_PATHS } from './console'
 import { INVITATION_PATHS } from './tenants/invitation-routes'
@@ -63,6 +64,7 @@ const SHAPE_REFUSAL = 'bad-request'
  * its schema, whatever its length.
  */
 const FORM_CHECKED = [
+  'passkeys.remove',
   'organisations.set-role',
   'organisations.remove',
   'organisations.revoke-invitation',
@@ -108,6 +110,7 @@ afterAll(async () => {
 const PATHS = [
   ...DEVICE_PATHS,
   ...TWO_FACTOR_PATHS,
+  ...PASSKEY_PATHS,
   ...ORGANISATION_PATHS,
   ...INVITATION_PATHS,
   ...CONSOLE_PATHS,

@@ -174,6 +174,31 @@ describe('RequestLimits', () => {
     }
   })
 
+  it("forgets an email's failures and sign-ins under way as a sign-in that succeeded does, holding no place", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    // One sign-in still under way holds the tenth place.
+    limits.signInAttempt('ann@example.test')
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+
+    limits.forgetFailedSignIns('ann@example.test')
+    // Forgetting again, and forgetting an email with no failures, holds no place either.
+    limits.forgetFailedSignIns('ann@example.test')
+    limits.forgetFailedSignIns('bob@example.test')
+
+    for (const email of ['ann@example.test', 'bob@example.test']) {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        expect(limits.signInAttempt(email).allowed).toBe(true)
+      }
+
+      expect(limits.signInAttempt(email).allowed).toBe(false)
+    }
+  })
+
   it('takes 30 invitations of one identity within 10 minutes, from any addresses, and refuses the 31st with the rest of the window', async () => {
     const { clock, limits } = limitsOn()
 

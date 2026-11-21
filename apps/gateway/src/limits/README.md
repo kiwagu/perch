@@ -34,7 +34,10 @@ gives the place back; each sign-in is settled once. A failure judged after a suc
 window it held its place in (a sign-in's wrong code that waited for the account's turn while
 another device's code signed in) counts in the email's window as it is then, past its limit when
 newer sign-ins filled it (`Reservation.keep` of `FixedWindow`), so every wrong password or code
-counts once, whatever those newer sign-ins give back later. A sign-in whose
+counts once, whatever those newer sign-ins give back later. A passkey sign-in takes no place
+among them and is never kept out by them, since a passkey cannot be guessed; once Better Auth
+verified the passkey, the auth mount forgets the email's window as a success does
+(`forgetFailedSignIns`). A sign-in whose
 body is not JSON naming an
 email answers 400 and counts against no email (its address's check, taken first, stays taken, as
 every sign-up's does whatever Better Auth answers); one that is reaches Better Auth as that very

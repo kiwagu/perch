@@ -258,6 +258,8 @@ export async function openStand() {
     otherDevice,
     invitation,
     ask,
+    /** The front's public origin the gateway was opened for, which its passkeys are bound to. */
+    publicUrl: base.root.publicUrl,
     close: async () => {
       await server.stop()
       await closeHarness()

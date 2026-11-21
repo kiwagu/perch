@@ -24,12 +24,15 @@ import { AccountPasswords } from '../auth/account-passwords'
 import { AccountTeardown } from '../auth/account-teardown'
 import {
   type AccountDepartures,
+  type PasskeyChallenges,
+  passkeyChallenges,
   type TwoFactorChallenges,
   twoFactorChallenges,
 } from '../auth/auth-handler'
 import { type AuthInstance, createAuthInstance } from '../auth/auth-instance'
 import { AuthSessions } from '../auth/auth-sessions'
 import { DeviceSessions } from '../auth/device-sessions'
+import { PasskeyRows } from '../auth/passkey-rows'
 import { ProfileEmails } from '../auth/profile-emails'
 import { accountChoicePolicy } from '../auth/second-factor-policy.account-choice'
 import type { SecondFactorPolicy } from '../auth/second-factor-policy.port'
@@ -70,6 +73,10 @@ export interface GatewayRoot {
   readonly twoFactorRows: TwoFactorRows
   /** Whether an account may turn its second factor on, and whether it must keep it on. */
   readonly secondFactorPolicy: SecondFactorPolicy
+  /** The passkeys of accounts in the directory: listed, removed, their account read by credential. */
+  readonly passkeyRows: PasskeyRows
+  /** Better Auth's passkey challenges: the cookie a passkey ceremony's challenge comes in. */
+  readonly passkeyChallenges: PasskeyChallenges
   /** The reset links Better Auth keeps: read by token, ended for an account. */
   readonly resets: ResetLinks
   /** The pending changes of accounts' emails, their links, and the change itself. */
@@ -264,6 +271,8 @@ export function createGatewayRoot(
       challenges: twoFactorChallenges(auth, local),
       twoFactorRows: new TwoFactorRows(local),
       secondFactorPolicy: accountChoicePolicy,
+      passkeyRows: new PasskeyRows(local),
+      passkeyChallenges: passkeyChallenges(auth),
       resets: new ResetLinks(local),
       emailChanges: new EmailChanges({
         directory: local,

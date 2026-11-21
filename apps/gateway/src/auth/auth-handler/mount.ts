@@ -15,6 +15,7 @@ import type { AccountPasswords } from '../account-passwords'
 import type { AccountTeardown } from '../account-teardown'
 import type { AuthInstance } from '../auth-instance'
 import type { AuthSessions } from '../auth-sessions'
+import type { PasskeyRows } from '../passkey-rows'
 import type { ProfileEmails } from '../profile-emails'
 import type { TwoFactorRows } from '../two-factor-rows'
 
@@ -22,6 +23,13 @@ import { deleteAccount, requestAccountDeletion } from './account-deletion'
 import type { TwoFactorChallenges } from './challenge-cookie'
 import { CONFIRM_SIGN_IN_PATH, confirmSignIn } from './confirm-sign-in'
 import { changeEmail, confirmEmail } from './email-change'
+import type { PasskeyChallenges } from './passkey-ceremony'
+import {
+  PASSKEY_OPTIONS_PATH,
+  PASSKEY_SIGN_IN_PATH,
+  passkeyOptions,
+  signInWithPasskey,
+} from './passkey-sign-in'
 import { changePassword } from './password-change'
 import { requestPasswordReset, resetPassword } from './password-reset'
 import { AUTH_PATHS } from './requests'
@@ -84,6 +92,10 @@ export interface AuthMountDeps {
   readonly challenges: TwoFactorChallenges
   /** Whether an account's second factor is on and its key confirmed, read at a sign-in's code. */
   readonly twoFactor: Pick<TwoFactorRows, 'read'>
+  /** The account a passkey belongs to, read by its credential at a passkey sign-in. */
+  readonly passkeys: Pick<PasskeyRows, 'ownerOf'>
+  /** Better Auth's passkey challenges: the name of the cookie a ceremony's challenge comes in. */
+  readonly passkeyChallenges: PasskeyChallenges
   /**
    * The front's public origin: the base and the origin of the gateway's own calls of Better Auth's
    * plugin endpoints (`internalRequest`), the one origin Better Auth trusts.
@@ -113,6 +125,7 @@ export interface AuthMountDeps {
     RequestLimits,
     | 'credentials'
     | 'signInAttempt'
+    | 'forgetFailedSignIns'
     | 'verificationMail'
     | 'resetMail'
     | 'emailChangeMail'
@@ -129,8 +142,8 @@ export interface AuthMountDeps {
    * requests by its email in lower case; its reset, its changes of password and of email by its
    * identity's key; a confirmation by both, the identity first, then the new email, so no sign-up
    * of the new email runs meanwhile; a request to delete the account and a deletion by its
-   * identity's key; a sign-in's code step by its challenge's identity. A sign-in's password step
-   * takes no turn (`signIn`). No work takes an identity's turn inside an
+   * identity's key; a sign-in's code step by its challenge's identity, and a passkey sign-in by its
+   * passkey's. A sign-in's password step takes no turn (`signIn`). No work takes an identity's turn inside an
    * email's, so the turns never wait on each other in a circle.
    */
   readonly accounts: KeyedTurns<string>
@@ -155,6 +168,8 @@ const SERVED_PATHS: ReadonlyMap<
   [SIGN_UP_PATH, credentialChecked(signUp)],
   [SIGN_IN_PATH, credentialChecked((deps, request) => signIn(deps, request))],
   [CONFIRM_SIGN_IN_PATH, credentialChecked((deps, request) => confirmSignIn(deps, request))],
+  [PASSKEY_OPTIONS_PATH, (deps, request) => passkeyOptions(deps, request)],
+  [PASSKEY_SIGN_IN_PATH, (deps, request) => signInWithPasskey(deps, request)],
   [VERIFY_PATH, credentialChecked((deps, request) => verify(deps, request))],
   [RESEND_PATH, resend],
   [REQUEST_RESET_PATH, requestPasswordReset],
@@ -182,10 +197,10 @@ function credentialChecked(
 
 /**
  * Better Auth's sign-up, sign-in, verification and resend behind the gateway's own limits, and the
- * gateway's code step of a sign-in, recovery and change of a password, change of an email and
- * deletion of an account. Of the paths under `/auth/`, only the sign-up, the sign-in, the
- * verification and the resend are handed to Better Auth's handler, at the path Better Auth serves
- * them under (the front's prefix put back); the other eight are answered here, calling Better Auth
+ * gateway's code step of a sign-in, sign-in by passkey, recovery and change of a password, change
+ * of an email and deletion of an account. Of the paths under `/auth/`, only the sign-up, the
+ * sign-in, the verification and the resend are handed to Better Auth's handler, at the path Better
+ * Auth serves them under (the front's prefix put back); the other ten are answered here, calling Better Auth
  * on the server, or with requests of the gateway's own, where they need it. Another method on any of them answers 405
  * with `Allow: POST`, and every other path under `/auth/` 404 `not-found`, Better Auth not asked.
  * A path outside `/auth/` is not answered here (`undefined`). The device routes come before this
@@ -221,6 +236,14 @@ function credentialChecked(
  *   (`confirmSignIn`), its email's failed sign-ins judged first: 200 signed in as by a sign-in,
  *   409 `device-limit`, 400 `invalid-code` (counted), 401 `code-expired`, 403 `account-banned`,
  *   429 `rate-limited`, 400 `bad-request` without a device or for a body it cannot read.
+ * - `POST /auth/passkey-options`, with the device's headers: a guest's options of a passkey sign-in
+ *   and their challenge (`passkeyOptions`), 200 `{ options, challenge }`. `POST
+ *   /auth/sign-in/passkey` `{ response, challenge, signOutOldestFor? }`, with the device's headers:
+ *   the sign-in by that passkey in its account's turn (`signInWithPasskey`), no password and no
+ *   code asked and no failed sign-in of the email judged, which a verified passkey forgets: 200
+ *   signed in as by a sign-in, 409 `{ code: 'device-limit', consentFor }`, 401 `passkey-unknown`,
+ *   403 `account-banned`, 400 `failed`, 400 `bad-request` without a device or for a body it cannot
+ *   read. Neither takes a credential check: neither runs a password's hash.
  * - `POST /auth/verify-email` `{ token }`, with the device's headers: takes one of the address's
  *   credential checks too, then exchanges the link's token (`verify`): 200 `{ token, user: { id,
  *   email, name, locale } }` the first time, which signs the device in, 200 `{ token: null }` for

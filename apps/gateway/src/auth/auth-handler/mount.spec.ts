@@ -122,6 +122,8 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
     ...accountServicesOf(opened),
     challenges: noAccounts.challenges,
     twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
     publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,

@@ -261,6 +261,8 @@ async function openGateway(options: GatewayOptions = {}) {
     // No account is deleted here, and none has its second factor on.
     challenges: noAccounts.challenges,
     twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
     publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,

@@ -37,6 +37,7 @@ import {
 import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
+import { PasskeyRows } from '../../passkey-rows'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
@@ -44,6 +45,7 @@ import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surq
 import { TwoFactorRows } from '../../two-factor-rows'
 import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
+import { passkeyChallenges } from '../passkey-ceremony'
 
 /** The account most specs sign up and verify. */
 export const ANN = 'ann@example.test'
@@ -142,8 +144,8 @@ export const noSessions: AuthMountDeps['sessions'] = {
 }
 
 /**
- * Stand-ins for the passwords, account links, two-factor challenges and factors, mails and an
- * account's deletion, for the specs of the sign-up, the sign-in and the verification over a
+ * Stand-ins for the passwords, account links, two-factor challenges and factors, passkeys, mails
+ * and an account's deletion, for the specs of the sign-up, the sign-in and the verification over a
  * stand-in for Better Auth: every one of them fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
@@ -151,6 +153,8 @@ export const noAccounts: Pick<
   | 'passwords'
   | 'challenges'
   | 'twoFactor'
+  | 'passkeys'
+  | 'passkeyChallenges'
   | 'resets'
   | 'emailChanges'
   | 'deletions'
@@ -182,6 +186,8 @@ export const noAccounts: Pick<
     end: notHere,
   },
   twoFactor: { read: notHere },
+  passkeys: { ownerOf: notHere },
+  passkeyChallenges: { cookieName: () => Promise.reject(new Error('no passkey is read here')) },
   resets: { read: notHere },
   emailChanges: {
     ask: notHere,
@@ -381,6 +387,8 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
     // their reads by the same hook.
     challenges: twoFactorChallenges(opened.auth, opened.directory),
     twoFactor: new TwoFactorRows(opened.directory),
+    passkeys: new PasskeyRows(opened.directory),
+    passkeyChallenges: passkeyChallenges(opened.auth),
     publicUrl: ORIGIN,
     deletions: accounts.accountDeletions,
     departure: {

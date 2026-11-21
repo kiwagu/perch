@@ -3,10 +3,13 @@ import { APIError } from 'better-auth/api'
 
 import { AUTH_MODELS } from './auth-models'
 
+/** The code of the refusal of a passkey whose authenticator did not verify its user. */
+export const USER_NOT_VERIFIED = 'USER_NOT_VERIFIED'
+
 /** The refusal of a passkey whose authenticator did not verify its user. */
 function userNotVerified(): APIError {
   return new APIError('BAD_REQUEST', {
-    code: 'USER_NOT_VERIFIED',
+    code: USER_NOT_VERIFIED,
     message: 'the authenticator did not verify its user',
   })
 }
