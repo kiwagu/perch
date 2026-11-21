@@ -41,6 +41,7 @@ import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
 import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
 import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surql'
+import { TwoFactorRows } from '../../two-factor-rows'
 import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
 
@@ -141,14 +142,15 @@ export const noSessions: AuthMountDeps['sessions'] = {
 }
 
 /**
- * Stand-ins for the passwords, account links, two-factor challenges, mails and an account's
- * deletion, for the specs of the sign-up, the sign-in and the verification over a stand-in for
- * Better Auth: every one of them fails, as none is meant to be asked.
+ * Stand-ins for the passwords, account links, two-factor challenges and factors, mails and an
+ * account's deletion, for the specs of the sign-up, the sign-in and the verification over a
+ * stand-in for Better Auth: every one of them fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
   | 'passwords'
   | 'challenges'
+  | 'twoFactor'
   | 'resets'
   | 'emailChanges'
   | 'deletions'
@@ -179,6 +181,7 @@ export const noAccounts: Pick<
     ownerOf: notHere,
     end: notHere,
   },
+  twoFactor: { read: notHere },
   resets: { read: notHere },
   emailChanges: {
     ask: notHere,
@@ -220,6 +223,7 @@ export function mountedOnFakeAuth(
       auth: fake.auth,
       sessions: noSessions,
       ...noAccounts,
+      publicUrl: ORIGIN,
       limits: new RequestLimits({ clock }),
       connections,
       clock,
@@ -373,9 +377,11 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
       admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
-    // The challenges reach the directory as the instance does: a test holds their reads by the
-    // same hook.
+    // The challenges and the second factor reach the directory as the instance does: a test holds
+    // their reads by the same hook.
     challenges: twoFactorChallenges(opened.auth, opened.directory),
+    twoFactor: new TwoFactorRows(opened.directory),
+    publicUrl: ORIGIN,
     deletions: accounts.accountDeletions,
     departure: {
       blocked: (identity) => departure.blocked(identity),
@@ -765,6 +771,17 @@ export const isChallengeLookup = (text: string): boolean => text === challengeOw
 
 /** The gateway's end of a two-factor challenge: its rows deleted. */
 export const isChallengeEnd = (text: string): boolean => text === challengeEndStatement
+
+/** Better Auth's adapter writes a row of `verification`, as a password step writes its challenge. */
+export const isVerificationInsert = (text: string): boolean =>
+  text.startsWith('INSERT') && text.includes('`verification`')
+
+/**
+ * Better Auth's adapter takes a backup code out of an account's codes: its compare-and-set of the
+ * two-factor row, once the code was checked, an update of the one row its subquery selects.
+ */
+export const isBackupCodeSpend = (text: string): boolean =>
+  text.startsWith('UPDATE') && text.includes('`two_factor`') && text.includes('LIMIT 1)')
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

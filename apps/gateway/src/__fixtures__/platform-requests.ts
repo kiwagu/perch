@@ -19,6 +19,11 @@ export interface Wire {
    * sender before it asks.
    */
   readonly carries?: (stand: Stand, sender: Account) => Promise<Readonly<Record<string, Sample>>>
+  /**
+   * The request is a guest's: it names the sender's device and carries no token, as a step of a
+   * sign-in does.
+   */
+  readonly guest?: boolean
 }
 
 /** A parameter of an action as the contract declares it, as far as its valid values need it. */
@@ -142,6 +147,8 @@ export function requestFor(
     values.set(name, value)
   }
 
+  const sender = wire.guest === true ? { device: world.sender.device } : { as: world.sender }
+
   if (wire.method === 'GET') {
     const query = new URLSearchParams()
 
@@ -149,8 +156,8 @@ export function requestFor(
       query.set(name, String(value))
     }
 
-    return { method: wire.method, path: `${path}?${query}`, as: world.sender }
+    return { method: wire.method, path: `${path}?${query}`, ...sender }
   }
 
-  return { method: wire.method, path, as: world.sender, body: Object.fromEntries(values) }
+  return { method: wire.method, path, ...sender, body: Object.fromEntries(values) }
 }

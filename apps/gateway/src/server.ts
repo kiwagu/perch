@@ -129,6 +129,8 @@ export function startServer(root: GatewayRoot, options: ServerOptions): RunningS
       sessions: root.sessions,
       passwords: root.passwords,
       challenges: root.challenges,
+      twoFactor: root.twoFactorRows,
+      publicUrl: root.publicUrl,
       resets: root.resets,
       emailChanges: root.emailChanges,
       deletions: root.deletions,

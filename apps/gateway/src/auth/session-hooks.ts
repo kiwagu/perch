@@ -22,7 +22,8 @@ export const DEVICE_LABEL_HEADER = 'X-Perch-Device-Label'
  */
 export const ADMISSION_HEADER = 'X-Perch-Admission'
 
-const label = z.string().max(60)
+/** A device's label as a session keeps it (`DEVICE_LABEL_HEADER`): at most 60 characters. */
+export const deviceLabel = z.string().max(60)
 
 type SessionRow = Session & Record<string, unknown>
 
@@ -112,7 +113,7 @@ export function sessionHooks(clock: Clock, directory: LocalDb) {
           })
         }
 
-        const parsedLabel = label.safeParse(headers?.get(DEVICE_LABEL_HEADER) ?? '')
+        const parsedLabel = deviceLabel.safeParse(headers?.get(DEVICE_LABEL_HEADER) ?? '')
 
         return {
           data: {

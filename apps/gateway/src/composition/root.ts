@@ -65,7 +65,7 @@ export interface GatewayRoot {
   readonly challenges: TwoFactorChallenges
   /**
    * The second factor of accounts in the directory, as the settings read, confirm and turn it off
-   * without rotating the caller's session.
+   * without rotating the caller's session, and as a sign-in's code step reads it.
    */
   readonly twoFactorRows: TwoFactorRows
   /** Whether an account may turn its second factor on, and whether it must keep it on. */
@@ -124,6 +124,8 @@ export interface GatewayRoot {
    * on it, by its identity's key.
    */
   readonly accountTurns: KeyedTurns<string>
+  /** The front's public origin, which the gateway's own calls of Better Auth's endpoints name. */
+  readonly publicUrl: string
   readonly clock: Clock
   /**
    * Drops the hub's regions once their work is done, closes the organisations' databases, then
@@ -296,6 +298,7 @@ export function createGatewayRoot(
       local,
       limits: new RequestLimits({ clock: options.clock }),
       accountTurns,
+      publicUrl: options.publicUrl,
       clock: options.clock,
       close: async () => {
         // The re-tells stop first, the one running awaited, before anything they read or tell

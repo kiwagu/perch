@@ -351,8 +351,8 @@ on the clock as it is then, so a link spent, replaced or expired while the reset
 other reset link of the account, sets the password on the credential row, ends every session of
 the account (the request's own session too when it is one of them), verifies its email when it was
 not yet (only that mailbox got the link; Better Auth's `emailVerified` is what a sign-in reads, so
-the account signs in from then on, its first sign-in carrying `start`) and deletes its pending
-change of email: all of them or none, so a failure (500 `internal`) leaves the password, the link, the
+the account signs in from then on, its first sign-in carrying `start`), deletes its pending
+change of email and ends its pending two-factor challenges: all of them or none, so a failure (500 `internal`) leaves the password, the link, the
 sessions and the pending change as they were. Once it committed, the account's sockets close with
 4002 (`CLOSE.passwordChanged`, `signed out because the password changed`) and the notice of a
 changed password starts (`afterPasswordChange`): 200 `{ signedOut }`, and nothing is signed in.
@@ -438,6 +438,45 @@ clean-up of expired rows is off (`verification.disableCleanup`), so a link past 
 expired, not unknown: an account keeps one reset link and one pending change of its email at
 most, each replaced by the next.
 
+The code step of that sign-in is the gateway's own (`POST /auth/confirm-sign-in` `{ challenge,
+email, code, signOutOldest? }`, with the device's headers; `auth-handler/confirm-sign-in.ts`). It
+takes one of the address's credential checks, answers 400 `bad-request` for a body it cannot read
+(a code outside the contract's length for a code of the second factor, a challenge that is not
+one cookie value) or a request that names no valid device, before anything is read or spent, then
+judges the email typed at the password step, in lower case, first: it must find a place among the
+email's failed sign-ins (429 `rate-limited` while they keep a password out, whatever the
+challenge and the code, a dead challenge included). The challenge's account is read from its own
+row (`challengeOwner`), and the account the email names must be that one (else 401
+`code-expired`: a client that sends another email only spends that email's places). In that
+account's turn (`AuthMountDeps.accounts`, by its identity's key, the turn a change or a reset of
+the password, the confirmation of a new email, a ban, a deletion and the second factor's settings
+take), the challenge's row is read again (gone: 401 `code-expired`) and the account's second
+factor (`TwoFactorRows.read`): one that is off, or whose key no code confirmed, ends the challenge
+and answers 401 `code-expired` before either verifier runs, since Better Auth's verifier of
+backup codes takes the codes of an unconfirmed key too. The code then goes to Better Auth's
+verifier, six digits to `/two-factor/verify-totp` and any other code to
+`/two-factor/verify-backup-code`, by the gateway's own call (`internalRequest`, the challenge its
+only cookie, the session it writes waiting for its admission), and Better Auth's answer is read by
+its code alone: a wrong code is 400 `invalid-code` and counts as a failed sign-in; a challenge
+spent, ended, past its ten minutes or after five wrong codes, and a factor Better Auth finds not on,
+are 401 `code-expired` (the sign-in starts again from the password); the admin plugin's refusal of
+a banned account's session is 403 `account-banned`; anything else is 500 `internal`. An accepted
+code is admitted as a sign-in by password is (`admitted`, `auth-handler/admitted.ts`, the back half
+of both: the limit of devices and the ban judged now, the device's sockets closed, the answer
+`{ token, user, start? }` built from the allowlist, no header of Better Auth's answer copied, its
+`set-auth-token` and cookies included), with the start of the account the email names, read in
+the turn. A right code is the sign-in's last step: 200, and 409 `device-limit` (whose confirmation
+signs in again from the password, which asks for a code again), forget the email's failed sign-ins;
+every other answer gives its place back, a ban's refusal included, so a banned account's right code
+forgets nothing. A change of what a challenge stood for ends it in its own transaction: a change
+or a reset of the password, the confirmation of a new email, the second factor turned off and the
+account's deletion each end the identity's pending challenges with the rows counting their codes
+(`fn::two_factor_challenges_end`), so a code step that waited for their turn answers 401
+`code-expired`, and one whose turn came first signs in and is then ended as any other session of
+the account by a change or a reset of the password (left by the confirmation of an email and by the
+factor turned off). Two code steps of one account, a backup code spent twice or beside a renewal of
+the codes, run one after the other: one signs in, the other is a wrong code.
+
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
 `unauthorized` for a token that holds no live session of it). It takes one of the address's
@@ -451,8 +490,9 @@ does). In the account's turn, the current password is
 checked against the credential row and the new one hashed (`AccountPasswords.change`); then one
 transaction (`surql/password-change-commit.surql`) makes sure the caller's session is still live
 (401 `unauthorized` when it ended while the change waited) and the row still holds the hash that
-was checked, and sets the new password, ends every other session of the account, every reset link
-and the pending change of its email: all of them or none (500 `internal` with nothing changed).
+was checked, and sets the new password, ends every other session of the account, every reset link,
+the pending change of its email and its pending two-factor challenges: all of them or none (500
+`internal` with nothing changed).
 Once it committed, the sockets of the devices whose session it ended close with 4002, the
 caller's own session and sockets staying, and the notice starts: 204 with no body. Better Auth's
 `/change-password` is not used: it sets the password apart from the endings.
@@ -488,8 +528,8 @@ is judged again on the clock as it is then (401 `link-expired` when it expired w
 confirmation waited), the pending change the token names is spent (`EmailChanges.claim`, once),
 and the account's email
 becomes the new one, verified, only while it is still the email the change was asked from, every
-reset link of the account ending with it in one transaction, since they went to the old email
-(`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
+reset link of the account and its pending two-factor challenges ending with it in one transaction,
+since they went to, or were answered for, the old email (`EmailChanges.move`): 401 `link-invalid` when the change was not pending (used before, replaced
 by a newer one, or ended by a change of the password), when the account's email changed since, or
 when the new email has got an account meanwhile. The new email is verified because its link was
 opened from its mailbox: an account whose own email never was (a change an operator asked for,
@@ -691,6 +731,7 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
 
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
   `POST /auth/send-verification-email`, Better Auth's behind the mount, and
+  `POST /auth/confirm-sign-in` (`confirmSignIn`, `CONFIRM_SIGN_IN_PATH`, `confirm-sign-in.ts`),
   `POST /auth/request-password-reset`, `POST /auth/reset-password`, `POST /auth/change-password`,
   `POST /auth/change-email`, `POST /auth/confirm-email`, `POST /auth/request-account-deletion` and
   `POST /auth/delete-account`, the mount's own (`authHandler`, `AuthMountDeps` and
@@ -701,8 +742,10 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   confirmation (`email-change.ts`), the request to delete an account and the deletion
   (`account-deletion.ts`), the confirmation of a signed-in caller's password
   (`password-confirmation.ts`), what follows a new password (`password-changed.ts`), the
-  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the close of a
-  device's sockets, and the requests and refusals as Better Auth and the client get them),
+  Bearer caller of the mount (`signed-in.ts`), the floors' wait (`src/floor.ts`, which the invite of the organisation routes waits on too), the
+  admission and answer of an accepted sign-in (`admitted` and `acceptedSession`, `admitted.ts`),
+  the close of a device's sockets (`closeDevice`, by the verified identity), and the requests and
+  refusals as Better Auth and the client get them (`refusalOf`, `refusalCodeOf`, `BANNED_USER`)),
   which one account's turns serialise (`GatewayRoot.accountTurns`, a `KeyedTurns` by the email in
   lower case or by the identity's key); `GET /devices`, `DELETE /devices/:id`,
   `POST /auth/sign-out` and `POST /auth/sign-out-everywhere` (`deviceRoutes`,
@@ -718,8 +761,9 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   (`CLOSE.deviceLimit`) on those of the device a confirmed sign-in past the account's limit of
   devices signed out; 4001 stays a sign-out from another device. 4004 (`CLOSE.banned`) is what a
   hello hears for a session an operator's ban ended (`ended_reason` `banned`).
-- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in
-  and verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`).
+- Headers: `Authorization: Bearer <token>`, `X-Perch-Device` (`DEVICE_HEADER`) and, at sign-in,
+  at its code step and at verification, `X-Perch-Device-Label` (`DEVICE_LABEL_HEADER`, at most 60
+  characters as `deviceLabel` takes it).
 - Services: `createAuthInstance` and `authOptions` (`auth-instance.ts`: Better Auth's options,
   which the schema check reads too, `SESSION_LIFETIME_MS`, `DEVICE_LIMIT` and
   `VERIFICATION_LINK_LIFETIME_S`),
@@ -744,7 +788,9 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   `accountChoicePolicy` (`second-factor-policy.account-choice.ts`, built by the composition root as
   `GatewayRoot.secondFactorPolicy`), `TwoFactorRows` (`two-factor-rows.ts`: `read` the account's flag
   and key, `confirm`, `disable`; `TwoFactorState`, `TwoFactorKey`, `TwoFactorConfirmation`; the
-  root's `twoFactorRows`), `keyShown` and `keyAccepts` (`two-factor-key.ts`),
+  root's `twoFactorRows`, which the mount reads at a code step as `AuthMountDeps.twoFactor`, beside
+  the front's origin of its own calls, `AuthMountDeps.publicUrl` from the root's `publicUrl`),
+  `keyShown` and `keyAccepts` (`two-factor-key.ts`),
   `confirmPassword`, `signedIn`, `stillSignedIn` and `MountCaller` (`auth-handler/`, through the
   folder's index, which the second factor's routes use beside the mount),
   `passkeyPlugin`, `refuseUnverifiedRegistration` and `refuseUnverifiedAuthentication`
@@ -780,12 +826,14 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   name, the identity of an email, an identity's email, name and language for a mail, an
   identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
-  the move of an identity's email with the end of its reset links, the hash on a credential
+  the move of an identity's email with the end of its reset links and two-factor challenges, the
+  hash on a credential
   row, an email's account, its hash, its ban, whether its second factor is on and its start as a
   sign-in reads them, the account of a two-factor challenge and the end of one, an account's second
   factor read (its flag and its key), the confirmation of a code of its key and the turning off of
   the factor (each one transaction), the two transactions of a
-  new password: a reset's and a change's, and the removal of a deleted account's rows).
+  new password: a reset's and a change's, each ending the account's two-factor challenges, and the
+  removal of a deleted account's rows).
 - Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`, and
   the two-factor plugin's `two_factor_enabled`, among its columns), `account`, `device_session`
   (the admin plugin's `impersonated_by` among its columns), `verification`, `two_factor` (with
@@ -824,6 +872,21 @@ later policy, an organisation's, replaces it in the composition root. A refusal 
   second read (held) answering 401 or 403 with the challenge gone, that 403 judging nothing even
   when the account is deleted before the step is settled (held), and a banned account's refusal
   forgetting nothing, its second factor read when the refusal is judged;
+  `auth-handler/confirm-sign-in.spec.ts` (the code step over a real Better Auth: a wrong code
+  counted and the right one kept out while the failures keep a password out, then taken on the same
+  challenge once the window passed, the right code signing the device in with the allowlist alone
+  and forgetting the failures, a backup code taken once, the code after five wrong ones, a challenge
+  past its ten minutes, a dead, made-up or other email's challenge answering 401 and giving its
+  place back, a dead one 429 while the failures are spent, the email read in lower case, a device
+  named first, a change or a reset of the password, the confirmation of a new email and the factor
+  turned off ending the challenge, and a ban between the steps answered 403, judging nothing) and
+  `auth-handler/confirm-sign-in-races.spec.ts` (each of those changes committed in the account's
+  turn before a code step and after it, both orders forced by the turn and by a held query, the
+  limit of devices answered 409 and confirmed from the password again, a ban in the turn before the
+  step or committed while its session waits for its admission, a factor turned off, or off and
+  started again unconfirmed, while the password step waited to write its challenge, refusing a code
+  of the key and a backup code with the challenge ended, and a backup code spent beside a renewal
+  of the codes or by two challenges, one after the other);
   `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, a challenge's account by
   its row and none for any other value, the internal requests, a challenge that is not one cookie
   value refused before any call is built, and one round trip of a challenge whose signature is

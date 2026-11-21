@@ -3,6 +3,7 @@
  * the client answers on its own, and the routes of the gateway that no action names, with why.
  */
 
+import { challengeOf } from './platform-challenge'
 import { enrolmentOf } from './platform-enrolment'
 import type { Wire } from './platform-requests'
 
@@ -10,6 +11,14 @@ import type { Wire } from './platform-requests'
 export const ACTION_ROUTES: Readonly<Record<string, Wire>> = {
   'sign-up': { method: 'POST', path: '/auth/sign-up/email' },
   'sign-in': { method: 'POST', path: '/auth/sign-in/email' },
+  // A guest's step: the challenge and the email of a password step of the sender's account, whose
+  // second factor is on, so a code reaches the check of the code.
+  'confirm-sign-in': {
+    method: 'POST',
+    path: '/auth/confirm-sign-in',
+    carries: challengeOf,
+    guest: true,
+  },
   'verify-email': { method: 'POST', path: '/auth/verify-email' },
   'resend-verification': { method: 'POST', path: '/auth/send-verification-email' },
   'request-password-reset': { method: 'POST', path: '/auth/request-password-reset' },
@@ -59,10 +68,11 @@ export const ACTION_ROUTES: Readonly<Record<string, Wire>> = {
  * The code a value just inside a bound of an action's parameter is answered with where the request
  * reaches the check behind the schema, not merely an answer other than the refusal past the bound:
  * a code of the shortest or the longest length is judged a wrong code, never refused for the
- * enrolment or the account.
+ * enrolment, the challenge or the account.
  */
 export const INSIDE_CODES: Readonly<Record<string, string>> = {
   'two-factor.confirm': 'invalid-code',
+  'confirm-sign-in': 'invalid-code',
 }
 
 /** The actions the client answers on its own: no request of the gateway is made for them. */

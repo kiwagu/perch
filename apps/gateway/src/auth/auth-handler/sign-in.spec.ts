@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, profileIdFactory } from '@workspace/ids'
-import { z } from '@workspace/zod'
 
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
@@ -10,11 +9,10 @@ import { deviceHeaders } from '../__fixtures__/auth-instance'
 import liveSessionsStatement from '../__fixtures__/device-sessions-live.surql'
 import identityRoleSetStatement from '../__fixtures__/identity-role-set.surql'
 import profileRowStatement from '../__fixtures__/profile-row.surql'
-import { secondFactorOn } from '../__fixtures__/second-factor'
 import secondFactorConfirmStatement from '../__fixtures__/second-factor-confirm.surql'
 import settingsLocaleStatement from '../__fixtures__/settings-locale.surql'
-import challengeRowsStatement from '../__fixtures__/two-factor-challenge-rows.surql'
 
+import { challengeOf, challengeRows, tokenOf, withSecondFactor } from './__fixtures__/code-step'
 import {
   ANN,
   ARGON2_WAIT,
@@ -78,9 +76,6 @@ function withHeaders(request: Request, set: Readonly<Record<string, string>>): R
 
   return new Request(request, { headers })
 }
-
-/** The session token a sign-in answered with: a raw token, which no test can know beforehand. */
-const tokenOf = (body: unknown): string => z.object({ token: z.string().min(1) }).parse(body).token
 
 /** Asks for a reset mail to `email` and answers the token of its link. */
 async function resetLink(mounted: Mounted, email: string): Promise<string> {
@@ -662,33 +657,16 @@ describe("authHandler, a sign-in Better Auth refused before it checked the email
   }, 90_000)
 })
 
-/** The identifiers of every row of a pending two-factor challenge in the directory. */
-async function challengeRows(mounted: Mounted): Promise<unknown[]> {
-  const [rows] = await mounted.local.db.query<[unknown[]]>(challengeRowsStatement)
-
-  return rows
-}
-
-/** The challenge a password step answered: Better Auth's own, which no test can know beforehand. */
-const challengeOf = (body: unknown): string =>
-  z.object({ secondFactor: z.object({ challenge: z.string().min(1) }) }).parse(body).secondFactor
-    .challenge
-
 /**
  * Ann signed up and verified on her laptop, then on her phone, her second factor turned on from
  * the laptop (which replaced the laptop's session: `laptop` is its new token).
  */
 async function annWithSecondFactor(mounted: Mounted) {
-  const ann = await signedInOn(mounted, ANN, ['laptop', 'phone'])
-  const factor = await secondFactorOn(
-    mounted.auth,
-    'laptop',
-    ann.tokens.get('laptop') ?? expect.unreachable('a session of the laptop'),
-  )
+  const ann = await withSecondFactor(mounted)
 
   return {
     ...ann,
-    laptop: factor.token,
+    laptop: ann.tokens.get('laptop') ?? expect.unreachable('a session of the laptop'),
     phone: ann.tokens.get('phone') ?? expect.unreachable('a session of the phone'),
   }
 }
