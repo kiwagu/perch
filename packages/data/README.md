@@ -51,8 +51,8 @@ ids and datetimes do not leave it.
   concurrent requests never run inside each other's transactions, to leave a failed join's
   error to its caller instead of printing it whole, the query's bindings with it, to stderr, and
   to add the single-row `consumeOne` and `incrementOne` Better Auth calls, each one statement, so
-  of two callers racing for a row exactly one finds it as it was; a statement or a transaction the
-  database refuses for a conflict runs again).
+  of two callers racing for a row exactly one finds it as it was; a statement the database refuses
+  for a conflict runs again, a transaction it refuses fails with the conflict and is not run again).
 - Value helpers: `recordId`, `recordRef`, `recordTableOf`, `toDriverParams`, `fromDriverValue`.
 - `./testing`: `openTestDb({ schema?, namespace?, database? })` (in-memory database with the
   directory schema by default), `readSchema(database)`,

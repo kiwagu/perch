@@ -16,9 +16,12 @@ import type { LocalDb } from './types'
  * and returns one row, `incrementOne` adds to counters and sets values on one row, answering the row
  * after the change, and the predicate that picks the row also guards the change. Each is one
  * statement, so of two callers racing for a row exactly one finds it as it was. The database
- * refuses the later one with a conflict, and the statement or the whole transaction it refused runs
- * again. A subpath of its own, since the adapter loads Node modules and the browser imports the
- * root.
+ * refuses the later of two overlapping writers of a row with a conflict: a statement on the
+ * connection that it refused runs again, and finds the row as the winner left it. A transaction is
+ * not run again, since what its callback did outside the database cannot be taken back; the later
+ * of two overlapping transactions fails with the conflict, and Better Auth itself takes the
+ * consumes of one verification identifier one at a time inside the process. A subpath of its own,
+ * since the adapter loads Node modules and the browser imports the root.
  */
 export function surrealAuthAdapter(local: LocalDb): ReturnType<typeof surrealAdapter> {
   return surrealAdapter({ db: local.db })
