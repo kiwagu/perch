@@ -56,6 +56,12 @@ values:
     type: string
     maxLength: 254
     description: A part of an email or of a name, matched whatever its case.
+  second-factor-code:
+    type: string
+    minLength: 6
+    maxLength: 11
+    description: "A code of the second factor: the six digits an authenticator app shows now, or a backup code."
+    examples: [ "123456", abcde-12345 ]
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -272,6 +278,61 @@ actions:
       - name: account-deleted
         to: account
         language: account
+  two-factor.read:
+    description: Reads whether the signed-in account's second factor is on.
+    params: {}
+    result: "whether the account's second factor is on, so that each sign-in with its password also asks for a code; each account turns it on or off as it chooses"
+    changes: []
+    codes:
+      - failed
+  two-factor.enable:
+    description: Starts turning the signed-in account's second factor on, with its password; a code of the key it answers turns it on.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each good for one sign-in; the second factor stays off until two-factor.confirm takes a code of that key, and asking again replaces the key and the codes; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: []
+    codes:
+      - invalid-credentials
+      - rate-limited
+      - failed
+  two-factor.confirm:
+    description: Turns the signed-in account's second factor on with a code of the key two-factor.enable answered.
+    params:
+      code:
+        value: second-factor-code
+        description: The code the authenticator app shows now for that key.
+    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code"
+    changes: [ two-factor.read ]
+    codes:
+      - invalid-code
+      - rate-limited
+      - failed
+  two-factor.disable:
+    description: Turns the signed-in account's second factor off, with its password.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone; this device and the account's other devices stay signed in; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: [ two-factor.read ]
+    codes:
+      - invalid-credentials
+      - rate-limited
+      - failed
+  two-factor.renew-codes:
+    description: Replaces the backup codes of the signed-in account's second factor, with its password.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the answer carries ten new backup codes, each good for one sign-in, and the earlier ones stop working; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: []
+    codes:
+      - invalid-credentials
+      - rate-limited
+      - failed
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -726,6 +787,8 @@ toasts:
   invitations.decline: invitation-declined
   devices.revoke: device-signed-out
   change-password: password-changed
+  two-factor.confirm: two-factor-enabled
+  two-factor.disable: two-factor-disabled
   accounts.rename: name-saved
   accounts.change-email: email-change-sent
   accounts.ban: ban-set

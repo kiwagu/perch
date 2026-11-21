@@ -1,10 +1,10 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: user.settings
 title: Settings
-description: "The signed-in account's settings: its theme and language, its password and email, and the request that deletes the account."
+description: "The signed-in account's settings: its theme and language, its password, email and second factor, and the request that deletes the account."
 flag: null
 bindings: [ { path: /settings, guard: authenticated, roles: [ identity ], history: push } ]
-entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.deletion.form ]
+entry: [ user.settings.heading, user.settings.theme-select, user.settings.locale-select, user.settings.password.form, user.settings.email.form, user.settings.two-factor.section, user.settings.deletion.form ]
 anchors:
   user.settings.heading:
     kind: heading
@@ -88,6 +88,72 @@ anchors:
     kind: error
     fields:
       invalid-credentials: user.settings.email.password-input
+  user.settings.two-factor.section:
+    kind: section
+    description: "The account's second factor as read, on or off: a code of an authenticator app, or a backup code, asked after the password at each sign-in."
+    source:
+      platform: two-factor.read
+    states: [ loading, ready ]
+  user.settings.two-factor.on-badge:
+    kind: badge
+    description: Marks the account's second factor as on.
+  user.settings.two-factor.password-input:
+    kind: input
+    secret: true
+    description: The password the account has now, which confirms turning the second factor on or off, or renewing its backup codes.
+    binding:
+      - action: platform.two-factor.enable
+        params:
+          password: user.settings.two-factor.password-input
+      - action: platform.two-factor.disable
+        params:
+          password: user.settings.two-factor.password-input
+      - action: platform.two-factor.renew-codes
+        params:
+          password: user.settings.two-factor.password-input
+  user.settings.two-factor.enable-button:
+    kind: button
+    description: Starts turning the second factor on.
+    without: [ user.settings.two-factor.on-badge ]
+    binding: { action: platform.two-factor.enable }
+  user.settings.two-factor.key-cell:
+    kind: cell
+    description: The key for the authenticator app, as text to type; a QR code beside it carries the same key to scan.
+  user.settings.two-factor.code-input:
+    kind: input
+    description: The code the authenticator app shows now for the key.
+    binding:
+      action: platform.two-factor.confirm
+      params:
+        code: user.settings.two-factor.code-input
+  user.settings.two-factor.confirm-button:
+    kind: button
+    description: Turns the second factor on with the code.
+    binding: { action: platform.two-factor.confirm }
+  user.settings.two-factor.stop-button:
+    kind: button
+    description: Stops turning the second factor on; it stays off.
+  user.settings.two-factor.codes-cell:
+    kind: cell
+    description: "The ten backup codes, shown this once: each signs the account in once in place of a code of the app."
+  user.settings.two-factor.hide-codes-button:
+    kind: button
+    description: Hides the backup codes; nothing shows them again.
+  user.settings.two-factor.disable-button:
+    kind: button
+    description: Turns the second factor off.
+    with: [ user.settings.two-factor.on-badge ]
+    binding: { action: platform.two-factor.disable }
+  user.settings.two-factor.renew-codes-button:
+    kind: button
+    description: Replaces the backup codes with ten new ones, shown once.
+    with: [ user.settings.two-factor.on-badge ]
+    binding: { action: platform.two-factor.renew-codes }
+  user.settings.two-factor.error:
+    kind: error
+    fields:
+      invalid-credentials: user.settings.two-factor.password-input
+      invalid-code: user.settings.two-factor.code-input
   user.settings.deletion.form:
     kind: form
     description: "Asks to delete the account: a mail to its email carries the link of the page that deletes it."
@@ -254,6 +320,93 @@ flow:
             sent:
               on:
                 user.settings.email.send-button: sending
+        two-factor:
+          description: Turning the account's second factor on or off, or renewing its backup codes.
+          initial: idle
+          states:
+            idle:
+              meta: { renders: [ user.settings.two-factor.password-input, user.settings.two-factor.enable-button, user.settings.two-factor.disable-button, user.settings.two-factor.renew-codes-button ] }
+              on:
+                user.settings.two-factor.enable-button: enabling
+                user.settings.two-factor.disable-button: disabling
+                user.settings.two-factor.renew-codes-button: renewing
+            enabling:
+              meta: { renders: [ user.settings.two-factor.password-input, user.settings.two-factor.enable-button, user.settings.two-factor.disable-button, user.settings.two-factor.renew-codes-button ] }
+              entry:
+                - clear: user.settings.two-factor.error
+              invoke:
+                src: platform.two-factor.enable
+                input: { password: user.settings.two-factor.password-input }
+                onDone:
+                  target: confirming
+                  actions:
+                    - clear: user.settings.two-factor.password-input
+                onError:
+                  target: idle
+                  actions:
+                    - show: user.settings.two-factor.error
+            confirming:
+              description: The key shows and waits for a code of it; the second factor is still off.
+              meta: { renders: [ user.settings.two-factor.key-cell, user.settings.two-factor.code-input, user.settings.two-factor.confirm-button, user.settings.two-factor.stop-button ] }
+              on:
+                user.settings.two-factor.confirm-button: turning-on
+                user.settings.two-factor.stop-button:
+                  target: idle
+                  actions:
+                    - clear: user.settings.two-factor.code-input
+                    - clear: user.settings.two-factor.error
+            turning-on:
+              meta: { renders: [ user.settings.two-factor.key-cell, user.settings.two-factor.code-input, user.settings.two-factor.confirm-button, user.settings.two-factor.stop-button ] }
+              entry:
+                - clear: user.settings.two-factor.error
+              invoke:
+                src: platform.two-factor.confirm
+                input: { code: user.settings.two-factor.code-input }
+                onDone:
+                  target: codes
+                  actions:
+                    - clear: user.settings.two-factor.code-input
+                    - read: user.settings.two-factor.section
+                onError:
+                  target: confirming
+                  actions:
+                    - show: user.settings.two-factor.error
+            codes:
+              description: The backup codes just made show until they are hidden or the page closes.
+              meta: { renders: [ user.settings.two-factor.codes-cell, user.settings.two-factor.hide-codes-button ] }
+              on:
+                user.settings.two-factor.hide-codes-button: idle
+            disabling:
+              meta: { renders: [ user.settings.two-factor.password-input, user.settings.two-factor.enable-button, user.settings.two-factor.disable-button, user.settings.two-factor.renew-codes-button ] }
+              entry:
+                - clear: user.settings.two-factor.error
+              invoke:
+                src: platform.two-factor.disable
+                input: { password: user.settings.two-factor.password-input }
+                onDone:
+                  target: idle
+                  actions:
+                    - clear: user.settings.two-factor.password-input
+                    - read: user.settings.two-factor.section
+                onError:
+                  target: idle
+                  actions:
+                    - show: user.settings.two-factor.error
+            renewing:
+              meta: { renders: [ user.settings.two-factor.password-input, user.settings.two-factor.enable-button, user.settings.two-factor.disable-button, user.settings.two-factor.renew-codes-button ] }
+              entry:
+                - clear: user.settings.two-factor.error
+              invoke:
+                src: platform.two-factor.renew-codes
+                input: { password: user.settings.two-factor.password-input }
+                onDone:
+                  target: codes
+                  actions:
+                    - clear: user.settings.two-factor.password-input
+                onError:
+                  target: idle
+                  actions:
+                    - show: user.settings.two-factor.error
         deletion:
           description: Asking to delete the account.
           initial: idle
@@ -300,5 +453,7 @@ wireframe: |-
   - textbox "New email"
   - textbox "Password"
   - button "Send the confirmation"
+  - textbox "Password"
+  - button "Turn on the second factor"
   - textbox "Password"
   - button "Send the deletion link"
