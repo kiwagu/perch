@@ -43,7 +43,7 @@ values:
     type: string
     minLength: 1
     maxLength: 64
-    description: "The id of a platform record: an identity, a device session, an invitation."
+    description: "The id of a platform record: an identity, a device session, an invitation, a passkey."
   invitation-ref:
     type: string
     minLength: 1
@@ -56,6 +56,12 @@ values:
     type: string
     maxLength: 254
     description: A part of an email or of a name, matched whatever its case.
+  second-factor-code:
+    type: string
+    minLength: 6
+    maxLength: 11
+    description: "A code of the second factor: the six digits an authenticator app shows now, or a backup code."
+    examples: [ "123456", abcde-12345 ]
 actions:
   sign-up:
     description: Creates an account with its name and its language, and sends the mail whose link verifies its email; this device is not signed in.
@@ -99,11 +105,45 @@ actions:
         type: boolean
         optional: true
         description: Sign in past the account's limit of devices, signing out its device seen least recently, but only when this device would otherwise be one too many.
-    result: the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email was verified without a device signing in (by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed) also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in
+    result: "the device is signed in, the app moves to /me with code welcome; the first sign-in of an account whose email was verified without a device signing in (by a password reset, by its verification link opened while it was banned, or by an operator's email change confirmed) also creates its settings (its language as it signed up) and profile (its name as it signed up), as the link of the sign-up mail would have; an account whose email is not verified yet is refused with email-not-verified and nothing is sent; an account is signed in on ten devices at most at once, each counted once while its session lasts, so a sign-in on one more device asks first (dialog device-limit) and signs nothing in; with signOutOldest it signs this device in and signs out the one seen least recently only when the account would otherwise be on more than ten devices; an account an operator banned is refused with account-banned once its password is right, so nobody without the password learns of the ban, and nothing is signed in; an account whose second factor is on is not signed in by its password alone: the answer asks for a code (confirm-sign-in), its ban is judged as above, and this step signs no device in or out, the limit of devices being judged once a code is taken; a wrong password counts toward the email's failed sign-ins, ten within a quarter of an hour, after which a sign-in answers rate-limited until the quarter of an hour has passed; these are the account's one count of failed sign-ins, the codes of its second factor held to it too, and they are forgotten once a sign-in's last step passes, even when the dialog device-limit then asks: the right password, or for an account whose second factor is on the right code, never its right password alone; a passkey sign-in (sign-in-passkey) is not kept out by them and forgets them"
     changes: [ devices.list, accounts.read ]
     codes:
       - invalid-credentials
       - email-not-verified
+      - account-banned
+      - rate-limited
+      - other-account
+      - failed
+  sign-in-passkey:
+    description: Signs this device in to an account with one of its passkeys, which the browser asks for, with no password and no code.
+    params:
+      signOutOldest:
+        type: boolean
+        optional: true
+        description: Sign in past the limit of devices of the account the dialog device-limit asked about, once it is confirmed.
+    result: "the browser asks to pick a passkey of this site and to unlock it; the device is then signed in to that passkey's account as by sign-in with the right password, the limit of devices (dialog device-limit) and the ban judged alike, and its second factor asks nothing; signOutOldest holds only for the account the dialog asked about, so a passkey of another account picked on the confirmation is asked about afresh; the email's failed sign-ins never keep it out, since a passkey cannot be guessed, while they keep a sign-in by password out (rate-limited), and a passkey sign-in that passes forgets them, the dialog device-limit asking or not; a passkey no account here holds, one removed from its account included, answers passkey-unknown; the browser's window closed or timed out answers passkey-cancelled; an account signed in on this browser answers other-account before the browser asks for a passkey, so no device is signed in or out; nothing is signed in on a refusal"
+    changes: [ devices.list, accounts.read ]
+    codes:
+      - passkey-cancelled
+      - passkey-unknown
+      - account-banned
+      - other-account
+      - failed
+  confirm-sign-in:
+    description: Signs this device in to the account whose sign-in by password asked for a code, with a code of its second factor.
+    params:
+      code:
+        value: second-factor-code
+        description: A code the account's authenticator app shows now, or one of its backup codes not used yet.
+      signOutOldest:
+        type: boolean
+        optional: true
+        description: Sign in past the account's limit of devices as for sign-in, once the dialog device-limit is confirmed.
+    result: "the device is signed in as by sign-in, the ban and the limit of devices (dialog device-limit) judged now, and a backup code taken is used up; the email's failed sign-ins are judged first: while they keep a password out it answers rate-limited, whatever else holds, and looks at no code; a wrong code answers invalid-code and counts toward them as a wrong password does, and a right code forgets them, the dialog device-limit asking or not; once five wrong codes were given, ten minutes have passed since the password, or the account's password or email has changed since then, the next code answers code-expired and the sign-in starts again from the password; another account signed in on this browser answers other-account before the server is asked, as for sign-in, so no device is signed in or out; past the limit of devices nothing is signed in, so the dialog's confirmation signs in again from the password, which asks for a code again"
+    changes: [ devices.list, accounts.read ]
+    codes:
+      - invalid-code
+      - code-expired
       - account-banned
       - rate-limited
       - other-account
@@ -272,6 +312,89 @@ actions:
       - name: account-deleted
         to: account
         language: account
+  two-factor.read:
+    description: Reads whether the signed-in account's second factor is on.
+    params: {}
+    result: "whether the account's second factor is on, so that each sign-in with its password also asks for a code; each account turns it on or off as it chooses"
+    changes: []
+    codes:
+      - failed
+  two-factor.enable:
+    description: Starts turning the signed-in account's second factor on, with its password; a code of the key it answers turns it on.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the answer carries a new key for an authenticator app, as text and as a QR code, and ten new backup codes, each good for one sign-in; the second factor stays off until two-factor.confirm takes a code of that key, and asking again replaces the key and the codes; while the second factor is on, turned on meanwhile from another device, it answers two-factor-changed and changes nothing; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: []
+    codes:
+      - invalid-credentials
+      - two-factor-changed
+      - rate-limited
+      - failed
+  two-factor.confirm:
+    description: Turns the signed-in account's second factor on with a code of the key two-factor.enable answered.
+    params:
+      code:
+        value: second-factor-code
+        description: The code the authenticator app shows now for that key.
+    result: "the second factor is on: from now on each sign-in of the account with its password asks for a code of that key, or for one of the backup codes two-factor.enable answered; this device and the account's other devices stay signed in; a code the key does not give now answers invalid-code; a code given for a key that a later two-factor.enable replaced, on this device or another, or once the second factor was turned on from another device, answers two-factor-changed whatever the code, and nothing changes"
+    changes: [ two-factor.read ]
+    codes:
+      - invalid-code
+      - two-factor-changed
+      - rate-limited
+      - failed
+  two-factor.disable:
+    description: Turns the signed-in account's second factor off, with its password.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the second factor is off: its key and its backup codes stop working, and a sign-in asks for the password alone; one off already, turned off meanwhile from another device, gets the same answer; this device and the account's other devices stay signed in; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: [ two-factor.read ]
+    codes:
+      - invalid-credentials
+      - rate-limited
+      - failed
+  two-factor.renew-codes:
+    description: Replaces the backup codes of the signed-in account's second factor, with its password.
+    params:
+      password:
+        value: password
+        description: The password the account has now, which confirms the request.
+    result: "the answer carries ten new backup codes, each good for one sign-in, and the earlier ones stop working; while the second factor is off, turned off meanwhile from another device, it answers two-factor-changed and makes none; a wrong password answers invalid-credentials and counts toward the account's failed sign-ins as for change-password"
+    changes: []
+    codes:
+      - invalid-credentials
+      - two-factor-changed
+      - rate-limited
+      - failed
+  passkeys.list:
+    description: Reads the passkeys of the signed-in account.
+    params: {}
+    result: "the account's passkeys, the earliest added first: for each its id and when it was added"
+    changes: []
+    codes:
+      - failed
+  passkeys.add:
+    description: Adds a passkey to the signed-in account, which the browser makes on this device or on a security key.
+    params: {}
+    result: "the browser asks to make a passkey for this site and to unlock it; the account then signs in with it from the sign-in page, with no password and no code; the browser's window closed or timed out answers passkey-cancelled, and nothing is added"
+    changes: [ passkeys.list ]
+    codes:
+      - passkey-cancelled
+      - failed
+  passkeys.remove:
+    description: Removes a passkey of the signed-in account.
+    params:
+      passkey:
+        value: id
+        description: The id of the passkey.
+    result: "the passkey signs nothing in from now on; the devices it signed in stay signed in"
+    changes: [ passkeys.list ]
+    codes:
+      - failed
   sign-out:
     description: Signs this device out, after sending what it can.
     params:
@@ -726,6 +849,10 @@ toasts:
   invitations.decline: invitation-declined
   devices.revoke: device-signed-out
   change-password: password-changed
+  two-factor.confirm: two-factor-enabled
+  two-factor.disable: two-factor-disabled
+  passkeys.add: passkey-added
+  passkeys.remove: passkey-removed
   accounts.rename: name-saved
   accounts.change-email: email-change-sent
   accounts.ban: ban-set
