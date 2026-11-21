@@ -65,6 +65,40 @@ describe('scanSources', () => {
       `apps/web/src/augment.d.ts:1: ${AUGMENTED_MODULE('./view')}`,
     ])
   })
+  it('refuses a module declaration that names a source from any typed file of the repository', () => {
+    const view = '@/features/organisation/organisation-create.view'
+    const augments = (specifier: string): string =>
+      `export {}\n\ndeclare module '${specifier}' {\n  interface CreateDraft { type: string }\n}\n`
+    const root = repository(
+      {
+        'apps/web/src/features/organisation/organisation-create.view.tsx': ANCHOR,
+        'apps/web/build/augment.d.ts': augments(view),
+        'tests/e2e/augment.mts': augments(
+          '../../apps/web/src/features/organisation/organisation-create.view',
+        ),
+        'scripts/helpers.d.cts': augments('./helpers'),
+        'packages/data/src/surql.d.ts': augments('*.surql'),
+        'docs/notes.md': augments(view),
+        '.gitignore': 'dist/\n',
+        'apps/web/dist/augment.d.ts': augments(view),
+      },
+      [],
+    )
+    const found = scanSources(root)
+
+    // A file outside the roots is said with its problem; one that names no source, an ignored
+    // build output and a file of another kind are not read.
+    expect(
+      found.map(({ file, literals, problems }) => [file, literals.length, problems.length]),
+    ).toEqual([
+      ['apps/web/build/augment.d.ts', 0, 1],
+      ['apps/web/src/features/organisation/organisation-create.view.tsx', 1, 0],
+      ['tests/e2e/augment.mts', 0, 1],
+    ])
+    expect(found[0]?.problems.map(formatProblem)).toEqual([
+      `apps/web/build/augment.d.ts:3: ${AUGMENTED_MODULE(view)}`,
+    ])
+  })
   it('skips a staged file that is gone from the working tree', () => {
     const root = repository({ 'apps/web/src/page.tsx': ANCHOR }, ['apps/web/src/page.tsx'])
 
