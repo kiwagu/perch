@@ -660,12 +660,20 @@ describe('compareWithContract', () => {
       'fields.length = 0',
       'addExtra(fields)',
       'const same = fields',
+      // A call through a computed member may be any method, one that changes it included.
+      "const append = 'push'; fields[append](props.extra)",
+      "fields[props.method ?? 'push'](props.extra)",
     ]) {
       expect(titleViewOf(looping(use)), use).toEqual({ strict: refused, ahead: refused })
     }
 
-    // Only read besides, its length or a spread of it, it yields the elements it declares.
-    for (const use of ['const count = fields.length', 'const copy = [...fields]']) {
+    // Only read besides, its length, an index or a spread of it, it yields the elements it declares.
+    for (const use of [
+      'const count = fields.length',
+      'const copy = [...fields]',
+      'const first = fields[0]',
+      'const nth = fields[props.at]',
+    ]) {
       expect(titleViewOf(looping(use)), use).toEqual({ strict: [], ahead: [] })
     }
   })
@@ -695,6 +703,46 @@ describe('compareWithContract', () => {
     expect(
       titleViewOf(tagged('<Input data-testid={TITLE_TEST_ID} {...row.props} maxLength={3} />')),
     ).toEqual({ strict: refused, ahead: refused })
+  })
+  it('lets a wrapper pass whose props a name destructures from a for…of variable or an alias of it, in ahead mode too', () => {
+    /** The tagged rows' loop, `derive` taking the row's props, spread as `props` in both arms. */
+    const derived = (derive: string, props: string, search: string): string[] => [
+      "const TITLE_TEST_ID = 'sample.title-input'",
+      "const searchProps = { 'data-testid': TITLE_TEST_ID }",
+      'function Fields(props) {',
+      "  const rows = [{ kind: 'search', props: searchProps }, { kind: 'wrapper', props: props.inputProps }]",
+      '  const out = []',
+      '  for (const row of rows) {',
+      `    ${derive}`,
+      `    out.push(row.kind === 'wrapper' ? <Wrapper {...${props}} /> : ${search})`,
+      '  }',
+      '  return out',
+      '}',
+    ]
+    const refused = [
+      `x.tsx:8: ${UNFOLLOWED_SPREAD('sample.title-input')}`,
+      `x.tsx:8: "sample.title-input": maxLength={3}, but ${KIT}`,
+    ]
+
+    // Each name it derives shares the loop variable's unknown as a whole: the wrapper passes, and
+    // an element that writes its anchor beside the spread is still held to it.
+    for (const [derive, props] of [
+      ['const { props: forwarded } = row', 'forwarded'],
+      ['const same = row', 'same.props'],
+      ['const same = row; const { props: forwarded } = same', 'forwarded'],
+      ['const { props: { ...forwarded } } = row', 'forwarded'],
+    ] as const) {
+      const anchored = `<Input data-testid={TITLE_TEST_ID} {...${props}} maxLength={3} />`
+
+      expect(titleViewOf(derived(derive, props, `<Input {...${props}} />`)), derive).toEqual({
+        strict: [],
+        ahead: [],
+      })
+      expect(titleViewOf(derived(derive, props, anchored)), derive).toEqual({
+        strict: refused,
+        ahead: refused,
+      })
+    }
   })
   it('refuses a spread the check stops following at its depth, whatever the element carries, and follows a shallower one', () => {
     /** The title's props under `search`, spread through `layers` objects in a row. */

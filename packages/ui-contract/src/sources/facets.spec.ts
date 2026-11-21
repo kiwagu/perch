@@ -885,6 +885,31 @@ describe('facetProblems', () => {
           }
         }
       })
+      it('reads an assertion to a typeof of a const of the view by the events it stands for, in ahead mode too', () => {
+        const event = 'withExtra({ type: eventType })'
+        const entries = {
+          withExtra:
+            "(extra: { type: typeof eventType }) => ({ type: 'sample.save-button', ...extra })",
+          save: `<Button data-testid="sample.save-button" disabled={!props.can(${event})} />`,
+        }
+        const asserted = "const eventType = 'sample.save-button' as typeof defaults.type"
+
+        // The query stands for the save event: the value asserted is one of its events. One that
+        // stands for another event, or that the view cannot read, leaves it unread.
+        for (const [declarations, refused] of [
+          [["const defaults = { type: 'sample.save-button' } as const", asserted], false],
+          [["const defaults = { type: 'sample.a-button' } as const", asserted], true],
+          [["import { defaults } from './defaults'", asserted], true],
+          [["let defaults = { type: 'sample.save-button' } as const", asserted], true],
+        ] as const) {
+          for (const ahead of [false, true]) {
+            expect(
+              problemsOf(entries, { declarations, ahead }),
+              `${declarations[0]}${ahead ? ' (ahead)' : ''}`,
+            ).toEqual(refused ? cannotRead(event) : [])
+          }
+        }
+      })
       it('reads a typeof of a member a template keeps past a spread that sets no type, in ahead mode too', () => {
         const event = 'withExtra(defaults)'
         const entries = {

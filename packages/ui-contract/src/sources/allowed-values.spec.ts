@@ -1,7 +1,7 @@
 import { type Expression, parseSync, type TSType, Visitor } from 'oxc-parser'
 import { describe, expect, it } from 'vitest'
 
-import { type AllowedValue, allowedValues, valueAllows } from './allowed-values'
+import { type AllowedValue, allowedValues, type QueryReader, valueAllows } from './allowed-values'
 import { localsOf } from './locals'
 
 /** The language a probe is written in: `tsx`, or `ts` for an assertion written `<T>value`. */
@@ -50,10 +50,14 @@ const valuesOf = (
   lang?: Lang,
 ): string[] | undefined => named(allowedBy(type, around, lang).allowed)
 
-/** The values the type of the value `probe` is declared with allows, in the file `around` writes. */
+/**
+ * The values the type of the value `probe` is declared with allows, in the file `around` writes,
+ * a query of a name's key read by `read` where it is given.
+ */
 function writtenOf(
   value: string,
   around: (probe: string) => string = (probe) => probe,
+  read?: QueryReader,
 ): string[] | undefined {
   const { program } = parseSync('x.tsx', around(`const probe = ${value}`), {
     lang: 'tsx',
@@ -75,7 +79,7 @@ function writtenOf(
     throw new Error('the file declares its probe')
   }
 
-  return named(valueAllows(probe, 'type', localsOf(program)))
+  return named(valueAllows(probe, 'type', localsOf(program), 0, read))
 }
 
 /** The file that writes `lines`, then types the probe. */
@@ -256,6 +260,28 @@ describe('allowedValues', () => {
 })
 
 describe('valueAllows', () => {
+  it('reads an assertion to a query by the events the caller reads it as, where the value is one', () => {
+    /** The caller's reading of `typeof <name>.type`: `defaults` stands for the save event. */
+    const read: QueryReader = ({ reference }) =>
+      reference.name === 'defaults' ? ['sample.save-button'] : undefined
+
+    expect(writtenOf(`${SAVE} as typeof defaults.type`, undefined, read)).toEqual([
+      'typeof defaults',
+    ])
+    expect(writtenOf(`${SAVE} as typeof defaults.type | ${A}`, undefined, read)).toEqual([
+      'typeof defaults',
+      'sample.a-button',
+    ])
+
+    // Another event than it stands for, a query the caller cannot read, or no reader: none.
+    for (const [value, reader] of [
+      [`${A} as typeof defaults.type`, read],
+      [`${SAVE} as typeof other.type`, read],
+      [`${SAVE} as typeof defaults.type`, undefined],
+    ] as const) {
+      expect(writtenOf(value, undefined, reader), value).toBeUndefined()
+    }
+  })
   it('reads the type of a value the file writes: its string, or the type an assertion gives it', () => {
     const reads: ReadonlyArray<readonly [string, readonly string[], string?]> = [
       [SAVE, ['sample.save-button']],

@@ -5,7 +5,8 @@
  * (`[...fields]`), a pattern it is destructured into, a `typeof` of it in a type, or a member read
  * (an index, `length`, a method) that is not assigned, updated or deleted and is no call of a
  * method that changes an array (`push`, `unshift`, `splice`, `sort`, `reverse`, `fill`,
- * `copyWithin`). So the array passed to a function (which may change it), handed on (to another
+ * `copyWithin`) or of a computed member, whatever its key (`fields[append](x)`, `const append =
+ * 'push'`). So the array passed to a function (which may change it), handed on (to another
  * name, a property, an element, a JSX prop, a `return`) or assigned anew is one the file may
  * change, as far as the check can tell. A name that is no use of a value (its declaration, a
  * property's or a member's name, a key of a type) is none.
@@ -14,7 +15,7 @@
 import type { Expression, Program, Super } from 'oxc-parser'
 import { Visitor } from 'oxc-parser'
 
-import { staticText, unwrap } from './values'
+import { unwrap } from './values'
 
 /** The methods of an array that change it. */
 const CHANGING = new Set(['push', 'unshift', 'splice', 'sort', 'reverse', 'fill', 'copyWithin'])
@@ -81,18 +82,13 @@ export function changingUses(program: Program): NameUse[] {
       }
     },
     CallExpression: ({ callee }) => {
-      const method = callee.type === 'MemberExpression' ? callee : undefined
-      const name =
-        method === undefined
-          ? undefined
-          : method.computed
-            ? staticText(method.property)
-            : method.property.type === 'Identifier'
-              ? method.property.name
-              : undefined
-
-      if (method !== undefined && name !== undefined && CHANGING.has(name)) {
-        mark(changed, method.object)
+      // A call through a computed member may be any method, whatever its key reads as.
+      if (
+        callee.type === 'MemberExpression' &&
+        (callee.computed ||
+          (callee.property.type === 'Identifier' && CHANGING.has(callee.property.name)))
+      ) {
+        mark(changed, callee.object)
       }
     },
     AssignmentExpression: ({ left }) => {

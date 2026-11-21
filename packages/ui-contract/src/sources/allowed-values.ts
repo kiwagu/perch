@@ -29,6 +29,14 @@ export type AllowedValue =
   | { readonly kind: 'literal'; readonly text: string }
   | { readonly kind: 'query'; readonly reference: IdentifierReference }
 
+/**
+ * How the caller reads the events a query of a name's key stands for (`typeof defaults.type`,
+ * `asked-event.ts`), where it can, for an assertion to be checked against them.
+ */
+export type QueryReader = (
+  query: Extract<AllowedValue, { kind: 'query' }>,
+) => readonly string[] | undefined
+
 /** Whether an assertion's type is `const`, which keeps the literal its value writes. */
 export const isConstType = (type: TSType): boolean =>
   type.type === 'TSTypeReference' &&
@@ -41,12 +49,13 @@ export function allowedValues(
   key: string,
   locals: Locals,
   depth = 0,
+  read?: QueryReader,
 ): AllowedValue[] | undefined {
   switch (type.type) {
     case 'TSParenthesizedType':
-      return allowedValues(type.typeAnnotation, key, locals, depth)
+      return allowedValues(type.typeAnnotation, key, locals, depth, read)
     case 'TSUnionType': {
-      const each = type.types.map((member) => allowedValues(member, key, locals, depth))
+      const each = type.types.map((member) => allowedValues(member, key, locals, depth, read))
 
       return each.every((values) => values !== undefined) ? each.flat() : undefined
     }
@@ -62,7 +71,7 @@ export function allowedValues(
       }
 
       if (exprName.type === 'Identifier') {
-        return constantValues(exprName, key, locals, depth)
+        return constantValues(exprName, key, locals, depth, read)
       }
 
       return exprName.type === 'TSQualifiedName' &&
@@ -82,6 +91,7 @@ function constantValues(
   key: string,
   locals: Locals,
   depth: number,
+  read: QueryReader | undefined,
 ): AllowedValue[] | undefined {
   const value = locals.constantNamed(name.name, name.start)
 
@@ -92,45 +102,59 @@ function constantValues(
   const annotation = locals.declaredTypeOf(name, name.start)
 
   return annotation === undefined
-    ? valueAllows(value, key, locals, depth + 1)
-    : allowedValues(annotation, key, locals, depth + 1)
+    ? valueAllows(value, key, locals, depth + 1, read)
+    : allowedValues(annotation, key, locals, depth + 1, read)
+}
+
+/** The strings values stand for, a query read as `read` says; none where one cannot be read. */
+const textsOf = (
+  values: readonly AllowedValue[] | undefined,
+  read: QueryReader | undefined,
+): string[] | undefined => {
+  const each = values?.map((value) => (value.kind === 'literal' ? [value.text] : read?.(value)))
+
+  return each?.every((texts) => texts !== undefined) === true
+    ? each.flatMap((texts) => texts ?? [])
+    : undefined
 }
 
 /**
  * The values the type of a value the file writes allows, as an unannotated const or a member of an
  * `as const` object keeps it: the one string it writes, or what the type an assertion other than
  * `as const` gives it allows (`'x' as 'x' | 'y'` both, `'x' as string` none), where the value it
- * asserts reads as strings that type allows (`'y' as 'x'` none); none for any other value, a call
- * included.
+ * asserts reads as strings that type allows (`'y' as 'x'` none), a query in either read as `read`
+ * says (`'x' as typeof defaults.type`, where `defaults.type` is `'x'`); none for any other value,
+ * a call included.
  */
 export function valueAllows(
   value: Expression,
   key: string,
   locals: Locals,
   depth = 0,
+  read?: QueryReader,
 ): AllowedValue[] | undefined {
   switch (value.type) {
     case 'ParenthesizedExpression':
     case 'TSSatisfiesExpression':
-      return valueAllows(value.expression, key, locals, depth)
+      return valueAllows(value.expression, key, locals, depth, read)
     case 'TSAsExpression':
     case 'TSTypeAssertion': {
-      const held = valueAllows(value.expression, key, locals, depth)
+      const held = valueAllows(value.expression, key, locals, depth, read)
 
       if (isConstType(value.typeAnnotation)) {
         return held
       }
 
-      const typed = allowedValues(value.typeAnnotation, key, locals, depth)
-      const allows = (text: string): boolean =>
-        typed?.some((each) => each.kind === 'literal' && each.text === text) === true
+      const typed = allowedValues(value.typeAnnotation, key, locals, depth, read)
+      const allows = textsOf(typed, read)
+      const holds = textsOf(held, read)
 
-      return held?.every((each) => each.kind === 'literal' && allows(each.text)) === true
+      return allows !== undefined && holds?.every((text) => allows.includes(text)) === true
         ? typed
         : undefined
     }
     case 'Identifier':
-      return constantValues(value, key, locals, depth)
+      return constantValues(value, key, locals, depth, read)
     case 'Literal':
     case 'TemplateLiteral': {
       const text = staticText(value)

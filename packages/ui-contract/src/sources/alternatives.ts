@@ -107,15 +107,31 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
           )
     }
     /**
-     * Whether a name, or a member of one, written at `at`, is the variable of a `for…of`: the body
-     * may guard which element reaches which use, so where one element leaves it unknown, it is
-     * unknown as a whole (`settled`), the elements the file states no alternatives of their own.
+     * Whether a name, written at `where`, or a member of one, is the variable of a `for…of` or a
+     * name derived from it (destructured from it, `const { props } = row`, or an alias, `const r =
+     * row`, at any remove): the body may guard which element reaches which use, so where one
+     * element leaves it unknown, it is unknown as a whole (`settled`), the elements the file states
+     * no alternatives of their own.
      */
-    const looped = (node: Expression | Super): boolean =>
-      node.type === 'MemberExpression'
-        ? looped(node.object)
-        : node.type === 'Identifier' &&
-          names.boundTo(node.name, at).some(({ member }) => member?.iterated === true)
+    const looped = (node: Expression | Super, where: number, level = 0): boolean => {
+      const written = node.type === 'Super' ? undefined : unwrap(node)
+
+      if (written?.type === 'MemberExpression') {
+        return looped(written.object, where, level)
+      }
+
+      return (
+        written?.type === 'Identifier' &&
+        level < DEPTH &&
+        names
+          .boundTo(written.name, where)
+          .some(({ value: held, member }) =>
+            member === undefined
+              ? held !== undefined && looped(held, held.start, level + 1)
+              : member.iterated === true || looped(member.object, member.object.start, level + 1),
+          )
+      )
+    }
     /**
      * The alternatives of `key` in an object's properties, scanning back from `from` at nesting
      * `level`: a property with the key decides; a spread decides for each branch it may take that
@@ -223,7 +239,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
 
         const members = membersOf(objectsOf(value.object, at, depth + 1), value.property.name)
 
-        return looped(value.object) ? settled(members) : members
+        return looped(value.object, at) ? settled(members) : members
       }
       case 'Identifier': {
         const bound = names.boundTo(value.name, at)
@@ -234,7 +250,7 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
           : bound.flatMap(({ value: declared, member }): Alternative[] => {
               if (member !== undefined) {
                 // A destructured name: the value destructured, or each element of the one a
-                // `for…of` iterates (`looped`), then each key down to it.
+                // `for…of` iterates, then each key down to it (`looped`).
                 const part = member.path.reduce(
                   (alternatives, key) => membersOf(alternatives, key),
                   member.iterated === true
@@ -242,7 +258,9 @@ export function alternativesIn(names: Names): (node: Expression, at: number) => 
                     : objectsOf(member.object, member.object.start, depth + 1),
                 )
 
-                return member.iterated === true ? settled(part) : part
+                return member.iterated === true || looped(member.object, member.object.start)
+                  ? settled(part)
+                  : part
               }
 
               const hook = declared === undefined ? undefined : hooked(declared)

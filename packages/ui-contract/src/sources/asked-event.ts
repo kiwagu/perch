@@ -34,11 +34,18 @@
 
 import type { Expression, ObjectExpression, SpreadElement, TSType } from 'oxc-parser'
 
-import { type AllowedValue, allowedValues, isConstType, valueAllows } from './allowed-values'
+import {
+  type AllowedValue,
+  allowedValues,
+  isConstType,
+  type QueryReader,
+  valueAllows,
+} from './allowed-values'
 import { type Alternative, DEEP, DEPTH, isNothing } from './alternatives'
 import { anchorIn } from './element'
 import type { Locals } from './locals'
 import { keyName, unwrap } from './values'
+import { writtenObject } from './written-object'
 
 /** `can` or `props.can`, the machine's question as the facets idiom writes it. */
 const isCan = (callee: Expression): boolean =>
@@ -141,6 +148,11 @@ export function questionOf(locals: Locals, written: Expression): Question {
 
     return types.every((type): type is string => typeof type === 'string') ? types : undefined
   }
+  /** How an assertion to a `typeof <name>.type` is checked: by the events the query says. */
+  const readQuery =
+    (depth: number): QueryReader =>
+    (query) =>
+      queriedTypes(query, depth + 1)
   /** The events each value allows: a string, or what the `typeof <name>.type` it is says. */
   const eventsOf = (allowed: readonly AllowedValue[], depth: number): string[] | undefined => {
     const events = allowed.map((value) =>
@@ -156,7 +168,10 @@ export function questionOf(locals: Locals, written: Expression): Question {
    */
   const allowedTypes = (declared: TSType, depth: number): string[] | undefined => {
     const member = locals.types.memberOf(declared, 'type')
-    const allowed = member === undefined ? undefined : allowedValues(member, 'type', locals, depth)
+    const allowed =
+      member === undefined
+        ? undefined
+        : allowedValues(member, 'type', locals, depth, readQuery(depth))
 
     return allowed === undefined ? undefined : eventsOf(allowed, depth)
   }
@@ -168,39 +183,9 @@ export function questionOf(locals: Locals, written: Expression): Question {
   }
   /** The events a `type` written with `value` is typed to allow; unread where it does not say. */
   const typedAs = (value: Expression, depth: number): Typed[] => {
-    const allowed = valueAllows(value, 'type', locals, depth)
+    const allowed = valueAllows(value, 'type', locals, depth, readQuery(depth))
 
     return (allowed === undefined ? undefined : eventsOf(allowed, depth)) ?? [null]
-  }
-  /**
-   * The object a spread of a queried template writes, as its type has it: an object literal, in
-   * parentheses, `as const` or `satisfies`, or one a `const` of the file holds that it writes no
-   * type for; none for anything else, whose type may differ from the object the file follows it to
-   * (an annotation, another assertion, a call, a parameter).
-   */
-  const writtenObject = (node: Expression, depth: number): ObjectExpression | undefined => {
-    if (depth >= DEPTH) {
-      return undefined
-    }
-
-    switch (node.type) {
-      case 'ParenthesizedExpression':
-      case 'TSSatisfiesExpression':
-        return writtenObject(node.expression, depth)
-      case 'TSAsExpression':
-        return isConstType(node.typeAnnotation) ? writtenObject(node.expression, depth) : undefined
-      case 'ObjectExpression':
-        return node
-      case 'Identifier': {
-        const value = locals.constantNamed(node.name, node.start)
-
-        return value === undefined || locals.declaredTypeOf(node, node.start) !== undefined
-          ? undefined
-          : writtenObject(value, depth + 1)
-      }
-      default:
-        return undefined
-    }
   }
   const typesOf = (
     alternatives: readonly Alternative[],
@@ -225,7 +210,7 @@ export function questionOf(locals: Locals, written: Expression): Question {
               // A spread of an object written as its type has it, which sets no `type`, keeps the
               // one before it.
               if (reading === 'type') {
-                const written = writtenObject(property.argument, depth)
+                const written = writtenObject(locals, property.argument, depth)
                 const setsNone =
                   written !== undefined &&
                   typesIn(written, depth + 1, reading).every((type) => type === undefined)

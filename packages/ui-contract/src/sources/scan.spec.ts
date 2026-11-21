@@ -3,8 +3,10 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { formatProblem } from '../files'
 import { repository, useRepositories } from '../repository.fixture'
 
+import { AUGMENTED_MODULE } from './augmentation'
 import { scanSources } from './scan'
 
 useRepositories()
@@ -36,6 +38,31 @@ describe('scanSources', () => {
       ['apps/web/src/new.tsx', 1],
       ['apps/web/src/page.tsx', 1],
       ['packages/ui/src/button.tsx', 1],
+    ])
+  })
+  it('refuses a module declaration that may name a source, in any typed file under the roots', () => {
+    const augments = "declare module './view' {\n  interface Draft { type: string }\n}\n"
+    const root = repository(
+      {
+        'apps/web/src/view.tsx': ANCHOR,
+        'apps/web/src/augment.d.ts': augments,
+        'apps/web/src/view.spec.tsx': `${ANCHOR}${augments}`,
+        'packages/ui/src/env.d.ts': "declare module 'virtual:x' {\n  const x: string\n}\n",
+      },
+      [],
+    )
+    const found = scanSources(root)
+
+    // Each file that augments is said with its problem; the view is collected as before.
+    expect(
+      found.map(({ file, literals, problems }) => [file, literals.length, problems.length]),
+    ).toEqual([
+      ['apps/web/src/augment.d.ts', 0, 1],
+      ['apps/web/src/view.spec.tsx', 0, 1],
+      ['apps/web/src/view.tsx', 1, 0],
+    ])
+    expect(found[0]?.problems.map(formatProblem)).toEqual([
+      `apps/web/src/augment.d.ts:1: ${AUGMENTED_MODULE('./view')}`,
     ])
   })
   it('skips a staged file that is gone from the working tree', () => {

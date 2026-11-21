@@ -182,7 +182,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     `sources/element.ts`, the event a `disabled`
     asks its machine about, `sources/asked-event.ts`, with what the file's type declarations say of
     a spread it cannot follow, `sources/declared-type.ts`, whether a function body can run off its
-    end, `sources/reachable-end.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`;
+    end, `sources/reachable-end.ts`); `scanSources(root)` collects the sources under `SOURCE_ROOTS`,
+    refusing in any typed file there a `declare module` that may name one (`sources/augmentation.ts`);
     `compareWithContract(collected, screens, vocabulary)` holds them to the contract, with
     `codesOf(vocabulary, screens)` (the kit takes a field's `holdsInput`, `marksState`, `maxLength`
     and `type` from the emitted field facts, so a view writes none: `sources/opt-outs.ts` and
