@@ -6,6 +6,7 @@ import { SCHEMA_OUTPUTS, SCREEN_SCHEMA_FILE } from '../files'
 import { authoredAnchorDefSchema } from '../schemas'
 
 import { schemaKeys } from './keys'
+import { ruleIdsNamedIn } from './mentions'
 import { renderReference } from './render'
 import { REFERENCE_RULES } from './rules'
 import { referenceSlug } from './slug'
@@ -69,6 +70,16 @@ const entries: readonly Entry[] = blocks
 
 const entryAt = (slug: string): Entry | undefined => entries.find((entry) => entry.slug === slug)
 
+/**
+ * What an entry says: its text together with the text of each rule that text names. A key's text
+ * says what the key is for and names the rule that holds the rest, so a reader takes both.
+ */
+function saidBy(entry: Entry | undefined): string {
+  const named = ruleIdsNamedIn(entry?.text ?? '').map((id) => entryAt(`rule-${id}`)?.text ?? '')
+
+  return [entry?.text ?? '', ...named].join('\n\n')
+}
+
 /** The facets of the screen file, each a key name: the reference says every one of them in full. */
 const FACET_KEYS = [
   'binding',
@@ -121,7 +132,10 @@ const FACET_HOMES: Readonly<Record<Facet, string>> = {
   pattern: 'screen-flow-states-name-states-name-pattern',
 }
 
-/** The shortest text that says a facet: what it is and how the engine treats it, not a label. */
+/**
+ * The shortest text that says a facet: what it is and how the engine treats it, not a label. A
+ * key's own text and the rules it names together reach it.
+ */
 const FACET_TEXT_LENGTH = 80
 
 /** The describe text of a key's schema, through the optional that wraps it. */
@@ -224,9 +238,11 @@ describe('renderReference', () => {
   })
   it.each(FACET_KEYS)('writes the facet %s under its key, with its rule in full', (facet) => {
     const home = entryAt(FACET_HOMES[facet])
+    const ruleIds = new Set(REFERENCE_RULES.map(({ id }) => id))
 
     expect(home?.heading.endsWith(`${facet}\``)).toBe(true)
-    expect(home?.text.length ?? 0).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+    expect(ruleIdsNamedIn(home?.text ?? '').filter((id) => !ruleIds.has(id))).toEqual([])
+    expect(saidBy(home).length).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
   })
   it('says where an error shows each code, and the fields key names that rule', () => {
     expect(entryAt('rule-error-placement')?.text).toContain('shows beside the controls of its part')
@@ -254,8 +270,11 @@ describe('renderReference', () => {
     ['rule-email-format', 'is submitted by no form'],
     ['rule-clear-keeps', 'while its draft lives'],
     ['rule-clear-keeps', "an entry's edit form closing because another entry is edited or deleted"],
-  ])('answers a question builders asked, in the text of %s', (slug, answer) => {
-    expect(entryAt(slug)?.text).toContain(answer)
+    ['screen-anchors-name-binding', 'a secret is never filled from a URL'],
+    ['screen-anchors-name-own', 'data (the owner of each entry) decides whether it shows'],
+    ['screen-anchors-name-source-paged', 'a paged list has at most 3 segments'],
+  ])('answers a question builders asked, in the text of %s or a rule it names', (slug, answer) => {
+    expect(saidBy(entryAt(slug))).toContain(answer)
   })
   it('gives each rule an id of its own', () => {
     const ids = REFERENCE_RULES.map(({ id }) => id)

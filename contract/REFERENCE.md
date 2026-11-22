@@ -325,7 +325,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `anchors.<name>.binding`
 
 <a id="screen-anchors-name-binding"></a>
-What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `anchors.<name>.binding.model`
 
@@ -370,12 +370,12 @@ The name of a search parameter every route of the screen declares.
 ### `anchors.<name>.roles`
 
 <a id="screen-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.
+The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.
 
 ### `anchors.<name>.own`
 
 <a id="screen-anchors-name-own"></a>
-Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.
+Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. See the rule `own-entries`.
 
 ### `anchors.<name>.holdsInput`
 
@@ -395,7 +395,7 @@ A field that holds a secret (a password, its confirmation, a current password, a
 ### `anchors.<name>.with`
 
 <a id="screen-anchors-name-with"></a>
-The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`.
+The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
 
 ### `anchors.<name>.with.<name>`
 
@@ -405,7 +405,7 @@ A code of the vocabulary (data-code).
 ### `anchors.<name>.without`
 
 <a id="screen-anchors-name-without"></a>
-The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`.
+The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
 
 ### `anchors.<name>.without.<name>`
 
@@ -455,7 +455,7 @@ The derived suffixes the element renders, each from the vocabulary's closed tabl
 ### `anchors.<name>.source`
 
 <a id="screen-anchors-name-source"></a>
-Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
+Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
 
 ### `anchors.<name>.source.entity`
 
@@ -480,7 +480,7 @@ The platform action whose result the anchor lists.
 ### `anchors.<name>.source.params`
 
 <a id="screen-anchors-name-source-params"></a>
-Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route.
+Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list reads again when it becomes another, or a constant; never a field. See the rule `list-reads`.
 
 ### `anchors.<name>.source.params.<name>`
 
@@ -500,7 +500,7 @@ The name of a search parameter every route of the screen declares.
 ### `anchors.<name>.source.paged`
 
 <a id="screen-anchors-name-source-paged"></a>
-The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the field facts carry for the kit. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.
+The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.
 
 ### `anchors.<name>.composite`
 
@@ -2256,7 +2256,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `screens.anchors.<name>.binding`
 
 <a id="manifest-screens-anchors-name-binding"></a>
-What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `screens.anchors.<name>.binding.model`
 
@@ -2301,12 +2301,12 @@ The name of a search parameter every route of the screen declares.
 ### `screens.anchors.<name>.roles`
 
 <a id="manifest-screens-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`). Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses. `contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`. A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there. A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.
+The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.
 
 ### `screens.anchors.<name>.own`
 
 <a id="manifest-screens-anchors-name-own"></a>
-Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.
+Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. See the rule `own-entries`.
 
 ### `screens.anchors.<name>.holdsInput`
 
@@ -2326,7 +2326,7 @@ A field that holds a secret (a password, its confirmation, a current password, a
 ### `screens.anchors.<name>.with`
 
 <a id="manifest-screens-anchors-name-with"></a>
-The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`.
+The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
 
 ### `screens.anchors.<name>.with.<name>`
 
@@ -2336,7 +2336,7 @@ A code of the vocabulary (data-code).
 ### `screens.anchors.<name>.without`
 
 <a id="manifest-screens-anchors-name-without"></a>
-The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes. An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`.
+The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
 
 ### `screens.anchors.<name>.without.<name>`
 
@@ -2386,7 +2386,7 @@ The derived suffixes the element renders, each from the vocabulary's closed tabl
 ### `screens.anchors.<name>.source`
 
 <a id="manifest-screens-anchors-name-source"></a>
-Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
+Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one.
 
 ### `screens.anchors.<name>.source.entity`
 
@@ -2411,7 +2411,7 @@ The platform action whose result the anchor lists.
 ### `screens.anchors.<name>.source.params`
 
 <a id="manifest-screens-anchors-name-source-params"></a>
-Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route.
+Per parameter of the action, a search parameter of the route `{ "search": "<name>" }`, which the list reads again when it becomes another, or a constant; never a field. See the rule `list-reads`.
 
 ### `screens.anchors.<name>.source.params.<name>`
 
@@ -2431,12 +2431,12 @@ The name of a search parameter every route of the screen declares.
 ### `screens.anchors.<name>.source.paged`
 
 <a id="manifest-screens-anchors-name-source-paged"></a>
-The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the field facts carry for the kit. A screen pages one list, and a paged list has at most 3 segments. See the rule `paged-list`.
+The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.
 
 ### `screens.anchors.<name>.asks`
 
 <a id="manifest-screens-anchors-name-asks"></a>
-Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way.
+Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`.
 
 ### `screens.anchors.<name>.asks.dialog`
 
@@ -3521,7 +3521,7 @@ The id of the screen that declares the anchor.
 ### `ids.<name>.binding`
 
 <a id="manifest-ids-name-binding"></a>
-What the anchor does or shows. `{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section. Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter. `{ route: /path }`: the path of a binding of some screen. `{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL. A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which. `contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `ids.<name>.binding.model`
 
@@ -3636,7 +3636,7 @@ A code of the vocabulary (data-code).
 ### `ids.<name>.asks`
 
 <a id="manifest-ids-name-asks"></a>
-Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way.
+Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`.
 
 ### `ids.<name>.asks.dialog`
 
@@ -4408,6 +4408,27 @@ The page speaks the user's language, so tests and agents never assert its words.
 
 Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.anchors.<name>.dataId`](#screen-anchors-name-dataid), [`screen.anchors.<name>.dataValue`](#screen-anchors-name-datavalue).
 
+### What an anchor is bound to
+
+<a id="rule-anchor-binding"></a>
+The `binding` of an anchor says what it does or shows.
+
+`{ model: <entity>.<field> }`: a field of `model.schema.json` (`$defs.<entity>`). `{ action: <entity>.<action>, params: { ... } }`: an action of the entity's `x-perch.actions`; `{ action: platform.<name> }`: an action of the platform section.
+
+Each parameter names the anchor whose value it takes, a constant `{ value: true }`, or `{ search: <name> }`: the value of that search parameter of the route the screen was opened at, which every binding of the screen declares under `search` (the token a link carries). An `item` or a `row` named as a parameter gives the `data-id` of the entry whose control acts: a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry (`<list>.revoke-button` passes `session: <list>.session-item`, the session of its own row). The item is an entry of a list, a table or a section of its own screen, declared under it or beside it in its part, and declares its `dataId`; an invoke's `input` takes one the same way, in a state that only the events of such controls enter.
+
+`{ route: /path }`: the path of a binding of some screen.
+
+`{ search: <name> }`, on a field (an input, a textarea, a select, a checkbox, a radio or a switch): the field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it; every binding of the screen declares it under `search`. It sits in a list beside the action the field gives its value to: the email a link carried into `/forgot-password?email=...` fills the email input the request is sent with, `[ { search: email }, { action: platform.request-password-reset, params: { email: user.forgot-password.email-input } } ]`. A navigate of another screen's flow carries the value there (`{ anchor: <field> }`, see the rule `flow-effects`). A `secret` field never takes it: a secret is never filled from a URL.
+
+The binding `{ search: <name> }` of a field. The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`.
+
+A list of bindings means the anchor runs them in that order, or one of them by the mode of the screen; its `flow` says which.
+
+`contract:check` holds every binding to what exists: a field, an action, a route, or a search parameter every route of the screen declares.
+
+Keys it concerns: [`screen.anchors.<name>.binding`](#screen-anchors-name-binding), [`manifest.screens.anchors.<name>.binding`](#manifest-screens-anchors-name-binding), [`manifest.ids.<name>.binding`](#manifest-ids-name-binding).
+
 ### The entries of a list and the controls that act on them
 
 <a id="rule-entries-of-a-list"></a>
@@ -4669,7 +4690,39 @@ An anchor rendered in each entry of a list, in the part of its `item` or `row` (
 
 An e2e run holds them in every settled state of the element's screen (see the rule `settled-state`), unless the element is rendered in each entry of a list, which the report does not tell apart: it is not visible while a `with` entry does not render or a `without` entry does. A state that lists the element in `meta.renders` requires it on the page only while its entries say it shows; while it is not visible, neither the parts derived from it nor the anchors nested under it are required. A control no state lists, which nothing besides its state decides, is visible once each of its `with` entries renders, one at least, and no `without` entry does; any other element shows by its own data too (a cell its value, a list its entries, a message its code), and an element with no `with` entry has nothing on the page that says the area holding it is shown. A code entry reads the `data-code` the report carries; where the report carries none, it is judged only when its anchor is not visible, and then it does not render.
 
+`with`: The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes.
+
+`without`: The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes.
+
+`with` and `without`: An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry.
+
 Keys it concerns: [`screen.anchors.<name>.with`](#screen-anchors-name-with), [`screen.anchors.<name>.without`](#screen-anchors-name-without).
+
+### Who sees an anchor: its roles
+
+<a id="rule-anchor-roles"></a>
+The `roles` of an anchor say who sees it.
+
+A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`).
+
+Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses.
+
+`contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`.
+
+A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there.
+
+A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.
+
+Keys it concerns: [`screen.anchors.<name>.roles`](#screen-anchors-name-roles), [`manifest.screens.anchors.<name>.roles`](#manifest-screens-anchors-name-roles), [`manifest.ids.<name>.roles`](#manifest-ids-name-roles).
+
+### When an element shows on the entries a member owns: own
+
+<a id="rule-own-entries"></a>
+`own`: Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone.
+
+A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.
+
+Keys it concerns: [`screen.anchors.<name>.own`](#screen-anchors-name-own), [`manifest.screens.anchors.<name>.own`](#manifest-screens-anchors-name-own), [`manifest.ids.<name>.own`](#manifest-ids-name-own).
 
 ### A list with no entries
 
@@ -4704,6 +4757,12 @@ Every other read is said by the flow, with the effect `read: <anchor>` (see the 
 A platform source's `params` give the action's parameters their values: each a search parameter of the route, `{ search: <name> }`, one every route of the screen declares, or a constant, `{ value: ... }`; never a field, since what a list shows is a state of the address and what is typed is not, so a search box moves the route with a navigate and the list reads the new search. A parameter left out is the implementation's to compute, as in a binding. Each param of a platform source is a parameter of its action taking a constant or a search parameter every route of the screen declares, never `page` or `size`.
 
 `searchKeysOf(source)` of `@workspace/ui-contract/anchors` computes the search parameters a source reads, which read it again when one changes: those its params take, then `page` and `size` when it pages. `contract:diff` lists a list that reads a platform action as `<anchor> reads platform.<action>`, then each param by name (`q=search:q`, `kind="all"`), then `paged` when it pages: a list moved to another search or to paging shows as its old line removed and its new one added, and a list added whole shows its line.
+
+The `source` of an anchor. Where the entries of a list, a section or a table come from, and with it when they are read; no other kind has one. `{ platform: <action> }`: the entries are the answer of that platform action, which the anchor reads each time it starts to render after it did not and each time what it reads for becomes another, and where a flow says `read: <anchor>`. `{ entity: <entity>, order, direction }`: the stored entries of that entity of the model, which the anchor follows as they change, here or on another device; such a list is never read.
+
+The branch `{ platform: <action> }` of a `source`. The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`.
+
+The `params` of a platform source. `page` and `size` are never among them: a paged source takes them from the route.
 
 Keys it concerns: [`screen.anchors.<name>.source`](#screen-anchors-name-source), [`screen.anchors.<name>.source.platform`](#screen-anchors-name-source-platform), [`screen.anchors.<name>.source.params`](#screen-anchors-name-source-params), [`screen.anchors.<name>.source.entity`](#screen-anchors-name-source-entity), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
 
@@ -4749,6 +4808,8 @@ A paged list derives four parts, which its `derived` lists and a screen file nev
 A part leaves out of the address a value equal to its default (page 1, the action's default size), as every link of the app does. A range or a link that does not apply is absent from the page, never disabled, so a state that lists the list in `meta.renders` does not require them; the size select it does. `pagerOf`, `searchKeysOf` and `pageSearchOf` of `@workspace/ui-contract/anchors` compute what a page shows, which search keys a list reads for and the search a part moves to, for the app and the tests alike (`PAGE` and `SIZE` name the search parameters, `PAGING_PARTS` the four parts).
 
 `contract:check` holds a paged source: its action pages, with its sizes each once, the smallest first, its default one of them, and takes the number parameters `page` and `size`, each of type `number` or `integer` as it writes it or as the value it refers to says (see the rule `declared-values`); every route of its screen declares `page` and `size` as it reads them; no source's `params` names `page` or `size`; a screen pages one list; and a paged list has at most 3 segments. A range and the previous and next links are shown where the read decides, so the e2e run's settled check does not require them to be on the page where their list is rendered; the size select shows wherever the list does (see the rule `settled-state`). `contract:diff` lists `paged` on the line of a list that reads a platform action.
+
+`paged: true` of a platform source. The list is a page of the action's entries: the action declares `paged: { sizes, default }` in `platform.yaml`, the page and the size are the route's search parameters `page` and `size`, which every route of the screen declares (no `params` names them), and a new search starts at page 1. The list derives `range`, `previous-link`, `next-link` and `size-select`, none written by a screen file; the size select holds no input, which the field facts carry for the kit. A screen pages one list, and a paged list has at most 3 segments.
 
 Keys it concerns: [`screen.anchors.<name>.source.paged`](#screen-anchors-name-source-paged), [`screen.anchors.<name>.derived`](#screen-anchors-name-derived), [`platform.actions.<name>.paged`](#platform-actions-name-paged).
 
@@ -5006,7 +5067,9 @@ With a confirmation on the frame (an anchor of kind `confirmation`, `app-shell.c
 
 The flow says nothing of it: the press still leads to the state that runs the action, and the app's gate asks in front of the event, its confirm-button letting the event through and its cancel-button dropping it. The one line a screen writes is `confirm: false` on the control, which runs the action without asking; on a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. The frame's confirmation is declared by the frame alone, once, reserved, with both answers and no action of its own.
 
-Keys it concerns: [`screen.anchors.<name>.confirm`](#screen-anchors-name-confirm).
+The key `asks` of a control, which the manifest carries. Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way.
+
+Keys it concerns: [`screen.anchors.<name>.confirm`](#screen-anchors-name-confirm), [`manifest.screens.anchors.<name>.asks`](#manifest-screens-anchors-name-asks), [`manifest.ids.<name>.asks`](#manifest-ids-name-asks).
 
 ### Scenario files and their ids
 

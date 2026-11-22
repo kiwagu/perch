@@ -1,8 +1,9 @@
 /**
  * The rules of what a state renders: the lists of `meta.renders`, what rendered means, who reads
  * it; a list several states share, named once; when an element shows beside others (`with`,
- * `without`); and the two elements that are not rendered by their data, a list with no entries and
- * a cell with no value.
+ * `without`), to some roles only (`roles`) or only on the entries a member owns (`own`); and the
+ * two elements that are not rendered by their data, a list with no entries and a cell with no
+ * value.
  */
 
 import type { ReferenceRule } from '../rule'
@@ -67,8 +68,43 @@ const withWithout: ReferenceRule = {
     'An anchor rendered in each entry of a list, in the part of its `item` or `row` (`<part>.<name>`, like the entry) or declared under it (see the rule `entries-of-a-list`), names anchors of the same entry and means the same entry: `device.list.revoke-button` with `without: [ device.list.current-badge, device.list.revoked-cell ]` shows on every entry but the one of this device and those signed out already. An anchor outside the entries may name one of them, and then means any entry.',
     "`contract:check` refuses an entry that names the element itself; an anchor of another screen (a screen's element never names the frame's, nor the frame's a screen's) or one its screen does not declare; a code the named anchor does not carry, as loaded (the codes the loader derives included); an anchor named twice, in one list or in both; an anchor that names the element back, directly or through others, a cycle, which is said on one of its anchors only; and, under an entry, an anchor outside that entry. The manifest carries `with` and `without` in `ids`.",
     "An e2e run holds them in every settled state of the element's screen (see the rule `settled-state`), unless the element is rendered in each entry of a list, which the report does not tell apart: it is not visible while a `with` entry does not render or a `without` entry does. A state that lists the element in `meta.renders` requires it on the page only while its entries say it shows; while it is not visible, neither the parts derived from it nor the anchors nested under it are required. A control no state lists, which nothing besides its state decides, is visible once each of its `with` entries renders, one at least, and no `without` entry does; any other element shows by its own data too (a cell its value, a list its entries, a message its code), and an element with no `with` entry has nothing on the page that says the area holding it is shown. A code entry reads the `data-code` the report carries; where the report carries none, it is judged only when its anchor is not visible, and then it does not render.",
+    "`with`: The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes.",
+    "`without`: The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or `{ <anchor>: [codes] }`, that anchor while it shows one of these codes.",
+    '`with` and `without`: An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry.',
   ].join('\n\n'),
   keys: ['screen.anchors.<name>.with', 'screen.anchors.<name>.without'],
+}
+
+const anchorRoles: ReferenceRule = {
+  id: 'anchor-roles',
+  title: 'Who sees an anchor: its roles',
+  text: [
+    'The `roles` of an anchor say who sees it.',
+    "A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`).",
+    "Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses.",
+    "`contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`.",
+    "A state of a flow may list such an anchor in `meta.renders` like any other, and the state still bounds where it may be visible: an anchor a state does not render is never visible there, and the e2e run's settled check reports it. Where the state does render it, data (the account's roles) decides whether it shows, so the settled check does not require it to be on the page or visible there.",
+    "A link bound to one route takes the roles of that route when it admits fewer devices than the screen serves: from version 4 the loader derives them and a file never writes roles that admit what the route's do (see the rule `link-roles`). With no `roles` on it, written or derived, and none on an anchor above it, it is shown to every role its screen serves, whoever is signed in.",
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.roles',
+    'manifest.screens.anchors.<name>.roles',
+    'manifest.ids.<name>.roles',
+  ],
+}
+
+const ownEntries: ReferenceRule = {
+  id: 'own-entries',
+  title: 'When an element shows on the entries a member owns: own',
+  text: [
+    '`own`: Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone.',
+    "A state of a flow may list it in `meta.renders` like any other anchor, and the state still bounds where it may be visible: a state that does not render it never shows it, which the e2e run's settled check reports. Where the state does render it, data (the owner of each entry) decides whether it shows, so the settled check does not require it to be on the page or visible there, as it does not for an anchor with `roles`, an entry (`dataId`) or an anchor nested under one of these.",
+  ].join('\n\n'),
+  keys: [
+    'screen.anchors.<name>.own',
+    'manifest.screens.anchors.<name>.own',
+    'manifest.ids.<name>.own',
+  ],
 }
 
 const emptyList: ReferenceRule = {
@@ -98,11 +134,13 @@ const errorPlacement: ReferenceRule = {
   keys: ['screen.anchors.<name>.fields', 'screen.anchors.<name>.codes'],
 }
 
-/** The rules of what a state renders, of when an element shows beside others, and where an error shows. */
+/** The rules of what a state renders, of when an element shows, and where an error shows. */
 export const RENDER_RULES: readonly ReferenceRule[] = [
   stateRenders,
   renderSets,
   withWithout,
+  anchorRoles,
+  ownEntries,
   emptyList,
   emptyCell,
   errorPlacement,
