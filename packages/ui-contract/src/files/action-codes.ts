@@ -18,7 +18,7 @@ export interface CodeEntry {
 }
 
 /** The codes of an action by name, in the order it writes them. */
-export const codesOf = (codes: ActionCodes): readonly string[] =>
+export const codeNamesOf = (codes: ActionCodes): readonly string[] =>
   Array.isArray(codes) ? codes : Object.keys(codes)
 
 /** Each code of an action with its place, and its condition or invariant where it writes one. */

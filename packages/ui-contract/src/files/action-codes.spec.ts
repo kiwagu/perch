@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { codeEntriesOf, codesOf, outcomesOf } from './action-codes'
+import { codeEntriesOf, codeNamesOf, outcomesOf } from './action-codes'
 
 const MAP = {
   'invalid-credentials': 'the email or the password is wrong',
@@ -8,12 +8,12 @@ const MAP = {
   failed: 'anything else fails',
 }
 
-describe('codesOf', () => {
+describe('codeNamesOf', () => {
   it('reads the codes of a map in its order', () => {
-    expect(codesOf(MAP)).toEqual(['invalid-credentials', 'device-limit', 'failed'])
+    expect(codeNamesOf(MAP)).toEqual(['invalid-credentials', 'device-limit', 'failed'])
   })
   it('reads the codes of the older list as written', () => {
-    expect(codesOf(['rate-limited', 'failed'])).toEqual(['rate-limited', 'failed'])
+    expect(codeNamesOf(['rate-limited', 'failed'])).toEqual(['rate-limited', 'failed'])
   })
 })
 

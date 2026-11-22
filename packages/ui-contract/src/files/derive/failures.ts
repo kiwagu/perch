@@ -24,7 +24,7 @@
 
 import { kebab } from '../../kebab'
 import type { ActionCodes, PlatformParameter } from '../../schemas'
-import { codesOf } from '../action-codes'
+import { codeNamesOf } from '../action-codes'
 import type { Model, ModelEntity, ModelField } from '../model'
 import type { Platform } from '../screens'
 
@@ -201,7 +201,7 @@ function attributionOf({ codes, params }: PlatformFailure): Record<string, reado
   return Object.fromEntries(
     Object.entries(params).flatMap(([param, { codes: listed = [] }]) => {
       const named = FIELD_CODE_SUFFIXES.map(({ suffix }) => codeNamedAfter(param, suffix))
-      const own = codesOf(codes).filter((code) => named.includes(code) || listed.includes(code))
+      const own = codeNamesOf(codes).filter((code) => named.includes(code) || listed.includes(code))
 
       return own.length === 0 ? [] : [[param, own] as const]
     }),
@@ -246,7 +246,7 @@ export const failuresOf =
       return declared === undefined
         ? undefined
         : {
-            codes: codesOf(declared.codes),
+            codes: codeNamesOf(declared.codes),
             params: edition >= ATTRIBUTION_EDITION ? attributionOf(declared) : {},
           }
     }

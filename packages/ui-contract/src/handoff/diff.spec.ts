@@ -188,6 +188,7 @@ describe('diffContracts', () => {
       values: { added: [], removed: [], changed: [] },
       actions: { added: [], removed: [] },
       actionLines: { 'sign-out': { added: [], removed: [] } },
+      invariantLines: {},
       modelActionLines: {
         'thing.createThing': { added: [], removed: [] },
         'thing.updateThing': { added: [], removed: [] },
@@ -1316,5 +1317,60 @@ describe('diffContracts and the platform values', () => {
       added: ['param kind: string, enum ["1"]'],
       removed: ['param kind: string, enum [1]'],
     })
+  })
+})
+
+describe('diffContracts and the invariants', () => {
+  /** The fixture contract with the platform's `invariants` set as given. */
+  function withInvariants(invariants: Contract['screens']['platform']['invariants']): Contract {
+    const contract = fixtureContract()
+
+    contract.screens.platform.invariants = invariants
+
+    return contract
+  }
+
+  const LIMIT = { rule: 'Ten devices at most at once.', refuses: 'device-limit' }
+
+  it('lists the rule and the code of an invariant added, edited or removed, by its name', () => {
+    expect(
+      diffContracts(
+        withInvariants({ limit: LIMIT, gone: { rule: 'Old rule.', refuses: 'failed' } }),
+        withInvariants({
+          limit: { ...LIMIT, rule: 'Five devices at most at once.' },
+          fresh: { rule: 'A new rule.', refuses: 'rate-limited' },
+        }),
+      ).invariantLines,
+    ).toEqual({
+      fresh: { added: ['refuses rate-limited', 'rule: A new rule.'], removed: [] },
+      gone: { added: [], removed: ['refuses failed', 'rule: Old rule.'] },
+      limit: {
+        added: ['rule: Five devices at most at once.'],
+        removed: ['rule: Ten devices at most at once.'],
+      },
+    })
+  })
+  it('lists nothing for invariants that stay as they were, or a platform with none', () => {
+    expect(
+      diffContracts(withInvariants({ limit: LIMIT }), withInvariants({ limit: LIMIT }))
+        .invariantLines,
+    ).toEqual({
+      limit: { added: [], removed: [] },
+    })
+    expect(diffContracts(fixtureContract(), fixtureContract()).invariantLines).toEqual({})
+  })
+  it('prints the lines changed in each invariant', () => {
+    expect(
+      formatChanges(
+        diffContracts(
+          withInvariants({ limit: LIMIT }),
+          withInvariants({ limit: { ...LIMIT, rule: 'Five devices at most at once.' } }),
+        ),
+      ).split('\n'),
+    ).toEqual([
+      'contract changes: 1 invariant line added in limit, 1 invariant line removed in limit',
+      'invariant lines added in limit: rule: Five devices at most at once.',
+      'invariant lines removed in limit: rule: Ten devices at most at once.',
+    ])
   })
 })

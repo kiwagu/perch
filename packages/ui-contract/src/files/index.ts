@@ -1,4 +1,4 @@
-export { type CodeEntry, codeEntriesOf, codesOf, outcomesOf } from './action-codes'
+export { type CodeEntry, codeEntriesOf, codeNamesOf, outcomesOf } from './action-codes'
 export {
   type Activity,
   type ActivityState,

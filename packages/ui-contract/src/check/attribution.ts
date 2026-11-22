@@ -17,7 +17,7 @@ import {
   attributedCodes,
   codeEntriesOf,
   codeNamedAfter,
-  codesOf,
+  codeNamesOf,
   constrains,
   FIELD_CODE_SUFFIXES,
   keywordsOf,
@@ -127,7 +127,7 @@ function listedProblems(contract: Contract): Problem[] {
   return actionsOf(contract).flatMap(({ name, declared, at }) =>
     Object.entries(declared.params).flatMap(([param, { codes = [] }]) =>
       codes.flatMap((code, index) =>
-        codesOf(declared.codes).includes(code)
+        codeNamesOf(declared.codes).includes(code)
           ? []
           : [
               locate(contract.screens)(

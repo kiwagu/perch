@@ -17,7 +17,7 @@ import { FIELD_STATES, kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
   codeEntriesOf,
-  codesOf,
+  codeNamesOf,
   jsonPath,
   MODEL_FILE,
   type Problem,
@@ -268,7 +268,7 @@ function choiceValueProblems(contract: Contract): Problem[] {
 const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
-    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codesOf(codes)),
+    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codeNamesOf(codes)),
     ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
     ...(screens.questions.length > 0 ? [CONFIRM_RULE_ROW] : []),
   ])

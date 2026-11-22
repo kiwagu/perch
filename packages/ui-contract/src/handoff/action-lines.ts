@@ -72,3 +72,9 @@ export function actionLines(action: PlatformAction | undefined): string[] {
     ),
   ]
 }
+
+type PlatformInvariant = NonNullable<Contract['screens']['platform']['invariants']>[string]
+
+/** The lines of an invariant: its rule and the code it refuses with; none for one a side lacks. */
+export const invariantLines = (invariant: PlatformInvariant | undefined): string[] =>
+  invariant === undefined ? [] : [`rule: ${invariant.rule}`, `refuses ${invariant.refuses}`]
