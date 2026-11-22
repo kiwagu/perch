@@ -37,10 +37,11 @@ const COOKIE_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
 export const challengeValue = z.string().regex(COOKIE_VALUE)
 
 /**
- * The value cookie `name` is set to by `answer`'s `set-cookie`, as it stands there: never decoded,
- * so it goes back to Better Auth exactly as Better Auth set it, which decodes it on its read. The
- * last setting of the name counts; none when the answer sets no such cookie, empties it, or sets it
- * to what is not one cookie value (`challengeValue`).
+ * The value cookie `name` is set to by `answer`'s `set-cookie`, as it stands there: never decoded
+ * nor trimmed, so it goes back to Better Auth exactly as Better Auth set it, which decodes it on its
+ * read. The last setting of the name counts; none when the answer sets no such cookie, empties it,
+ * or sets it to what is not one cookie value (`challengeValue`), a value padded with whitespace
+ * included.
  */
 export function setCookieValue(answer: Response, name: string): string | undefined {
   let value: string | undefined
@@ -50,7 +51,7 @@ export function setCookieValue(answer: Response, name: string): string | undefin
     const equals = pair.indexOf('=')
 
     if (equals > 0 && pair.slice(0, equals).trim() === name) {
-      const set = challengeValue.safeParse(pair.slice(equals + 1).trim())
+      const set = challengeValue.safeParse(pair.slice(equals + 1))
 
       value = set.success ? set.data : undefined
     }

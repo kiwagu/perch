@@ -89,6 +89,23 @@ describe('setCookieValue', () => {
     expect(setCookieValue(answer, 'two_factor')).toBeUndefined()
     expect(setCookieValue(new Response(null), 'better-auth.two_factor')).toBeUndefined()
   })
+
+  it.each([
+    ['a space before it', 'better-auth.two_factor= 2fa-abc.c2ln%3D; Path=/'],
+    ['a space after it', 'better-auth.two_factor=2fa-abc.c2ln%3D ; Path=/'],
+    ['a tab before it', 'better-auth.two_factor=\t2fa-abc.c2ln%3D; Path=/'],
+  ])(
+    'reads no value padded with %s: the value is taken as it stands, never trimmed into one',
+    (_, cookie) => {
+      const headers = new Headers()
+
+      headers.append('set-cookie', cookie)
+
+      expect(setCookieValue(new Response(null, { headers }), 'better-auth.two_factor')).toBe(
+        undefined,
+      )
+    },
+  )
 })
 
 describe('twoFactorChallenges', () => {

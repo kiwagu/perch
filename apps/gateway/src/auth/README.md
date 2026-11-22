@@ -66,7 +66,8 @@ add a passkey. Neither the mount nor the passkey routes hand any of the plugins'
 HTTP: they reach them through the gateway's own calls (`internalRequest`, `auth-handler/challenge-cookie.ts`): a request to Better
 Auth's path behind the front, from the front's origin, with the device's headers, the plugin's
 challenge as its only cookie, in the wire form Better Auth set it (`setCookieValue` reads it from
-Better Auth's `set-cookie`, never decoded and encoded again), a bearer only for a call made while
+Better Auth's `set-cookie`, never decoded and encoded again, nor trimmed: a value padded with
+whitespace reads as none), a bearer only for a call made while
 signed in, and `X-Perch-Admission: pending` when the call writes a session. A challenge is one
 cookie value on the wire (`challengeValue`: no separator, whitespace, quote or backslash), which a
 route parses from what a device sends; a call whose challenge is not one is refused with an error
@@ -1004,7 +1005,8 @@ its challenge cookie carried by the device as `challenge`.
   started again unconfirmed, while the password step waited to write its challenge, refusing a code
   of the key and a backup code with the challenge ended, and a backup code spent beside a renewal
   of the codes or by two challenges, one after the other);
-  `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, a challenge's account by
+  `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, none for one padded with
+  whitespace, a challenge's account by
   its row and none for any other value, the internal requests, a challenge that is not one cookie
   value refused before any call is built, one round trip of a challenge whose signature is
   encoded, and the reclaim of expired challenges: each with its count, a count left alone
