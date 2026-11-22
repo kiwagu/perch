@@ -551,6 +551,157 @@ describe('SignInContainer', () => {
     expect(asked).toEqual(['password in', 'code in', 'password out', 'code out'])
   })
 
+  it('retries a confirmed sign-in with the credentials of the attempt that asked, whatever the form holds by then', async () => {
+    let user: AuthUser | undefined
+    let answer: (result: SignInResult) => void = () => {}
+    const asked: Array<{ email: string; password: string; out: boolean }> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
+        asked.push({
+          email: input.email,
+          password: input.password,
+          out: input.signOutOldest === true,
+        })
+
+        if (asked.length === 1) {
+          // The first answer waits, while the form can still be edited.
+          return ResultAsync.fromSafePromise(
+            new Promise<SignInResult>((resolve) => {
+              answer = resolve
+            }),
+          )
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    await screen.findByTestId('user.sign-in.email-input')
+    typeInto('user.sign-in.email-input', ann.email)
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    // Another account's credentials are typed while the first attempt is pending.
+    typeInto('user.sign-in.email-input', 'bob@example.test')
+    typeInto('user.sign-in.password-input', 'Other-word-2')
+    act(() => answer({ kind: 'device-limit' }))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    // The dialog asked about the first account: its confirmation signs that one in.
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual([
+      { email: ann.email, password: 'Pass-word-1', out: false },
+      { email: ann.email, password: 'Pass-word-1', out: true },
+    ])
+  })
+
+  it('retries with the credentials of the attempt after the code step too, whatever the form holds by then', async () => {
+    let user: AuthUser | undefined
+    const asked: Array<{ email: string; password: string; out: boolean }> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input) => {
+        asked.push({
+          email: input.email,
+          password: input.password,
+          out: input.signOutOldest === true,
+        })
+
+        return okAsync({ kind: 'code-required', challenge: 'challenge-1', email: input.email })
+      },
+      confirmSignIn: (_step, _code, out) => {
+        if (!out) {
+          return okAsync({ kind: 'device-limit' })
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    await screen.findByTestId('user.sign-in.email-input')
+    typeInto('user.sign-in.email-input', ann.email)
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+    typeInto('user.sign-in.email-input', 'bob@example.test')
+    typeInto('user.sign-in.password-input', 'Other-word-2')
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual([
+      { email: ann.email, password: 'Pass-word-1', out: false },
+      { email: ann.email, password: 'Pass-word-1', out: true },
+    ])
+  })
+
+  it('makes no confirmation for a code shorter than the contract allows, on a click or on Enter, and sends a six-digit code and an eleven-character backup code', async () => {
+    const confirmed: string[] = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () => okAsync({ kind: 'code-required', challenge: 'challenge-1', email: ann.email }),
+      confirmSignIn: (_step, code) => {
+        confirmed.push(code)
+
+        return errAsync({ code: 'data:INVALID_CODE', message: 'the code is wrong' })
+      },
+    }
+    const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    const confirm = () => screen.getByTestId('user.sign-in.code.dialog.confirm-button')
+
+    renderSignIn(session)
+    await passwordSent()
+    await waitFor(() => expect(document.activeElement).toBe(codeInput()))
+
+    // Enter with nothing typed.
+    await userEvent.keyboard('{Enter}')
+    await settle()
+
+    expect(confirmed).toEqual([])
+    expect(screen.getByTestId('user.sign-in.code.error').getAttribute('data-code')).toBe(
+      'invalid-code',
+    )
+
+    // A click on five digits.
+    typeInto('user.sign-in.code.code-input', '12345')
+    fireEvent.click(confirm())
+    await settle()
+
+    expect(confirmed).toEqual([])
+    expect(screen.getByTestId('user.sign-in.code.error').getAttribute('data-code')).toBe(
+      'invalid-code',
+    )
+
+    // Enter on five digits.
+    await userEvent.keyboard('{Enter}')
+    await settle()
+
+    expect(confirmed).toEqual([])
+
+    // The bounds themselves go to the gateway, which judges the code.
+    typeInto('user.sign-in.code.code-input', '123456')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(confirmed).toEqual(['123456']))
+    await settle()
+    typeInto('user.sign-in.code.code-input', '0123456789a')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(confirmed).toEqual(['123456', '0123456789a']))
+  })
+
   it('signs in with a passkey the browser picks, asking no email, no password and no code', async () => {
     let user: AuthUser | undefined
     const asked: Array<string | undefined> = []

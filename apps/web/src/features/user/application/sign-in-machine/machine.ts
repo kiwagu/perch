@@ -17,8 +17,8 @@ import { askCode, askPastTheLimit, clearError, refusedSignIn, showError, welcome
 import type { ClearParams, NavigateParams, ShowParams, SignInEmitted, SignInEvent } from './events'
 import { signInGuards } from './guards'
 import { outcomeOf } from './outcome'
-import { secondStepActors } from './second-step-actors'
 import { SECOND_STEPS } from './second-steps'
+import { type SignInAttempt, signInActors } from './sign-in-actors'
 import { SIGN_UP_STATES } from './sign-up-states'
 
 /** The form the submit button sent, which a sign-in or a sign-up takes. */
@@ -26,12 +26,6 @@ function formInput({ event }: { readonly event: SignInEvent }): { readonly form:
   assertEvent(event, 'user.sign-in.submit-button')
 
   return { form: event.form }
-}
-
-/** What a sign-in invokes with: the form, and whether it signs out the device seen least recently. */
-interface SignInAttempt {
-  readonly form: SignInForm
-  readonly signOutOldest: boolean
 }
 
 /** The sign-in the submit button asks for. */
@@ -112,9 +106,6 @@ export function createSignInMachine(
     },
     guards: signInGuards,
     actors: {
-      'platform.sign-in': fromPromise(({ input }: { readonly input: SignInAttempt }) =>
-        settled(service.signIn(input.form, input.signOutOldest)),
-      ),
       // A sign-up and a resend end with the address they mailed: the message names that one, not
       // the field's, which can change after.
       'platform.sign-up': fromPromise(
@@ -125,7 +116,7 @@ export function createSignInMachine(
         ({ input }: { readonly input: { readonly email: string } }) =>
           settled(service.resend(input.email).map(() => input.email)),
       ),
-      ...secondStepActors(service),
+      ...signInActors(service),
     },
     actions: {
       show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
@@ -176,6 +167,13 @@ export function createSignInMachine(
         }
       }),
       forgetSteps: assign({ step: undefined, consentFor: undefined }),
+      // The attempt keeps the form it was sent with until it ends: the form's fields may change.
+      holdAttempt: assign(({ event }) => {
+        assertEvent(event, 'user.sign-in.submit-button')
+
+        return { attempt: event.form }
+      }),
+      forgetAttempt: assign({ attempt: undefined }),
     },
   }).createMachine({
     id: 'user.sign-in',
@@ -185,12 +183,14 @@ export function createSignInMachine(
       mail: undefined,
       sentTo: undefined,
       step: undefined,
+      attempt: undefined,
       codeError: undefined,
       consentFor: undefined,
     },
     states: {
       'sign-in': {
         meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.passkey-button'] },
+        entry: ['forgetAttempt'],
         on: {
           'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
@@ -201,7 +201,7 @@ export function createSignInMachine(
       ...SIGN_UP_STATES,
       'signing-in': {
         meta: { renders: ['user.sign-in.forgot-link'] },
-        entry: [clearError],
+        entry: [clearError, 'holdAttempt'],
         invoke: {
           src: 'platform.sign-in',
           input: signInInput,
@@ -269,6 +269,7 @@ export function createSignInMachine(
             'user.sign-in.passkey-button',
           ],
         },
+        entry: ['forgetAttempt'],
         on: {
           'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
@@ -293,7 +294,11 @@ export function createSignInMachine(
           },
         },
       },
-      done: { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
+      done: {
+        type: 'final',
+        entry: ['forgetAttempt'],
+        meta: { renders: ['user.sign-in.forgot-link'] },
+      },
       'forgot-password': { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
     },
   })

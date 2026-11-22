@@ -1,5 +1,7 @@
 import type { CodeStep } from '@workspace/data'
 
+import type { SignInForm } from '../sign-in.service'
+
 /** The anchor of the form's own error: the machine keeps the code it shows for the view. */
 export const SIGN_IN_ERROR = 'user.sign-in.error'
 
@@ -37,6 +39,12 @@ export interface SignInContext {
    * moment a code is asked until that step ends or is given up.
    */
   readonly step: CodeStep | undefined
+  /**
+   * The form of the sign-in attempt under way, as it was sent: what a confirmed sign-in past the
+   * limit of devices signs in again with, whatever the form holds by then. It is held while the
+   * attempt can still ask for that confirmation, and forgotten once the attempt ends.
+   */
+  readonly attempt: SignInForm | undefined
   /** The code of the last refusal the code step answered without ending, which its dialog shows. */
   readonly codeError: string | undefined
   /**

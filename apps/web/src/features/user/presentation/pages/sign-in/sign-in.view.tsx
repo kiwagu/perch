@@ -89,10 +89,10 @@ export interface SignInViewProps {
   /** Moves to asking for a reset mail, carrying the email as typed. */
   readonly onForgot: (email: string) => void
   /**
-   * Signs in all the same past the account's limit of devices, with the values as typed: the
+   * Signs in all the same past the account's limit of devices, as the attempt that asked: the
    * account's device seen least recently is signed out.
    */
-  readonly onConfirmDeviceLimit: (values: SignInValues) => void
+  readonly onConfirmDeviceLimit: () => void
   /** Goes back to the form from the dialog past the limit of devices, signing nothing in. */
   readonly onCancelDeviceLimit: () => void
   /** What is typed in the code of the dialog of the second factor. */
@@ -326,7 +326,7 @@ export function SignInView(props: SignInViewProps) {
         </Form>
         <DeviceLimitDialog
           open={props.renders('user.sign-in.device-limit-dialog')}
-          onConfirm={() => props.onConfirmDeviceLimit(values)}
+          onConfirm={() => props.onConfirmDeviceLimit()}
           onCancel={() => props.onCancelDeviceLimit()}
         />
         <CodeDialog

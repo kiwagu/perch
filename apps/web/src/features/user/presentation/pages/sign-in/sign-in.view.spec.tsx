@@ -11,12 +11,7 @@ import { expectNoStateColour } from '../../../../../field-state-colour.test-supp
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
-import {
-  type SignInListed,
-  type SignInValues,
-  SignInView,
-  type SignInViewProps,
-} from './sign-in.view'
+import { type SignInListed, SignInView, type SignInViewProps } from './sign-in.view'
 
 /** What the states of each mode render, as the flow lists them, the resend button aside. */
 const RENDERS: Readonly<Record<SignInViewProps['mode'], readonly SignInListed[]>> = {
@@ -59,7 +54,7 @@ function renderView(
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
     onForgot: vi.fn((_email: string) => {}),
-    onConfirmDeviceLimit: vi.fn((_values: SignInValues) => {}),
+    onConfirmDeviceLimit: vi.fn(),
     onCancelDeviceLimit: vi.fn(),
     onTypeCode: vi.fn((_code: string) => {}),
     onConfirmCode: vi.fn(),
@@ -97,18 +92,13 @@ describe('the question past the limit of devices', () => {
     expect(dialog.textContent).toContain(es['user.sign-in.device-limit.body'])
   })
 
-  it('confirms with the values typed', () => {
+  it('confirms, saying nothing of the form: the retry is the attempt that asked', () => {
     const handlers = renderView({ dialog: true, startEmail: 'ann@example.test' })
 
     type('user.sign-in.password-input', 'Pass-word-1')
     fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
 
-    expect(handlers.onConfirmDeviceLimit).toHaveBeenCalledWith({
-      email: 'ann@example.test',
-      password: 'Pass-word-1',
-      confirmation: '',
-      name: '',
-    })
+    expect(handlers.onConfirmDeviceLimit).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('goes back to the form on cancel, confirming nothing', () => {
@@ -222,7 +212,7 @@ describe('the code of the second factor', () => {
   })
 
   it("marks the field each code of its error concerns, as the screen's fields say, and no other", () => {
-    const failures: Readonly<Record<string, string>> = { 'invalid-code': 'data:INVALID_CODE' }
+    const failures: Readonly<Record<string, string>> = { 'invalid-code': 'sign-in:CODE_INVALID' }
 
     expectEachCodeMarksItsField(CODE_ERROR, (code) =>
       renderView({ codeDialog: true, codeError: failures[code] }),
@@ -239,7 +229,22 @@ describe('the code of the second factor', () => {
     expect(screen.getByTestId(CODE_DIALOG).contains(error)).toBe(true)
     expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBe('true')
     expect(input(CODE_INPUT).getAttribute('aria-describedby')).toBe(error.getAttribute('id'))
+    // Under the input: in its field, after it.
+    expect(input(CODE_INPUT).closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(
+      input(CODE_INPUT).compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
   })
+
+  it.each(['data:INVALID_CODE', 'sign-in:CODE_INVALID'])(
+    'says %s, a wrong code or no code at all, under the input as an invalid code',
+    (failure) => {
+      renderView({ codeDialog: true, codeError: failure })
+
+      expect(screen.getByTestId(CODE_ERROR).getAttribute('data-code')).toBe('invalid-code')
+      expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBe('true')
+    },
+  )
 
   it('says any other failure in the dialog, marking no field', () => {
     renderView({ codeDialog: true, codeError: 'data:AUTH_FAILED' })

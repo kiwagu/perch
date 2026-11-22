@@ -8,6 +8,7 @@ import type { Locale } from '@workspace/i18n'
 import type { SessionPort, SignInResult } from '../../../platform/session.port'
 
 import { profileName } from './profile-name.policy'
+import { secondFactorCode } from './second-factor-code.policy'
 
 /** What the form collects, and the language the app speaks as it is sent; signing in ignores the name and the language. */
 export interface SignInForm {
@@ -55,7 +56,9 @@ export class SignInService {
 
   /**
    * The code step of a sign-in that answered `code-required`: `code` is one the account's
-   * authenticator app shows now, or a backup code not used yet. A wrong code fails as
+   * authenticator app shows now, or a backup code not used yet. A code shorter or longer than the
+   * contract allows is no code: it fails as `sign-in:CODE_INVALID` before the gateway is asked,
+   * so it counts toward nothing. Within those bounds the gateway judges it: a wrong code fails as
    * `data:INVALID_CODE`, a step that is over as `data:CODE_EXPIRED`. `signOutOldest` signs in past
    * the account's limit of devices, as for `signIn`.
    */
@@ -64,7 +67,9 @@ export class SignInService {
     code: string,
     signOutOldest: boolean,
   ): ResultAsync<SignInOutcome, SignInError> {
-    return this.session.confirmSignIn(step, code, signOutOldest)
+    return secondFactorCode(code).asyncAndThen((valid) =>
+      this.session.confirmSignIn(step, valid, signOutOldest),
+    )
   }
 
   /**

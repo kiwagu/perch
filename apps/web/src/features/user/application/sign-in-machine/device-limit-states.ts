@@ -1,18 +1,13 @@
-import { assertEvent } from 'xstate'
-
-import type { SignInForm } from '../sign-in.service'
-
+import type { SignInContext } from './context'
 import { askCode, refusedSignIn, welcomed } from './effects'
-import type { SignInEvent } from './events'
+import type { SignInAttempt } from './sign-in-actors'
 
-/** The sign-in the dialog's confirmation asks for: the form as typed, signing out the device seen least recently. */
-function confirmedInput({ event }: { readonly event: SignInEvent }): {
-  readonly form: SignInForm
-  readonly signOutOldest: boolean
-} {
-  assertEvent(event, 'user.sign-in.device-limit-dialog.confirm-button')
-
-  return { form: event.form, signOutOldest: true }
+/**
+ * The sign-in the dialog's confirmation asks for: the form of the attempt that asked, which the
+ * machine kept, signing out the device seen least recently.
+ */
+function confirmedInput({ context }: { readonly context: SignInContext }): SignInAttempt {
+  return { form: context.attempt, signOutOldest: true }
 }
 
 /**

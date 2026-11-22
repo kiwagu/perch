@@ -4,7 +4,7 @@ import type { SignInContext } from './context'
 import { CODE_ERROR, CODE_INPUT } from './context'
 import { askPastTheLimit, clearError, showError, welcomed } from './effects'
 import type { SignInEvent } from './events'
-import type { CodeAttempt, PasskeyAttempt } from './second-step-actors'
+import type { CodeAttempt, PasskeyAttempt } from './sign-in-actors'
 
 const clearCodeInput = { type: 'clear', params: { anchor: CODE_INPUT } } as const
 const clearCodeError = { type: 'clear', params: { anchor: CODE_ERROR } } as const
@@ -101,6 +101,8 @@ export const SECOND_STEPS = {
   },
   'code-anyway': {
     meta: RENDERS_CODE,
+    // The retry that asked the code is over: its form is no longer held.
+    entry: ['forgetAttempt'],
     on: {
       'user.sign-in.code.dialog.confirm-button': { target: 'confirming-code-anyway' },
       'user.sign-in.code.dialog.cancel-button': CANCEL_CODE,

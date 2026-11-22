@@ -64,12 +64,12 @@ const CODE_ERROR_TEST_ID = 'user.sign-in.code.error'
 /** The field each code of `user.sign-in.code.error` concerns, as the screen's `fields` say. */
 const CODE_ERROR_FIELDS: Partial<Record<CodeErrorCode, 'code'>> = { 'invalid-code': 'code' }
 
-/** The contract code of a refusal of the code, with its text. */
+/** The contract code of a refusal of the code, with its text: a code that is no code is as wrong as any. */
 function codeErrorOf(
   t: ReturnType<typeof useT>,
   code: string,
 ): { code: CodeErrorCode; text: string } {
-  return code === 'data:INVALID_CODE'
+  return code === 'data:INVALID_CODE' || code === 'sign-in:CODE_INVALID'
     ? { code: 'invalid-code', text: t('user.sign-in.code.error.invalid-code') }
     : { code: 'failed', text: t('user.sign-in.code.error.failed') }
 }

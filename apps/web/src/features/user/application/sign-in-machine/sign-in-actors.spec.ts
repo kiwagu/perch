@@ -1,12 +1,17 @@
 import { okAsync } from 'neverthrow'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { createActor, toPromise } from 'xstate'
 
-import { secondStepActors } from './second-step-actors'
+import { signInActors } from './sign-in-actors'
 
-describe('the actors of the second steps', () => {
+describe('the actors that sign in', () => {
   const asked: unknown[] = []
-  const actors = secondStepActors({
+  const actors = signInActors({
+    signIn: (form, signOutOldest) => {
+      asked.push({ form, signOutOldest })
+
+      return okAsync({ kind: 'device-limit' })
+    },
     confirmSignIn: (step, code, signOutOldest) => {
       asked.push({ step, code, signOutOldest })
 
@@ -19,6 +24,10 @@ describe('the actors of the second steps', () => {
     },
   })
 
+  beforeEach(() => {
+    asked.length = 0
+  })
+
   it('tells a code step that is not under way that the sign-in is over, asking nothing', async () => {
     const confirming = createActor(actors['platform.confirm-sign-in'], {
       input: { step: undefined, code: '123456', signOutOldest: false },
@@ -28,6 +37,34 @@ describe('the actors of the second steps', () => {
 
     await expect(toPromise(confirming)).rejects.toMatchObject({ code: 'data:CODE_EXPIRED' })
     expect(asked).toEqual([])
+  })
+
+  it('tells a sign-in with no attempt under way that it failed, asking nothing', async () => {
+    const signing = createActor(actors['platform.sign-in'], {
+      input: { form: undefined, signOutOldest: true },
+    })
+
+    signing.start()
+
+    await expect(toPromise(signing)).rejects.toMatchObject({ code: 'data:AUTH_FAILED' })
+    expect(asked).toEqual([])
+  })
+
+  it('signs in with the form of the attempt it is given', async () => {
+    const form = {
+      email: 'ann@example.test',
+      password: 'Secret-ann1',
+      name: '',
+      locale: 'en' as const,
+    }
+    const signing = createActor(actors['platform.sign-in'], {
+      input: { form, signOutOldest: true },
+    })
+
+    signing.start()
+    await toPromise(signing)
+
+    expect(asked).toEqual([{ form, signOutOldest: true }])
   })
 
   it('takes the code at the step it is given, and asks the passkey for the account it names', async () => {

@@ -401,18 +401,25 @@ const atTheLimit = () => okAsync<SignInOutcome, SignInError>({ kind: 'device-lim
 /** A sign-in that signs Ann in. */
 const signedIn = () => okAsync<SignInOutcome, SignInError>({ kind: 'signed-in', user: annUser })
 
+/** A step of a sign-in that fails with `code`, as the session fails it. */
+const refusedWith = (code: Parameters<typeof dataError>[0]) => () =>
+  errAsync<SignInOutcome, SignInError>(dataError(code, 'the step was refused'))
+
 /**
- * The sign-in form over a service whose sign-ins answer `answers` in turn, recording whether each
- * one confirmed signing out the device seen least recently; nothing else is asked here.
+ * The sign-in form over a service whose sign-ins answer `answers` in turn, recording the form each
+ * one signed in with and whether it confirmed signing out the device seen least recently; nothing
+ * else is asked here.
  */
 function limited(answers: ReadonlyArray<() => ResultAsync<SignInOutcome, SignInError>>) {
   const confirmed: boolean[] = []
+  const forms: SignInForm[] = []
   const actor = createActor(
     createSignInMachine({
-      signIn: (_form, signOutOldest) => {
+      signIn: (form, signOutOldest) => {
         const answer = answers[confirmed.length] ?? expect.unreachable('no sign-in beyond these')
 
         confirmed.push(signOutOldest)
+        forms.push(form)
 
         return answer()
       },
@@ -425,14 +432,11 @@ function limited(answers: ReadonlyArray<() => ResultAsync<SignInOutcome, SignInE
 
   actor.on('*', (event) => emitted.push(event))
 
-  return { actor, confirmed, emitted }
+  return { actor, confirmed, forms, emitted }
 }
 
-/** The dialog's confirmation, with Ann's form as typed. */
-const confirmedAnyway: SignInEvent = {
-  type: 'user.sign-in.device-limit-dialog.confirm-button',
-  form: ann,
-}
+/** The dialog's confirmation: it carries nothing, the retry is the attempt that asked. */
+const confirmedAnyway: SignInEvent = { type: 'user.sign-in.device-limit-dialog.confirm-button' }
 
 /** What the form asks its host to show once a sign-in finds the account at its limit. */
 const ASKED = { type: 'show', anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] }
@@ -456,6 +460,72 @@ describe('a sign-in past the limit of devices', () => {
       { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
       { type: 'navigate', to: '/me' },
     ])
+  })
+
+  it('signs in all the same with the form of the attempt that asked, which the host cannot change by confirming', async () => {
+    const { actor, forms } = limited([atTheLimit, signedIn])
+    const asked: SignInForm = { ...ann, password: 'Secret-ann1' }
+
+    actor.send({ type: 'user.sign-in.submit-button', form: asked, confirmation: '' })
+    await waitFor(actor, (state) => state.matches('device-limit'))
+
+    expect(actor.getSnapshot().context.attempt).toEqual(asked)
+
+    actor.send(confirmedAnyway)
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(forms).toEqual([asked, asked])
+    expect(forms[1]).toBe(forms[0])
+  })
+
+  it.each([
+    [
+      'once it is signed in',
+      [atTheLimit, signedIn],
+      async (actor: ReturnType<typeof limited>['actor']) => {
+        actor.send(confirmedAnyway)
+        await waitFor(actor, (state) => state.matches('done'))
+      },
+    ],
+    [
+      'once its confirmed retry is refused',
+      [atTheLimit, refusedWith('data:INVALID_CREDENTIALS')],
+      async (actor: ReturnType<typeof limited>['actor']) => {
+        actor.send(confirmedAnyway)
+        await waitFor(actor, (state) => state.context.error !== undefined)
+      },
+    ],
+    [
+      'on cancel',
+      [atTheLimit],
+      async (actor: ReturnType<typeof limited>['actor']) => {
+        actor.send({ type: 'user.sign-in.device-limit-dialog.cancel-button' })
+      },
+    ],
+  ])('lets the attempt go %s', async (_, answers, finish) => {
+    const { actor } = limited(answers)
+
+    actor.send(submitted(''))
+    await waitFor(actor, (state) => state.matches('device-limit'))
+    await finish(actor)
+
+    expect(actor.getSnapshot().context.attempt).toBeUndefined()
+  })
+
+  it('lets the attempt go when its sign-in is refused or signs in at once', async () => {
+    const refused = limited([refusedWith('data:INVALID_CREDENTIALS')])
+
+    refused.actor.send(submitted(''))
+    await waitFor(refused.actor, (state) => state.context.error !== undefined)
+
+    expect(refused.actor.getSnapshot().context.attempt).toBeUndefined()
+
+    const through = limited([signedIn])
+
+    through.actor.send(submitted(''))
+    await waitFor(through.actor, (state) => state.matches('done'))
+
+    expect(through.actor.getSnapshot().context.attempt).toBeUndefined()
   })
 
   it('goes back to the form on cancel, asking nothing more', async () => {
@@ -547,10 +617,6 @@ const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
 /** The password step of an account whose second factor is on: a code is asked, nothing signed in. */
 const asksCode = () => okAsync<SignInOutcome, SignInError>({ kind: 'code-required', ...step })
 
-/** The code step's refusals and answers, as the session fails or answers them. */
-const refusedWith = (code: Parameters<typeof dataError>[0]) => () =>
-  errAsync<SignInOutcome, SignInError>(dataError(code, 'the step was refused'))
-
 /** The dialog's confirmation with `code` typed in its input. */
 const codeTyped = (code: string): SignInEvent => ({
   type: 'user.sign-in.code.dialog.confirm-button',
@@ -580,6 +646,7 @@ type Answers = ReadonlyArray<() => ResultAsync<SignInOutcome, SignInError>>
 function stepping(answers: { signIn?: Answers; confirm?: Answers; passkey?: Answers }) {
   const asked = {
     signIn: [] as boolean[],
+    forms: [] as SignInForm[],
     confirm: [] as Array<{ step: CodeStep; code: string; signOutOldest: boolean }>,
     passkey: [] as Array<string | undefined>,
   }
@@ -587,8 +654,9 @@ function stepping(answers: { signIn?: Answers; confirm?: Answers; passkey?: Answ
     (queue?.[taken] ?? expect.unreachable('no answer for this call'))()
   const actor = createActor(
     createSignInMachine({
-      signIn: (_form, signOutOldest) => {
+      signIn: (form, signOutOldest) => {
         asked.signIn.push(signOutOldest)
+        asked.forms.push(form)
 
         return next(answers.signIn, asked.signIn.length - 1)
       },
@@ -669,6 +737,28 @@ describe('a sign-in whose account asks for a code', () => {
     expect(actor.getSnapshot().context.codeError).toBeUndefined()
   })
 
+  it('shows a code that is no code at all in the dialog, as a wrong one, for another to be typed', async () => {
+    const { actor } = stepping({
+      signIn: [asksCode],
+      confirm: [
+        () =>
+          errAsync<SignInOutcome, SignInError>({
+            code: 'sign-in:CODE_INVALID',
+            message: 'no code',
+          }),
+      ],
+    })
+
+    actor.send(submitted(''))
+    await waitFor(actor, (state) => state.matches('code'))
+    actor.send(codeTyped('12345'))
+
+    const refused = await waitFor(actor, (state) => state.context.codeError !== undefined)
+
+    expect(refused.value).toBe('code')
+    expect(refused.context).toMatchObject({ codeError: 'sign-in:CODE_INVALID', error: undefined })
+  })
+
   it('shows any other failure of the code in the dialog, not on the form', async () => {
     const { actor } = stepping({
       signIn: [asksCode],
@@ -702,7 +792,12 @@ describe('a sign-in whose account asks for a code', () => {
       const ended = await waitFor(actor, (state) => state.context.error !== undefined)
 
       expect(ended.value).toBe('sign-in')
-      expect(ended.context).toMatchObject({ error: code, codeError: undefined, step: undefined })
+      expect(ended.context).toMatchObject({
+        error: code,
+        codeError: undefined,
+        step: undefined,
+        attempt: undefined,
+      })
       expect(emitted).toEqual([ASKED_CODE, CLEARED_CODE])
     },
   )
@@ -722,7 +817,12 @@ describe('a sign-in whose account asks for a code', () => {
     const back = actor.getSnapshot()
 
     expect(back.value).toBe('sign-in')
-    expect(back.context).toMatchObject({ codeError: undefined, error: undefined, step: undefined })
+    expect(back.context).toMatchObject({
+      codeError: undefined,
+      error: undefined,
+      step: undefined,
+      attempt: undefined,
+    })
     expect(emitted).toEqual([ASKED_CODE, CLEARED_CODE])
   })
 
@@ -779,6 +879,29 @@ describe('a sign-in whose account asks for a code', () => {
         CLEARED_CODE,
         ...WELCOMED,
       ])
+    })
+
+    it('holds the attempt through the code step, retries from the password with its form, and lets it go once the retry asks the code', async () => {
+      const { actor, asked } = stepping({
+        signIn: [asksCode, asksCode],
+        confirm: [atTheLimit, signedIn],
+      })
+
+      actor.send(submitted(''))
+      await waitFor(actor, (state) => state.matches('code'))
+
+      expect(actor.getSnapshot().context.attempt).toEqual(ann)
+
+      actor.send(codeTyped('123456'))
+      await waitFor(actor, (state) => state.matches('device-limit'))
+
+      expect(actor.getSnapshot().context.attempt).toEqual(ann)
+
+      actor.send(confirmedAnyway)
+      await waitFor(actor, (state) => state.matches('code-anyway'))
+
+      expect(asked.forms).toEqual([ann, ann])
+      expect(actor.getSnapshot().context.attempt).toBeUndefined()
     })
 
     it('asks the code in the dialog of the confirmed sign-in, and shows a wrong code there', async () => {

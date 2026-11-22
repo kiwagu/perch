@@ -99,7 +99,12 @@ function recordingSession(
 }
 
 /** What the form keeps of a second step while none is under way. */
-const NO_SECOND_STEP = { step: undefined, codeError: undefined, consentFor: undefined }
+const NO_SECOND_STEP = {
+  step: undefined,
+  codeError: undefined,
+  consentFor: undefined,
+  attempt: undefined,
+}
 
 /** The switch of mode, Ann's password typed and typed again. */
 const toggled = {
@@ -191,7 +196,7 @@ describe('a sign-in past the limit of devices', () => {
 
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
     await waitFor(actor, (state) => state.matches('done'))
 
     expect(session.current()?.email).toBe(ann.email)
@@ -255,6 +260,28 @@ describe('a sign-in whose account asks for a code', () => {
       { confirm: { step, code: CODE, out: false } },
       { confirm: { step, code: CODE, out: true } },
     ])
+  })
+
+  it.each([
+    ['nothing', ''],
+    ['five digits', '12345'],
+    ['more than a backup code has', '0123456789ab'],
+  ])('asks the session nothing for %s, failing as no code', async (_, code) => {
+    const { asked, port } = recordingSession()
+    const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
+
+    expect(
+      (await new SignInService(port).confirmSignIn(step, code, false))._unsafeUnwrapErr().code,
+    ).toBe('sign-in:CODE_INVALID')
+    expect(asked).toEqual([])
+  })
+
+  it.each(['123456', '0123456789a'])('leaves the code %s to the gateway', async (code) => {
+    const { asked, port } = recordingSession()
+    const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
+
+    expect((await new SignInService(port).confirmSignIn(step, code, false)).isErr()).toBe(true)
+    expect(asked).toEqual([{ confirm: { step, code, out: false } }])
   })
 
   it('signs the device in once the code is right, and fails a wrong one as data:INVALID_CODE', async () => {
@@ -343,7 +370,7 @@ describe('a sign-in whose account asks for a code', () => {
 
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
     await waitFor(actor, (state) => state.matches('code-anyway'))
     actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: CODE })
     await waitFor(actor, (state) => state.matches('done'))
@@ -428,7 +455,7 @@ describe('a sign-in with a passkey', () => {
     expect(actor.getSnapshot().context.consentFor).toBe(opened.auth.identityOf(ann.email).id)
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
     await waitFor(actor, (state) => state.matches('done'))
 
     expect(session.current()?.email).toBe(ann.email)

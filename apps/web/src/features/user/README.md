@@ -43,10 +43,14 @@ password to the rules of a new password (the kernel's `keepsPasswordRules`, the 
 and compares the password typed again as either password is typed and on the switch into
 sign-up, it keeps the codes of the form's error and mail message and of the code's error, and the
 address the last sign-up or resend mailed, and emits `show` and `navigate` for the page;
-`machine.ts` builds it, its states of the limit of devices are `device-limit-states.ts`, those
-of the code and of the passkey `second-steps.ts` (their actors `second-step-actors.ts`),
-`effects.ts` holds the effects the states share, `guards.ts` the flow's guards, `outcome.ts`
-reads what a step answered, `events.ts` and `context.ts` what it takes and keeps), the
+`machine.ts` builds it, its states of the mode sign-up are `sign-up-states.ts`, those of the limit
+of devices `device-limit-states.ts`, those of the code and of the passkey `second-steps.ts`, their
+actors with the password's `sign-in-actors.ts`, `effects.ts` holds the effects the states share,
+`guards.ts` the flow's guards, `outcome.ts` reads what a step answered, `events.ts` and
+`context.ts` what it takes and keeps; the confirmation of the dialog past the limit of devices
+carries nothing: the machine keeps the form an attempt was sent with (`attempt`) while that
+attempt can still ask the confirmation, and signs in again with it, whatever the form's fields
+hold by then, forgetting it once the attempt ends), the
 verify-email machine (the flow of `contract/domain/screens/verify-email.yaml`: it starts by
 invoking `platform.verify-email` with the token of its address, given when the page builds it;
 the first verification shows the frame's `welcome` and moves to `/me`, a link verified before
@@ -214,7 +218,10 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   (`user.sign-in.code.dialog`, code `code-required`, texts `user.sign-in.code.*`, the field
   `user.sign-in.code.code-input` in it, the `InputDialog` of the kit: Enter confirms, Escape
   cancels, the confirmation is held while the flow does not take it) and signs in once a code is
-  taken; a wrong code (`data:INVALID_CODE`) shows under the field
+  taken; a code shorter or longer than the contract's `second-factor-code` allows is refused by
+  the service before the gateway is asked (`sign-in:CODE_INVALID`, the domain rule
+  `second-factor-code.rule.ts`, counting toward nothing); a wrong code (`data:INVALID_CODE`) and
+  such a refusal show under the field
   (`user.sign-in.code.error`, code `invalid-code`) and the dialog stays for another, any other
   failure of the step shows in the dialog (`failed`), and a step that is over, or an account that
   cannot sign in now (`data:CODE_EXPIRED`, `data:ACCOUNT_BANNED`, `data:RATE_LIMITED`,
