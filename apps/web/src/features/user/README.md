@@ -154,7 +154,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   them (`section-read.ts`: from the moment a read is asked the section shows `loading`, so no
   earlier answer is shown as current: the badge and the actions wait for the read, while the
   password field with its eye is the idle state's and shows whatever the read says, as do the
-  codes and the key, which the flow's state shows),
+  codes and the key, which the flow's state shows; the field starts over, hidden, at each of the
+  flow's `clear`s of it, never at a read),
   its screen's flow run as
   its machine (`application/settings/settings-machine/`: the theme, language, password, email,
   two-factor, passkey-add, passkey-remove and deletion regions of one parallel state, `machine.ts`

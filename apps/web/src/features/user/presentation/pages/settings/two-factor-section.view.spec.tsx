@@ -43,19 +43,25 @@ function renderView(props: Partial<TwoFactorSectionViewProps> = {}) {
     onHideCodes: vi.fn(),
   }
 
-  renderWithFacts(
+  const view = (next: Partial<TwoFactorSectionViewProps>) => (
     <TwoFactorSectionView
       factor={{ status: 'ready', enabled: false }}
       renders={rendersAt('idle')}
       can={() => true}
       password=""
+      passwordClears={0}
       code=""
       {...handlers}
-      {...props}
-    />,
+      {...next}
+    />
   )
+  const { rerender } = renderWithFacts(view(props))
 
-  return handlers
+  return {
+    ...handlers,
+    /** Renders the view again with `next` over the props it was given, as the page does. */
+    again: (next: Partial<TwoFactorSectionViewProps>) => rerender(view({ ...props, ...next })),
+  }
 }
 
 /** The key step: the key shown, waiting for a code of it. */
@@ -123,6 +129,30 @@ describe('TwoFactorSectionView, as the section reads', () => {
     renderView()
 
     expect(new Set(expectFieldFacts(document.body))).toEqual(new Set([CODE, PASSWORD]))
+  })
+})
+
+describe('TwoFactorSectionView, the password shown', () => {
+  const EYE = `${PASSWORD}.visibility-button`
+
+  it('stays shown as the section reads again, and starts over hidden each time the flow empties it', () => {
+    const view = renderView({ factor: { status: 'loading' }, password: 'Secret-ann1' })
+    const field = input(PASSWORD)
+
+    fireEvent.click(screen.getByTestId(EYE))
+    expect(field.type).toBe('text')
+
+    // The read answers: the same field, still shown, even once the person erased it.
+    view.again({ factor: { status: 'ready', enabled: true } })
+    view.again({ factor: { status: 'ready', enabled: true }, password: '' })
+    expect(input(PASSWORD)).toBe(field)
+    expect(field.type).toBe('text')
+
+    // The flow empties it, already empty or not: the field starts over, hidden.
+    view.again({ factor: { status: 'ready', enabled: true }, password: '', passwordClears: 1 })
+    expect(input(PASSWORD).value).toBe('')
+    expect(input(PASSWORD).type).toBe('password')
+    expect(screen.getByTestId(EYE).getAttribute('data-value')).toBe('show')
   })
 })
 

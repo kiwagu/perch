@@ -60,6 +60,11 @@ export interface TwoFactorSectionViewProps {
   readonly can: (event: SettingsEvent) => boolean
   /** The password typed, which the page holds: the flow's `clear` empties it. */
   readonly password: string
+  /**
+   * How many times the flow's `clear` has emptied the password: the field starts over, hidden, at
+   * each one, and keeps what it holds, its focus and its eye through anything else, a read too.
+   */
+  readonly passwordClears: number
   /** The code typed for the key shown, which the page holds the same way. */
   readonly code: string
   /** The code of the last failure. */
@@ -102,6 +107,8 @@ export function TwoFactorSectionView(props: TwoFactorSectionViewProps) {
     <Field data-invalid={concerns === 'password' ? true : undefined}>
       <FieldLabel htmlFor={ids.password}>{t('user.settings.two-factor.password')}</FieldLabel>
       <PasswordInput
+        // A field emptied by the flow is a new one, hidden whether or not it was emptied already.
+        key={props.passwordClears}
         id={ids.password}
         value={props.password}
         onChange={(event) => props.onPassword(event.target.value)}

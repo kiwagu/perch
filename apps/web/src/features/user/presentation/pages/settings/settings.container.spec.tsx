@@ -250,6 +250,11 @@ const typed = (testId: string, text: string) =>
   fireEvent.change(screen.getByTestId(testId), { target: { value: text } })
 const pressed = (testId: string) => act(async () => fireEvent.click(screen.getByTestId(testId)))
 const errorCode = () => screen.getByTestId(FACTOR.error).getAttribute('data-code')
+const EYE = `${FACTOR.password}.visibility-button`
+/** Whether the second factor's password shows what it holds (`text`) or hides it (`password`). */
+const kind = () => (screen.getByTestId(FACTOR.password) as HTMLInputElement).type
+/** What a press on the eye does: `show` while the password is hidden. */
+const eyeOffers = () => screen.getByTestId(EYE).getAttribute('data-value')
 
 /** The page with the second factor read as off, its enable button on screen. */
 async function openOff(world: World = {}) {
@@ -429,7 +434,7 @@ describe('SettingsContainer, the second factor', () => {
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
   })
 
-  it('turns it off with the password, then marks it off', async () => {
+  it('turns it off with the password, then marks it off, the password empty and masked again', async () => {
     const twoFactor = new FakeTwoFactor()
 
     twoFactor.enabled = true
@@ -437,11 +442,20 @@ describe('SettingsContainer, the second factor', () => {
     await screen.findByTestId(FACTOR.onBadge)
 
     typed(FACTOR.password, FACTOR_PASSWORD)
+    // The password was shown to check it: nothing typed next is shown unless the eye is pressed.
+    await pressed(EYE)
+    expect(kind()).toBe('text')
     await pressed(FACTOR.disable)
 
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
     expect(twoFactor.enabled).toBe(false)
     expect(value(FACTOR.password)).toBe('')
+    expect(kind()).toBe('password')
+    expect(eyeOffers()).toBe('show')
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+
+    expect(kind()).toBe('password')
   })
 
   it('renews the codes with the password and shows the ten new ones once', async () => {
@@ -495,12 +509,21 @@ describe('SettingsContainer, the password field while the second factor is not r
       shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.offBadge, FACTOR.onBadge),
     ).toEqual([false, false, false, false, false])
 
+    await pressed(EYE)
+
+    const field = screen.getByTestId(FACTOR.password)
+
+    field.focus()
     typed(FACTOR.password, FACTOR_PASSWORD)
     await released(release)
 
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
     expect(value(FACTOR.password)).toBe(FACTOR_PASSWORD)
     expect(shown(FACTOR.enable)).toEqual([true])
+    // The read changes nothing of the field: the same one, focused, shown as the person chose.
+    expect(screen.getByTestId(FACTOR.password)).toBe(field)
+    expect(document.activeElement).toBe(field)
+    expect(kind()).toBe('text')
   })
 
   it('draws the password and its eye when the read failed, with no badge and no action', async () => {
@@ -637,6 +660,86 @@ describe('SettingsContainer, the second factor while it is read again', () => {
 
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
     expect(shown(FACTOR.enable, FACTOR.disable, FACTOR.renew)).toEqual([true, false, false])
+  })
+})
+
+describe('SettingsContainer, the password shown once the flow empties it', () => {
+  it('hides it after turning it off even when the shown password was erased while the request ran', async () => {
+    const twoFactor = await openOn()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(EYE)
+
+    const release = twoFactor.holdWrites()
+
+    await pressed(FACTOR.disable)
+    await waitFor(() => expect(twoFactor.calls).toContainEqual(['disable', FACTOR_PASSWORD]))
+    // The request took the password; the field stays on screen, shown, and is erased meanwhile.
+    typed(FACTOR.password, '')
+    expect(kind()).toBe('text')
+
+    await released(release)
+
+    expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
+    expect(value(FACTOR.password)).toBe('')
+    expect(kind()).toBe('password')
+    expect(eyeOffers()).toBe('show')
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+
+    expect(kind()).toBe('password')
+  })
+
+  it('hides it when a start finds it turned on elsewhere and empties it', async () => {
+    const { twoFactor } = await openOff()
+
+    twoFactor.enabled = true
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(EYE)
+    await pressed(FACTOR.enable)
+
+    await waitFor(() => expect(errorCode()).toBe('two-factor-changed'))
+    expect(value(FACTOR.password)).toBe('')
+    expect([kind(), eyeOffers()]).toEqual(['password', 'show'])
+  })
+
+  it('hides it when a renewal finds it turned off elsewhere and empties it', async () => {
+    const twoFactor = await openOn()
+
+    twoFactor.enabled = false
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(EYE)
+    await pressed(FACTOR.renew)
+
+    await waitFor(() => expect(errorCode()).toBe('two-factor-changed'))
+    expect(value(FACTOR.password)).toBe('')
+    expect([kind(), eyeOffers()]).toEqual(['password', 'show'])
+  })
+
+  it('asks it hidden after the codes a renewal showed', async () => {
+    await openOn()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(EYE)
+    await pressed(FACTOR.renew)
+    await screen.findByTestId(FACTOR.codes)
+    await pressed(FACTOR.hide)
+
+    expect(value(FACTOR.password)).toBe('')
+    expect([kind(), eyeOffers()]).toEqual(['password', 'show'])
+  })
+
+  it('asks it hidden after a key that was stopped', async () => {
+    await openOff()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(EYE)
+    await pressed(FACTOR.enable)
+    await screen.findByTestId(FACTOR.key)
+    await pressed(FACTOR.stop)
+
+    expect(value(FACTOR.password)).toBe('')
+    expect([kind(), eyeOffers()]).toEqual(['password', 'show'])
   })
 })
 

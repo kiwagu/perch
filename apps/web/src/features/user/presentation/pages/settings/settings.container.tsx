@@ -58,6 +58,8 @@ export function SettingsContainer() {
   const [email, setEmail] = useState(EMPTY_EMAIL)
   const [deletionPassword, setDeletionPassword] = useState('')
   const [factorPassword, setFactorPassword] = useState('')
+  // Each clear of the flow starts the second factor's password field over, hidden.
+  const [factorPasswordClears, setFactorPasswordClears] = useState(0)
   const [factorCode, setFactorCode] = useState('')
   const factor = useSectionRead(() => twoFactor.read())
   const listed = useSectionRead(() => passkeys.list())
@@ -138,7 +140,10 @@ export function SettingsContainer() {
     'user.settings.password.password-confirmation-input': () =>
       setPasswords((now) => ({ ...now, confirmation: '' })),
     'user.settings.deletion.password-input': () => setDeletionPassword(''),
-    'user.settings.two-factor.password-input': () => setFactorPassword(''),
+    'user.settings.two-factor.password-input': () => {
+      setFactorPassword('')
+      setFactorPasswordClears((clears) => clears + 1)
+    },
     'user.settings.two-factor.code-input': () => setFactorCode(''),
   })
 
@@ -203,6 +208,7 @@ export function SettingsContainer() {
         renders={renders}
         can={can}
         password={factorPassword}
+        passwordClears={factorPasswordClears}
         code={factorCode}
         error={state.context.twoFactorError}
         start={state.context.start}

@@ -24,6 +24,16 @@ export const RENEWED_CODES: readonly string[] = Array.from(
   (_, index) => `renewed-code-${index}`,
 )
 
+/** A wait, and the function that ends it. */
+function untilReleased(): readonly [Promise<void>, () => void] {
+  let release = () => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+
+  return [held, release]
+}
+
 /** A request the gateway refused with `code`. */
 export const refusedWith = (code: DataError['code']): DataError => dataError(code, 'refused')
 
@@ -32,14 +42,16 @@ export const refusedWith = (code: DataError['code']): DataError => dataError(cod
  * a start replaces the one before it, and a code for a replaced start (or once the factor is on)
  * is `data:TWO_FACTOR_CHANGED`. A password is checked first, as the gateway does, so a wrong one
  * is `data:INVALID_CREDENTIALS` whatever state the factor is in. `refusal` makes the next call fail
- * with it; `holdReads` keeps the reads that follow waiting until the release it answers is called.
+ * with it; `holdReads` keeps the reads that follow waiting until the release it answers is called,
+ * and `holdWrites` the requests that confirm a password (a start, turning it off, a renewal).
  */
 export class FakeTwoFactor implements TwoFactorPort {
   readonly calls: Array<readonly unknown[]> = []
   enabled = false
   refusal: DataError | undefined = undefined
   #start: TwoFactorId | undefined = undefined
-  #held: Promise<void> | undefined = undefined
+  #heldReads: Promise<void> | undefined = undefined
+  #heldWrites: Promise<void> | undefined = undefined
 
   #answer<T>(value: () => T): ResultAsync<T, DataError> {
     const refusal = this.refusal
@@ -51,19 +63,34 @@ export class FakeTwoFactor implements TwoFactorPort {
 
   /** What `then` answers once the password is right; a wrong one is refused first. */
   #checked<T>(password: string, then: () => ResultAsync<T, DataError>): ResultAsync<T, DataError> {
-    return password === FACTOR_PASSWORD ? then() : errAsync(refusedWith('data:INVALID_CREDENTIALS'))
+    const answer = (): ResultAsync<T, DataError> =>
+      password === FACTOR_PASSWORD ? then() : errAsync(refusedWith('data:INVALID_CREDENTIALS'))
+    const held = this.#heldWrites
+
+    // Answered once the release came, with what the gateway holds then.
+    return held === undefined ? answer() : new ResultAsync(held.then(answer))
   }
 
   /** Keeps the reads that follow waiting until the function this answers is called. */
   holdReads(): () => void {
-    let release = () => {}
+    const [held, release] = untilReleased()
 
-    this.#held = new Promise<void>((resolve) => {
-      release = resolve
-    })
+    this.#heldReads = held
 
     return () => {
-      this.#held = undefined
+      this.#heldReads = undefined
+      release()
+    }
+  }
+
+  /** Keeps the requests that confirm a password waiting until the function this answers is called. */
+  holdWrites(): () => void {
+    const [held, release] = untilReleased()
+
+    this.#heldWrites = held
+
+    return () => {
+      this.#heldWrites = undefined
       release()
     }
   }
@@ -71,7 +98,7 @@ export class FakeTwoFactor implements TwoFactorPort {
   read(): ResultAsync<{ readonly enabled: boolean }, DataError> {
     this.calls.push(['read'])
 
-    const held = this.#held
+    const held = this.#heldReads
 
     // The state is read once the release came, as a slow gateway answers with what it holds then.
     return held === undefined
