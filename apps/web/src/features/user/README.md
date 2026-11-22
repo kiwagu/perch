@@ -110,7 +110,9 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   already started; a page mounted anew (a later visit, a revisit after a sign-out or after a
   failed exchange) asks afresh, and another token in the address of the open page starts another
   exchange with its own machine (the part of the page that runs it is keyed by the token). `/me` (guard `authenticated`)
-  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`: the account's
+  renders `ProfilePage`; `/settings` (guard `authenticated`) renders `SettingsPage`, a lazy page
+  (`LazyPage`: its code loads apart from the first frame, when the route first opens for a
+  signed-in device, the frame shown meanwhile; `settings-page.spec.ts`): the account's
   theme (stored through `settings.updateTheme`, shown at once through the platform's
   `useDeviceTheme`, which keeps it on this device as the theme it showed last) and the account's
   language (stored through `settings.updateLocale`, spoken at once), each taken only once the

@@ -14,7 +14,6 @@ import { ForgotPasswordContainer } from './presentation/pages/forgot-password/fo
 import { ProfileContainer } from './presentation/pages/profile/profile.container'
 import { profileCommands, profileShape } from './presentation/pages/profile/profile.model.gen'
 import { ResetPasswordContainer } from './presentation/pages/reset-password/reset-password.container'
-import { SettingsContainer } from './presentation/pages/settings/settings.container'
 import { SignInContainer } from './presentation/pages/sign-in/sign-in.container'
 import { VerifyEmailContainer } from './presentation/pages/verify-email/verify-email.container'
 
@@ -42,6 +41,8 @@ export const UserModule = defineModule({
       useFactory: (container) => new VerifyEmailService(container.get(SESSION)),
     },
   ],
+  // A dynamic import: the settings page is a screen a signed-in device opens rarely, so its code
+  // loads when its route first opens, and no first frame carries it.
   declarations: {
     SignInPage: SignInContainer,
     VerifyEmailPage: VerifyEmailContainer,
@@ -50,7 +51,12 @@ export const UserModule = defineModule({
     ConfirmEmailPage: ConfirmEmailContainer,
     DeleteAccountPage: DeleteAccountContainer,
     ProfilePage: ProfileContainer,
-    SettingsPage: SettingsContainer,
+    SettingsPage: {
+      load: () =>
+        import('./presentation/pages/settings/settings.container').then(
+          ({ SettingsContainer }) => SettingsContainer,
+        ),
+    },
   },
   routes: [
     // A page that moves here may carry the email typed there.
