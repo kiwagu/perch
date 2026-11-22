@@ -179,11 +179,7 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
     'field-holds-input',
     'It holds none when its own change applies it at once',
   ],
-  [
-    'screen-anchors-name-holdsinput',
-    'leave-questions',
-    'declares under `unsavedInput` every leave that would lose what was typed',
-  ],
+  ['screen-anchors-name-holdsinput', 'field-holds-input', 'the app is to ask before such a leave'],
   ['screen-anchors-name-marksstate', 'state-colour', "the field's `fieldStates` still hold"],
   [
     'screen-anchors-name-marksstate',
@@ -361,9 +357,9 @@ describe('renderReference', () => {
   it.each(SHORT_FACETS)('lists in FACET_RULES every rule the short hint of %s names', (facet) => {
     const slug = FACET_HOMES[facet]
     const named = ruleIdsNamedIn(entryAt(slug)?.text ?? '')
-    const listed = FACET_RULES.filter(([of]) => of === slug).map(([, rule]) => rule)
+    const listed = new Set(FACET_RULES.filter(([of]) => of === slug).map(([, rule]) => rule))
 
-    expect([...listed].sort()).toEqual([...named].sort())
+    expect([...listed].sort()).toEqual([...new Set(named)].sort())
   })
   it('says where an error shows each code, and the fields key names that rule', () => {
     expect(entryAt('rule-error-placement')?.text).toContain('shows beside the controls of its part')

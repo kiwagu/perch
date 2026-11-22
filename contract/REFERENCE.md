@@ -380,17 +380,17 @@ Shown to a member only on the entries the member owns: the anchor sits in an ent
 ### `anchors.<name>.holdsInput`
 
 <a id="screen-anchors-name-holdsinput"></a>
-Whether the field holds input: what is typed stays until an action takes it, so a leave loses it. Left out, the loader derives it. See the rules `field-holds-input` and `leave-questions`.
+Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change applies it at once. See the rule `field-holds-input`.
 
 ### `anchors.<name>.marksState`
 
 <a id="screen-anchors-name-marksstate"></a>
-The field shows no state colour: its border keeps the untouched colour whatever its `data-state`. Left out: the field shows it. See the rules `state-colour` and `check-sources`.
+`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.
 
 ### `anchors.<name>.secret`
 
 <a id="screen-anchors-name-secret"></a>
-A field that holds a secret (a password, its confirmation, a current password): it leaves the page only in the request of the action that takes it, never through a URL. See the rule `secret-field`.
+A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.
 
 ### `anchors.<name>.with`
 
@@ -440,17 +440,17 @@ What the `data-id` of the element holds: the id of the entity it shows, on an `i
 ### `anchors.<name>.dataValue`
 
 <a id="screen-anchors-name-datavalue"></a>
-The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, never its label. See the rules `attributes` and `kind-parts`.
+The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.
 
 ### `anchors.<name>.states`
 
 <a id="screen-anchors-name-states"></a>
-The `data-state` values the element takes, each a state of the vocabulary. The state of a field is not written here: the loader derives it. See the rules `attributes` and `field-states-carried`.
+The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.
 
 ### `anchors.<name>.derived`
 
 <a id="screen-anchors-name-derived"></a>
-The derived suffixes the element renders, from the vocabulary's table; the loader lists the parts a paged list or a kind brings. See the rules `derived-parts`, `kind-parts` and `visibility-button`.
+The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.
 
 ### `anchors.<name>.source`
 
@@ -510,7 +510,7 @@ The platform composite the field opts into, declared once in `platform.yaml`; th
 ### `anchors.<name>.confirms`
 
 <a id="screen-anchors-name-confirms"></a>
-The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password. See the rule `password-pair`.
+Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.
 
 ### `anchors.<name>.confirm`
 
@@ -2311,17 +2311,17 @@ Shown to a member only on the entries the member owns: the anchor sits in an ent
 ### `screens.anchors.<name>.holdsInput`
 
 <a id="manifest-screens-anchors-name-holdsinput"></a>
-A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. See the rule `field-holds-input`.
+A field holds input: what is typed stays until an action takes it or a flow clears it, so a leave loses it; false where its own change applies it at once. See the rule `field-holds-input`.
 
 ### `screens.anchors.<name>.marksState`
 
 <a id="manifest-screens-anchors-name-marksstate"></a>
-The field shows no state colour: its border keeps the untouched colour whatever its `data-state`. Left out: the field shows it. See the rules `state-colour` and `check-sources`.
+`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.
 
 ### `screens.anchors.<name>.secret`
 
 <a id="manifest-screens-anchors-name-secret"></a>
-A field that holds a secret (a password, its confirmation, a current password): it leaves the page only in the request of the action that takes it, never through a URL. See the rule `secret-field`.
+A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.
 
 ### `screens.anchors.<name>.with`
 
@@ -2371,17 +2371,17 @@ What the `data-id` of the element holds: the id of the entity it shows, on an `i
 ### `screens.anchors.<name>.dataValue`
 
 <a id="manifest-screens-anchors-name-datavalue"></a>
-The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, never its label. See the rules `attributes` and `kind-parts`.
+The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.
 
 ### `screens.anchors.<name>.states`
 
 <a id="manifest-screens-anchors-name-states"></a>
-The `data-state` values the element takes, each a state of the vocabulary. The state of a field is not written here: the loader derives it. See the rules `attributes` and `field-states-carried`.
+The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.
 
 ### `screens.anchors.<name>.derived`
 
 <a id="manifest-screens-anchors-name-derived"></a>
-The derived suffixes the element renders, from the vocabulary's table; the loader lists the parts a paged list or a kind brings. See the rules `derived-parts`, `kind-parts` and `visibility-button`.
+The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.
 
 ### `screens.anchors.<name>.source`
 
@@ -2486,7 +2486,7 @@ The item of the composite the anchor stands for; absent: the list.
 ### `screens.anchors.<name>.confirms`
 
 <a id="manifest-screens-anchors-name-confirms"></a>
-The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password. See the rule `password-pair`.
+Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.
 
 ### `screens.states`
 
@@ -4896,7 +4896,7 @@ Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [
 <a id="rule-field-holds-input"></a>
 Every field (`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave (see the rule `leave-questions`). A field whose own change applies it at once, and nothing else applies it, holds none: one of its bindings runs an action that takes the field itself as a parameter, an action no other anchor of its screen runs with it (the language select, the organisation select), or its own event moves its screen's search with it, a `navigate` to a path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's event does (a filter applied on change).
 
-A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it (the search box of the accounts), holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` is such a field by its facet: its choice sets the route's `size` at once. The loader sets `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input.
+A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it (the search box of the accounts), holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` holds none by its facet: its choice sets the route's `size` at once. The loader sets `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input.
 
 In the JSX no field carries `holdsInput`: the kit takes it from the generated field facts, `holdsInput: false` on a field that holds no input and on a paged list's size select, which holds none by its facet (see the rule `emitted-modules`), so the sources check refuses a `holdsInput` a view writes, `{false}` or `{true}`, and nothing is wanted of a field rendered (see the rule `check-sources`).
 

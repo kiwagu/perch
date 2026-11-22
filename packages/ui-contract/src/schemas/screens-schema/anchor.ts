@@ -178,19 +178,19 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. See the rule `field-holds-input`.',
+        'A field holds input: what is typed stays until an action takes it or a flow clears it, so a leave loses it; false where its own change applies it at once. See the rule `field-holds-input`.',
       ),
     marksState: z
       .literal(false)
       .optional()
       .describe(
-        'The field shows no state colour: its border keeps the untouched colour whatever its `data-state`. Left out: the field shows it. See the rules `state-colour` and `check-sources`.',
+        '`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.',
       ),
     secret: z
       .literal(true)
       .optional()
       .describe(
-        'A field that holds a secret (a password, its confirmation, a current password): it leaves the page only in the request of the action that takes it, never through a URL. See the rule `secret-field`.',
+        "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
       ),
     with: withSchema.optional(),
     without: withoutSchema.optional(),
@@ -222,19 +222,19 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        'The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, never its label. See the rules `attributes` and `kind-parts`.',
+        "The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.",
       ),
     states: z
       .array(stateSchema)
       .optional()
       .describe(
-        'The `data-state` values the element takes, each a state of the vocabulary. The state of a field is not written here: the loader derives it. See the rules `attributes` and `field-states-carried`.',
+        "The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.",
       ),
     derived: z
       .array(kebabNameSchema)
       .optional()
       .describe(
-        "The derived suffixes the element renders, from the vocabulary's table; the loader lists the parts a paged list or a kind brings. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
+        "The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
@@ -248,7 +248,7 @@ export const anchorDefSchema = z
     confirms: baseAnchorSchema
       .optional()
       .describe(
-        'The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password. See the rule `password-pair`.',
+        'Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.',
       ),
   })
   .describe('One declared anchor.')
@@ -278,7 +278,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .boolean()
       .optional()
       .describe(
-        'Whether the field holds input: what is typed stays until an action takes it, so a leave loses it. Left out, the loader derives it. See the rules `field-holds-input` and `leave-questions`.',
+        'Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change applies it at once. See the rule `field-holds-input`.',
       ),
     confirm: z
       .literal(false)

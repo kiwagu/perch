@@ -691,16 +691,16 @@
             "type": "boolean"
           },
           "holdsInput": {
-            "description": "Whether the field holds input: what is typed stays until an action takes it, so a leave loses it. Left out, the loader derives it. See the rules `field-holds-input` and `leave-questions`.",
+            "description": "Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change applies it at once. See the rule `field-holds-input`.",
             "type": "boolean"
           },
           "marksState": {
-            "description": "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`. Left out: the field shows it. See the rules `state-colour` and `check-sources`.",
+            "description": "`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.",
             "type": "boolean",
             "const": false
           },
           "secret": {
-            "description": "A field that holds a secret (a password, its confirmation, a current password): it leaves the page only in the request of the action that takes it, never through a URL. See the rule `secret-field`.",
+            "description": "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
             "type": "boolean",
             "const": true
           },
@@ -816,11 +816,11 @@
             "type": "string"
           },
           "dataValue": {
-            "description": "The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, never its label. See the rules `attributes` and `kind-parts`.",
+            "description": "The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.",
             "type": "boolean"
           },
           "states": {
-            "description": "The `data-state` values the element takes, each a state of the vocabulary. The state of a field is not written here: the loader derives it. See the rules `attributes` and `field-states-carried`.",
+            "description": "The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.",
             "type": "array",
             "items": {
               "type": "string",
@@ -829,7 +829,7 @@
             }
           },
           "derived": {
-            "description": "The derived suffixes the element renders, from the vocabulary's table; the loader lists the parts a paged list or a kind brings. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
+            "description": "The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
             "type": "array",
             "items": {
               "type": "string",
@@ -938,7 +938,7 @@
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
           },
           "confirms": {
-            "description": "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password. See the rule `password-pair`.",
+            "description": "Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.",
             "type": "string",
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
           },
