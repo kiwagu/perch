@@ -212,7 +212,7 @@ dialog's code names what it asks (`unsent-changes`), not the answer.
 | `invalid-credentials` | `user.sign-in.error`, `user.settings.password.error`, `user.settings.email.error`, `user.settings.two-factor.error`, `user.settings.deletion.error` | the email or the password is wrong, a password longer or shorter than its value allows included |
 | `invalid-code` | `user.settings.two-factor.error`, `user.sign-in.code.error` | the code is not one the authenticator app shows now for the account's key, nor a backup code of the account not used yet |
 | `code-required` | `user.sign-in.code.dialog` | the dialog asks for a code of the account's authenticator app, or one of its backup codes, since its second factor is on: the right password alone signs nothing in |
-| `code-expired` | `user.sign-in.error` | the sign-in waited ten minutes for its code, took five wrong ones, or the account's password or email changed meanwhile, so it starts again from the password |
+| `code-expired` | `user.sign-in.error` | the sign-in waited about ten minutes for its code, took five wrong ones, or the account's password or email changed meanwhile, so it starts again from the password |
 | `passkey-cancelled` | `user.sign-in.error`, `user.settings.passkeys.error` | the browser's window for the passkey was closed or timed out, so nothing was signed in or added |
 | `passkey-unknown` | `user.sign-in.error` | the passkey picked is no account's here: removed from its account, or never added to one |
 | `two-factor-changed` | `user.settings.two-factor.error` | the second factor changed meanwhile from elsewhere: turned on or off, or its key replaced, so nothing changed here; the section shows it as it is now |
