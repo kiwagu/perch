@@ -482,6 +482,58 @@ const has = (testId: string) => screen.queryByTestId(testId) !== null
 /** Lets the read the page waits for answer. */
 const released = (release: () => void) => act(async () => release())
 
+describe('SettingsContainer, the password field while the second factor is not read', () => {
+  it('draws the password and its eye while the read waits, keeps what is typed as it answers, then offers the action', async () => {
+    const twoFactor = new FakeTwoFactor()
+    const release = twoFactor.holdReads()
+
+    open(() => okAsync(undefined), undefined, { twoFactor })
+
+    await waitFor(() => expect(state()).toBe('loading'))
+    expect(shown(FACTOR.password, `${FACTOR.password}.visibility-button`)).toEqual([true, true])
+    expect(
+      shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.offBadge, FACTOR.onBadge),
+    ).toEqual([false, false, false, false, false])
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await released(release)
+
+    expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
+    expect(value(FACTOR.password)).toBe(FACTOR_PASSWORD)
+    expect(shown(FACTOR.enable)).toEqual([true])
+  })
+
+  it('draws the password and its eye when the read failed, with no badge and no action', async () => {
+    const twoFactor = new FakeTwoFactor()
+
+    twoFactor.refusal = refusedWith('data:OFFLINE')
+    open(() => okAsync(undefined), undefined, { twoFactor })
+
+    await waitFor(() => expect(state()).toBe('error'))
+    expect(shown(FACTOR.password, `${FACTOR.password}.visibility-button`)).toEqual([true, true])
+    expect(
+      shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.offBadge, FACTOR.onBadge),
+    ).toEqual([false, false, false, false, false])
+  })
+
+  it('draws the password while it is read again after an action, with no action meanwhile', async () => {
+    const twoFactor = await openOn()
+    const release = twoFactor.holdReads()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(FACTOR.disable)
+
+    await waitFor(() => expect(state()).toBe('loading'))
+    expect(shown(FACTOR.password, FACTOR.enable, FACTOR.disable, FACTOR.renew)).toEqual([
+      true,
+      false,
+      false,
+      false,
+    ])
+    await released(release)
+  })
+})
+
 describe('SettingsContainer, a blank password', () => {
   it('sends no request for any of the three presses', async () => {
     const off = await openOff()
@@ -557,9 +609,10 @@ describe('SettingsContainer, the second factor while it is read again', () => {
     await pressed(FACTOR.hide)
 
     expect(state()).toBe('loading')
+    // The field is the state's, the actions and the badge wait for the read.
     expect(
-      shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.password, FACTOR.offBadge),
-    ).toEqual([false, false, false, false, false])
+      shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.offBadge, FACTOR.password),
+    ).toEqual([false, false, false, false, true])
 
     await released(release)
 

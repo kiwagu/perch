@@ -91,7 +91,7 @@ export function TwoFactorSectionView(props: TwoFactorSectionViewProps) {
   const ids = { password: useId(), error: useId() }
   const error = props.error ? twoFactorErrorOf(t, props.error) : undefined
   const ready = props.factor.status === 'ready'
-  const asksPassword = ready && props.renders('user.settings.two-factor.password-input')
+  const asksPassword = props.renders('user.settings.two-factor.password-input')
   const asksCode = props.start !== undefined && props.renders('user.settings.two-factor.code-input')
   const concerns = concernsOf(TWO_FACTOR_ERROR_FIELDS, error?.code)
   // An error shows under the field it concerns while that field is on screen, else above them all.
@@ -161,61 +161,60 @@ export function TwoFactorSectionView(props: TwoFactorSectionViewProps) {
             </AlertDescription>
           </Alert>
         ) : null}
-        {asksPassword && !enabled ? (
-          <Form onSubmit={props.onEnable}>
+        {asksPassword ? (
+          // The state renders the password whatever the read says, in one form that stays mounted
+          // as the read answers; the actions wait for the badge. Turning it off and renewing the
+          // codes are two presses, so Enter chooses neither, and each is held to the form's
+          // validation as a submit is.
+          <Form onSubmit={() => (ready && !enabled ? props.onEnable() : false)}>
             <FieldGroup>
               {passwordField}
-              <Button
-                type="submit"
-                disabled={
-                  !props.can({
-                    type: 'user.settings.two-factor.enable-button',
-                    password: props.password,
-                  })
-                }
-                data-testid="user.settings.two-factor.enable-button"
-              >
-                {t('user.settings.two-factor.enable')}
-              </Button>
-            </FieldGroup>
-          </Form>
-        ) : null}
-        {asksPassword && enabled ? (
-          // Turning it off and renewing the codes are two presses: Enter in the password chooses
-          // neither, and each press is held to the form's validation as a submit is.
-          <Form onSubmit={() => false}>
-            <FieldGroup>
-              {passwordField}
-              <div className="flex flex-wrap gap-2">
+              {ready && !enabled ? (
                 <Button
-                  type="button"
-                  variant="outline"
+                  type="submit"
                   disabled={
                     !props.can({
-                      type: 'user.settings.two-factor.disable-button',
+                      type: 'user.settings.two-factor.enable-button',
                       password: props.password,
                     })
                   }
-                  onClick={pressWhenValid(props.onDisable)}
-                  data-testid="user.settings.two-factor.disable-button"
+                  data-testid="user.settings.two-factor.enable-button"
                 >
-                  {t('user.settings.two-factor.disable')}
+                  {t('user.settings.two-factor.enable')}
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={
-                    !props.can({
-                      type: 'user.settings.two-factor.renew-codes-button',
-                      password: props.password,
-                    })
-                  }
-                  onClick={pressWhenValid(props.onRenew)}
-                  data-testid="user.settings.two-factor.renew-codes-button"
-                >
-                  {t('user.settings.two-factor.renew-codes')}
-                </Button>
-              </div>
+              ) : null}
+              {ready && enabled ? (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      !props.can({
+                        type: 'user.settings.two-factor.disable-button',
+                        password: props.password,
+                      })
+                    }
+                    onClick={pressWhenValid(props.onDisable)}
+                    data-testid="user.settings.two-factor.disable-button"
+                  >
+                    {t('user.settings.two-factor.disable')}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      !props.can({
+                        type: 'user.settings.two-factor.renew-codes-button',
+                        password: props.password,
+                      })
+                    }
+                    onClick={pressWhenValid(props.onRenew)}
+                    data-testid="user.settings.two-factor.renew-codes-button"
+                  >
+                    {t('user.settings.two-factor.renew-codes')}
+                  </Button>
+                </div>
+              ) : null}
             </FieldGroup>
           </Form>
         ) : null}

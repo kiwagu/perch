@@ -76,11 +76,15 @@ describe('TwoFactorSectionView, as the section reads', () => {
     expect(screen.getByTestId(SECTION).getAttribute('data-state')).toBe(state)
   })
 
-  it('shows no control and no badge before the second factor is read, nor when it could not be', () => {
+  it('shows the password with its eye, and no badge and no action, before the second factor is read or when it could not be', () => {
     for (const status of ['loading', 'error'] as const) {
       renderView({ factor: { status } })
 
-      for (const anchor of [ON_BADGE, OFF_BADGE, PASSWORD, ENABLE, DISABLE, RENEW]) {
+      // The idle state renders the field whatever the read says; the actions wait for the badge.
+      expect(has(PASSWORD), `${PASSWORD} while ${status}`).toBe(true)
+      expect(has(`${PASSWORD}.visibility-button`), `its eye while ${status}`).toBe(true)
+
+      for (const anchor of [ON_BADGE, OFF_BADGE, ENABLE, DISABLE, RENEW]) {
         expect(has(anchor), `${anchor} while ${status}`).toBe(false)
       }
 
