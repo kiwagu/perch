@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { IdentityId } from '@workspace/ids'
-import { CLOSE } from '@workspace/replica/protocol'
-
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { ban } from '../__fixtures__/account-ban'
 import { codeOf, keyOf } from '../__fixtures__/second-factor'
-import { DeviceSessions } from '../device-sessions'
 
 import {
   answered,
@@ -21,7 +17,6 @@ import {
   withSecondFactor,
   wrongPasswords,
 } from './__fixtures__/code-step'
-import { seenInTurn } from './__fixtures__/devices'
 import {
   ANN,
   ARGON2_WAIT,
@@ -45,9 +40,6 @@ const FROM = '203.0.113.7'
 
 /** The email Ann's account moves to. */
 const MOVED = 'ann.moved@example.test'
-
-/** Ten devices, the most one account keeps signed in at once; `a` signed in first. */
-const TEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const
 
 /** How long a test of many password checks may run: each is an argon2 run, slow on a busy host. */
 const ARGON2_RUNS_MS = 60_000
@@ -139,16 +131,6 @@ const CHANGES: readonly Change[] = [
   },
 ]
 
-/** The devices of `identity` whose session ended, each with why. */
-async function endedOf(mounted: Mounted, identity: IdentityId) {
-  const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
-
-  return (await devices.list(identity))
-    ._unsafeUnwrap()
-    .filter((row) => row.endedAt !== undefined)
-    .map((row) => [row.device, row.endedReason])
-}
-
 describe("authHandler, a sign-in's code step and a change of the account in the account's turn", () => {
   it.each(CHANGES)(
     'answers 401 code-expired to a code step that waited for the turn in which $name committed',
@@ -204,53 +186,6 @@ describe("authHandler, a sign-in's code step and a change of the account in the 
       expect((await mounted.sessions.read(tokenOf(body))).kind).toBe(
         change.keepsTheDevice ? 'session' : 'none',
       )
-    },
-    ARGON2_RUNS_MS,
-  )
-})
-
-describe("authHandler, a sign-in's code step at the account's limit of devices", () => {
-  it(
-    "answers the right code of an eleventh device 409 with nothing signed in, forgetting the email's failed sign-ins, and signs it in from the password again once confirmed, the device seen least recently signed out",
-    async () => {
-      const mounted = await mountedOnRealAuth()
-      const ann = await withSecondFactor(mounted, TEN)
-
-      // Every device but c is seen after the sign-ins, c the least recently: c is the one to go.
-      await seenInTurn(
-        mounted,
-        ann,
-        TEN.filter((device) => device !== 'c'),
-      )
-      await wrongPasswords(mounted, 9, FROM)
-
-      const asked = await passwordStep(mounted, 'k', FROM)
-
-      expect(
-        await answered(await mounted.route(codeStep(asked, await codeOf(ann.secret), 'k'), FROM)),
-      ).toEqual({ status: 409, body: { code: 'device-limit' } })
-      expect(await endedOf(mounted, ann.identity)).toEqual([])
-      expect(await challengeRows(mounted)).toEqual([])
-      // The right code was the sign-in's last step: two more failures are the first of a new count.
-      await wrongPasswords(mounted, 2, FROM)
-
-      const again = await passwordStep(mounted, 'k', FROM)
-      const confirmed = await answered(
-        await mounted.route(
-          codeStep(again, await codeOf(ann.secret), 'k', { signOutOldest: true }),
-          FROM,
-        ),
-      )
-
-      expect(confirmed.status).toBe(200)
-      expect((await mounted.sessions.read(tokenOf(confirmed.body))).kind).toBe('session')
-
-      expect(await endedOf(mounted, ann.identity)).toEqual([['c', 'device-limit']])
-      // Its socket, and no other, is closed for the limit.
-      expect(mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)).toEqual([
-        [ann.identity, 'c', CLOSE.deviceLimit],
-      ])
-      expect(ann.sockets.get('c')?.ended).toEqual([CLOSE.deviceLimit])
     },
     ARGON2_RUNS_MS,
   )

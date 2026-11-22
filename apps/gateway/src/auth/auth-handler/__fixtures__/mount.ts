@@ -125,8 +125,8 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
- * account, no session is read back, no token holds a session, nothing is signed out, and every
- * sign-in and verification is admitted.
+ * account, no session is read back, no token holds a session, nothing is signed out, every
+ * sign-in is judged and admitted as it is, and every verification admitted.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -140,6 +140,7 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signOut: notHere,
   revokeAll: notHere,
   admit: () => okAsync({ kind: 'admitted' }),
+  judge: () => okAsync('admitted'),
   admitVerified: () => okAsync({ kind: 'admitted' }),
 }
 
@@ -381,6 +382,7 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
 
         return options.admission === undefined ? admit() : options.admission(admit)
       },
+      judge: (identity, device) => sessions.judge(identity, device),
       admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,

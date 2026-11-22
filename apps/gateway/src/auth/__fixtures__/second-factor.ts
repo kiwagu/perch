@@ -85,6 +85,13 @@ export async function secondFactorOn(
   return { secret, backupCodes, token: read.session.token }
 }
 
+/** The backup codes of `identity` (its key) not used up yet, as Better Auth reads them. */
+export async function backupCodesOf(auth: AuthInstance, identity: string): Promise<string[]> {
+  const { backupCodes } = await auth.api.viewBackupCodes({ body: { userId: identity } })
+
+  return backupCodes
+}
+
 /**
  * A sign-in by `email` and `password` from `device` as the gateway hands one to Better Auth's
  * handler: at the path Better Auth serves it under, its session asked to wait for its admission.

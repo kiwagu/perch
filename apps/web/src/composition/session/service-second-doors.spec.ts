@@ -239,7 +239,8 @@ describe('the code step', () => {
     ).toEqual({ kind: 'device-limit' })
     expect(savedSession(tab.storage)).toBeUndefined()
 
-    // The right code spent the challenge: the confirmation signs in again from the password.
+    // The limit ended the challenge before the code was looked at: the confirmation signs in
+    // again from the password.
     const again = (await tab.session.signIn(annSignUp))._unsafeUnwrap()
 
     if (again.kind !== 'code-required') expect.unreachable('the password step asks for a code')

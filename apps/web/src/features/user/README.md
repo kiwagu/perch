@@ -251,8 +251,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   cannot sign in now (`data:CODE_EXPIRED`, `data:ACCOUNT_BANNED`, `data:RATE_LIMITED`,
   `data:OTHER_ACCOUNT`) goes back to the form with its reason on `user.sign-in.error`, the dialog's
   cancel the same without one, the container holding what is typed in the code and emptying it as
-  the flow clears it; past the limit of devices the right code asks about it, and its
-  confirmation signs in again from the password, which asks the code again; the button
+  the flow clears it; past the limit of devices the code step asks about it before the code is
+  checked, and its confirmation signs in again from the password, which asks the code again; the button
   `user.sign-in.passkey-button` ("Sign in with a passkey", in the states sign-in, check-mail and
   unverified, never at sign-up) signs in with a passkey the browser picks, a window closed or timed out
   (`data:PASSKEY_CANCELLED`, "No passkey was used") or a passkey no account holds (`data:PASSKEY_UNKNOWN`) showing on

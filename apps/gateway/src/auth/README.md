@@ -387,7 +387,9 @@ stands is then admitted against the account's limit of devices, `DEVICE_LIMIT` (
 `SESSION_LIFETIME_MS` in `auth-instance.ts`), in one transaction (`AuthSessions.admit`,
 `surql/device-sessions-admit.surql`), one admission of an account at a time in the gateway's
 process: the account's devices with a live admitted session are counted, the new session's
-device included and a device with several sessions once. A sign-in's session is written
+device included and a device with several sessions once (`fn::devices_signed_in_with` of the
+directory schema, by which a sign-in's code step judges the limit too, before its code is
+checked). A sign-in's session is written
 `pending` (the sign-in route asks for it with `X-Perch-Admission: pending`, whatever the client
 sent, and the session hooks honour it on Better Auth's paths of a sign-in only: `/sign-in/email`,
 `/two-factor/verify-totp`, `/two-factor/verify-backup-code` and `/passkey/verify-authentication`)
@@ -467,7 +469,16 @@ the password, the confirmation of a new email, a ban, a deletion and the second 
 take), the challenge's row is read again (gone: 401 `code-expired`) and the account's second
 factor (`TwoFactorRows.read`): one that is off, or whose key no code confirmed, ends the challenge
 and answers 401 `code-expired` before either verifier runs, since Better Auth's verifier of
-backup codes takes the codes of an unconfirmed key too. The code then goes to Better Auth's
+backup codes takes the codes of an unconfirmed key too. A step without `signOutOldest: true` is
+then judged as its admission would judge it, before its code is checked (`AuthSessions.judge`,
+`surql/device-sessions-limit.surql`, in the account's turn of admissions, its devices counted as
+the admission counts them, writing nothing): a banned account, or a device that would bring the
+account past its limit of devices, ends the challenge and answers 403 `account-banned` or 409
+`device-limit` with no verifier run, so the code, right or wrong, is neither checked nor spent,
+nothing is signed in or out and the email's failed sign-ins stay as they were; the dialog's
+confirmation signs in again from the password, which asks for a code again. A confirmed step
+skips that judgment: its code is checked, and a backup code spent, before anyone is signed in or
+out. The code then goes to Better Auth's
 verifier, six digits to `/two-factor/verify-totp` and any other code to
 `/two-factor/verify-backup-code`, by the gateway's own call (`internalRequest`, the challenge its
 only cookie, the session it writes waiting for its admission), and Better Auth's answer is read by
@@ -479,10 +490,12 @@ code is admitted as a sign-in by password is (`admitted`, `auth-handler/admitted
 of both: the limit of devices and the ban judged now, the device's sockets closed, the answer
 `{ token, user, start? }` built from the allowlist, no header of Better Auth's answer copied, its
 `set-auth-token` and cookies included), with the start of the account the email names, read in
-the turn. A right code is the sign-in's last step: 200, and 409 `device-limit` (whose confirmation
-signs in again from the password, which asks for a code again), forget the email's failed sign-ins;
-every other answer gives its place back, a ban's refusal included, so a banned account's right code
-forgets nothing. A change of what a challenge stood for ends it in its own transaction: a change
+the turn. A right code is the sign-in's last step: 200 forgets the email's failed sign-ins, and so
+does the admission's own 409 `device-limit`, which a step judged within the limit still meets when
+a device was admitted after the judgment through a door that does not take the account's turn (a
+sign-in by password Better Auth took while the factor was off, a verification): the code is spent
+by then, and nothing is signed in. Every other answer gives its place back, the 409 judged before
+the code and a ban's refusal included, so a banned account's right code forgets nothing. A change of what a challenge stood for ends it in its own transaction: a change
 or a reset of the password, the confirmation of a new email, the second factor turned off and the
 account's deletion each end the identity's pending challenges with the rows counting their codes
 (`fn::two_factor_challenges_end`), so a code step that waited for their turn answers 401
@@ -921,7 +934,8 @@ its challenge cookie carried by the device as `challenge`.
   `sessionHooks` (`session-hooks.ts`), `AuthSessions`
   (`auth-sessions/`: `read` a session by its token,
   `signOut`, `revoke`, `revokeAll`, `admit` a sign-in against the limit of devices and the ban
-  (`SignInAdmission`), `admitVerified` a verification's session against the ban
+  (`SignInAdmission`), `judge` a sign-in as `admit` would take it, before its session is written
+  (`SignInJudgment`), `admitVerified` a verification's session against the ban
   (`VerifiedAdmission`), and for a verification `signedIn`,
   `identityOf` and `verificationOf`; `SignedInAccount`, `MailedVerification`), `DeviceSessions` (`device-sessions.ts`: `list`,
   `byToken`, `seen`) over the rows of `device-session-rows.ts`, the Bearer caller
@@ -937,7 +951,8 @@ its challenge cookie carried by the device as `challenge`.
   that ended 30 days ago, the mark of a device seen, the three endings of `AuthSessions`, the
   ending of all but a device's newest session for a row written admitted, a sign-in's admission
   against the limit of devices and a verification's admission (each reading the account's ban and
-  ending the same), the language an account's settings
+  ending the same), a sign-in's judgment against the ban and the limit before its session is
+  written, the language an account's settings
   name, the identity of an email, an identity's email, name and language for a mail, an
   identity's email and the key and email of its profile, a reset
   link read and the earlier links ended, a pending change of the email kept, ended and spent,
@@ -998,10 +1013,15 @@ its challenge cookie carried by the device as `challenge`.
   place back, a dead one 429 while the failures are spent, the email read in lower case, a device
   named first, a change or a reset of the password, the confirmation of a new email and the factor
   turned off ending the challenge, and a ban between the steps answered 403, judging nothing) and
+  `auth-handler/confirm-sign-in-device-limit.spec.ts` (past the limit of devices the last backup
+  code, a wrong code and a code of the key answered 409 before they are checked: nothing signed in
+  or out, the backup code kept, the challenge ended, the failed sign-ins as they were; the
+  confirmation from the password signing in with that backup code, which is then used up, or with
+  a new code of the key, signing out the device seen least recently and closing its socket; 429
+  still first; within the limit, a tenth device and one signed in already, a wrong code counted and
+  the right one forgetting) and
   `auth-handler/confirm-sign-in-races.spec.ts` (each of those changes committed in the account's
-  turn before a code step and after it, both orders forced by the turn and by a held query, the
-  limit of devices answered 409 and confirmed from the password again, signing out the device seen
-  least recently and closing its socket, a ban in the turn before the
+  turn before a code step and after it, both orders forced by the turn and by a held query, a ban in the turn before the
   step or committed while its session waits for its admission, a factor turned off, or off and
   started again unconfirmed, while the password step waited to write its challenge, refusing a code
   of the key and a backup code with the challenge ended, and a backup code spent beside a renewal
@@ -1099,8 +1119,10 @@ its challenge cookie carried by the device as `challenge`.
   `auth-models.spec.ts`, `auth-schema.spec.ts`, `auth-sessions/sessions.spec.ts` (the admissions
   of a sign-in and of a verification against a ban, by a session written live after it or ended by
   it, `admitted` keeping the device's newest session, `gone` for a session ended meanwhile, and a
-  waiting session read as none until its admission, the account's platform roles read afresh at
-  every read), `platform-roles.spec.ts`,
+  waiting session read as none until its admission, a sign-in judged before its session is
+  written as its admission counts the devices, a waiting sign-in and a device signed in already
+  taking no place, and a banned account's judged banned, the account's platform roles read afresh
+  at every read), `platform-roles.spec.ts`,
   `bearer-caller.spec.ts`, `device.routes.spec.ts` (a waiting session's token 401 until its
   admission), `device-sessions.spec.ts` (a session a ban ended read with `banned` as why),
   `identity-by-email.spec.ts`, `password-hash.spec.ts`, `verification-mail.spec.ts`).

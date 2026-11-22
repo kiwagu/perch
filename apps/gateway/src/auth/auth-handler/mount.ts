@@ -78,6 +78,7 @@ export interface AuthMountDeps {
     | 'signOut'
     | 'revokeAll'
     | 'admit'
+    | 'judge'
     | 'admitVerified'
   >
   /** The reset mail, the reset, the change and the check of a password, an email's credential. */

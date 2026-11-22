@@ -11,7 +11,7 @@ import type { StepAnswer } from './signed-in'
 /**
  * What the code step answers besides a device signed in, by status and code: a code the key does
  * not give counts as a failed sign-in, a dead challenge starts over from the password, a banned
- * account is refused after the right code, and the email's failed sign-ins spent keep it out.
+ * account is refused, and the email's failed sign-ins spent keep it out.
  */
 const STEP: StepReading = {
   refusals: new Map([

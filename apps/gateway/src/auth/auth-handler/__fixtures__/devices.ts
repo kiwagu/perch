@@ -1,8 +1,10 @@
 /**
  * The devices of an account as the specs of the limit of devices order them: each marked seen a
  * minute after the other, so the device seen least recently, the one a confirmed sign-in signs
- * out, is the one a test names.
+ * out, is the one a test names; and the devices My devices lists, the ended ones with why.
  */
+
+import type { IdentityId } from '@workspace/ids'
 
 import { DeviceSessions } from '../../device-sessions'
 
@@ -29,4 +31,23 @@ export async function seenInTurn(
     await mounted.clock.advance(MINUTE_MS)
     ;(await rows.seen({ identity: account.identity, device }))._unsafeUnwrap()
   }
+}
+
+/** The latest row of each device of `identity`, as My devices lists them. */
+async function devicesOf(mounted: Mounted, identity: IdentityId) {
+  const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
+
+  return (await devices.list(identity))._unsafeUnwrap()
+}
+
+/** The devices of `identity` My devices lists, signed in or ended, in order of their ids. */
+export async function listedOf(mounted: Mounted, identity: IdentityId): Promise<string[]> {
+  return (await devicesOf(mounted, identity)).map((row) => row.device).sort()
+}
+
+/** The devices of `identity` whose session ended, each with why. */
+export async function endedOf(mounted: Mounted, identity: IdentityId) {
+  return (await devicesOf(mounted, identity))
+    .filter((row) => row.endedAt !== undefined)
+    .map((row) => [row.device, row.endedReason])
 }

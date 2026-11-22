@@ -332,19 +332,29 @@ export function fakeGatewayAuth(): FakeGatewayAuth {
         return errAsync(dataError('data:CODE_EXPIRED', 'the sign-in must start again'))
       }
 
+      // Unconfirmed, the step is judged before its code is looked at: a banned account, or one at
+      // the limit of devices, ends the challenge, no code checked or spent.
+      if (!step.signOutOldest && banned.has(account.identity.email)) {
+        challenges.delete(step.challenge)
+
+        return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
+      }
+
+      if (!step.signOutOldest && atLimit.has(account.identity.email)) {
+        challenges.delete(step.challenge)
+
+        return okAsync({ kind: 'device-limit' })
+      }
+
       if (codes.get(account.identity.email) !== step.code) {
         return errAsync(dataError('data:INVALID_CODE', 'the code is wrong'))
       }
 
-      // A right code spends the challenge, the limit of devices asking or not.
+      // A right code spends the challenge.
       challenges.delete(step.challenge)
 
       if (banned.has(account.identity.email)) {
         return errAsync(dataError('data:ACCOUNT_BANNED', 'the account is banned'))
-      }
-
-      if (atLimit.has(account.identity.email) && !step.signOutOldest) {
-        return okAsync({ kind: 'device-limit' })
       }
 
       const given = token()

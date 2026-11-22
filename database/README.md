@@ -36,7 +36,9 @@ only the gateway's own writes change it (the profile's email through the confirm
   is on; an identity reads only its own row), `account` (how an identity signs in: the credential
   row holds the argon2id hash of the password), `device_session` (one row per sign-in of a device
   of an identity, with the device's own id, its label and the session token it holds; a sign-out
-  ends the row, which stays listed for 30 days), `verification` (one-time tokens with an expiry,
+  ends the row, which stays listed for 30 days; with the function `fn::devices_signed_in_with`,
+  the devices an identity is signed in on with one device more, by which the gateway judges the
+  limit of devices), `verification` (one-time tokens with an expiry,
   a sign-in's two-factor challenge and a passkey's ceremony among them, each ceremony marked with
   its kind, `ceremony`, which the schema derives at each write, and indexed by kind and expiry, so
   the gateway reclaims the expired ones of a kind reading them alone), `two_factor` (an account's second factor: its

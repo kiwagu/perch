@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { ban } from '../__fixtures__/account-ban'
-import { codeOf, wrongCodeOf } from '../__fixtures__/second-factor'
+import { backupCodesOf, codeOf, wrongCodeOf } from '../__fixtures__/second-factor'
 
 import {
   ageChallenges,
@@ -388,6 +388,26 @@ describe('authHandler, a change of what a challenge stood for between the steps'
       // The refusal judged nothing: the next wrong password is the tenth, which spends them.
       await wrongPasswords(mounted, 1, FROM)
       expect(await rightPassword(mounted)).toBe(429)
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'answers 403 account-banned to a backup code of an account banned between the steps before checking it: the code kept, the challenge ended',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await withSecondFactor(mounted)
+      const [backup = ''] = ann.backupCodes
+      const challenge = await passwordStep(mounted, 'desk', FROM)
+
+      await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+
+      expect(await confirm(mounted, challenge, backup)).toEqual({
+        status: 403,
+        body: { code: 'account-banned' },
+      })
+      expect(await backupCodesOf(mounted.auth, ann.identity)).toContain(backup)
+      expect(await challengeRows(mounted)).toEqual([])
     },
     ARGON2_RUNS_MS,
   )

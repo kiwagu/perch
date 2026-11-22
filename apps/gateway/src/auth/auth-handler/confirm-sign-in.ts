@@ -58,6 +58,12 @@ const expired = (): JudgedAnswer => judged(refused(401, 'code-expired'), 'unjudg
 
 const failure = (): JudgedAnswer => judged(internal(), 'unjudged')
 
+/** 403 `account-banned`, judging nothing: a banned account's right code forgets no failure. */
+const banned = (): JudgedAnswer => judged(refused(403, 'account-banned'), 'unjudged')
+
+/** 409 `device-limit` before the code is checked, judging nothing: no code was looked at. */
+const pastTheLimit = (): JudgedAnswer => judged(refused(409, 'device-limit'), 'unjudged')
+
 /** Better Auth's codes of the two-factor plugin's refusals. */
 const CODES = TWO_FACTOR_ERROR_CODES
 
@@ -77,8 +83,41 @@ const REFUSALS: ReadonlyMap<string, () => JudgedAnswer> = new Map([
   [CODES.TOTP_NOT_ENABLED.code, expired],
   [CODES.BACKUP_CODES_NOT_ENABLED.code, expired],
   [CODES.TWO_FACTOR_NOT_ENABLED.code, expired],
-  [BANNED_USER, () => judged(refused(403, 'account-banned'), 'unjudged')],
+  [BANNED_USER, banned],
 ])
+
+/**
+ * A step that does not confirm a sign-in past the limit of devices (no `signOutOldest`), judged
+ * before its code is checked as its admission would judge it (`AuthSessions.judge`): an account banned, or a device that would bring
+ * the account past the limit, ends the challenge and answers 403 `account-banned` or 409
+ * `device-limit`, no verifier run, so no code is checked or spent and the email's failed sign-ins
+ * stay as they were; the sign-in starts again from the password, the dialog's confirmation
+ * included. Within the limit, and for a confirmed step, which checks its code before anyone is
+ * signed in or out, nothing is answered here.
+ */
+async function prejudged(
+  deps: AuthMountDeps,
+  identity: IdentityId,
+  step: Step,
+): Promise<JudgedAnswer | undefined> {
+  if (step.signOutOldest) {
+    return undefined
+  }
+
+  const judgment = await deps.sessions.judge(identity, step.device.id)
+
+  if (judgment.isErr()) {
+    return failure()
+  }
+
+  if (judgment.value === 'admitted') {
+    return undefined
+  }
+
+  const refusal = judgment.value === 'banned' ? banned : pastTheLimit
+
+  return (await deps.challenges.end(step.challenge)).match(refusal, failure)
+}
 
 /**
  * The code step in the account's turn, so a change of the password, a reset, the confirmation of a
@@ -86,10 +125,11 @@ const REFUSALS: ReadonlyMap<string, () => JudgedAnswer> = new Map([
  * it. The challenge's row is read again (gone: 401 `code-expired`), as is the account's second
  * factor: one that is off, or whose key no code confirmed, ends the challenge and answers 401
  * `code-expired` before either verifier runs (Better Auth's verifier of backup codes takes them of
- * an unconfirmed key too). The code then goes to Better Auth's verifier (a code of the key, or a
- * backup code) with the challenge as the call's only cookie, the session it writes waiting for its
- * admission; an accepted one is admitted (`admitted`), with the start of the account the typed
- * email names, read in the turn.
+ * an unconfirmed key too). A step that does not confirm a sign-in past the limit of devices is
+ * then judged against the ban and the limit before its code is checked (`prejudged`). The code
+ * then goes to Better Auth's verifier (a code of the key, or a backup code) with the challenge as
+ * the call's only cookie, the session it writes waiting for its admission; an accepted one is
+ * admitted (`admitted`), with the start of the account the typed email names, read in the turn.
  */
 async function verified(
   deps: AuthMountDeps,
@@ -111,6 +151,12 @@ async function verified(
 
   if (!factor.value.enabled || factor.value.key?.verified !== true) {
     return (await deps.challenges.end(step.challenge)).match(expired, failure)
+  }
+
+  const refusal = await prejudged(deps, identity, step)
+
+  if (refusal !== undefined) {
+    return refusal
   }
 
   const answer = await deps.auth.handler(
@@ -144,6 +190,10 @@ async function verified(
 
   // The right code is a sign-in's last step: admitted, or asked about the limit of devices, it
   // forgets the email's failed sign-ins; a ban the admission read, or a failure, judges nothing.
+  // The admission still asks when a device it counts was admitted after `prejudged` judged the
+  // step within the limit, through a door that does not take the account's turn (a sign-in by
+  // password Better Auth took while the factor was off, a verification): the code is spent by
+  // then, and nothing is signed in.
   return judged(
     response,
     response.status === 200 || response.status === 409 ? 'succeeded' : 'unjudged',
@@ -180,10 +230,11 @@ async function stepped(deps: AuthMountDeps, request: Request, step: Step): Promi
  * email, in lower case, must then find a place among its failed sign-ins (`RequestLimits.
  * signInAttempt`, 429 `rate-limited` once spent, whatever the challenge and the code), the place
  * settled once with what the step meant (`settling`): a wrong code (400 `invalid-code`) counts as
- * a failed sign-in, a right one (200 signed in, or 409 `device-limit`) forgets them, and every
- * other answer gives the place back: 401 `code-expired` (a challenge dead, of another email's
- * account, after five wrong codes, past its ten minutes, or of a factor that is not on), 403
- * `account-banned`, 500 `internal`, a throw.
+ * a failed sign-in, a right one (200 signed in, or 409 `device-limit` from an admission a device
+ * admitted meanwhile made ask) forgets them, and every other answer gives the place back: 409
+ * `device-limit` judged before the code was checked, 401 `code-expired` (a challenge dead, of
+ * another email's account, after five wrong codes, past its ten minutes, or of a factor that is
+ * not on), 403 `account-banned`, 500 `internal`, a throw.
  */
 export async function confirmSignIn(deps: AuthMountDeps, request: Request): Promise<Response> {
   const body = confirmBody.safeParse(await readBody(request))
