@@ -138,7 +138,7 @@ anchors:
     description: Stops turning the second factor on; it stays off.
   user.settings.two-factor.codes-cell:
     kind: cell
-    description: "The ten backup codes, shown this once: each signs the account in once in place of a code of the app."
+    description: "The ten backup codes, shown this once: each usable at most once in place of a code of the app."
   user.settings.two-factor.hide-codes-button:
     kind: button
     description: Hides the backup codes; nothing shows them again.
