@@ -222,7 +222,7 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        "It or its options carry a `data-value`, a choice's stable key, never its label. On a select the loader sets it: from version 4 a screen file omits it. See the rules `attributes` and `kind-parts`.",
+        "It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.",
       ),
     states: z
       .array(stateSchema)

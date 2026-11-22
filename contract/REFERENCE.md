@@ -440,7 +440,7 @@ What the `data-id` of the element holds: the id of the entity it shows, on an `i
 ### `anchors.<name>.dataValue`
 
 <a id="screen-anchors-name-datavalue"></a>
-It or its options carry a `data-value`, a choice's stable key, never its label. On a select the loader sets it: from version 4 a screen file omits it. See the rules `attributes` and `kind-parts`.
+It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.
 
 ### `anchors.<name>.states`
 
@@ -2371,7 +2371,7 @@ What the `data-id` of the element holds: the id of the entity it shows, on an `i
 ### `screens.anchors.<name>.dataValue`
 
 <a id="manifest-screens-anchors-name-datavalue"></a>
-It or its options carry a `data-value`, a choice's stable key, never its label. On a select the loader sets it: from version 4 a screen file omits it. See the rules `attributes` and `kind-parts`.
+It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.
 
 ### `screens.anchors.<name>.states`
 
