@@ -427,6 +427,7 @@
       "name": "@workspace/e2e",
       "version": "0.1.0",
       "devDependencies": {
+        "@better-auth/utils": "catalog:",
         "@playwright/test": "catalog:",
         "@types/bun": "catalog:",
         "@workspace/mailbox": "workspace:*",

@@ -19,7 +19,9 @@ any open page scrolls sideways. At the end of every test a check fails it when a
 script of the front came without the front's security headers, or when a page or one of its
 workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
 service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
-`app-shell/base/open-offline`, which lets it run to open the app offline. Each test signs up fresh accounts in fresh browser contexts,
+`app-shell/base/open-offline`, which lets it run to open the app offline; there the browser, which
+never opened `/settings` online, then opens it offline and every script it loads for the first
+time is answered by the worker, so the settings' lazy scripts come from its precache. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog, each through the link of its verification mail, read
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
@@ -48,8 +50,10 @@ goes through every scenario and a desktop through the `@smoke` ones. `@smoke`:
 `user/base/` (one account on its own) and `organisation/base/` but the tests named below,
 `not-found/base/`, `console/flows/not-operator` (an account and a guest at the console's
 addresses), `contract/base/manifest`, and `guest-start`, `guest-without-navigation`,
-`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`. `@full`: `user/flows/` (one account across devices,
-tabs or time), `device/base/my-devices`, the `user/base/` tests of a limit, of a link opened
+`open-before-data`, `start-failed` and `toast-before-data` of `app-shell/base/`, and
+`user/flows/sign-in-with-code`. `@full`: `user/flows/` (one account across devices,
+tabs or time) but that one, `device/base/my-devices`, `user/base/passkeys`, the `user/base/`
+tests of a limit, of a link opened
 again or replaced, or of several mails of one run (`resend-same-answer`, `resend-limit`,
 `forgot-password-limit`, `reset-link-replaced`, `reset-link-used`, `reset-password-rules`,
 `reset-link-after-email-change`, `reset-verifies-email`, `confirm-link-used`,
@@ -148,6 +152,20 @@ up, mails, opens a link or creates an organisation counts against these.
   page with the notice `signed-out-elsewhere` within 5 seconds and its database is gone;
   signing out everywhere sends both devices to the sign-in page, and the account signs in
   again after it.
+- `user/base/two-factor`: the settings turn the second factor on only with a code of the key
+  they show (a wrong one answers `invalid-code`), show the ten backup codes once, renew them
+  with the password and turn the factor off with it, the device signed in through all of it.
+- `user/base/passkeys`: the browser's virtual authenticator makes a passkey the settings list
+  (`passkey-added`), which is removed only once the frame's question `passkeys-remove` is
+  confirmed (`passkey-removed`).
+- `user/flows/sign-in-with-code`: the right password of an account with the second factor on
+  opens the code dialog and signs nothing in; cancelling it starts from the password again, a
+  wrong code answers `invalid-code`, and a code of the key signs in onto `/me`.
+- `user/flows/sign-in-with-backup-code`: a backup code signs in once and answers `invalid-code`
+  the second time, while the second code kept still signs in.
+- `user/flows/sign-in-with-passkey`: the sign-in page's passkey button signs the account in
+  with no password and no code although its second factor is on; once the passkey is removed
+  from the account, the authenticator that still keeps it signs nothing in (`passkey-unknown`).
 - `organisation/flows/shared-notes`: user A creates an organisation and invites user B; B
   accepts the invitation on its organisation page and sees the organisation and A's note
   without a reload, B's note reaches A within 5 seconds, and B sees neither the members nor
@@ -277,6 +295,20 @@ its send button and waits for the gateway's answer), `resetRequested` (its messa
 `src/support/email-change.ts`: the change of an email from `/settings`: `askToChangeEmail`
 (sends the confirmation and waits for its message), `emailChangeRequested` (that message) and
 `openChangeEmailMail` (opens the link of the mail to the new email, held to its declaration).
+`src/support/totp.ts`: the codes of an authenticator app for the key the settings show, by Better
+Auth's own `createOTP` (`@better-auth/utils`) as the gateway checks them: `totpFor` (the code the
+key gives now, computed just before it is typed; one asked in the last 3 seconds of its 30-second
+step waits for the next) and `wrongCodeFor` (a code of another key that is none of the enrolled
+key's codes of the steps around now).
+`src/support/virtual-authenticator.ts`: `addVirtualAuthenticator`, which gives a page a platform
+authenticator through the DevTools protocol (it keeps discoverable credentials, verifies the user
+and answers every test of presence at once) for the passkey tests; it keeps its passkeys until the
+page's browser context closes.
+`src/support/second-factor.ts`: the second factor the tests share: `turnSecondFactorOn` (from the
+settings with the factor off: password, key, code of the key, confirmation; answers the key and the
+ten backup codes, still shown), `expectTwoFactorRead`, `twoFactorSection`, `backupCodesShown`, and
+the sign-in page's steps written out by hand (`signIn` asserts `/me`): `submitCredentials`,
+`codeDialog` (by its anchor and its code) and `submitCode`.
 `src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
 and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
 form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for
