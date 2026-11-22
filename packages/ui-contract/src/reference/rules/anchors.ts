@@ -136,8 +136,9 @@ const readiness: ReferenceRule = {
   title: 'Readiness and container states',
   text: [
     'Wait for `app-shell.status` to reach the state `ready` (`[data-testid="app-shell.status"][data-state="ready"]`): the frame and the screen are rendered. Its other states, and what each means, are the vocabulary\'s table "App states". Then wait for the screen\'s container to leave `loading`: a `list`, a `section` or a page `status` carries one of the vocabulary\'s "Container states".',
+    "On a screen's `states`: The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.states'],
+  keys: ['screen.anchors.<name>.states', 'screen.states', 'manifest.screens.states'],
 }
 
 const notices: ReferenceRule = {

@@ -102,13 +102,13 @@ const authoredTransitionsSchema = transitionsSchemaOf(authoredTransitionSchema)
 export const controlRegionSchema = z
   .strictObject({
     by: anchorSchema.describe(
-      "The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. It carries what the screen decides of the button: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one.",
+      "The button whose region this is, bound to one action: the loader derives the region (`idle`, `running`). It carries the button's `description`, `onDone`, `onError`. See the rule `button-region`.",
     ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        'What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.',
+        "What follows when the action succeeds; absent, back to `idle`. From version 5 a branch never writes the clear of its part's error: it is derived. See the rule `area-request`.",
       ),
     onError: authoredTransitionsSchema
       .exactOptional()
@@ -127,7 +127,7 @@ export const draftPatternSchema = z
     pattern: z
       .literal('draft')
       .describe(
-        "A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.",
+        'A control that follows a stored value or holds what was typed, when two regions or more share it. Its states, `following` and `edited`, list no `meta.renders`. See the rule `flow-shorter-forms`.',
       ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     input: anchorSchema.describe('The control typed into.'),
@@ -156,5 +156,5 @@ export const authoredFlowSchema = flowSchemaOf({
       'The regions written, by name: two or more once the loader adds the region of each button bound to one action that the flow handles nowhere.',
   },
   description:
-    'The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',
+    'The flow of the screen: an XState v5 machine config in a shorter form (targets, named effects, regions by pattern or button) that the loader expands. See the rule `flow-shorter-forms`.',
 })

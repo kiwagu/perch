@@ -520,7 +520,7 @@ Written on an unbound secret input: names the other secret input of its screen, 
 ### `states`
 
 <a id="screen-states"></a>
-The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.
+The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.
 
 ### `states.<name>`
 
@@ -530,12 +530,12 @@ What is visible on the screen in this container state; the vocabulary says what 
 ### `flow`
 
 <a id="screen-flow"></a>
-The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.
+The flow of the screen: an XState v5 machine config in a shorter form (targets, named effects, regions by pattern or button) that the loader expands. See the rule `flow-shorter-forms`.
 
 ### `flow.id`
 
 <a id="screen-flow-id"></a>
-The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.
+The id of the machine: one segment, which the app gives its machine and an id target `#<id>.<state>` names; absent, the screen id. See the rule `flow-states`.
 
 ### `flow.description`
 
@@ -570,7 +570,7 @@ The codes it holds for: the action failed with one of them.
 ### `flow.meta.renders`
 
 <a id="screen-flow-meta-renders"></a>
-Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors, as if it listed them; the loader writes them in. A set serves two states or more. See the rule `render-sets`.
+Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors. A set serves two states or more. See the rule `render-sets`.
 
 ### `flow.meta.renders.<name>`
 
@@ -625,7 +625,7 @@ A string, a number or a boolean.
 ### `flow.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
+Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.entry`
 
@@ -755,7 +755,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `flow.states.<name>.on.<name>.read`
 
 <a id="screen-flow-states-name-on-name-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `flow.states.<name>.on.<name>.actions`
 
@@ -830,7 +830,7 @@ A region written in full, by its pattern (`draft`), or as the region of a button
 ### `flow.states.<name>.states.<name>.pattern`
 
 <a id="screen-flow-states-name-states-name-pattern"></a>
-A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.
+A control that follows a stored value or holds what was typed, when two regions or more share it. Its states, `following` and `edited`, list no `meta.renders`. See the rule `flow-shorter-forms`.
 
 ### `flow.states.<name>.states.<name>.description`
 
@@ -855,12 +855,12 @@ The guard that holds when what was typed is the stored value, a guard of `meta.g
 ### `flow.states.<name>.states.<name>.by`
 
 <a id="screen-flow-states-name-states-name-by"></a>
-The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. It carries what the screen decides of the button: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one.
+The button whose region this is, bound to one action: the loader derives the region (`idle`, `running`). It carries the button's `description`, `onDone`, `onError`. See the rule `button-region`.
 
 ### `flow.states.<name>.states.<name>.onDone`
 
 <a id="screen-flow-states-name-states-name-ondone"></a>
-What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.
+What follows when the action succeeds; absent, back to `idle`. From version 5 a branch never writes the clear of its part's error: it is derived. See the rule `area-request`.
 
 ### `flow.states.<name>.states.<name>.onError`
 
@@ -905,7 +905,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
+Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -2491,7 +2491,7 @@ Written on an unbound secret input: names the other secret input of its screen, 
 ### `screens.states`
 
 <a id="manifest-screens-states"></a>
-The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.
+The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.
 
 ### `screens.states.<name>`
 
@@ -2506,7 +2506,7 @@ The flow of the screen: an XState v5 machine config.
 ### `screens.flow.id`
 
 <a id="manifest-screens-flow-id"></a>
-The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.
+The id of the machine: one segment, which the app gives its machine and an id target `#<id>.<state>` names; absent, the screen id. See the rule `flow-states`.
 
 ### `screens.flow.description`
 
@@ -2596,7 +2596,7 @@ A string, a number or a boolean.
 ### `screens.flow.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
+Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.entry`
 
@@ -2721,7 +2721,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.on.<name>.read`
 
 <a id="manifest-screens-flow-states-name-on-name-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.on.<name>.actions`
 
@@ -2826,7 +2826,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.invoke.onDone.read`
 
 <a id="manifest-screens-flow-states-name-invoke-ondone-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.invoke.onDone.actions`
 
@@ -2901,7 +2901,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.invoke.onError.read`
 
 <a id="manifest-screens-flow-states-name-invoke-onerror-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.invoke.onError.actions`
 
@@ -3006,7 +3006,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
+Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -3131,7 +3131,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.on.<name>.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-on-name-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.on.<name>.actions`
 
@@ -3236,7 +3236,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onDone.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-invoke-ondone-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onDone.actions`
 
@@ -3311,7 +3311,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onError.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-invoke-onerror-read"></a>
-Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onError.actions`
 
@@ -4496,7 +4496,9 @@ Keys it concerns: [`screen.anchors.<name>.kind`](#screen-anchors-name-kind), [`s
 <a id="rule-readiness"></a>
 Wait for `app-shell.status` to reach the state `ready` (`[data-testid="app-shell.status"][data-state="ready"]`): the frame and the screen are rendered. Its other states, and what each means, are the vocabulary's table "App states". Then wait for the screen's container to leave `loading`: a `list`, a `section` or a page `status` carries one of the vocabulary's "Container states".
 
-Keys it concerns: [`screen.anchors.<name>.states`](#screen-anchors-name-states).
+On a screen's `states`: The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.
+
+Keys it concerns: [`screen.anchors.<name>.states`](#screen-anchors-name-states), [`screen.states`](#screen-states), [`manifest.screens.states`](#manifest-screens-states).
 
 ### Notices and ranked messages
 
@@ -4572,7 +4574,9 @@ A screen's `flow` is an XState v5 machine config, in the subset `createMachine` 
 
 Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested deeper than a parallel state's regions, history states, targets by `.child` or by an id from anywhere but a region's state, or actions named by a string. A state of a region is the area's own: where the app keeps one per item (each note's edit form), the region follows the item acted on last and says so. The flow's states are the machine's; the screen's `states` stay the container states.
 
-Keys it concerns: [`screen.flow`](#screen-flow), [`screen.flow.id`](#screen-flow-id), [`screen.flow.initial`](#screen-flow-initial), [`screen.flow.states`](#screen-flow-states), [`screen.flow.states.<name>.type`](#screen-flow-states-name-type).
+On `flow.id`: The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.
+
+Keys it concerns: [`screen.flow`](#screen-flow), [`screen.flow.id`](#screen-flow-id), [`screen.flow.initial`](#screen-flow-initial), [`screen.flow.states`](#screen-flow-states), [`screen.flow.states.<name>.type`](#screen-flow-states-name-type), [`manifest.screens.flow.id`](#manifest-screens-flow-id).
 
 ### Events, targets and guards
 
@@ -4607,6 +4611,8 @@ A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item
 
 The scope of each effect differs. A `show` names a declared anchor, of any screen (the frame's toast and notice included), and codes that anchor carries. A `clear` names a declared anchor that carries codes, of any kind and any screen, which then shows none, or else a field of the flow's own screen, never a `visibility-button`. A `read` names a list, a section or a table of the flow's own screen whose `source` is a platform action. A `navigate` names the path of a binding of some screen and search keys of that binding, and sits on a transition, never in an `entry` or an `exit`, moving once (see the rule `leave-questions`). An address, `meta.address`, is a binding of the flow's own screen (its first one when the path is left out) with search parameters of that binding.
 
+On a `read` effect: A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data.
+
 Keys it concerns: [`screen.flow.states.<name>.entry`](#screen-flow-states-name-entry), [`screen.flow.states.<name>.entry.show`](#screen-flow-states-name-entry-show), [`screen.flow.states.<name>.entry.clear`](#screen-flow-states-name-entry-clear), [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.entry.navigate`](#screen-flow-states-name-entry-navigate), [`screen.flow.states.<name>.entry.navigate.search`](#screen-flow-states-name-entry-navigate-search).
 
 ### What empties a field
@@ -4637,7 +4643,11 @@ A screen file may write its flow shorter, and leave out what the contract says e
 
 The states of a pattern and of a button's region are the machine's, named by the loader (`idle`, `running`, `following`, `edited`), and a scenario or a test reads them as it reads any state. What the shorter forms leave out is mechanics a tester or a user cannot tell apart; a `description` belongs to a decision (where a success leads, what a failure shows, what restarts what), not to every state. The states of a region written by its pattern or by its button list nothing in `meta.renders`.
 
-Keys it concerns: [`screen.flow.states.<name>.states.<name>.pattern`](#screen-flow-states-name-states-name-pattern), [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by).
+On `pattern`: A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.
+
+On the `flow` key: The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.
+
+Keys it concerns: [`screen.flow.states.<name>.states.<name>.pattern`](#screen-flow-states-name-states-name-pattern), [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by), [`screen.flow`](#screen-flow).
 
 ### The area of a button across its request
 
@@ -4645,6 +4655,8 @@ Keys it concerns: [`screen.flow.states.<name>.states.<name>.pattern`](#screen-fl
 The area of a button bound to one action is the button's part, and the area's error is `<part>.error`, when the screen declares it. The button's region, derived or written `by: <button>` (see the rule `button-region`), keeps that error while its action runs: entering `running` clears nothing, unlike a request that writes no `onError` (see the rule `request-outcome`). A refusal shown on the error replaces it with its own code. From version 5 a success clears it: every branch of the region's `onDone` that neither shows nor clears `<part>.error` starts with `clear: <part>.error`, derived, so `console.account.name` forgets a refused rename's error once a rename goes through. A screen file never writes that clear in such a branch: it is a problem at the clear (derived: a success clears its area's error; leave it out). A clear of another anchor stays the screen's, and so does a region written in full, whose outcomes say what they clear; an error a region shows outside its part (the members' removal of `organisation` shows on `organisation.invite.error`) is not its area's, and its success clears it only where the region writes so. Before version 5 a success clears only what the region writes.
 
 A list, a section or a table an outcome reads again (`read: <anchor>`) keeps its state and its entries while that read runs, and the answer replaces them, a failure included: `loading` shows only while nothing of its current search is read yet, at its first read or a read for another search, organisation or account (see the rule `list-reads`), never during the read after an action. In the area, a field keeps what was typed through the action and the read after it, until a `clear` of the flow empties it; a field that starts with what a read gives (`console.account.name.name-input`, the name as read) shows it only until something is typed into it, and no later read replaces what was typed.
+
+On `onDone` of a button's region: What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.
 
 Keys it concerns: [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by), [`screen.flow.states.<name>.states.<name>.onDone`](#screen-flow-states-name-states-name-ondone).
 
@@ -4687,12 +4699,16 @@ Rendered means visible to the user. An anchor a state renders is on the page and
 
 `contract:check` holds `meta.renders`: it lists anchors its own screen declares (a derived part's base, never the part), each once and never beside an anchor it is declared under, and a plain state of the root or a state of a region renders every anchor only some states render that it handles (one declared under a listed anchor, through that anchor).
 
-Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.flow.states.<name>.states.<name>.states.<name>.meta.renders`](#screen-flow-states-name-states-name-states-name-meta-renders).
+On `meta.renders` of a state: Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.
+
+Keys it concerns: [`screen.flow.states.<name>.meta.renders`](#screen-flow-states-name-meta-renders), [`screen.flow.states.<name>.states.<name>.states.<name>.meta.renders`](#screen-flow-states-name-states-name-states-name-meta-renders), [`manifest.screens.flow.states.<name>.meta.renders`](#manifest-screens-flow-states-name-meta-renders).
 
 ### Anchors several states render, named once
 
 <a id="rule-render-sets"></a>
 A flow may name a list of anchors several states render (`flow.meta.renders: { <set>: [anchors] }`); a state that lists the set's name in its `meta.renders` renders those anchors. A set serves two states or more.
+
+On the flow's `meta.renders`: Anchors that several states render, named once: a state that lists the name in its `meta.renders` renders those anchors, as if it listed them; the loader writes them in. A set serves two states or more. See the rule `render-sets`.
 
 Keys it concerns: [`screen.flow.meta.renders`](#screen-flow-meta-renders).
 
@@ -4811,7 +4827,9 @@ The read after a success is mandatory where the action may change what a list sh
 
 Every action, of the platform or of the model, writes its `changes`: each name of it is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once, `[]` for none. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `contract:diff` lists the reads each action of the model comes to change or stops changing, as `model action lines added in <entity>.<action>: changes <read>`.
 
-Keys it concerns: [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.on.<name>.read`](#screen-flow-states-name-on-name-read), [`screen.flow.states.<name>.invoke.read`](#screen-flow-states-name-invoke-read), [`platform.actions.<name>.changes`](#platform-actions-name-changes).
+On `read: false` of an outcome: Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.
+
+Keys it concerns: [`screen.flow.states.<name>.entry.read`](#screen-flow-states-name-entry-read), [`screen.flow.states.<name>.on.<name>.read`](#screen-flow-states-name-on-name-read), [`screen.flow.states.<name>.invoke.read`](#screen-flow-states-name-invoke-read), [`platform.actions.<name>.changes`](#platform-actions-name-changes), [`manifest.screens.flow.states.<name>.on.<name>.read`](#manifest-screens-flow-states-name-on-name-read).
 
 ### The key of an address
 
@@ -5101,6 +5119,8 @@ Keys it concerns: [`screen.flow.states.<name>.invoke.onError`](#screen-flow-stat
 A button bound to one action that no state of the flow handles gets its region, when the root of the flow has one parallel state. The region is named by the button without its screen and its kind (`organisation.notes.add-button` gives `notes-add`) and comes after the regions written; it counts among the two regions or more of the parallel state, which may write fewer. It rests in `idle`; the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. A failure shows its codes on the error of the button's part, which from version 5 a success clears (see the rule `area-request`); the success of an action of the model says what the controls do by the word its name starts with: `create` (`createNote`), the controls whose values it took are emptied; `update`, they show the stored value; `delete`, the entry leaves its list. A failure with codes and no error in the part is a problem: the screen declares the error, or writes the region by its button with its `onError`.
 
 A screen writes the region by its button, `by: <button>`, when it decides something of it: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`. The states of a button's region are the machine's, named by the loader (`idle`, `running`), and a scenario or a test reads them as it reads any state.
+
+On `by`: The button whose region this is: a button of the screen bound to one action. The region rests in `idle`, the button moves it to `running`, which invokes the action with the parameters the binding passes, and both outcomes lead back to `idle`. It carries what the screen decides of the button: its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one.
 
 Keys it concerns: [`screen.flow.states.<name>.states.<name>.by`](#screen-flow-states-name-states-name-by).
 

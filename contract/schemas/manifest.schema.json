@@ -1424,7 +1424,7 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
+            "description": "The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -1438,7 +1438,7 @@
             "type": "object",
             "properties": {
               "id": {
-                "description": "The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.",
+                "description": "The id of the machine: one segment, which the app gives its machine and an id target `#<id>.<state>` names; absent, the screen id. See the rule `flow-states`.",
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
@@ -1583,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                              "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -1703,7 +1703,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -1897,7 +1897,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -2023,7 +2023,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -2132,7 +2132,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -2246,7 +2246,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2355,7 +2355,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2532,7 +2532,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2641,7 +2641,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2755,7 +2755,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -2864,7 +2864,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -2983,7 +2983,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -3092,7 +3092,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -3206,7 +3206,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -3315,7 +3315,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -3475,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                              "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3595,7 +3595,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3789,7 +3789,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3915,7 +3915,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -4024,7 +4024,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -4138,7 +4138,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -4247,7 +4247,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4386,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors of the screen that only some states render. An anchor no state of the flow lists is rendered in every state; one a state lists is rendered only in the states that list it: in a plain state of the root that lists it, and in a state of a region that lists it or whose parallel state does. A name is an anchor its screen declares, listed once; a derived part is rendered with its base, so a state lists the base (`user.sign-in.password-input`, never its `visibility-button`). A listed anchor also renders the anchors declared under it (`<anchor>.<rest>`, a list's items): a state lists the list alone, never the list and one of its items, and an anchor declared under a listed one is rendered only where its container is, or where a state lists it itself. A plain state of the root or a state of a region that handles an event on an anchor only some states render renders it (for an event on a derived part or on an anchor declared under another, through the anchor it is under), since a control the user acts on is on the page; a state may render a control it does not handle, which is then disabled. The events of a parallel state's own `on` are not held to this, and neither are the effects: a `show` or a `clear` may name an anchor its state does not render. The states of a region written by its pattern or by its button, or derived by the loader, list nothing: an area that renders something in some of its states only is written in full. Rendered means visible to the user: an anchor a state does not render is absent from the page, or kept in it hidden. The app reads what a state renders from its machine (`renderedAt`, `isRendered`), never from a flag of its own. See the rule `renders`.",
+                                          "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
@@ -4506,7 +4506,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4700,7 +4700,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4826,7 +4826,7 @@
                                               "read": {
                                                 "type": "boolean",
                                                 "const": false,
-                                                "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                               },
                                               "actions": {
                                                 "minItems": 1,
@@ -4935,7 +4935,7 @@
                                                         "params"
                                                       ],
                                                       "additionalProperties": false,
-                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                     },
                                                     {
                                                       "type": "object",
@@ -5049,7 +5049,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5158,7 +5158,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5335,7 +5335,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5444,7 +5444,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5558,7 +5558,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -5667,7 +5667,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",
@@ -5786,7 +5786,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5895,7 +5895,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -6009,7 +6009,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -6118,7 +6118,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",

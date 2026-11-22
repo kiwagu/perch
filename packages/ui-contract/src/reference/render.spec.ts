@@ -260,6 +260,12 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
     'destructive-question',
     'On a control that runs no destructive action it bans nothing and is refused.',
   ],
+  ['screen-flow-states-name-meta-renders', 'renders', 'a derived part is rendered with its base'],
+  [
+    'screen-flow-states-name-states-name-pattern',
+    'flow-shorter-forms',
+    'its states list nothing in `meta.renders`',
+  ],
 ]
 
 /** The describe text of a key's schema, through the optional that wraps it. */
