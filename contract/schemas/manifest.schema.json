@@ -1583,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors only some states render; an unlisted one renders with its container, a derived part with its base. A plain root or region state with an event on one renders it. See the rule `renders`.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3475,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors only some states render; an unlisted one renders with its container, a derived part with its base. A plain root or region state with an event on one renders it. See the rule `renders`.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -4386,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors only some states render; an unlisted one renders with its container, a derived part with its base. A plain root or region state with an event on one renders it. See the rule `renders`.",
+                                          "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
