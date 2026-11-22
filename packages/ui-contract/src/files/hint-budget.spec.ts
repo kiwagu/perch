@@ -74,6 +74,34 @@ describe('hintBudgetProblems', () => {
 
     expect(hintBudgetProblems(outputOf(schema))).toHaveLength(3)
   })
+  it('reads no description inside metadata an extension keyword carries', () => {
+    const schema = {
+      type: 'string',
+      description: 'What the key is for.',
+      'x-perch-context': { description: text(DESCRIPTION_BUDGET + 1) },
+    }
+
+    expect(hintBudgetProblems(outputOf(schema))).toEqual([])
+  })
+  it('names a shared definition by the key that first refers to it, as the reference does', () => {
+    const schema = {
+      type: 'object',
+      properties: { flow: { $ref: '#/$defs/effect' }, other: { $ref: '#/$defs/effect' } },
+      $defs: {
+        effect: {
+          type: 'object',
+          properties: { type: { type: 'string', description: text(DESCRIPTION_BUDGET + 1) } },
+        },
+        orphan: { type: 'string', description: text(DESCRIPTION_BUDGET + 2) },
+      },
+    }
+
+    const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatch(/^flow\.type: /)
+    expect(messages[1]).toMatch(/^\$defs\.orphan: /)
+  })
   it('gives one problem for a long hint repeated at several keys of one file', () => {
     const long = { type: 'string', description: text(DESCRIPTION_BUDGET + 1) }
     const schema = { type: 'object', properties: { a: long, b: long, c: { items: long } } }
