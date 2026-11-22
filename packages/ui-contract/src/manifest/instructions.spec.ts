@@ -170,7 +170,7 @@ describe('instructionsOf', () => {
   })
   it("says which anchors a flow's state renders, those nested under a listed one with it", () => {
     expect(instructions.screenMap).toContain(
-      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists, neither itself nor one it is under, is rendered in every state, one listed, itself or through one it is under, only in the states that list it or that one, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user: an anchor a state does not render is absent from the page or hidden on it.",
+      "A state's `meta.renders` names anchors of the screen that only some states render: an anchor no state of the flow lists, neither itself nor one it is under, is rendered in every state, one listed, itself or through one it is under, only in the states that list it or that one, a state of a region rendering what its parallel state lists too; the anchors nested under a listed one (`<anchor>.<rest>`, such as the items of a list) are rendered with it, or where they are listed themselves. Rendered means visible to the user, as far as the state decides: an anchor a state renders shows unless its own conditions (its `roles` or `own`, its entry's data, its `with` and `without`) keep it hidden, and one it does not render is absent from the page or hidden on it.",
     )
   })
   it('says a guard is a sentence, the failure codes it holds for, on an onError only, or one of a password pair', () => {
