@@ -155,8 +155,36 @@ describe('hintBudgetProblems', () => {
     const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
 
     expect(messages).toHaveLength(2)
-    expect(messages[0]).toMatch(/^binding \("First a+…"\): /)
-    expect(messages[1]).toMatch(/^binding \("Other a+…"\): /)
+    expect(messages[0]).toMatch(/^binding \("First a+…" at /)
+    expect(messages[1]).toMatch(/^binding \("Other a+…" at /)
+  })
+  it('points at where each long hint stands when two at one key open alike', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        binding: {
+          anyOf: [
+            { type: 'string', description: `${text(DESCRIPTION_BUDGET)}x` },
+            { type: 'number', description: `${text(DESCRIPTION_BUDGET)}y` },
+          ],
+        },
+      },
+    }
+
+    const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toContain('at #/properties/binding/anyOf/0')
+    expect(messages[1]).toContain('at #/properties/binding/anyOf/1')
+  })
+  it('points into the definition a shared hint stands in', () => {
+    const schema = {
+      type: 'object',
+      properties: { flow: { $ref: '#/$defs/effect' } },
+      $defs: { effect: { type: 'string', description: text(DESCRIPTION_BUDGET + 1) } },
+    }
+
+    expect(hintBudgetProblems(outputOf(schema))[0]?.message).toContain('at #/$defs/effect')
   })
   it('gives one problem for a long hint repeated at several keys of one file', () => {
     const long = { type: 'string', description: text(DESCRIPTION_BUDGET + 1) }

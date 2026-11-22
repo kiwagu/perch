@@ -927,7 +927,7 @@
                   "platform"
                 ],
                 "additionalProperties": false,
-                "description": "The entries come from a platform action, read when the anchor starts to render, when what it reads for changes while it renders, and where a flow says `read: <anchor>`. See the rule `list-reads`."
+                "description": "The entries come from a platform action, read when the anchor starts to render, while it renders when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`."
               }
             ],
             "description": "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."

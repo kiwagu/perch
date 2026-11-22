@@ -54,15 +54,22 @@ const isObject = (value: unknown): value is Record<string, unknown> =>
 
 const listOf = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : [])
 
+/** Where a schema stands: its key as the reference writes it, and its JSON pointer in the document. */
+interface Place {
+  readonly key: readonly string[]
+  readonly pointer: readonly string[]
+}
+
 interface Hint {
-  readonly path: string
+  readonly key: string
+  readonly pointer: string
   readonly text: string
 }
 
-/** A schema to read later, at its key. */
+/** A schema to read later, at its place. */
 interface Pending {
   readonly node: unknown
-  readonly path: readonly string[]
+  readonly at: Place
 }
 
 /** The definitions of a document, those already read, and the schemas left for later. */
@@ -72,24 +79,41 @@ interface Walk {
   readonly later: Pending[]
 }
 
-/** The schemas a keyword outside the reference's walk holds, each at its key. */
-function laterOf(keyword: string, value: unknown, path: readonly string[]): Pending[] {
-  if (ONE.has(keyword)) {
-    const step = ONE.get(keyword)
+/** The place one step down: `key` added to the key unless absent, `steps` to the pointer. */
+const down = (at: Place, key: string | undefined, ...steps: string[]): Place => ({
+  key: key === undefined ? at.key : [...at.key, key],
+  pointer: [...at.pointer, ...steps],
+})
 
-    return [{ node: value, path: step === undefined ? path : [...path, step] }]
+/** A JSON pointer (RFC 6901) into the document, `#/properties/binding/anyOf/0`. */
+const pointerOf = (steps: readonly string[]): string =>
+  `#${steps.map((step) => `/${step.replaceAll('~', '~0').replaceAll('/', '~1')}`).join('')}`
+
+/** The schemas a keyword outside the reference's walk holds, each at its place. */
+function laterOf(keyword: string, value: unknown, at: Place): Pending[] {
+  if (ONE.has(keyword)) {
+    return [{ node: value, at: down(at, ONE.get(keyword), keyword) }]
   }
 
   if (LIST.has(keyword)) {
-    return listOf(value).map((node) => ({ node, path }))
+    return listOf(value).map((node, index) => ({
+      node,
+      at: down(at, undefined, keyword, String(index)),
+    }))
   }
 
   if (NAMED.has(keyword) && isObject(value)) {
-    return Object.entries(value).map(([name, node]) => ({ node, path: [...path, name] }))
+    return Object.entries(value).map(([name, node]) => ({
+      node,
+      at: down(at, name, keyword, name),
+    }))
   }
 
   if (DEFINITIONS.has(keyword) && isObject(value)) {
-    return Object.entries(value).map(([name, node]) => ({ node, path: [...path, keyword, name] }))
+    return Object.entries(value).map(([name, node]) => ({
+      node,
+      at: { key: [...at.key, keyword, name], pointer: [...at.pointer, keyword, name] },
+    }))
   }
 
   return []
@@ -99,12 +123,7 @@ function laterOf(keyword: string, value: unknown, path: readonly string[]): Pend
  * Each hint of the schema `node` along the reference's keywords, in its order; the schemas other
  * keywords hold go to `walk.later`. `root` marks the document, whose `$defs` are read by reference.
  */
-function* hintsOf(
-  node: unknown,
-  path: readonly string[],
-  walk: Walk,
-  root = false,
-): Generator<Hint> {
+function* hintsOf(node: unknown, at: Place, walk: Walk, root = false): Generator<Hint> {
   if (!isObject(node)) {
     return
   }
@@ -112,20 +131,29 @@ function* hintsOf(
   const { description, properties, additionalProperties, items, anyOf, oneOf, $ref } = node
 
   if (typeof description === 'string') {
-    yield { path: path.length === 0 ? '(the root)' : path.join('.'), text: description }
+    yield {
+      key: at.key.length === 0 ? '(the root)' : at.key.join('.'),
+      pointer: pointerOf(at.pointer),
+      text: description,
+    }
   }
 
   if (isObject(properties)) {
     for (const [name, schema] of Object.entries(properties)) {
-      yield* hintsOf(schema, [...path, name], walk)
+      yield* hintsOf(schema, down(at, name, 'properties', name), walk)
     }
   }
 
-  yield* hintsOf(additionalProperties, [...path, '<name>'], walk)
-  yield* hintsOf(items, path, walk)
+  yield* hintsOf(additionalProperties, down(at, '<name>', 'additionalProperties'), walk)
+  yield* hintsOf(items, down(at, undefined, 'items'), walk)
 
-  for (const branch of [...listOf(anyOf), ...listOf(oneOf)]) {
-    yield* hintsOf(branch, path, walk)
+  for (const [keyword, list] of [
+    ['anyOf', anyOf],
+    ['oneOf', oneOf],
+  ] as const) {
+    for (const [index, branch] of listOf(list).entries()) {
+      yield* hintsOf(branch, down(at, undefined, keyword, String(index)), walk)
+    }
   }
 
   if (typeof $ref === 'string' && $ref.startsWith(DEFS)) {
@@ -133,13 +161,13 @@ function* hintsOf(
 
     if (!walk.visited.has(name)) {
       walk.visited.add(name)
-      yield* hintsOf(walk.defs[name], path, walk)
+      yield* hintsOf(walk.defs[name], { key: at.key, pointer: ['$defs', name] }, walk)
     }
   }
 
   for (const [keyword, value] of Object.entries(node)) {
     if (!(root && keyword === '$defs')) {
-      walk.later.push(...laterOf(keyword, value, path))
+      walk.later.push(...laterOf(keyword, value, at))
     }
   }
 }
@@ -149,19 +177,19 @@ function* documentHints(document: object): Generator<Hint> {
   const defs = isObject(document) && isObject(document['$defs']) ? document['$defs'] : {}
   const walk: Walk = { defs, visited: new Set(), later: [] }
 
-  yield* hintsOf(document, [], walk, true)
+  yield* hintsOf(document, { key: [], pointer: [] }, walk, true)
 
   for (let pending = walk.later.shift(); pending !== undefined; pending = walk.later.shift()) {
-    yield* hintsOf(pending.node, pending.path, walk)
+    yield* hintsOf(pending.node, pending.at, walk)
   }
 
   for (const [name, schema] of Object.entries(defs)) {
     if (!walk.visited.has(name)) {
       walk.visited.add(name)
-      yield* hintsOf(schema, ['$defs', name], walk)
+      yield* hintsOf(schema, { key: ['$defs', name], pointer: ['$defs', name] }, walk)
 
       for (let pending = walk.later.shift(); pending !== undefined; pending = walk.later.shift()) {
-        yield* hintsOf(pending.node, pending.path, walk)
+        yield* hintsOf(pending.node, pending.at, walk)
       }
     }
   }
@@ -170,17 +198,21 @@ function* documentHints(document: object): Generator<Hint> {
 /** One problem for each distinct hint of a written schema past the budget, at its first key. */
 export function hintBudgetProblems(outputs: readonly SchemaOutput[]): Problem[] {
   return outputs.flatMap(({ file, schema }) => {
-    const keys = new Map<string, string[]>()
+    const found = new Map<string, Hint[]>()
 
-    for (const { path, text } of documentHints(schema())) {
-      if (descriptionLength(text) > DESCRIPTION_BUDGET) {
-        keys.set(text, [...(keys.get(text) ?? []), path])
+    for (const hint of documentHints(schema())) {
+      if (descriptionLength(hint.text) > DESCRIPTION_BUDGET) {
+        found.set(hint.text, [...(found.get(hint.text) ?? []), hint])
       }
     }
 
-    return Array.from(keys, ([text, [first, ...others]]) => ({
-      file,
-      message: `${first} ("${[...text].slice(0, OPENING).join('')}…")${others.length === 0 ? '' : ` (and ${others.length} more keys)`}: the field hint is ${descriptionLength(text)} characters, past its budget of ${DESCRIPTION_BUDGET}; keep what the key is for and what does not go in it, and move the rest into a rule of the reference that the hint names (the rule \`<id>\`)`,
-    }))
+    return Array.from(found.values(), ([first, ...others]) => {
+      const { key, pointer, text } = first as Hint
+
+      return {
+        file,
+        message: `${key} ("${[...text].slice(0, OPENING).join('')}…" at ${pointer})${others.length === 0 ? '' : ` (and ${others.length} more keys)`}: the field hint is ${descriptionLength(text)} characters, past its budget of ${DESCRIPTION_BUDGET}; keep what the key is for and what does not go in it, and move the rest into a rule of the reference that the hint names (the rule \`<id>\`)`,
+      }
+    })
   })
 }
