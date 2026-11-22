@@ -119,6 +119,46 @@ describe('RequestLimits', () => {
     expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
   })
 
+  it("counts a failure judged after another sign-in of the email succeeded meanwhile, in the email's new window", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    const waiting = limits.signInAttempt('ann@example.test')
+
+    settle(limits.signInAttempt('ann@example.test'), 'succeeded')
+    settle(waiting, 'failed')
+
+    // The failure is the first of the new window: nine more fill it.
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
+    }
+
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
+  it("keeps a failure judged after a success counted when newer sign-ins filled the email's new window and one of them gives its place back", () => {
+    const { limits } = limitsOn()
+    const waiting = limits.signInAttempt('ann@example.test')
+
+    settle(limits.signInAttempt('ann@example.test'), 'succeeded')
+
+    const newer = answers(10, () => limits.signInAttempt('ann@example.test'))
+
+    expect(newer.map((attempt) => attempt.allowed)).toEqual(answers(10, () => true))
+
+    settle(waiting, 'failed')
+
+    const [first] = newer
+
+    settle(first ?? expect.unreachable('a newer sign-in'), 'unjudged')
+
+    // Nine newer sign-ins under way and the failure fill the window.
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+  })
+
   it("clears an email's failures and sign-ins under way once it signs in", () => {
     const { limits } = limitsOn()
 
@@ -131,6 +171,31 @@ describe('RequestLimits', () => {
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
       expect(limits.signInAttempt('ann@example.test').allowed).toBe(true)
+    }
+  })
+
+  it("forgets an email's failures and sign-ins under way as a sign-in that succeeded does, holding no place", () => {
+    const { limits } = limitsOn()
+
+    for (let attempt = 0; attempt < 9; attempt += 1) {
+      settle(limits.signInAttempt('ann@example.test'), 'failed')
+    }
+
+    // One sign-in still under way holds the tenth place.
+    limits.signInAttempt('ann@example.test')
+    expect(limits.signInAttempt('ann@example.test').allowed).toBe(false)
+
+    limits.forgetFailedSignIns('ann@example.test')
+    // Forgetting again, and forgetting an email with no failures, holds no place either.
+    limits.forgetFailedSignIns('ann@example.test')
+    limits.forgetFailedSignIns('bob@example.test')
+
+    for (const email of ['ann@example.test', 'bob@example.test']) {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        expect(limits.signInAttempt(email).allowed).toBe(true)
+      }
+
+      expect(limits.signInAttempt(email).allowed).toBe(false)
     }
   })
 

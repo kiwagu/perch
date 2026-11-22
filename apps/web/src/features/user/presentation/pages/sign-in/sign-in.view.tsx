@@ -1,7 +1,6 @@
 import { useId, useState } from 'react'
 
 import { useLocale, useT } from '@workspace/i18n'
-import { ConfirmDialog } from '@workspace/ui/components/platform/confirm-dialog'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -15,6 +14,9 @@ import type { SessionNotice } from '../../../../../platform/session.port'
 import type { SignInEvent } from '../../../application/sign-in-machine'
 import type { Passwords } from '../../../domain/password-confirmation.rule'
 import { PasswordRuleList } from '../../components/password-rule-list/password-rule-list'
+
+import { CodeDialog, DeviceLimitDialog } from './sign-in-dialogs.view'
+import { ERROR_FIELDS, errorOf, noticeText } from './sign-in-texts'
 
 /** The rules of a new password the list shows at sign-up, each with its item's anchor. */
 const RULES = [
@@ -44,7 +46,9 @@ export type SignInListed =
   | 'user.sign-in.password-confirmation-input'
   | 'user.sign-in.name-input'
   | 'user.sign-in.resend-button'
+  | 'user.sign-in.passkey-button'
   | 'user.sign-in.device-limit-dialog'
+  | 'user.sign-in.code.dialog'
 
 /** A password field: the password, or the password typed again. */
 export type PasswordField = keyof Passwords
@@ -85,84 +89,24 @@ export interface SignInViewProps {
   /** Moves to asking for a reset mail, carrying the email as typed. */
   readonly onForgot: (email: string) => void
   /**
-   * Signs in all the same past the account's limit of devices, with the values as typed: the
+   * Signs in all the same past the account's limit of devices, as the attempt that asked: the
    * account's device seen least recently is signed out.
    */
-  readonly onConfirmDeviceLimit: (values: SignInValues) => void
+  readonly onConfirmDeviceLimit: () => void
   /** Goes back to the form from the dialog past the limit of devices, signing nothing in. */
   readonly onCancelDeviceLimit: () => void
-}
-
-/** The codes of `user.sign-in.error`. */
-type SignInErrorCode =
-  | 'invalid-credentials'
-  | 'email-not-verified'
-  | 'account-banned'
-  | 'sign-up-rejected'
-  | 'rate-limited'
-  | 'other-account'
-  | 'name-required'
-  | 'name-too-long'
-  | 'passwords-differ'
-  | 'failed'
-
-/** The contract code of a refusal, with its text. */
-function errorOf(
-  t: ReturnType<typeof useT>,
-  code: string,
-): { code: SignInErrorCode; text: string } {
-  switch (code) {
-    case 'data:INVALID_CREDENTIALS':
-      return { code: 'invalid-credentials', text: t('user.sign-in.error.invalid-credentials') }
-    case 'data:EMAIL_NOT_VERIFIED':
-      return { code: 'email-not-verified', text: t('user.sign-in.error.email-not-verified') }
-    case 'data:ACCOUNT_BANNED':
-      return { code: 'account-banned', text: t('user.sign-in.error.account-banned') }
-    case 'data:SIGN_UP_REJECTED':
-      return { code: 'sign-up-rejected', text: t('user.sign-in.error.sign-up-rejected') }
-    case 'data:RATE_LIMITED':
-      return { code: 'rate-limited', text: t('user.sign-in.error.rate-limited') }
-    case 'data:OTHER_ACCOUNT':
-      return { code: 'other-account', text: t('user.sign-in.error.other-account') }
-    case 'profile:NAME_REQUIRED':
-      return { code: 'name-required', text: t('user.sign-in.error.name-required') }
-    case 'profile:NAME_TOO_LONG':
-      return { code: 'name-too-long', text: t('user.sign-in.error.name-too-long') }
-    case 'sign-in:PASSWORDS_DIFFER':
-      return { code: 'passwords-differ', text: t('user.sign-in.error.passwords-differ') }
-    default:
-      return { code: 'failed', text: t('user.sign-in.error.failed') }
-  }
-}
-
-/** The field each code of `user.sign-in.error` concerns, as the screen's `fields` say. */
-const ERROR_FIELDS: Partial<Record<SignInErrorCode, 'name' | 'confirmation'>> = {
-  'name-required': 'name',
-  'name-too-long': 'name',
-  'passwords-differ': 'confirmation',
-}
-
-/** The text of the notice the last session left. */
-function noticeText(
-  t: ReturnType<typeof useT>,
-  notice: NonNullable<SignInViewProps['notice']>,
-): string {
-  switch (notice) {
-    case 'account-banned':
-      return t('user.sign-in.notice.account-banned')
-    case 'resend-after-sign-in':
-      return t('user.sign-in.notice.resend-after-sign-in')
-    case 'signed-out-elsewhere':
-      return t('user.sign-in.notice.signed-out-elsewhere')
-    case 'password-changed-elsewhere':
-      return t('user.sign-in.notice.password-changed-elsewhere')
-    case 'device-limit-elsewhere':
-      return t('user.sign-in.notice.device-limit-elsewhere')
-    case 'password-reset-elsewhere':
-      return t('user.sign-in.notice.password-reset-elsewhere')
-    case 'delete-pending':
-      return t('user.sign-in.notice.delete-pending')
-  }
+  /** What is typed in the code of the dialog of the second factor. */
+  readonly code: string
+  /** The code of the last refusal of the code, which the dialog shows under its field. */
+  readonly codeError?: string | undefined
+  /** A keystroke in the code. */
+  readonly onTypeCode: (code: string) => void
+  /** Signs in with the code as typed. */
+  readonly onConfirmCode: () => void
+  /** Goes back to the form from the dialog of the code: the sign-in starts again from the password. */
+  readonly onCancelCode: () => void
+  /** Signs in with a passkey, which the browser asks for. */
+  readonly onPasskey: () => void
 }
 
 export function SignInView(props: SignInViewProps) {
@@ -338,6 +282,17 @@ export function SignInView(props: SignInViewProps) {
             >
               {signingUp ? t('user.sign-in.sign-up') : t('user.sign-in.sign-in')}
             </Button>
+            {props.renders('user.sign-in.passkey-button') ? (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!props.can({ type: 'user.sign-in.passkey-button' })}
+                onClick={() => props.onPasskey()}
+                data-testid="user.sign-in.passkey-button"
+              >
+                {t('user.sign-in.passkey')}
+              </Button>
+            ) : null}
             <Button
               type="button"
               variant="link"
@@ -369,17 +324,19 @@ export function SignInView(props: SignInViewProps) {
             ) : null}
           </FieldGroup>
         </Form>
-        <ConfirmDialog
+        <DeviceLimitDialog
           open={props.renders('user.sign-in.device-limit-dialog')}
-          title={t('user.sign-in.device-limit.title')}
-          description={t('user.sign-in.device-limit.body')}
-          confirmLabel={t('user.sign-in.device-limit.confirm')}
-          cancelLabel={t('user.sign-in.device-limit.cancel')}
-          destructive
-          onConfirm={() => props.onConfirmDeviceLimit(values)}
+          onConfirm={() => props.onConfirmDeviceLimit()}
           onCancel={() => props.onCancelDeviceLimit()}
-          testId="user.sign-in.device-limit-dialog"
-          code="device-limit"
+        />
+        <CodeDialog
+          open={props.renders('user.sign-in.code.dialog')}
+          code={props.code}
+          error={props.codeError}
+          can={props.can}
+          onType={props.onTypeCode}
+          onConfirm={props.onConfirmCode}
+          onCancel={props.onCancelCode}
         />
       </CardContent>
     </Card>

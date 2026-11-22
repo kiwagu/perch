@@ -11,22 +11,14 @@ import type { AuthSessions } from '../auth-sessions'
 import { DeviceSessions } from '../device-sessions'
 import { ADMISSION_HEADER } from '../session-hooks'
 
-import {
-  ANN,
-  mountedOnRealAuth,
-  PASSWORD,
-  type SignedInAccount,
-  signedInOn,
-  signInRequest,
-} from './__fixtures__/mount'
+import { seenInTurn } from './__fixtures__/devices'
+import { ANN, mountedOnRealAuth, PASSWORD, signedInOn, signInRequest } from './__fixtures__/mount'
 
 /** The client address a request comes from, unless a test names another. */
 const FROM = '203.0.113.7'
 
 /** How long a test of many password checks may run: each is an argon2 run, slow on a busy host. */
 const ARGON2_RUNS_MS = 30_000
-
-const MINUTE_MS = 60_000
 
 /** Ten devices, the most one account keeps signed in at once; `a` signed in first. */
 const TEN = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'] as const
@@ -90,21 +82,6 @@ function heldAdmissions() {
 
       return ResultAsync.fromSafePromise(held).andThen(admit)
     },
-  }
-}
-
-/**
- * Marks every device of `ann` seen a minute after the other, in the order given, all after every
- * sign-in: a device left out was seen last when it signed in.
- */
-async function seenInTurn(mounted: Mounted, ann: SignedInAccount, devices: readonly string[]) {
-  const rows = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
-
-  await mounted.clock.advance(Date.now() + MINUTE_MS - mounted.clock.now())
-
-  for (const device of devices) {
-    await mounted.clock.advance(MINUTE_MS)
-    ;(await rows.seen({ identity: ann.identity, device }))._unsafeUnwrap()
   }
 }
 

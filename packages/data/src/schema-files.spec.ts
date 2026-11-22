@@ -24,9 +24,11 @@ describe('readSchema', () => {
         'directory/identity.surql',
         'directory/invitation.surql',
         'directory/membership.surql',
+        'directory/passkey.surql',
         'directory/profile.surql',
         'directory/settings.surql',
         'directory/tenant.surql',
+        'directory/two_factor.surql',
         'directory/verification.surql',
       ]
         .map(file)

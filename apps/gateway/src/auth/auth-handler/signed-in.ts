@@ -1,8 +1,8 @@
 import { match } from 'ts-pattern'
 
+import type { AuthSessions } from '../auth-sessions'
 import { bearerCaller, bearerRefused } from '../bearer-caller'
 
-import type { AuthMountDeps } from './mount'
 import { badRequest, internal } from './requests'
 
 /** Who a call of the mount with a session token comes from, once its session was read. */
@@ -18,7 +18,7 @@ export type MountCaller = Extract<
  * no live session of it; 500 `internal` for a session that could not be read.
  */
 export async function signedIn(
-  deps: Pick<AuthMountDeps, 'sessions'>,
+  deps: { readonly sessions: Pick<AuthSessions, 'read'> },
   request: Request,
   handler: (caller: MountCaller) => Promise<Response>,
 ): Promise<Response> {
@@ -30,4 +30,31 @@ export async function signedIn(
     .with({ kind: 'bad-request' }, async () => badRequest())
     .with({ kind: 'failed' }, async () => internal())
     .exhaustive()
+}
+
+/**
+ * The caller's session read again, in the account's turn, once the work waited for it: its
+ * account's email as it is now, in lower case, or the answer that refuses the work. 401
+ * `unauthorized` when the session ended meanwhile or is no longer this device's, 500 `internal`
+ * when it could not be read.
+ */
+export async function stillSignedIn(
+  deps: { readonly sessions: Pick<AuthSessions, 'read'> },
+  caller: MountCaller,
+): Promise<Response | { readonly email: string }> {
+  const read = await deps.sessions.read(caller.token)
+
+  if (read.kind === 'failed') {
+    return internal()
+  }
+
+  if (
+    read.kind === 'none' ||
+    read.caller.identity !== caller.identity ||
+    read.caller.device !== caller.device
+  ) {
+    return bearerRefused()
+  }
+
+  return { email: read.caller.email.toLowerCase() }
 }

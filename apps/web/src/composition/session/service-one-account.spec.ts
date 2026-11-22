@@ -1,8 +1,10 @@
+import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
 import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { assertionOf, fakeCeremony } from '../__fixtures__/passkey-ceremony'
 import { openTestWorld, type TestWorld, type TestWorldOptions } from '../__fixtures__/session'
 import { signedIn, signedInElsewhere } from '../__fixtures__/signed-in'
 import type { GatewayAuth } from '../gateway-auth'
@@ -137,5 +139,133 @@ describe('one account per browser', () => {
 
     expect((await tab.session.signIn(annSignUp)).isOk()).toBe(true)
     expect(tab.session.current()?.id).toBe(annAtGateway.id)
+  })
+})
+
+describe('one account per browser at the second doors', () => {
+  /** Ann's account with the second factor on, a step its password asked for, and Bob's account. */
+  async function annAsksForACode(auth: ReturnType<typeof fakeGatewayAuth>) {
+    expect((await verifiedElsewhere(auth, annSignUp)).isOk()).toBe(true)
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    auth.secondFactor(annSignUp.email, '123456')
+
+    const asked = (await auth.signIn(annSignUp, { id: 'device-x', label: 'Edge' }))._unsafeUnwrap()
+
+    if (asked.kind !== 'code-required') expect.unreachable('the password step asks for a code')
+
+    auth.requests.splice(0)
+
+    return { challenge: asked.challenge, email: annSignUp.email }
+  }
+
+  it('refuses a code step while another account is signed in on this browser, before it asks the gateway', async () => {
+    const auth = fakeGatewayAuth()
+    const step = await annAsksForACode(auth)
+    const tab = await world({ online: false, auth })
+
+    expect((await tab.session.restore()).isOk()).toBe(true)
+    // Another tab signed Bob in; this one has not heard of it yet.
+    signedIn(tab.storage, {
+      identity: { id: identityIdFactory.create(), email: bobSignUp.email },
+      token: 'token-bob',
+      memberships: [],
+    })
+
+    const refused = await tab.session.confirmSignIn(step, '123456', false)
+
+    expect(refused._unsafeUnwrapErr().code).toBe('data:OTHER_ACCOUNT')
+    expect(auth.requests).toEqual([])
+    expect(tab.opened()).toEqual([])
+  })
+
+  it('lets the code step of the account signed in on this browser go on', async () => {
+    const auth = fakeGatewayAuth()
+    const step = await annAsksForACode(auth)
+    const tab = await world({ online: false, auth })
+
+    signedIn(tab.storage, {
+      identity: auth.identityOf(annSignUp.email),
+      token: 'token-ann',
+      memberships: [],
+    })
+
+    expect((await tab.session.confirmSignIn(step, '123456', false))._unsafeUnwrap().kind).toBe(
+      'signed-in',
+    )
+  })
+
+  it('refuses a code step whose answer comes after another tab signed someone else in, and has its new token signed out', async () => {
+    const auth = fakeGatewayAuth()
+    const step = await annAsksForACode(auth)
+    const storage = memoryStorage()
+    const late: GatewayAuth = {
+      ...auth,
+      confirmSignIn: (input, device) =>
+        auth.confirmSignIn(input, device).map((answer) => {
+          signedIn(storage, {
+            identity: { id: identityIdFactory.create(), email: bobSignUp.email },
+            token: 'token-bob',
+            memberships: [],
+          })
+
+          return answer
+        }),
+    }
+    const tab = await world({ storage, auth: late })
+
+    expect((await tab.session.confirmSignIn(step, '123456', false))._unsafeUnwrapErr().code).toBe(
+      'data:OTHER_ACCOUNT',
+    )
+    expect(tab.opened()).toEqual([])
+    await vi.waitFor(() =>
+      expect(auth.requests.map(({ kind }) => kind)).toEqual(['confirm-sign-in', 'sign-out']),
+    )
+    expect(pendingRevokes(storage)).toEqual([])
+  })
+
+  it('refuses a passkey sign-in while any account is signed in on this browser, before the browser is asked', async () => {
+    const auth = fakeGatewayAuth()
+    const browser = fakeCeremony(() => okAsync(assertionOf('credential-ann')))
+
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+    auth.requests.splice(0)
+
+    const tab = await world({ online: false, auth, ceremony: browser })
+
+    signedIn(tab.storage, ann)
+
+    expect((await tab.session.signInWithPasskey())._unsafeUnwrapErr().code).toBe(
+      'data:OTHER_ACCOUNT',
+    )
+    expect(browser.windows).toBe(0)
+    expect(auth.requests).toEqual([])
+    expect(tab.opened()).toEqual([])
+  })
+
+  it('refuses a passkey sign-in when an account was saved during the ceremony, sending no assertion', async () => {
+    const auth = fakeGatewayAuth()
+
+    expect((await verifiedElsewhere(auth, bobSignUp)).isOk()).toBe(true)
+
+    const credential = auth.passkeyOf(bobSignUp.email)
+
+    auth.requests.splice(0)
+
+    const storage = memoryStorage()
+    // Another tab signs Ann in while the browser's window is open.
+    const browser = fakeCeremony(() => {
+      signedIn(storage, ann)
+
+      return okAsync(assertionOf(credential))
+    })
+    const tab = await world({ storage, auth, ceremony: browser })
+
+    expect((await tab.session.signInWithPasskey())._unsafeUnwrapErr().code).toBe(
+      'data:OTHER_ACCOUNT',
+    )
+    expect(browser.windows).toBe(1)
+    expect(auth.requests.map(({ kind }) => kind)).toEqual(['passkey-options'])
+    expect(savedIdentity(storage)?.id).toBe(ann.identity.id)
+    expect(tab.opened()).toEqual([])
   })
 })

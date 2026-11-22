@@ -45,6 +45,10 @@ than its portal or overlay. A control that is not a test target carries a
     `description`, `confirmLabel`, `cancelLabel`, `destructive`, `onConfirm`, `onCancel`);
     `testId` marks the dialog, with `code` as its `data-code`, and its buttons carry
     `<testId>.confirm-button` and `<testId>.cancel-button`.
+  - `InputDialog`: a `ConfirmDialog` that asks for something typed: its props plus `children`
+    (the inputs, between its text and its two actions) and `confirmDisabled`; the first input has
+    the focus once it opens, Enter in an input presses the confirm button (which does nothing while
+    `confirmDisabled` holds it), and Escape is the cancel button.
   - `PasswordInput`: a password input with its eye beside it (`showLabel`, `hideLabel` for its
     accessible name), which shows what the input holds as typed or hides it again; `testId`
     marks the input, and the eye carries the derived `<testId>.visibility-button` with `show`

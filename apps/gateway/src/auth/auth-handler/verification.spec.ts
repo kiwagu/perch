@@ -464,7 +464,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
     expect(JSON.stringify(logs)).not.toContain(token.slice(0, 40))
   })
 
-  it('answers a verification whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a verification whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const failure: { pattern?: RegExp } = {}
     const { route, outbox, logs, closes } = await mountedOnRealAuth({
       directory: (local) =>
@@ -488,7 +488,7 @@ describe('authHandler over Better Auth: nothing of an address or a link on stder
       body: '{"code":"internal"}',
     })
     expect(closes).toEqual([])
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKER)
     expect(printed).not.toMatch(MARKER)
     expect(printed).not.toContain(token.slice(0, 40))

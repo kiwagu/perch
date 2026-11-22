@@ -1,11 +1,11 @@
-import type { SignInOutcome } from '../../limits/request-limits'
+import type { RequestLimits, SignInOutcome } from '../../limits/request-limits'
 import { tooMany } from '../../limits/too-many'
-import { bearerRefused } from '../bearer-caller'
+import type { AccountPasswords } from '../account-passwords'
+import type { AuthSessions } from '../auth-sessions'
 import { hasPasswordLength } from '../password-length'
 
-import type { AuthMountDeps } from './mount'
 import { internal, refused } from './requests'
-import type { MountCaller } from './signed-in'
+import { type MountCaller, stillSignedIn } from './signed-in'
 
 /** The caller's account once its password matched: its email as it is now, in lower case. */
 export interface ConfirmedAccount {
@@ -21,29 +21,26 @@ export interface ConfirmedAccount {
  * failed sign-ins (`RequestLimits.signInAttempt`, 429 when they are spent) and match the
  * credential row, as a sign-in's does: a wrong one keeps its place and answers 400
  * `invalid-credentials`, as one of a length no account's password has (`hasPasswordLength`) does
- * without being checked; a right one clears them. Answers the account once the password matched,
- * or the answer that refuses the work.
+ * without being checked; a right one gives its place back and forgets none of the failures, which
+ * only a sign-in's last step does. Answers the account once the password matched, or the answer
+ * that refuses the work.
  */
 export async function confirmPassword(
-  deps: Pick<AuthMountDeps, 'sessions' | 'limits' | 'passwords'>,
+  deps: {
+    readonly sessions: Pick<AuthSessions, 'read'>
+    readonly limits: Pick<RequestLimits, 'signInAttempt'>
+    readonly passwords: Pick<AccountPasswords, 'matches'>
+  },
   caller: MountCaller,
   password: string,
 ): Promise<Response | ConfirmedAccount> {
-  const read = await deps.sessions.read(caller.token)
+  const live = await stillSignedIn(deps, caller)
 
-  if (read.kind === 'failed') {
-    return internal()
+  if (live instanceof Response) {
+    return live
   }
 
-  if (
-    read.kind === 'none' ||
-    read.caller.identity !== caller.identity ||
-    read.caller.device !== caller.device
-  ) {
-    return bearerRefused()
-  }
-
-  const email = read.caller.email.toLowerCase()
+  const { email } = live
   const attempt = deps.limits.signInAttempt(email)
 
   if (!attempt.allowed) {
@@ -62,7 +59,9 @@ export async function confirmPassword(
         return internal()
       }
 
-      outcome = matches.value ? 'succeeded' : 'failed'
+      // A right password settles nothing: only a sign-in's last step forgets the email's failed
+      // sign-ins, so the place it held goes back and the failures stay.
+      outcome = matches.value ? 'unjudged' : 'failed'
     }
   } finally {
     attempt.settle(outcome)

@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
@@ -10,16 +11,11 @@ import { expectNoStateColour } from '../../../../../field-state-colour.test-supp
 import en from '../../i18n/user.en.json'
 import es from '../../i18n/user.es.json'
 
-import {
-  type SignInListed,
-  type SignInValues,
-  SignInView,
-  type SignInViewProps,
-} from './sign-in.view'
+import { type SignInListed, SignInView, type SignInViewProps } from './sign-in.view'
 
 /** What the states of each mode render, as the flow lists them, the resend button aside. */
 const RENDERS: Readonly<Record<SignInViewProps['mode'], readonly SignInListed[]>> = {
-  'sign-in': ['user.sign-in.forgot-link'],
+  'sign-in': ['user.sign-in.forgot-link', 'user.sign-in.passkey-button'],
   'sign-up': [
     'user.sign-in.password-rule-list',
     'user.sign-in.password-confirmation-input',
@@ -29,21 +25,28 @@ const RENDERS: Readonly<Record<SignInViewProps['mode'], readonly SignInListed[]>
 
 /**
  * Renders the view in the mode `props` gives (sign-in by default), with what a state of that mode
- * renders; `resend` renders the resend button too, as the states asking to check the mail do, and
- * `dialog` the dialog past the limit of devices, as the state asking about it does.
+ * renders; `resend` renders the resend button too, as the states asking to check the mail do,
+ * `dialog` the dialog past the limit of devices and `codeDialog` the dialog of the code, as the
+ * states asking about them do.
  */
 function renderView(
   {
     resend = false,
     dialog = false,
+    codeDialog = false,
     ...props
-  }: Partial<SignInViewProps> & { readonly resend?: boolean; readonly dialog?: boolean } = {},
+  }: Partial<SignInViewProps> & {
+    readonly resend?: boolean
+    readonly dialog?: boolean
+    readonly codeDialog?: boolean
+  } = {},
   locale: 'en' | 'es' = 'en',
 ) {
   const rendered = new Set<SignInListed>([
     ...RENDERS[props.mode ?? 'sign-in'],
     ...(resend ? (['user.sign-in.resend-button'] as const) : []),
     ...(dialog ? (['user.sign-in.device-limit-dialog'] as const) : []),
+    ...(codeDialog ? (['user.sign-in.code.dialog'] as const) : []),
   ])
   const handlers = {
     onSubmit: vi.fn(() => Promise.resolve(true)),
@@ -51,14 +54,19 @@ function renderView(
     onTypePassword: vi.fn(),
     onResend: vi.fn((_email: string) => Promise.resolve(true)),
     onForgot: vi.fn((_email: string) => {}),
-    onConfirmDeviceLimit: vi.fn((_values: SignInValues) => {}),
+    onConfirmDeviceLimit: vi.fn(),
     onCancelDeviceLimit: vi.fn(),
+    onTypeCode: vi.fn((_code: string) => {}),
+    onConfirmCode: vi.fn(),
+    onCancelCode: vi.fn(),
+    onPasskey: vi.fn(),
   }
 
   renderWithFacts(
     <SignInView
       startEmail=""
       mode="sign-in"
+      code=""
       renders={(anchor) => rendered.has(anchor)}
       can={() => true}
       {...handlers}
@@ -84,18 +92,13 @@ describe('the question past the limit of devices', () => {
     expect(dialog.textContent).toContain(es['user.sign-in.device-limit.body'])
   })
 
-  it('confirms with the values typed', () => {
+  it('confirms, saying nothing of the form: the retry is the attempt that asked', () => {
     const handlers = renderView({ dialog: true, startEmail: 'ann@example.test' })
 
     type('user.sign-in.password-input', 'Pass-word-1')
     fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
 
-    expect(handlers.onConfirmDeviceLimit).toHaveBeenCalledWith({
-      email: 'ann@example.test',
-      password: 'Pass-word-1',
-      confirmation: '',
-      name: '',
-    })
+    expect(handlers.onConfirmDeviceLimit).toHaveBeenCalledExactlyOnceWith()
   })
 
   it('goes back to the form on cancel, confirming nothing', () => {
@@ -111,6 +114,217 @@ describe('the question past the limit of devices', () => {
     renderView()
 
     expect(screen.queryByTestId('user.sign-in.device-limit-dialog')).toBeNull()
+  })
+})
+
+/** The dialog asking the code of the account's second factor. */
+const CODE_DIALOG = 'user.sign-in.code.dialog'
+const CODE_INPUT = 'user.sign-in.code.code-input'
+const CODE_ERROR = 'user.sign-in.code.error'
+
+describe('the code of the second factor', () => {
+  it('asks in its dialog, with the input inside, while the flow renders it, in the language of the app', () => {
+    renderView({ codeDialog: true }, 'es')
+
+    const dialog = screen.getByTestId(CODE_DIALOG)
+
+    expect(dialog.getAttribute('data-code')).toBe('code-required')
+    expect(dialog.contains(screen.getByTestId(CODE_INPUT))).toBe(true)
+    expect(dialog.textContent).toContain(es['user.sign-in.code.title'])
+    expect(dialog.textContent).toContain(es['user.sign-in.code.body'])
+    expect(input(CODE_INPUT).labels?.[0]?.textContent).toBe(es['user.sign-in.code.label'])
+    expect(screen.getByTestId(`${CODE_DIALOG}.confirm-button`).textContent).toBe(
+      es['user.sign-in.code.confirm'],
+    )
+    expect(screen.getByTestId(`${CODE_DIALOG}.cancel-button`).textContent).toBe(
+      es['user.sign-in.code.cancel'],
+    )
+  })
+
+  it('asks nothing while the flow does not render the dialog', () => {
+    renderView()
+
+    expect(screen.queryByTestId(CODE_DIALOG)).toBeNull()
+    expect(screen.queryByTestId(CODE_INPUT)).toBeNull()
+  })
+
+  it('focuses the input, shows the code as given and tells each keystroke in it', async () => {
+    const { onTypeCode } = renderView({ codeDialog: true, code: '12' })
+
+    expect(input(CODE_INPUT).value).toBe('12')
+    expect(input(CODE_INPUT).autocomplete).toBe('one-time-code')
+    await waitFor(() => expect(document.activeElement).toBe(input(CODE_INPUT)))
+
+    type(CODE_INPUT, '123')
+
+    expect(onTypeCode).toHaveBeenCalledExactlyOnceWith('123')
+  })
+
+  it('gives the input what the contract says of it', () => {
+    renderView({ codeDialog: true })
+
+    expect(expectFieldFacts(document.body)).toEqual(expect.arrayContaining([CODE_INPUT]))
+  })
+
+  it('confirms and cancels with the buttons, and confirms on Enter in the input', async () => {
+    const { onConfirmCode, onCancelCode } = renderView({ codeDialog: true, code: '123456' })
+
+    fireEvent.click(screen.getByTestId(`${CODE_DIALOG}.confirm-button`))
+    expect(onConfirmCode).toHaveBeenCalledTimes(1)
+
+    await waitFor(() => expect(document.activeElement).toBe(input(CODE_INPUT)))
+    await userEvent.keyboard('{Enter}')
+    expect(onConfirmCode).toHaveBeenCalledTimes(2)
+
+    fireEvent.click(screen.getByTestId(`${CODE_DIALOG}.cancel-button`))
+    expect(onCancelCode).toHaveBeenCalledTimes(1)
+  })
+
+  it('cancels on Escape', async () => {
+    const { onConfirmCode, onCancelCode } = renderView({ codeDialog: true })
+
+    await waitFor(() => expect(document.activeElement).toBe(input(CODE_INPUT)))
+    await userEvent.keyboard('{Escape}')
+
+    expect(onCancelCode).toHaveBeenCalledTimes(1)
+    expect(onConfirmCode).not.toHaveBeenCalled()
+  })
+
+  it('holds the confirmation, and Enter, while the flow does not take it, asking about the code as given', async () => {
+    const can = vi.fn(
+      (event: Parameters<SignInViewProps['can']>[0]) =>
+        event.type !== 'user.sign-in.code.dialog.confirm-button',
+    )
+    const { onConfirmCode } = renderView({ codeDialog: true, code: '123456', can })
+
+    expect(
+      (screen.getByTestId(`${CODE_DIALOG}.confirm-button`) as HTMLButtonElement).disabled,
+    ).toBe(true)
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.sign-in.code.dialog.confirm-button',
+      code: '123456',
+    })
+
+    await waitFor(() => expect(document.activeElement).toBe(input(CODE_INPUT)))
+    await userEvent.keyboard('{Enter}')
+
+    expect(onConfirmCode).not.toHaveBeenCalled()
+  })
+
+  it("marks the field each code of its error concerns, as the screen's fields say, and no other", () => {
+    const failures: Readonly<Record<string, string>> = { 'invalid-code': 'sign-in:CODE_INVALID' }
+
+    expectEachCodeMarksItsField(CODE_ERROR, (code) =>
+      renderView({ codeDialog: true, codeError: failures[code] }),
+    )
+  })
+
+  it('says a wrong code under the input in its dialog, in the language of the app', () => {
+    renderView({ codeDialog: true, codeError: 'data:INVALID_CODE' }, 'es')
+
+    const error = screen.getByTestId(CODE_ERROR)
+
+    expect(error.getAttribute('data-code')).toBe('invalid-code')
+    expect(error.textContent).toBe(es['user.sign-in.code.error.invalid-code'])
+    expect(screen.getByTestId(CODE_DIALOG).contains(error)).toBe(true)
+    expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBe('true')
+    expect(input(CODE_INPUT).getAttribute('aria-describedby')).toBe(error.getAttribute('id'))
+    // Under the input: in its field, after it.
+    expect(input(CODE_INPUT).closest('[data-slot="field"]')?.contains(error)).toBe(true)
+    expect(
+      input(CODE_INPUT).compareDocumentPosition(error) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it.each(['data:INVALID_CODE', 'sign-in:CODE_INVALID'])(
+    'says %s, a wrong code or no code at all, under the input as an invalid code',
+    (failure) => {
+      renderView({ codeDialog: true, codeError: failure })
+
+      expect(screen.getByTestId(CODE_ERROR).getAttribute('data-code')).toBe('invalid-code')
+      expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBe('true')
+    },
+  )
+
+  it('says any other failure in the dialog, marking no field', () => {
+    renderView({ codeDialog: true, codeError: 'data:AUTH_FAILED' })
+
+    const error = screen.getByTestId(CODE_ERROR)
+
+    expect(error.getAttribute('data-code')).toBe('failed')
+    expect(error.textContent).toBe(en['user.sign-in.code.error.failed'])
+    expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBeNull()
+  })
+
+  it('shows no error of the code until one comes', () => {
+    renderView({ codeDialog: true })
+
+    expect(screen.queryByTestId(CODE_ERROR)).toBeNull()
+    expect(input(CODE_INPUT).getAttribute('aria-invalid')).toBeNull()
+  })
+})
+
+describe('the passkey button', () => {
+  const PASSKEY = 'user.sign-in.passkey-button'
+
+  it('offers to sign in with a passkey where the flow renders it, and asks for one on a click', () => {
+    const { onPasskey } = renderView()
+
+    expect(screen.getByTestId(PASSKEY).textContent).toBe(en['user.sign-in.passkey'])
+    expect((screen.getByTestId(PASSKEY) as HTMLButtonElement).type).toBe('button')
+
+    fireEvent.click(screen.getByTestId(PASSKEY))
+
+    expect(onPasskey).toHaveBeenCalledOnce()
+  })
+
+  it('offers it in Spanish', () => {
+    renderView({}, 'es')
+
+    expect(screen.getByTestId(PASSKEY).textContent).toBe(es['user.sign-in.passkey'])
+  })
+
+  it('is not there in the mode sign-up', () => {
+    renderView({ mode: 'sign-up' })
+
+    expect(screen.queryByTestId(PASSKEY)).toBeNull()
+  })
+
+  it('holds the button while the flow does not take it, and no other button', () => {
+    renderView({ can: (event) => event.type !== 'user.sign-in.passkey-button' })
+
+    expect((screen.getByTestId(PASSKEY) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId('user.sign-in.submit-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  it('asks the flow about it with no values', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ can })
+
+    expect(can).toHaveBeenCalledWith({ type: PASSKEY })
+  })
+
+  it.each([
+    ['data:CODE_EXPIRED', 'code-expired'],
+    ['data:PASSKEY_CANCELLED', 'passkey-cancelled'],
+    ['data:PASSKEY_UNKNOWN', 'passkey-unknown'],
+  ] as const)('says %s above the fields, in both languages', (failure, code) => {
+    renderView({ error: failure })
+
+    expect(screen.getByTestId('user.sign-in.error').getAttribute('data-code')).toBe(code)
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      en[`user.sign-in.error.${code}`],
+    )
+
+    cleanup()
+    renderView({ error: failure }, 'es')
+
+    expect(screen.getByTestId('user.sign-in.error').textContent).toBe(
+      es[`user.sign-in.error.${code}`],
+    )
   })
 })
 
@@ -455,6 +669,11 @@ describe('SignInView', () => {
       onResend: () => Promise.resolve(true),
       onConfirmDeviceLimit: () => {},
       onCancelDeviceLimit: () => {},
+      code: '',
+      onTypeCode: () => {},
+      onConfirmCode: () => {},
+      onCancelCode: () => {},
+      onPasskey: () => {},
     }
     const describedBy = () =>
       input('user.sign-in.password-confirmation-input').getAttribute('aria-describedby')
@@ -780,7 +999,7 @@ describe('SignInView', () => {
     type('user.sign-in.password-confirmation-input', 'Secret-new1')
     type('user.sign-in.name-input', 'Ann')
 
-    expect(can).toHaveBeenLastCalledWith({
+    expect(can).toHaveBeenCalledWith({
       type: 'user.sign-in.resend-button',
       email: 'ann@example.test',
     })
@@ -821,6 +1040,11 @@ function renderTracked(mode: SignInViewProps['mode']) {
         onForgot={() => {}}
         onConfirmDeviceLimit={() => {}}
         onCancelDeviceLimit={() => {}}
+        code=""
+        onTypeCode={() => {}}
+        onConfirmCode={() => {}}
+        onCancelCode={() => {}}
+        onPasskey={() => {}}
       />
     </UnsavedInputScope>,
   )

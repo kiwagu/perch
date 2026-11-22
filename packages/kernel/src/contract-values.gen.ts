@@ -95,6 +95,11 @@ export const CONTRACT_VALUES = {
       "admin"
     ]
   },
+  "second-factor-code": {
+    "type": "string",
+    "minLength": 6,
+    "maxLength": 11
+  },
   "settings.id": {
     "type": "string",
     "readOnly": true

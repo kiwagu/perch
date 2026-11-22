@@ -3,6 +3,7 @@
 export {
   type SessionRevoke,
   type SignInAdmission,
+  type SignInJudgment,
   type SignOutEnding,
   toEndedDevices,
   type VerifiedAdmission,

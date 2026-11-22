@@ -1,7 +1,7 @@
 import { ResultAsync } from 'neverthrow'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import { openTestWorld, signUpVerified, type TestWorld } from '../__fixtures__/session'
 import { signedIn as signedInOn } from '../__fixtures__/signed-in'
 import type { GatewayAuth } from '../gateway-auth'
@@ -136,17 +136,21 @@ describe('a password reset in a browser signed in', () => {
     // token before this one heard the answer.
     await vi.waitFor(() => expect(auth.requests.at(-1)?.kind).toBe('reset'))
 
-    const again = await auth.signIn(
-      { email, password: 'Secret-new1' },
-      { id: 'device-other-tab', label: 'Other tab' },
+    const again = signedDevice(
+      (
+        await auth.signIn(
+          { email, password: 'Secret-new1' },
+          { id: 'device-other-tab', label: 'Other tab' },
+        )
+      )._unsafeUnwrap(),
     )
 
-    signedInOn(world.storage, { identity: me, token: again._unsafeUnwrap().token })
+    signedInOn(world.storage, { identity: me, token: again.token })
     answer()
     expect((await resetting).isOk()).toBe(true)
 
     expect(world.session.current()?.id).toBe(me.id)
-    expect(savedToken(world.storage)).toBe(again._unsafeUnwrap().token)
+    expect(savedToken(world.storage)).toBe(again.token)
     expect(world.session.notice()).toBeUndefined()
   })
 })

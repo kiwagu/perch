@@ -5,8 +5,10 @@
 -- becomes the password of its credential row, every session of the identity not ended already
 -- ends at $ended_at (an expired one at its expiry; a live one keeps `password-changed` as its
 -- reason, for its device's next hello), its email is verified when it was not yet
--- (only that mailbox got the link), and its pending change of email and pending deletion of the
--- account are deleted; the answer is `reset`. A failure of any of these leaves all of them undone.
+-- (only that mailbox got the link), its pending change of email and pending deletion of the
+-- account are deleted, and its pending two-factor challenges end with the rows counting their
+-- codes (`fn::two_factor_challenges_end`), so no code is taken for a password step of the old
+-- password; the answer is `reset`. A failure of any of these leaves all of them undone.
 BEGIN TRANSACTION;
 LET $link = (
   SELECT `value` AS identity, expires_at
@@ -54,6 +56,7 @@ IF $outcome = 'reset' {
   RETURN NONE;
   DELETE verification WHERE identifier = string::concat('change-email:', $identity) RETURN NONE;
   DELETE verification WHERE identifier = string::concat('delete-account:', $identity) RETURN NONE;
+  fn::two_factor_challenges_end($identity);
 };
 RETURN $outcome;
 COMMIT TRANSACTION;
