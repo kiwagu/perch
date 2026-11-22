@@ -520,7 +520,10 @@ then failed (its read of the account to answer with, say) verified the passkey: 
 service's, so the gateway ends that session, which nobody was handed (the session hooks note each
 session written for the gateway's call that wrote it, `noteSessionWritten` and
 `watchingSessionWrites` in `session-writes.ts`), and answers 500 `internal`, whatever code the
-plugin gave.
+plugin gave; a verified passkey whose account the gateway then fails to read back (its start, for
+the admission) has its session ended and answers 500 alike. Either ending is best effort: one that
+fails too still answers 500 and leaves the session waiting for an admission it never gets, handed
+to nobody, counted by no admission, listed nowhere and read by no caller.
 
 A ceremony a device starts and leaves (its browser window closed) leaves the plugin's row in
 `verification`, which expires after five minutes but which nothing deletes, Better Auth's own

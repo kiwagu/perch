@@ -46,11 +46,13 @@ export interface GatewayAuth {
   /**
    * Signs `device` in (`signed-in`); an account whose second factor is on answers the challenge
    * its code step carries (`code-required`), signing nothing in. An account whose email is not
-   * verified yet fails as `data:EMAIL_NOT_VERIFIED` (a 403 whose body does not name
-   * `account-banned`), one an operator banned, once its password is right, as
-   * `data:ACCOUNT_BANNED` (a 403 that names it); one signed in on as many devices as it may be
-   * answers `device-limit`, nothing signed in, unless `input.signOutOldest` confirms signing out
-   * its device seen least recently.
+   * verified yet fails as `data:EMAIL_NOT_VERIFIED` (exactly a 403 whose body names
+   * `EMAIL_NOT_VERIFIED`), one an operator banned, once its password is right, as
+   * `data:ACCOUNT_BANNED` (a 403 that names `account-banned`); one signed in on as many devices as
+   * it may be answers `device-limit`, nothing signed in, unless `input.signOutOldest` confirms
+   * signing out its device seen least recently. A refusal the gateway sends with no code named
+   * here (a 403 `INVALID_ORIGIN` of the origin check, say) fails as `data:AUTH_FAILED` naming its
+   * status.
    */
   signIn(input: SignInInput, device: NamedDevice): ResultAsync<SignInAnswer, DataError>
   /**

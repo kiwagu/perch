@@ -43,15 +43,17 @@ function secondFactorOn(deps: AuthMountDeps, email: string): Promise<boolean> {
  * What the mount's answer to a sign-in means for its email's limit, for an answer not judged where
  * it was made (`JudgedAnswer`): 200 signed in, and 409, a sign-in asked about the account's limit
  * of devices once Better Auth accepted it, both judged the password right, and so does a 403 coded
- * `EMAIL_NOT_VERIFIED` or `account-banned`, a refusal Better Auth made after the password and before
- * any challenge, for an account whose second factor is off. For one whose second factor is on it
- * judged nothing: the right password of such an account is not a sign-in's last step, so it neither
- * counts nor forgets; its second factor is read again when the refusal is judged (`secondFactorOn`),
- * so a factor turned on meanwhile counts. Any other 403 judged nothing: a refusal of the request's
- * origin, of its Fetch Metadata or of its callback comes before Better Auth checks the password, so
- * a forged request would otherwise clear the failed sign-ins of any email it names; nor does a 403
- * whose code cannot be read. A 401 judged the password wrong, any other status nothing. The body is
- * read from a copy of the answer: the client gets it untouched.
+ * `EMAIL_NOT_VERIFIED` or `account-banned`, for an account whose second factor is off: a refusal
+ * Better Auth made after the password and before any challenge, or the gateway's own refusal at the
+ * admission of a session Better Auth wrote, of an account banned after Better Auth's own gate (its
+ * ban read in the admission), which came after the password too. For one whose second factor is on
+ * it judged nothing: the right password of such an account is not a sign-in's last step, so it
+ * neither counts nor forgets; its second factor is read again when the refusal is judged
+ * (`secondFactorOn`), so a factor turned on meanwhile counts. Any other 403 judged nothing: a
+ * refusal of the request's origin, of its Fetch Metadata or of its callback comes before Better
+ * Auth checks the password, so a forged request would otherwise clear the failed sign-ins of any
+ * email it names; nor does a 403 whose code cannot be read. A 401 judged the password wrong, any
+ * other status nothing. The body is read from a copy of the answer: the client gets it untouched.
  */
 async function outcomeOf(
   deps: AuthMountDeps,

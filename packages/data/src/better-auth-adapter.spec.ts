@@ -148,9 +148,11 @@ async function together<T>(
 
 /**
  * The adapter's operations as Better Auth reaches them, directly and inside a transaction. A call
- * on the adapter that loses a race is run again until it finds the row as the winner left it, so
- * it always answers. A transaction is not run again, for what its callback did cannot be taken
- * back: the later of two overlapping transactions is refused with the database's conflict.
+ * on the adapter that loses a race is sent again by the driver, at most five more times with a
+ * growing pause, until a try finds the row as the winner left it; the races here settle within
+ * that bound, so every call answers, though a conflict on the last try would reject the call with
+ * it. A transaction is not run again, for what its callback did cannot be taken back: the later of
+ * two overlapping transactions is refused with the database's conflict.
  */
 const PATHS = [
   {

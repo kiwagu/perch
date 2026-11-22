@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c6fa40b7f 100644
+index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..b4b553b3f5cc5b405ce4cb6be8db514266cb8108 100644
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -1,4 +1,6 @@
@@ -144,7 +144,7 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
        }
      } else if (isInsensitive) {
        if (typeof value === "string") {
-@@ -9820,11 +9917,24 @@ function mapFieldTypeToSurreal(type, required) {
+@@ -9820,11 +9917,25 @@ function mapFieldTypeToSurreal(type, required) {
  }
  var surrealAdapter = (config) => {
    let lazyOptions = null;
@@ -163,16 +163,17 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
 +  };
 +  // A statement that two callers can race on. The database refuses the later of two overlapping
 +  // writers of one row with a conflict it says can be retried. A statement of the connection
-+  // stands alone, so the driver sends it again until it runs without one, and it then finds the
-+  // row as the earlier caller left it. A transaction is not run again: what its callback did
-+  // outside the database, a mail it sent, cannot be taken back, so the conflict fails the
-+  // transaction and the caller decides.
++  // stands alone, so the driver sends it again, at most five more times with a growing pause (its
++  // default bound), and the try that runs without one finds the row as the earlier caller left
++  // it; a conflict on the last try rejects the call with that conflict. A transaction is not run
++  // again: what its callback did outside the database, a mail it sent, cannot be taken back, so
++  // the conflict fails the transaction and the caller decides.
 +  const runAtomic = async (sql, bindings) => {
 +    const result = await (created === null ? db.query(sql, bindings).retry() : db.query(sql, bindings));
      return result[0] ?? [];
    };
    const findManyRaw = async (model, where, limit) => {
-@@ -9876,34 +9986,26 @@ var surrealAdapter = (config) => {
+@@ -9876,34 +9987,26 @@ var surrealAdapter = (config) => {
        supportsArrays: true,
        supportsNumericIds: false,
        supportsUUIDs: false,
@@ -213,7 +214,7 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
          }
        }
      },
-@@ -9914,13 +10016,13 @@ var surrealAdapter = (config) => {
+@@ -9914,13 +10017,13 @@ var surrealAdapter = (config) => {
        }) => {
          const insertData = { ...data };
          if (insertData.id && typeof insertData.id === "string") {
@@ -230,7 +231,7 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
          }
          return record;
        },
-@@ -10017,7 +10119,7 @@ var surrealAdapter = (config) => {
+@@ -10017,7 +10120,7 @@ var surrealAdapter = (config) => {
        }) => {
          const { sql: whereSql, bindings } = buildWhereClause(where, model);
          try {
@@ -239,7 +240,7 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
          } catch (err) {
            if (!isTableNotFoundError(err))
              throw err;
-@@ -10037,6 +10139,51 @@ var surrealAdapter = (config) => {
+@@ -10037,6 +10140,51 @@ var surrealAdapter = (config) => {
            throw err;
          }
        },
@@ -291,7 +292,7 @@ index f050fc47a6ebe06eff7aba47637de9520e9ce3a0..41ff96b14b89b488c519662e3b77b65c
        count: async ({
          model,
          where
-@@ -10170,6 +10317,9 @@ var surrealAdapter = (config) => {
+@@ -10170,6 +10318,9 @@ var surrealAdapter = (config) => {
        }
      })
    });
