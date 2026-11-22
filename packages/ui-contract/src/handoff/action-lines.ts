@@ -1,7 +1,8 @@
 /**
  * A platform action as lines for the hand-over diff, one per fact it declares: each parameter
  * with its type or the value it refers to, the constraints it writes (`valueWords`) and whether
- * it may be left out, its result, each code its failure shows, each role that may run it, the page
+ * it may be left out, each line of its result, each code its failure shows with the condition it
+ * answers on or the invariant it refuses for, each role that may run it, the page
  * sizes it answers with its default when it pages, each read it changes, the mail it
  * sends (who it goes to, the language it speaks, the screen its link opens and the search
  * parameter that carries the token) and each notice (its name, who it goes to, its language and
@@ -10,6 +11,7 @@
  */
 
 import type { Contract } from '../check'
+import { codeEntriesOf, outcomesOf } from '../files'
 
 import { valueWords } from './value-words'
 
@@ -46,8 +48,14 @@ export function actionLines(action: PlatformAction | undefined): string[] {
 
   return [
     ...Object.entries(action.params).map(([name, parameter]) => parameterLine(name, parameter)),
-    `result: ${action.result}`,
-    ...action.codes.map((code) => `code ${code}`),
+    ...outcomesOf(action.result).map((outcome) => `result: ${outcome}`),
+    ...codeEntriesOf(action.codes).map(({ code, condition, invariant }) => {
+      if (invariant !== undefined) {
+        return `code ${code}: invariant ${invariant}`
+      }
+
+      return condition === undefined ? `code ${code}` : `code ${code}: ${condition}`
+    }),
     ...(action.roles ?? []).map((role) => `role ${role}`),
     ...(action.paged === undefined
       ? []

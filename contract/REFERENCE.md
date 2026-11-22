@@ -1149,12 +1149,22 @@ What the parameter is for. Its type or the value it refers to, and its constrain
 ### `actions.<name>.result`
 
 <a id="platform-actions-name-result"></a>
-What holds once the action succeeds.
+What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`.
 
 ### `actions.<name>.codes`
 
 <a id="platform-actions-name-codes"></a>
-The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.
+The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`.
+
+### `actions.<name>.codes.<name>`
+
+<a id="platform-actions-name-codes-name"></a>
+When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named here instead. At most 200 characters.
+
+### `actions.<name>.codes.<name>.invariant`
+
+<a id="platform-actions-name-codes-name-invariant"></a>
+The invariant, by its name under `platform.invariants`, whose `refuses` is this code.
 
 ### `actions.<name>.roles`
 
@@ -1240,6 +1250,26 @@ The plain link of the notice, when it has one: a password changed links to the r
 
 <a id="platform-actions-name-notices-link-screen"></a>
 The screen the link opens, at a route that needs no parameter: the link carries no token and no search.
+
+### `invariants`
+
+<a id="platform-invariants"></a>
+The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.
+
+### `invariants.<name>`
+
+<a id="platform-invariants-name"></a>
+A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`.
+
+### `invariants.<name>.rule`
+
+<a id="platform-invariants-name-rule"></a>
+The rule, said once for every action that names it under the code it refuses with. At most 200 characters.
+
+### `invariants.<name>.refuses`
+
+<a id="platform-invariants-name-refuses"></a>
+The code an action refuses with when the rule would break: each action names the invariant under it.
 
 ### `events`
 
@@ -3916,12 +3946,22 @@ What the parameter is for. Its type or the value it refers to, and its constrain
 ### `platform.actions.<name>.result`
 
 <a id="manifest-platform-actions-name-result"></a>
-What holds once the action succeeds.
+What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`.
 
 ### `platform.actions.<name>.codes`
 
 <a id="manifest-platform-actions-name-codes"></a>
-The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`.
+The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`.
+
+### `platform.actions.<name>.codes.<name>`
+
+<a id="manifest-platform-actions-name-codes-name"></a>
+When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named here instead. At most 200 characters.
+
+### `platform.actions.<name>.codes.<name>.invariant`
+
+<a id="manifest-platform-actions-name-codes-name-invariant"></a>
+The invariant, by its name under `platform.invariants`, whose `refuses` is this code.
 
 ### `platform.actions.<name>.roles`
 
@@ -4007,6 +4047,26 @@ The plain link of the notice, when it has one: a password changed links to the r
 
 <a id="manifest-platform-actions-name-notices-link-screen"></a>
 The screen the link opens, at a route that needs no parameter: the link carries no token and no search.
+
+### `platform.invariants`
+
+<a id="manifest-platform-invariants"></a>
+The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.
+
+### `platform.invariants.<name>`
+
+<a id="manifest-platform-invariants-name"></a>
+A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`.
+
+### `platform.invariants.<name>.rule`
+
+<a id="manifest-platform-invariants-name-rule"></a>
+The rule, said once for every action that names it under the code it refuses with. At most 200 characters.
+
+### `platform.invariants.<name>.refuses`
+
+<a id="manifest-platform-invariants-name-refuses"></a>
+The code an action refuses with when the rule would break: each action names the invariant under it.
 
 ### `platform.events`
 
@@ -4908,6 +4968,17 @@ A control that does not submit its form (a `type=button` that runs its action on
 On `format`: The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.
 
 Keys it concerns: [`platform.values.<name>.format`](#platform-values-name-format), [`manifest.ids.<name>.value.format`](#manifest-ids-name-value-format).
+
+### What an action answers: its outcomes, its codes and the invariants
+
+<a id="rule-action-outcomes"></a>
+A platform action says what it answers in two places. Its `result` is what holds once it runs: one outcome, or a list of outcome lines, the plain success first, then each other outcome under its own condition (`with the second factor on: asks for a code and signs no device in`). Its `codes` map each code a failure shows to when it answers: a condition, as the server judges it when the request is admitted (`invalid-code: the code is wrong or used up`), or `{ invariant: <name> }`, a rule several actions keep, said once under `platform.invariants`. Each line of a list `result`, each condition and each rule keeps 200 characters, the budget of a description (`behaviourTextsProblems`). The older form of `codes`, a list of their names, still loads and says no condition.
+
+An invariant, `platform.invariants.<name>`, writes its `rule` and the code it `refuses` with. An action names it under that code, and nowhere else: the engine derives the actions an invariant limits (`invariantActions`), in the order the platform file writes them, and the manifest carries them under the invariant as `actions`. `contract:check` holds them (`invariantsProblems`): an invariant an action names exists, and its `refuses` is the code it is named under, both at that code; an invariant no action names is refused, at the invariant. The vocabulary's Codes table keeps what each code means to the user; the rule behind a refusal is its invariant's.
+
+The hand-over diff lists each outcome line as `result: <line>`, each code as `code <code>: <condition>` or `code <code>: invariant <name>`, and each invariant as `invariant lines added in <name>` and `invariant lines removed in <name>`, its `rule: <text>` and `refuses <code>`.
+
+Keys it concerns: [`platform.actions.<name>.result`](#platform-actions-name-result), [`platform.actions.<name>.codes`](#platform-actions-name-codes), [`platform.invariants`](#platform-invariants), [`platform.invariants.<name>`](#platform-invariants-name).
 
 ### What an action fails with
 

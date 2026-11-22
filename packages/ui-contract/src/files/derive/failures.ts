@@ -23,7 +23,8 @@
  */
 
 import { kebab } from '../../kebab'
-import type { PlatformParameter } from '../../schemas'
+import type { ActionCodes, PlatformParameter } from '../../schemas'
+import { codesOf } from '../action-codes'
 import type { Model, ModelEntity, ModelField } from '../model'
 import type { Platform } from '../screens'
 
@@ -45,7 +46,7 @@ export const failureCodes = (failure: ReturnType<FailureOf>): readonly string[] 
 
 /** A platform action as its failure reads it: the codes it declares and its parameters. */
 interface PlatformFailure {
-  readonly codes: readonly string[]
+  readonly codes: ActionCodes
   readonly params: Readonly<Record<string, PlatformParameter>>
 }
 
@@ -200,7 +201,7 @@ function attributionOf({ codes, params }: PlatformFailure): Record<string, reado
   return Object.fromEntries(
     Object.entries(params).flatMap(([param, { codes: listed = [] }]) => {
       const named = FIELD_CODE_SUFFIXES.map(({ suffix }) => codeNamedAfter(param, suffix))
-      const own = codes.filter((code) => named.includes(code) || listed.includes(code))
+      const own = codesOf(codes).filter((code) => named.includes(code) || listed.includes(code))
 
       return own.length === 0 ? [] : [[param, own] as const]
     }),
@@ -245,7 +246,7 @@ export const failuresOf =
       return declared === undefined
         ? undefined
         : {
-            codes: declared.codes,
+            codes: codesOf(declared.codes),
             params: edition >= ATTRIBUTION_EDITION ? attributionOf(declared) : {},
           }
     }

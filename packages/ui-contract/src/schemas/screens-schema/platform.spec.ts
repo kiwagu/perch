@@ -190,3 +190,75 @@ describe('platformSchema changes', () => {
     expect(parsed.error?.issues.map(({ path }) => path)).toEqual([['actions', 'send', 'changes']])
   })
 })
+
+describe('platformSchema codes, result and invariants', () => {
+  const parses = (action: Readonly<Record<string, unknown>>, platform = {}) =>
+    platformSchema.safeParse({
+      ...PLATFORM,
+      ...platform,
+      actions: { 'sign-in': { ...ACTION, ...action } },
+    }).success
+  const INVARIANTS = {
+    invariants: {
+      'device-limit': {
+        rule: 'An account is signed in on ten devices at most at once.',
+        refuses: 'device-limit',
+      },
+    },
+  }
+
+  it('accepts the codes as a map, each with its condition or the invariant it refuses for', () => {
+    expect(
+      parses(
+        {
+          codes: {
+            'invalid-credentials': 'the email or the password is wrong',
+            'device-limit': { invariant: 'device-limit' },
+            failed: 'anything else fails',
+          },
+        },
+        INVARIANTS,
+      ),
+    ).toBe(true)
+    expect(parses({ codes: {} })).toBe(true)
+  })
+  it('still accepts the codes as a list of names', () => {
+    expect(parses({ codes: ['failed'] })).toBe(true)
+  })
+  it('refuses an empty condition, a key beside the invariant, or a code no code could be', () => {
+    for (const codes of [
+      { failed: '' },
+      { 'device-limit': { invariant: 'device-limit', also: 'x' } },
+      { 'device-limit': { invariant: 'Device limit' } },
+      { Failed: 'anything else fails' },
+      { failed: 3 },
+    ]) {
+      expect(parses({ codes }, INVARIANTS), JSON.stringify(codes)).toBe(false)
+    }
+  })
+  it('accepts the result as one outcome or a list of outcome lines', () => {
+    expect(parses({ result: 'the device is signed in' })).toBe(true)
+    expect(
+      parses({ result: ['the device is signed in', 'with the second factor on: asks for a code'] }),
+    ).toBe(true)
+  })
+  it('refuses an empty list of outcomes and an empty outcome line', () => {
+    for (const result of [[], [''], ['the device is signed in', '']]) {
+      expect(parses({ result }), JSON.stringify(result)).toBe(false)
+    }
+  })
+  it('accepts invariants by name, each with its rule and the code it refuses with', () => {
+    expect(parses({}, INVARIANTS)).toBe(true)
+  })
+  it('refuses an invariant without its rule or its code, with a key of its own, or misnamed', () => {
+    for (const invariants of [
+      { 'device-limit': { rule: 'Ten devices at most.' } },
+      { 'device-limit': { refuses: 'device-limit' } },
+      { 'device-limit': { rule: '', refuses: 'device-limit' } },
+      { 'device-limit': { rule: 'Ten devices at most.', refuses: 'device-limit', actions: [] } },
+      { 'Device limit': { rule: 'Ten devices at most.', refuses: 'device-limit' } },
+    ]) {
+      expect(parses({}, { invariants }), JSON.stringify(invariants)).toBe(false)
+    }
+  })
+})

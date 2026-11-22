@@ -42,6 +42,20 @@ export const DESCRIPTION_PURPOSES = {
   activityTransition: `What acting on the anchor leads to that the target and the guard do not say; the flows of the screens do the work. ${AT_MOST}`,
 } as const
 
+/**
+ * What each text of a platform action's behaviour is for: its outcome lines, the condition each of
+ * its codes answers on, and the rule of an invariant. They are behaviour, which the hand-over diff
+ * lists with their text, not descriptions, and keep the same budget (`behaviourTextsProblems`).
+ */
+export const BEHAVIOUR_PURPOSES = {
+  outcome: `One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. ${AT_MOST}`,
+  condition: `When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named here instead. ${AT_MOST}`,
+  rule: `The rule, said once for every action that names it under the code it refuses with. ${AT_MOST}`,
+} as const
+
+/** What a text of a platform action's behaviour is: an outcome line, a condition or a rule. */
+export type BehaviourKind = keyof typeof BEHAVIOUR_PURPOSES
+
 /** What a written description describes: the field whose purpose it keeps. */
 export type DescriptionKind = keyof typeof DESCRIPTION_PURPOSES
 

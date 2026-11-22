@@ -1,5 +1,7 @@
 export { activitySchema } from './activity.schema'
 export {
+  BEHAVIOUR_PURPOSES,
+  type BehaviourKind,
   DESCRIPTION_BUDGET,
   DESCRIPTION_PURPOSES,
   type DescriptionKind,
@@ -10,6 +12,8 @@ export { flatJsonSchema } from './flat-json-schema'
 export { manifestSchema } from './manifest.schema'
 export {
   ACCOUNT,
+  type ActionCodes,
+  type ActionResult,
   actionParamsSchema,
   anchorBindingSchema,
   anchorDefSchema,
@@ -26,6 +30,7 @@ export {
   flowSchema,
   type PlatformComposite,
   type PlatformDefaults,
+  type PlatformInvariant,
   type PlatformMail,
   type PlatformNotice,
   type PlatformParameter,
@@ -33,6 +38,7 @@ export {
   platformCompositeSchema,
   platformDefaultsSchema,
   platformFileSchema,
+  platformInvariantSchema,
   platformMailSchema,
   platformNoticeSchema,
   platformSchema,

@@ -115,3 +115,25 @@ describe('actionLines', () => {
     expect(actionLines(undefined)).toEqual([])
   })
 })
+
+describe('actionLines of codes written as a map and a result written as a list', () => {
+  it('gives each outcome line its result line, and each code its condition or its invariant', () => {
+    expect(
+      actionLines({
+        description: 'Signs this device in.',
+        params: {},
+        result: ['the device is signed in', 'with the second factor on: asks for a code'],
+        codes: {
+          'invalid-credentials': 'the email or the password is wrong',
+          'device-limit': { invariant: 'device-limit' },
+        },
+        changes: [],
+      }),
+    ).toEqual([
+      'result: the device is signed in',
+      'result: with the second factor on: asks for a code',
+      'code invalid-credentials: the email or the password is wrong',
+      'code device-limit: invariant device-limit',
+    ])
+  })
+})

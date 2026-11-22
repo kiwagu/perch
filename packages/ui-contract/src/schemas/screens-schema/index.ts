@@ -36,11 +36,15 @@ export {
 } from './mail'
 export { actionParamsSchema, paramValueSchema } from './params'
 export {
+  type ActionCodes,
+  type ActionResult,
   type PlatformComposite,
   type PlatformDefaults,
+  type PlatformInvariant,
   type PlatformParameter,
   platformCompositeSchema,
   platformDefaultsSchema,
+  platformInvariantSchema,
   platformSchema,
 } from './platform'
 export { authoredScreenSchema, screenSchema } from './screen'

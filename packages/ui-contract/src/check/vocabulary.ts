@@ -16,6 +16,8 @@
 import { FIELD_STATES, kindOf, screenOf, VISIBILITY_BUTTON } from '../anchors'
 import {
   CONFIRM_RULE_ROW,
+  codeEntriesOf,
+  codesOf,
   jsonPath,
   MODEL_FILE,
   type Problem,
@@ -151,7 +153,16 @@ function platformProblems({ vocabulary, screens }: Contract): Problem[] {
   return [
     ...Object.entries(actions).flatMap(([name, action]) => [
       ...unlisted(action.roles, ['platform', 'actions', name, 'roles'], vocabulary.roles, 'a role'),
-      ...unlisted(action.codes, ['platform', 'actions', name, 'codes'], vocabulary.codes, 'a code'),
+      ...codeEntriesOf(action.codes).flatMap(({ code, at }) =>
+        has(vocabulary.codes, code)
+          ? []
+          : [
+              inScreens(
+                ['platform', 'actions', name, 'codes', at],
+                `"${code}" is not a code of the vocabulary`,
+              ),
+            ],
+      ),
     ]),
     ...(status.states.join(',') === appStates.join(',')
       ? []
@@ -257,7 +268,7 @@ function choiceValueProblems(contract: Contract): Problem[] {
 const usedCodes = (screens: ScreensFile): Set<string> =>
   new Set([
     ...declaredAnchors(screens).flatMap(({ def }) => def.codes ?? []),
-    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codes),
+    ...Object.values(screens.platform.actions).flatMap(({ codes }) => codesOf(codes)),
     ...(screens.toasts.length > 0 ? [TOAST_RULE_ROW] : []),
     ...(screens.questions.length > 0 ? [CONFIRM_RULE_ROW] : []),
   ])

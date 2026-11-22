@@ -15,7 +15,9 @@
 import {
   ATTRIBUTION_EDITION,
   attributedCodes,
+  codeEntriesOf,
   codeNamedAfter,
+  codesOf,
   constrains,
   FIELD_CODE_SUFFIXES,
   keywordsOf,
@@ -71,14 +73,14 @@ function strayProblems(contract: Contract): Problem[] {
       Object.values(attributedCodes(`${PLATFORM}${name}`, contract.screens.platform)).flat(),
     )
 
-    return declared.codes.flatMap((code, index) => {
+    return codeEntriesOf(declared.codes).flatMap(({ code, at: place }) => {
       const row = FIELD_CODE_SUFFIXES.find(({ suffix }) => code.endsWith(`-${suffix}`))
 
       return row === undefined || attributed.has(code)
         ? []
         : [
             locate(contract.screens)(
-              [...at, 'codes', index],
+              [...at, 'codes', place],
               `"${code}" ends like the code of a field ("-${row.suffix}") but concerns no parameter: name it after one (\`<parameter>-${row.suffix}\`) or list it in the \`codes\` of the one it concerns`,
             ),
           ]
@@ -99,14 +101,16 @@ function unconstrainedProblems(contract: Contract): Problem[] {
       const value = parameterValueOf(`${PLATFORM}${name}`, param, platform, contract.model)
 
       return FIELD_CODE_SUFFIXES.flatMap(({ suffix, holds, constraint }) => {
-        const index = declared.codes.indexOf(codeNamedAfter(param, suffix))
+        const named = codeEntriesOf(declared.codes).find(
+          ({ code }) => code === codeNamedAfter(param, suffix),
+        )
 
-        return index === -1 || holds(value)
+        return named === undefined || holds(value)
           ? []
           : [
               locate(contract.screens)(
-                [...at, 'codes', index],
-                `"${declared.codes[index]}" is named after the parameter "${param}", whose value has no ${constraint}`,
+                [...at, 'codes', named.at],
+                `"${named.code}" is named after the parameter "${param}", whose value has no ${constraint}`,
               ),
             ]
       })
@@ -123,7 +127,7 @@ function listedProblems(contract: Contract): Problem[] {
   return actionsOf(contract).flatMap(({ name, declared, at }) =>
     Object.entries(declared.params).flatMap(([param, { codes = [] }]) =>
       codes.flatMap((code, index) =>
-        declared.codes.includes(code)
+        codesOf(declared.codes).includes(code)
           ? []
           : [
               locate(contract.screens)(
