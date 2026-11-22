@@ -781,7 +781,8 @@ lines, as they change nothing that runs, so a screen file written shorter that l
 flow shows no flow line. A platform action is listed by its name, and its lines as `platform action lines
 added in <action>` and `platform action lines removed in <action>`, one per fact it declares:
 each parameter with its type (`param email: string`), each line of its result (`result: <the
-line>`, the prose that stays, since it says what the action answers), each code its failure
+line>`, `result #<n>: <the line>` by position when there are several, the first being the plain
+success; the prose that stays, since it says what the action answers), each code its failure
 shows with its condition or its invariant (`code rate-limited: <the condition>`, `code
 device-limit: invariant device-limit`), each role that may run it, its page sizes when it pages (`paged by
 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language

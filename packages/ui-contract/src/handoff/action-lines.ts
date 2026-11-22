@@ -1,7 +1,7 @@
 /**
  * A platform action as lines for the hand-over diff, one per fact it declares: each parameter
  * with its type or the value it refers to, the constraints it writes (`valueWords`) and whether
- * it may be left out, each line of its result, each code its failure shows with the condition it
+ * it may be left out, each line of its result (with its position when there are several), each code its failure shows with the condition it
  * answers on or the invariant it refuses for, each role that may run it, the page
  * sizes it answers with its default when it pages, each read it changes, the mail it
  * sends (who it goes to, the language it speaks, the screen its link opens and the search
@@ -38,6 +38,16 @@ function parameterLine(name: string, parameter: PlatformParameter): string {
 export const changesLines = (changes: readonly string[] | undefined): string[] =>
   (changes ?? []).map((read) => `changes ${read}`)
 
+/**
+ * The lines of an action's outcomes: `result: <line>` for one, and for several each with its
+ * position, `result #<n>: <line>`, since the first is the plain success and the diff compares
+ * the lines as sets, so a reorder alone shows.
+ */
+const resultLines = (outcomes: readonly string[]): string[] =>
+  outcomes.length === 1
+    ? outcomes.map((outcome) => `result: ${outcome}`)
+    : outcomes.map((outcome, index) => `result #${index + 1}: ${outcome}`)
+
 /** The lines of a platform action, none for an action one side lacks. */
 export function actionLines(action: PlatformAction | undefined): string[] {
   if (action === undefined) {
@@ -48,7 +58,7 @@ export function actionLines(action: PlatformAction | undefined): string[] {
 
   return [
     ...Object.entries(action.params).map(([name, parameter]) => parameterLine(name, parameter)),
-    ...outcomesOf(action.result).map((outcome) => `result: ${outcome}`),
+    ...resultLines(outcomesOf(action.result)),
     ...codeEntriesOf(action.codes).map(({ code, condition, invariant }) => {
       if (invariant !== undefined) {
         return `code ${code}: invariant ${invariant}`

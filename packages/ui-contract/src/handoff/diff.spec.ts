@@ -1374,3 +1374,42 @@ describe('diffContracts and the invariants', () => {
     ])
   })
 })
+
+describe("diffContracts and the order of an action's outcome lines", () => {
+  /** The fixture contract with `sign-out` answering the outcome lines given. */
+  function answering(result: Contract['screens']['platform']['actions'][string]['result']) {
+    const contract = fixtureContract()
+    const action = contract.screens.platform.actions['sign-out']
+
+    if (action === undefined) {
+      throw new Error('the fixture lost sign-out')
+    }
+
+    action.result = result
+
+    return contract
+  }
+
+  it('lists a reorder of the outcome lines, whose first is the plain success', () => {
+    expect(
+      diffContracts(
+        answering(['this device signs out', 'with unsent changes: asks first']),
+        answering(['with unsent changes: asks first', 'this device signs out']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: with unsent changes: asks first', 'result #2: this device signs out'],
+      removed: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+    })
+  })
+  it('lists a one-string result split into lines by position', () => {
+    expect(
+      diffContracts(
+        answering('this device signs out'),
+        answering(['this device signs out', 'with unsent changes: asks first']),
+      ).actionLines['sign-out'],
+    ).toEqual({
+      added: ['result #1: this device signs out', 'result #2: with unsent changes: asks first'],
+      removed: ['result: this device signs out'],
+    })
+  })
+})

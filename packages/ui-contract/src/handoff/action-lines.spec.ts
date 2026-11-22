@@ -130,10 +130,21 @@ describe('actionLines of codes written as a map and a result written as a list',
         changes: [],
       }),
     ).toEqual([
-      'result: the device is signed in',
-      'result: with the second factor on: asks for a code',
+      'result #1: the device is signed in',
+      'result #2: with the second factor on: asks for a code',
       'code invalid-credentials: the email or the password is wrong',
       'code device-limit: invariant device-limit',
     ])
+  })
+  it('gives a list of one outcome the line of one string, with no position', () => {
+    expect(
+      actionLines({
+        description: 'Signs this device out.',
+        params: {},
+        result: ['this device signs out'],
+        codes: {},
+        changes: [],
+      }),
+    ).toEqual(['result: this device signs out'])
   })
 })
