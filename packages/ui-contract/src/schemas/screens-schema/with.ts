@@ -20,15 +20,12 @@ export const withEntrySchema = z
     'An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes.',
   )
 
-const UNDER_AN_ENTRY =
-  'An anchor rendered in each entry of a list (in the part of its `item` or `row`, `<part>.<name>`, or declared under it) names anchors of the same entry, and means the same entry. See the rule `with-without`.'
-
 /** The entries that each render while the element does. */
 export const withSchema = z
   .array(withEntrySchema)
   .min(1)
   .describe(
-    `The element renders only while each of these renders: an anchor of its screen (the frame's, on the frame), or \`{ <anchor>: [codes] }\`, that anchor while it shows one of these codes. ${UNDER_AN_ENTRY}`,
+    'The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.',
   )
 
 /** The entries none of which renders while the element does. */
@@ -36,5 +33,5 @@ export const withoutSchema = z
   .array(withEntrySchema)
   .min(1)
   .describe(
-    `The element renders only while none of these renders: an anchor of its screen (the frame's, on the frame), or \`{ <anchor>: [codes] }\`, that anchor while it shows one of these codes. ${UNDER_AN_ENTRY}`,
+    'The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.',
   )

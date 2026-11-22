@@ -316,7 +316,7 @@ links to as `contract/REFERENCE.md#<slug>`.
   `bun run contract:check` on both).
 - From the root: `bun run contract:check` (the contract files and the scenarios against each
   other, by the rules of the version the contract declares, every written description against
-  its budget, the schema drift, the reference's drift and each link of a guide into the
+  its budget, every field hint of the generated schemas against the same budget, the schema drift, the reference's drift and each link of a guide into the
   reference; prints `file:line: message` per
   problem and exits 1, or a one-line summary, followed for a contract older than the engine by
   `ui-contract: the contract is at version <n>; this engine reads up to <m> (bun run contract:migrate)`;

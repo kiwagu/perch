@@ -19,6 +19,7 @@ const flowStates: ReferenceRule = {
       "- The flow's `id` is a one-segment name the flow declares, which the app gives its machine and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.",
     ].join('\n'),
     "Nothing else of XState is in the subset: no `context`, `after`, `always`, states nested deeper than a parallel state's regions, history states, targets by `.child` or by an id from anywhere but a region's state, or actions named by a string. A state of a region is the area's own: where the app keeps one per item (each note's edit form), the region follows the item acted on last and says so. The flow's states are the machine's; the screen's `states` stay the container states.",
+    'On `flow.id`: The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.',
   ].join('\n\n'),
   keys: [
     'screen.flow',
@@ -26,6 +27,7 @@ const flowStates: ReferenceRule = {
     'screen.flow.initial',
     'screen.flow.states',
     'screen.flow.states.<name>.type',
+    'manifest.screens.flow.id',
   ],
 }
 
@@ -63,6 +65,7 @@ const flowEffects: ReferenceRule = {
     "Each value of a navigate's `search` is a search key of the binding it moves to, given a literal (`$id` for a minted id) or `{ anchor: <field> }`: the value a field of the flow's own screen holds when the app moves (an input, a textarea, a select, a checkbox, a radio or a switch; never a button, a list, a `visibility-button` or a `secret` field, whose value would stay in the address, the browser's history and the logs). A link that carries the email typed so far to the page that asks for a password reset: `navigate: { to: /forgot-password, search: { email: { anchor: user.sign-in.email-input } } }`.",
     "A value may also be `{ item: <item> }`: the `data-id` of the entry of that `item` or `row` whose control the user acted on, so that the selection is in the address and a reload or a copied link reaches the same entry. Only the event of a control (a button, a link, a tab or a field, never a cell or a sibling entry) in the item's part (`<part>.<name>`, like the item), rendered in each entry, carries it, so the navigate sits in the actions of that event's transition, never in an `entry`, an `exit` or the outcome of an invoke, where no entry was acted on. The item is an entry of a list, a table or a section of the flow's own screen, declared under it or beside it in its part, and declares its `dataId`; the search key it fills takes a string. A row that opens the entity it shows: `navigate: { to: /<path>, search: { id: { item: <screen>.list.<entity>-item } } }` on `<screen>.list.open-link`. A navigate that sets a search key a paged list of the screen it moves to reads says `page: 1` (see the rule `paged-list`).",
     "The scope of each effect differs. A `show` names a declared anchor, of any screen (the frame's toast and notice included), and codes that anchor carries. A `clear` names a declared anchor that carries codes, of any kind and any screen, which then shows none, or else a field of the flow's own screen, never a `visibility-button`. A `read` names a list, a section or a table of the flow's own screen whose `source` is a platform action. A `navigate` names the path of a binding of some screen and search keys of that binding, and sits on a transition, never in an `entry` or an `exit`, moving once (see the rule `leave-questions`). An address, `meta.address`, is a binding of the flow's own screen (its first one when the path is left out) with search parameters of that binding.",
+    "On a `read` effect: A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data.",
   ].join('\n\n'),
   keys: [
     'screen.flow.states.<name>.entry',
@@ -108,10 +111,13 @@ const flowShorterForms: ReferenceRule = {
       "- A region written by its button, `by: <button>`: the region of a button bound to one action (see the rule `button-region`) with what the screen decides of it, its `description`, `onDone` and `onError`, and the `toast: false` or `read: false` it says of its action, which the loader puts on the region's invoke; a branch of its `onDone` or `onError` that says `read: false` keeps it. An outcome left out is the derived one; a transition without a target goes back to `idle`.",
     ].join('\n'),
     "The states of a pattern and of a button's region are the machine's, named by the loader (`idle`, `running`, `following`, `edited`), and a scenario or a test reads them as it reads any state. What the shorter forms leave out is mechanics a tester or a user cannot tell apart; a `description` belongs to a decision (where a success leads, what a failure shows, what restarts what), not to every state. The states of a region written by its pattern or by its button list nothing in `meta.renders`.",
+    "On `pattern`: A control that follows a stored value or holds what was typed: in `following` the control `input` shows the stored value as it changes, here or on another device; typing moves it to `edited`, where it keeps what was typed until that is the stored value again, by typing it back or by the data event `stored`, both under `guard`. A region is written by its pattern when two regions or more of the screens share its shape, named by what the area does; a shape that one region has is written in full until a second one shares it. The states of a pattern are the machine's, named by the loader (`following`, `edited`), and a scenario or a test reads them as it reads any state; its states list nothing in `meta.renders`.",
+    'On the `flow` key: The flow of the screen: an XState v5 machine config, which may write a transition as its target, an effect by its name and a region by its pattern or its button, and leave out the region of a button bound to one action; the loader expands it into the config `createMachine` takes.',
   ].join('\n\n'),
   keys: [
     'screen.flow.states.<name>.states.<name>.pattern',
     'screen.flow.states.<name>.states.<name>.by',
+    'screen.flow',
   ],
 }
 
@@ -121,6 +127,7 @@ const areaRequest: ReferenceRule = {
   text: [
     "The area of a button bound to one action is the button's part, and the area's error is `<part>.error`, when the screen declares it. The button's region, derived or written `by: <button>` (see the rule `button-region`), keeps that error while its action runs: entering `running` clears nothing, unlike a request that writes no `onError` (see the rule `request-outcome`). A refusal shown on the error replaces it with its own code. From version 5 a success clears it: every branch of the region's `onDone` that neither shows nor clears `<part>.error` starts with `clear: <part>.error`, derived, so `console.account.name` forgets a refused rename's error once a rename goes through. A screen file never writes that clear in such a branch: it is a problem at the clear (derived: a success clears its area's error; leave it out). A clear of another anchor stays the screen's, and so does a region written in full, whose outcomes say what they clear; an error a region shows outside its part (the members' removal of `organisation` shows on `organisation.invite.error`) is not its area's, and its success clears it only where the region writes so. Before version 5 a success clears only what the region writes.",
     'A list, a section or a table an outcome reads again (`read: <anchor>`) keeps its state and its entries while that read runs, and the answer replaces them, a failure included: `loading` shows only while nothing of its current search is read yet, at its first read or a read for another search, organisation or account (see the rule `list-reads`), never during the read after an action. In the area, a field keeps what was typed through the action and the read after it, until a `clear` of the flow empties it; a field that starts with what a read gives (`console.account.name.name-input`, the name as read) shows it only until something is typed into it, and no later read replaces what was typed.',
+    "On `onDone` of a button's region: What follows when the action succeeds; absent, back to `idle`; a transition without a target goes back to `idle` too. From version 5 each branch that neither shows nor clears the error of the part (`<part>.error`) starts with its clear, derived: a branch never writes it. See the rule `area-request`.",
   ].join('\n\n'),
   keys: [
     'screen.flow.states.<name>.states.<name>.by',

@@ -40,7 +40,7 @@ const screenSchemaOf = <F extends z.ZodType, A extends z.ZodType>(flow: F, ancho
         .record(z.string(), z.string().describe(DESCRIPTION_PURPOSES.containerState))
         .optional()
         .describe(
-          "The container states of the screen, each a row of the vocabulary's Container states table with what is visible in it: `loading`, `ready`, `empty` and the like say when the data of a list, a section or a page status has arrived; a screen's `states` say what is visible in each, never what each means.",
+          "The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.",
         ),
       flow: flow.optional(),
       wireframe: z

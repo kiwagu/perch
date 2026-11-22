@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import {
+  hintBudgetProblems,
   loadActivities,
   loadModel,
   loadScenarios,
@@ -15,6 +16,7 @@ import {
   type Problem,
   parseVocabulary,
   readDescriptions,
+  SCHEMA_OUTPUTS,
   schemaDrift,
   sortProblems,
   VOCABULARY_FILE,
@@ -145,6 +147,7 @@ export function checkContract(root: string): Problem[] {
   return sortProblems([
     ...contractProblems(contract),
     ...schemaDrift(root),
+    ...hintBudgetProblems(SCHEMA_OUTPUTS),
     ...referenceDrift(root),
     ...referenceLinkProblems(root),
   ])

@@ -15,7 +15,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991,
-          "description": "The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`."
+          "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
         }
       },
       "required": [
@@ -63,7 +63,7 @@
             "maximum": 9007199254740991
           },
           "maxLength": {
-            "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes the default length (`defaults.maxLength`), and `null` says it has no limit and takes none. See the rule `declared-values`.",
+            "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes `defaults.maxLength`, and `null` takes no limit. See the rule `declared-values`.",
             "anyOf": [
               {
                 "type": "integer",
@@ -80,7 +80,7 @@
             "type": "string"
           },
           "format": {
-            "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+            "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
             "type": "string",
             "enum": [
               "email"
@@ -141,7 +141,7 @@
                 "value": {
                   "type": "string",
                   "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
-                  "description": "The value the parameter takes: a name of `platform.values` (`email`) or a field of the model, `<entity>.<field>` (`profile.name`), whose constraints a value has it takes; a keyword written beside it only narrows it (`maxLength: 100` beside `email`), and `contract:check` refuses one that would widen it. See the rule `declared-values`."
+                  "description": "The value the parameter takes: a name of `platform.values` or a model field, `<entity>.<field>`, with its constraints; a keyword beside it may narrow them, never widen. See the rule `declared-values`."
                 },
                 "enum": {
                   "description": "The values it takes, each a string or a number.",
@@ -172,7 +172,7 @@
                   "type": "string"
                 },
                 "format": {
-                  "description": "The format every value of a string keeps: `email`, an address of mail. A field that holds it is `type=email`; an editable one is submitted through a form without `noValidate`, so the browser refuses a text that is no email when the form submits, before the action runs (a button that does not submit runs its action unchecked); where the action declares an `-invalid` code, it answers what passes the browser. See the rule `email-format`.",
+                  "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                   "type": "string",
                   "enum": [
                     "email"
@@ -237,7 +237,7 @@
             }
           },
           "paged": {
-            "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+            "description": "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
             "type": "object",
             "properties": {
               "sizes": {
@@ -270,7 +270,7 @@
               "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
               "description": "A platform action: `sign-in`, `organisations.create`."
             },
-            "description": "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none."
+            "description": "Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
           },
           "mail": {
             "description": "The mail the action sends, when it sends one.",
@@ -279,12 +279,12 @@
               "to": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
+                "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
               },
               "language": {
                 "type": "string",
                 "pattern": "^[a-z][a-zA-Z0-9]*$",
-                "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
+                "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
               },
               "link": {
                 "type": "object",
@@ -297,7 +297,7 @@
                   "search": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`."
+                    "description": "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`."
                   }
                 },
                 "required": [
@@ -330,12 +330,12 @@
                 "to": {
                   "type": "string",
                   "pattern": "^[a-z][a-zA-Z0-9]*$",
-                  "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                  "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`."
                 },
                 "language": {
                   "type": "string",
                   "pattern": "^[a-z][a-zA-Z0-9]*$",
-                  "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
+                  "description": "Where the mail's language comes from: a language parameter of the action, or `account` (the account the action acts on). See the rule `mail-recipients`."
                 },
                 "link": {
                   "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
@@ -388,7 +388,7 @@
       }
     },
     "leaving": {
-      "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
+      "description": "Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.",
       "type": "array",
       "items": {
         "type": "string",
@@ -397,7 +397,7 @@
       }
     },
     "toasts": {
-      "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+      "description": "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
       "type": "object",
       "propertyNames": {
         "type": "string",

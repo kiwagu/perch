@@ -89,8 +89,13 @@ const passwordPair: ReferenceRule = {
       "Each is added to the flow's `meta.guards` only when a transition of the flow names it, so every guard declared stays used. The checks, the walk in XState, the manifest and an app's machine read it as any guard, by its name, and the app implements it. `contract:diff` lists each as `guard <name>: confirms <differs|strays|follows>` or `guard <name>: composite breaks`.",
     ].join('\n'),
     'Refused, each at its key: a `confirms` on anything but a secret input, on an input with a binding, or naming anything but another secret input of its screen with a composite; a second `confirms` on a screen, the first making the pair; and a guard of a pair a screen file writes, `{ confirms }` or `{ composite }`, at every version, since only the loader derives one. From version 4 a screen with a pair never writes one of the four names either: a guard written under one of them beside `confirms` is a problem (derived from the confirms; leave it out). Before version 4 a name the screen writes keeps its written guard, and the others are derived. A screen without a `confirms` writes its guards as sentences, these four names included.',
+    "On `anchors.<name>.confirms`: The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.confirms', 'screen.flow.meta.guards'],
+  keys: [
+    'screen.anchors.<name>.confirms',
+    'screen.flow.meta.guards',
+    'manifest.screens.anchors.<name>.confirms',
+  ],
 }
 
 /** The rules of a password pair: the overview, then each meaning in the order of the guards. */

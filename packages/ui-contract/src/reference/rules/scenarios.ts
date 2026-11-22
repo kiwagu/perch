@@ -20,8 +20,9 @@ const scenarioFiles: ReferenceRule = {
       '- an optional area, then a kebab-case slug.',
     ].join('\n'),
     'No numbers: the tree orders the scenarios and the tags select them. The role is a property of the scenario, in its front matter, never a folder. A path that does not match `^[a-z][a-z0-9-]*(\\/[a-z][a-z0-9-]*){2,3}$`, or whose layer is not one of the three, is a problem of its file. The scenarios are sorted by id, an id before the ids that extend it (`user/base/sign-up` before `user/base/sign-up-taken-email`).',
+    "On a scenario's `id`: `<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base` (the entity works on its own), `flows` (several roles or devices meet), `features` (how one function behaves): the path of the file `tests/e2e/scenarios/<id>.md`, and the test `tests/e2e/src/<id>.e2e.spec.ts`.",
   ].join('\n\n'),
-  keys: [],
+  keys: ['manifest.scenarios.id'],
 }
 
 const scenarioFormat: ReferenceRule = {
