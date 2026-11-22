@@ -7,7 +7,10 @@
  * or the flow already says is left to them.
  */
 
-/** The most characters a written description may have, whatever it describes. */
+/**
+ * The most characters a written description may have, whatever it describes; a field hint the
+ * engine writes into the schemas keeps the same budget (`hintBudgetProblems`).
+ */
 export const DESCRIPTION_BUDGET = 200
 
 const AT_MOST = `At most ${DESCRIPTION_BUDGET} characters.`

@@ -48,6 +48,7 @@ export {
   rootOf,
   transitionsOf,
 } from './flow-nodes'
+export { hintBudgetProblems } from './hint-budget'
 export {
   MIGRATIONS,
   type Migration,
