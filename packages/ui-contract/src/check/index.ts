@@ -1,5 +1,6 @@
 export { accessProblems } from './access'
 export { activitiesProblems } from './activities'
+export { behaviourTextsProblems } from './behaviour-texts'
 export { bindingsProblems } from './bindings'
 export { anchorCarries, type Carried } from './carries'
 export { changesProblems } from './changes'
