@@ -15,7 +15,7 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991,
-          "description": "Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`."
+          "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
         }
       },
       "required": [
@@ -80,7 +80,7 @@
             "type": "string"
           },
           "format": {
-            "description": "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
+            "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
             "type": "string",
             "enum": [
               "email"
@@ -172,7 +172,7 @@
                   "type": "string"
                 },
                 "format": {
-                  "description": "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
+                  "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
                   "type": "string",
                   "enum": [
                     "email"
@@ -297,7 +297,7 @@
                   "search": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`."
+                    "description": "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`."
                   }
                 },
                 "required": [
@@ -388,7 +388,7 @@
       }
     },
     "leaving": {
-      "description": "Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.",
+      "description": "Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.",
       "type": "array",
       "items": {
         "type": "string",

@@ -32,7 +32,7 @@ export const valueKeywords = {
     .enum(VALUE_FORMATS)
     .optional()
     .describe(
-      "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
+      "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
     ),
   minimum,
   maximum,

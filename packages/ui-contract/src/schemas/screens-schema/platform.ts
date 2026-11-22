@@ -136,7 +136,7 @@ export const platformDefaultsSchema = z
       .int()
       .min(1)
       .describe(
-        'Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.',
+        'Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`.',
       ),
   })
   .describe(
@@ -193,7 +193,7 @@ export const platformSchema = z
       .array(actionNameSchema)
       .optional()
       .describe(
-        'Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.',
+        'Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.',
       ),
     toasts: z
       .record(platformActionNameSchema, codeSchema)

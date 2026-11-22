@@ -270,7 +270,7 @@ Anything a reader needs to know about the value.
 ### `bindings.search.properties.<name>.x-perch.key`
 
 <a id="screen-bindings-search-properties-name-x-perch-key"></a>
-Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.
+The screen's key: a missing or broken value fails with this code, from an action whose `{ search: <name> }` feeds a param referring to a value. One per route, no `default`. See the rule `address-key`.
 
 ### `bindings.search.required`
 
@@ -999,7 +999,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `defaults.maxLength`
 
 <a id="platform-defaults-maxlength"></a>
-Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
+Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`.
 
 ### `values`
 
@@ -1039,7 +1039,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `values.<name>.format`
 
 <a id="platform-values-name-format"></a>
-A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.
 
 ### `values.<name>.minimum`
 
@@ -1119,7 +1119,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `actions.<name>.params.<name>.format`
 
 <a id="platform-actions-name-params-name-format"></a>
-A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.
 
 ### `actions.<name>.params.<name>.minimum`
 
@@ -1209,7 +1209,7 @@ The screen the link opens, at the path of its route.
 ### `actions.<name>.mail.link.search`
 
 <a id="platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.
+The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`.
 
 ### `actions.<name>.notices`
 
@@ -1254,7 +1254,7 @@ What the event means: when the platform raises it. What follows is said by the f
 ### `leaving`
 
 <a id="platform-leaving"></a>
-Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.
+Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.
 
 ### `toasts`
 
@@ -1686,7 +1686,7 @@ From version 6, what a value takes where it writes nothing of its own; the platf
 ### `contract.defaults.maxLength`
 
 <a id="manifest-contract-defaults-maxlength"></a>
-Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
+Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`.
 
 ### `contract.idAttribute`
 
@@ -2196,7 +2196,7 @@ Anything a reader needs to know about the value.
 ### `screens.bindings.search.properties.<name>.x-perch.key`
 
 <a id="manifest-screens-bindings-search-properties-name-x-perch-key"></a>
-Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.
+The screen's key: a missing or broken value fails with this code, from an action whose `{ search: <name> }` feeds a param referring to a value. One per route, no `default`. See the rule `address-key`.
 
 ### `screens.bindings.search.required`
 
@@ -3736,7 +3736,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `ids.<name>.value.format`
 
 <a id="manifest-ids-name-value-format"></a>
-A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.
 
 ### `ids.<name>.value.minimum`
 
@@ -3766,7 +3766,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `platform.defaults.maxLength`
 
 <a id="manifest-platform-defaults-maxlength"></a>
-Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
+Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`.
 
 ### `platform.values`
 
@@ -3806,7 +3806,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.values.<name>.format`
 
 <a id="manifest-platform-values-name-format"></a>
-A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.
 
 ### `platform.values.<name>.minimum`
 
@@ -3886,7 +3886,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.actions.<name>.params.<name>.format`
 
 <a id="manifest-platform-actions-name-params-name-format"></a>
-A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.
 
 ### `platform.actions.<name>.params.<name>.minimum`
 
@@ -3976,7 +3976,7 @@ The screen the link opens, at the path of its route.
 ### `platform.actions.<name>.mail.link.search`
 
 <a id="manifest-platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.
+The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`.
 
 ### `platform.actions.<name>.notices`
 
@@ -4021,7 +4021,7 @@ What the event means: when the platform raises it. What follows is said by the f
 ### `platform.leaving`
 
 <a id="manifest-platform-leaving"></a>
-Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.
+Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.
 
 ### `platform.toasts`
 

@@ -48,7 +48,7 @@ export const platformMailSchema = z
       .strictObject({
         screen: screenNameSchema.describe('The screen the link opens, at the path of its route.'),
         search: nameSchema.describe(
-          "The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.",
+          "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`.",
         ),
       })
       .describe("Where the mail's link leads."),
