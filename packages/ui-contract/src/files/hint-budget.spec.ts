@@ -102,6 +102,43 @@ describe('hintBudgetProblems', () => {
     expect(messages[0]).toMatch(/^flow\.type: /)
     expect(messages[1]).toMatch(/^\$defs\.orphan: /)
   })
+  it('reads a definition nested under a key at its own path', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        a: {
+          type: 'string',
+          description: 'What the key is for.',
+          $defs: { inner: { type: 'string', description: text(DESCRIPTION_BUDGET + 1) } },
+        },
+      },
+    }
+
+    const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatch(/^a\.\$defs\.inner: /)
+  })
+  it("prefers the reference's path for a definition that a key outside its walk uses first", () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        field: { allOf: [{ $ref: '#/$defs/effect' }] },
+        flow: { $ref: '#/$defs/effect' },
+      },
+      $defs: {
+        effect: {
+          type: 'object',
+          properties: { type: { type: 'string', description: text(DESCRIPTION_BUDGET + 1) } },
+        },
+      },
+    }
+
+    const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatch(/^flow\.type: /)
+  })
   it('gives one problem for a long hint repeated at several keys of one file', () => {
     const long = { type: 'string', description: text(DESCRIPTION_BUDGET + 1) }
     const schema = { type: 'object', properties: { a: long, b: long, c: { items: long } } }

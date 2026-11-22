@@ -6,10 +6,11 @@
  *
  * The walk follows the keywords of JSON Schema 2020-12 that hold schemas, and nothing else: an
  * extension keyword's metadata and the values a schema holds as data (`const`, `default`) are not
- * read. A `$ref` into `$defs` is followed where it is first used, so a shared definition is named by
- * the key that refers to it, as the reference names it; a definition nothing refers to is read at
- * its own path. Unlike the reference's walk of the keys (`reference/keys.ts`), it also reads the
- * hints of record keys (`propertyNames`) and of `allOf` branches.
+ * read. It reads first along the keywords the reference's walk of the keys follows
+ * (`reference/keys.ts`: `properties`, `additionalProperties`, `items`, `anyOf`, `oneOf`, `$ref`), in
+ * its order, so a shared definition is named by the key the reference names it under; then the
+ * keywords only the budget reads (`allOf`, `propertyNames`, a nested `$defs` and the rest); then
+ * each definition nothing refers to, at its own path.
  */
 
 import { DESCRIPTION_BUDGET, descriptionLength } from '../schemas'
@@ -22,12 +23,10 @@ interface SchemaOutput {
   readonly schema: () => object
 }
 
-/** Keywords whose value is one schema, with how each reads in a key's path (`anchors.<name>`). */
+/** Keywords outside the reference's walk whose value is one schema, with how each reads in a path. */
 const ONE = new Map<string, string | undefined>([
-  ['additionalProperties', '<name>'],
   ['propertyNames', '<key>'],
   ['unevaluatedProperties', '<name>'],
-  ['items', undefined],
   ['contains', undefined],
   ['unevaluatedItems', undefined],
   ['not', undefined],
@@ -36,71 +35,131 @@ const ONE = new Map<string, string | undefined>([
   ['else', undefined],
 ])
 
-/** Keywords whose value is a list of schemas, read at the same key. */
-const LIST = new Set(['allOf', 'anyOf', 'oneOf', 'prefixItems'])
+/** Keywords outside the reference's walk whose value is a list of schemas, read at the same key. */
+const LIST = new Set(['allOf', 'prefixItems'])
 
-/** Keywords whose value maps names to schemas, each name a key. */
-const NAMED = new Set(['properties', 'patternProperties', 'dependentSchemas'])
+/** Keywords outside the reference's walk whose value maps names to schemas, each name a key. */
+const NAMED = new Set(['patternProperties', 'dependentSchemas'])
+
+/** Keywords that hold definitions, each read at its own path where nothing refers to it first. */
+const DEFINITIONS = new Set(['$defs', 'definitions'])
 
 const DEFS = '#/$defs/'
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
+const listOf = (value: unknown): readonly unknown[] => (Array.isArray(value) ? value : [])
+
 interface Hint {
   readonly path: string
   readonly text: string
 }
 
-/** The definitions of a document, and those already read through a `$ref`. */
+/** A schema to read later, at its key. */
+interface Pending {
+  readonly node: unknown
+  readonly path: readonly string[]
+}
+
+/** The definitions of a document, those already read, and the schemas left for later. */
 interface Walk {
   readonly defs: Record<string, unknown>
   readonly visited: Set<string>
+  readonly later: Pending[]
 }
 
-/** Each hint of the schema `node` with the path of its key, depth first. */
-function* hintsOf(node: unknown, path: readonly string[], walk: Walk): Generator<Hint> {
+/** The schemas a keyword outside the reference's walk holds, each at its key. */
+function laterOf(keyword: string, value: unknown, path: readonly string[]): Pending[] {
+  if (ONE.has(keyword)) {
+    const step = ONE.get(keyword)
+
+    return [{ node: value, path: step === undefined ? path : [...path, step] }]
+  }
+
+  if (LIST.has(keyword)) {
+    return listOf(value).map((node) => ({ node, path }))
+  }
+
+  if (NAMED.has(keyword) && isObject(value)) {
+    return Object.entries(value).map(([name, node]) => ({ node, path: [...path, name] }))
+  }
+
+  if (DEFINITIONS.has(keyword) && isObject(value)) {
+    return Object.entries(value).map(([name, node]) => ({ node, path: [...path, keyword, name] }))
+  }
+
+  return []
+}
+
+/**
+ * Each hint of the schema `node` along the reference's keywords, in its order; the schemas other
+ * keywords hold go to `walk.later`. `root` marks the document, whose `$defs` are read by reference.
+ */
+function* hintsOf(
+  node: unknown,
+  path: readonly string[],
+  walk: Walk,
+  root = false,
+): Generator<Hint> {
   if (!isObject(node)) {
     return
   }
 
+  const { description, properties, additionalProperties, items, anyOf, oneOf, $ref } = node
+
+  if (typeof description === 'string') {
+    yield { path: path.length === 0 ? '(the root)' : path.join('.'), text: description }
+  }
+
+  if (isObject(properties)) {
+    for (const [name, schema] of Object.entries(properties)) {
+      yield* hintsOf(schema, [...path, name], walk)
+    }
+  }
+
+  yield* hintsOf(additionalProperties, [...path, '<name>'], walk)
+  yield* hintsOf(items, path, walk)
+
+  for (const branch of [...listOf(anyOf), ...listOf(oneOf)]) {
+    yield* hintsOf(branch, path, walk)
+  }
+
+  if (typeof $ref === 'string' && $ref.startsWith(DEFS)) {
+    const name = $ref.slice(DEFS.length)
+
+    if (!walk.visited.has(name)) {
+      walk.visited.add(name)
+      yield* hintsOf(walk.defs[name], path, walk)
+    }
+  }
+
   for (const [keyword, value] of Object.entries(node)) {
-    if (keyword === 'description' && typeof value === 'string') {
-      yield { path: path.length === 0 ? '(the root)' : path.join('.'), text: value }
-    } else if (keyword === '$ref' && typeof value === 'string' && value.startsWith(DEFS)) {
-      const name = value.slice(DEFS.length)
-
-      if (!walk.visited.has(name)) {
-        walk.visited.add(name)
-        yield* hintsOf(walk.defs[name], path, walk)
-      }
-    } else if (ONE.has(keyword)) {
-      const step = ONE.get(keyword)
-
-      yield* hintsOf(value, step === undefined ? path : [...path, step], walk)
-    } else if (LIST.has(keyword) && Array.isArray(value)) {
-      for (const branch of value) {
-        yield* hintsOf(branch, path, walk)
-      }
-    } else if (NAMED.has(keyword) && isObject(value)) {
-      for (const [name, schema] of Object.entries(value)) {
-        yield* hintsOf(schema, [...path, name], walk)
-      }
+    if (!(root && keyword === '$defs')) {
+      walk.later.push(...laterOf(keyword, value, path))
     }
   }
 }
 
-/** Every hint of a document: its schemas from the root, then each definition nothing refers to. */
+/** Every hint of a document: by the reference's keywords, then the others, then lone definitions. */
 function* documentHints(document: object): Generator<Hint> {
   const defs = isObject(document) && isObject(document['$defs']) ? document['$defs'] : {}
-  const walk: Walk = { defs, visited: new Set() }
+  const walk: Walk = { defs, visited: new Set(), later: [] }
 
-  yield* hintsOf(document, [], walk)
+  yield* hintsOf(document, [], walk, true)
+
+  for (let pending = walk.later.shift(); pending !== undefined; pending = walk.later.shift()) {
+    yield* hintsOf(pending.node, pending.path, walk)
+  }
 
   for (const [name, schema] of Object.entries(defs)) {
     if (!walk.visited.has(name)) {
       walk.visited.add(name)
       yield* hintsOf(schema, ['$defs', name], walk)
+
+      for (let pending = walk.later.shift(); pending !== undefined; pending = walk.later.shift()) {
+        yield* hintsOf(pending.node, pending.path, walk)
+      }
     }
   }
 }
