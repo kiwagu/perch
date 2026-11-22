@@ -299,7 +299,7 @@ flow:
         onDone:
           - target: device-limit
             guard: atDeviceLimit
-            description: The code was right but nothing is signed in and no code is spent; the dialog's confirmation signs in again from the password, which asks for a code again.
+            description: "Past the limit of devices, before the code is checked: nothing is signed in and no code spent; the confirmation signs in again from the password, asking a code again."
             actions:
               - clear: user.sign-in.code.code-input
               - show: user.sign-in.device-limit-dialog
