@@ -67,9 +67,12 @@ export async function submitCredentials(page: Page, account: SeedAccount): Promi
   await page.getByTestId('user.sign-in.submit-button').click()
 }
 
-/** The dialog that asks for a code once the password is right, by its anchor and its code. */
-export const codeDialog = (page: Page): Locator =>
-  page.locator('[data-testid="user.sign-in.code.dialog"][data-code="code-required"]')
+/**
+ * The dialog that asks for a code once the password is right, by its anchor alone: a test that
+ * expects it to show asserts the `code-required` it carries, and one that expects it gone asserts
+ * the anchor is gone, never a dialog that only lost its code.
+ */
+export const codeDialog = (page: Page): Locator => page.getByTestId('user.sign-in.code.dialog')
 
 /** Enters `code` into the code dialog and confirms it. */
 export async function submitCode(page: Page, code: string): Promise<void> {

@@ -20,8 +20,8 @@ script of the front came without the front's security headers, or when a page or
 workers reported a Content-Security-Policy violation on the console. Every test blocks the app's
 service worker (`serviceWorkers: 'block'`, so requests and page loads stay the network's) but
 `app-shell/base/open-offline`, which lets it run to open the app offline; there the browser, which
-never opened `/settings` online, then opens it offline and every script it loads for the first
-time is answered by the worker, so the settings' lazy scripts come from its precache. Each test signs up fresh accounts in fresh browser contexts,
+never asked for the settings' script (named by the worker's precache list, `src/support/precache.ts`),
+then opens `/settings` offline, and the worker answers that script, so a lazy script comes from the precache. Each test signs up fresh accounts in fresh browser contexts,
 with data generated from the seed catalog, each through the link of its verification mail, read
 from the stand's mailbox. Every mail a test reads is held to its declaration in the contract
 (`contract/domain/platform.yaml`, `mail` on the action that sends it): its recipient, the path
@@ -300,6 +300,9 @@ Auth's own `createOTP` (`@better-auth/utils`) as the gateway checks them: `totpF
 key gives now, computed just before it is typed; one asked in the last 3 seconds of its 30-second
 step waits for the next) and `wrongCodeFor` (a code of another key that is none of the enrolled
 key's codes of the steps around now).
+`src/support/precache.ts`: `precachedScript`, which reads the stand's service worker script
+(`/sw.js`, the build's own file list) and answers the path of the one precached script whose name a
+pattern matches, failing when the precache lists none or several.
 `src/support/virtual-authenticator.ts`: `addVirtualAuthenticator`, which gives a page a platform
 authenticator through the DevTools protocol (it keeps discoverable credentials, verifies the user
 and answers every test of presence at once) for the passkey tests; it keeps its passkeys until the
@@ -308,7 +311,8 @@ page's browser context closes.
 settings with the factor off: password, key, code of the key, confirmation; answers the key and the
 ten backup codes, still shown), `expectTwoFactorRead`, `twoFactorSection`, `backupCodesShown`, and
 the sign-in page's steps written out by hand (`signIn` asserts `/me`): `submitCredentials`,
-`codeDialog` (by its anchor and its code) and `submitCode`.
+`codeDialog` (by its anchor alone: a test asserts the `code-required` it carries when it expects
+it, and its absence when it expects it gone) and `submitCode`.
 `src/support/account-deletion.ts`: the deletion of an account: `openSettings` (opens `/settings`
 and waits for its deletion form), `sendDeletionRequest` (types the password into the deletion
 form, sends it and waits for the gateway's answer), `askToDeleteAccount` (sends it and waits for

@@ -45,7 +45,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
       await submitCredentials(page, data)
       // Expected: After step 4 [user.sign-in.code.dialog] carries [code:code-required] and the
       //   URL is still [/sign-in]: nothing is signed in yet
-      await expect(dialog).toBeVisible()
+      await expect(dialog).toHaveAttribute('data-code', 'code-required')
       await expectPathname(page, '/sign-in')
       await expect(page.getByTestId('app-shell.nav')).toHaveCount(0)
     })
@@ -61,7 +61,7 @@ test.describe('Sign in with a code of the second factor', { tag: '@smoke' }, () 
     await test.step('6. Click [user.sign-in.submit-button] again', async () => {
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 6 [user.sign-in.code.dialog] carries [code:code-required] again
-      await expect(dialog).toBeVisible()
+      await expect(dialog).toHaveAttribute('data-code', 'code-required')
     })
 
     await test.step('7. Enter a code the key does not give now into [user.sign-in.code.code-input] and click [user.sign-in.code.dialog.confirm-button]', async () => {

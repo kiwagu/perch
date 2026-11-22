@@ -3,6 +3,9 @@ import { generate } from '../../support/data'
 import { expect, signUp, test, toast } from '../../support/fixtures'
 import { addVirtualAuthenticator } from '../../support/virtual-authenticator'
 
+/** How far the stand's clock and the test's may differ: both run on this host. */
+const CLOCK_SLACK_MS = 5_000
+
 test.describe('Add and remove a passkey in the settings', { tag: '@full' }, () => {
   test("A passkey is added by the browser, listed, and removed only once the frame's question is confirmed", async ({
     page,
@@ -25,6 +28,8 @@ test.describe('Add and remove a passkey in the settings', { tag: '@full' }, () =
     })
 
     await test.step('2. Click [user.settings.passkeys.add-button]', async () => {
+      const before = Date.now()
+
       await add.click()
       // Expected: After step 2 [app-shell.toast] carries [code:passkey-added] and
       //   [user.settings.passkeys.list] carries [state:ready] with one
@@ -33,7 +38,19 @@ test.describe('Add and remove a passkey in the settings', { tag: '@full' }, () =
       await expect(toast(page, 'passkey-added')).toBeVisible()
       await expect(list).toHaveAttribute('data-state', 'ready')
       await expect(items).toHaveCount(1)
-      await expect(items.first().getByTestId('user.settings.passkeys.added-cell')).toHaveText(/\S/)
+
+      const added = items.first().getByTestId('user.settings.passkeys.added-cell')
+      const after = Date.now()
+
+      await expect(added).toBeVisible()
+      // The cell's own `<time datetime>` is the moment the account got the passkey: between the
+      // click and the list showing it, within the clocks' difference of the stand and the test.
+      const when = Date.parse((await added.getAttribute('datetime')) ?? '')
+
+      expect(when, 'the added cell carries the time of its passkey').toBeGreaterThanOrEqual(
+        before - CLOCK_SLACK_MS,
+      )
+      expect(when).toBeLessThanOrEqual(after + CLOCK_SLACK_MS)
     })
 
     await test.step('3. Click [user.settings.passkeys.remove-button] of the passkey', async () => {
