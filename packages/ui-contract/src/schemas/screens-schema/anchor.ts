@@ -62,7 +62,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`.',
+        'A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`.',
       ),
   ])
   .describe(

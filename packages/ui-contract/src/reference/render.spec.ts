@@ -359,6 +359,7 @@ describe('renderReference', () => {
     const named = ruleIdsNamedIn(entryAt(slug)?.text ?? '')
     const listed = new Set(FACET_RULES.filter(([of]) => of === slug).map(([, rule]) => rule))
 
+    expect(listed.size).toBeGreaterThan(0)
     expect([...listed].sort()).toEqual([...new Set(named)].sort())
   })
   it('says where an error shows each code, and the fields key names that rule', () => {
