@@ -91,6 +91,7 @@ const leaveQuestions: ReferenceRule = {
     "`platform.yaml` declares under `unsavedInput` every leave that would lose what was typed, and how the app asks first. `question` names the frame's dialog: a reserved dialog whose code names what it asks, its confirm-button lets the leave go on and its cancel-button stays; it runs no action of its own. `screen` (a link, Back, Forward) and `actions` (a control bound to an action listed under `leaving`, such as a sign-out) ask through it (`question`) or `never`. `unload` (a reload, closing the tab, an address typed by hand) is the browser's own prompt (`browser`), drawn outside the page, so no anchor or code marks it, or `never`. `state` (a tab, a search parameter inside one screen) is `never` or `question`; `flow` (a navigation a flow makes after its action completed: the action took the input) is always `never`, and `elsewhere` (another tab or device, a database that will not open) always `cannot`. The manifest carries it, and `contract:diff` lists a change of it. `leaving` comes with `unsavedInput`, and the question is a reserved dialog with a code and both answers that runs no action of its own.",
     "A flow's `navigate` is one of these leaves by what moves it: after an invoke's outcome it is `flow`; on a platform or data event, `elsewhere`; on a control's event, to the path of the screen's one binding, `state`; on a control's event, to any other path, `screen`, a leave the user starts as with a link. Such a control asks the frame's question before its event while a change of screen asks, as long as a field it loses holds unsaved input: the fields of its screen that hold input, but those the move carries in its search and the control itself. The loader derives it on the control, `leaves: { dialog, loses }`, which a screen file never writes, and `contract:diff` lists it as `<anchor> leaves losing <field>, <field>`.",
     "For that question to hold wherever the control is acted on, a navigate sits on a transition, never in an entry or an exit; one transition moves once; a control's navigate names a control of the flow's own screen, outside the frame, an anchor it declares or a part one derives, which has no declaration to carry the question and so moves within its screen only; a move to a path of its own screen needs a screen of one binding; and a control that leaves its screen leaves it in every branch of every state that handles it, losing the same fields, since its question comes before its event.",
+    "On the platform's `leaving`: The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
   ].join('\n\n'),
   keys: ['platform.unsavedInput', 'platform.leaving', 'screen.anchors.<name>.holdsInput'],
 }
@@ -163,8 +164,26 @@ const mailLinkSearch: ReferenceRule = {
     "A platform action whose `mail` links to a screen names the search parameter that carries the token (`link: { screen: user.verify-email, search: token }`). From version 4 the loader gives every route of that screen that parameter, built from the platform value of the same name (`values.token`): its `type`, `enum`, bounds, `pattern`, `description` and `examples`. A screen file never writes it: a parameter of that name in a route's `search` is a problem at its key (derived from the mail link; leave it out). A mail whose `search` names no value of the platform, or a value a route cannot take (one without a `type`, or with a `format`), is a problem at its link. Before version 4 nothing is derived and a file writes the parameter as before.",
     "The parameter is the screen's key (see the rule `address-key`) when an action of the screen takes it: the first action the screen runs with `{ search: <name> }` gives the first of the `codes` of the parameter that takes it, so the `token` of `user.verify-email` carries `x-perch: { key: link-invalid }`, the first code `platform.verify-email` lists for its `token`. The first action is one the flow's initial state invokes (a parallel initial state through the declared initial state of each of its regions), then one another state invokes, as the file writes the states, then one a list takes as its source: the order the file writes the states in changes nothing before the initial one. A parameter that lists no `codes`, and an action of the model, give no key.",
     'No control of the page sets this parameter, a link carries it: when its platform value has an `enum`, the check wants no control for the values under `x-perch.values`, which the other enums of a route, a page choice, still need.',
+    "On `mail.link.search`: The search parameter of that screen's route the link carries its token in. From version 4 the loader gives every route of the screen that parameter, from the platform value of the same name. See the rule `mail-link-search`.",
   ].join('\n\n'),
   keys: ['screen.bindings.search.properties.<name>', 'platform.actions.<name>.mail.link.search'],
+}
+
+const mailRecipients: ReferenceRule = {
+  id: 'mail-recipients',
+  title: 'Where a mail goes and in which language',
+  text: [
+    "On `mail.language`: Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's.",
+    "On `notices.language`: Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in.",
+    'On `mail.to`: The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name.',
+    'On `notices.to`: The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address).',
+  ].join('\n\n'),
+  keys: [
+    'platform.actions.<name>.mail.language',
+    'platform.actions.<name>.mail.to',
+    'platform.actions.<name>.notices.language',
+    'platform.actions.<name>.notices.to',
+  ],
 }
 
 const engineDescriptions: ReferenceRule = {
@@ -213,6 +232,7 @@ export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
   kindParts,
   linkRoles,
   mailLinkSearch,
+  mailRecipients,
   engineDescriptions,
   descriptionPurposes,
   whatStays,

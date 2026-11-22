@@ -74,12 +74,12 @@ const platformActionSchema = z
       })
       .optional()
       .describe(
-        'The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.',
+        'The action answers one page of its entries: it takes `page`, from 1, and `size`, one of the sizes, and answers that page with the number of all. See the rule `paged-list`.',
       ),
     changes: z
       .array(platformActionNameSchema)
       .describe(
-        "Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+        'On every action: the reads (actions a list takes as `source`) its success changes; never itself or a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.',
       ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
@@ -136,7 +136,7 @@ export const platformDefaultsSchema = z
       .int()
       .min(1)
       .describe(
-        'The most characters of a string value that names no limit: a value of `platform.values`, a field of the model and a parameter of a platform action that refers to no `value` and writes a constraint, each one with `type: string`, no `enum` and not read-only. A value that writes its own `maxLength` keeps it; `maxLength: null` takes no limit. See the rule `declared-values`.',
+        'The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`.',
       ),
   })
   .describe(
@@ -193,13 +193,13 @@ export const platformSchema = z
       .array(actionNameSchema)
       .optional()
       .describe(
-        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.',
+        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language): the app asks before one runs. See the rule `leave-questions`.',
       ),
     toasts: z
       .record(platformActionNameSchema, codeSchema)
       .optional()
       .describe(
-        'The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.',
+        "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
       ),
     composites: z
       .record(kebabNameSchema, platformCompositeSchema)

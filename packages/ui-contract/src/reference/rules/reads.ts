@@ -44,6 +44,8 @@ const readAfterAnAction: ReferenceRule = {
     "The read after a success is mandatory where the action may change what a list shows. An invoke holds each list, section or table of its own screen whose `source` is a platform action when its `input` takes an entry of it (an `item` or a `row` it contains, as a role change takes the members list's item), when a value of its `input` equals one its source's `params` take (the removal of an account takes `{ search: id }`, which the account's section reads its action with), or when its action's `changes` names that source (`organisations.invite` changes `organisations.invitations`, which a sent-invitations list reads); a region written `by` its button is held as its invoke. Every branch of its `onDone`, a single transition being one, then reads each list it holds, `read: <list>`, or says `read: false`: the check refuses each list a branch leaves unread, at that branch, saying why the invoke holds it. A failure holds no read, so an `onError` reads where it says, and an invoke that says `read: false` holds nothing.",
     "Every action, of the platform or of the model, writes its `changes`: each name of it is a platform action, never the action itself, that a list, a section or a table of some screen takes as its `source`, written once, `[]` for none. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `contract:diff` lists the reads each action of the model comes to change or stops changing, as `model action lines added in <entity>.<action>: changes <read>`.",
     "On `read: false` of an outcome: Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself.",
+    "On a platform action's `changes`: Written on every action: the reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
+    "On a model action's `x-perch.changes`: Written on every action: the reads of the platform whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds, each a platform action that a list, a section or a table of some screen takes as its `source`. What another account reads for itself is never named. `[]`: it changes none.",
   ].join('\n\n'),
   keys: [
     'screen.flow.states.<name>.entry.read',
@@ -51,13 +53,18 @@ const readAfterAnAction: ReferenceRule = {
     'screen.flow.states.<name>.invoke.read',
     'platform.actions.<name>.changes',
     'manifest.screens.flow.states.<name>.on.<name>.read',
+    'model.x-perch.actions.<name>.changes',
+    'manifest.platform.actions.<name>.changes',
   ],
 }
 
 const addressKey: ReferenceRule = {
   id: 'address-key',
   title: 'The key of an address',
-  text: "A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared. The search parameter of a mail's link is the key of its screen, derived (see the rule `mail-link-search`).",
+  text: [
+    "A search parameter that is the screen's key (`x-perch.key: <code>`): a missing value, or one that breaks the value its action takes, is that action's failure `<code>`, shown as the flow shows that failure, without asking the platform; another value of it starts the screen afresh: the flow at its initial state, its fields empty, its errors cleared. The search parameter of a mail's link is the key of its screen, derived (see the rule `mail-link-search`).",
+    "On a search parameter's `x-perch.key`: Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+  ].join('\n\n'),
   keys: ['screen.bindings.search.properties.<name>.x-perch.key'],
 }
 

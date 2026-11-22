@@ -339,7 +339,7 @@
                           }
                         },
                         "key": {
-                          "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code, one of an action the screen runs with `{ search: <name> }` whose parameter refers to a value. A route has one key, and a key has no `default`. See the rule `address-key`.",
+                          "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code. A route has one key, and a key has no `default`. See the rule `address-key`.",
                           "type": "string",
                           "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                         }
