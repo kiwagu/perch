@@ -43,7 +43,7 @@ const actionSchema = z
     changes: z
       .array(platformActionNameSchema)
       .describe(
-        'On every action: the reads (actions a list takes as `source`) its success changes; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`.',
+        'Required: the list, section or table `source` actions its success changes in its context; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`.',
       ),
   })
   .describe('One action on the entity.')

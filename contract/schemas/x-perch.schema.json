@@ -88,7 +88,7 @@
                   "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                   "description": "A platform action: `sign-in`, `organisations.create`."
                 },
-                "description": "On every action: the reads (actions a list takes as `source`) its success changes; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`."
+                "description": "Required: the list, section or table `source` actions its success changes in its context; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`."
               }
             },
             "required": [

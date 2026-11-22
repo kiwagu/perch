@@ -48,7 +48,7 @@ export const platformMailSchema = z
       .strictObject({
         screen: screenNameSchema.describe('The screen the link opens, at the path of its route.'),
         search: nameSchema.describe(
-          "The search parameter of that screen's route the link carries its token in; from version 4 the loader gives every route of the screen that parameter. See the rule `mail-link-search`.",
+          "The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.",
         ),
       })
       .describe("Where the mail's link leads."),
@@ -63,7 +63,7 @@ export const platformNoticeSchema = z
       'The name of the notice, unique within the action: `password-changed`; a scenario names it `[notice:<action>.<name>]`.',
     ),
     to: nameSchema.describe(
-      "The parameter of the action whose value the notice goes to, or `account`: the account's email as it was before the action. See the rule `mail-recipients`.",
+      'The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`.',
     ),
     language: languageSchema,
     link: z

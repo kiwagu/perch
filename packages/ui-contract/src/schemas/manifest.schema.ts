@@ -319,7 +319,7 @@ export const manifestSchema = z
           .describe('One rule of the engine.'),
       )
       .describe(
-        'The rules this manifest and its schema name, by id: where a description says "see the rule" and an id, its text is here (the reference is not shipped). One only these texts name is not carried.',
+        'The texts of the rules this manifest and its schema name by id, each id in backticks after "rule" or "rules"; the reference is not shipped. A rule only these texts name is not carried.',
       ),
   })
   .describe('The UI manifest: the contract of the application for tests and agents.')

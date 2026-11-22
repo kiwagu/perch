@@ -74,12 +74,12 @@ const platformActionSchema = z
       })
       .optional()
       .describe(
-        'The action answers one page of its entries: it takes `page`, from 1, and `size`, one of the sizes, and answers that page with the number of all. See the rule `paged-list`.',
+        "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
       ),
     changes: z
       .array(platformActionNameSchema)
       .describe(
-        'On every action: the reads (actions a list takes as `source`) its success changes; never itself or a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.',
+        'Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.',
       ),
     mail: platformMailSchema.optional().describe('The mail the action sends, when it sends one.'),
     notices: z
@@ -136,7 +136,7 @@ export const platformDefaultsSchema = z
       .int()
       .min(1)
       .describe(
-        'The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`.',
+        'Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.',
       ),
   })
   .describe(
@@ -193,7 +193,7 @@ export const platformSchema = z
       .array(actionNameSchema)
       .optional()
       .describe(
-        'The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language): the app asks before one runs. See the rule `leave-questions`.',
+        'Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.',
       ),
     toasts: z
       .record(platformActionNameSchema, codeSchema)

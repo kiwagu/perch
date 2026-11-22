@@ -183,6 +183,10 @@ const mailRecipients: ReferenceRule = {
     'platform.actions.<name>.mail.to',
     'platform.actions.<name>.notices.language',
     'platform.actions.<name>.notices.to',
+    'manifest.platform.actions.<name>.mail.language',
+    'manifest.platform.actions.<name>.mail.to',
+    'manifest.platform.actions.<name>.notices.language',
+    'manifest.platform.actions.<name>.notices.to',
   ],
 }
 

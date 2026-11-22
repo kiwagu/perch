@@ -270,7 +270,7 @@ Anything a reader needs to know about the value.
 ### `bindings.search.properties.<name>.x-perch.key`
 
 <a id="screen-bindings-search-properties-name-x-perch-key"></a>
-Makes the parameter the screen's key: a value of it missing or broken is the failure with this code. A route has one key, and a key has no `default`. See the rule `address-key`.
+Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.
 
 ### `bindings.search.required`
 
@@ -999,7 +999,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `defaults.maxLength`
 
 <a id="platform-defaults-maxlength"></a>
-The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`.
+Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
 
 ### `values`
 
@@ -1039,7 +1039,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `values.<name>.format`
 
 <a id="platform-values-name-format"></a>
-The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
 
 ### `values.<name>.minimum`
 
@@ -1119,7 +1119,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `actions.<name>.params.<name>.format`
 
 <a id="platform-actions-name-params-name-format"></a>
-The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
 
 ### `actions.<name>.params.<name>.minimum`
 
@@ -1164,7 +1164,7 @@ The roles that may run the action.
 ### `actions.<name>.paged`
 
 <a id="platform-actions-name-paged"></a>
-The action answers one page of its entries: it takes `page`, from 1, and `size`, one of the sizes, and answers that page with the number of all. See the rule `paged-list`.
+The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.
 
 ### `actions.<name>.paged.sizes`
 
@@ -1179,7 +1179,7 @@ The size of a page the route does not name, a size.
 ### `actions.<name>.changes`
 
 <a id="platform-actions-name-changes"></a>
-On every action: the reads (actions a list takes as `source`) its success changes; never itself or a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.
+Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.
 
 ### `actions.<name>.mail`
 
@@ -1209,7 +1209,7 @@ The screen the link opens, at the path of its route.
 ### `actions.<name>.mail.link.search`
 
 <a id="platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in; from version 4 the loader gives every route of the screen that parameter. See the rule `mail-link-search`.
+The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.
 
 ### `actions.<name>.notices`
 
@@ -1224,7 +1224,7 @@ The name of the notice, unique within the action: `password-changed`; a scenario
 ### `actions.<name>.notices.to`
 
 <a id="platform-actions-name-notices-to"></a>
-The parameter of the action whose value the notice goes to, or `account`: the account's email as it was before the action. See the rule `mail-recipients`.
+The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`.
 
 ### `actions.<name>.notices.language`
 
@@ -1254,7 +1254,7 @@ What the event means: when the platform raises it. What follows is said by the f
 ### `leaving`
 
 <a id="platform-leaving"></a>
-The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language): the app asks before one runs. See the rule `leave-questions`.
+Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.
 
 ### `toasts`
 
@@ -1557,7 +1557,7 @@ Per parameter, the field it sets (`$id` for a new id).
 ### `x-perch.actions.<name>.changes`
 
 <a id="model-x-perch-actions-name-changes"></a>
-On every action: the reads (actions a list takes as `source`) its success changes; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`.
+Required: the list, section or table `source` actions its success changes in its context; never what another account reads for itself. `[]`: none. See the rule `read-after-an-action`.
 
 ### `x-perch.unique`
 
@@ -1686,7 +1686,7 @@ From version 6, what a value takes where it writes nothing of its own; the platf
 ### `contract.defaults.maxLength`
 
 <a id="manifest-contract-defaults-maxlength"></a>
-The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`.
+Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
 
 ### `contract.idAttribute`
 
@@ -2196,7 +2196,7 @@ Anything a reader needs to know about the value.
 ### `screens.bindings.search.properties.<name>.x-perch.key`
 
 <a id="manifest-screens-bindings-search-properties-name-x-perch-key"></a>
-Makes the parameter the screen's key: a value of it missing or broken is the failure with this code. A route has one key, and a key has no `default`. See the rule `address-key`.
+Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.
 
 ### `screens.bindings.search.required`
 
@@ -3736,7 +3736,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `ids.<name>.value.format`
 
 <a id="manifest-ids-name-value-format"></a>
-The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
 
 ### `ids.<name>.value.minimum`
 
@@ -3766,7 +3766,7 @@ What a value takes where it writes nothing of its own, said once for every value
 ### `platform.defaults.maxLength`
 
 <a id="manifest-platform-defaults-maxlength"></a>
-The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`.
+Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`.
 
 ### `platform.values`
 
@@ -3806,7 +3806,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.values.<name>.format`
 
 <a id="manifest-platform-values-name-format"></a>
-The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
 
 ### `platform.values.<name>.minimum`
 
@@ -3886,7 +3886,7 @@ A regular expression (ECMA-262) every value of a string matches.
 ### `platform.actions.<name>.params.<name>.format`
 
 <a id="manifest-platform-actions-name-params-name-format"></a>
-The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.
+A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.
 
 ### `platform.actions.<name>.params.<name>.minimum`
 
@@ -3931,7 +3931,7 @@ The roles that may run the action.
 ### `platform.actions.<name>.paged`
 
 <a id="manifest-platform-actions-name-paged"></a>
-The action answers one page of its entries: it takes `page`, from 1, and `size`, one of the sizes, and answers that page with the number of all. See the rule `paged-list`.
+The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.
 
 ### `platform.actions.<name>.paged.sizes`
 
@@ -3946,7 +3946,7 @@ The size of a page the route does not name, a size.
 ### `platform.actions.<name>.changes`
 
 <a id="manifest-platform-actions-name-changes"></a>
-On every action: the reads (actions a list takes as `source`) its success changes; never itself or a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.
+Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`.
 
 ### `platform.actions.<name>.mail`
 
@@ -3976,7 +3976,7 @@ The screen the link opens, at the path of its route.
 ### `platform.actions.<name>.mail.link.search`
 
 <a id="manifest-platform-actions-name-mail-link-search"></a>
-The search parameter of that screen's route the link carries its token in; from version 4 the loader gives every route of the screen that parameter. See the rule `mail-link-search`.
+The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`.
 
 ### `platform.actions.<name>.notices`
 
@@ -3991,7 +3991,7 @@ The name of the notice, unique within the action: `password-changed`; a scenario
 ### `platform.actions.<name>.notices.to`
 
 <a id="manifest-platform-actions-name-notices-to"></a>
-The parameter of the action whose value the notice goes to, or `account`: the account's email as it was before the action. See the rule `mail-recipients`.
+The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`.
 
 ### `platform.actions.<name>.notices.language`
 
@@ -4021,7 +4021,7 @@ What the event means: when the platform raises it. What follows is said by the f
 ### `platform.leaving`
 
 <a id="manifest-platform-leaving"></a>
-The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language): the app asks before one runs. See the rule `leave-questions`.
+Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.
 
 ### `platform.toasts`
 
@@ -4331,7 +4331,7 @@ A keyword of the model document.
 ### `rules`
 
 <a id="manifest-rules"></a>
-The rules this manifest and its schema name, by id: where a description says "see the rule" and an id, its text is here (the reference is not shipped). One only these texts name is not carried.
+The texts of the rules this manifest and its schema name by id, each id in backticks after "rule" or "rules"; the reference is not shipped. A rule only these texts name is not carried.
 
 ### `rules.<name>`
 
@@ -5059,7 +5059,7 @@ On `mail.to`: The parameter of the action whose value the mail goes to, or `acco
 
 On `notices.to`: The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address).
 
-Keys it concerns: [`platform.actions.<name>.mail.language`](#platform-actions-name-mail-language), [`platform.actions.<name>.mail.to`](#platform-actions-name-mail-to), [`platform.actions.<name>.notices.language`](#platform-actions-name-notices-language), [`platform.actions.<name>.notices.to`](#platform-actions-name-notices-to).
+Keys it concerns: [`platform.actions.<name>.mail.language`](#platform-actions-name-mail-language), [`platform.actions.<name>.mail.to`](#platform-actions-name-mail-to), [`platform.actions.<name>.notices.language`](#platform-actions-name-notices-language), [`platform.actions.<name>.notices.to`](#platform-actions-name-notices-to), [`manifest.platform.actions.<name>.mail.language`](#manifest-platform-actions-name-mail-language), [`manifest.platform.actions.<name>.mail.to`](#manifest-platform-actions-name-mail-to), [`manifest.platform.actions.<name>.notices.language`](#manifest-platform-actions-name-notices-language), [`manifest.platform.actions.<name>.notices.to`](#manifest-platform-actions-name-notices-to).
 
 ### A description the engine can say
 

@@ -48,7 +48,7 @@ const searchControlSchema = z
     key: codeSchema
       .optional()
       .describe(
-        "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code. A route has one key, and a key has no `default`. See the rule `address-key`.",
+        "Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.",
       ),
   })
   .describe("The controls of the page that set the parameter, and whether it is the screen's key.")

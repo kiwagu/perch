@@ -68,7 +68,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991,
-              "description": "The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`."
+              "description": "Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`."
             }
           },
           "required": [
@@ -741,7 +741,7 @@
                                 }
                               },
                               "key": {
-                                "description": "Makes the parameter the screen's key: a value of it missing or broken is the failure with this code. A route has one key, and a key has no `default`. See the rule `address-key`.",
+                                "description": "Makes it the screen's key: a missing or broken value is the failure with this code, from an action taking `{ search: <name> }` for a value. One per route, no `default`. See the rule `address-key`.",
                                 "type": "string",
                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                               }
@@ -6988,7 +6988,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.",
+                "description": "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7030,7 +7030,7 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991,
-              "description": "The most characters of a string value naming no limit (`type: string`, no `enum`, not read-only); one that writes its own keeps it, and `maxLength: null` takes none. See the rule `declared-values`."
+              "description": "Most characters of a string value that names none: a platform value, model field, or parameter with a constraint and no `value`; no `enum`, not read-only. See the rule `declared-values`."
             }
           },
           "required": [
@@ -7095,7 +7095,7 @@
                 "type": "string"
               },
               "format": {
-                "description": "The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.",
+                "description": "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
                 "type": "string",
                 "enum": [
                   "email"
@@ -7187,7 +7187,7 @@
                       "type": "string"
                     },
                     "format": {
-                      "description": "The format every value of a string keeps: `email`. Its field is `type=email`, submitted through a form without `noValidate`, so the browser refuses a non-email first. See the rule `email-format`.",
+                      "description": "A string value's format: `email`. Its editable field is `type=email`, checked by the browser when a form without `noValidate` submits; an action run unsubmitted skips it. See the rule `email-format`.",
                       "type": "string",
                       "enum": [
                         "email"
@@ -7252,7 +7252,7 @@
                 }
               },
               "paged": {
-                "description": "The action answers one page of its entries: it takes `page`, from 1, and `size`, one of the sizes, and answers that page with the number of all. See the rule `paged-list`.",
+                "description": "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
                 "type": "object",
                 "properties": {
                   "sizes": {
@@ -7285,7 +7285,7 @@
                   "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                   "description": "A platform action: `sign-in`, `organisations.create`."
                 },
-                "description": "On every action: the reads (actions a list takes as `source`) its success changes; never itself or a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
+                "description": "Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
               },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
@@ -7312,7 +7312,7 @@
                       "search": {
                         "type": "string",
                         "pattern": "^[a-z][a-zA-Z0-9]*$",
-                        "description": "The search parameter of that screen's route the link carries its token in; from version 4 the loader gives every route of the screen that parameter. See the rule `mail-link-search`."
+                        "description": "The search parameter of that screen's route the link carries its token in; from version 4 a platform value so named (a `type`, no `format`), added to its routes. See the rule `mail-link-search`."
                       }
                     },
                     "required": [
@@ -7345,7 +7345,7 @@
                     "to": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "The parameter of the action whose value the notice goes to, or `account`: the account's email as it was before the action. See the rule `mail-recipients`."
+                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`."
                     },
                     "language": {
                       "type": "string",
@@ -7403,7 +7403,7 @@
           }
         },
         "leaving": {
-          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language): the app asks before one runs. See the rule `leave-questions`.",
+          "description": "Actions (named as in a binding) that drop typed input: a sign-out, a switch of organisation or language. Asked first if `unsavedInput` says so and a field holds input. See the rule `leave-questions`.",
           "type": "array",
           "items": {
             "type": "string",
@@ -7945,7 +7945,7 @@
         "additionalProperties": false,
         "description": "One rule of the engine."
       },
-      "description": "The rules this manifest and its schema name, by id: where a description says \"see the rule\" and an id, its text is here (the reference is not shipped). One only these texts name is not carried."
+      "description": "The texts of the rules this manifest and its schema name by id, each id in backticks after \"rule\" or \"rules\"; the reference is not shipped. A rule only these texts name is not carried."
     }
   },
   "required": [
