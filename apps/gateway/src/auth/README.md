@@ -500,15 +500,19 @@ of both: the limit of devices and the ban judged now, the device's sockets close
 the turn. A right code is the sign-in's last step: 200 forgets the email's failed sign-ins, and so
 does the admission's own 409 `device-limit`. Every other answer gives its place back, the 409
 judged before the code and a ban's refusal included, so a banned account's right code forgets
-nothing. So a backup code is used up only by a sign-in that goes through, with one exception: a
-device's session of the account renewed, or a device admitted through a door that does not take
-the account's turn, at any moment after the gateway's judgment and before the admission counts the
-devices, after Better Auth's answer included, can make the admission answer 409 `device-limit`
-once the code was checked; that late 409 uses the code up with nothing signed in and, as a right
-code, forgets the email's failed sign-ins. A ban cannot fall in that interval through the
+nothing. A backup code is used up when it signs this device in: if the limit of devices, a ban or
+a challenge that ended stops the attempt before the code is checked, the code stays usable. Once
+Better Auth has started checking it, the code can still be used up with nothing signed in: by a
+failure of the server, by the challenge ending during the check (the margin below makes that
+unlikely, a pause or a stall past the deadline can still do it), or by another change to the
+account during the check: a device's session of the account renewed, or a device admitted
+through a door that does not take the account's turn, at any moment after the gateway's judgment
+and before the admission counts the devices, Better Auth's answer included, makes the admission
+answer 409 `device-limit` once the code was checked; that late 409 uses the code up and, as a
+right code, forgets the email's failed sign-ins. A ban cannot fall in that interval through the
 console, whose ban takes the account's turn the code step holds; only a writer outside that turn
-could make it. The challenge's deadline does not use a code up: the margin refuses a challenge
-that could expire during the check before any code is checked. A change of what a challenge stood for ends it in its own transaction: a change
+could make it. The margin refuses a challenge within `CODE_CHECK_MARGIN_MS` of its deadline
+before any code is checked, so the code step ends at about ten minutes. A change of what a challenge stood for ends it in its own transaction: a change
 or a reset of the password, the confirmation of a new email, the second factor turned off and the
 account's deletion each end the identity's pending challenges with the rows counting their codes
 (`fn::two_factor_challenges_end`), so a code step that waited for their turn answers 401

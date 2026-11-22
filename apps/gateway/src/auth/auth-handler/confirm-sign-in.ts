@@ -213,11 +213,12 @@ async function verified(
 
   // The right code is a sign-in's last step: admitted, or asked about the limit of devices, it
   // forgets the email's failed sign-ins; a ban the admission read, or a failure, judges nothing.
-  // The admission still asks when a device's session of the account is renewed, or a device
-  // admitted through a door that does not take the account's turn, at any moment after `prejudged`
-  // and before the admission counts the devices, Better Auth's answer included: that late 409
-  // spends the code and, as a right code, forgets the email's failed sign-ins. A ban there needs a
-  // writer outside the account's turn, which the console's ban takes.
+  // Once Better Auth checked the code it may be used up with nothing signed in: the admission still
+  // asks when a device's session of the account is renewed, or a device admitted through a door
+  // that does not take the account's turn, at any moment after `prejudged` and before the admission
+  // counts the devices, Better Auth's answer included; that late 409 spends the code and, as a right
+  // code, forgets the email's failed sign-ins. A failure of the server after the check spends it as
+  // well. A ban there needs a writer outside the account's turn, which the console's ban takes.
   return judged(
     response,
     response.status === 200 || response.status === 409 ? 'succeeded' : 'unjudged',
