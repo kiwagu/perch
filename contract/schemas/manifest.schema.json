@@ -1098,7 +1098,7 @@
                   "type": "boolean"
                 },
                 "holdsInput": {
-                  "description": "A field holds input: what is typed stays until an action takes it or a flow clears it, so a leave loses it; false where its own change applies it at once. See the rule `field-holds-input`.",
+                  "description": "True when what is typed stays in the field until an action takes it or a flow clears it, so a leave with it typed loses it; false when it holds none. See the rule `field-holds-input`.",
                   "type": "boolean"
                 },
                 "marksState": {
@@ -1223,11 +1223,11 @@
                   "type": "string"
                 },
                 "dataValue": {
-                  "description": "The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.",
+                  "description": "It or its options carry a `data-value`, a choice's stable key, never its label. On a select the loader sets it: from version 4 a screen file omits it. See the rules `attributes` and `kind-parts`.",
                   "type": "boolean"
                 },
                 "states": {
-                  "description": "The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.",
+                  "description": "The `data-state` values it takes: an app, container or row state. Not the field states of an `input`, `textarea` or `select`: `ids` lists those. See the rules `attributes` and `field-states-carried`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1236,7 +1236,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
+                  "description": "The derived suffixes it renders; a screen file omits a paged list's parts and, from version 4, a kind's own: the loader lists them. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1410,7 +1410,7 @@
                   "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
                 },
                 "confirms": {
-                  "description": "Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.",
+                  "description": "Written on an unbound secret input: names the other secret input of its screen, one that opts into a composite, whose password it repeats. See the rule `password-pair`.",
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
                 }

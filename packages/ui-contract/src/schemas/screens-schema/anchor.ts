@@ -178,7 +178,7 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        'A field holds input: what is typed stays until an action takes it or a flow clears it, so a leave loses it; false where its own change applies it at once. See the rule `field-holds-input`.',
+        'True when what is typed stays in the field until an action takes it or a flow clears it, so a leave with it typed loses it; false when it holds none. See the rule `field-holds-input`.',
       ),
     marksState: z
       .literal(false)
@@ -222,19 +222,19 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        "The element or its options carry a `data-value`: a choice's stable key, never its label. From version 4 a select's is derived, never written. See the rules `attributes` and `kind-parts`.",
+        "It or its options carry a `data-value`, a choice's stable key, never its label. On a select the loader sets it: from version 4 a screen file omits it. See the rules `attributes` and `kind-parts`.",
       ),
     states: z
       .array(stateSchema)
       .optional()
       .describe(
-        "The `data-state` values the element takes: an app, container or row state. Not a field's: one that holds input carries them in `fieldStates`. See the rules `attributes` and `field-states-carried`.",
+        'The `data-state` values it takes: an app, container or row state. Not the field states of an `input`, `textarea` or `select`: `ids` lists those. See the rules `attributes` and `field-states-carried`.',
       ),
     derived: z
       .array(kebabNameSchema)
       .optional()
       .describe(
-        "The derived suffixes the element renders; never a paged list's parts, nor from version 4 a kind's own: the loader lists those. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
+        "The derived suffixes it renders; a screen file omits a paged list's parts and, from version 4, a kind's own: the loader lists them. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
@@ -248,7 +248,7 @@ export const anchorDefSchema = z
     confirms: baseAnchorSchema
       .optional()
       .describe(
-        'Written on an unbound secret input: the secret input of its screen it confirms, one that opts into a composite (the new password, typed again). See the rule `password-pair`.',
+        'Written on an unbound secret input: names the other secret input of its screen, one that opts into a composite, whose password it repeats. See the rule `password-pair`.',
       ),
   })
   .describe('One declared anchor.')
@@ -278,7 +278,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .boolean()
       .optional()
       .describe(
-        'Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change applies it at once. See the rule `field-holds-input`.',
+        'Whether typed text stays in the field until an action takes it or a `clear` empties it. Left out, it is derived: false where its own change alone applies it at once. See the rule `field-holds-input`.',
       ),
     confirm: z
       .literal(false)
