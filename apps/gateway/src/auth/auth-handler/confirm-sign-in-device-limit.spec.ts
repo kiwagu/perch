@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { CLOSE } from '@workspace/replica/protocol'
 
+import { ban, setBanned } from '../__fixtures__/account-ban'
 import { backupCodesOf, codeOf, wrongCodeOf } from '../__fixtures__/second-factor'
 
 import {
+  ageChallenges,
   answered,
   challengeRows,
   codeStep,
@@ -27,6 +29,11 @@ const NINE = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i'] as const
 
 /** How long a test of many password checks may run: each is an argon2 run, slow on a busy host. */
 const ARGON2_RUNS_MS = 60_000
+
+/** How long the email's failed sign-ins keep a password out. */
+const WINDOW_MS = 15 * 60_000
+
+const codeExpired = { status: 401, body: { code: 'code-expired' } }
 
 const deviceLimit = { status: 409, body: { code: 'device-limit' } }
 
@@ -202,6 +209,86 @@ describe("authHandler, a sign-in's code step past the account's limit of devices
       // The right code was the sign-in's last step: two more failures are the first of a new count.
       await wrongPasswords(mounted, 2, FROM)
       expect(await rightPassword(mounted, 'k')).toBe(200)
+    },
+    ARGON2_RUNS_MS,
+  )
+})
+
+describe("authHandler, a sign-in's code step past the limit and a challenge or an account that changed", () => {
+  it(
+    "answers 403 account-banned to the confirmed retry of an account banned after the dialog's confirmation, before checking its code: the backup code kept, and taken once the ban is lifted, the email's failed sign-ins as they were",
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await withSecondFactor(mounted, TEN)
+      const [backup = ''] = ann.backupCodes
+
+      await wrongPasswords(mounted, 9, FROM)
+
+      const asked = await passwordStep(mounted, 'k', FROM)
+
+      expect(await confirm(mounted, asked, backup, 'k')).toEqual(deviceLimit)
+
+      // The dialog is confirmed: the password again, then an operator's ban before the code.
+      const again = await passwordStep(mounted, 'k', FROM)
+
+      await ban(mounted.local, ann.identity, new Date(mounted.clock.now()))
+
+      expect(await confirm(mounted, again, backup, 'k', true)).toEqual({
+        status: 403,
+        body: { code: 'account-banned' },
+      })
+      expect(await backupCodesOf(mounted.auth, ann.identity)).toContain(backup)
+      expect(await challengeRows(mounted)).toEqual([])
+      // Nothing was judged: the next wrong password is the tenth failure, which spends them.
+      await wrongPasswords(mounted, 1, FROM)
+      expect(await rightPassword(mounted, 'k')).toBe(429)
+
+      // The ban lifted (it ended every device) and the window passed, the code signs the device in.
+      await setBanned(mounted.local, ann.identity, false)
+      await mounted.clock.advance(WINDOW_MS)
+
+      const lifted = await passwordStep(mounted, 'k', FROM)
+
+      expect((await confirm(mounted, lifted, backup, 'k')).status).toBe(200)
+      expect(await backupCodesOf(mounted.auth, ann.identity)).not.toContain(backup)
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'answers 401 code-expired, not 409, to a code of an eleventh device whose challenge is past its ten minutes, its challenge ended',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await withSecondFactor(mounted, TEN)
+      const asked = await passwordStep(mounted, 'k', FROM)
+
+      await ageChallenges(mounted)
+
+      expect(await confirm(mounted, asked, await codeOf(ann.secret), 'k')).toEqual(codeExpired)
+      expect(await challengeRows(mounted)).toEqual([])
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'answers 401 code-expired, not 409, to the code after five wrong ones once the account reached its limit meanwhile, its challenge ended',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await withSecondFactor(mounted, NINE)
+      const challenge = await passwordStep(mounted, 'k', FROM)
+
+      for (let wrong = 0; wrong < 5; wrong++) {
+        expect(await confirm(mounted, challenge, await wrongCodeOf(ann.secret), 'k')).toEqual(
+          invalidCode,
+        )
+      }
+
+      // j takes the last place: k would now be the eleventh device.
+      const tenth = await passwordStep(mounted, 'j', FROM)
+
+      expect((await confirm(mounted, tenth, await codeOf(ann.secret), 'j')).status).toBe(200)
+      expect(await confirm(mounted, challenge, await codeOf(ann.secret), 'k')).toEqual(codeExpired)
+      expect(await challengeRows(mounted)).toEqual([])
     },
     ARGON2_RUNS_MS,
   )

@@ -1,6 +1,6 @@
-import { okAsync, type ResultAsync } from 'neverthrow'
+import { err, ok, okAsync, type ResultAsync } from 'neverthrow'
 
-import type { DataError, LocalDb } from '@workspace/data'
+import { type DataError, dataError, fromDriverValue, type LocalDb } from '@workspace/data'
 import { type IdentityId, idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
@@ -10,6 +10,7 @@ import { reading, writing } from '../device-session-rows'
 import { ADMISSION_HEADER, DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
 import challengeEndStatement from '../surql/two-factor-challenge-end.surql'
 import challengeOwnerStatement from '../surql/two-factor-challenge-owner.surql'
+import challengeStateStatement from '../surql/two-factor-challenge-state.surql'
 import challengesReclaimStatement from '../surql/two-factor-challenges-reclaim.surql'
 
 /**
@@ -110,6 +111,49 @@ export function challengeOwner(
   })
 }
 
+/** The codes Better Auth's verifiers count on one challenge: the next one after them ends it. */
+const CODES_PER_CHALLENGE = 5
+
+const challengeState = z.object({
+  expires_at: z.date().nullish(),
+  attempts: z.object({ value: z.string(), expires_at: z.date() }).nullish(),
+})
+
+/**
+ * Whether a pending two-factor challenge still takes a code at `now`, as Better Auth's verifiers
+ * judge it before the code: its row and the row counting its codes are there and expire after
+ * `now`, the count a whole number below `CODES_PER_CHALLENGE`. False for a value that names no
+ * challenge; the signature is Better Auth's to check.
+ */
+export function challengeTakesCode(
+  directory: LocalDb,
+  challenge: string,
+  now: Date,
+): ResultAsync<boolean, DataError> {
+  const identifier = challengeIdentifier(challenge)
+
+  if (identifier === undefined) {
+    return okAsync(false)
+  }
+
+  return reading(
+    directory.db.query<[unknown]>(challengeStateStatement, { identifier }),
+    'the state of a two-factor challenge could not be read',
+  ).andThen(([value]) => {
+    const state = challengeState.safeParse(fromDriverValue(value))
+
+    if (!state.success) {
+      return err(dataError('data:QUERY_FAILED', 'a two-factor challenge has an unknown shape'))
+    }
+
+    const { expires_at: expiry, attempts } = state.data
+    const counted = Number(attempts?.value)
+    const live = expiry != null && expiry > now && attempts != null && attempts.expires_at > now
+
+    return ok(live && Number.isInteger(counted) && counted >= 0 && counted < CODES_PER_CHALLENGE)
+  })
+}
+
 /**
  * Ends a pending two-factor challenge: its row and the row counting its codes go, so no code is
  * taken for it. Ending one that is gone, or a value that names none, ends nothing.
@@ -151,20 +195,23 @@ export function reclaimChallenges(directory: LocalDb): ResultAsync<void, DataErr
 
 /**
  * Better Auth's two-factor challenges as the auth mount meets them: the name of the cookie that
- * carries one, the account one belongs to (`challengeOwner`), the end of one (`endChallenge`), and
- * the reclaim of those left unanswered once expired (`reclaimChallenges`).
+ * carries one, the account one belongs to (`challengeOwner`), whether one still takes a code
+ * (`challengeTakesCode`), the end of one (`endChallenge`), and the reclaim of those left
+ * unanswered once expired (`reclaimChallenges`).
  */
 export interface TwoFactorChallenges {
   /** The name of Better Auth's two-factor cookie, its namespace and any secure prefix included. */
   cookieName(): Promise<string>
   ownerOf(challenge: string): ResultAsync<IdentityId | undefined, DataError>
+  takesCode(challenge: string): ResultAsync<boolean, DataError>
   end(challenge: string): ResultAsync<void, DataError>
   reclaim(): ResultAsync<void, DataError>
 }
 
 /**
  * The two-factor challenges of `auth` over `directory`, the cookie's name read from Better Auth's
- * own `createAuthCookie`, never written out here.
+ * own `createAuthCookie`, never written out here. Whether one takes a code is judged by this
+ * process's own clock, as Better Auth judges a challenge's expiry.
  */
 export function twoFactorChallenges(
   auth: Pick<AuthInstance, '$context'>,
@@ -173,6 +220,7 @@ export function twoFactorChallenges(
   return {
     cookieName: async () => (await auth.$context).createAuthCookie(TWO_FACTOR_COOKIE).name,
     ownerOf: (challenge) => challengeOwner(directory, challenge),
+    takesCode: (challenge) => challengeTakesCode(directory, challenge, new Date()),
     end: (challenge) => endChallenge(directory, challenge),
     reclaim: () => reclaimChallenges(directory),
   }

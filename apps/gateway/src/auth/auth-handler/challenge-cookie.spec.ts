@@ -9,6 +9,7 @@ import { linkToken } from '../../mail/__fixtures__/outbox'
 import { accountServicesOf, deviceHeaders, openAuth, signUpOn } from '../__fixtures__/auth-instance'
 import { selectionReads } from '../__fixtures__/query-plan'
 import { codeOf, passwordStepRequest, secondFactorOn } from '../__fixtures__/second-factor'
+import twoFactorAttemptsSetStatement from '../__fixtures__/two-factor-attempts-set.surql'
 import {
   identifiersIn,
   identifiersOf,
@@ -22,6 +23,7 @@ import twoFactorChallengesReclaimStatement from '../surql/two-factor-challenges-
 
 import {
   challengeOwner,
+  challengeTakesCode,
   challengeValue,
   internalRequest,
   RECLAIMED_PER_CHALLENGE,
@@ -149,6 +151,32 @@ describe('challengeOwner', () => {
     expect(
       (await challengeOwner(opened.local, `reset-password:${token}.c2lnbmF0dXJl`))._unsafeUnwrap(),
     ).toBeUndefined()
+  }, 30_000)
+})
+
+describe('challengeTakesCode', () => {
+  it('takes a code for a challenge a password step just answered, and none past its ten minutes, after five codes counted, with a count that is no whole number, or for a value naming no challenge', async () => {
+    const { local, challenge } = await challenged()
+    const [identifier = ''] = decodeURIComponent(challenge).split('.')
+    const takes = async (value: string, now = new Date()) =>
+      (await challengeTakesCode(local, value, now))._unsafeUnwrap()
+
+    expect(await takes(challenge)).toBe(true)
+    expect(await takes(challenge, new Date(Date.now() + 11 * 60_000))).toBe(false)
+    expect(await takes('2fa-nobody-has-this.c2lnbmF0dXJl')).toBe(false)
+    expect(await takes('not-a-challenge')).toBe(false)
+
+    for (const [count, taken] of [
+      ['4', true],
+      ['5', false],
+      ['1.5', false],
+      ['-1', false],
+      ['many', false],
+    ] as const) {
+      await local.db.query(twoFactorAttemptsSetStatement, { identifier, value: count })
+
+      expect(await takes(challenge)).toBe(taken)
+    }
   }, 30_000)
 })
 

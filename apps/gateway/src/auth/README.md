@@ -469,16 +469,20 @@ the password, the confirmation of a new email, a ban, a deletion and the second 
 take), the challenge's row is read again (gone: 401 `code-expired`) and the account's second
 factor (`TwoFactorRows.read`): one that is off, or whose key no code confirmed, ends the challenge
 and answers 401 `code-expired` before either verifier runs, since Better Auth's verifier of
-backup codes takes the codes of an unconfirmed key too. A step without `signOutOldest: true` is
-then judged as its admission would judge it, before its code is checked (`AuthSessions.judge`,
+backup codes takes the codes of an unconfirmed key too. The step is then judged before its code
+is checked, no verifier run on a refusal, so the code, right or wrong, is neither checked nor
+spent, nothing is signed in or out and the email's failed sign-ins stay as they were. A challenge
+that takes no code any more, judged as Better Auth's verifiers judge it (its rows past their ten
+minutes by the process's own clock, as Better Auth reads it, or five codes counted: `TwoFactorChallenges.takesCode`,
+`surql/two-factor-challenge-state.surql`), ends and answers 401 `code-expired` first. Then the
+sign-in is judged as its admission would judge it (`AuthSessions.judge`,
 `surql/device-sessions-limit.surql`, in the account's turn of admissions, its devices counted as
-the admission counts them, writing nothing): a banned account, or a device that would bring the
-account past its limit of devices, ends the challenge and answers 403 `account-banned` or 409
-`device-limit` with no verifier run, so the code, right or wrong, is neither checked nor spent,
-nothing is signed in or out and the email's failed sign-ins stay as they were; the dialog's
-confirmation signs in again from the password, which asks for a code again. A confirmed step
-skips that judgment: its code is checked, and a backup code spent, before anyone is signed in or
-out. The code then goes to Better Auth's
+the admission counts them, writing nothing): a banned account ends the challenge and answers 403
+`account-banned`, at both steps of the dialog alike; a device that would bring the account past
+its limit of devices, on a step without `signOutOldest: true`, ends it and answers 409
+`device-limit`, and the dialog's confirmation signs in again from the password, which asks for a
+code again. A confirmed step is not asked about the limit: its code is checked, and a backup code
+spent, before anyone is signed in or out. The code then goes to Better Auth's
 verifier, six digits to `/two-factor/verify-totp` and any other code to
 `/two-factor/verify-backup-code`, by the gateway's own call (`internalRequest`, the challenge its
 only cookie, the session it writes waiting for its admission), and Better Auth's answer is read by
@@ -491,11 +495,12 @@ of both: the limit of devices and the ban judged now, the device's sockets close
 `{ token, user, start? }` built from the allowlist, no header of Better Auth's answer copied, its
 `set-auth-token` and cookies included), with the start of the account the email names, read in
 the turn. A right code is the sign-in's last step: 200 forgets the email's failed sign-ins, and so
-does the admission's own 409 `device-limit`, which a step judged within the limit still meets when
-a device was admitted after the judgment through a door that does not take the account's turn (a
-sign-in by password Better Auth took while the factor was off, a verification): the code is spent
-by then, and nothing is signed in. Every other answer gives its place back, the 409 judged before
-the code and a ban's refusal included, so a banned account's right code forgets nothing. A change of what a challenge stood for ends it in its own transaction: a change
+does the admission's own 409 `device-limit`. Every other answer gives its place back, the 409
+judged before the code and a ban's refusal included, so a banned account's right code forgets
+nothing. So a backup code is used up only by a sign-in that goes through, except when another
+change to the account (a device's session renewed, a ban) commits inside the code check itself,
+between the gateway's judgment and the admission: then the code may be spent with nothing signed
+in. A change of what a challenge stood for ends it in its own transaction: a change
 or a reset of the password, the confirmation of a new email, the second factor turned off and the
 account's deletion each end the identity's pending challenges with the rows counting their codes
 (`fn::two_factor_challenges_end`), so a code step that waited for their turn answers 401
@@ -921,13 +926,14 @@ its challenge cookie carried by the device as `challenge`.
   `passkeyChallenges` (`PasskeyChallenges`: `cookieName`; the root's `passkeyChallenges`, the
   mount's too) and `ceremonyOf` (`Ceremony`) (`auth-handler/passkey-ceremony.ts`, through the
   folder's index),
-  `challengeValue`, `setCookieValue`, `challengeOwner`, `endChallenge`, `internalRequest`
-  (`InternalCall`) and
+  `challengeValue`, `setCookieValue`, `challengeOwner`, `challengeTakesCode`, `endChallenge`,
+  `internalRequest` (`InternalCall`) and
   `reclaimChallenges` and `RECLAIMED_PER_CHALLENGE`,
-  `twoFactorChallenges` (`TwoFactorChallenges`: `cookieName`, `ownerOf`, `end`, `reclaim`; the
-  mount's `challenges`, built by the composition root) (`auth-handler/challenge-cookie.ts`; all but
-  `challengeOwner`, `endChallenge`, `reclaimChallenges` and `RECLAIMED_PER_CHALLENGE` also through
-  the folder's index), `secondFactorAsked`
+  `twoFactorChallenges` (`TwoFactorChallenges`: `cookieName`, `ownerOf`, `takesCode`, `end`,
+  `reclaim`; the mount's `challenges`, built by the composition root)
+  (`auth-handler/challenge-cookie.ts`; all but `challengeOwner`, `challengeTakesCode`,
+  `endChallenge`, `reclaimChallenges` and `RECLAIMED_PER_CHALLENGE` also through the folder's
+  index), `secondFactorAsked`
   (`auth-handler/second-factor-asked.ts`),
   `ADMIN_PATHS` (`admin-paths.ts`: the path of every endpoint of that plugin), `rolesOf`
   (`platform-roles.ts`: the platform roles of an account's stored role),
@@ -959,8 +965,8 @@ its challenge cookie carried by the device as `challenge`.
   the move of an identity's email with the end of its reset links and two-factor challenges, the
   hash on a credential
   row, an email's account, its hash, its ban, whether its second factor is on and its start as a
-  sign-in reads them, the account of a two-factor challenge, the end of one and the reclaim of
-  those left unanswered, an account's second
+  sign-in reads them, the account of a two-factor challenge, what tells whether one takes a
+  code, the end of one and the reclaim of those left unanswered, an account's second
   factor read (its flag and its key), the confirmation of a code of its key and the turning off of
   the factor (each one transaction), the two transactions of a
   new password: a reset's and a change's, each ending the account's two-factor challenges, an
@@ -1018,8 +1024,10 @@ its challenge cookie carried by the device as `challenge`.
   or out, the backup code kept, the challenge ended, the failed sign-ins as they were; the
   confirmation from the password signing in with that backup code, which is then used up, or with
   a new code of the key, signing out the device seen least recently and closing its socket; 429
-  still first; within the limit, a tenth device and one signed in already, a wrong code counted and
-  the right one forgetting) and
+  still first; a ban between the dialog's confirmation and its code answered 403 with the backup
+  code kept and taken once the ban is lifted; a challenge past its ten minutes, or after five wrong
+  codes, answered 401 before the limit; within the limit, a tenth device and one signed in already,
+  a wrong code counted and the right one forgetting) and
   `auth-handler/confirm-sign-in-races.spec.ts` (each of those changes committed in the account's
   turn before a code step and after it, both orders forced by the turn and by a held query, a ban in the turn before the
   step or committed while its session waits for its admission, a factor turned off, or off and
@@ -1028,7 +1036,8 @@ its challenge cookie carried by the device as `challenge`.
   of the codes or by two challenges, one after the other);
   `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, none for one padded with
   whitespace, a challenge's account by
-  its row and none for any other value, the internal requests, a challenge that is not one cookie
+  its row and none for any other value, whether a challenge takes a code (none past its ten
+  minutes, after five codes counted, with a count that is no whole number), the internal requests, a challenge that is not one cookie
   value refused before any call is built, one round trip of a challenge whose signature is
   encoded, and the reclaim of expired challenges: each with its count, a count left alone
   included, no unexpired one and no row of another kind, a bounded number at a time, read through
