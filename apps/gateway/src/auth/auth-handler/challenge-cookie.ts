@@ -10,6 +10,7 @@ import { reading, writing } from '../device-session-rows'
 import { ADMISSION_HEADER, DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
 import challengeEndStatement from '../surql/two-factor-challenge-end.surql'
 import challengeOwnerStatement from '../surql/two-factor-challenge-owner.surql'
+import challengesReclaimStatement from '../surql/two-factor-challenges-reclaim.surql'
 
 /**
  * The key Better Auth's two-factor plugin names its cookie by, which carries a password step's
@@ -126,14 +127,38 @@ export function endChallenge(directory: LocalDb, challenge: string): ResultAsync
 }
 
 /**
+ * How many rows of expired two-factor challenges one password step that writes a challenge reads
+ * at most to reclaim them: each such step leaves one challenge (two rows, ending together) behind at
+ * most, while the rows it reads end five challenges at least, so a backlog of unanswered ones
+ * drains over the next steps.
+ */
+export const RECLAIMED_PER_CHALLENGE = 10
+
+/**
+ * Ends some of the two-factor challenges password steps wrote and no code step answered, once they
+ * expired more than a minute ago: at most `RECLAIMED_PER_CHALLENGE` of their rows are read, through
+ * the index of the ceremonies' expiry, and each ends its challenge with the row counting its codes
+ * (`fn::two_factor_challenge_end`). Better Auth's own clean-up of expired rows is off, so nothing
+ * else reclaims them. No row of another kind is touched.
+ */
+export function reclaimChallenges(directory: LocalDb): ResultAsync<void, DataError> {
+  return writing(
+    directory.db.query(challengesReclaimStatement, { limit: RECLAIMED_PER_CHALLENGE }).retry(),
+    'the expired two-factor challenges could not be reclaimed',
+  ).map(() => undefined)
+}
+
+/**
  * Better Auth's two-factor challenges as the auth mount meets them: the name of the cookie that
- * carries one, the account one belongs to (`challengeOwner`), and the end of one (`endChallenge`).
+ * carries one, the account one belongs to (`challengeOwner`), the end of one (`endChallenge`), and
+ * the reclaim of those left unanswered once expired (`reclaimChallenges`).
  */
 export interface TwoFactorChallenges {
   /** The name of Better Auth's two-factor cookie, its namespace and any secure prefix included. */
   cookieName(): Promise<string>
   ownerOf(challenge: string): ResultAsync<IdentityId | undefined, DataError>
   end(challenge: string): ResultAsync<void, DataError>
+  reclaim(): ResultAsync<void, DataError>
 }
 
 /**
@@ -148,6 +173,7 @@ export function twoFactorChallenges(
     cookieName: async () => (await auth.$context).createAuthCookie(TWO_FACTOR_COOKIE).name,
     ownerOf: (challenge) => challengeOwner(directory, challenge),
     end: (challenge) => endChallenge(directory, challenge),
+    reclaim: () => reclaimChallenges(directory),
   }
 }
 

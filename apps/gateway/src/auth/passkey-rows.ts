@@ -18,9 +18,9 @@ export interface ListedPasskey {
 
 /**
  * How many expired ceremonies one start of a ceremony deletes at most: each start leaves one row at
- * most behind, so a backlog of abandoned ones drains over the next starts. This bounds the
- * deletions only: finding them reads the rows of `verification` by their expiry and value, which no
- * index holds, so that read grows with the table (every row of it while fewer than this many match).
+ * most behind, so a backlog of abandoned ones drains over the next starts. Finding them reads the
+ * index of the ceremonies' expiry, so the read is bounded by this too: it reads the rows it deletes
+ * and no other.
  */
 export const RECLAIMED_PER_CEREMONY = 10
 
@@ -80,8 +80,9 @@ export class PasskeyRows {
   /**
    * Deletes the rows Better Auth's passkey plugin wrote for the options of a registration or of a
    * sign-in whose ceremony was left unfinished, once they expired more than a minute ago, at most
-   * `RECLAIMED_PER_CEREMONY` of them: Better Auth's own clean-up of expired rows is off, so nothing
-   * else reclaims them. No row of another kind is touched.
+   * `RECLAIMED_PER_CEREMONY` of them, found through the index of the ceremonies' expiry: Better
+   * Auth's own clean-up of expired rows is off, so nothing else reclaims them. No row of another
+   * kind is touched.
    */
   reclaim(): ResultAsync<void, DataError> {
     return writing(

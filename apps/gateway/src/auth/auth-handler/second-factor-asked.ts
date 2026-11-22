@@ -33,6 +33,11 @@ export const asksSecondFactor = z.object({ twoFactorRedirect: z.literal(true) })
  * A challenge the answer does not carry, a read that failed, or an ending that failed answers 500
  * `internal`, the challenge handed to nobody.
  *
+ * Each step that wrote a challenge first reclaims some of those earlier steps left unanswered and
+ * expired (`TwoFactorChallenges.reclaim`): this is where challenges are written, so their backlog
+ * drains at the pace they are made, whatever the passkeys do. A reclaim that failed answers 500
+ * `internal` too, the new challenge handed to nobody (it expires, and a later step reclaims it).
+ *
  * Each answer carries what it means for the email's failed sign-ins (`JudgedAnswer`), decided here
  * and not read again later: the challenge and the ban's refusal judged nothing (the right password
  * of an account whose second factor is on is not a sign-in's last step, whatever becomes of the
@@ -48,6 +53,11 @@ export async function secondFactorAsked(
   const challenge = setCookieValue(answer, await deps.challenges.cookieName())
 
   if (challenge === undefined) {
+    return unjudged(internal())
+  }
+
+  // Each step that writes a challenge reclaims some left unanswered, which nothing else does.
+  if ((await deps.challenges.reclaim()).isErr()) {
     return unjudged(internal())
   }
 

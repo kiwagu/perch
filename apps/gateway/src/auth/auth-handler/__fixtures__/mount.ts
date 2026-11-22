@@ -184,6 +184,7 @@ export const noAccounts: Pick<
     cookieName: () => Promise.reject(new Error('no challenge is read here')),
     ownerOf: notHere,
     end: notHere,
+    reclaim: notHere,
   },
   twoFactor: { read: notHere },
   passkeys: { ownerOf: notHere, reclaim: notHere },

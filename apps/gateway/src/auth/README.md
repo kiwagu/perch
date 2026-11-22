@@ -427,7 +427,14 @@ token and no cookie; one that does not (a password changed, an email moved meanw
 challenge's rows deleted (`endChallenge`) and answers 401 as wrong credentials; one whose account
 the second read finds banned has them deleted and answers 403 `account-banned`. A challenge the
 answer does not carry, or a read or an ending that failed, answers 500 `internal`, the challenge
-handed to nobody. Each of these answers carries what it means for the email's failed sign-ins,
+handed to nobody. A step whose code never comes (the device closed) leaves the challenge's two rows
+behind, which expire after ten minutes but which nothing deletes, Better Auth's own clean-up being
+off: so each step that wrote a challenge first reclaims some of those earlier steps left once they
+expired more than a minute ago (`TwoFactorChallenges.reclaim`, `reclaimChallenges`: at most
+`RECLAIMED_PER_CHALLENGE` (10) rows read, each ending its challenge with the row counting its codes
+through `fn::two_factor_challenge_end`, a count whose challenge is gone included; a reclaim that
+failed answers 500 `internal` too). The step is where challenges are written, so their backlog
+drains at the pace they are made, whatever happens to passkeys. Each of these answers carries what it means for the email's failed sign-ins,
 decided where it is made and read again nowhere (`JudgedAnswer`, `auth-handler/sign-in-settlement.ts`):
 the challenge and the ban's refusal judge nothing, whatever becomes of the account afterwards (the
 right password of such an account is not a sign-in's last step; the right code will be), the 401
@@ -522,11 +529,13 @@ registration's options and a guest's alike, first reclaims at most `RECLAIMED_PE
 of the passkey ceremonies that expired more than a minute ago (`PasskeyRows.reclaim`, one
 statement: the rows whose JSON value is the plugin's registration or sign-in, the minute keeping a
 ceremony Better Auth still takes out of reach of a database clock a little ahead), so a backlog of
-abandoned ones drains over the next starts. That bounds the deletions, not the read that finds
-them: `verification` is indexed by its identifier alone, so the statement reads its rows by expiry
-and value, all of them while fewer than ten match, a cost that grows with the table. No row of another
-kind (a reset link, a pending change of an email or deletion of an account, a two-factor challenge)
-is touched.
+abandoned ones drains over the next starts. The read that finds them is bounded too: the schema
+marks each row of `verification` with the kind of ceremony it belongs to (`ceremony`: `passkey`,
+`two-factor`, none for every other row) and indexes the ceremonies by kind and expiry
+(`verification_ceremony_expiry`), so each reclaim, a password step's of two-factor challenges
+included, reads the expired rows of its kind, the earliest first, and no other row. No row of
+another kind (a reset link, a pending change of an email or deletion of an account, a two-factor
+challenge) is touched, so a reset link past its hour still reads as expired.
 
 A signed-in device changes its password with `POST /auth/change-password` `{ currentPassword,
 password }`, its token and `X-Perch-Device` (400 `bad-request` without a valid device, 401
@@ -897,9 +906,11 @@ its challenge cookie carried by the device as `challenge`.
   folder's index),
   `challengeValue`, `setCookieValue`, `challengeOwner`, `endChallenge`, `internalRequest`
   (`InternalCall`) and
-  `twoFactorChallenges` (`TwoFactorChallenges`: `cookieName`, `ownerOf`, `end`; the mount's
-  `challenges`, built by the composition root) (`auth-handler/challenge-cookie.ts`; all but
-  `challengeOwner` and `endChallenge` also through the folder's index), `secondFactorAsked`
+  `reclaimChallenges` and `RECLAIMED_PER_CHALLENGE`,
+  `twoFactorChallenges` (`TwoFactorChallenges`: `cookieName`, `ownerOf`, `end`, `reclaim`; the
+  mount's `challenges`, built by the composition root) (`auth-handler/challenge-cookie.ts`; all but
+  `challengeOwner`, `endChallenge`, `reclaimChallenges` and `RECLAIMED_PER_CHALLENGE` also through
+  the folder's index), `secondFactorAsked`
   (`auth-handler/second-factor-asked.ts`),
   `ADMIN_PATHS` (`admin-paths.ts`: the path of every endpoint of that plugin), `rolesOf`
   (`platform-roles.ts`: the platform roles of an account's stored role),
@@ -929,7 +940,8 @@ its challenge cookie carried by the device as `challenge`.
   the move of an identity's email with the end of its reset links and two-factor challenges, the
   hash on a credential
   row, an email's account, its hash, its ban, whether its second factor is on and its start as a
-  sign-in reads them, the account of a two-factor challenge and the end of one, an account's second
+  sign-in reads them, the account of a two-factor challenge, the end of one and the reclaim of
+  those left unanswered, an account's second
   factor read (its flag and its key), the confirmation of a code of its key and the turning off of
   the factor (each one transaction), the two transactions of a
   new password: a reset's and a change's, each ending the account's two-factor challenges, an
@@ -937,7 +949,8 @@ its challenge cookie carried by the device as `challenge`.
   reclaim of the passkey ceremonies left unfinished, and the removal of a deleted account's rows).
 - Tables: `identity` (the admin plugin's `role`, `banned`, `ban_reason` and `ban_expires`, and
   the two-factor plugin's `two_factor_enabled`, among its columns), `account`, `device_session`
-  (the admin plugin's `impersonated_by` among its columns), `verification`, `two_factor` (with
+  (the admin plugin's `impersonated_by` among its columns), `verification` (with the schema's
+  `ceremony` column and the index of the ceremonies' expiry beside Better Auth's), `two_factor` (with
   the schema's functions `fn::two_factor_challenge_end` and `fn::two_factor_challenges_end`) and
   `passkey` of the directory schema
   (`database/schema/directory/`), which `auth-schema.spec.ts` holds to Better Auth's own for
@@ -990,8 +1003,14 @@ its challenge cookie carried by the device as `challenge`.
   of the codes or by two challenges, one after the other);
   `auth-handler/challenge-cookie.spec.ts` (a cookie's value read as set, a challenge's account by
   its row and none for any other value, the internal requests, a challenge that is not one cookie
-  value refused before any call is built, and one round trip of a challenge whose signature is
-  encoded); `session-hooks.spec.ts` (which paths write a session waiting);
+  value refused before any call is built, one round trip of a challenge whose signature is
+  encoded, and the reclaim of expired challenges: each with its count, a count left alone
+  included, no unexpired one and no row of another kind, a bounded number at a time, read through
+  the index of the ceremonies' expiry as `EXPLAIN FULL` shows);
+  `auth-handler/second-factor-asked.spec.ts` (the challenges password steps left unanswered
+  reclaimed once expired at the next step that writes one, no row of another kind, no unexpired
+  challenge and none expired under a minute ago touched, and a reset link still read as expired);
+  `session-hooks.spec.ts` (which paths write a session waiting);
   `two-factor-adapter.spec.ts` (Better Auth's enable, a code on a challenge without a session and
   a backup code spent once, through the patched adapter); `two-factor.routes.spec.ts` (the
   settings of the second factor over a real Better Auth on an embedded directory: the key, its URI,
@@ -1022,6 +1041,8 @@ its challenge cookie carried by the device as `challenge`.
   `auth-handler/passkey-ceremonies.spec.ts` (the ceremonies of both kinds left unfinished
   reclaimed once expired at the next options, no row of another kind, no unexpired ceremony and
   none expired under a minute ago touched, and a backlog drained a bounded number at a time);
+  `passkey-rows.spec.ts` (the reclaim of expired ceremonies of both kinds and of no other row, read
+  through the index of the ceremonies' expiry as `EXPLAIN FULL` shows);
   `auth-handler/verification-ban.spec.ts`, which holds the
   verification of a banned account through the real Better Auth: its gate's refusal with the email
   verified, a ban committed while the insert, the readback or the admission is held answering 403

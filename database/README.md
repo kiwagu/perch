@@ -37,7 +37,9 @@ only the gateway's own writes change it (the profile's email through the confirm
   row holds the argon2id hash of the password), `device_session` (one row per sign-in of a device
   of an identity, with the device's own id, its label and the session token it holds; a sign-out
   ends the row, which stays listed for 30 days), `verification` (one-time tokens with an expiry,
-  a sign-in's two-factor challenge among them), `two_factor` (an account's second factor: its
+  a sign-in's two-factor challenge and a passkey's ceremony among them, each ceremony marked with
+  its kind, `ceremony`, which the schema derives at each write, and indexed by kind and expiry, so
+  the gateway reclaims the expired ones of a kind reading them alone), `two_factor` (an account's second factor: its
   key's secret and its backup codes, encrypted, and whether a code confirmed the key, with the
   functions `fn::two_factor_challenge_end` and `fn::two_factor_challenges_end`, which end one
   pending two-factor challenge or every one of an identity) and `passkey` (an account's passkeys:
@@ -68,7 +70,8 @@ only the gateway's own writes change it (the profile's email through the confirm
   schema folder: the permissions of `identity` (with `account`), `profile`, `settings`,
   `membership` (with `tenant`), `device_session`, `invitation`, `two_factor` and `passkey`, the
   structure of the tenant
-  tables (`tenant-structure`), and the generated suites of the shapes.
+  tables (`tenant-structure`), the kind of ceremony each row of `verification` is marked with
+  (`verification-ceremony`), and the generated suites of the shapes.
   `setup.surql`, which SurrealKit runs in each test database before it applies the schema,
   defines a record access method `identity` for that database only: the suites' record actors
   sign up and in through it, which creates the identity row and its credential row as the

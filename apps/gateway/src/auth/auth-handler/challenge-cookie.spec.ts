@@ -1,17 +1,31 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
+import { openTestDb } from '@workspace/data/testing'
 import { idSchemas } from '@workspace/ids'
 import { z } from '@workspace/zod'
 
+import { DIRECTORY, NAMESPACE } from '../../config'
 import { linkToken } from '../../mail/__fixtures__/outbox'
 import { accountServicesOf, deviceHeaders, openAuth, signUpOn } from '../__fixtures__/auth-instance'
+import { selectionReads } from '../__fixtures__/query-plan'
 import { codeOf, passwordStepRequest, secondFactorOn } from '../__fixtures__/second-factor'
+import {
+  identifiersIn,
+  identifiersOf,
+  keptRows,
+  passkeyCeremony,
+  twoFactorChallenge,
+  written,
+} from '../__fixtures__/verification'
 import { ADMISSION_HEADER, DEVICE_HEADER, DEVICE_LABEL_HEADER } from '../session-hooks'
+import twoFactorChallengesReclaimStatement from '../surql/two-factor-challenges-reclaim.surql'
 
 import {
   challengeOwner,
   challengeValue,
   internalRequest,
+  RECLAIMED_PER_CHALLENGE,
+  reclaimChallenges,
   setCookieValue,
   twoFactorChallenges,
 } from './challenge-cookie'
@@ -119,6 +133,83 @@ describe('challengeOwner', () => {
       (await challengeOwner(opened.local, `reset-password:${token}.c2lnbmF0dXJl`))._unsafeUnwrap(),
     ).toBeUndefined()
   }, 30_000)
+})
+
+describe('reclaimChallenges', () => {
+  /** A directory of its own, closed when the test ends. */
+  async function directory() {
+    const local = (await openTestDb({ namespace: NAMESPACE, database: DIRECTORY }))._unsafeUnwrap()
+
+    closers.push(() => local.close())
+
+    return local
+  }
+
+  it('ends the challenges that expired over a minute ago with the rows counting their codes, a count left alone included, and no other row', async () => {
+    const local = await directory()
+    const [, orphanCount] = twoFactorChallenge('spent', -3)
+    const expired = [
+      ...twoFactorChallenge('old', -10),
+      ...twoFactorChallenge('older', -60),
+      // The row counting the codes of a challenge already gone.
+      orphanCount,
+    ]
+    const kept = [
+      ...keptRows('a'),
+      ...twoFactorChallenge('live', 9),
+      ...twoFactorChallenge('recent', -0.5),
+      passkeyCeremony('authentication-old', 'authentication', -10),
+    ]
+
+    await written(local, [...expired, ...kept])
+    ;(await reclaimChallenges(local))._unsafeUnwrap()
+
+    expect(await identifiersIn(local)).toEqual(identifiersOf(kept))
+  })
+
+  it('reads at most its bound of rows each time, so a backlog of challenges drains over several', async () => {
+    const local = await directory()
+
+    // Twelve challenges left unanswered, each expired a minute apart, the earliest first.
+    await written(
+      local,
+      Array.from({ length: 12 }, (_, at) => twoFactorChallenge(`left-${at}`, -2 - at)).flat(),
+    )
+    ;(await reclaimChallenges(local))._unsafeUnwrap()
+
+    // The ten rows of the five earliest expired went, each challenge with its count.
+    expect(await identifiersIn(local)).toHaveLength(24 - RECLAIMED_PER_CHALLENGE)
+
+    ;(await reclaimChallenges(local))._unsafeUnwrap()
+    ;(await reclaimChallenges(local))._unsafeUnwrap()
+
+    expect(await identifiersIn(local)).toEqual([])
+  })
+
+  it('reads the expired challenges through the index of their expiry, never the whole table: as many rows as it ends', async () => {
+    const local = await directory()
+    const expired = [...twoFactorChallenge('old', -10), ...twoFactorChallenge('older', -20)]
+
+    // Many rows the read must not walk: expired rows of other kinds and live challenges.
+    await written(local, [
+      ...expired,
+      ...Array.from({ length: 8 }, (_, at) => keptRows(`${at}`)).flat(),
+      ...Array.from({ length: 8 }, (_, at) =>
+        passkeyCeremony(`authentication-${at}`, 'authentication', -30),
+      ),
+      ...Array.from({ length: 8 }, (_, at) => twoFactorChallenge(`live-${at}`, 9)).flat(),
+    ])
+
+    const reads = await selectionReads(local, twoFactorChallengesReclaimStatement, {
+      limit: RECLAIMED_PER_CHALLENGE,
+    })
+
+    expect(reads.map(({ operator, index, rows }) => ({ operator, index, rows }))).toEqual([
+      { operator: 'IndexScan', index: 'verification_ceremony_expiry', rows: expired.length },
+    ])
+    // Only the two-factor challenges that expired: the range of the index starts at their kind.
+    expect(reads[0]?.access).toMatch(/^\['two-factor'\] LessThan d'/)
+  })
 })
 
 describe('internalRequest', () => {
