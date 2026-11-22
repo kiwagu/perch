@@ -602,16 +602,26 @@ describe('SignInContainer', () => {
 
   it('retries with the credentials of the attempt after the code step too, whatever the form holds by then', async () => {
     let user: AuthUser | undefined
+    let answer: (result: SignInResult) => void = () => {}
     const asked: Array<{ email: string; password: string; out: boolean }> = []
     const session: SessionPort = {
       ...fakeSession().session,
       current: () => user,
-      signIn: (input) => {
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
         asked.push({
           email: input.email,
           password: input.password,
           out: input.signOutOldest === true,
         })
+
+        if (asked.length === 1) {
+          // The password step's answer waits, while the form can still be edited.
+          return ResultAsync.fromSafePromise(
+            new Promise<SignInResult>((resolve) => {
+              answer = resolve
+            }),
+          )
+        }
 
         return okAsync({ kind: 'code-required', challenge: 'challenge-1', email: input.email })
       },
@@ -631,9 +641,11 @@ describe('SignInContainer', () => {
     typeInto('user.sign-in.email-input', ann.email)
     typeInto('user.sign-in.password-input', 'Pass-word-1')
     fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
-    await screen.findByTestId('user.sign-in.code.dialog')
+    // Another account's credentials are typed while the password step is pending.
     typeInto('user.sign-in.email-input', 'bob@example.test')
     typeInto('user.sign-in.password-input', 'Other-word-2')
+    act(() => answer({ kind: 'code-required', challenge: 'challenge-1', email: ann.email }))
+    await screen.findByTestId('user.sign-in.code.dialog')
     typeInto('user.sign-in.code.code-input', CODE)
     fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
     await screen.findByTestId('user.sign-in.device-limit-dialog')

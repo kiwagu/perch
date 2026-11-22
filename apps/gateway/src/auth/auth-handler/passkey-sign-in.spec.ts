@@ -1,10 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 
 import { interceptQueries } from '@workspace/data/testing'
 import type { IdentityId } from '@workspace/ids'
 import { CLOSE } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
+import type { KeyedTurns } from '../../keyed-turns'
 import { SUPERSEDED } from '../../sync/sync-connection'
 import { ban, sessionStates } from '../__fixtures__/account-ban'
 import { DeviceSessions } from '../device-sessions'
@@ -16,6 +17,7 @@ import {
   withSecondFactor,
   wrongPasswords,
 } from './__fixtures__/code-step'
+import { seenInTurn } from './__fixtures__/devices'
 import {
   ANN,
   ARGON2_WAIT,
@@ -72,6 +74,31 @@ async function devicesOf(mounted: Mounted, identity: IdentityId) {
   const devices = new DeviceSessions({ directory: mounted.local, clock: mounted.clock })
 
   return (await devices.list(identity))._unsafeUnwrap().map((row) => row.device)
+}
+
+/**
+ * The turns `turns` is asked for from now on, by key: how many were asked, and how many of them
+ * started their work, each once every turn asked before it under its key settled.
+ */
+function turnsStarted(turns: KeyedTurns<string>) {
+  const run = turns.run.bind(turns)
+  const begun: string[] = []
+  const spy = vi.spyOn(turns, 'run').mockImplementation((key, work) =>
+    run(key, () => {
+      begun.push(key)
+
+      return work()
+    }),
+  )
+
+  onTestFinished(() => {
+    spy.mockRestore()
+  })
+
+  return {
+    asked: (key: string) => spy.mock.calls.filter(([asked]) => asked === key).length,
+    started: (key: string) => begun.filter((each) => each === key).length,
+  }
 }
 
 /**
@@ -452,30 +479,33 @@ describe("authHandler, a passkey sign-in and a removal of its passkey in the acc
   )
 
   it(
-    'signs in with a passkey whose turn came before its removal, which then ends no session',
+    'signs in with a passkey whose turn came before its removal, which waits for the whole turn, its admission included, and then ends no session',
     async () => {
       const queries = heldQueries()
       const mounted = await mountedOnRealAuth({ directory: queries.directory })
       const { ann, held, id } = await annWithPasskey(mounted)
       const passkeys = passkeysOf(mounted)
       const assertion = await assertionOf(mounted, 'desk', held)
-      const asked = turnsAsked(mounted.turns)
-      const insert = queries.hold(isSessionInsert)
+      const started = turnsStarted(mounted.turns)
+      const admission = queries.hold(isAdmission)
       const signing = mounted.route(passkeySignInRequest(assertion, 'desk'), '198.18.2.2')
 
-      // Better Auth verified the passkey and is about to write the session, in the sign-in's turn;
-      // the removal asks for the turn meanwhile.
-      await vi.waitFor(() => expect(insert.paused()).toBe(true), ARGON2_WAIT)
+      // Better Auth verified the passkey and wrote the session, and the gateway is admitting it, the
+      // last step of the sign-in's turn; the removal asks for the turn meanwhile.
+      await vi.waitFor(() => expect(admission.paused()).toBe(true), ARGON2_WAIT)
 
       const removing = passkeys.remove(ann.on('laptop'), id)
 
-      await turnsReach(asked, ann.identity, 2)
-      insert.release()
+      await vi.waitFor(() => expect(started.asked(ann.identity)).toBe(2), ARGON2_WAIT)
+      // The removal's turn has not started: the sign-in's runs on through its admission.
+      expect(started.started(ann.identity)).toBe(1)
+      admission.release()
 
       const { status, body } = await answered(await signing)
 
       expect(status).toBe(200)
       expect((await removing).status).toBe(204)
+      expect(started.started(ann.identity)).toBe(2)
       expect((await mounted.sessions.read(tokenOf(body))).kind).toBe('session')
       expect(await passkeys.listed(ann.on('laptop'))).toEqual([])
     },
@@ -485,11 +515,17 @@ describe("authHandler, a passkey sign-in and a removal of its passkey in the acc
 
 describe("authHandler, a passkey sign-in at the account's limit of devices", () => {
   it(
-    "answers 409 device-limit naming the account it asks about, nothing signed in and the email's failed sign-ins forgotten, and signs in once confirmed for that account, the oldest device signed out",
+    "answers 409 device-limit naming the account it asks about, nothing signed in and the email's failed sign-ins forgotten, and signs in once confirmed for that account, the device seen least recently signed out",
     async () => {
       const mounted = await mountedOnRealAuth()
       const { ann, held } = await annWithPasskey(mounted, TEN)
 
+      // Every device but c is seen after the sign-ins, c the least recently: c is the one to go.
+      await seenInTurn(
+        mounted,
+        ann,
+        TEN.filter((device) => device !== 'c'),
+      )
       await wrongPasswords(mounted, 9, '198.18.3.1')
 
       expect(await passkeySignIn(mounted, 'k', held)).toEqual({
@@ -504,10 +540,12 @@ describe("authHandler, a passkey sign-in at the account's limit of devices", () 
 
       expect(confirmed.status).toBe(200)
       expect((await mounted.sessions.read(tokenOf(confirmed.body))).kind).toBe('session')
-      expect((await endedOf(mounted, ann.identity)).map(([, reason]) => reason)).toEqual([
-        'device-limit',
+      expect(await endedOf(mounted, ann.identity)).toEqual([['c', 'device-limit']])
+      // Its socket, and no other, is closed for the limit.
+      expect(mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)).toEqual([
+        [ann.identity, 'c', CLOSE.deviceLimit],
       ])
-      expect(mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)).toHaveLength(1)
+      expect(ann.sockets.get('c')?.ended).toEqual([CLOSE.deviceLimit])
     },
     ARGON2_RUNS_MS * 2,
   )

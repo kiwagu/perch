@@ -1,10 +1,23 @@
 // scenario: user/base/passkeys
+import type { Page } from '@playwright/test'
+
 import { generate } from '../../support/data'
 import { expect, signUp, test, toast } from '../../support/fixtures'
 import { addVirtualAuthenticator } from '../../support/virtual-authenticator'
 
 /** How far the stand's clock and the test's may differ: both run on this host. */
 const CLOCK_SLACK_MS = 5_000
+
+/** The moment `time` as the page writes one: the date and the minute, in the page's language. */
+const shownAs = (page: Page, time: number): Promise<string> =>
+  page.evaluate(
+    (moment) =>
+      new Intl.DateTimeFormat(document.documentElement.lang, {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+      }).format(moment),
+    time,
+  )
 
 test.describe('Add and remove a passkey in the settings', { tag: '@full' }, () => {
   test("A passkey is added by the browser, listed, and removed only once the frame's question is confirmed", async ({
@@ -51,6 +64,10 @@ test.describe('Add and remove a passkey in the settings', { tag: '@full' }, () =
         before - CLOCK_SLACK_MS,
       )
       expect(when).toBeLessThanOrEqual(after + CLOCK_SLACK_MS)
+      // And it says that moment as the page writes one (the date and the minute, in its language).
+      await expect(added, 'the added cell says when its passkey was added').toHaveText(
+        await shownAs(page, when),
+      )
     })
 
     await test.step('3. Click [user.settings.passkeys.remove-button] of the passkey', async () => {

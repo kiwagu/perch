@@ -256,6 +256,12 @@ describe('the bounds of the parameters', () => {
 
       if (reached !== undefined) {
         expect(inside.code).toBe(reached)
+        // The check behind the schema is never reached past the bound: the schema refuses the
+        // text as a request that does not follow it, the contract attributing no code to it.
+        expect({ status: past.status, code: past.code }).toEqual({
+          status: 400,
+          code: SHAPE_REFUSAL,
+        })
       }
 
       // A value the account checks is refused past its bounds as a wrong one is: the text inside

@@ -1000,7 +1000,8 @@ its challenge cookie carried by the device as `challenge`.
   turned off ending the challenge, and a ban between the steps answered 403, judging nothing) and
   `auth-handler/confirm-sign-in-races.spec.ts` (each of those changes committed in the account's
   turn before a code step and after it, both orders forced by the turn and by a held query, the
-  limit of devices answered 409 and confirmed from the password again, a ban in the turn before the
+  limit of devices answered 409 and confirmed from the password again, signing out the device seen
+  least recently and closing its socket, a ban in the turn before the
   step or committed while its session waits for its admission, a factor turned off, or off and
   started again unconfirmed, while the password step waited to write its challenge, refusing a code
   of the key and a backup code with the challenge ended, and a backup code spent beside a renewal
@@ -1041,8 +1042,9 @@ its challenge cookie carried by the device as `challenge`.
   replayed assertion refused, a sign-in whose count or session the directory refused to write
   answering 500, a removed or unknown passkey answering 401, the device checked
   before the challenge is spent, a ban before the turn, in it and at the admission, a removal
-  committed before the sign-in's turn and after it, and the limit of devices: 409 naming the
-  account, a retry confirmed for it, and one confirmed for another account asked again);
+  committed before the sign-in's turn and after it, waiting through its admission, and the limit
+  of devices: 409 naming the account, a retry confirmed for it signing out the device seen least
+  recently and closing its socket, and one confirmed for another account asked again);
   `auth-handler/passkey-ceremonies.spec.ts` (the ceremonies of both kinds left unfinished
   reclaimed once expired at the next options, no row of another kind, no unexpired ceremony and
   none expired under a minute ago touched, and a backlog drained a bounded number at a time);

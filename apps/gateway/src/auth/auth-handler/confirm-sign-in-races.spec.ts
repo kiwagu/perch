@@ -21,6 +21,7 @@ import {
   withSecondFactor,
   wrongPasswords,
 } from './__fixtures__/code-step'
+import { seenInTurn } from './__fixtures__/devices'
 import {
   ANN,
   ARGON2_WAIT,
@@ -210,11 +211,17 @@ describe("authHandler, a sign-in's code step and a change of the account in the 
 
 describe("authHandler, a sign-in's code step at the account's limit of devices", () => {
   it(
-    "answers the right code of an eleventh device 409 with nothing signed in, forgetting the email's failed sign-ins, and signs it in from the password again once confirmed, the oldest device signed out",
+    "answers the right code of an eleventh device 409 with nothing signed in, forgetting the email's failed sign-ins, and signs it in from the password again once confirmed, the device seen least recently signed out",
     async () => {
       const mounted = await mountedOnRealAuth()
       const ann = await withSecondFactor(mounted, TEN)
 
+      // Every device but c is seen after the sign-ins, c the least recently: c is the one to go.
+      await seenInTurn(
+        mounted,
+        ann,
+        TEN.filter((device) => device !== 'c'),
+      )
       await wrongPasswords(mounted, 9, FROM)
 
       const asked = await passwordStep(mounted, 'k', FROM)
@@ -238,10 +245,12 @@ describe("authHandler, a sign-in's code step at the account's limit of devices",
       expect(confirmed.status).toBe(200)
       expect((await mounted.sessions.read(tokenOf(confirmed.body))).kind).toBe('session')
 
-      const ended = await endedOf(mounted, ann.identity)
-
-      expect(ended.map(([, reason]) => reason)).toEqual(['device-limit'])
-      expect(mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)).toHaveLength(1)
+      expect(await endedOf(mounted, ann.identity)).toEqual([['c', 'device-limit']])
+      // Its socket, and no other, is closed for the limit.
+      expect(mounted.closes.filter(([, , code]) => code === CLOSE.deviceLimit)).toEqual([
+        [ann.identity, 'c', CLOSE.deviceLimit],
+      ])
+      expect(ann.sockets.get('c')?.ended).toEqual([CLOSE.deviceLimit])
     },
     ARGON2_RUNS_MS,
   )
