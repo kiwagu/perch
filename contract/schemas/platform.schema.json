@@ -262,7 +262,8 @@
                               "items": {
                                 "type": "string",
                                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
-                              }
+                              },
+                              "uniqueItems": true
                             }
                           ],
                           "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."

@@ -155,3 +155,69 @@ describe('the screen schema an editor reads', () => {
     ).not.toEqual([])
   })
 })
+
+describe('the generated schemas and an invariant named twice in a list', () => {
+  /** Every schema of a property named `invariant` in a generated schema, at any depth. */
+  function invariantProperties(node: unknown): unknown[] {
+    if (Array.isArray(node)) {
+      return node.flatMap(invariantProperties)
+    }
+    if (typeof node !== 'object' || node === null) {
+      return []
+    }
+    const record = node as Record<string, unknown>
+    const properties = record['properties']
+    const own =
+      typeof properties === 'object' && properties !== null && 'invariant' in properties
+        ? [(properties as Record<string, unknown>)['invariant']]
+        : []
+
+    return [...own, ...Object.values(record).flatMap(invariantProperties)]
+  }
+
+  it('makes the list of names unique in the platform and the manifest schemas', () => {
+    for (const output of SCHEMA_OUTPUTS.filter(({ file }) => /platform|manifest/.test(file))) {
+      const lists = invariantProperties(output.schema()).flatMap((property) => {
+        const branches = (property as { anyOf?: unknown[] }).anyOf ?? []
+
+        return branches.filter(
+          (branch) => (branch as { type?: string }).type === 'array',
+        ) as Array<{ minItems?: number; uniqueItems?: boolean }>
+      })
+
+      expect(lists.length, output.file).toBeGreaterThan(0)
+      for (const list of lists) {
+        expect(list, output.file).toMatchObject({ minItems: 2, uniqueItems: true })
+      }
+    }
+  })
+  it('refuses a platform file whose code names an invariant twice, by its generated schema', () => {
+    const output = SCHEMA_OUTPUTS.find(({ file }) => /platform/.test(file))
+
+    if (output === undefined) {
+      throw new Error('no platform schema output')
+    }
+
+    const platformFile = (invariant: unknown) => ({
+      version: 6,
+      actions: {
+        'sign-in': {
+          description: 'Signs this device in.',
+          params: {},
+          result: 'the device is signed in',
+          codes: { 'rate-limited': { invariant } },
+          changes: [],
+        },
+      },
+      reserved: [],
+      status: { anchor: 'app-shell.status', states: ['ready'] },
+    })
+    const problems = (invariant: unknown) =>
+      validateAgainst('platform.yaml', output.schema(), platformFile(invariant)).map(
+        ({ message }) => message,
+      )
+
+    expect(problems(['failed-sign-ins', 'address-mails'])).toEqual([])
+    expect(problems(['failed-sign-ins', 'failed-sign-ins']).join(' ')).toMatch(/duplicate/)
+  })
+})

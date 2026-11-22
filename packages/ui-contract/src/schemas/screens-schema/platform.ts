@@ -58,7 +58,7 @@ export type PlatformParameter = z.infer<typeof actionParameterSchema>
 const invariantRefSchema = z
   .strictObject({
     invariant: z
-      .union([kebabNameSchema, z.array(kebabNameSchema).min(2)])
+      .union([kebabNameSchema, z.array(kebabNameSchema).min(2).meta({ uniqueItems: true })])
       .refine((named) => typeof named === 'string' || new Set(named).size === named.length, {
         message: 'an invariant is named once',
       })
