@@ -50,6 +50,7 @@ export {
   transitionsOf,
 } from './flow-nodes'
 export { hintBudgetProblems } from './hint-budget'
+export { invariantActions } from './invariants'
 export {
   MIGRATIONS,
   type Migration,
