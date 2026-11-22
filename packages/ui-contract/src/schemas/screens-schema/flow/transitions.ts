@@ -24,7 +24,7 @@ import { flowTargetSchema, guardNameSchema } from './names'
 export const branchReadOptOutSchema = z
   .literal(false)
   .describe(
-    "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.",
+    "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.",
   )
 
 /** One transition whose `actions` are `effect`s. */

@@ -1583,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                              "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -2023,7 +2023,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                    "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -2246,7 +2246,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                      "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2532,7 +2532,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                      "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2755,7 +2755,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                        "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -2983,7 +2983,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                      "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -3206,7 +3206,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                        "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -3475,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                              "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3915,7 +3915,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                    "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -4138,7 +4138,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                      "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -4386,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                                          "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
@@ -4826,7 +4826,7 @@
                                               "read": {
                                                 "type": "boolean",
                                                 "const": false,
-                                                "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                               },
                                               "actions": {
                                                 "minItems": 1,
@@ -5049,7 +5049,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                  "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5335,7 +5335,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                  "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5558,7 +5558,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                    "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -5786,7 +5786,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                  "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -6009,7 +6009,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+                                                    "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,

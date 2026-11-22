@@ -102,13 +102,13 @@ const authoredTransitionsSchema = transitionsSchemaOf(authoredTransitionSchema)
 export const controlRegionSchema = z
   .strictObject({
     by: anchorSchema.describe(
-      "The button whose region this is, bound to one action: the loader derives the region (`idle`, `running`). It carries the button's `description`, `onDone`, `onError`. See the rule `button-region`.",
+      "The screen's own button bound to one action, whose region this is: the loader writes `idle` and `running`; its `description`, `onDone` and `onError` go here. See the rule `button-region`.",
     ),
     description: z.string().exactOptional().describe(DESCRIPTION_PURPOSES.region),
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        "What follows when the action succeeds; absent, back to `idle`. From version 5 a branch never writes the clear of its part's error: it is derived. See the rule `area-request`.",
+        "What follows a success; absent or with no target, back to `idle`. From version 5 a branch neither showing nor clearing its part's error starts with that clear, derived. See the rule `area-request`.",
       ),
     onError: authoredTransitionsSchema
       .exactOptional()

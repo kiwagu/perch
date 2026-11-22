@@ -625,7 +625,7 @@ A string, a number or a boolean.
 ### `flow.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.entry`
 
@@ -755,7 +755,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `flow.states.<name>.on.<name>.read`
 
 <a id="screen-flow-states-name-on-name-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `flow.states.<name>.on.<name>.actions`
 
@@ -855,12 +855,12 @@ The guard that holds when what was typed is the stored value, a guard of `meta.g
 ### `flow.states.<name>.states.<name>.by`
 
 <a id="screen-flow-states-name-states-name-by"></a>
-The button whose region this is, bound to one action: the loader derives the region (`idle`, `running`). It carries the button's `description`, `onDone`, `onError`. See the rule `button-region`.
+The screen's own button bound to one action, whose region this is: the loader writes `idle` and `running`; its `description`, `onDone` and `onError` go here. See the rule `button-region`.
 
 ### `flow.states.<name>.states.<name>.onDone`
 
 <a id="screen-flow-states-name-states-name-ondone"></a>
-What follows when the action succeeds; absent, back to `idle`. From version 5 a branch never writes the clear of its part's error: it is derived. See the rule `area-request`.
+What follows a success; absent or with no target, back to `idle`. From version 5 a branch neither showing nor clearing its part's error starts with that clear, derived. See the rule `area-request`.
 
 ### `flow.states.<name>.states.<name>.onError`
 
@@ -905,7 +905,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -2596,7 +2596,7 @@ A string, a number or a boolean.
 ### `screens.flow.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-meta-renders"></a>
-Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.entry`
 
@@ -2721,7 +2721,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.on.<name>.read`
 
 <a id="manifest-screens-flow-states-name-on-name-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.on.<name>.actions`
 
@@ -2826,7 +2826,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.invoke.onDone.read`
 
 <a id="manifest-screens-flow-states-name-invoke-ondone-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.invoke.onDone.actions`
 
@@ -2901,7 +2901,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.invoke.onError.read`
 
 <a id="manifest-screens-flow-states-name-invoke-onerror-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.invoke.onError.actions`
 
@@ -3006,7 +3006,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -3131,7 +3131,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.on.<name>.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-on-name-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.on.<name>.actions`
 
@@ -3236,7 +3236,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onDone.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-invoke-ondone-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onDone.actions`
 
@@ -3311,7 +3311,7 @@ A guard: a camelCase name of the flow `meta.guards`.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onError.read`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-invoke-onerror-read"></a>
-Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`.
+Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.invoke.onError.actions`
 

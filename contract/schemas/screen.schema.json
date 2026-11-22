@@ -1100,7 +1100,7 @@
                         "additionalProperties": false
                       },
                       "renders": {
-                        "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                        "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                         "minItems": 1,
                         "type": "array",
                         "items": {
@@ -1332,7 +1332,7 @@
                         "additionalProperties": false
                       },
                       "renders": {
-                        "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                        "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                         "minItems": 1,
                         "type": "array",
                         "items": {
@@ -1460,14 +1460,14 @@
                             "by": {
                               "type": "string",
                               "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,4}$",
-                              "description": "The button whose region this is, bound to one action: the loader derives the region (`idle`, `running`). It carries the button's `description`, `onDone`, `onError`. See the rule `button-region`."
+                              "description": "The screen's own button bound to one action, whose region this is: the loader writes `idle` and `running`; its `description`, `onDone` and `onError` go here. See the rule `button-region`."
                             },
                             "description": {
                               "description": "What area of the screen the region is. Its states and their transitions say how it behaves. At most 200 characters.",
                               "type": "string"
                             },
                             "onDone": {
-                              "description": "What follows when the action succeeds; absent, back to `idle`. From version 5 a branch never writes the clear of its part's error: it is derived. See the rule `area-request`.",
+                              "description": "What follows a success; absent or with no target, back to `idle`. From version 5 a branch neither showing nor clearing its part's error starts with that clear, derived. See the rule `area-request`.",
                               "anyOf": [
                                 {
                                   "$ref": "#/$defs/authoredTransition"
@@ -1546,7 +1546,7 @@
                                     "type": "object",
                                     "properties": {
                                       "renders": {
-                                        "description": "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+                                        "description": "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
                                         "minItems": 1,
                                         "type": "array",
                                         "items": {
@@ -2162,7 +2162,7 @@
             "read": {
               "type": "boolean",
               "const": false,
-              "description": "Nothing reads after this outcome. Only on a branch of an invoke's `onDone` or `onError`; refused beside a `read` or under an invoke that says `read: false`. See the rule `read-after-an-action`."
+              "description": "Only where this outcome changes no list: nothing reads after it. On an invoke's `onDone` or `onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
             },
             "actions": {
               "minItems": 1,

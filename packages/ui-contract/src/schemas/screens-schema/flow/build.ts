@@ -83,7 +83,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     .min(1)
     .exactOptional()
     .describe(
-      "Anchors of the screen that only some states render; unlisted ones render in all. List a part's base or a list, never its items; a state handling an event on one renders it. See the rule `renders`.",
+      "Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.",
     )
   const meta = z
     .strictObject({
