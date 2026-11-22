@@ -1100,7 +1100,7 @@
                         "additionalProperties": false
                       },
                       "renders": {
-                        "description": "Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`.",
+                        "description": "List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`.",
                         "minItems": 1,
                         "type": "array",
                         "items": {
@@ -1332,7 +1332,7 @@
                         "additionalProperties": false
                       },
                       "renders": {
-                        "description": "Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`.",
+                        "description": "List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`.",
                         "minItems": 1,
                         "type": "array",
                         "items": {
@@ -1546,7 +1546,7 @@
                                     "type": "object",
                                     "properties": {
                                       "renders": {
-                                        "description": "Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`.",
+                                        "description": "List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`.",
                                         "minItems": 1,
                                         "type": "array",
                                         "items": {

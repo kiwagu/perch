@@ -625,7 +625,7 @@ A string, a number or a boolean.
 ### `flow.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-meta-renders"></a>
-Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`.
+List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`.
 
 ### `flow.states.<name>.entry`
 
@@ -905,7 +905,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`.
+List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`.
 
 ### `flow.states.<name>.states.<name>.states.<name>.entry`
 

@@ -84,7 +84,7 @@ export function flowPartsOf<T extends z.ZodType, E extends z.ZodType>(parts: {
     .exactOptional()
     .describe(
       parts.renderSets === true
-        ? "Anchors or render sets only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. List a part's base. See the rule `renders`."
+        ? "List anchors or render sets. A set lists all its anchors. An anchor renders where it or an ancestor is listed, or in all states if neither is ever listed. List a part's base. See the rule `renders`."
         : 'Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.',
     )
   const meta = z
