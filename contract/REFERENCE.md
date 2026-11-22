@@ -20,7 +20,7 @@ The title of the screen, for a reader.
 ### `description`
 
 <a id="screen-description"></a>
-What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters.
+What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule `description-purposes`. At most 200 characters.
 
 ### `frame`
 
@@ -320,7 +320,7 @@ The kind of the anchor; matches the end of its last segment.
 ### `anchors.<name>.description`
 
 <a id="screen-anchors-name-description"></a>
-What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.
+What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule `description-purposes`. At most 200 characters.
 
 ### `anchors.<name>.binding`
 
@@ -415,17 +415,17 @@ A code of the vocabulary (data-code).
 ### `anchors.<name>.codes`
 
 <a id="screen-anchors-name-codes"></a>
-The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code. See the rule `error-codes-and-fields`.
+The `data-code` values on a `message`, `error`, `toast` or `dialog`, each a vocabulary code: tests assert codes, never wording. An error may leave them out. See the rule `error-codes-and-fields`.
 
 ### `anchors.<name>.ranked`
 
 <a id="screen-anchors-name-ranked"></a>
-A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.
+A message whose codes are in rank order: of the codes raised before it shows, it shows the first. Only on a message of two codes or more, each listed once. See the rule `ranked-message`.
 
 ### `anchors.<name>.fields`
 
 <a id="screen-anchors-name-fields"></a>
-An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Every other code shows beside the controls of its part (rule `error-placement`). Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.
+An error's codes, each with the field it concerns or `form`; a code left out concerns the form. Left out, both are derived from bindings. See the rules `error-codes-and-fields` and `error-placement`.
 
 ### `anchors.<name>.fields.<name>`
 
@@ -515,7 +515,7 @@ Written on an unbound secret input: names the other secret input of its screen, 
 ### `anchors.<name>.confirm`
 
 <a id="screen-anchors-name-confirm"></a>
-The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation (an anchor of kind `confirmation` on the frame): an action of the model whose verb is `delete`, or an action of the platform whose verb (the first word of its last segment) is `ban`, `delete`, `remove` or `revoke`. On a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. See the rule `destructive-question`.
+`false`: the control runs its destructive action without asking. Left out, one bound to a destructive action asks the frame's confirmation; refused on any other. See the rule `destructive-question`.
 
 ### `states`
 
@@ -1946,7 +1946,7 @@ The title of the screen, for a reader.
 ### `screens.description`
 
 <a id="manifest-screens-description"></a>
-What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters.
+What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule `description-purposes`. At most 200 characters.
 
 ### `screens.frame`
 
@@ -2251,7 +2251,7 @@ The kind of the anchor; matches the end of its last segment.
 ### `screens.anchors.<name>.description`
 
 <a id="manifest-screens-anchors-name-description"></a>
-What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.
+What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule `description-purposes`. At most 200 characters.
 
 ### `screens.anchors.<name>.binding`
 
@@ -2351,12 +2351,12 @@ The data-code values the element carries. On an `error`, `failed` shows for a fa
 ### `screens.anchors.<name>.ranked`
 
 <a id="manifest-screens-anchors-name-ranked"></a>
-A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.
+A message whose codes are in rank order: of the codes raised before it shows, it shows the first. Only on a message of two codes or more, each listed once. See the rule `ranked-message`.
 
 ### `screens.anchors.<name>.fields`
 
 <a id="manifest-screens-anchors-name-fields"></a>
-An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).
+An error's codes, each with the field it concerns, which it shows under and marks invalid, or `form`; a code left out concerns the form. See the rules `error-placement` and `error-codes-and-fields`.
 
 ### `screens.anchors.<name>.fields.<name>`
 
@@ -4507,6 +4507,13 @@ A message whose codes more than one source may raise before it shows (an effect 
 
 Keys it concerns: [`screen.anchors.<name>.ranked`](#screen-anchors-name-ranked), [`screen.anchors.<name>.codes`](#screen-anchors-name-codes).
 
+### A message whose codes are ranked
+
+<a id="rule-ranked-message"></a>
+`ranked: true` on a message: A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.
+
+Keys it concerns: [`screen.anchors.<name>.ranked`](#screen-anchors-name-ranked), [`manifest.screens.anchors.<name>.ranked`](#manifest-screens-anchors-name-ranked).
+
 ### Routes: the bindings of a screen
 
 <a id="rule-route-bindings"></a>
@@ -4889,7 +4896,13 @@ An error `<part>.error` that writes no `codes` carries the codes of three source
 
 Its `fields` map each code that concerns a parameter to the control its binding or the invoke passes for that parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen: a code a field of the model gives, and from version 3 a code a platform action attributes to a parameter (see the rule `attributed-codes`). A written entry names a field of the screen or `form`, the form as a whole, which is no anchor. Before version 3 a written `fields` replaces the derived one whole, and a code that two sources pass from two controls concerns the form. From version 3 the written entries merge over the derived ones, code by code, and the loader refuses, at the error, a code it carries that two controls pass and the file does not write (it writes the field it concerns or `form`), and a written entry equal to the derived one (derived; leave it out). The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>` (`-> form`).
 
-Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.fields`](#screen-anchors-name-fields).
+On `anchors.<name>.codes` as a screen file writes it: The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code. See the rule `error-codes-and-fields`.
+
+On `anchors.<name>.fields` as a screen file writes it: An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Every other code shows beside the controls of its part (rule `error-placement`). Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.
+
+In the manifest, `anchors.<name>.fields`: An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).
+
+Keys it concerns: [`screen.anchors.<name>.codes`](#screen-anchors-name-codes), [`screen.anchors.<name>.fields`](#screen-anchors-name-fields), [`manifest.screens.anchors.<name>.fields`](#manifest-screens-anchors-name-fields).
 
 ### Whether a field holds input
 
@@ -5002,6 +5015,15 @@ An anchor's `description` may be left out where the engine says it: a `heading` 
 
 Keys it concerns: [`screen.anchors.<name>.description`](#screen-anchors-name-description).
 
+### What a screen's and an element's description say
+
+<a id="rule-description-purposes"></a>
+A screen's `description`: What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters.
+
+An anchor's `description`: What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.
+
+Keys it concerns: [`screen.description`](#screen-description), [`manifest.screens.description`](#manifest-screens-description), [`screen.anchors.<name>.description`](#screen-anchors-name-description), [`manifest.screens.anchors.<name>.description`](#manifest-screens-anchors-name-description).
+
 ### What stays in a screen
 
 <a id="rule-what-stays"></a>
@@ -5103,6 +5125,8 @@ With a confirmation on the frame (an anchor of kind `confirmation`, `app-shell.c
 The flow says nothing of it: the press still leads to the state that runs the action, and the app's gate asks in front of the event, its confirm-button letting the event through and its cancel-button dropping it. The one line a screen writes is `confirm: false` on the control, which runs the action without asking; on a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. The frame's confirmation is declared by the frame alone, once, reserved, with both answers and no action of its own.
 
 The key `asks` of a control, which the manifest carries. Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform). Enter in a field of the asking control's form asks the same way.
+
+On `anchors.<name>.confirm`: The control runs its destructive action without asking first. Left out, a control whose binding names a destructive action asks the frame's confirmation (an anchor of kind `confirmation` on the frame): an action of the model whose verb is `delete`, or an action of the platform whose verb (the first word of its last segment) is `ban`, `delete`, `remove` or `revoke`. On a control that runs no destructive action it bans nothing and is refused. Without a confirmation on the frame nothing asks. See the rule `destructive-question`.
 
 Keys it concerns: [`screen.anchors.<name>.confirm`](#screen-anchors-name-confirm), [`manifest.screens.anchors.<name>.asks`](#manifest-screens-anchors-name-asks), [`manifest.ids.<name>.asks`](#manifest-ids-name-asks).
 

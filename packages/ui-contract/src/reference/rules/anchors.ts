@@ -150,6 +150,15 @@ const notices: ReferenceRule = {
   keys: ['screen.anchors.<name>.ranked', 'screen.anchors.<name>.codes'],
 }
 
+const rankedMessage: ReferenceRule = {
+  id: 'ranked-message',
+  title: 'A message whose codes are ranked',
+  text: [
+    '`ranked: true` on a message: A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. A code raised waits until the message shows or a flow clears it. For a message whose codes more than one source may raise before it shows (an effect of the app and a `show` of a flow on its way there): it says which one it shows in its structure, with its `codes` in rank order. Only a message of two codes or more, each listed once: `contract:check` refuses it elsewhere. The manifest carries `ranked` in `ids`, and `contract:diff` lists each ranked message with its order, `<anchor> ranks <code> > <code>`, a new order as the old line removed and the new one added, which its codes compared as a set do not show.',
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.ranked', 'manifest.screens.anchors.<name>.ranked'],
+}
+
 const anchorBinding: ReferenceRule = {
   id: 'anchor-binding',
   title: 'What an anchor is bound to',
@@ -193,4 +202,5 @@ export const ANCHOR_RULES: readonly ReferenceRule[] = [
   marking,
   readiness,
   notices,
+  rankedMessage,
 ]

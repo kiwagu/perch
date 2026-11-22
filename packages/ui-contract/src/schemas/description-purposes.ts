@@ -13,8 +13,8 @@ export const DESCRIPTION_BUDGET = 200
 const AT_MOST = `At most ${DESCRIPTION_BUDGET} characters.`
 
 export const DESCRIPTION_PURPOSES = {
-  screen: `What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. ${AT_MOST}`,
-  anchor: `What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. ${AT_MOST}`,
+  screen: `What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule \`description-purposes\`. ${AT_MOST}`,
+  anchor: `What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule \`description-purposes\`. ${AT_MOST}`,
   containerState: `What is visible on the screen in this container state; the vocabulary says what the state means, and each anchor what it is for in a description of its own. ${AT_MOST}`,
   flow: `What the flow does as a whole that no single state says: how its areas or its modes go together. Its states, events, guards and effects say the rest. ${AT_MOST}`,
   state: `What a tester or a user tells apart in the state that its events, effects and \`meta.renders\` do not say. ${AT_MOST}`,

@@ -239,6 +239,27 @@ const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: str
     'paged-list',
     '`paged: { sizes, default }` in `platform.yaml`',
   ],
+  [
+    'screen-anchors-name-codes',
+    'error-codes-and-fields',
+    'is mapped to a contract code (`forbidden`) in the presentation layer',
+  ],
+  [
+    'screen-anchors-name-fields',
+    'error-codes-and-fields',
+    'the written entries merge over the derived ones code by code',
+  ],
+  ['screen-anchors-name-fields', 'error-placement', 'shows beside the controls of its part'],
+  [
+    'screen-anchors-name-ranked',
+    'ranked-message',
+    'A code raised waits until the message shows or a flow clears it.',
+  ],
+  [
+    'screen-anchors-name-confirm',
+    'destructive-question',
+    'On a control that runs no destructive action it bans nothing and is refused.',
+  ],
 ]
 
 /** The describe text of a key's schema, through the optional that wraps it. */

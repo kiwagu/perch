@@ -34,8 +34,15 @@ const errorCodes: ReferenceRule = {
   text: [
     'An error `<part>.error` that writes no `codes` carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>`, in the order they are declared); then the failures of the actions the flow invokes and shows on it, by a written `onError` in any form or by the request pattern (see the rule `request-outcome`), a region written `by` a button included; then the codes the flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. So `user.reset-password.error` may leave its codes out: the failures of `platform.reset-password`, which the anchors beside it bind, then `passwords-differ`, which its flow shows on it, then `failed`.',
     'Its `fields` map each code that concerns a parameter to the control its binding or the invoke passes for that parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen: a code a field of the model gives, and from version 3 a code a platform action attributes to a parameter (see the rule `attributed-codes`). A written entry names a field of the screen or `form`, the form as a whole, which is no anchor. Before version 3 a written `fields` replaces the derived one whole, and a code that two sources pass from two controls concerns the form. From version 3 the written entries merge over the derived ones, code by code, and the loader refuses, at the error, a code it carries that two controls pass and the file does not write (it writes the field it concerns or `form`), and a written entry equal to the derived one (derived; leave it out). The codes and the error fields the anchors gain or lose, written or derived, are listed by `contract:diff` as `<anchor> <code>` and `<error> <code> -> <field>` (`-> form`).',
+    "On `anchors.<name>.codes` as a screen file writes it: The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code. See the rule `error-codes-and-fields`.",
+    "On `anchors.<name>.fields` as a screen file writes it: An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form, and an error may leave both its `codes` and its `fields` out. Every other code shows beside the controls of its part (rule `error-placement`). Each code a field of the model gives, and from version 3 each code a platform action attributes to a parameter, goes to the control the binding or the invoke passes for that field or parameter (`name-too-long` to `user.profile.name-input`), when that control is a field of the screen. Before version 3 a written `fields` replaces the derived one whole, and a code two sources pass from two controls concerns the form; from version 3 the written entries merge over the derived ones code by code, a code two controls pass is a problem until the file writes it (a field or `form`), and an entry equal to the derived one is a problem: leave it out. `contract:diff` lists them as `<error> <code> -> <field>` (`-> form`), written or derived. See the rule `error-codes-and-fields`.",
+    "In the manifest, `anchors.<name>.fields`: An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid, or with `form`, the form as a whole; a code left out concerns the form. Every other code shows beside the controls of its part (rule `error-placement`).",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.codes', 'screen.anchors.<name>.fields'],
+  keys: [
+    'screen.anchors.<name>.codes',
+    'screen.anchors.<name>.fields',
+    'manifest.screens.anchors.<name>.fields',
+  ],
 }
 
 const fieldHoldsInput: ReferenceRule = {
@@ -169,6 +176,21 @@ const engineDescriptions: ReferenceRule = {
   keys: ['screen.anchors.<name>.description'],
 }
 
+const descriptionPurposes: ReferenceRule = {
+  id: 'description-purposes',
+  title: "What a screen's and an element's description say",
+  text: [
+    "A screen's `description`: What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters.",
+    "An anchor's `description`: What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
+  ].join('\n\n'),
+  keys: [
+    'screen.description',
+    'manifest.screens.description',
+    'screen.anchors.<name>.description',
+    'manifest.screens.anchors.<name>.description',
+  ],
+}
+
 const whatStays: ReferenceRule = {
   id: 'what-stays',
   title: 'What stays in a screen',
@@ -192,5 +214,6 @@ export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
   linkRoles,
   mailLinkSearch,
   engineDescriptions,
+  descriptionPurposes,
   whatStays,
 ]
