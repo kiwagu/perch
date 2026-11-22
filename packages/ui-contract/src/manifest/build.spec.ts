@@ -445,6 +445,37 @@ describe('the value a field takes', () => {
     })
     expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
   })
+  it('carries each invariant once, with the actions that name it derived, the codes as written', () => {
+    const base = fixtureContract()
+    const codes = {
+      'device-limit': { invariant: 'device-limit' },
+      failed: 'anything else fails',
+    }
+
+    base.screens.platform.invariants = {
+      'device-limit': { rule: 'Ten devices at most at once.', refuses: 'device-limit' },
+    }
+    base.screens.platform.actions['report'] = {
+      description: 'Reports a thing.',
+      params: {},
+      result: ['the report is in', 'past the limit: nothing is reported'],
+      codes,
+      changes: [],
+    }
+
+    const built = buildManifest({ ...base, product: PRODUCT, now: NOW })
+
+    expect(built.platform.invariants).toEqual({
+      'device-limit': {
+        rule: 'Ten devices at most at once.',
+        refuses: 'device-limit',
+        actions: ['report'],
+      },
+    })
+    expect(built.platform.actions['report']?.codes).toEqual(codes)
+    expect(base.screens.platform.invariants['device-limit']).not.toHaveProperty('actions')
+    expect(manifestSchema.safeParse(built).error?.issues).toBeUndefined()
+  })
   it('gives no value to a select, which is no text field', () => {
     const base = fixtureContract()
     const [sample] = base.screens.screens

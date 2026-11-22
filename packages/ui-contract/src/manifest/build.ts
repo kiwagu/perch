@@ -32,6 +32,7 @@ import {
   describedOf,
   failuresOf,
   fieldValueOf,
+  invariantActions,
   type Model,
   type ResolvedValue,
   type Screen,
@@ -181,6 +182,27 @@ const partsOf = (vocabulary: Vocabulary): Manifest['contract']['derivedParts'] =
     ]),
   )
 
+/** The platform as the manifest carries it: each invariant with the actions that name it. */
+function platformOf(platform: ScreensFile['platform']): Manifest['platform'] {
+  const { invariants, ...rest } = platform
+
+  if (invariants === undefined) {
+    return rest
+  }
+
+  const actions = invariantActions(platform)
+
+  return {
+    ...rest,
+    invariants: Object.fromEntries(
+      Object.entries(invariants).map(([name, invariant]) => [
+        name,
+        { ...invariant, actions: [...(actions[name] ?? [])] },
+      ]),
+    ),
+  }
+}
+
 function contractOf(vocabulary: Vocabulary, screens: ScreensFile): Manifest['contract'] {
   const { defaults } = screens.platform
 
@@ -254,7 +276,7 @@ export function buildManifest({
     }),
     routeParams: routeParamsOf(screens.screens),
     ids: idsOf(screens, vocabulary, model),
-    platform: screens.platform,
+    platform: platformOf(screens.platform),
     activities,
     scenarios,
     model: model.document,

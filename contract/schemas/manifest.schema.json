@@ -7442,7 +7442,7 @@
           "description": "The platform actions by name: `platform.<name>` in a binding."
         },
         "invariants": {
-          "description": "The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.",
+          "description": "The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.",
           "type": "object",
           "propertyNames": {
             "type": "string",
@@ -7460,14 +7460,23 @@
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
                 "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`."
               }
             },
             "required": [
               "rule",
-              "refuses"
+              "refuses",
+              "actions"
             ],
-            "additionalProperties": false,
-            "description": "A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`."
+            "additionalProperties": false
           }
         },
         "events": {

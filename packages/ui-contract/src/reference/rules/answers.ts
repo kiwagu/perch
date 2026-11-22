@@ -18,6 +18,7 @@ const actionOutcomes: ReferenceRule = {
     'platform.actions.<name>.codes',
     'platform.invariants',
     'platform.invariants.<name>',
+    'manifest.platform.invariants.<name>.actions',
   ],
 }
 

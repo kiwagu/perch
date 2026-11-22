@@ -4051,12 +4051,7 @@ The screen the link opens, at a route that needs no parameter: the link carries 
 ### `platform.invariants`
 
 <a id="manifest-platform-invariants"></a>
-The invariants by name: each a rule said once, named by the actions it limits under the code it refuses with. See the rule `action-outcomes`.
-
-### `platform.invariants.<name>`
-
-<a id="manifest-platform-invariants-name"></a>
-A rule several actions keep, said once: each names it under the code it refuses with, and the engine derives the actions it limits. See the rule `action-outcomes`.
+The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.
 
 ### `platform.invariants.<name>.rule`
 
@@ -4067,6 +4062,11 @@ The rule, said once for every action that names it under the code it refuses wit
 
 <a id="manifest-platform-invariants-name-refuses"></a>
 The code an action refuses with when the rule would break: each action names the invariant under it.
+
+### `platform.invariants.<name>.actions`
+
+<a id="manifest-platform-invariants-name-actions"></a>
+Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`.
 
 ### `platform.events`
 
@@ -4978,7 +4978,7 @@ An invariant, `platform.invariants.<name>`, writes its `rule` and the code it `r
 
 The hand-over diff lists each outcome line as `result: <line>`, each code as `code <code>: <condition>` or `code <code>: invariant <name>`, and each invariant as `invariant lines added in <name>` and `invariant lines removed in <name>`, its `rule: <text>` and `refuses <code>`.
 
-Keys it concerns: [`platform.actions.<name>.result`](#platform-actions-name-result), [`platform.actions.<name>.codes`](#platform-actions-name-codes), [`platform.invariants`](#platform-invariants), [`platform.invariants.<name>`](#platform-invariants-name).
+Keys it concerns: [`platform.actions.<name>.result`](#platform-actions-name-result), [`platform.actions.<name>.codes`](#platform-actions-name-codes), [`platform.invariants`](#platform-invariants), [`platform.invariants.<name>`](#platform-invariants-name), [`manifest.platform.invariants.<name>.actions`](#manifest-platform-invariants-name-actions).
 
 ### What an action fails with
 
