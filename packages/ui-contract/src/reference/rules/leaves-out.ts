@@ -2,7 +2,7 @@
  * What a screen leaves out: what it would only repeat of the model, the platform and its own
  * bindings, which the loader derives the same way every time. The derivations of an action's
  * failures, of a button's params, of an error's codes and fields, of the fields that hold input,
- * of their states, of the leaves that ask first, of a platform composite, of what an element's
+ * of their states and of a field that shows no state colour, of the leaves that ask first, of a platform composite, of what an element's
  * kind implies, of a link's roles, of the search parameter of a mail's link and of the
  * descriptions the engine says itself; the derivations that shape a flow are in `outcomes.ts`.
  */
@@ -45,8 +45,14 @@ const fieldHoldsInput: ReferenceRule = {
     "Every field (`input`, `textarea`, `select`, `checkbox`, `radio`, `switch`) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave (see the rule `leave-questions`). A field whose own change applies it at once, and nothing else applies it, holds none: one of its bindings runs an action that takes the field itself as a parameter, an action no other anchor of its screen runs with it (the language select, the organisation select), or its own event moves its screen's search with it, a `navigate` to a path of its screen whose `search` takes `{ anchor: <the field> }` that no other anchor's event does (a filter applied on change).",
     "A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it (the search box of the accounts), holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` is such a field by its facet: its choice sets the route's `size` at once. The loader sets `holdsInput` on every field, once the flow is parsed; a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input.",
     "In the JSX no field carries `holdsInput`: the kit takes it from the generated field facts, `holdsInput: false` on a field that holds no input and on a paged list's size select, which holds none by its facet (see the rule `emitted-modules`), so the sources check refuses a `holdsInput` a view writes, `{false}` or `{true}`, and nothing is wanted of a field rendered (see the rule `check-sources`).",
+    "On `anchors.<name>.holdsInput` as a screen file writes it: Left out, every field (input, textarea, select, checkbox, radio, switch) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave. It holds none when its own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it (the language select), or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes `{ anchor: <the field> }`) and no other anchor's event moves there with it (a filter applied on change). A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it, holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` holds none by its facet: its choice sets the route's `size` at once. The loader sets it on every field once the flow is parsed, and a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input. The kit takes it from the generated field facts, and a view writes no `holdsInput` (see the rule `check-sources`). See the rules `field-holds-input` and `leave-questions`.",
+    "In the manifest, `anchors.<name>.holdsInput`: A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.holdsInput', 'screen.anchors.<name>.marksState'],
+  keys: [
+    'screen.anchors.<name>.holdsInput',
+    'screen.anchors.<name>.marksState',
+    'manifest.screens.anchors.<name>.holdsInput',
+  ],
 }
 
 const fieldStatesCarried: ReferenceRule = {
@@ -60,6 +66,15 @@ const fieldStatesCarried: ReferenceRule = {
     'screen.anchors.<name>.holdsInput',
     'screen.anchors.<name>.marksState',
   ],
+}
+
+const stateColour: ReferenceRule = {
+  id: 'state-colour',
+  title: 'A field that shows no state colour',
+  text: [
+    "`marksState: false` on a field: The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The kit takes it from the generated field facts, and a view writes no `marksState` (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
+  ].join('\n\n'),
+  keys: ['screen.anchors.<name>.marksState', 'manifest.screens.anchors.<name>.marksState'],
 }
 
 const leaveQuestions: ReferenceRule = {
@@ -104,8 +119,14 @@ const composite: ReferenceRule = {
       '```',
     ].join('\n'),
     "A composite's anchors are declared anchors the loader derives, not derived parts (`user.settings.password-rule-list.digit-item` is screen `user.settings`, kind `item`); they follow the anchor grammar, and no screen file writes them. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. An unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor and a `derivedFrom` a screen file writes are problems. The platform's composites and the rows of the vocabulary's \"Composites\" table name each other, each item state a row state: the table names each composite with what it is for. The manifest lists them in `contract.composites`, the declarations under `platform.composites`, a secret input's `composite` and `derivedFrom` on the anchors a composite derives (`{ composite }` on its list, `{ composite, item }` on an item), and `contract:diff` reports a composite added or removed. A composite declared and used by no screen is no problem: `contract:coverage` notes it (`composite <name> is declared and used by no screen`).",
+    "On `anchors.<name>.composite`: The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.",
   ].join('\n\n'),
-  keys: ['screen.anchors.<name>.composite', 'platform.composites', 'platform.composites.<name>'],
+  keys: [
+    'screen.anchors.<name>.composite',
+    'platform.composites',
+    'platform.composites.<name>',
+    'manifest.screens.anchors.<name>.composite',
+  ],
 }
 
 const kindParts: ReferenceRule = {
@@ -164,6 +185,7 @@ export const LEAVES_OUT_RULES: readonly ReferenceRule[] = [
   errorCodes,
   fieldHoldsInput,
   fieldStatesCarried,
+  stateColour,
   leaveQuestions,
   composite,
   kindParts,

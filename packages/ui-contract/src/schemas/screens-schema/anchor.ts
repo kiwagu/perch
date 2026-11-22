@@ -178,19 +178,19 @@ export const anchorDefSchema = z
       .boolean()
       .optional()
       .describe(
-        "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change applies it at once and nothing else applies it: it runs an action that takes the field, or it moves its screen's search with it.",
+        'A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. See the rule `field-holds-input`.',
       ),
     marksState: z
       .literal(false)
       .optional()
       .describe(
-        "The field shows no state colour: its border keeps the untouched colour whatever its `data-state`; for a field where fresh input is the point (an entry form). Left out: the field shows it. Only on an `input`, a `textarea` or a `select` that holds input, and never on a form: `contract:check` refuses it elsewhere. The kit takes it from the generated field facts, and a view writes no `marksState` (see the rule `check-sources`). The manifest carries it in `ids` (the app leaves the border uncoloured; the field's `fieldStates` still hold), and `contract:diff` lists the fields that drop their colour as `<anchor> shows no state colour`.",
+        'The field shows no state colour: its border keeps the untouched colour whatever its `data-state`. Left out: the field shows it. See the rules `state-colour` and `check-sources`.',
       ),
     secret: z
       .literal(true)
       .optional()
       .describe(
-        "A field that holds a secret (a password, its confirmation, a current password, anything that never leaves the page but in the request of the action that takes it): no navigate carries it into a search (a `{ anchor }` value would keep it in the address, the browser's history and the logs) and no search parameter starts it (a `{ search }` binding on it is refused); a secret is never filled from a URL. Only a field has it, and only a secret `input` renders a `visibility-button` and opts into a composite. A `clear` of its flow empties it as it empties any field, so it holds no input any more, as if nothing was typed: a form empties its passwords this way once the action that takes them succeeds. Its description may be left out: the engine says it holds a secret the user types and never shows, and the manifest appends `(type password)` once to a written one.",
+        'A field that holds a secret (a password, its confirmation, a current password): it leaves the page only in the request of the action that takes it, never through a URL. See the rule `secret-field`.',
       ),
     with: withSchema.optional(),
     without: withoutSchema.optional(),
@@ -216,25 +216,25 @@ export const anchorDefSchema = z
       .string()
       .optional()
       .describe(
-        "What the `data-id` of the element holds: the id of the entity it shows. Declared on an `item` or a `row`, the one static anchor that marks every entry of its list, table or section, the id of each entry's entity going into `data-id`; an entry that differs from the others or changes in place carries a row state, a normal one none. An `item` or a `row` named as a binding parameter, as an invoke's `input` or as a navigate's `{ item }` search takes the `data-id` of the entry whose control acts, so it declares `dataId`; the selection may then be in the address, and a reload or a copied link reaches the same entry. A `data-id` is data, not contract: no check reads its value.",
+        'What the `data-id` of the element holds: the id of the entity it shows, on an `item` or a `row`. A `data-id` is data, not contract: no check reads its value. See the rule `attributes`.',
       ),
     dataValue: z
       .boolean()
       .optional()
       .describe(
-        "The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, the key the code already uses and never its label, on an `option`, a `badge` or a `button` that switches a mode. Each fixed value is a row of the vocabulary's Choice values table with its meaning. On a `visibility-button` the values are `show` or `hide`, the suffix's own and never rows of the table; on an option of a paged list's `size-select`, the page size it chooses. A behaviour that varies is a value of one anchor, never a second anchor: one `toggle-button` whose `data-value` says which way it switches. A value asserted on an anchor must be one that anchor, or an anchor under it, carries. A select always carries them, so from version 4 the loader derives `dataValue` on it and a file never writes it (see the rule `kind-parts`).",
+        'The element, or its derived options, carry a `data-value` from the choice values: the stable key of a choice that is not an entity, never its label. See the rules `attributes` and `kind-parts`.',
       ),
     states: z
       .array(stateSchema)
       .optional()
       .describe(
-        "The `data-state` values the element takes, each a state of the vocabulary: an app state on the frame's `status`, a container state on a `status`, `list` or `section` (`loading` while its data arrives after the page), a row state on an `item`. An entry that differs from the others or changes in place carries a row state; an entry in its normal state carries none. The state of a field is not written here: an `input`, `textarea` or `select` that holds input carries `unsaved` while it holds input no save has taken, and, when its binding is a model field, `saved` once a save stored what it shows, for as long as it stays on the screen; a reload or leaving the screen clears it. The loader derives it from the vocabulary's Field states table, and the manifest lists it under `fieldStates` (see the rule `field-states-carried`).",
+        'The `data-state` values the element takes, each a state of the vocabulary. The state of a field is not written here: the loader derives it. See the rules `attributes` and `field-states-carried`.',
       ),
     derived: z
       .array(kebabNameSchema)
       .optional()
       .describe(
-        "The derived suffixes the element renders, each from the vocabulary's closed table of derived suffixes and ending with a kind (the kind of the part it marks). The part is `<anchor>.<suffix>`, which code builds only with `testIdFor(base, suffix)` from `@workspace/ui-contract/anchors`; the loaded base lists every suffix it renders here, and a derived part may have no reference in the screens, scenarios or tests at all, since its declaration is found by the base. No declared anchor equals another plus a derived suffix (`<list>.session-item`, never `<list>.item`). A paged list's four parts, `range`, `previous-link`, `next-link` and `size-select`, are listed by the loader on the list whose source says `paged: true`, and a screen file never writes them (see the rule `paged-list`). From version 4 so are the parts a kind brings by itself, `option` on a select, `visibility-button` on a secret input (the eye of a password input, presentation only: see the rule `visibility-button`), `confirm-button` and `cancel-button` on a dialog and a confirmation, and a screen file writes here only a suffix no kind brings (see the rule `kind-parts`). Before version 4 a file may list them here, and a secret `input` alone lists `visibility-button`.",
+        "The derived suffixes the element renders, from the vocabulary's table; the loader lists the parts a paged list or a kind brings. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
       ),
     source: sourceSchema.optional(),
     asks: asksSchema.optional(),
@@ -242,13 +242,13 @@ export const anchorDefSchema = z
     composite: kebabNameSchema
       .optional()
       .describe(
-        "The platform composite the field opts into (`password-rules`), one declared once in `platform.yaml` under `composites` where its policy lives: the loader declares on the field's screen `<screen>.<list>` (kind `list`, the composite's description) and `<screen>.<list>.<item>-item` (kind `item`, the item's description, `states: [ <itemState> ]`), right after the input, each marked `derivedFrom`. Only a secret `input` opts in. The derived list and items are declared anchors like any other: the flow's guards, the scenarios, the tests and the sources name them as they name any. Refused: an unknown composite, an opt-in on anything but a secret input, a second opt-in of one composite on a screen, a written anchor whose id a composite derives, two composites deriving one anchor, and a `derivedFrom` a screen file writes. See the rule `composite-of-the-platform`.",
+        'The platform composite the field opts into, declared once in `platform.yaml`; the loader derives its list and items. Only a secret `input` opts in. See the rule `composite-of-the-platform`.',
       ),
     derivedFrom: derivedFromSchema.optional(),
     confirms: baseAnchorSchema
       .optional()
       .describe(
-        "The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password (`confirms: user.reset-password.password-input`). Only a secret `input` with no binding writes it, never sent, once per screen. It takes the value of the input it confirms, and the loader derives the guards of the pair that the screen's flow names. See the rule `password-pair`.",
+        'The secret input of its screen this input confirms, one that opts into a composite: the password typed again names the new password. See the rule `password-pair`.',
       ),
   })
   .describe('One declared anchor.')
@@ -278,7 +278,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .boolean()
       .optional()
       .describe(
-        "Left out, every field (input, textarea, select, checkbox, radio, switch) holds input: what is typed into it stays until an action takes it or a `clear` of its flow empties it, so a leave with it typed loses it, and the app is to ask before such a leave. It holds none when its own change applies it at once and nothing else applies it: one of its bindings runs an action that takes the field itself and that no other anchor of the screen runs with it (the language select), or its own event moves its screen's search with it (a navigate to a path of its screen whose search takes `{ anchor: <the field> }`) and no other anchor's event moves there with it (a filter applied on change). A field whose action a submit button also runs with it (the sign-in email), or whose search a search button moves with it, holds input, and so does one whose event moves to another screen carrying itself: that leaves rather than moves the search. A paged list's derived `size-select` holds none by its facet: its choice sets the route's `size` at once. The loader sets it on every field once the flow is parsed, and a written value wins. The manifest carries it, and `contract:diff` lists the fields that start or stop holding input. The kit takes it from the generated field facts, and a view writes no `holdsInput` (see the rule `check-sources`). See the rules `field-holds-input` and `leave-questions`.",
+        'Whether the field holds input: what is typed stays until an action takes it, so a leave loses it. Left out, the loader derives it. See the rules `field-holds-input` and `leave-questions`.',
       ),
     confirm: z
       .literal(false)
