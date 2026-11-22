@@ -158,7 +158,7 @@
   "user.settings.two-factor.code": "Code",
   "user.settings.two-factor.confirm": "Turn on",
   "user.settings.two-factor.stop": "Cancel",
-  "user.settings.two-factor.codes.hint": "Backup codes: each signs you in once, in place of an app code. They show only now, so save them.",
+  "user.settings.two-factor.codes.hint": "Backup codes: each works at most once, in place of an app code. They show only now, so save them.",
   "user.settings.two-factor.hide-codes": "Hide the codes",
   "user.settings.two-factor.error.invalid-credentials": "The password is wrong.",
   "user.settings.two-factor.error.invalid-code": "That code is wrong.",

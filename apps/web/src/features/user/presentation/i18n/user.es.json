@@ -158,7 +158,7 @@
   "user.settings.two-factor.code": "Código",
   "user.settings.two-factor.confirm": "Activar",
   "user.settings.two-factor.stop": "Cancelar",
-  "user.settings.two-factor.codes.hint": "Códigos de respaldo: cada uno inicia sesión una vez, en lugar de un código de la aplicación. Solo se muestran ahora, así que guárdalos.",
+  "user.settings.two-factor.codes.hint": "Códigos de respaldo: cada uno sirve como máximo una vez, en lugar de un código de la aplicación. Solo se muestran ahora, así que guárdalos.",
   "user.settings.two-factor.hide-codes": "Ocultar los códigos",
   "user.settings.two-factor.error.invalid-credentials": "La contraseña no es correcta.",
   "user.settings.two-factor.error.invalid-code": "Ese código no es correcto.",
