@@ -775,7 +775,7 @@
             "description": "The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
           },
           "codes": {
-            "description": "The `data-code` values on a `message`, `error`, `toast` or `dialog`, each a vocabulary code: tests assert codes, never wording. An error may leave them out. See the rule `error-codes-and-fields`.",
+            "description": "`data-code` values on a `message`, `error`, `toast` or `dialog`: vocabulary or derived toast codes; tests assert them, not words. An error may leave them out. See the rule `error-codes-and-fields`.",
             "type": "array",
             "items": {
               "type": "string",
@@ -789,7 +789,7 @@
             "const": true
           },
           "fields": {
-            "description": "An error's codes, each with the field it concerns or `form`; a code left out concerns the form. Left out, both are derived from bindings. See the rules `error-codes-and-fields` and `error-placement`.",
+            "description": "Each error code with its field or `form`. From version 3 written entries override the derived code by code; before, they replace them all. See the rules `error-codes-and-fields` and `error-placement`.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -943,7 +943,7 @@
             "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
           },
           "confirm": {
-            "description": "`false`: the control runs its destructive action without asking. Left out, one bound to a destructive action asks the frame's confirmation; refused on any other. See the rule `destructive-question`.",
+            "description": "`false`: no question before its destructive action. Left out, a control bound to one asks if the frame has a confirmation; refused on others. See the rule `destructive-question`.",
             "type": "boolean",
             "const": false
           }

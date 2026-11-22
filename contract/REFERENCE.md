@@ -415,7 +415,7 @@ A code of the vocabulary (data-code).
 ### `anchors.<name>.codes`
 
 <a id="screen-anchors-name-codes"></a>
-The `data-code` values on a `message`, `error`, `toast` or `dialog`, each a vocabulary code: tests assert codes, never wording. An error may leave them out. See the rule `error-codes-and-fields`.
+`data-code` values on a `message`, `error`, `toast` or `dialog`: vocabulary or derived toast codes; tests assert them, not words. An error may leave them out. See the rule `error-codes-and-fields`.
 
 ### `anchors.<name>.ranked`
 
@@ -425,7 +425,7 @@ A message whose codes are in rank order: of the codes raised before it shows, it
 ### `anchors.<name>.fields`
 
 <a id="screen-anchors-name-fields"></a>
-An error's codes, each with the field it concerns or `form`; a code left out concerns the form. Left out, both are derived from bindings. See the rules `error-codes-and-fields` and `error-placement`.
+Each error code with its field or `form`. From version 3 written entries override the derived code by code; before, they replace them all. See the rules `error-codes-and-fields` and `error-placement`.
 
 ### `anchors.<name>.fields.<name>`
 
@@ -515,7 +515,7 @@ Written on an unbound secret input: names the other secret input of its screen, 
 ### `anchors.<name>.confirm`
 
 <a id="screen-anchors-name-confirm"></a>
-`false`: the control runs its destructive action without asking. Left out, one bound to a destructive action asks the frame's confirmation; refused on any other. See the rule `destructive-question`.
+`false`: no question before its destructive action. Left out, a control bound to one asks if the frame has a confirmation; refused on others. See the rule `destructive-question`.
 
 ### `states`
 

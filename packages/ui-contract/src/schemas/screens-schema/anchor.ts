@@ -266,13 +266,13 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .array(codeSchema)
       .optional()
       .describe(
-        'The `data-code` values on a `message`, `error`, `toast` or `dialog`, each a vocabulary code: tests assert codes, never wording. An error may leave them out. See the rule `error-codes-and-fields`.',
+        '`data-code` values on a `message`, `error`, `toast` or `dialog`: vocabulary or derived toast codes; tests assert them, not words. An error may leave them out. See the rule `error-codes-and-fields`.',
       ),
     fields: z
       .record(codeSchema, errorFieldSchema)
       .optional()
       .describe(
-        "An error's codes, each with the field it concerns or `form`; a code left out concerns the form. Left out, both are derived from bindings. See the rules `error-codes-and-fields` and `error-placement`.",
+        'Each error code with its field or `form`. From version 3 written entries override the derived code by code; before, they replace them all. See the rules `error-codes-and-fields` and `error-placement`.',
       ),
     holdsInput: z
       .boolean()
@@ -284,7 +284,7 @@ export const authoredAnchorDefSchema = anchorDefSchema
       .literal(false)
       .optional()
       .describe(
-        "`false`: the control runs its destructive action without asking. Left out, one bound to a destructive action asks the frame's confirmation; refused on any other. See the rule `destructive-question`.",
+        '`false`: no question before its destructive action. Left out, a control bound to one asks if the frame has a confirmation; refused on others. See the rule `destructive-question`.',
       ),
   })
   .omit({ asks: true, leaves: true, derivedFrom: true })
