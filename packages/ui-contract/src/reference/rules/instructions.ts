@@ -33,7 +33,7 @@ const session: ReferenceRule = {
   title: 'Sessions and platform actions',
   text: [
     'Every scenario starts in a fresh browser context with nobody signed in (`guest`).',
-    "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what holds once it succeeds), its `codes` (what a failure shows), its `changes` (written on every action, `[]` where it changes none: the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds, platform actions a list, a section or a table takes as its `source`) and, when it sends mails, its `mail` and its `notices`; never assume it from the action's name.",
+    "What a platform action does is read from `platform.actions.<name>`, the platform file: its `description`, its `result` (what it answers: one outcome, or outcome lines, the plain success first and each other outcome under its condition), its `codes` (each code a failure shows, with the condition it answers on, or the invariant of `platform.invariants` it refuses for, whose `rule` is said once there and whose `actions` are the actions it limits), its `changes` (written on every action, `[]` where it changes none: the reads whose answer, for the organisation, the account and the params it ran with, differs once it succeeds, platform actions a list, a section or a table takes as its `source`) and, when it sends mails, its `mail` and its `notices`; never assume it from the action's name.",
     'One account per browser: a second account, or a second device of the same one, needs a browser context of its own.',
   ].join(' '),
   keys: [instructionsKey('session')],

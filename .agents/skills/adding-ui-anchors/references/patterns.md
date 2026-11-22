@@ -683,7 +683,8 @@ actions:
       size: { type: number, description: The entries a page holds. }
     paged: { sizes: [ 10, 25, 50 ], default: 25 }
     result: the page of accounts, the newest first, and how many the search finds
-    codes: [ failed ]
+    codes:
+      failed: the accounts cannot be read
     changes: []
 ```
 
