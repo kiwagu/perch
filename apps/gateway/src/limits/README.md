@@ -30,7 +30,15 @@ email's 10 places from the moment it is let through until Better Auth answers, s
 guesses are counted while under way: wrong credentials (401) keep the place, a success (200, 409,
 or a 403 `EMAIL_NOT_VERIFIED` or `account-banned`) clears the email's window, and any other answer
 (any other 403 included), or a handler that threw instead of answering,
-gives the place back; each sign-in is settled once. A sign-in whose body is not JSON naming an
+gives the place back; each sign-in is settled once. A failure judged after a success cleared the
+window it held its place in (a sign-in's wrong code that waited for the account's turn while
+another device's code signed in) counts in the email's window as it is then, past its limit when
+newer sign-ins filled it (`Reservation.keep` of `FixedWindow`), so every wrong password or code
+counts once, whatever those newer sign-ins give back later. A passkey sign-in takes no place
+among them and is never kept out by them, since a passkey cannot be guessed; once Better Auth
+verified the passkey, the auth mount forgets the email's window as a success does
+(`forgetFailedSignIns`). A sign-in whose
+body is not JSON naming an
 email answers 400 and counts against no email (its address's check, taken first, stays taken, as
 every sign-up's does whatever Better Auth answers); one that is reaches Better Auth as that very
 JSON, whatever content type it came with, so the email whose password is checked is the email
@@ -86,8 +94,10 @@ client address in 10 minutes (`ADDRESS_LINK_ATTEMPTS`), the resets of a password
 (`invitationLink`, `POST /invitations/read`) each on their own, every attempt counted,
 refused or not, before anything is read: a link's token is too long to guess, so the limit keeps
 one client from hammering the directory. A change of a password or of an email and a request to
-delete an account take one of their address's credential checks, and the current password a
-place among its account's failed sign-ins, as a sign-in does.
+delete an account, and each change of the second factor with its password, take one of their
+address's credential checks, and the password a place among its account's failed sign-ins, as a
+sign-in does: a wrong one keeps its place, a right one gives it back and forgets none of the
+failures, which only a sign-in's last step clears.
 Invitations, `POST /organisations/:key/invitations`, are limited to 30 attempts per inviting
 identity and 60 per client address in 10 minutes, so probing the invites stays slow, and each
 takes one of the client address's 200 mails too (`inviteMail`): the address's mail is reserved

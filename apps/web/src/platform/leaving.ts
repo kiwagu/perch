@@ -37,6 +37,7 @@ export const isLeavingControl = (control: string): boolean => LEAVING_CONTROLS.h
 export const NAVIGATING_CONTROLS: Readonly<Record<string, readonly string[]>> = {
   'console.users.list.open-link': ['console.users.search-input'],
   'user.sign-in.forgot-link': [
+    'user.sign-in.code.code-input',
     'user.sign-in.name-input',
     'user.sign-in.password-confirmation-input',
     'user.sign-in.password-input',

@@ -69,3 +69,34 @@ DEFINE FIELD OVERWRITE impersonated_by ON device_session TYPE option<string>;
 DEFINE INDEX OVERWRITE device_session_token ON device_session FIELDS token
   UNIQUE;
 DEFINE INDEX OVERWRITE device_session_identity_device ON device_session FIELDS identity, device;
+
+-- The devices identity $identity (its key) is signed in on at $now, with device $device among
+-- them: each device with a live session admitted (not `pending`) once, with the moment it was seen
+-- last, and $device itself, signed in or not (seen at NONE when it is not). A sign-in on $device
+-- would bring the account past its limit of devices when they are more than that limit: the
+-- admission of a sign-in judges it so with the device of its new session
+-- (`device-sessions-admit.surql` of the gateway), and the code step of a sign-in before its code is
+-- checked (`device-sessions-limit.surql`), so both count the devices alike: a session still
+-- waiting for its admission takes no place, and a device signed in already takes no new one. It
+-- carries no PERMISSIONS clause, which the SurrealQL formatter of the commit hook would move before
+-- the parameters, where it does not parse; it reads only `device_session`, closed to every record
+-- user, so a record user calling it reads no session.
+DEFINE FUNCTION OVERWRITE fn::devices_signed_in_with($identity: string, $device: string, $now: datetime) {
+  LET $live = (
+    SELECT
+      device,
+      time::max(last_seen_at) AS seen_at
+    FROM device_session
+    WHERE
+      identity = $identity
+      AND ended_at = NONE
+      AND expires_at > $now
+      AND pending = false
+    GROUP BY device
+  );
+  RETURN IF $device IN $live.device {
+    $live;
+  } ELSE {
+    array::append($live, { device: $device, seen_at: NONE });
+  };
+};

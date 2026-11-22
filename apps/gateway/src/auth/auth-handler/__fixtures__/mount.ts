@@ -37,9 +37,15 @@ import {
 import { AccountTeardown } from '../../account-teardown'
 import type { AuthInstance } from '../../auth-instance'
 import { AuthSessions } from '../../auth-sessions'
+import { PasskeyRows } from '../../passkey-rows'
 import sessionsAdmitStatement from '../../surql/device-sessions-admit.surql'
 import sessionsAdmitVerifiedStatement from '../../surql/device-sessions-admit-verified.surql'
+import challengeEndStatement from '../../surql/two-factor-challenge-end.surql'
+import challengeOwnerStatement from '../../surql/two-factor-challenge-owner.surql'
+import { TwoFactorRows } from '../../two-factor-rows'
+import { twoFactorChallenges } from '../challenge-cookie'
 import { type AuthMountDeps, authHandler } from '../mount'
+import { passkeyChallenges } from '../passkey-ceremony'
 
 /** The account most specs sign up and verify. */
 export const ANN = 'ann@example.test'
@@ -119,8 +125,8 @@ export const STAND_IN_EMAIL = 'stand-in@example.test'
  * A stand-in for the sessions a verification reads: every token reads as the link of a mail to
  * the stand-in's account (`STAND_IN_ACCOUNT`, which the stand-in's credential reads find holding
  * any email), the token itself being Better Auth's, naming `STAND_IN_EMAIL`; no email has an
- * account, no session is read back, no token holds a session, nothing is signed out, and every
- * sign-in and verification is admitted.
+ * account, no session is read back, no token holds a session, nothing is signed out, every
+ * sign-in is judged and admitted as it is, and every verification admitted.
  */
 export const noSessions: AuthMountDeps['sessions'] = {
   verificationOf: async (token) => ({
@@ -134,17 +140,22 @@ export const noSessions: AuthMountDeps['sessions'] = {
   signOut: notHere,
   revokeAll: notHere,
   admit: () => okAsync({ kind: 'admitted' }),
+  judge: () => okAsync('admitted'),
   admitVerified: () => okAsync({ kind: 'admitted' }),
 }
 
 /**
- * Stand-ins for the passwords, account links, mails and an account's deletion, for the specs of
- * the sign-up, the sign-in and the verification over a stand-in for Better Auth: every one of them
- * fails, as none is meant to be asked.
+ * Stand-ins for the passwords, account links, two-factor challenges and factors, passkeys, mails
+ * and an account's deletion, for the specs of the sign-up, the sign-in and the verification over a
+ * stand-in for Better Auth: every one of them fails, as none is meant to be asked.
  */
 export const noAccounts: Pick<
   AuthMountDeps,
   | 'passwords'
+  | 'challenges'
+  | 'twoFactor'
+  | 'passkeys'
+  | 'passkeyChallenges'
   | 'resets'
   | 'emailChanges'
   | 'deletions'
@@ -166,9 +177,20 @@ export const noAccounts: Pick<
         identity: STAND_IN_ACCOUNT,
         hash: 'stand-in-hash',
         banned: false,
+        secondFactor: false,
         start: undefined,
       }),
   },
+  challenges: {
+    cookieName: () => Promise.reject(new Error('no challenge is read here')),
+    ownerOf: notHere,
+    takesCode: notHere,
+    end: notHere,
+    reclaim: notHere,
+  },
+  twoFactor: { read: notHere },
+  passkeys: { ownerOf: notHere, reclaim: notHere },
+  passkeyChallenges: { cookieName: () => Promise.reject(new Error('no passkey is read here')) },
   resets: { read: notHere },
   emailChanges: {
     ask: notHere,
@@ -210,6 +232,7 @@ export function mountedOnFakeAuth(
       auth: fake.auth,
       sessions: noSessions,
       ...noAccounts,
+      publicUrl: ORIGIN,
       limits: new RequestLimits({ clock }),
       connections,
       clock,
@@ -360,9 +383,17 @@ export async function mountedOnRealAuth(options: RealMountOptions = {}) {
 
         return options.admission === undefined ? admit() : options.admission(admit)
       },
+      judge: (identity, device) => sessions.judge(identity, device),
       admitVerified: (identity, token) => sessions.admitVerified(identity, token),
     },
     ...accounts,
+    // The challenges and the second factor reach the directory as the instance does: a test holds
+    // their reads by the same hook.
+    challenges: twoFactorChallenges(opened.auth, opened.directory),
+    twoFactor: new TwoFactorRows(opened.directory),
+    passkeys: new PasskeyRows(opened.directory),
+    passkeyChallenges: passkeyChallenges(opened.auth),
+    publicUrl: ORIGIN,
     deletions: accounts.accountDeletions,
     departure: {
       blocked: (identity) => departure.blocked(identity),
@@ -746,6 +777,23 @@ export const isVerifiedAdmission = (text: string): boolean =>
 /** Better Auth's adapter reads a session by its token from its table, as at a session's read. */
 export const isSessionLookup = (text: string): boolean =>
   text.startsWith('SELECT') && text.includes('FROM `device_session`')
+
+/** The gateway's read of the account a two-factor challenge belongs to. */
+export const isChallengeLookup = (text: string): boolean => text === challengeOwnerStatement
+
+/** The gateway's end of a two-factor challenge: its rows deleted. */
+export const isChallengeEnd = (text: string): boolean => text === challengeEndStatement
+
+/** Better Auth's adapter writes a row of `verification`, as a password step writes its challenge. */
+export const isVerificationInsert = (text: string): boolean =>
+  text.startsWith('INSERT') && text.includes('`verification`')
+
+/**
+ * Better Auth's adapter takes a backup code out of an account's codes: its compare-and-set of the
+ * two-factor row, once the code was checked, an update of the one row its subquery selects.
+ */
+export const isBackupCodeSpend = (text: string): boolean =>
+  text.startsWith('UPDATE') && text.includes('`two_factor`') && text.includes('LIMIT 1)')
 
 /** Better Auth's adapter looks an account up by its email in its table. */
 export const isAccountLookup = (text: string): boolean =>

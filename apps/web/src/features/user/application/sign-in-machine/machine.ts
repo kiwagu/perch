@@ -5,14 +5,21 @@ import type { SignInForm, SignInService } from '../sign-in.service'
 
 import {
   CHECK_YOUR_MAIL,
+  CODE_ERROR,
   MAIL_MESSAGE,
   PASSWORDS_DIFFER,
   SIGN_IN_ERROR,
   type SignInContext,
   UNKNOWN_FAILURE,
 } from './context'
+import { DEVICE_LIMIT_STATES } from './device-limit-states'
+import { askCode, askPastTheLimit, clearError, refusedSignIn, showError, welcomed } from './effects'
 import type { ClearParams, NavigateParams, ShowParams, SignInEmitted, SignInEvent } from './events'
 import { signInGuards } from './guards'
+import { outcomeOf } from './outcome'
+import { SECOND_STEPS } from './second-steps'
+import { type SignInAttempt, signInActors } from './sign-in-actors'
+import { SIGN_UP_STATES } from './sign-up-states'
 
 /** The form the submit button sent, which a sign-in or a sign-up takes. */
 function formInput({ event }: { readonly event: SignInEvent }): { readonly form: SignInForm } {
@@ -21,26 +28,11 @@ function formInput({ event }: { readonly event: SignInEvent }): { readonly form:
   return { form: event.form }
 }
 
-/** What a sign-in invokes with: the form, and whether it signs out the device seen least recently. */
-interface SignInAttempt {
-  readonly form: SignInForm
-  readonly signOutOldest: boolean
-}
-
-/**
- * The sign-in the submit button asks for, or the one the dialog past the limit of devices
- * confirms, which signs out the account's device seen least recently.
- */
+/** The sign-in the submit button asks for. */
 function signInInput({ event }: { readonly event: SignInEvent }): SignInAttempt {
-  assertEvent(event, [
-    'user.sign-in.submit-button',
-    'user.sign-in.device-limit-dialog.confirm-button',
-  ])
+  assertEvent(event, 'user.sign-in.submit-button')
 
-  return {
-    form: event.form,
-    signOutOldest: event.type === 'user.sign-in.device-limit-dialog.confirm-button',
-  }
+  return { form: event.form, signOutOldest: false }
 }
 
 /** The email the resend button sent, which the resend takes. */
@@ -64,45 +56,11 @@ const toForgotPassword = {
   ],
 } as const
 
-/** The effect showing the form's error: its one code, or the code of the failure among `codes`. */
-const showError = (...codes: readonly string[]) =>
-  ({ type: 'show', params: { anchor: SIGN_IN_ERROR, codes } }) as const
-const clearError = { type: 'clear', params: { anchor: SIGN_IN_ERROR } } as const
 const clearMail = { type: 'clear', params: { anchor: MAIL_MESSAGE } } as const
 const showMail = {
   type: 'show',
   params: { anchor: MAIL_MESSAGE, codes: [CHECK_YOUR_MAIL] },
 } as const
-
-/** The welcome a sign-in that went through says, and the move to the profile. */
-const welcomed = [
-  { type: 'show', params: { anchor: 'app-shell.notice-message', codes: ['welcome'] } },
-  { type: 'navigate', params: { to: '/me' } },
-] as const
-
-/** The dialog asking whether to sign in past the limit of devices. */
-const askPastTheLimit = {
-  type: 'show',
-  params: { anchor: 'user.sign-in.device-limit-dialog', codes: ['device-limit'] },
-} as const
-
-/**
- * A refused sign-in: one of an email not verified yet offers the resend, any other goes back with
- * its code, a banned account's (`account-banned`) among them: no resend is offered for it.
- */
-const refusedSignIn = [
-  {
-    target: 'unverified',
-    guard: 'emailNotVerified',
-    actions: [showError('email-not-verified')],
-  },
-  {
-    target: 'sign-in',
-    actions: [
-      showError('invalid-credentials', 'account-banned', 'rate-limited', 'other-account', 'failed'),
-    ],
-  },
-] as const
 
 /**
  * The switch into the mode sign-up, judging the passwords as typed with `clear` on the way: to
@@ -123,7 +81,10 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * asking to check the mail, and a sign-in of an account not verified yet offers the resend. A
  * sign-in that finds the account signed in on as many devices as it may be signs nothing in and
  * asks in its dialog; confirmed, it signs in all the same, signing out the account's device seen
- * least recently, and the cancel goes back to the form. At
+ * least recently, and the cancel goes back to the form. A sign-in of an account whose second
+ * factor is on asks a code in its dialog once the password is right, and signs in when the code
+ * is taken (`second-steps.ts`); a passkey signs in with no password and no code, from every state
+ * that offers its button. At
  * sign-up the password is held to the rules of a new password and the password typed again is
  * compared, as either is typed and on the switch into sign-up, and the submit is held while the
  * password breaks a rule or the two differ. In the mode sign-in the forgot-link moves to the page
@@ -131,7 +92,12 @@ const intoSignUp = (clear: typeof clearError | typeof clearMail) =>
  * the form's own error and mail message for the view and emit any other; its `navigate` emits the
  * path with the fields its event carries, for the host to move with.
  */
-export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'signUp' | 'resend'>) {
+export function createSignInMachine(
+  service: Pick<
+    SignInService,
+    'signIn' | 'signUp' | 'resend' | 'confirmSignIn' | 'signInWithPasskey'
+  >,
+) {
   return setup({
     types: {
       context: {} as SignInContext,
@@ -140,9 +106,6 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
     },
     guards: signInGuards,
     actors: {
-      'platform.sign-in': fromPromise(({ input }: { readonly input: SignInAttempt }) =>
-        settled(service.signIn(input.form, input.signOutOldest)),
-      ),
       // A sign-up and a resend end with the address they mailed: the message names that one, not
       // the field's, which can change after.
       'platform.sign-up': fromPromise(
@@ -153,6 +116,7 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         ({ input }: { readonly input: { readonly email: string } }) =>
           settled(service.resend(input.email).map(() => input.email)),
       ),
+      ...signInActors(service),
     },
     actions: {
       show: enqueueActions(({ enqueue, event }, params: ShowParams) => {
@@ -167,6 +131,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.assign({
             mail: params.codes.includes(CHECK_YOUR_MAIL) ? CHECK_YOUR_MAIL : undefined,
           })
+        } else if (params.anchor === CODE_ERROR) {
+          enqueue.assign({ codeError: failureOf(event, UNKNOWN_FAILURE) })
         } else {
           enqueue.emit({ type: 'show', ...params })
         }
@@ -176,6 +142,8 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           enqueue.assign({ error: undefined })
         } else if (params.anchor === MAIL_MESSAGE) {
           enqueue.assign({ mail: undefined, sentTo: undefined })
+        } else if (params.anchor === CODE_ERROR) {
+          enqueue.assign({ codeError: undefined })
         } else {
           enqueue.emit({ type: 'clear', ...params })
         }
@@ -186,115 +154,67 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         ...params,
         ...('fields' in event ? { fields: event.fields } : {}),
       })),
+      // The code step and the account a passkey dialog asked about follow the last answer.
+      keepOutcome: assign(({ event }) => {
+        const outcome = outcomeOf(event)
+
+        return {
+          step:
+            outcome?.kind === 'code-required'
+              ? { challenge: outcome.challenge, email: outcome.email }
+              : undefined,
+          consentFor: outcome?.kind === 'device-limit' ? outcome.consentFor : undefined,
+        }
+      }),
+      forgetSteps: assign({ step: undefined, consentFor: undefined }),
+      // The attempt keeps the form it was sent with until it ends: the form's fields may change.
+      holdAttempt: assign(({ event }) => {
+        assertEvent(event, 'user.sign-in.submit-button')
+
+        return { attempt: event.form }
+      }),
+      forgetAttempt: assign({ attempt: undefined }),
     },
   }).createMachine({
     id: 'user.sign-in',
     initial: 'sign-in',
-    context: { error: undefined, mail: undefined, sentTo: undefined },
+    context: {
+      error: undefined,
+      mail: undefined,
+      sentTo: undefined,
+      step: undefined,
+      attempt: undefined,
+      codeError: undefined,
+      consentFor: undefined,
+    },
     states: {
       'sign-in': {
-        meta: { renders: ['user.sign-in.forgot-link'] },
+        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.passkey-button'] },
+        entry: ['forgetAttempt'],
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.toggle-button': intoSignUp(clearError),
           'user.sign-in.submit-button': { target: 'signing-in' },
         },
       },
-      'sign-up': {
-        meta: {
-          renders: [
-            'user.sign-in.password-rule-list',
-            'user.sign-in.password-confirmation-input',
-            'user.sign-in.name-input',
-          ],
-        },
-        on: {
-          'user.sign-in.toggle-button': { target: 'sign-in', actions: [clearError] },
-          'user.sign-in.password-confirmation-input': {
-            target: 'passwords-differ',
-            guard: 'confirmationStrays',
-          },
-          'user.sign-in.password-input': [
-            { target: 'password-weak', guard: 'passwordBreaksRules' },
-            { target: 'passwords-differ', guard: 'confirmationStrays' },
-          ],
-          'user.sign-in.submit-button': [
-            { target: 'passwords-differ', guard: 'passwordsDiffer' },
-            { target: 'signing-up' },
-          ],
-        },
-      },
-      // The list marks the rules the password keeps; the password typed again waits to be judged,
-      // and the submit is not taken.
-      'password-weak': {
-        meta: {
-          renders: [
-            'user.sign-in.password-rule-list',
-            'user.sign-in.password-confirmation-input',
-            'user.sign-in.name-input',
-          ],
-        },
-        on: {
-          'user.sign-in.password-input': [
-            { guard: 'passwordBreaksRules' },
-            { target: 'passwords-differ', guard: 'confirmationStrays' },
-            { target: 'sign-up' },
-          ],
-          'user.sign-in.toggle-button': { target: 'sign-in', actions: [clearError] },
-        },
-      },
-      'passwords-differ': {
-        meta: {
-          renders: [
-            'user.sign-in.password-rule-list',
-            'user.sign-in.password-confirmation-input',
-            'user.sign-in.name-input',
-          ],
-        },
-        entry: [showError('passwords-differ')],
-        exit: [clearError],
-        on: {
-          'user.sign-in.password-confirmation-input': {
-            target: 'sign-up',
-            guard: 'confirmationFollows',
-          },
-          'user.sign-in.password-input': [
-            { target: 'password-weak', guard: 'passwordBreaksRules' },
-            { target: 'sign-up', guard: 'confirmationFollows' },
-          ],
-          'user.sign-in.toggle-button': { target: 'sign-in' },
-        },
-      },
+      ...SIGN_UP_STATES,
       'signing-in': {
         meta: { renders: ['user.sign-in.forgot-link'] },
-        entry: [clearError],
+        entry: [clearError, 'holdAttempt'],
         invoke: {
           src: 'platform.sign-in',
           input: signInInput,
           onDone: [
+            { target: 'code', guard: 'codeRequired', actions: ['keepOutcome', askCode] },
             { target: 'device-limit', guard: 'atDeviceLimit', actions: [askPastTheLimit] },
             { target: 'done', actions: welcomed },
           ],
           onError: refusedSignIn,
         },
       },
-      // Nothing is signed in unless the dialog is confirmed.
-      'device-limit': {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.device-limit-dialog'] },
-        on: {
-          'user.sign-in.device-limit-dialog.confirm-button': { target: 'signing-in-anyway' },
-          'user.sign-in.device-limit-dialog.cancel-button': { target: 'sign-in' },
-        },
-      },
-      'signing-in-anyway': {
-        meta: { renders: ['user.sign-in.forgot-link'] },
-        invoke: {
-          src: 'platform.sign-in',
-          input: signInInput,
-          onDone: { target: 'done', actions: welcomed },
-          onError: refusedSignIn,
-        },
-      },
+      ...DEVICE_LIMIT_STATES,
+      ...SECOND_STEPS,
       'signing-up': {
         meta: {
           renders: [
@@ -326,8 +246,15 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       'check-mail': {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
+        meta: {
+          renders: [
+            'user.sign-in.forgot-link',
+            'user.sign-in.resend-button',
+            'user.sign-in.passkey-button',
+          ],
+        },
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey', actions: [clearMail] },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in', actions: [clearMail] },
@@ -335,8 +262,16 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
         },
       },
       unverified: {
-        meta: { renders: ['user.sign-in.forgot-link', 'user.sign-in.resend-button'] },
+        meta: {
+          renders: [
+            'user.sign-in.forgot-link',
+            'user.sign-in.resend-button',
+            'user.sign-in.passkey-button',
+          ],
+        },
+        entry: ['forgetAttempt'],
         on: {
+          'user.sign-in.passkey-button': { target: 'signing-in-passkey' },
           'user.sign-in.forgot-link': toForgotPassword,
           'user.sign-in.resend-button': { target: 'resending' },
           'user.sign-in.submit-button': { target: 'signing-in' },
@@ -359,7 +294,11 @@ export function createSignInMachine(service: Pick<SignInService, 'signIn' | 'sig
           },
         },
       },
-      done: { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
+      done: {
+        type: 'final',
+        entry: ['forgetAttempt'],
+        meta: { renders: ['user.sign-in.forgot-link'] },
+      },
       'forgot-password': { type: 'final', meta: { renders: ['user.sign-in.forgot-link'] } },
     },
   })

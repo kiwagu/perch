@@ -9,16 +9,28 @@ interface Refusal {
 /** Whether an attempt may go on, and when to ask again if it may not. */
 export type Allowance = { readonly allowed: true } | Refusal
 
-/** An attempt counted while it is under way: its holder may give it back. */
+/**
+ * An attempt counted while it is under way: its holder settles it once, giving it back or keeping
+ * it; the first settle counts, any later one changes nothing.
+ */
 export type Reservation =
   | {
       readonly allowed: true
       /**
-       * Uncounts the attempt once, while the window that counted it still holds its key. A window
-       * left with no attempt is dropped, so a key whose attempts were all given back is as if it
-       * had never been counted: its next attempt starts a fresh window.
+       * Uncounts the attempt, while the window that counted it still holds its key. A window left
+       * with no attempt is dropped, so a key whose attempts were all given back is as if it had
+       * never been counted: its next attempt starts a fresh window.
        */
       giveBack(): void
+      /**
+       * Keeps the attempt counted for good. While the window that counted it still holds its key
+       * it stays there; once that window is gone (the key forgotten while the attempt was under
+       * way, its window passed or evicted), the attempt counts in the key's window as it is now,
+       * opening one if there is none, past its limit when newer attempts filled it: an attempt
+       * judged after a forgetting always counts, once, so a newer attempt given back later leaves
+       * it counted.
+       */
+      keep(): void
     }
   | Refusal
 
@@ -77,14 +89,14 @@ export class FixedWindow {
       return counted
     }
 
-    let given = false
+    let settled = false
 
     return {
       allowed: true,
       giveBack: () => {
         // A window that restarted, or a key forgotten or evicted since, holds nothing of it; a
-        // reservation given back once holds nothing more.
-        if (!given && this.live(key) === counted && counted.count > 0) {
+        // reservation settled once holds nothing more.
+        if (!settled && this.live(key) === counted && counted.count > 0) {
           counted.count -= 1
 
           if (counted.count === 0) {
@@ -92,7 +104,15 @@ export class FixedWindow {
           }
         }
 
-        given = true
+        settled = true
+      },
+      keep: () => {
+        // Its own window still counts it; any other window, or none, has not counted it yet.
+        if (!settled && this.live(key) !== counted) {
+          this.record(key)
+        }
+
+        settled = true
       },
     }
   }
@@ -100,6 +120,20 @@ export class FixedWindow {
   /** Forgets `key`'s window (a success that clears its failures). */
   forget(key: string): void {
     this.counters.delete(key)
+  }
+
+  /**
+   * Counts one attempt of `key` that was judged already, which no window refuses: past the limit
+   * of a full window, or in a window it opens.
+   */
+  private record(key: string): void {
+    const counter = this.live(key)
+
+    if (counter) {
+      counter.count += 1
+    } else {
+      this.open(key)
+    }
   }
 
   /** Counts one attempt of `key`: the window that counted it, or the refusal of a full window. */

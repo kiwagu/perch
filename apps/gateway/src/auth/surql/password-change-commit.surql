@@ -4,8 +4,10 @@
 -- must still hold $verified_hash, else `wrong-password`, and nothing changes. Once both hold,
 -- $hash becomes the password, every reset link of the identity is deleted, every other session
 -- not ended already ends at $ended_at (an expired one at its expiry; a live one keeps
--- `password-changed` as its reason, for its device's next hello), and the pending change of
--- email and the pending deletion of the account are deleted. Answers `{ outcome, ended }`:
+-- `password-changed` as its reason, for its device's next hello), the pending change of email
+-- and the pending deletion of the account are deleted, and every pending two-factor challenge of
+-- the identity ends with the row counting its codes (`fn::two_factor_challenges_end`): a code
+-- given for a password step of the old password is taken no more. Answers `{ outcome, ended }`:
 -- `changed` with, for each session it marked, its device and whether it was live until now. A
 -- failure of any write leaves all of them undone.
 BEGIN TRANSACTION;
@@ -65,6 +67,7 @@ LET $ended = IF $outcome = 'changed' {
 IF $outcome = 'changed' {
   DELETE verification WHERE identifier = string::concat('change-email:', $identity) RETURN NONE;
   DELETE verification WHERE identifier = string::concat('delete-account:', $identity) RETURN NONE;
+  fn::two_factor_challenges_end($identity);
 };
 RETURN { outcome: $outcome, ended: $ended };
 COMMIT TRANSACTION;

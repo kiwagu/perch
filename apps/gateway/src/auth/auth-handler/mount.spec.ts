@@ -26,6 +26,7 @@ import {
   mountedOnFakeAuth,
   noAccounts,
   noSessions,
+  ORIGIN,
   printedDuring,
   STAND_IN_ACCOUNT,
   signedInAnswer,
@@ -119,6 +120,11 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
     auth: opened.auth,
     sessions: noSessions,
     ...accountServicesOf(opened),
+    challenges: noAccounts.challenges,
+    twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
+    publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,
@@ -568,7 +574,7 @@ describe('authHandler', () => {
     expect(await signIns(route, 'decoy@example.test', 10)).toEqual([...times(9, 401), 429])
   })
 
-  it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
+  it("strips every Set-Cookie and every other header of Better Auth's answer from a sign-in's, its body by the allowlist", async () => {
     const body = JSON.stringify(acceptedSignIn())
     const { route, clock } = mountedOnFakeAuth(() => {
       const headers = new Headers({
@@ -586,7 +592,8 @@ describe('authHandler', () => {
     expect(response?.status).toBe(200)
     expect(response?.headers.getSetCookie()).toEqual([])
     expect(response?.headers.has('set-cookie')).toBe(false)
-    expect(response?.headers.get('set-auth-token')).toBe('raw-token.signature')
+    // The signed token stays with the gateway: the device signs in by the raw token of the body.
+    expect(response?.headers.get('set-auth-token')).toBeNull()
     expect(response?.headers.get('content-type')).toMatch(/^application\/json\b/)
     expect(await response?.text()).toBe(body)
 
@@ -871,7 +878,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     expect(printed).not.toMatch(MARKED)
   })
 
-  it('answers a sign-in whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a sign-in whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bINSERT\s+INTO\s+`?device_session`?/
@@ -880,7 +887,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     )
 
     expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
   })

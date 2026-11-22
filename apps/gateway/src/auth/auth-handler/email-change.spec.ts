@@ -225,6 +225,19 @@ describe('authHandler, the request to change the email', () => {
     expect((await mounted.route(confirm(second), FROM))?.status).toBe(200)
   })
 
+  it("forgets none of the account's failed sign-ins at a right password", async () => {
+    const mounted = await mountedOnRealAuth()
+    const ann = await signedInOn(mounted, ANN, ['laptop'])
+
+    await failNineSignIns((request, from) => mounted.route(request, from), ANN, FROM)
+    expect((await asked(mounted, ann, NEW_EMAIL))?.status).toBe(202)
+    // The right password forgot nothing: the next failure is the tenth, and the sign-in waits.
+    expect(
+      (await mounted.route(signInRequest(ANN, 'Wrong-pass-word-9', 'desk'), FROM))?.status,
+    ).toBe(401)
+    expect((await mounted.route(signInRequest(ANN, PASSWORD, 'desk'), FROM))?.status).toBe(429)
+  }, 60_000)
+
   it.each(OUT_OF_LENGTH)(
     'refuses %s as a wrong one, mailing nothing, and counts it as a failed sign-in',
     async (_, password) => {

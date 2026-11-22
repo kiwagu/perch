@@ -26,6 +26,8 @@ describe('checkIdRegistry', () => {
         account: table('acc'),
         verification: table('vrf'),
         invitation: table('inv'),
+        two_factor: table('tfa'),
+        passkey: table('pkey'),
         member: table(),
         _replica_update: table(),
       },
@@ -47,6 +49,8 @@ describe('checkIdRegistry', () => {
         account: table('acc'),
         verification: table('vrf'),
         invitation: table('inv'),
+        two_factor: table('tfa'),
+        passkey: table('pkey'),
         team: table('tem'),
       },
     }
@@ -71,6 +75,8 @@ describe('checkIdRegistry', () => {
       'the id registry declares account = acc but the schema has no table account',
       'the id registry declares verification = vrf but the schema has no table verification',
       'the id registry declares invitation = inv but the schema has no table invitation',
+      'the id registry declares two_factor = tfa but the schema has no table two_factor',
+      'the id registry declares passkey = pkey but the schema has no table passkey',
     ])
   })
 })

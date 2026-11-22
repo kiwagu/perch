@@ -8,6 +8,7 @@ import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth
 import {
   browserDatabases,
   openTestWorld,
+  signedInUser,
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
@@ -161,7 +162,7 @@ describe("the account's platform roles, from the leading tab's welcome", () => {
     const heard = rolesHeard(tab.session)
     const writes = roleWrites(storage)
 
-    expect((await tab.session.signIn(input))._unsafeUnwrap().id).toBe(identity)
+    expect(signedInUser((await tab.session.signIn(input))._unsafeUnwrap()).id).toBe(identity)
     await vi.waitFor(() => expect(tab.states.at(-1)).toEqual({ leader: true, channel: 'down' }))
 
     const kept = savedSession(storage) ?? expect.unreachable('the sign-in saved')

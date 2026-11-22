@@ -1,8 +1,8 @@
 import { okAsync } from 'neverthrow'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
-import { openTestWorld, type TestWorld } from '../__fixtures__/session'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { openTestWorld, signedInUser, type TestWorld } from '../__fixtures__/session'
 import type { GatewayAuth } from '../gateway-auth'
 import { savedIdentity, savedSession } from '../storage'
 
@@ -29,9 +29,12 @@ async function notStarted() {
   const starting: GatewayAuth = {
     ...auth,
     signIn: (input, device) =>
-      auth
-        .signIn(input, device)
-        .andThen((signed) => okAsync({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+      auth.signIn(input, device).andThen((signed) =>
+        okAsync({
+          kind: 'signed-in' as const,
+          device: { ...signedDevice(signed), start: { name: 'Ann', locale: 'es' as const } },
+        }),
+      ),
   }
 
   return { auth, starting }
@@ -51,7 +54,7 @@ describe('the start a sign-in answers', () => {
 
     worlds.push(world)
 
-    const user = (await world.session.signIn(annSignUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(annSignUp))._unsafeUnwrap())
 
     expect(savedWhenKept).toBeUndefined()
     expect(savedIdentity(world.storage)?.id).toBe(user.id)
@@ -63,7 +66,7 @@ describe('the start a sign-in answers', () => {
 
     worlds.push(world)
 
-    const user = (await world.session.signIn(annSignUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(annSignUp))._unsafeUnwrap())
 
     // Kept under the sign-in's own id, the one its records are saved under.
     expect(world.startsKept).toEqual([

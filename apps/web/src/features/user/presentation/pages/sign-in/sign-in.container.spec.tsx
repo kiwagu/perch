@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { createMemoryHistory, Outlet, RouterProvider } from '@tanstack/react-router'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { err, errAsync, okAsync, ResultAsync } from 'neverthrow'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -14,7 +15,7 @@ import { defineModule } from '../../../../../platform/module'
 import { NoticeProvider } from '../../../../../platform/notices'
 import { createAppRouter } from '../../../../../platform/router'
 import { ServicesProvider } from '../../../../../platform/services'
-import type { SessionPort } from '../../../../../platform/session.port'
+import type { SessionPort, SignInResult } from '../../../../../platform/session.port'
 import { NOTICE_TEXTS } from '../../../../app-shell/presentation/shell/notice-texts'
 import { SIGN_IN_SERVICE, SignInService } from '../../../application/sign-in.service'
 
@@ -25,6 +26,16 @@ type AuthUser = NonNullable<ReturnType<SessionPort['current']>>
 
 /** What a sign-up asks the session for. */
 type SignUpInput = Parameters<SessionPort['signUp']>[0]
+
+/** The code step a password step carries, and what the code step fails with, as the session says them. */
+type CodeStep = Parameters<SessionPort['confirmSignIn']>[0]
+type DataError =
+  ReturnType<SessionPort['confirmSignIn']> extends ResultAsync<unknown, infer Failure>
+    ? Failure
+    : never
+
+/** The code of the second factor of the account the tests sign in, which its step takes. */
+const CODE = '123456'
 
 const ann: AuthUser = {
   id: 'idn_0000000000000000.01m52pexcp' as AuthUser['id'],
@@ -45,10 +56,10 @@ function switchableSession() {
     here = true
 
     return ResultAsync.fromSafePromise(
-      new Promise<AuthUser>((resolve) => {
+      new Promise<SignInResult>((resolve) => {
         answer = (result) => {
           here = false
-          resolve(result)
+          resolve({ kind: 'signed-in', user: result })
         }
       }),
     )
@@ -334,19 +345,16 @@ describe('SignInContainer', () => {
     const session: SessionPort = {
       ...fakeSession().session,
       current: () => user,
-      signIn: (input) => {
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
         confirmations.push(input.signOutOldest)
 
         if (input.signOutOldest !== true) {
-          return errAsync({
-            code: 'data:DEVICE_LIMIT',
-            message: 'the account is on as many devices as it may be',
-          })
+          return okAsync({ kind: 'device-limit' })
         }
 
         user = ann
 
-        return okAsync(ann)
+        return okAsync({ kind: 'signed-in', user: ann })
       },
     }
     const router = renderSignIn(session)
@@ -369,6 +377,443 @@ describe('SignInContainer', () => {
     await screen.findByText('profile')
     expect(router.state.location.pathname).toBe('/me')
     expect(confirmations).toEqual([undefined, true])
+  })
+
+  /** A session whose password step asks the code of the account's second factor, `CODE` being right. */
+  function codeSession(
+    confirmed: Array<{ step: CodeStep; code: string; out: boolean }> = [],
+    refusal?: DataError,
+  ): SessionPort {
+    let user: AuthUser | undefined
+
+    return {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: () => okAsync({ kind: 'code-required', challenge: 'challenge-1', email: ann.email }),
+      confirmSignIn: (step, code, out): ReturnType<SessionPort['confirmSignIn']> => {
+        confirmed.push({ step, code, out })
+
+        if (refusal !== undefined) {
+          return errAsync(refusal)
+        }
+
+        if (code !== CODE) {
+          return errAsync({ code: 'data:INVALID_CODE', message: 'the code is wrong' })
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+  }
+
+  /** The password typed and sent, which asks the code. */
+  async function passwordSent() {
+    fireEvent.change(await screen.findByTestId('user.sign-in.email-input'), {
+      target: { value: ann.email },
+    })
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+
+    return screen.findByTestId('user.sign-in.code.dialog')
+  }
+
+  const codeInput = () => screen.getByTestId('user.sign-in.code.code-input') as HTMLInputElement
+
+  it('asks the code of the second factor in a dialog, signing nothing in, then signs in with the code typed and moves to the profile', async () => {
+    const confirmed: Array<{ step: CodeStep; code: string; out: boolean }> = []
+    const router = renderSignIn(codeSession(confirmed))
+    const dialog = await passwordSent()
+
+    expect(dialog.getAttribute('data-code')).toBe('code-required')
+    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(confirmed).toEqual([])
+
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(router.state.location.pathname).toBe('/me')
+    expect(confirmed).toEqual([
+      { step: { challenge: 'challenge-1', email: ann.email }, code: CODE, out: false },
+    ])
+  })
+
+  it('says a wrong code under the field, keeping the dialog and what was typed, and takes the right one next', async () => {
+    const router = renderSignIn(codeSession())
+
+    await passwordSent()
+    typeInto('user.sign-in.code.code-input', '000000')
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    const error = await screen.findByTestId('user.sign-in.code.error')
+
+    expect(error.getAttribute('data-code')).toBe('invalid-code')
+    expect(codeInput().value).toBe('000000')
+    expect(codeInput().getAttribute('aria-invalid')).toBe('true')
+    expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
+
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(router.state.location.pathname).toBe('/me')
+  })
+
+  it('confirms the code on Enter in the field', async () => {
+    renderSignIn(codeSession())
+    await passwordSent()
+    typeInto('user.sign-in.code.code-input', CODE)
+    await waitFor(() => expect(document.activeElement).toBe(codeInput()))
+    await userEvent.keyboard('{Enter}')
+
+    await screen.findByText('profile')
+  })
+
+  it('goes back to the password with the reason once the sign-in is spent, the dialog gone and the field emptied', async () => {
+    renderSignIn(codeSession([], { code: 'data:CODE_EXPIRED', message: 'start again' }))
+
+    await passwordSent()
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('code-expired')
+    expect(screen.queryByTestId('user.sign-in.code.dialog')).toBeNull()
+    expect((screen.getByTestId('user.sign-in.email-input') as HTMLInputElement).value).toBe(
+      ann.email,
+    )
+
+    // The next password step asks afresh, with nothing left in the field.
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+
+    expect(codeInput().value).toBe('')
+    expect(screen.queryByTestId('user.sign-in.code.error')).toBeNull()
+  })
+
+  it('starts again from the password on cancel, signing nothing in and leaving no code behind', async () => {
+    const confirmed: Array<{ step: CodeStep; code: string; out: boolean }> = []
+    const router = renderSignIn(codeSession(confirmed))
+
+    await passwordSent()
+    typeInto('user.sign-in.code.code-input', '000000')
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.cancel-button'))
+
+    await waitFor(() => expect(screen.queryByTestId('user.sign-in.code.dialog')).toBeNull())
+    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(confirmed).toEqual([])
+    expect(screen.queryByTestId('user.sign-in.error')).toBeNull()
+
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+
+    expect(codeInput().value).toBe('')
+  })
+
+  it('asks about the limit of devices once the code is right, then signs in from the password and asks the code again', async () => {
+    let user: AuthUser | undefined
+    const asked: string[] = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input) => {
+        asked.push(`password ${input.signOutOldest === true ? 'out' : 'in'}`)
+
+        return okAsync({ kind: 'code-required', challenge: 'challenge-1', email: ann.email })
+      },
+      confirmSignIn: (_step, _code, out) => {
+        asked.push(`code ${out ? 'out' : 'in'}`)
+
+        if (!out) {
+          return okAsync({ kind: 'device-limit' })
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    await passwordSent()
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual(['password in', 'code in', 'password out', 'code out'])
+  })
+
+  it('retries a confirmed sign-in with the credentials of the attempt that asked, whatever the form holds by then', async () => {
+    let user: AuthUser | undefined
+    let answer: (result: SignInResult) => void = () => {}
+    const asked: Array<{ email: string; password: string; out: boolean }> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
+        asked.push({
+          email: input.email,
+          password: input.password,
+          out: input.signOutOldest === true,
+        })
+
+        if (asked.length === 1) {
+          // The first answer waits, while the form can still be edited.
+          return ResultAsync.fromSafePromise(
+            new Promise<SignInResult>((resolve) => {
+              answer = resolve
+            }),
+          )
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    await screen.findByTestId('user.sign-in.email-input')
+    typeInto('user.sign-in.email-input', ann.email)
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    // Another account's credentials are typed while the first attempt is pending.
+    typeInto('user.sign-in.email-input', 'bob@example.test')
+    typeInto('user.sign-in.password-input', 'Other-word-2')
+    act(() => answer({ kind: 'device-limit' }))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    // The dialog asked about the first account: its confirmation signs that one in.
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual([
+      { email: ann.email, password: 'Pass-word-1', out: false },
+      { email: ann.email, password: 'Pass-word-1', out: true },
+    ])
+  })
+
+  it('retries with the credentials of the attempt after the code step too, whatever the form holds by then', async () => {
+    let user: AuthUser | undefined
+    let answer: (result: SignInResult) => void = () => {}
+    const asked: Array<{ email: string; password: string; out: boolean }> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signIn: (input): ReturnType<SessionPort['signIn']> => {
+        asked.push({
+          email: input.email,
+          password: input.password,
+          out: input.signOutOldest === true,
+        })
+
+        if (asked.length === 1) {
+          // The password step's answer waits, while the form can still be edited.
+          return ResultAsync.fromSafePromise(
+            new Promise<SignInResult>((resolve) => {
+              answer = resolve
+            }),
+          )
+        }
+
+        return okAsync({ kind: 'code-required', challenge: 'challenge-1', email: input.email })
+      },
+      confirmSignIn: (_step, _code, out) => {
+        if (!out) {
+          return okAsync({ kind: 'device-limit' })
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    await screen.findByTestId('user.sign-in.email-input')
+    typeInto('user.sign-in.email-input', ann.email)
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    // Another account's credentials are typed while the password step is pending.
+    typeInto('user.sign-in.email-input', 'bob@example.test')
+    typeInto('user.sign-in.password-input', 'Other-word-2')
+    act(() => answer({ kind: 'code-required', challenge: 'challenge-1', email: ann.email }))
+    await screen.findByTestId('user.sign-in.code.dialog')
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+    await screen.findByTestId('user.sign-in.code.dialog')
+    typeInto('user.sign-in.code.code-input', CODE)
+    fireEvent.click(screen.getByTestId('user.sign-in.code.dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual([
+      { email: ann.email, password: 'Pass-word-1', out: false },
+      { email: ann.email, password: 'Pass-word-1', out: true },
+    ])
+  })
+
+  it('makes no confirmation for a code shorter than the contract allows, on a click or on Enter, and sends a six-digit code and an eleven-character backup code', async () => {
+    const confirmed: string[] = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signIn: () => okAsync({ kind: 'code-required', challenge: 'challenge-1', email: ann.email }),
+      confirmSignIn: (_step, code) => {
+        confirmed.push(code)
+
+        return errAsync({ code: 'data:INVALID_CODE', message: 'the code is wrong' })
+      },
+    }
+    const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+    const confirm = () => screen.getByTestId('user.sign-in.code.dialog.confirm-button')
+
+    renderSignIn(session)
+    await passwordSent()
+    await waitFor(() => expect(document.activeElement).toBe(codeInput()))
+
+    // Enter with nothing typed.
+    await userEvent.keyboard('{Enter}')
+    await settle()
+
+    expect(confirmed).toEqual([])
+    expect(screen.getByTestId('user.sign-in.code.error').getAttribute('data-code')).toBe(
+      'invalid-code',
+    )
+
+    // A click on five digits.
+    typeInto('user.sign-in.code.code-input', '12345')
+    fireEvent.click(confirm())
+    await settle()
+
+    expect(confirmed).toEqual([])
+    expect(screen.getByTestId('user.sign-in.code.error').getAttribute('data-code')).toBe(
+      'invalid-code',
+    )
+
+    // Enter on five digits.
+    await userEvent.keyboard('{Enter}')
+    await settle()
+
+    expect(confirmed).toEqual([])
+
+    // The bounds themselves go to the gateway, which judges the code.
+    typeInto('user.sign-in.code.code-input', '123456')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(confirmed).toEqual(['123456']))
+    await settle()
+    typeInto('user.sign-in.code.code-input', '0123456789a')
+    fireEvent.click(confirm())
+    await waitFor(() => expect(confirmed).toEqual(['123456', '0123456789a']))
+  })
+
+  it('signs in with a passkey the browser picks, asking no email, no password and no code', async () => {
+    let user: AuthUser | undefined
+    const asked: Array<string | undefined> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signInWithPasskey: (signOutOldestFor) => {
+        asked.push(signOutOldestFor)
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.passkey-button'))
+
+    await screen.findByText('profile')
+    expect(router.state.location.pathname).toBe('/me')
+    expect(asked).toEqual([undefined])
+  })
+
+  it('says no passkey was used above the form, offering the passkey and the password again', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signInWithPasskey: () =>
+        errAsync({ code: 'data:PASSKEY_CANCELLED', message: 'the window was closed' }),
+    }
+    const router = renderSignIn(session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.passkey-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('passkey-cancelled')
+    expect(router.state.location.pathname).toBe('/sign-in')
+    expect((screen.getByTestId('user.sign-in.passkey-button') as HTMLButtonElement).disabled).toBe(
+      false,
+    )
+  })
+
+  it('asks about the limit of devices of a passkey sign-in, naming the account on the confirmation', async () => {
+    let user: AuthUser | undefined
+    const asked: Array<string | undefined> = []
+    const session: SessionPort = {
+      ...fakeSession().session,
+      current: () => user,
+      signInWithPasskey: (signOutOldestFor) => {
+        asked.push(signOutOldestFor)
+
+        if (signOutOldestFor === undefined) {
+          return okAsync({ kind: 'device-limit', consentFor: ann.id })
+        }
+
+        user = ann
+
+        return okAsync({ kind: 'signed-in', user: ann })
+      },
+    }
+
+    renderSignIn(session)
+    fireEvent.click(await screen.findByTestId('user.sign-in.passkey-button'))
+    await screen.findByTestId('user.sign-in.device-limit-dialog')
+    fireEvent.click(screen.getByTestId('user.sign-in.device-limit-dialog.confirm-button'))
+
+    await screen.findByText('profile')
+    expect(asked).toEqual([undefined, ann.id])
+  })
+
+  it('offers the passkey beside the mail message and the resend, and takes the message away when it is used', async () => {
+    const session: SessionPort = {
+      ...fakeSession().session,
+      signUp: () => okAsync(undefined),
+      signInWithPasskey: () =>
+        errAsync({ code: 'data:PASSKEY_UNKNOWN', message: 'no account holds the passkey' }),
+    }
+
+    renderSignIn(session)
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+    typeInto('user.sign-in.email-input', ann.email)
+    typeInto('user.sign-in.password-input', 'Pass-word-1')
+    typeInto('user.sign-in.password-confirmation-input', 'Pass-word-1')
+    typeInto('user.sign-in.name-input', 'Ann')
+    fireEvent.click(screen.getByTestId('user.sign-in.submit-button'))
+    await screen.findByTestId('user.sign-in.mail-message')
+
+    fireEvent.click(screen.getByTestId('user.sign-in.passkey-button'))
+
+    const error = await screen.findByTestId('user.sign-in.error')
+
+    expect(error.getAttribute('data-code')).toBe('passkey-unknown')
+    expect(screen.queryByTestId('user.sign-in.mail-message')).toBeNull()
+  })
+
+  it('offers no passkey while an account is being created', async () => {
+    renderSignIn(fakeSession().session)
+
+    fireEvent.click(await screen.findByTestId('user.sign-in.toggle-button'))
+
+    expect(screen.queryByTestId('user.sign-in.passkey-button')).toBeNull()
   })
 
   it('offers the resend when a sign-in is refused because the email is not verified yet', async () => {

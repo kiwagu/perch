@@ -1,9 +1,12 @@
 -- Deletes every row of the account of identity $identity (its key) from the directory, as one
 -- transaction, the identity last: its sessions, its credential row, its pending links (the change
 -- of its email, the deletion of the account, and its reset links, which Better Auth keeps under
--- `reset-password:<token>` with the identity's key as their value), its profile and settings, and
--- the server's copy of its private region $region (head, snapshots, update log, projected
--- records, bound peers). A failure of any of these leaves all of them undone. An identity that
+-- `reset-password:<token>` with the identity's key as their value), its pending two-factor
+-- challenges with the rows counting their codes (`fn::two_factor_challenges_end`), its passkeys'
+-- pending registrations (whose JSON value names the identity as `userData.id`), its second factor,
+-- its passkeys, its profile and settings, and the server's copy of its private region $region
+-- (head, snapshots, update log, projected records, bound peers). A failure of any of these leaves
+-- all of them undone. An identity that
 -- still has a membership is refused with nothing deleted: memberships, organisations and their
 -- databases go with the account's departure from its organisations, before this runs. What is
 -- gone already deletes nothing, so a second run changes nothing.
@@ -21,6 +24,12 @@ WHERE
   `value` = $identity
   AND string::starts_with(identifier, 'reset-password:')
 RETURN NONE;
+fn::two_factor_challenges_end($identity);
+DELETE verification
+WHERE string::contains(`value`, string::concat('"userData":{"id":"', $identity, '"'))
+RETURN NONE;
+DELETE two_factor WHERE identity = $identity RETURN NONE;
+DELETE passkey WHERE identity = $identity RETURN NONE;
 DELETE profile WHERE identity = $record RETURN NONE;
 DELETE settings WHERE identity = $record RETURN NONE;
 DELETE _replica_head WHERE region = $region RETURN NONE;

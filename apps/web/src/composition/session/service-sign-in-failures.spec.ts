@@ -11,6 +11,7 @@ import {
   type BrowserDatabases,
   browserDatabases,
   openTestWorld,
+  signedInUser,
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
@@ -291,7 +292,7 @@ describe('a sign-in whose memberships cannot be read', () => {
       online: false,
       listMemberships: readThrough(fetcher),
     })
-    const user = (await tab.session.signIn(annSignUp))._unsafeUnwrap()
+    const user = signedInUser((await tab.session.signIn(annSignUp))._unsafeUnwrap())
 
     expect(sent).toHaveLength(1)
     expect(savedToken(storage)).toBe(ISSUED)
@@ -352,7 +353,9 @@ describe('a sign-in whose space does not open', () => {
     expect(savedToken(storage)).toBeUndefined()
     expect(tab.session.current()).toBeUndefined()
     // The next sign-in takes the lock and signs in.
-    expect((await tab.session.signIn(annSignUp))._unsafeUnwrap().email).toBe(annSignUp.email)
+    expect(signedInUser((await tab.session.signIn(annSignUp))._unsafeUnwrap()).email).toBe(
+      annSignUp.email,
+    )
   })
 
   it('a hand-off that throws: the device is forgotten all the same, and the sign-in fails naming nothing', async () => {
@@ -391,7 +394,9 @@ describe('a sign-in whose space does not open', () => {
     expectNobodySaved(storage)
     expect(tab.session.current()).toBeUndefined()
     // The next sign-in takes the lock and signs in.
-    expect((await tab.session.signIn(annSignUp))._unsafeUnwrap().email).toBe(annSignUp.email)
+    expect(signedInUser((await tab.session.signIn(annSignUp))._unsafeUnwrap()).email).toBe(
+      annSignUp.email,
+    )
   })
 
   it('an open that throws once the space opened: keeps the device with the token its space uses, and signs nothing out', async () => {

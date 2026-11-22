@@ -20,11 +20,15 @@ function passwordsOf(event: SettingsEvent): Passwords {
 /** The failure of a deletion request whose account is the only admin of an organisation with others. */
 const LAST_ADMIN = 'data:LAST_ADMIN'
 
+/** The failure of a second factor request whose factor is not as the request found it. */
+const TWO_FACTOR_CHANGED = 'data:TWO_FACTOR_CHANGED'
+
 /**
  * The guards of the screen's flow, by the names of its `meta.guards`: whether the account's
  * settings are on the device, whether the account a store began for has left, whether a deletion
- * request failed as the only admin of an organisation with other members, and those of a new
- * password typed twice.
+ * request failed as the only admin of an organisation with other members, whether a second factor
+ * request found the factor changed meanwhile (turned on or off, or its key replaced, from another
+ * device), and those of a new password typed twice.
  */
 export function settingsGuards(deps: Pick<SettingsMachineDeps, 'values'>) {
   return {
@@ -36,6 +40,8 @@ export function settingsGuards(deps: Pick<SettingsMachineDeps, 'values'>) {
     },
     // The invoke's error event, which the machine's own events do not name.
     deletionBlocked: ({ event }: { readonly event: object }) => failureOf(event, '') === LAST_ADMIN,
+    factorChanged: ({ event }: { readonly event: object }) =>
+      failureOf(event, '') === TWO_FACTOR_CHANGED,
     ...newPasswordGuards(passwordsOf),
   }
 }
