@@ -97,6 +97,12 @@ describe('PasskeysListView', () => {
     expect(screen.getByTestId(ERROR).getAttribute('data-code')).toBe(code)
   })
 
+  it('says a window closed or timed out as no passkey added, whichever it was', () => {
+    renderView({ error: 'data:PASSKEY_CANCELLED' })
+
+    expect(screen.getByTestId(ERROR).textContent).toBe('No passkey was added.')
+  })
+
   it('says nothing before a failure', () => {
     renderView()
 

@@ -13,10 +13,10 @@ export type TwoFactorError = DataError | BusError
 
 /**
  * What turning the second factor on starts, as the page shows it: the gateway's answer and the QR
- * code of its key as an SVG, or none when the QR could not be drawn (the key to type still shows).
+ * code of its key as an SVG. A start without its QR is no start: the key step never opens on one.
  */
 export interface TwoFactorStart extends TwoFactorEnrolment {
-  readonly qr: string | undefined
+  readonly qr: string
 }
 
 /**
@@ -38,17 +38,20 @@ export class TwoFactorService {
 
   /**
    * Starts turning it on: the key, ten backup codes and the enrolment a code confirms, with the
-   * QR of the key. The QR is drawn only for a start the gateway answered; one that cannot be
-   * drawn leaves `qr` out and does not fail the start, since the key shows as text too.
+   * QR of the key. The QR is drawn only for a start the gateway answered, and a start whose QR
+   * cannot be drawn fails as `data:AUTH_FAILED` naming the QR, never the key: the second factor
+   * stays off, and the next start replaces the one the gateway made.
    */
   enable(password: string): ResultAsync<TwoFactorStart, DataError> {
     return this.factor.enable(password).andThen((enrolment) =>
-      ResultAsync.fromSafePromise(
-        this.draw(enrolment.uri).then(
-          (qr) => ({ ...enrolment, qr }),
-          () => ({ ...enrolment, qr: undefined }),
-        ),
-      ),
+      ResultAsync.fromPromise(
+        this.draw(enrolment.uri),
+        (cause): DataError => ({
+          code: 'data:AUTH_FAILED',
+          message: 'the QR code of the key could not be drawn',
+          cause,
+        }),
+      ).map((qr) => ({ ...enrolment, qr })),
     )
   }
 

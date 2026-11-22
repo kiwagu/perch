@@ -382,14 +382,25 @@ describe('SettingsContainer, the second factor', () => {
     expect(value(FACTOR.code)).toBe('')
   })
 
-  it('shows the key to type when the QR cannot be drawn, and says so', async () => {
-    await openOff({ draw: () => Promise.reject(new Error('the chunk did not load')) })
+  it('refuses the key when its QR cannot be drawn: the failed error, no key step, the factor off', async () => {
+    const { twoFactor } = await openOff({
+      draw: () => Promise.reject(new Error('the chunk did not load')),
+    })
 
-    await askTheKey()
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(FACTOR.enable)
 
-    expect(screen.getByTestId(FACTOR.key).textContent).toBe(KEY)
+    await waitFor(() => expect(errorCode()).toBe('failed'))
+    for (const anchor of [FACTOR.key, FACTOR.code, FACTOR.confirm, FACTOR.stop]) {
+      expect(screen.queryByTestId(anchor), anchor).toBeNull()
+    }
+
     expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.getByRole('alert').textContent).toContain('could not be drawn')
+    expect(screen.getByTestId(FACTOR.offBadge)).toBeTruthy()
+    expect(twoFactor.enabled).toBe(false)
+    expect(twoFactor.calls.filter(([call]) => call === 'confirm')).toEqual([])
+    // The password stays as typed, to ask again.
+    expect(value(FACTOR.password)).toBe(FACTOR_PASSWORD)
   })
 
   it('reads it as it is now when it was turned on from another device meanwhile', async () => {
@@ -451,6 +462,128 @@ describe('SettingsContainer, the second factor', () => {
 
     expect(screen.queryByTestId(FACTOR.codes)).toBeNull()
     expect(screen.getByTestId(FACTOR.onBadge)).toBeTruthy()
+  })
+})
+
+/** The page with the second factor read as on, its disable and renew buttons on screen. */
+async function openOn(): Promise<FakeTwoFactor> {
+  const twoFactor = new FakeTwoFactor()
+
+  twoFactor.enabled = true
+  open(() => okAsync(undefined), undefined, { twoFactor })
+  await screen.findByTestId(FACTOR.onBadge)
+
+  return twoFactor
+}
+
+const state = () => screen.getByTestId(FACTOR.section).getAttribute('data-state')
+const shown = (...anchors: readonly string[]) => anchors.map((anchor) => has(anchor))
+const has = (testId: string) => screen.queryByTestId(testId) !== null
+/** Lets the read the page waits for answer. */
+const released = (release: () => void) => act(async () => release())
+
+describe('SettingsContainer, a blank password', () => {
+  it('sends no request for any of the three presses', async () => {
+    const off = await openOff()
+
+    await pressed(FACTOR.enable)
+
+    expect(off.twoFactor.calls).toEqual([['read']])
+    expect(screen.queryByTestId(FACTOR.key)).toBeNull()
+    cleanup()
+
+    const on = await openOn()
+
+    await pressed(FACTOR.disable)
+    await pressed(FACTOR.renew)
+
+    expect(on.calls).toEqual([['read']])
+    expect(screen.queryByTestId(FACTOR.codes)).toBeNull()
+    expect(screen.getByTestId(FACTOR.onBadge)).toBeTruthy()
+  })
+
+  it('asks the password the field holds once it is typed', async () => {
+    const on = await openOn()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(FACTOR.renew)
+
+    expect(await screen.findByTestId(FACTOR.codes)).toBeTruthy()
+    expect(on.calls).toContainEqual(['renew', FACTOR_PASSWORD])
+  })
+})
+
+describe('SettingsContainer, the second factor while it is read again', () => {
+  it('shows the codes made without a status or an action until the read answers, then the new status', async () => {
+    const { twoFactor } = await openOff()
+
+    await askTheKey()
+
+    const release = twoFactor.holdReads()
+
+    typed(FACTOR.code, RIGHT_CODE)
+    await pressed(FACTOR.confirm)
+
+    expect(await screen.findByTestId(FACTOR.codes)).toBeTruthy()
+    // The old answer (off) is not shown next to the codes while the new one is awaited.
+    expect(state()).toBe('loading')
+    expect(
+      shown(FACTOR.offBadge, FACTOR.onBadge, FACTOR.enable, FACTOR.disable, FACTOR.renew),
+    ).toEqual([false, false, false, false, false])
+
+    await released(release)
+
+    expect(await screen.findByTestId(FACTOR.onBadge)).toBeTruthy()
+    expect(state()).toBe('ready')
+    // The codes stay while the flow shows them, and no action comes with them.
+    expect(has(FACTOR.codes)).toBe(true)
+    expect(shown(FACTOR.enable, FACTOR.disable, FACTOR.renew)).toEqual([false, false, false])
+
+    await pressed(FACTOR.hide)
+
+    expect(shown(FACTOR.disable, FACTOR.renew, FACTOR.enable)).toEqual([true, true, false])
+  })
+
+  it('does not offer to turn it on again when the codes are hidden before the read answers', async () => {
+    const { twoFactor } = await openOff()
+
+    await askTheKey()
+
+    const release = twoFactor.holdReads()
+
+    typed(FACTOR.code, RIGHT_CODE)
+    await pressed(FACTOR.confirm)
+    await screen.findByTestId(FACTOR.codes)
+    await pressed(FACTOR.hide)
+
+    expect(state()).toBe('loading')
+    expect(
+      shown(FACTOR.enable, FACTOR.disable, FACTOR.renew, FACTOR.password, FACTOR.offBadge),
+    ).toEqual([false, false, false, false, false])
+
+    await released(release)
+
+    expect(await screen.findByTestId(FACTOR.onBadge)).toBeTruthy()
+    expect(shown(FACTOR.disable, FACTOR.renew, FACTOR.enable)).toEqual([true, true, false])
+  })
+
+  it('does not offer to renew the codes while it is read again after turning it off', async () => {
+    const twoFactor = await openOn()
+    const release = twoFactor.holdReads()
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+    await pressed(FACTOR.disable)
+
+    await waitFor(() => expect(state()).toBe('loading'))
+    expect(twoFactor.enabled).toBe(false)
+    expect(
+      shown(FACTOR.onBadge, FACTOR.offBadge, FACTOR.disable, FACTOR.renew, FACTOR.enable),
+    ).toEqual([false, false, false, false, false])
+
+    await released(release)
+
+    expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
+    expect(shown(FACTOR.enable, FACTOR.disable, FACTOR.renew)).toEqual([true, false, false])
   })
 })
 

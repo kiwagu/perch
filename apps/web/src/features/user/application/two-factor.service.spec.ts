@@ -53,15 +53,16 @@ describe('TwoFactorService', () => {
     expect(draw).not.toHaveBeenCalled()
   })
 
-  it('still answers the key when the QR cannot be drawn, with no QR', async () => {
-    const { service: twoFactor } = service(() =>
+  it('fails the start, the factor staying off and nothing of the key in the failure, when the QR cannot be drawn', async () => {
+    const { factor, service: twoFactor } = service(() =>
       Promise.reject(new Error('the chunk did not load')),
     )
 
-    const start = (await twoFactor.enable(FACTOR_PASSWORD))._unsafeUnwrap()
+    const refused = (await twoFactor.enable(FACTOR_PASSWORD))._unsafeUnwrapErr()
 
-    expect(start).toMatchObject({ key: KEY, backupCodes: START_CODES })
-    expect(start.qr).toBeUndefined()
+    expect(refused.code).toBe('data:AUTH_FAILED')
+    expect(JSON.stringify(refused.message)).not.toContain(KEY)
+    expect(factor.enabled).toBe(false)
   })
 
   it('confirms a start with a code of its key, which turns the factor on', async () => {

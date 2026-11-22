@@ -133,14 +133,47 @@ describe('TwoFactorSectionView, the idle controls', () => {
     expect(onEnable).toHaveBeenCalledTimes(1)
   })
 
-  it('turns it off and renews the codes on their own presses', () => {
-    const { onDisable, onRenew } = renderView({ factor: { status: 'ready', enabled: true } })
+  it('turns it off and renews the codes on their own presses, with the password typed', () => {
+    const { onDisable, onRenew } = renderView({
+      factor: { status: 'ready', enabled: true },
+      password: 'Secret-ann1',
+    })
 
     fireEvent.click(button(DISABLE))
     fireEvent.click(button(RENEW))
 
     expect(onDisable).toHaveBeenCalledTimes(1)
     expect(onRenew).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends nothing for a blank password on either press', () => {
+    const { onDisable, onRenew } = renderView({ factor: { status: 'ready', enabled: true } })
+
+    fireEvent.click(button(DISABLE))
+    fireEvent.click(button(RENEW))
+
+    expect(onDisable).not.toHaveBeenCalled()
+    expect(onRenew).not.toHaveBeenCalled()
+  })
+
+  it('lets Enter in the password choose neither press, as turning it off and renewing are two', () => {
+    const { onDisable, onRenew } = renderView({
+      factor: { status: 'ready', enabled: true },
+      password: 'Secret-ann1',
+    })
+
+    fireEvent.submit(input(PASSWORD).closest('form') ?? expect.unreachable('the form'))
+
+    expect(onDisable).not.toHaveBeenCalled()
+    expect(onRenew).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing for a blank password on the press that turns it on', () => {
+    const { onEnable } = renderView()
+
+    fireEvent.click(button(ENABLE))
+
+    expect(onEnable).not.toHaveBeenCalled()
   })
 
   it('enables each button exactly while the flow takes its event, with the password as typed', () => {
@@ -177,16 +210,6 @@ describe('TwoFactorSectionView, the key step', () => {
 
     expect(qr.querySelector('svg')).not.toBeNull()
     expect(qr.contains(screen.getByTestId(KEY_CELL))).toBe(false)
-  })
-
-  it('says the QR could not be drawn, the key still shown to type', () => {
-    renderView({ ...atTheKey, start: { key: STARTED.key, qr: undefined } })
-
-    expect(screen.getByTestId(KEY_CELL).textContent).toBe(STARTED.key)
-    expect(screen.queryByRole('img')).toBeNull()
-    expect(screen.getByRole('alert').textContent).toBe(
-      'The QR code could not be drawn. Type the key in your app instead.',
-    )
   })
 
   it('takes the code by the form, telling each keystroke, and stops turning it on', () => {

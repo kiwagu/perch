@@ -13,10 +13,7 @@ import type { TwoFactorStart } from '../../../application/two-factor.service'
 import { TWO_FACTOR_ERROR_FIELDS, type TwoFactorErrorCode } from './two-factor-error'
 
 export interface KeyStepProps {
-  /**
-   * The key to type, and its QR as the SVG `qrSvg` draws (markup of numbers only, never the text
-   * it encodes), or none when it could not be drawn.
-   */
+  /** The key to type, and its QR as the SVG `qrSvg` draws (markup of numbers only, never the text it encodes). */
   readonly start: Pick<TwoFactorStart, 'key' | 'qr'>
   /** What is typed in the code. */
   readonly code: string
@@ -34,8 +31,7 @@ export interface KeyStepProps {
 
 /**
  * The key for the authenticator app as text to type, with a QR code beside it that carries the
- * same key, and the field for the code the app then shows. A QR that could not be drawn is said,
- * the key still being there to type.
+ * same key, and the field for the code the app then shows.
  */
 export function KeyStep(props: KeyStepProps) {
   const t = useT()
@@ -46,19 +42,13 @@ export function KeyStep(props: KeyStepProps) {
     <div className="flex flex-col gap-4">
       <p className="text-muted-foreground">{t('user.settings.two-factor.key.hint')}</p>
       <div className="flex flex-wrap items-center gap-4">
-        {props.start.qr === undefined ? (
-          <p className="text-destructive" role="alert">
-            {t('user.settings.two-factor.key.qr-failed')}
-          </p>
-        ) : (
-          <div
-            className="size-40 shrink-0 overflow-hidden rounded-md [&>svg]:size-full"
-            role="img"
-            aria-label={t('user.settings.two-factor.key.qr')}
-            // The picture is drawn from numbers alone, so it carries no markup of anyone's text.
-            dangerouslySetInnerHTML={{ __html: props.start.qr }}
-          />
-        )}
+        <div
+          className="size-40 shrink-0 overflow-hidden rounded-md [&>svg]:size-full"
+          role="img"
+          aria-label={t('user.settings.two-factor.key.qr')}
+          // The picture is drawn from numbers alone, so it carries no markup of anyone's text.
+          dangerouslySetInnerHTML={{ __html: props.start.qr }}
+        />
         <code
           className="min-w-0 font-mono text-sm break-all select-all"
           data-testid="user.settings.two-factor.key-cell"

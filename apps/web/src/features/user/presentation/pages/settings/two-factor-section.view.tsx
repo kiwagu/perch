@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { type MouseEvent, useId } from 'react'
 
 import { useT } from '@workspace/i18n'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
@@ -23,6 +23,16 @@ import { CodesStep, KeyStep } from './two-factor-steps.view'
 
 /** The anchor of the section's error, drawn above the controls or under the field its code concerns. */
 const ERROR_TEST_ID = 'user.settings.two-factor.error'
+
+/**
+ * A press that takes the password the form holds: it goes ahead only once the form's fields are
+ * valid, as a submit does (the password is `required`), and the browser says which is not.
+ */
+const pressWhenValid = (press: () => void) => (event: MouseEvent<HTMLButtonElement>) => {
+  if (event.currentTarget.form?.reportValidity()) {
+    press()
+  }
+}
 
 /** The marker of the second factor being on or off, which the page's anchors tell apart. */
 function StateBadge(props: { readonly testId: string; readonly children: string }) {
@@ -171,39 +181,43 @@ export function TwoFactorSectionView(props: TwoFactorSectionViewProps) {
           </Form>
         ) : null}
         {asksPassword && enabled ? (
-          <FieldGroup>
-            {passwordField}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={
-                  !props.can({
-                    type: 'user.settings.two-factor.disable-button',
-                    password: props.password,
-                  })
-                }
-                onClick={props.onDisable}
-                data-testid="user.settings.two-factor.disable-button"
-              >
-                {t('user.settings.two-factor.disable')}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={
-                  !props.can({
-                    type: 'user.settings.two-factor.renew-codes-button',
-                    password: props.password,
-                  })
-                }
-                onClick={props.onRenew}
-                data-testid="user.settings.two-factor.renew-codes-button"
-              >
-                {t('user.settings.two-factor.renew-codes')}
-              </Button>
-            </div>
-          </FieldGroup>
+          // Turning it off and renewing the codes are two presses: Enter in the password chooses
+          // neither, and each press is held to the form's validation as a submit is.
+          <Form onSubmit={() => false}>
+            <FieldGroup>
+              {passwordField}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    !props.can({
+                      type: 'user.settings.two-factor.disable-button',
+                      password: props.password,
+                    })
+                  }
+                  onClick={pressWhenValid(props.onDisable)}
+                  data-testid="user.settings.two-factor.disable-button"
+                >
+                  {t('user.settings.two-factor.disable')}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={
+                    !props.can({
+                      type: 'user.settings.two-factor.renew-codes-button',
+                      password: props.password,
+                    })
+                  }
+                  onClick={pressWhenValid(props.onRenew)}
+                  data-testid="user.settings.two-factor.renew-codes-button"
+                >
+                  {t('user.settings.two-factor.renew-codes')}
+                </Button>
+              </div>
+            </FieldGroup>
+          </Form>
         ) : null}
         {props.start && asksCode ? (
           <KeyStep

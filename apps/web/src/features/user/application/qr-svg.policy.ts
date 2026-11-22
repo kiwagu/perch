@@ -9,7 +9,7 @@ const loadQrLibrary = () => import('uqr')
  * The QR code of `text` as an SVG: a white square with the black modules on it and the four
  * modules of white around them the scanners expect, whatever the page's theme. The picture holds
  * the modules only, none of the text it encodes. A library that cannot be loaded rejects, which
- * the caller says.
+ * fails the start of the second factor that asked for the picture.
  */
 export async function qrSvg(text: string): Promise<string> {
   const { renderSVG } = await loadQrLibrary()

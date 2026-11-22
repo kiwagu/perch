@@ -29,7 +29,7 @@ over the shape runner and the command bus, the
 and commands beside it), the `TwoFactorService` and the `PasskeysService` over the platform's
 ports of the signed-in account's second factor and passkeys (the first also draws the QR of a key
 it starts, `qr-svg.policy.ts`, whose `uqr` loads at that action and never with the first frame;
-a QR that cannot be drawn leaves the key to type, said on the page), the sign-in
+a start whose QR cannot be drawn fails as `failed` and the second factor stays off), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
@@ -151,7 +151,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   added through the browser's ceremony, `platform.passkeys.add`, and removed after the frame's
   confirmation `passkeys-remove`, `platform.passkeys.remove`, each reading the list again), the
   page reading the section and the list as it opens and again each time the flow's `read` names
-  them (`section-read.ts`),
+  them (`section-read.ts`: from the moment a read is asked the section shows `loading`, so no
+  earlier answer is shown as current, and the codes and the key stay while the flow shows them),
   its screen's flow run as
   its machine (`application/settings/settings-machine/`: the theme, language, password, email,
   two-factor, passkey-add, passkey-remove and deletion regions of one parallel state, `machine.ts`
