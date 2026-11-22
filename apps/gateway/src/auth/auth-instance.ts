@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth'
 import { bearer } from 'better-auth/plugins'
+import { twoFactor } from 'better-auth/plugins/two-factor'
 
 import type { LocalDb } from '@workspace/data'
 import { surrealAuthAdapter } from '@workspace/data/better-auth-adapter'
@@ -16,9 +17,11 @@ import { ADMIN_PATHS } from './admin-paths'
 import { adminPlugin } from './admin-plugin'
 import { type AuthLog, authErrorReporter, authLogger } from './auth-log'
 import { AUTH_MODELS, generateAuthId } from './auth-models'
+import { passkeyPlugin } from './passkey-plugin'
 import { hashPassword, verifyPassword } from './password-hash'
 import { RESET_LINK_LIFETIME_S, resetMailer } from './reset-mail'
 import { sessionHooks } from './session-hooks'
+import { storageFailuresTold } from './storage-failures'
 import { verificationMailer } from './verification-mail'
 
 /**
@@ -63,10 +66,29 @@ export function authOptions(options: AuthInstanceOptions) {
     baseURL: options.baseURL,
     secret: options.secret,
     trustedOrigins: [...options.trustedOrigins],
-    database: surrealAuthAdapter(options.local),
+    // A passkey or a session the directory did not take is a failure of the service, which the
+    // passkey plugin would otherwise answer as a refusal of the device's ceremony.
+    database: storageFailuresTold(surrealAuthAdapter(options.local), options.log),
     // The admin plugin keeps an account's role and ban and refuses a banned account a session;
-    // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below).
-    plugins: [bearer(), adminPlugin()],
+    // none of its endpoints is reachable (`adminPlugin`, `disabledPaths` below). The two-factor
+    // plugin keeps an account's second factor and answers a sign-in by password of an account
+    // whose factor is on with a challenge instead of a session; its own lockout is off, as the
+    // gateway counts a sign-in's wrong codes with its wrong passwords. The passkey plugin keeps
+    // an account's passkeys (`passkeyPlugin`). The mount reaches their endpoints only through the
+    // gateway's own calls.
+    plugins: [
+      bearer(),
+      adminPlugin(),
+      twoFactor({
+        issuer: 'Perch',
+        accountLockout: { enabled: false },
+        schema: {
+          user: { fields: { twoFactorEnabled: 'two_factor_enabled' } },
+          twoFactor: AUTH_MODELS.twoFactor,
+        },
+      }),
+      passkeyPlugin(options.publicUrl),
+    ],
     emailAndPassword: {
       enabled: true,
       password: { hash: hashPassword, verify: verifyPassword },
@@ -133,6 +155,10 @@ export function authOptions(options: AuthInstanceOptions) {
         pending: { type: 'boolean', required: false, input: false, defaultValue: false },
       },
       expiresIn: SESSION_LIFETIME_MS / 1000,
+      // A session of any age may add a passkey: a device stays signed in for months, and
+      // Better Auth's default would ask for a session younger than a day. The mount serves none of
+      // Better Auth's other endpoints that ask for a fresh session.
+      freshAge: 0,
       // Better Auth's refresh stays off, so it never writes `expires_at` after sign-in: its write is
       // unconditional and could revive a session the gateway ended. The gateway extends a session
       // itself, where its device is seen.

@@ -41,7 +41,7 @@ import {
 import endWithStatement from '../../auth/__fixtures__/device-session-end-with.surql'
 import identityRoleSetStatement from '../../auth/__fixtures__/identity-role-set.surql'
 import { authHandler } from '../../auth/auth-handler'
-import { noAccounts } from '../../auth/auth-handler/__fixtures__/mount'
+import { noAccounts, ORIGIN } from '../../auth/auth-handler/__fixtures__/mount'
 import { AuthSessions, type SessionRead } from '../../auth/auth-sessions'
 import { DeviceSessions } from '../../auth/device-sessions'
 import { ProfileEmails } from '../../auth/profile-emails'
@@ -258,7 +258,12 @@ async function openGateway(options: GatewayOptions = {}) {
     auth: opened.auth,
     sessions,
     ...accounts,
-    // No account is deleted here.
+    // No account is deleted here, and none has its second factor on.
+    challenges: noAccounts.challenges,
+    twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
+    publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,

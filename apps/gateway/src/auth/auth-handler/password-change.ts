@@ -23,8 +23,8 @@ const changeBody = z.object({ currentPassword: z.string(), password: z.string() 
  * current password must find a place among its account's failed sign-ins, as a sign-in's does
  * (`RequestLimits.signInAttempt`, by the caller's email; 429 when they are spent), and a wrong one
  * keeps its place there: 400 `invalid-credentials`, as a current password of a length no
- * account's password has (`hasPasswordLength`) does without being checked; a right one clears
- * them. In the account's turn,
+ * account's password has (`hasPasswordLength`) does without being checked; a right one gives its
+ * place back and forgets none of the failures. In the account's turn,
  * the current password is checked against the credential row and the new one hashed; then one
  * transaction makes sure the caller's session is still live (401 `unauthorized` when it ended
  * meanwhile) and the row still holds the hash that was checked, and sets the new password, ends
@@ -102,7 +102,8 @@ async function changed(
         return bearerRefused()
       }
 
-      outcome = 'succeeded'
+      // A right current password forgets none of the failed sign-ins (only a sign-in's last step
+      // does), so the place it held goes back.
       await afterPasswordChange(deps, caller.identity, change.value.devices)
 
       return new Response(null, { status: 204 })

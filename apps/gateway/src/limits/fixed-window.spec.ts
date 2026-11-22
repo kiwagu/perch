@@ -165,6 +165,46 @@ describe('FixedWindow', () => {
     expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 1 })
   })
 
+  it('keeps a reservation in the window that counted it, once, however often its holder asks', () => {
+    const { window } = windowOf(2, 10_000)
+    const reservation = reservedOf(window, 'a')
+
+    reservation.keep()
+    reservation.keep()
+    reservation.giveBack()
+
+    expect(window.take('a')).toEqual({ allowed: true })
+    expect(window.take('a').allowed).toBe(false)
+  })
+
+  it('counts a reservation kept after its key was forgotten in the window as it is then, opening one', async () => {
+    const { clock, window } = windowOf(2, 10_000)
+    const reservation = reservedOf(window, 'a')
+
+    window.forget('a')
+    await clock.advance(1_000)
+    reservation.keep()
+
+    expect(window.take('a')).toEqual({ allowed: true })
+    // The window opened when the reservation was kept, a second after the forgetting.
+    expect(window.take('a')).toEqual({ allowed: false, retryAfterMs: 10_000 })
+  })
+
+  it('counts a reservation kept after its key was forgotten even once newer attempts filled the window, so a later give-back leaves it counted', () => {
+    const { window } = windowOf(2, 10_000)
+    const queued = reservedOf(window, 'a')
+
+    window.forget('a')
+
+    const newer = [reservedOf(window, 'a'), reservedOf(window, 'a')]
+
+    queued.keep()
+    newer[0]?.giveBack()
+
+    // The kept attempt and the newer one still under way fill the window.
+    expect(window.take('a').allowed).toBe(false)
+  })
+
   it('forgets a key', () => {
     const { window } = windowOf(1, 10_000)
 

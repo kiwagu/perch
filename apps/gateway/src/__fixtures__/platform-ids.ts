@@ -5,8 +5,14 @@
  * the gateway issues ids of about 30 characters.
  */
 
-import { device_sessionIdFactory, identityIdFactory, invitationIdFactory } from '@workspace/ids'
+import {
+  device_sessionIdFactory,
+  identityIdFactory,
+  invitationIdFactory,
+  passkeyIdFactory,
+} from '@workspace/ids'
 
+import { passkeyOf } from './platform-passkey'
 import type { World } from './platform-requests'
 import type { Stand } from './stand'
 
@@ -36,6 +42,11 @@ const IDS: Readonly<Record<string, Ids>> = {
   'devices.revoke': {
     unknown: () => device_sessionIdFactory.create(),
     issued: (stand, world) => stand.otherDevice(world.sender),
+  },
+  // A passkey the sender added just now, which it may remove.
+  'passkeys.remove': {
+    unknown: () => passkeyIdFactory.create(),
+    issued: (stand, world) => passkeyOf(stand, world.sender),
   },
   'organisations.set-role': member,
   'organisations.remove': member,

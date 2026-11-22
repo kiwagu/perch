@@ -146,6 +146,12 @@ const APP_MACHINES: Readonly<Record<string, () => { readonly config: unknown }>>
       changePassword: () => okAsync(undefined),
       changeEmail: () => okAsync(undefined),
       requestAccountDeletion: () => okAsync(undefined),
+      enableTwoFactor: () => errAsync(dataError('data:OFFLINE', 'not in this spec')),
+      confirmTwoFactor: () => okAsync(undefined),
+      disableTwoFactor: () => okAsync(undefined),
+      renewCodes: () => okAsync([]),
+      addPasskey: () => okAsync(undefined),
+      removePasskey: () => okAsync(undefined),
     }),
   'user.profile': () =>
     createProfileMachine({

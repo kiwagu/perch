@@ -1,17 +1,18 @@
-import { errAsync } from 'neverthrow'
+import { errAsync, okAsync } from 'neverthrow'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createActor, waitFor } from 'xstate'
 
-import { type DataError, dataError, type SignUpInput } from '@workspace/data'
+import { type CodeStep, type DataError, dataError, type SignUpInput } from '@workspace/data'
 import { CONTRACT_VALUES } from '@workspace/kernel'
 
+import { assertionOf, fakeCeremony } from '../../../composition/__fixtures__/passkey-ceremony'
 import {
   openTestSession,
   signUpVerified,
   type TestSession,
 } from '../../../composition/__fixtures__/session'
 import type { SessionService } from '../../../composition/session'
-import type { SessionPort } from '../../../platform/session.port'
+import type { SessionPort, SignInResult } from '../../../platform/session.port'
 import { profileCommands, profileShape } from '../presentation/pages/profile/profile.model.gen'
 
 import { ProfileService } from './profile.service'
@@ -30,9 +31,18 @@ const ann = {
 let opened: TestSession
 let session: SessionService
 let signIn: SignInService
+/** The account whose passkey the browser's window picks, once a test sets one. */
+let picked: string | undefined
 
 beforeEach(async () => {
-  opened = await openTestSession()
+  picked = undefined
+  opened = await openTestSession(undefined, {
+    ceremony: fakeCeremony(() =>
+      picked === undefined
+        ? errAsync(dataError('data:PASSKEY_CANCELLED', 'the window was closed'))
+        : okAsync(assertionOf(opened.auth.passkeyOf(picked))),
+    ),
+  })
   session = opened.session
   signIn = new SignInService(session)
 })
@@ -45,14 +55,19 @@ afterEach(async () => {
 type Asked =
   | { readonly signUp: SignUpInput }
   | { readonly signIn: string }
+  | { readonly confirm: { readonly step: CodeStep; readonly code: string; readonly out: boolean } }
+  | { readonly passkey: string | undefined }
   | { readonly resend: string }
+
+/** What the sign-in service asks of the session. */
+type SignInSession = ConstructorParameters<typeof SignInService>[0]
 
 /** A session whose answers the test sets, recording what is asked of it. */
 function recordingSession(
   answers: { readonly resend?: () => ReturnType<SessionPort['resendVerification']> } = {},
 ) {
   const asked: Asked[] = []
-  const port: Pick<SessionPort, 'signIn' | 'signUp' | 'resendVerification'> = {
+  const port: SignInSession = {
     signUp: (input) => {
       asked.push({ signUp: input })
 
@@ -63,6 +78,16 @@ function recordingSession(
 
       return session.signIn(input)
     },
+    confirmSignIn: (step, code, out) => {
+      asked.push({ confirm: { step, code, out } })
+
+      return session.confirmSignIn(step, code, out)
+    },
+    signInWithPasskey: (signOutOldestFor) => {
+      asked.push({ passkey: signOutOldestFor })
+
+      return session.signInWithPasskey(signOutOldestFor)
+    },
     resendVerification: (email) => {
       asked.push({ resend: email })
 
@@ -71,6 +96,14 @@ function recordingSession(
   }
 
   return { asked, port }
+}
+
+/** What the form keeps of a second step while none is under way. */
+const NO_SECOND_STEP = {
+  step: undefined,
+  codeError: undefined,
+  consentFor: undefined,
+  attempt: undefined,
 }
 
 /** The switch of mode, Ann's password typed and typed again. */
@@ -163,7 +196,7 @@ describe('a sign-in past the limit of devices', () => {
 
     expect(session.current()).toBeUndefined()
 
-    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button', form: ann })
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
     await waitFor(actor, (state) => state.matches('done'))
 
     expect(session.current()?.email).toBe(ann.email)
@@ -189,6 +222,246 @@ describe('a sign-in past the limit of devices', () => {
   })
 })
 
+/** Ann's account, verified and signed out, whose second factor is on and takes `CODE`. */
+const CODE = '123456'
+
+async function annWithSecondFactor(): Promise<void> {
+  await annVerified()
+  opened.auth.secondFactor(ann.email, CODE)
+}
+
+/** The code step the password step of Ann's account asked for. */
+async function annsStep(): Promise<CodeStep> {
+  const outcome = (await signIn.signIn(ann, false))._unsafeUnwrap()
+
+  return outcome.kind === 'code-required' ? outcome : expect.unreachable('a code was asked')
+}
+
+describe('a sign-in whose account asks for a code', () => {
+  it('answers the code step the account asks, with the challenge and the email typed, signing nothing in', async () => {
+    await annWithSecondFactor()
+
+    const outcome = (await signIn.signIn(ann, false))._unsafeUnwrap()
+
+    expect(outcome).toMatchObject({ kind: 'code-required', email: ann.email })
+    expect(session.current()).toBeUndefined()
+  })
+
+  it('asks the session to take the code at the step, past the limit of devices or not', async () => {
+    const { asked, port } = recordingSession()
+    const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
+    const stepping = new SignInService(port)
+
+    // The gateway knows no such challenge: each is refused, and each is asked as given.
+    expect((await stepping.confirmSignIn(step, CODE, false)).isErr()).toBe(true)
+    expect((await stepping.confirmSignIn(step, CODE, true)).isErr()).toBe(true)
+
+    expect(asked).toEqual([
+      { confirm: { step, code: CODE, out: false } },
+      { confirm: { step, code: CODE, out: true } },
+    ])
+  })
+
+  it.each([
+    ['nothing', ''],
+    ['five digits', '12345'],
+    ['more than a backup code has', '0123456789ab'],
+  ])('asks the session nothing for %s, failing as no code', async (_, code) => {
+    const { asked, port } = recordingSession()
+    const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
+
+    expect(
+      (await new SignInService(port).confirmSignIn(step, code, false))._unsafeUnwrapErr().code,
+    ).toBe('sign-in:CODE_INVALID')
+    expect(asked).toEqual([])
+  })
+
+  it.each(['123456', '0123456789a'])('leaves the code %s to the gateway', async (code) => {
+    const { asked, port } = recordingSession()
+    const step: CodeStep = { challenge: 'challenge-1', email: ann.email }
+
+    expect((await new SignInService(port).confirmSignIn(step, code, false)).isErr()).toBe(true)
+    expect(asked).toEqual([{ confirm: { step, code, out: false } }])
+  })
+
+  it('signs the device in once the code is right, and fails a wrong one as data:INVALID_CODE', async () => {
+    await annWithSecondFactor()
+
+    const step = await annsStep()
+
+    expect((await signIn.confirmSignIn(step, '000000', false))._unsafeUnwrapErr().code).toBe(
+      'data:INVALID_CODE',
+    )
+    expect(session.current()).toBeUndefined()
+
+    const done = (await signIn.confirmSignIn(step, CODE, false))._unsafeUnwrap()
+
+    expect(done.kind === 'signed-in' ? done.user.email : undefined).toBe(ann.email)
+    expect(session.current()?.email).toBe(ann.email)
+  })
+
+  it('answers the limit of devices as the outcome the form asks about', async () => {
+    const limited: SignInSession = {
+      ...recordingSession().port,
+      signIn: () => okAsync<SignInResult, DataError>({ kind: 'device-limit' }),
+    }
+
+    expect((await new SignInService(limited).signIn(ann, false))._unsafeUnwrap()).toEqual({
+      kind: 'device-limit',
+    })
+  })
+
+  it('asks the code, takes it and says the welcome in the form, signing the account in', async () => {
+    await annWithSecondFactor()
+
+    const actor = start()
+    const emitted: unknown[] = []
+
+    actor.on('show', (event) => emitted.push(event))
+    actor.on('navigate', (event) => emitted.push(event))
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('code'))
+
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: CODE })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+    expect(emitted).toEqual([
+      { type: 'show', anchor: 'user.sign-in.code.dialog', codes: ['code-required'] },
+      { type: 'show', anchor: 'app-shell.notice-message', codes: ['welcome'] },
+      { type: 'navigate', to: '/me' },
+    ])
+  })
+
+  it('asks again under the field after a wrong code, and signs in with the right one', async () => {
+    await annWithSecondFactor()
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('code'))
+    actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: '000000' })
+
+    const refused = await waitFor(actor, (state) => state.context.codeError !== undefined)
+
+    expect(refused.value).toBe('code')
+    expect(refused.context.codeError).toBe('data:INVALID_CODE')
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: CODE })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+  })
+
+  it('signs in all the same past the limit of devices: the password again, then the code again', async () => {
+    await annWithSecondFactor()
+    opened.auth.atDeviceLimit(ann.email)
+    opened.auth.requests.splice(0)
+
+    const actor = start()
+
+    actor.send(submitted(ann))
+    await waitFor(actor, (state) => state.matches('code'))
+    actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: CODE })
+    await waitFor(actor, (state) => state.matches('device-limit'))
+
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
+    await waitFor(actor, (state) => state.matches('code-anyway'))
+    actor.send({ type: 'user.sign-in.code.dialog.confirm-button', code: CODE })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+    expect(opened.auth.requests.map((request) => request.kind)).toEqual([
+      'sign-in',
+      'confirm-sign-in',
+      'sign-in',
+      'confirm-sign-in',
+    ])
+  })
+})
+
+describe('a sign-in with a passkey', () => {
+  it('asks the session for the passkey, naming the account only when a confirmation names one', async () => {
+    const { asked, port } = recordingSession()
+    const keyed = new SignInService(port)
+
+    // The browser's window is closed, so each is refused, and each is asked as given.
+    expect((await keyed.signInWithPasskey()).isErr()).toBe(true)
+    expect((await keyed.signInWithPasskey('idn_ann')).isErr()).toBe(true)
+
+    expect(asked).toEqual([{ passkey: undefined }, { passkey: 'idn_ann' }])
+  })
+
+  it('signs the device in with the passkey the browser picks, asking no password and no code', async () => {
+    await annWithSecondFactor()
+    picked = ann.email
+    opened.auth.requests.splice(0)
+
+    const actor = start()
+
+    actor.send({ type: 'user.sign-in.passkey-button' })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+    expect(opened.auth.requests.map((request) => request.kind)).toEqual([
+      'passkey-options',
+      'passkey-sign-in',
+    ])
+  })
+
+  it('goes back to the form saying no passkey was used, signing nothing in', async () => {
+    await annVerified()
+
+    const actor = start()
+
+    actor.send({ type: 'user.sign-in.passkey-button' })
+
+    const closed = await waitFor(actor, (state) => state.context.error !== undefined)
+
+    expect(closed.value).toBe('sign-in')
+    expect(closed.context.error).toBe('data:PASSKEY_CANCELLED')
+    expect(session.current()).toBeUndefined()
+  })
+
+  it('says no account holds a passkey it does not know', async () => {
+    await annVerified()
+    picked = 'nobody@example.test'
+
+    const actor = start()
+
+    actor.send({ type: 'user.sign-in.passkey-button' })
+
+    const unknown = await waitFor(actor, (state) => state.context.error !== undefined)
+
+    expect(unknown.value).toBe('sign-in')
+    expect(unknown.context.error).toBe('data:PASSKEY_UNKNOWN')
+  })
+
+  it('asks about the limit of devices naming the account, then signs in naming it once confirmed', async () => {
+    await annVerified()
+    opened.auth.atDeviceLimit(ann.email)
+    picked = ann.email
+
+    const actor = start()
+
+    actor.send({ type: 'user.sign-in.passkey-button' })
+    await waitFor(actor, (state) => state.matches('passkey-device-limit'))
+
+    expect(actor.getSnapshot().context.consentFor).toBe(opened.auth.identityOf(ann.email).id)
+    expect(session.current()).toBeUndefined()
+
+    actor.send({ type: 'user.sign-in.device-limit-dialog.confirm-button' })
+    await waitFor(actor, (state) => state.matches('done'))
+
+    expect(session.current()?.email).toBe(ann.email)
+  })
+})
+
 describe('the sign-in form', () => {
   it('asks to check the mail after a sign-up, in the mode sign-in, signing nothing in and asking its host nothing', async () => {
     const actor = start()
@@ -206,6 +479,7 @@ describe('the sign-in form', () => {
       error: undefined,
       mail: 'check-your-mail',
       sentTo: ann.email,
+      ...NO_SECOND_STEP,
     })
     expect(emitted).toEqual([])
     expect(session.current()).toBeUndefined()
@@ -243,6 +517,7 @@ describe('the sign-in form', () => {
       error: 'data:EMAIL_NOT_VERIFIED',
       mail: undefined,
       sentTo: undefined,
+      ...NO_SECOND_STEP,
     })
     expect(session.current()).toBeUndefined()
   })
@@ -272,6 +547,7 @@ describe('the sign-in form', () => {
         error: undefined,
         mail: 'check-your-mail',
         sentTo: 'Ann@Example.Test',
+        ...NO_SECOND_STEP,
       })
       expect(opened.auth.requests).toEqual([{ kind: 'resend', email: 'Ann@Example.Test' }])
     },
@@ -295,6 +571,7 @@ describe('the sign-in form', () => {
       error: 'data:RATE_LIMITED',
       mail: undefined,
       sentTo: undefined,
+      ...NO_SECOND_STEP,
     })
   })
 

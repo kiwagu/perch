@@ -90,6 +90,16 @@ export const FIELD_FACTS = {
   "user.settings.theme-select": {
     "holdsInput": false
   },
+  "user.settings.two-factor.code-input": {
+    "maxLength": 11
+  },
+  "user.settings.two-factor.password-input": {
+    "maxLength": 35
+  },
+  "user.sign-in.code.code-input": {
+    "maxLength": 11,
+    "marksState": false
+  },
   "user.sign-in.email-input": {
     "maxLength": 254,
     "type": "email",

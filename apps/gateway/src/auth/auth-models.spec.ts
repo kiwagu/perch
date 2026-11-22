@@ -10,9 +10,12 @@ describe('generateAuthId', () => {
     ['device_session', /^dvs_/],
     ['account', /^acc_/],
     ['verification', /^vrf_/],
+    ['twoFactor', /^tfa_/],
+    ['two_factor', /^tfa_/],
+    ['passkey', /^pkey_/],
   ])('mints an id of our format for model %s', (model, prefix) => {
     expect(generateAuthId({ model })).toMatch(prefix)
-    expect(generateAuthId({ model })).toMatch(/^[a-z]{3}_[0-9a-z]{16}\.[0-9a-z]{10}$/)
+    expect(generateAuthId({ model })).toMatch(/^[a-z]{3,4}_[0-9a-z]{16}\.[0-9a-z]{10}$/)
   })
 
   it('refuses a model it does not know', () => {
@@ -26,5 +29,9 @@ describe('AUTH_MODELS', () => {
     expect(AUTH_MODELS.session.modelName).toBe('device_session')
     expect(AUTH_MODELS.session.fields.userId).toBe('identity')
     expect(AUTH_MODELS.account.fields.providerId).toBe('provider_id')
+    expect(AUTH_MODELS.twoFactor.modelName).toBe('two_factor')
+    expect(AUTH_MODELS.twoFactor.fields.userId).toBe('identity')
+    expect(AUTH_MODELS.passkey.modelName).toBe('passkey')
+    expect(AUTH_MODELS.passkey.fields.credentialID).toBe('credential_id')
   })
 })

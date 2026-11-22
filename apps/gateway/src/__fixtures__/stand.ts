@@ -31,12 +31,18 @@ export interface Account {
   readonly password: string
 }
 
-/** A request: its method and path (with its query), the account that sends it, its JSON body. */
+/**
+ * A request: its method and path (with its query), the account that sends it with its token, the
+ * device it names, its JSON body.
+ */
 export interface Asked {
   readonly method: string
   readonly path: string
   readonly as?: Account
-  /** The device the request names, instead of the sender's own. */
+  /**
+   * The device the request names, instead of the sender's own: with no sender, a guest's request
+   * from that device, which carries no token.
+   */
   readonly device?: string
   readonly body?: unknown
 }
@@ -149,7 +155,12 @@ export async function openStand() {
 
     if (as !== undefined) {
       headers.set('Authorization', `Bearer ${as.token}`)
-      headers.set('X-Perch-Device', device ?? as.device)
+    }
+
+    const named = device ?? as?.device
+
+    if (named !== undefined) {
+      headers.set('X-Perch-Device', named)
     }
 
     if (body !== undefined) {
@@ -247,6 +258,8 @@ export async function openStand() {
     otherDevice,
     invitation,
     ask,
+    /** The front's public origin the gateway was opened for, which its passkeys are bound to. */
+    publicUrl: base.root.publicUrl,
     close: async () => {
       await server.stop()
       await closeHarness()
