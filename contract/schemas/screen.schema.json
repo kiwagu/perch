@@ -915,7 +915,7 @@
                         }
                       ]
                     },
-                    "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. See the rule `list-reads`."
+                    "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list rereads when it changes while it renders, or a constant; never a field. See the rule `list-reads`."
                   },
                   "paged": {
                     "description": "The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.",
