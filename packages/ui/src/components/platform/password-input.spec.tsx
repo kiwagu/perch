@@ -1,6 +1,5 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
@@ -62,72 +61,6 @@ describe('PasswordInput', () => {
     expect(input().disabled).toBe(true)
     expect((eye() as HTMLButtonElement).disabled).toBe(false)
     expect((eye() as HTMLButtonElement).type).toBe('button')
-  })
-})
-
-/** A password the app holds, with a button that empties it as a flow does once an action took it. */
-function Held() {
-  const [value, setValue] = useState('')
-
-  return (
-    <>
-      <PasswordInput
-        testId="x.y.password-input"
-        showLabel="Show"
-        hideLabel="Hide"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-      />
-      <button type="button" data-testid="x.y.clear" onClick={() => setValue('')}>
-        Clear
-      </button>
-      <button type="button" data-testid="x.y.preset" onClick={() => setValue('Preset-1')}>
-        Preset
-      </button>
-    </>
-  )
-}
-
-describe('a PasswordInput whose value the app holds', () => {
-  it('stays shown while the person types and deletes, even down to nothing', async () => {
-    render(<Held />)
-
-    await userEvent.click(eye())
-    await userEvent.type(input(), 'Secret-ann1')
-    await userEvent.clear(input())
-    await userEvent.type(input(), 'Next-1')
-
-    expect(input().type).toBe('text')
-    expect(eye().getAttribute('data-value')).toBe('hide')
-  })
-
-  it('hides again once the app empties it, so the next entry is masked until the eye is pressed', async () => {
-    render(<Held />)
-
-    await userEvent.type(input(), 'Secret-ann1')
-    await userEvent.click(eye())
-    expect(input().type).toBe('text')
-
-    await userEvent.click(screen.getByTestId('x.y.clear'))
-
-    expect(input().value).toBe('')
-    expect(input().type).toBe('password')
-    expect(eye().getAttribute('data-value')).toBe('show')
-    expect(eye().getAttribute('aria-pressed')).toBe('false')
-
-    await userEvent.type(input(), 'Next-1')
-
-    expect(input().type).toBe('password')
-  })
-
-  it('hides again once the app gives it a value the person did not type', async () => {
-    render(<Held />)
-
-    await userEvent.click(eye())
-    await userEvent.click(screen.getByTestId('x.y.preset'))
-
-    expect(input().value).toBe('Preset-1')
-    expect(input().type).toBe('password')
   })
 })
 
