@@ -53,7 +53,9 @@ than its portal or overlay. A control that is not a test target carries a
     accessible name), which shows what the input holds as typed or hides it again; `testId`
     marks the input, and the eye carries the derived `<testId>.visibility-button` with `show`
     or `hide` as its `data-value`, what a click does. Whether the input shows its value is its
-    own, never a flow's: the eye is always enabled, the input disabled or not.
+    own, never a flow's: the eye is always enabled, the input disabled or not. A value the app
+    gives that the person did not just type (a flow emptying the field once an action took it)
+    hides it again; typing and deleting do not.
   - `navItemVariants`: the classes of a navigation item, active or not.
 - `./field-facts`: what the kit's fields take from the app when their element says nothing.
   `FieldFactsProvider` takes a map of `FieldFacts` (`maxLength`, `type`, `marksState`,

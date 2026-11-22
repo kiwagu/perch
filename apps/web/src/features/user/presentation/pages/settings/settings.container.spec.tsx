@@ -197,6 +197,11 @@ describe('SettingsContainer', () => {
     await screen.findByTestId('user.settings.deletion.form')
     fireEvent.change(screen.getByTestId(DELETION_PASSWORD), { target: { value: 'Secret-ann1' } })
     expect(unsavedNow).toBe(true)
+    // Shown to check it; emptied by the flow, it is masked again.
+    await act(async () =>
+      fireEvent.click(screen.getByTestId(`${DELETION_PASSWORD}.visibility-button`)),
+    )
+    expect((screen.getByTestId(DELETION_PASSWORD) as HTMLInputElement).type).toBe('text')
     await act(async () => fireEvent.click(screen.getByTestId('user.settings.deletion.send-button')))
 
     await waitFor(() =>
@@ -206,6 +211,7 @@ describe('SettingsContainer', () => {
     )
     expect(requestAccountDeletion).toHaveBeenCalledWith('Secret-ann1')
     await waitFor(() => expect(value(DELETION_PASSWORD)).toBe(''))
+    expect((screen.getByTestId(DELETION_PASSWORD) as HTMLInputElement).type).toBe('password')
     await waitFor(() => expect(unsavedNow).toBe(false))
   })
 
@@ -429,7 +435,7 @@ describe('SettingsContainer, the second factor', () => {
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
   })
 
-  it('turns it off with the password, then marks it off', async () => {
+  it('turns it off with the password, then marks it off, the password empty and masked again', async () => {
     const twoFactor = new FakeTwoFactor()
 
     twoFactor.enabled = true
@@ -437,11 +443,22 @@ describe('SettingsContainer, the second factor', () => {
     await screen.findByTestId(FACTOR.onBadge)
 
     typed(FACTOR.password, FACTOR_PASSWORD)
+    // The password was shown to check it: nothing typed next is shown unless the eye is pressed.
+    await pressed(`${FACTOR.password}.visibility-button`)
+    expect((screen.getByTestId(FACTOR.password) as HTMLInputElement).type).toBe('text')
     await pressed(FACTOR.disable)
 
     expect(await screen.findByTestId(FACTOR.offBadge)).toBeTruthy()
     expect(twoFactor.enabled).toBe(false)
     expect(value(FACTOR.password)).toBe('')
+    expect((screen.getByTestId(FACTOR.password) as HTMLInputElement).type).toBe('password')
+    expect(
+      screen.getByTestId(`${FACTOR.password}.visibility-button`).getAttribute('data-value'),
+    ).toBe('show')
+
+    typed(FACTOR.password, FACTOR_PASSWORD)
+
+    expect((screen.getByTestId(FACTOR.password) as HTMLInputElement).type).toBe('password')
   })
 
   it('renews the codes with the password and shows the ten new ones once', async () => {

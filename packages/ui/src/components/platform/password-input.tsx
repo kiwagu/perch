@@ -1,6 +1,6 @@
 import { cn } from 'cn'
 import { EyeIcon, EyeOffIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { Button } from '@workspace/ui/components/ui/button'
 import { Input, type InputProps } from '@workspace/ui/components/ui/input'
@@ -19,21 +19,38 @@ export interface PasswordInputProps extends Omit<InputProps, 'type'> {
  * A password input with its eye beside it, which shows what the input holds as typed or hides it
  * again. Whether it shows is the input's own: presentation only, never an event of a flow, so the
  * eye is always enabled, the input disabled or not, and its `data-value` names what a click does
- * (`show` while the input hides its value, `hide` while it shows it).
+ * (`show` while the input hides its value, `hide` while it shows it). It shows until the eye is
+ * pressed again, whatever the person types or deletes, but a value the app gives that the person
+ * did not just type (a flow emptying it once an action took it) hides it again, so what is typed
+ * next is masked until the eye is pressed.
  */
 export function PasswordInput({
   testId,
   showLabel,
   hideLabel,
   className,
+  onChange,
   ...props
 }: PasswordInputProps) {
   const [shown, setShown] = useState(false)
+  // What the person typed last: a value the app holds that is not it is the app's own.
+  const typed = useRef<InputProps['value']>(undefined)
+  const { value } = props
+
+  useEffect(() => {
+    if (value !== undefined && value !== typed.current) {
+      setShown(false)
+    }
+  }, [value])
 
   return (
     <div className="relative w-full">
       <Input
         {...props}
+        onChange={(event) => {
+          typed.current = event.target.value
+          onChange?.(event)
+        }}
         type={shown ? 'text' : 'password'}
         className={cn('pr-11', className)}
         data-testid={testId}
