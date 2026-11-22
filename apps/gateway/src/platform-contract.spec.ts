@@ -1,7 +1,8 @@
 /**
  * The gateway held to the platform's actions. Each platform action the contract declares is a
  * route of the gateway or the client's own, and each route the gateway serves is an action's or
- * has its reason. Each bound a parameter of an action states (a length, a pattern, a format) is a
+ * has its reason; on a branch (`CONTRACT_AHEAD=1`) an action the contract declares now and did not
+ * declare at the branch's merge base may wait for its route (`actions-ahead.ts`). Each bound a parameter of an action states (a length, a pattern, a format) is a
  * bound of its route: a value just past it is refused, with the code the contract attributes to
  * that parameter for that bound where it attributes one, and a value just inside it is answered
  * otherwise than the one past it, with that code or none. The text of an id is held apart from
@@ -29,6 +30,7 @@ import {
   parameterValueOf,
 } from '@workspace/ui-contract'
 
+import { actionsAhead } from './__fixtures__/actions-ahead'
 import { heldContract } from './__fixtures__/held-contract'
 import { census, stale, unnamed } from './__fixtures__/platform-census'
 import { idsOf } from './__fixtures__/platform-ids'
@@ -126,9 +128,13 @@ describe('the platform actions and the routes', () => {
   const declared = Object.keys(platform.actions)
 
   it("names each platform action as a route or as the client's own, never both", () => {
-    expect(declared.filter((action) => !routed(action) && !CLIENT_ONLY.includes(action))).toEqual(
-      [],
-    )
+    const waiting = actionsAhead({ declared, root: ROOT, env: process.env })
+
+    expect(
+      declared.filter(
+        (action) => !routed(action) && !CLIENT_ONLY.includes(action) && !waiting.has(action),
+      ),
+    ).toEqual([])
     expect(declared.filter((action) => routed(action) && CLIENT_ONLY.includes(action))).toEqual([])
   })
 
