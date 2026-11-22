@@ -120,15 +120,15 @@ const challengeState = z.object({
 })
 
 /**
- * Whether a pending two-factor challenge still takes a code at `now`, as Better Auth's verifiers
+ * Whether a pending two-factor challenge still takes a code at `at`, as Better Auth's verifiers
  * judge it before the code: its row and the row counting its codes are there and expire after
- * `now`, the count a whole number below `CODES_PER_CHALLENGE`. False for a value that names no
+ * `at`, the count a whole number below `CODES_PER_CHALLENGE`. False for a value that names no
  * challenge; the signature is Better Auth's to check.
  */
 export function challengeTakesCode(
   directory: LocalDb,
   challenge: string,
-  now: Date,
+  at: Date,
 ): ResultAsync<boolean, DataError> {
   const identifier = challengeIdentifier(challenge)
 
@@ -148,7 +148,7 @@ export function challengeTakesCode(
 
     const { expires_at: expiry, attempts } = state.data
     const counted = Number(attempts?.value)
-    const live = expiry != null && expiry > now && attempts != null && attempts.expires_at > now
+    const live = expiry != null && expiry > at && attempts != null && attempts.expires_at > at
 
     return ok(live && Number.isInteger(counted) && counted >= 0 && counted < CODES_PER_CHALLENGE)
   })
@@ -203,15 +203,14 @@ export interface TwoFactorChallenges {
   /** The name of Better Auth's two-factor cookie, its namespace and any secure prefix included. */
   cookieName(): Promise<string>
   ownerOf(challenge: string): ResultAsync<IdentityId | undefined, DataError>
-  takesCode(challenge: string): ResultAsync<boolean, DataError>
+  takesCode(challenge: string, at: Date): ResultAsync<boolean, DataError>
   end(challenge: string): ResultAsync<void, DataError>
   reclaim(): ResultAsync<void, DataError>
 }
 
 /**
  * The two-factor challenges of `auth` over `directory`, the cookie's name read from Better Auth's
- * own `createAuthCookie`, never written out here. Whether one takes a code is judged by this
- * process's own clock, as Better Auth judges a challenge's expiry.
+ * own `createAuthCookie`, never written out here.
  */
 export function twoFactorChallenges(
   auth: Pick<AuthInstance, '$context'>,
@@ -220,7 +219,7 @@ export function twoFactorChallenges(
   return {
     cookieName: async () => (await auth.$context).createAuthCookie(TWO_FACTOR_COOKIE).name,
     ownerOf: (challenge) => challengeOwner(directory, challenge),
-    takesCode: (challenge) => challengeTakesCode(directory, challenge, new Date()),
+    takesCode: (challenge, at) => challengeTakesCode(directory, challenge, at),
     end: (challenge) => endChallenge(directory, challenge),
     reclaim: () => reclaimChallenges(directory),
   }

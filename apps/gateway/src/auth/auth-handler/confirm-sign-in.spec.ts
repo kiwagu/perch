@@ -10,6 +10,7 @@ import {
   answered,
   challengeRows,
   codeStep,
+  expireChallengesAt,
   passwordStep,
   settingsOf,
   tokenOf,
@@ -24,6 +25,7 @@ import {
   postTo,
   signInRequest,
 } from './__fixtures__/mount'
+import { CODE_CHECK_MARGIN_MS } from './confirm-sign-in'
 import { RESET_REQUEST_FLOOR_MS } from './password-reset'
 
 /** The client address a request comes from. */
@@ -169,6 +171,30 @@ describe("authHandler, a sign-in's code step and the email's failed sign-ins", (
       await ageChallenges(mounted)
 
       expect(await confirm(mounted, challenge, await codeOf(ann.secret))).toEqual(codeExpired)
+    },
+    ARGON2_RUNS_MS,
+  )
+
+  it(
+    'answers 401 code-expired to a backup code whose challenge ends within the margin of a code check, before checking it: the code kept, and taken on a challenge just outside the margin',
+    async () => {
+      const mounted = await mountedOnRealAuth()
+      const ann = await withSecondFactor(mounted)
+      const [backup = ''] = ann.backupCodes
+      const late = await passwordStep(mounted, 'desk', FROM)
+
+      await expireChallengesAt(mounted, new Date(Date.now() + CODE_CHECK_MARGIN_MS - 5_000))
+
+      expect(await confirm(mounted, late, backup)).toEqual(codeExpired)
+      expect(await backupCodesOf(mounted.auth, ann.identity)).toContain(backup)
+      expect(await challengeRows(mounted)).toEqual([])
+
+      const inTime = await passwordStep(mounted, 'desk', FROM)
+
+      await expireChallengesAt(mounted, new Date(Date.now() + CODE_CHECK_MARGIN_MS + 5_000))
+
+      expect((await confirm(mounted, inTime, backup)).status).toBe(200)
+      expect(await backupCodesOf(mounted.auth, ann.identity)).not.toContain(backup)
     },
     ARGON2_RUNS_MS,
   )

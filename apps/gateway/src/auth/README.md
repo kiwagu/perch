@@ -473,8 +473,11 @@ backup codes takes the codes of an unconfirmed key too. The step is then judged 
 is checked, no verifier run on a refusal, so the code, right or wrong, is neither checked nor
 spent, nothing is signed in or out and the email's failed sign-ins stay as they were. A challenge
 that takes no code any more, judged as Better Auth's verifiers judge it (its rows past their ten
-minutes by the process's own clock, as Better Auth reads it, or five codes counted: `TwoFactorChallenges.takesCode`,
-`surql/two-factor-challenge-state.surql`), ends and answers 401 `code-expired` first. Then the
+minutes by the process's own clock, as Better Auth reads it, or five codes counted:
+`TwoFactorChallenges.takesCode`, `surql/two-factor-challenge-state.surql`), ends and answers 401
+`code-expired` first, and so does one that ends within `CODE_CHECK_MARGIN_MS` (15 s): Better
+Auth's verifier of backup codes writes the account's codes without the one given before it spends
+the challenge, so a challenge expiring in between would use the code up with nothing signed in. Then the
 sign-in is judged as its admission would judge it (`AuthSessions.judge`,
 `surql/device-sessions-limit.surql`, in the account's turn of admissions, its devices counted as
 the admission counts them, writing nothing): a banned account ends the challenge and answers 403
@@ -497,10 +500,15 @@ of both: the limit of devices and the ban judged now, the device's sockets close
 the turn. A right code is the sign-in's last step: 200 forgets the email's failed sign-ins, and so
 does the admission's own 409 `device-limit`. Every other answer gives its place back, the 409
 judged before the code and a ban's refusal included, so a banned account's right code forgets
-nothing. So a backup code is used up only by a sign-in that goes through, except when another
-change to the account (a device's session renewed, a ban) commits inside the code check itself,
-between the gateway's judgment and the admission: then the code may be spent with nothing signed
-in. A change of what a challenge stood for ends it in its own transaction: a change
+nothing. So a backup code is used up only by a sign-in that goes through, with one exception: a
+device's session of the account renewed, or a device admitted through a door that does not take
+the account's turn, at any moment after the gateway's judgment and before the admission counts the
+devices, after Better Auth's answer included, can make the admission answer 409 `device-limit`
+once the code was checked; that late 409 uses the code up with nothing signed in and, as a right
+code, forgets the email's failed sign-ins. A ban cannot fall in that interval through the
+console, whose ban takes the account's turn the code step holds; only a writer outside that turn
+could make it. The challenge's deadline does not use a code up: the margin refuses a challenge
+that could expire during the check before any code is checked. A change of what a challenge stood for ends it in its own transaction: a change
 or a reset of the password, the confirmation of a new email, the second factor turned off and the
 account's deletion each end the identity's pending challenges with the rows counting their codes
 (`fn::two_factor_challenges_end`), so a code step that waited for their turn answers 401
@@ -845,7 +853,8 @@ its challenge cookie carried by the device as `challenge`.
 
 - Routes: `POST /auth/sign-up/email`, `POST /auth/sign-in/email`, `POST /auth/verify-email` and
   `POST /auth/send-verification-email`, Better Auth's behind the mount, and
-  `POST /auth/confirm-sign-in` (`confirmSignIn`, `CONFIRM_SIGN_IN_PATH`, `confirm-sign-in.ts`),
+  `POST /auth/confirm-sign-in` (`confirmSignIn`, `CONFIRM_SIGN_IN_PATH`, `CODE_CHECK_MARGIN_MS`,
+  `confirm-sign-in.ts`),
   `POST /auth/request-password-reset`, `POST /auth/reset-password`, `POST /auth/change-password`,
   `POST /auth/change-email`, `POST /auth/confirm-email`, `POST /auth/request-account-deletion` and
   `POST /auth/delete-account`, the mount's own (`authHandler`, `AuthMountDeps` and
@@ -1015,7 +1024,9 @@ its challenge cookie carried by the device as `challenge`.
   counted and the right one kept out while the failures keep a password out, then taken on the same
   challenge once the window passed, the right code signing the device in with the allowlist alone
   and forgetting the failures, a backup code taken once, the code after five wrong ones, a challenge
-  past its ten minutes, a dead, made-up or other email's challenge answering 401 and giving its
+  past its ten minutes, a backup code on a challenge ending within the margin of a code check
+  answered 401 and kept, then taken on one just outside it, a dead, made-up or other email's
+  challenge answering 401 and giving its
   place back, a dead one 429 while the failures are spent, the email read in lower case, a device
   named first, a change or a reset of the password, the confirmation of a new email and the factor
   turned off ending the challenge, and a ban between the steps answered 403, judging nothing) and

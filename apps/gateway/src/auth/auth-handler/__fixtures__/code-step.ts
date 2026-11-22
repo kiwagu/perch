@@ -66,12 +66,16 @@ export async function challengeRows(mounted: Mounted): Promise<unknown[]> {
 }
 
 /**
- * Ages every pending two-factor challenge past its ten minutes: Better Auth judges a challenge's
- * age by the system clock, which the gateway's clock does not move, so its rows' expiry is set to
- * a minute ago.
+ * Sets the expiry of every pending two-factor challenge to `at`: Better Auth judges a challenge's
+ * age by the system clock, which the gateway's clock does not move, so its rows' expiry is moved.
  */
+export async function expireChallengesAt(mounted: Mounted, at: Date): Promise<void> {
+  await mounted.local.db.query(challengeAgeStatement, { at })
+}
+
+/** Ages every pending two-factor challenge past its ten minutes: its rows expired a minute ago. */
 export async function ageChallenges(mounted: Mounted): Promise<void> {
-  await mounted.local.db.query(challengeAgeStatement, { at: new Date(Date.now() - 60_000) })
+  await expireChallengesAt(mounted, new Date(Date.now() - 60_000))
 }
 
 /** An account signed in on devices, its second factor on: its key, its backup codes. */

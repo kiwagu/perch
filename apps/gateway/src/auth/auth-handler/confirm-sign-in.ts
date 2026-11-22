@@ -19,6 +19,14 @@ import { type JudgedAnswer, settling } from './sign-in-settlement'
 /** The code step of a sign-in whose password step answered a challenge. */
 export const CONFIRM_SIGN_IN_PATH = '/auth/confirm-sign-in'
 
+/**
+ * How long before its deadline a challenge counts as dead already: Better Auth's verifier of backup
+ * codes writes the account's codes without the one given before it spends the challenge, so a
+ * challenge that expired in between would leave the code used up and nothing signed in. A code
+ * check takes well under a second on a busy host; fifteen seconds keep it clear of the deadline.
+ */
+export const CODE_CHECK_MARGIN_MS = 15_000
+
 const { minLength: CODE_MIN, maxLength: CODE_MAX } = CONTRACT_VALUES['second-factor-code']
 
 /**
@@ -88,8 +96,9 @@ const REFUSALS: ReadonlyMap<string, () => JudgedAnswer> = new Map([
 
 /**
  * A step judged before its code is checked. A challenge that takes no code any more (past its ten
- * minutes, or after five wrong codes) ends and answers 401 `code-expired` before anything else is
- * judged. The sign-in is then judged as its admission would judge it (`AuthSessions.judge`): an
+ * minutes, or within `CODE_CHECK_MARGIN_MS` of them by this process's clock, which Better Auth
+ * judges its expiry by, or after five wrong codes) ends and answers 401 `code-expired` before
+ * anything else is judged. The sign-in is then judged as its admission would judge it (`AuthSessions.judge`): an
  * account banned ends the challenge and answers 403 `account-banned`, a confirmed step's
  * (`signOutOldest`) too; a device that would bring the account past the limit of devices, on a step
  * that does not confirm signing out the device seen least recently, ends it and answers 409
@@ -103,7 +112,10 @@ async function prejudged(
   identity: IdentityId,
   step: Step,
 ): Promise<JudgedAnswer | undefined> {
-  const live = await deps.challenges.takesCode(step.challenge)
+  const live = await deps.challenges.takesCode(
+    step.challenge,
+    new Date(Date.now() + CODE_CHECK_MARGIN_MS),
+  )
 
   if (live.isErr()) {
     return failure()
@@ -201,10 +213,11 @@ async function verified(
 
   // The right code is a sign-in's last step: admitted, or asked about the limit of devices, it
   // forgets the email's failed sign-ins; a ban the admission read, or a failure, judges nothing.
-  // The admission still asks, or finds the account banned, when another change of the account
-  // commits while the code is checked, after `prejudged`: a device's session renewed or admitted
-  // through a door that does not take the account's turn, a ban. The code is spent by then, and
-  // nothing is signed in.
+  // The admission still asks when a device's session of the account is renewed, or a device
+  // admitted through a door that does not take the account's turn, at any moment after `prejudged`
+  // and before the admission counts the devices, Better Auth's answer included: that late 409
+  // spends the code and, as a right code, forgets the email's failed sign-ins. A ban there needs a
+  // writer outside the account's turn, which the console's ban takes.
   return judged(
     response,
     response.status === 200 || response.status === 409 ? 'succeeded' : 'unjudged',
