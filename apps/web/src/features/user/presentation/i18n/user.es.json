@@ -49,7 +49,7 @@
   "user.sign-in.error.passwords-differ": "Las contraseñas no coinciden.",
   "user.sign-in.error.failed": "Algo salió mal. Inténtalo de nuevo.",
   "user.sign-in.error.code-expired": "Este inicio de sesión caducó o cambió. Vuelve a escribir tu contraseña.",
-  "user.sign-in.error.passkey-cancelled": "Se cerró la ventana de la clave de acceso. Inténtalo de nuevo.",
+  "user.sign-in.error.passkey-cancelled": "No se usó ninguna clave de acceso. Inténtalo de nuevo.",
   "user.sign-in.error.passkey-unknown": "Ninguna cuenta de aquí tiene esa clave de acceso. Inicia sesión con tu contraseña.",
   "user.sign-in.mail.check-your-mail": "Revisa tu correo en {email}: abre el enlace para confirmarlo y entrar. ¿No llega en unos minutos? Pide que se envíe de nuevo, o inicia sesión si ya lo confirmaste.",
   "user.sign-in.resend": "Enviar el correo de nuevo",

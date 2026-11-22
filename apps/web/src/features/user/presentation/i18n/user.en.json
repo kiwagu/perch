@@ -49,7 +49,7 @@
   "user.sign-in.error.passwords-differ": "The passwords don't match.",
   "user.sign-in.error.failed": "Something went wrong. Try again.",
   "user.sign-in.error.code-expired": "This sign-in timed out or changed. Enter your password again.",
-  "user.sign-in.error.passkey-cancelled": "The passkey window was closed. Try again.",
+  "user.sign-in.error.passkey-cancelled": "No passkey was used. Try again.",
   "user.sign-in.error.passkey-unknown": "No account here has that passkey. Sign in with your password.",
   "user.sign-in.mail.check-your-mail": "Check your mail at {email}: open the link in it to confirm your email and sign in. No mail after a few minutes? Send it again, or sign in if you confirmed it already.",
   "user.sign-in.resend": "Send the mail again",

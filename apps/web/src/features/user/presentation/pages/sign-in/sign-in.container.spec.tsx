@@ -724,7 +724,7 @@ describe('SignInContainer', () => {
     expect(asked).toEqual([undefined])
   })
 
-  it('says the window was closed above the form, offering the passkey and the password again', async () => {
+  it('says no passkey was used above the form, offering the passkey and the password again', async () => {
     const session: SessionPort = {
       ...fakeSession().session,
       signInWithPasskey: () =>

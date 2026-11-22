@@ -254,8 +254,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   the flow clears it; past the limit of devices the right code asks about it, and its
   confirmation signs in again from the password, which asks the code again; the button
   `user.sign-in.passkey-button` ("Sign in with a passkey", in the states sign-in, check-mail and
-  unverified, never at sign-up) signs in with a passkey the browser picks, a window closed
-  (`data:PASSKEY_CANCELLED`) or a passkey no account holds (`data:PASSKEY_UNKNOWN`) showing on
+  unverified, never at sign-up) signs in with a passkey the browser picks, a window closed or timed out
+  (`data:PASSKEY_CANCELLED`, "No passkey was used") or a passkey no account holds (`data:PASSKEY_UNKNOWN`) showing on
   `user.sign-in.error` (`passkey-cancelled`, `passkey-unknown`), its limit of devices asking in
   the same dialog and signing in again for the account it named;
   the account's settings and profile are created where its link is first opened, from the name

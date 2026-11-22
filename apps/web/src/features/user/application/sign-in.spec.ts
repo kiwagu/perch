@@ -414,7 +414,7 @@ describe('a sign-in with a passkey', () => {
     ])
   })
 
-  it('goes back to the form saying the window was closed, signing nothing in', async () => {
+  it('goes back to the form saying no passkey was used, signing nothing in', async () => {
     await annVerified()
 
     const actor = start()
