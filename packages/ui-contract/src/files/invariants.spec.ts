@@ -59,4 +59,23 @@ describe('invariantActions', () => {
 
     expect(invariantActions(platform)['device-limit']).toEqual(['twice'])
   })
+  it('lists an action under each invariant one code names together', () => {
+    const platform: Platform = {
+      ...PLATFORM,
+      actions: {
+        'change-email': action({
+          'rate-limited': {
+            invariant: ['failed-sign-ins', 'unused'],
+            condition: 'a fourth change within a quarter of an hour',
+          },
+        }),
+      },
+    }
+
+    expect(invariantActions(platform)).toEqual({
+      'failed-sign-ins': ['change-email'],
+      'device-limit': [],
+      unused: ['change-email'],
+    })
+  })
 })

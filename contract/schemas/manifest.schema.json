@@ -7260,26 +7260,43 @@
                         {
                           "type": "string",
                           "minLength": 1,
-                          "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named here instead. At most 200 characters."
+                          "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. At most 200 characters."
                         },
                         {
                           "type": "object",
                           "properties": {
                             "invariant": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                },
+                                {
+                                  "minItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                  }
+                                }
+                              ],
+                              "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."
+                            },
+                            "condition": {
+                              "description": "A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.",
                               "type": "string",
-                              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                              "description": "The invariant, by its name under `platform.invariants`, whose `refuses` is this code."
+                              "minLength": 1
                             }
                           },
                           "required": [
                             "invariant"
                           ],
                           "additionalProperties": false,
-                          "description": "The code answers when the invariant would break; its rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
+                          "description": "The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
                         }
                       ]
                     },
-                    "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariant it refuses for. See the rule `action-outcomes`."
+                    "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`."
                   },
                   {
                     "type": "array",

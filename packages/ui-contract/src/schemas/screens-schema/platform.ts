@@ -51,20 +51,35 @@ const actionParameterSchema = z
 
 export type PlatformParameter = z.infer<typeof actionParameterSchema>
 
-/** The invariant a code of an action names: the action refuses with the code when its rule would break. */
+/**
+ * The invariants a code of an action names: the action refuses with the code when the rule of any
+ * of them would break; a condition of the code's own may stand beside them.
+ */
 const invariantRefSchema = z
   .strictObject({
-    invariant: kebabNameSchema.describe(
-      'The invariant, by its name under `platform.invariants`, whose `refuses` is this code.',
-    ),
+    invariant: z
+      .union([kebabNameSchema, z.array(kebabNameSchema).min(2)])
+      .refine((named) => typeof named === 'string' || new Set(named).size === named.length, {
+        message: 'an invariant is named once',
+      })
+      .describe(
+        'The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`.',
+      ),
+    condition: z
+      .string()
+      .min(1)
+      .optional()
+      .describe(
+        'A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.',
+      ),
   })
   .describe(
-    'The code answers when the invariant would break; its rule is said once, under `platform.invariants`. See the rule `action-outcomes`.',
+    'The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`.',
   )
 
 /**
- * The codes of an action: a map from each code to the condition it answers on or the invariant it
- * refuses for, or, the older form, a list of their names.
+ * The codes of an action: a map from each code to the condition it answers on, or to the invariants
+ * it refuses for with a condition of its own beside them, or, the older form, a list of their names.
  */
 const actionCodesSchema = z
   .union([
@@ -74,7 +89,7 @@ const actionCodesSchema = z
         z.union([z.string().min(1).describe(BEHAVIOUR_PURPOSES.condition), invariantRefSchema]),
       )
       .describe(
-        'Each code a failure of the action shows, with when it answers: its condition, or the invariant it refuses for. See the rule `action-outcomes`.',
+        'Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`.',
       ),
     z.array(codeSchema).describe('The older form: the codes by name alone, with no condition.'),
   ])

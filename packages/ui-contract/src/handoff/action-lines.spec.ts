@@ -147,4 +147,25 @@ describe('actionLines of codes written as a map and a result written as a list',
       }),
     ).toEqual(['result: this device signs out'])
   })
+  it('names every invariant of a code, and the condition beside them after a semicolon', () => {
+    expect(
+      actionLines({
+        description: 'Changes the email.',
+        params: {},
+        result: 'the mail is on its way',
+        codes: {
+          'rate-limited': {
+            invariant: ['failed-sign-ins', 'address-mails'],
+            condition: 'a fourth change within a quarter of an hour',
+          },
+          'last-admin': { invariant: 'last-admin', condition: 'checked as it runs' },
+        },
+        changes: [],
+      }),
+    ).toEqual([
+      'result: the mail is on its way',
+      'code rate-limited: invariant failed-sign-ins, address-mails; a fourth change within a quarter of an hour',
+      'code last-admin: invariant last-admin; checked as it runs',
+    ])
+  })
 })

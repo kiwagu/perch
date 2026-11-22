@@ -82,6 +82,19 @@ describe('behaviourTextsProblems', () => {
       ),
     ])
   })
+  it('refuses a condition beside invariants past the budget, at that condition', () => {
+    expect(
+      behaviourTextsProblems(
+        signingIn('the device is signed in', {
+          'rate-limited': { invariant: ['a', 'b'], condition: PAST },
+        }),
+      ),
+    ).toEqual([
+      problem(
+        `actions["sign-in"].codes["rate-limited"].condition: the condition is ${DESCRIPTION_BUDGET + 1} characters, past its budget of ${DESCRIPTION_BUDGET}; its purpose: "${BEHAVIOUR_PURPOSES.condition}"`,
+      ),
+    ])
+  })
   it('leaves a result written as one string to its older form, whatever its length', () => {
     expect(behaviourTextsProblems(signingIn(PAST.repeat(5), ['failed']))).toEqual([])
   })

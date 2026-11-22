@@ -261,4 +261,44 @@ describe('platformSchema codes, result and invariants', () => {
       expect(parses({}, { invariants }), JSON.stringify(invariants)).toBe(false)
     }
   })
+  it('accepts a code naming several invariants, or invariants with a condition of its own beside them', () => {
+    const SEVERAL = {
+      invariants: {
+        'failed-sign-ins': { rule: 'Ten wrong passwords keep it out.', refuses: 'rate-limited' },
+        'address-mails': {
+          rule: 'Two hundred mails a quarter of an hour.',
+          refuses: 'rate-limited',
+        },
+      },
+    }
+
+    for (const codes of [
+      { 'rate-limited': { invariant: ['failed-sign-ins', 'address-mails'] } },
+      {
+        'rate-limited': {
+          invariant: 'address-mails',
+          condition: 'a fourth request within a quarter of an hour',
+        },
+      },
+      {
+        'rate-limited': {
+          invariant: ['failed-sign-ins', 'address-mails'],
+          condition: 'a fourth change by the account within a quarter of an hour',
+        },
+      },
+    ]) {
+      expect(parses({ codes }, SEVERAL), JSON.stringify(codes)).toBe(true)
+    }
+  })
+  it('refuses a list of one invariant, a name twice, an empty list, an empty condition, and a condition with no invariant', () => {
+    for (const codes of [
+      { 'rate-limited': { invariant: ['failed-sign-ins'] } },
+      { 'rate-limited': { invariant: ['failed-sign-ins', 'failed-sign-ins'] } },
+      { 'rate-limited': { invariant: [] } },
+      { 'rate-limited': { invariant: 'failed-sign-ins', condition: '' } },
+      { 'rate-limited': { condition: 'a fourth request' } },
+    ]) {
+      expect(parses({ codes }), JSON.stringify(codes)).toBe(false)
+    }
+  })
 })

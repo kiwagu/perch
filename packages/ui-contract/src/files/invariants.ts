@@ -1,6 +1,7 @@
 /**
  * The actions each invariant of the platform limits, derived: an action names an invariant under
- * the code it refuses with (`<code>: { invariant: <name> }`), and only there, so the list of the
+ * the code it refuses with (`<code>: { invariant: <name> }`, or one of several,
+ * `{ invariant: [<name>, ...] }`), and only there, so the list of the
  * actions an invariant limits is never written by hand and cannot leave a new action out.
  */
 
@@ -21,7 +22,7 @@ export function invariantActions(
       name,
       actions
         .filter(([, action]) =>
-          codeEntriesOf(action.codes).some(({ invariant }) => invariant === name),
+          codeEntriesOf(action.codes).some(({ invariants }) => invariants.includes(name)),
         )
         .map(([action]) => action),
     ]),

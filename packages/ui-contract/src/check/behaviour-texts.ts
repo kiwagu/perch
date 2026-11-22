@@ -40,12 +40,20 @@ function behaviourTexts({ actions, invariants }: Contract['screens']['platform']
             kind: 'outcome' as const,
             text,
           }))),
-      ...codeEntriesOf(action.codes).flatMap(({ at, condition }) =>
+      ...codeEntriesOf(action.codes).flatMap(({ at, condition, invariants }) =>
         condition === undefined
           ? []
           : [
               {
-                at: ['platform', 'actions', name, 'codes', at],
+                // A condition beside invariants is the object's `condition`; alone, the code's value.
+                at: [
+                  'platform',
+                  'actions',
+                  name,
+                  'codes',
+                  at,
+                  ...(invariants.length > 0 ? ['condition'] : []),
+                ],
                 kind: 'condition' as const,
                 text: condition,
               },

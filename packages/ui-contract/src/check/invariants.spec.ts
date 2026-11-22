@@ -91,6 +91,34 @@ describe('invariantsProblems', () => {
       ),
     ])
   })
+  it('holds each invariant of a list to existing and refusing with the code, at that code', () => {
+    const invariants = {
+      ...DEVICE_LIMIT,
+      'failed-sign-ins': { rule: 'Ten wrong passwords keep it out.', refuses: 'rate-limited' },
+    }
+
+    expect(
+      invariantsProblems(
+        signingIn(
+          {
+            'device-limit': { invariant: 'device-limit' },
+            'rate-limited': {
+              invariant: ['failed-sign-ins', 'mails', 'device-limit'],
+              condition: 'a fourth sign-in within a minute',
+            },
+          },
+          invariants,
+        ),
+      ),
+    ).toEqual([
+      problem(
+        'actions["sign-in"].codes["rate-limited"]: "mails" is no invariant of platform.invariants',
+      ),
+      problem(
+        'actions["sign-in"].codes["rate-limited"]: the invariant "device-limit" refuses with "device-limit", so an action names it under that code, not under "rate-limited"',
+      ),
+    ])
+  })
   it('runs among the rules of the contract check', () => {
     expect(
       contractProblems(signingIn({ 'device-limit': { invariant: 'devices' } }, undefined)),

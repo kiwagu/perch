@@ -130,7 +130,9 @@ The authored files, edited by hand or by a model in the modeling thread:
   An action says what it answers ([the rule](REFERENCE.md#rule-action-outcomes)): its
   `result` is one outcome or a list of outcome lines, the plain success first, then each other
   outcome under its own condition; its `codes` map each code a failure shows to the condition
-  it answers on, or to `{ invariant: <name> }`. An invariant, under `invariants`, is a rule
+  it answers on, or to the invariants it refuses for, `{ invariant: <name> }` or
+  `{ invariant: [<name>, <name>] }`, with `condition: <text>` beside them for a cause that is no
+  invariant. An invariant, under `invariants`, is a rule
   several actions keep, said once with the code it `refuses` with; each action that keeps it
   names it under that code, and the engine derives the actions it limits, which the manifest
   carries. Each outcome line, condition and rule keeps the budget of a description; the older
@@ -141,6 +143,12 @@ The authored files, edited by hand or by a model in the modeling thread:
     device-limit:
       rule: An account is signed in on ten devices at most at once, each counted once while its session lasts.
       refuses: device-limit
+    failed-sign-ins:
+      rule: Ten wrong passwords of one email within a quarter of an hour keep its password out.
+      refuses: rate-limited
+    address-mails:
+      rule: A network address is charged 200 mail requests a quarter of an hour at most.
+      refuses: rate-limited
   actions:
     sign-in:
       # description, params, changes
@@ -150,7 +158,14 @@ The authored files, edited by hand or by a model in the modeling thread:
       codes:
         invalid-credentials: the email or the password is wrong
         device-limit: { invariant: device-limit }
+        rate-limited: { invariant: failed-sign-ins }
         failed: anything else fails
+    change-email:
+      # description, params, result, changes
+      codes:
+        rate-limited:
+          invariant: [ failed-sign-ins, address-mails ]
+          condition: a fourth change by the account within a quarter of an hour
   ```
 
   An action that sends a mail declares it under `mail`: `to`, the parameter whose value the
@@ -783,8 +798,9 @@ added in <action>` and `platform action lines removed in <action>`, one per fact
 each parameter with its type (`param email: string`), each line of its result (`result: <the
 line>`, `result #<n>: <the line>` by position when there are several, the first being the plain
 success; the prose that stays, since it says what the action answers), each code its failure
-shows with its condition or its invariant (`code rate-limited: <the condition>`, `code
-device-limit: invariant device-limit`), each role that may run it, its page sizes when it pages (`paged by
+shows with its invariants and its condition (`code invalid-code: <the condition>`, `code
+device-limit: invariant device-limit`, `code rate-limited: invariant failed-sign-ins,
+address-mails; <the condition>`), each role that may run it, its page sizes when it pages (`paged by
 10, 25, 50, 25 by default`), each read it changes (`changes organisations.invitations`), its mail (`mail to email language
 locale link user.verify-email?token`: who it goes to, the language it speaks, the screen its link
 opens and the search parameter that carries the token) and each notice (`notice

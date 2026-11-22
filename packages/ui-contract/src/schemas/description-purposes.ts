@@ -49,7 +49,7 @@ export const DESCRIPTION_PURPOSES = {
  */
 export const BEHAVIOUR_PURPOSES = {
   outcome: `One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. ${AT_MOST}`,
-  condition: `When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named here instead. ${AT_MOST}`,
+  condition: `When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. ${AT_MOST}`,
   rule: `The rule, said once for every action that names it under the code it refuses with. ${AT_MOST}`,
 } as const
 
