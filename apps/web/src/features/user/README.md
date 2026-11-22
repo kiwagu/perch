@@ -26,7 +26,10 @@ an unfinished start; until then the profile page shows its empty state when the 
 missing), the `ProfileService`
 over the shape runner and the command bus, the
 `SettingsService` the same way in its own component folder `application/settings/` (its shape
-and commands beside it), the sign-in
+and commands beside it), the `TwoFactorService` and the `PasskeysService` over the platform's
+ports of the signed-in account's second factor and passkeys (the first also draws the QR of a key
+it starts, `qr-svg.policy.ts`, whose `uqr` loads at that action and never with the first frame;
+a QR that cannot be drawn leaves the key to type, said on the page), the sign-in
 machine in its folder `application/sign-in-machine/` (the flow of
 `contract/domain/screens/sign-in.yaml`, its states carrying what each renders: the mode is its
 state, sign-up where it renders the fields of a new account, an attempt invokes
@@ -136,13 +139,29 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
   and so it does on `last-admin` above the form, a right password that nothing more can use here
   (the guard `deletionBlocked`); any other refusal (`invalid-credentials` under the field,
   `rate-limited`, `failed` above the form) keeps it as typed; another press sends a fresh link),
+  the account's second factor (`two-factor.section`, whose `data-state` is loading, ready or error
+  as `two-factor.read` answers, with the badge `on-badge` or `off-badge`: off, the password turns
+  it on through `platform.two-factor.enable`, which shows the key as text with its QR beside it and
+  asks a code of the key, `platform.two-factor.confirm`, then shows the ten backup codes once,
+  until they are hidden; on, the password turns it off or renews the codes, which show the same
+  way; the key and the codes live in the machine's context until its region rests; a request that
+  finds the factor changed from another device, `two-factor-changed`, empties what it was sent
+  with and reads the section again) and the account's passkeys (`passkeys.list`, whose
+  `data-state` is loading, ready, empty or error: each by when it was added, the earliest first;
+  added through the browser's ceremony, `platform.passkeys.add`, and removed after the frame's
+  confirmation `passkeys-remove`, `platform.passkeys.remove`, each reading the list again), the
+  page reading the section and the list as it opens and again each time the flow's `read` names
+  them (`section-read.ts`),
   its screen's flow run as
-  its machine (`application/settings/settings-machine/`: the theme, language, password, email and
-  deletion regions of one parallel state, `machine.ts` assembling `password-region.ts`,
-  `email-region.ts` and `deletion-region.ts`, held to `contract/domain/screens/settings.yaml` by
-  `platform/machines.spec.ts`) through `useScreenMachine`, which asks the leave guard before the
-  language changes; its view is `settings.view.tsx` with `password-form.view.tsx`,
-  `email-form.view.tsx` and `deletion-form.view.tsx`.
+  its machine (`application/settings/settings-machine/`: the theme, language, password, email,
+  two-factor, passkey-add, passkey-remove and deletion regions of one parallel state, `machine.ts`
+  assembling `password-region.ts`, `email-region.ts`, `two-factor-region.ts` (its actors in
+  `two-factor-actors.ts`), `passkeys-region.ts` and `deletion-region.ts`, held to
+  `contract/domain/screens/settings.yaml` by `platform/machines.spec.ts`) through
+  `useScreenMachine`, which asks the leave guard before the language changes and the frame's
+  confirmation before a passkey is removed; its view is `settings.view.tsx` with
+  `password-form.view.tsx`, `email-form.view.tsx`, `two-factor-section.view.tsx` (the key and
+  the codes in `two-factor-steps.view.tsx`), `passkeys-list.view.tsx` and `deletion-form.view.tsx`.
 - Shape `profile.shape.surql`: the signed-in identity's profile (`id`, `name`, `email`,
   `bio`, `created_at`) from `profile` in the private region.
 - Commands `profile.commands.surql`: `createProfile`, `updateName`, `updateBio`.
@@ -155,7 +174,8 @@ and one file per policy (`profile-name.policy.ts`, `profile-bio.policy.ts`,
 - Components: `presentation/components/page-link/` (`PageLinkProps`, `PlainLink` a view draws
   alone, `RouterLink` its container gives it) and `presentation/components/password-rule-list/`
   (`PasswordRuleList`, the rules of a new password under it, its screen giving the anchors).
-- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`; `SETTINGS_SERVICE`
+- Providers: `PROFILE_SERVICE`, `SIGN_IN_SERVICE`, `VERIFY_EMAIL_SERVICE`, `TWO_FACTOR_SERVICE`,
+  `PASSKEYS_SERVICE`; `SETTINGS_SERVICE`
   is provided app-wide by the composition root, since the frame reads and stores the settings too,
   and so is `ACCOUNT_START_SERVICE`, since the root runs the starts and the seed client finishes one
   through it.

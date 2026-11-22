@@ -3,10 +3,15 @@ import { z } from '@workspace/zod'
 
 import { COMMANDS } from '../../platform/commands.port'
 import { defineModule } from '../../platform/module'
+import { PASSKEYS } from '../../platform/passkeys.port'
 import { SESSION } from '../../platform/session.port'
+import { TWO_FACTOR } from '../../platform/two-factor.port'
 
+import { PASSKEYS_SERVICE, PasskeysService } from './application/passkeys.service'
 import { PROFILE_SERVICE, ProfileService } from './application/profile.service'
+import { qrSvg } from './application/qr-svg.policy'
 import { SIGN_IN_SERVICE, SignInService } from './application/sign-in.service'
+import { TWO_FACTOR_SERVICE, TwoFactorService } from './application/two-factor.service'
 import { VERIFY_EMAIL_SERVICE, VerifyEmailService } from './application/verify-email.service'
 import { ConfirmEmailContainer } from './presentation/pages/confirm-email/confirm-email.container'
 import { DeleteAccountContainer } from './presentation/pages/delete-account/delete-account.container'
@@ -19,7 +24,8 @@ import { VerifyEmailContainer } from './presentation/pages/verify-email/verify-e
 
 /**
  * Accounts, profiles and settings: signing in or up, verifying an account's email from the link of
- * its mail, and the signed-in user's own profile page.
+ * its mail, the signed-in user's own profile page, and the settings where the account turns its
+ * second factor on or off and keeps its passkeys.
  */
 export const UserModule = defineModule({
   id: 'user',
@@ -39,6 +45,14 @@ export const UserModule = defineModule({
     {
       provide: VERIFY_EMAIL_SERVICE,
       useFactory: (container) => new VerifyEmailService(container.get(SESSION)),
+    },
+    {
+      provide: TWO_FACTOR_SERVICE,
+      useFactory: (container) => new TwoFactorService(container.get(TWO_FACTOR), qrSvg),
+    },
+    {
+      provide: PASSKEYS_SERVICE,
+      useFactory: (container) => new PasskeysService(container.get(PASSKEYS)),
     },
   ],
   // A dynamic import: the settings page is a screen a signed-in device opens rarely, so its code

@@ -16,7 +16,7 @@ run check` and in the pre-commit hook on `main`.
 
 The contract declares 15 screens, 256 anchors and 103 codes.
 
-Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 93/94, ignored 2.
+Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5/8; controls marked 102/103, ignored 2.
 
 ## Model
 
@@ -73,9 +73,9 @@ Totals: fields bound 6/14, actions bound 7/9; activities 1, transitions walked 5
 | device | 3 | 3 | 0 | 100% |
 | not-found | 2 | 2 | 0 | 100% |
 | organisation | 23 | 23 | 0 | 100% |
-| user | 34 | 34 | 0 | 100% |
+| user | 43 | 43 | 0 | 100% |
 | ui kit | 6 | 5 | 2 | 83% |
-| all | 94 | 93 | 2 | 99% |
+| all | 103 | 102 | 2 | 99% |
 
 ### Unmarked
 
