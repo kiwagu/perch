@@ -99,8 +99,8 @@ describe('hintBudgetProblems', () => {
     const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
 
     expect(messages).toHaveLength(2)
-    expect(messages[0]).toMatch(/^flow\.type: /)
-    expect(messages[1]).toMatch(/^\$defs\.orphan: /)
+    expect(messages[0]).toMatch(/^flow\.type \(/)
+    expect(messages[1]).toMatch(/^\$defs\.orphan \(/)
   })
   it('reads a definition nested under a key at its own path', () => {
     const schema = {
@@ -117,7 +117,7 @@ describe('hintBudgetProblems', () => {
     const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
 
     expect(messages).toHaveLength(1)
-    expect(messages[0]).toMatch(/^a\.\$defs\.inner: /)
+    expect(messages[0]).toMatch(/^a\.\$defs\.inner \(/)
   })
   it("prefers the reference's path for a definition that a key outside its walk uses first", () => {
     const schema = {
@@ -137,7 +137,26 @@ describe('hintBudgetProblems', () => {
     const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
 
     expect(messages).toHaveLength(1)
-    expect(messages[0]).toMatch(/^flow\.type: /)
+    expect(messages[0]).toMatch(/^flow\.type \(/)
+  })
+  it('tells apart two different long hints at one key by their opening words', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        binding: {
+          anyOf: [
+            { type: 'string', description: `First ${text(DESCRIPTION_BUDGET - 5)}` },
+            { type: 'number', description: `Other ${text(DESCRIPTION_BUDGET - 5)}` },
+          ],
+        },
+      },
+    }
+
+    const messages = hintBudgetProblems(outputOf(schema)).map(({ message }) => message)
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatch(/^binding \("First a+…"\): /)
+    expect(messages[1]).toMatch(/^binding \("Other a+…"\): /)
   })
   it('gives one problem for a long hint repeated at several keys of one file', () => {
     const long = { type: 'string', description: text(DESCRIPTION_BUDGET + 1) }

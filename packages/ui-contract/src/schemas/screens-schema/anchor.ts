@@ -111,7 +111,7 @@ export const sourceSchema = z
           ),
       })
       .describe(
-        'The entries come from a platform action, which the anchor reads when it starts to render, when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`.',
+        'The entries come from a platform action, read when the anchor starts to render, when what it reads for changes while it renders, and where a flow says `read: <anchor>`. See the rule `list-reads`.',
       ),
   ])
   .describe(

@@ -46,6 +46,9 @@ const DEFINITIONS = new Set(['$defs', 'definitions'])
 
 const DEFS = '#/$defs/'
 
+/** How many characters of a long hint its problem quotes, to tell two hints at one key apart. */
+const OPENING = 24
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
@@ -177,7 +180,7 @@ export function hintBudgetProblems(outputs: readonly SchemaOutput[]): Problem[] 
 
     return Array.from(keys, ([text, [first, ...others]]) => ({
       file,
-      message: `${first}${others.length === 0 ? '' : ` (and ${others.length} more keys)`}: the field hint is ${descriptionLength(text)} characters, past its budget of ${DESCRIPTION_BUDGET}; keep what the key is for and what does not go in it, and move the rest into a rule of the reference that the hint names (the rule \`<id>\`)`,
+      message: `${first} ("${[...text].slice(0, OPENING).join('')}…")${others.length === 0 ? '' : ` (and ${others.length} more keys)`}: the field hint is ${descriptionLength(text)} characters, past its budget of ${DESCRIPTION_BUDGET}; keep what the key is for and what does not go in it, and move the rest into a rule of the reference that the hint names (the rule \`<id>\`)`,
     }))
   })
 }
