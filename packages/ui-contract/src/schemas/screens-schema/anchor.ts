@@ -62,7 +62,7 @@ export const bindingRefSchema = z
           .describe('The name of a search parameter every route of the screen declares.'),
       })
       .describe(
-        'The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`.',
+        'A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`.',
       ),
   ])
   .describe(
@@ -80,7 +80,7 @@ export const anchorBindingSchema = z
       ),
   ])
   .describe(
-    'What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.',
+    'What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.',
   )
 
 export const sourceSchema = z
@@ -111,7 +111,7 @@ export const sourceSchema = z
           ),
       })
       .describe(
-        'The entries come from a platform action, which the anchor reads when it starts to render and when what it reads for changes. See the rule `list-reads`.',
+        'The entries come from a platform action, which the anchor reads when it starts to render, when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`.',
       ),
   ])
   .describe(
@@ -166,7 +166,7 @@ export const anchorDefSchema = z
       .array(roleSchema)
       .optional()
       .describe(
-        "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.",
+        "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
       ),
     own: z
       .boolean()

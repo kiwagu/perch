@@ -956,7 +956,7 @@
                             "search"
                           ],
                           "additionalProperties": false,
-                          "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                          "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                         }
                       ],
                       "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1074,7 +1074,7 @@
                               "search"
                             ],
                             "additionalProperties": false,
-                            "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                            "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                           }
                         ],
                         "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1082,10 +1082,10 @@
                       "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
                   ],
-                  "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
+                  "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
                 },
                 "roles": {
-                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.",
+                  "description": "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1144,7 +1144,7 @@
                     ],
                     "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
                   },
-                  "description": "The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`."
+                  "description": "The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
                 },
                 "without": {
                   "minItems": 1,
@@ -1179,7 +1179,7 @@
                     ],
                     "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
                   },
-                  "description": "The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`."
+                  "description": "The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
                 },
                 "codes": {
                   "description": "The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.",
@@ -1334,7 +1334,7 @@
                         "platform"
                       ],
                       "additionalProperties": false,
-                      "description": "The entries come from a platform action, which the anchor reads when it starts to render and when what it reads for changes. See the rule `list-reads`."
+                      "description": "The entries come from a platform action, which the anchor reads when it starts to render, when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`."
                     }
                   ],
                   "description": "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."
@@ -6585,7 +6585,7 @@
                       "search"
                     ],
                     "additionalProperties": false,
-                    "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                    "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                   }
                 ],
                 "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6703,7 +6703,7 @@
                         "search"
                       ],
                       "additionalProperties": false,
-                      "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                      "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                     }
                   ],
                   "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6711,7 +6711,7 @@
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
             ],
-            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
+            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
           },
           "codes": {
             "description": "The data-code values the element carries.",

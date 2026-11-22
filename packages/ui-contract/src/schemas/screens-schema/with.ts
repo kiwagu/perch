@@ -25,7 +25,7 @@ export const withSchema = z
   .array(withEntrySchema)
   .min(1)
   .describe(
-    'The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.',
+    'The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.',
   )
 
 /** The entries none of which renders while the element does. */
@@ -33,5 +33,5 @@ export const withoutSchema = z
   .array(withEntrySchema)
   .min(1)
   .describe(
-    'The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.',
+    'The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.',
   )

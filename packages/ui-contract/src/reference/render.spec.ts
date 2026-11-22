@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from '@workspace/zod'
 
 import { SCHEMA_OUTPUTS, SCREEN_SCHEMA_FILE } from '../files'
-import { authoredAnchorDefSchema } from '../schemas'
+import { authoredAnchorDefSchema, DESCRIPTION_BUDGET, descriptionLength } from '../schemas'
 
 import { schemaKeys } from './keys'
 import { ruleIdsNamedIn } from './mentions'
@@ -138,6 +138,113 @@ const FACET_HOMES: Readonly<Record<Facet, string>> = {
  */
 const FACET_TEXT_LENGTH = 80
 
+/** The facets whose key text is a hint within the budget, its rule held by the rules it names. */
+const SHORT_FACETS = FACET_KEYS.filter(
+  (facet) => descriptionLength(entryAt(FACET_HOMES[facet])?.text ?? '') <= DESCRIPTION_BUDGET,
+)
+
+/**
+ * Each rule a facet's hint must name once the hint is short, with a fact of that rule the hint
+ * leaves out: a hint that stops naming one of them, or a rule that loses the fact, fails here.
+ */
+const FACET_RULES: ReadonlyArray<readonly [slug: string, rule: string, fact: string]> = [
+  [
+    'screen-anchors-name-binding',
+    'anchor-binding',
+    'An `item` or a `row` named as a parameter gives the `data-id`',
+  ],
+  [
+    'screen-anchors-name-binding',
+    'flow-effects',
+    'The effects, in `actions`, `entry` and `exit`, are four',
+  ],
+  [
+    'screen-anchors-name-roles',
+    'anchor-roles',
+    'Every restriction above an anchor admits a device by the roles it holds together',
+  ],
+  ['screen-anchors-name-roles', 'roles', "A role is a row of the vocabulary's Roles table."],
+  [
+    'screen-anchors-name-roles',
+    'link-roles',
+    'A link bound to one route (`binding: { route: /me }`)',
+  ],
+  [
+    'screen-anchors-name-own',
+    'own-entries',
+    'data (the owner of each entry) decides whether it shows',
+  ],
+  [
+    'screen-anchors-name-holdsinput',
+    'field-holds-input',
+    'It holds none when its own change applies it at once',
+  ],
+  [
+    'screen-anchors-name-holdsinput',
+    'leave-questions',
+    'declares under `unsavedInput` every leave that would lose what was typed',
+  ],
+  ['screen-anchors-name-marksstate', 'state-colour', "the field's `fieldStates` still hold"],
+  [
+    'screen-anchors-name-marksstate',
+    'check-sources',
+    '`bun run contract:check:sources` holds the JSX',
+  ],
+  ['screen-anchors-name-secret', 'secret-field', 'a secret is never filled from a URL'],
+  [
+    'screen-anchors-name-dataid',
+    'attributes',
+    "an invoke's `input` or as a navigate's `{ item }` search",
+  ],
+  [
+    'screen-anchors-name-datavalue',
+    'attributes',
+    'A value asserted on an anchor must be one that anchor',
+  ],
+  [
+    'screen-anchors-name-datavalue',
+    'kind-parts',
+    "From version 4 an anchor's kind says what a file would only repeat",
+  ],
+  ['screen-anchors-name-states', 'attributes', 'The state of a field is not written here'],
+  [
+    'screen-anchors-name-states',
+    'field-states-carried',
+    'a reload or leaving the screen clears it',
+  ],
+  [
+    'screen-anchors-name-derived',
+    'derived-parts',
+    'From version 4 so are the parts a kind brings by itself',
+  ],
+  [
+    'screen-anchors-name-derived',
+    'kind-parts',
+    "From version 4 an anchor's kind says what a file would only repeat",
+  ],
+  [
+    'screen-anchors-name-derived',
+    'visibility-button',
+    'One derived part is presentation only: `visibility-button`',
+  ],
+  [
+    'screen-anchors-name-source',
+    'list-reads',
+    '`{ platform: <action> }`: the entries are the answer of that platform action',
+  ],
+  [
+    'screen-anchors-name-source',
+    'paged-list',
+    "`paged: true` makes the list a page of the action's entries.",
+  ],
+  ['screen-anchors-name-composite', 'composite-of-the-platform', 'Only a secret `input` opts in.'],
+  [
+    'screen-anchors-name-source-paged',
+    'paged-list',
+    '`paged: { sizes, default }` in `platform.yaml`',
+  ],
+]
+
 /** The describe text of a key's schema, through the optional that wraps it. */
 const describeText = (schema: z.core.$ZodType): string | undefined =>
   z.globalRegistry.get(schema)?.description ??
@@ -243,6 +350,20 @@ describe('renderReference', () => {
     expect(home?.heading.endsWith(`${facet}\``)).toBe(true)
     expect(ruleIdsNamedIn(home?.text ?? '').filter((id) => !ruleIds.has(id))).toEqual([])
     expect(saidBy(home).length).toBeGreaterThanOrEqual(FACET_TEXT_LENGTH)
+  })
+  it.each(FACET_RULES)(
+    'the hint of %s names the rule %s, which says what the hint leaves out',
+    (slug, rule, fact) => {
+      expect(ruleIdsNamedIn(entryAt(slug)?.text ?? '')).toContain(rule)
+      expect(entryAt(`rule-${rule}`)?.text).toContain(fact)
+    },
+  )
+  it.each(SHORT_FACETS)('lists in FACET_RULES every rule the short hint of %s names', (facet) => {
+    const slug = FACET_HOMES[facet]
+    const named = ruleIdsNamedIn(entryAt(slug)?.text ?? '')
+    const listed = FACET_RULES.filter(([of]) => of === slug).map(([, rule]) => rule)
+
+    expect([...listed].sort()).toEqual([...named].sort())
   })
   it('says where an error shows each code, and the fields key names that rule', () => {
     expect(entryAt('rule-error-placement')?.text).toContain('shows beside the controls of its part')

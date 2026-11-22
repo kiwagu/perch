@@ -325,7 +325,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `anchors.<name>.binding`
 
 <a id="screen-anchors-name-binding"></a>
-What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `anchors.<name>.binding.model`
 
@@ -370,7 +370,7 @@ The name of a search parameter every route of the screen declares.
 ### `anchors.<name>.roles`
 
 <a id="screen-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.
+Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.
 
 ### `anchors.<name>.own`
 
@@ -395,7 +395,7 @@ A field that holds a secret (a password, its confirmation, a current password): 
 ### `anchors.<name>.with`
 
 <a id="screen-anchors-name-with"></a>
-The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
+The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.
 
 ### `anchors.<name>.with.<name>`
 
@@ -405,7 +405,7 @@ A code of the vocabulary (data-code).
 ### `anchors.<name>.without`
 
 <a id="screen-anchors-name-without"></a>
-The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
+The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.
 
 ### `anchors.<name>.without.<name>`
 
@@ -2256,7 +2256,7 @@ What the element is for. Its kind, binding, codes, states, roles and the flow sa
 ### `screens.anchors.<name>.binding`
 
 <a id="manifest-screens-anchors-name-binding"></a>
-What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `screens.anchors.<name>.binding.model`
 
@@ -2301,7 +2301,7 @@ The name of a search parameter every route of the screen declares.
 ### `screens.anchors.<name>.roles`
 
 <a id="manifest-screens-anchors-name-roles"></a>
-The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.
+Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.
 
 ### `screens.anchors.<name>.own`
 
@@ -2326,7 +2326,7 @@ A field that holds a secret (a password, its confirmation, a current password): 
 ### `screens.anchors.<name>.with`
 
 <a id="manifest-screens-anchors-name-with"></a>
-The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
+The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.
 
 ### `screens.anchors.<name>.with.<name>`
 
@@ -2336,7 +2336,7 @@ A code of the vocabulary (data-code).
 ### `screens.anchors.<name>.without`
 
 <a id="manifest-screens-anchors-name-without"></a>
-The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`.
+The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`.
 
 ### `screens.anchors.<name>.without.<name>`
 
@@ -3521,7 +3521,7 @@ The id of the screen that declares the anchor.
 ### `ids.<name>.binding`
 
 <a id="manifest-ids-name-binding"></a>
-What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
+What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`.
 
 ### `ids.<name>.binding.model`
 
@@ -4721,7 +4721,7 @@ Keys it concerns: [`screen.anchors.<name>.with`](#screen-anchors-name-with), [`s
 ### Who sees an anchor: its roles
 
 <a id="rule-anchor-roles"></a>
-The `roles` of an anchor say who sees it.
+`roles`: The roles that see the element, among those its screen's bindings serve; absent: every role of the screen, as far as the anchors above it and a link's derived roles admit (below).
 
 A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`).
 

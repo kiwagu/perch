@@ -549,7 +549,7 @@
                       "search"
                     ],
                     "additionalProperties": false,
-                    "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                    "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                   }
                 ],
                 "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -667,7 +667,7 @@
                         "search"
                       ],
                       "additionalProperties": false,
-                      "description": "The field starts with the value of a search parameter of the route the screen was opened at, and takes it again when that parameter changes. See the rule `anchor-binding`."
+                      "description": "A field that holds no secret starts with the value of a search parameter of the route, takes it again when the parameter changes, and the user may change it. See the rule `anchor-binding`."
                     }
                   ],
                   "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -675,10 +675,10 @@
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
             ],
-            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field alone) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
+            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
           },
           "roles": {
-            "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen. See the rules `anchor-roles`, `roles` and `link-roles`.",
+            "description": "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
             "type": "array",
             "items": {
               "type": "string",
@@ -737,7 +737,7 @@
               ],
               "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
             },
-            "description": "The element renders only while each of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`."
+            "description": "The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
           },
           "without": {
             "minItems": 1,
@@ -772,7 +772,7 @@
               ],
               "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
             },
-            "description": "The element renders only while none of these anchors renders, or shows one of the codes listed beside it. See the rule `with-without`."
+            "description": "The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
           },
           "codes": {
             "description": "The `data-code` values the element carries, on a `message`, `error`, `toast` or `dialog` (a dialog's code names what it asks, since every dialog looks alike): each a code of the vocabulary's Codes table, which holds its meaning, or a toast code the loader derived. Tests and agents assert the code, never the wording; a domain code (`profile:FORBIDDEN`) is mapped to a contract code (`forbidden`) in the presentation layer and never reaches `data-code`. An error that leaves them out carries the codes of three sources, each once, `failed` last: the failures of the actions the anchors of its part bind (`<part>.<name>` beside `<part>.error`, in the order they are declared); then the failures of the actions its flow invokes and shows on it (a written `onError` in any form, the request pattern, a region written `by` its button); then the codes its flow shows on it explicitly, `show: { <error>: [codes] }` in an `entry`, an `exit` or a transition. What the file writes wins. `contract:diff` lists the codes the anchors gain or lose, written or derived, as `<anchor> <code>`. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code. See the rule `error-codes-and-fields`.",
@@ -927,7 +927,7 @@
                   "platform"
                 ],
                 "additionalProperties": false,
-                "description": "The entries come from a platform action, which the anchor reads when it starts to render and when what it reads for changes. See the rule `list-reads`."
+                "description": "The entries come from a platform action, which the anchor reads when it starts to render, when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`."
               }
             ],
             "description": "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."

@@ -79,7 +79,7 @@ const anchorRoles: ReferenceRule = {
   id: 'anchor-roles',
   title: 'Who sees an anchor: its roles',
   text: [
-    'The `roles` of an anchor say who sees it.',
+    "`roles`: The roles that see the element, among those its screen's bindings serve; absent: every role of the screen, as far as the anchors above it and a link's derived roles admit (below).",
     "A role is a row of the vocabulary's Roles table, and a device holds a set of them (see the rule `roles`).",
     "Every restriction above an anchor admits a device by the roles it holds together: its own `roles`, those of each anchor it is declared under and its screen's (the frame aside), so one restriction naming only roles the route serves is enough, wherever it sits on the chain, and a link to a route whose roles name neither `guest` nor `identity` is shown to no device the route refuses.",
     "`contract:check` wants an anchor's roles among those its screen's bindings serve; the manifest carries them, and `contract:diff` lists each role an anchor is shown to as `<anchor> <role>`.",
