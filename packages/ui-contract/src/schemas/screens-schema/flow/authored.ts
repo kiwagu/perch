@@ -108,7 +108,7 @@ export const controlRegionSchema = z
     onDone: authoredTransitionsSchema
       .exactOptional()
       .describe(
-        "What follows a success; absent or with no target, back to `idle`. From version 5 a branch neither showing nor clearing its part's error starts with that clear, derived. See the rule `area-request`.",
+        'What follows success; absent or untargeted, `idle`. From version 5 the loader first clears a declared `<part>.error` unless the branch shows it; never write that clear. See the rule `area-request`.',
       ),
     onError: authoredTransitionsSchema
       .exactOptional()

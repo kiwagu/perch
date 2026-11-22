@@ -625,7 +625,7 @@ A string, a number or a boolean.
 ### `flow.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-meta-renders"></a>
-Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
+Anchors or render sets only some states render; an unlisted one renders with its container. List a part's base; a plain root or region state with an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.entry`
 
@@ -860,7 +860,7 @@ The screen's own button bound to one action, whose region this is: the loader wr
 ### `flow.states.<name>.states.<name>.onDone`
 
 <a id="screen-flow-states-name-states-name-ondone"></a>
-What follows a success; absent or with no target, back to `idle`. From version 5 a branch neither showing nor clearing its part's error starts with that clear, derived. See the rule `area-request`.
+What follows success; absent or untargeted, `idle`. From version 5 the loader first clears a declared `<part>.error` unless the branch shows it; never write that clear. See the rule `area-request`.
 
 ### `flow.states.<name>.states.<name>.onError`
 
@@ -905,7 +905,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="screen-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
+Anchors or render sets only some states render; an unlisted one renders with its container. List a part's base; a plain root or region state with an event on one renders it. See the rule `renders`.
 
 ### `flow.states.<name>.states.<name>.states.<name>.entry`
 
@@ -2596,7 +2596,7 @@ A string, a number or a boolean.
 ### `screens.flow.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-meta-renders"></a>
-Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render; an unlisted one renders with its container, a derived part with its base. A plain root or region state with an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.entry`
 
@@ -3006,7 +3006,7 @@ What the contract says of the state beyond XState: the anchors it renders.
 ### `screens.flow.states.<name>.states.<name>.states.<name>.meta.renders`
 
 <a id="manifest-screens-flow-states-name-states-name-states-name-meta-renders"></a>
-Anchors only some states render, or a render set; one no state lists renders with its container. List a part's base; a root or region state handling an event on one renders it. See the rule `renders`.
+Anchors only some states render; an unlisted one renders with its container, a derived part with its base. A plain root or region state with an event on one renders it. See the rule `renders`.
 
 ### `screens.flow.states.<name>.states.<name>.states.<name>.entry`
 
