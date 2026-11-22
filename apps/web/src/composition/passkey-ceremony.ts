@@ -5,14 +5,11 @@
  * `data:AUTH_FAILED`.
  */
 
-import {
-  type AuthenticationResponseJSON,
-  type PublicKeyCredentialCreationOptionsJSON,
-  type PublicKeyCredentialRequestOptionsJSON,
-  type RegistrationResponseJSON,
-  startAuthentication,
-  startRegistration,
-  WebAuthnError,
+import type {
+  AuthenticationResponseJSON,
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
 } from '@simplewebauthn/browser'
 import { ResultAsync } from 'neverthrow'
 
@@ -45,26 +42,44 @@ export interface PasskeyCeremony {
 }
 
 /**
+ * The library that runs the ceremony, loaded when a passkey control is first pressed and never
+ * with the first frame: it is code run only after the person's own action on a control. The
+ * browser loads it once, however often it is asked.
+ */
+const loadLibrary = () => import('@simplewebauthn/browser')
+
+type Library = Awaited<ReturnType<typeof loadLibrary>>
+
+/**
  * Whether the person or the browser ended the window: closed or declined (`NotAllowedError`, which
  * the browser also raises when the operation times out), or aborted (`AbortError`, or the
  * library's own code for a ceremony it was told to abort).
  */
-const endedByTheWindow = (error: unknown): boolean =>
+const endedByTheWindow = (error: unknown, { WebAuthnError }: Library): boolean =>
   error instanceof Error &&
   (error.name === 'NotAllowedError' ||
     error.name === 'AbortError' ||
     (error instanceof WebAuthnError && error.code === 'ERROR_CEREMONY_ABORTED'))
 
-function ceremonyFailed(cause: unknown): DataError {
-  return endedByTheWindow(cause)
+function ceremonyFailed(cause: unknown, library: Library): DataError {
+  return endedByTheWindow(cause, library)
     ? dataError('data:PASSKEY_CANCELLED', 'the passkey window was closed or timed out')
     : dataError('data:AUTH_FAILED', 'the browser could not complete the passkey ceremony', cause)
+}
+
+/** Runs one ceremony of the library, loading it first; a library that cannot load fails the ceremony, naming it. */
+function ceremony<T>(run: (library: Library) => Promise<T>): ResultAsync<T, DataError> {
+  return ResultAsync.fromPromise(loadLibrary(), (cause) =>
+    dataError('data:AUTH_FAILED', 'the passkey library could not be loaded', cause),
+  ).andThen((library) =>
+    ResultAsync.fromPromise(run(library), (cause) => ceremonyFailed(cause, library)),
+  )
 }
 
 /** The real browser call of `@simplewebauthn/browser`, over `navigator.credentials`. */
 export const browserPasskeyCeremony: PasskeyCeremony = {
   register: (options) =>
-    ResultAsync.fromPromise(startRegistration({ optionsJSON: options }), ceremonyFailed),
+    ceremony(({ startRegistration }) => startRegistration({ optionsJSON: options })),
   authenticate: (options) =>
-    ResultAsync.fromPromise(startAuthentication({ optionsJSON: options }), ceremonyFailed),
+    ceremony(({ startAuthentication }) => startAuthentication({ optionsJSON: options })),
 }

@@ -52,8 +52,10 @@ modeling stage.
   `data:ACCOUNT_BANNED`, a 429 `data:RATE_LIMITED`. A passkey signs in with
   `SessionPort.signInWithPasskey(signOutOldestFor?)`: the gateway's `POST /backend/auth/passkey-options`
   (options and challenge, no session), the browser's window (`composition/passkey-ceremony.ts`,
-  `@simplewebauthn/browser` over `navigator.credentials`: a window closed, declined or timed out
-  is `data:PASSKEY_CANCELLED`, any other refusal `data:AUTH_FAILED`), then `POST /backend/auth/sign-in/passkey`
+  `@simplewebauthn/browser` over `navigator.credentials`, loaded by a dynamic import at the press
+  of a passkey control and never with the first frame: a window closed, declined or timed out
+  is `data:PASSKEY_CANCELLED`, any other refusal, a library that cannot load included,
+  `data:AUTH_FAILED`), then `POST /backend/auth/sign-in/passkey`
   with the assertion and the challenge (a passkey no account holds is `data:PASSKEY_UNKNOWN`; the
   limit of devices answers `device-limit` with `consentFor`, the account it asked about, which the
   retry names as `signOutOldestFor`). Every call that can sign a device in (the password, the code
