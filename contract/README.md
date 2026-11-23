@@ -115,7 +115,8 @@ The authored files, edited by hand or by a model in the modeling thread:
   use for it, and its `storage`, the name storage gives it where that differs (organisation is
   the table `tenant`; no applied migration is renamed). A contract with the file keeps its
   roles there and the vocabulary lists none. The check refuses a synonym in a description, a
-  behaviour text, an action's name, a screen's id, a route path or a role's name; code and
+  behaviour text, an action's, a screen's, an anchor's, a value's or a field's name, an enum's
+  value, a route path or a role's name; code and
   tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
   (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
   holds ([the rule](REFERENCE.md#rule-terms)).

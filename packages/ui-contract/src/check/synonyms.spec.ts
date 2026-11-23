@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { PLATFORM_FILE, TERMS_FILE, type Terms, type WrittenDescription } from '../files'
+import {
+  MODEL_FILE,
+  PLATFORM_FILE,
+  TERMS_FILE,
+  type Terms,
+  type WrittenDescription,
+} from '../files'
 
 import type { Contract } from './contract'
 import { sampleContract } from './contract.fixture'
@@ -171,6 +177,50 @@ describe('synonymsProblems', () => {
       {
         file: TERMS_FILE,
         message: `roles["tenant-admin"]: the role's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in what CONTRACT_VALUES holds: a value's name or enum, a field's name or enum", () => {
+    const contract = withTerms(TERMS)
+    const thing = contract.model.entities['thing']
+
+    contract.screens.platform.values = {
+      'tenant-key': { type: 'string', maxLength: 32, description: 'A key.' },
+      plan: { enum: ['free', 'trial-tenant'], description: 'A plan.' },
+    }
+
+    if (thing !== undefined) {
+      thing.fields['org'] = { type: 'string', readonly: false, crdt: 'none' }
+      thing.fields['kind'] = { enum: ['workspace', 'organisation'], readonly: false, crdt: 'none' }
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: PLATFORM_FILE,
+        message: `values["tenant-key"]: the value's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: PLATFORM_FILE,
+        message: `values.plan.enum[1]: the value's enum says "tenant", a synonym of the term "organisation"; write "organisation"`,
+      },
+      {
+        file: MODEL_FILE,
+        message: `$defs.thing.properties.org: the field's name says "org", a synonym of the term "organisation"; write "organisation"`,
+      },
+    ])
+  })
+  it("refuses one in an anchor's name, which FIELD_FACTS and the code carry", () => {
+    const contract = withTerms(TERMS)
+    const sample = contract.screens.screens[1]
+
+    if (sample !== undefined) {
+      sample.anchors['sample.tenant-input'] = { kind: 'input' }
+    }
+
+    expect(synonymsProblems(contract)).toEqual([
+      {
+        file: SCREEN_FILE,
+        message: `anchors["sample.tenant-input"]: the anchor's name says "tenant", a synonym of the term "organisation"; write "organisation"`,
       },
     ])
   })
