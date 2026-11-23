@@ -245,7 +245,8 @@ links to as `contract/REFERENCE.md#<slug>`.
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
     element of each field carries that the contract decides, by its anchor, and
     `termsModuleOf(contract)` that of `CONTRACT_ROLES` and `CONTRACT_ROUTES`, every role by its
-    name and every screen's route path by its id (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
+    name and every route path by its screen's id, a further binding's by `<id>@<path>`
+    (`routeKeyOf`; `contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
