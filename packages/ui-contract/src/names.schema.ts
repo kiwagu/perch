@@ -41,7 +41,9 @@ export const dataNameSchema = z
   .regex(new RegExp(`^${WORD}(\\.${WORD})?$`))
   .describe('A name of what the activity carries: one or two kebab-case segments.')
 
-export const roleSchema = kebabNameSchema.describe('A role of the vocabulary.')
+export const roleSchema = kebabNameSchema.describe(
+  "A role of the contract: of its terms file, or of the vocabulary's Roles.",
+)
 
 export const codeSchema = kebabNameSchema.describe('A code of the vocabulary (data-code).')
 

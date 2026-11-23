@@ -93,7 +93,7 @@ contract/
   REFERENCE.md       every key and rule of the contract, generated, never edited by hand
   COVERAGE.md        the coverage note
   vocabulary.md      the closed lists
-  domain/            what a feature describes: the model, the platform, the screens, the activities
+  domain/            what a feature describes: the model, the platform, the screens, the activities, the terms
   schemas/           the JSON Schemas generated from the tooling, never edited by hand
 ```
 
@@ -101,13 +101,24 @@ The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
   the derived suffixes, the attributes, the app, container and row states, the codes, the
-  choice values, the screen names, the roles, the anchors the shell reserves and the
-  platform's composites). Its
+  choice values, the screen names, the roles while the contract has no terms file, the anchors
+  the shell reserves and the platform's composites). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
   heading. The grammar, the kinds, the suffixes and the attributes are the engine's (meta);
   every other table is content a feature adds with the screen file that first uses it
   (business). The contract version is not in it: since version 2 it is said only in
   `domain/platform.yaml`.
+- `domain/terms.yaml`, YAML: the project's language. Its `contexts` are the bounded contexts
+  (one while the product is one), its `terms` the platform's nouns (account, organisation,
+  membership, invitation, device, session) and its `roles` the roles a device holds: each with
+  its `meaning` within the budget of a description, its `synonyms`, the words the texts never
+  use for it, and its `storage`, the name storage gives it where that differs (organisation is
+  the table `tenant`; no applied migration is renamed). A contract with the file keeps its
+  roles there and the vocabulary lists none. The check refuses a synonym in a description, a
+  behaviour text, an action's name, a screen's id, a route path or a role's name; code and
+  tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
+  (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
+  holds ([the rule](REFERENCE.md#rule-terms)).
 - `domain/screens/<pathname>.yaml`: one screen per file, named by the path of the screen's
   first binding without the leading `/`. `/sign-in` is `domain/screens/sign-in.yaml` and `/me`
   is `domain/screens/me.yaml`; a nested path is a folder (`/org/$org` would be
@@ -368,7 +379,8 @@ not-found screen at the same address ([the rule](REFERENCE.md#rule-roles),
 an anchor's [`roles`](REFERENCE.md#screen-anchors-name-roles)). A route that must not show
 itself to a guest leaves its `guard` out and names no `guest`. `GUEST`, `IDENTITY`,
 `heldRoles` and `admits` of `@workspace/ui-contract/anchors` read the roles for the app and
-the checks alike.
+the checks alike. The roles are the terms file's ([the rule](REFERENCE.md#rule-terms)), and code
+names one through `CONTRACT_ROLES`, a route through `CONTRACT_ROUTES`, never by hand.
 
 A parameter of `params` or `search` may carry `examples`, which `contract:check` holds to the
 parameter's schema; `bun run contract:routes` (`ui-contract routes [--json]`) prints the
@@ -680,7 +692,7 @@ gap is fixed in the contract files first, never worked around in a test
 ([the rule](REFERENCE.md#rule-checks)):
 
 - `bun run contract:check`: the files on their own and against each other: their shapes, the
-  vocabulary, the bindings, the flows, the platform, who each route serves, the scenarios, the
+  vocabulary, the terms and their synonyms ([the rule](REFERENCE.md#rule-terms)), the bindings, the flows, the platform, who each route serves, the scenarios, the
   schema drift, the reference's drift and each link of a guide into the reference
   ([the files](REFERENCE.md#rule-check-files), [the bindings](REFERENCE.md#rule-check-bindings),
   [the flows](REFERENCE.md#rule-check-flows), [the platform](REFERENCE.md#rule-check-platform),

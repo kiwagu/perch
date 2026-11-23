@@ -27,7 +27,11 @@ links to as `contract/REFERENCE.md#<slug>`.
     (`file:line: message` through `formatProblem`):
     - `parseVocabulary(markdown)`: the closed lists of `contract/vocabulary.md`, one `## `
       section each (`VOCABULARY_SECTIONS`); a vocabulary without its "Composites" section reads
-      as an empty table.
+      as an empty table, and one without its "Roles" section too (a terms file holds them;
+      `writesRoles` says whether the section is there).
+    - `loadTerms(root)`: `contract/domain/terms.yaml` (`TERMS_FILE`) through `termsFileSchema`,
+      none when the contract leaves it out; `loadContract` then takes the contract's roles from
+      it (`contract/REFERENCE.md#rule-terms`).
     - `loadScreens(root)` and `loadScreensWith(root, model)` (with a model already loaded, as
       the contract check does, which takes back the model with its lengths resolved): every
       `.yaml` file under `contract/domain/screens`, sorted by path, the platform's values, the
@@ -239,8 +243,9 @@ links to as `contract/REFERENCE.md#<slug>`.
   - The emitted modules (`emit/`): `valuesModuleOf(contract)` is the text of a module of plain
     data, `CONTRACT_VALUES`, every value of the platform and every field of the model as the
     contract resolves it, and `fieldFactsModuleOf(contract)` that of `FIELD_FACTS`, what the
-    element of each field carries that the contract decides, by its anchor
-    (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
+    element of each field carries that the contract decides, by its anchor, and
+    `termsModuleOf(contract)` that of `CONTRACT_ROLES` and `CONTRACT_ROUTES`, every role by its
+    name and every screen's route path by its id (`contract/REFERENCE.md#rule-emitted-modules`); `heldModule({ committed, emit, root, env })`
     is the text a package's committed module must equal (see `./testing` below).
   - The hand-over: `contractAt(ref, root)` reads the contract files at a git ref, or returns
     `{ missing: true }` when that commit has no `contract/`; `diffContracts(before, after)` returns
@@ -361,8 +366,9 @@ links to as `contract/REFERENCE.md#<slug>`.
   folder under the root; prints the problems and exits 1 when the contract check finds any
   or the manifest does not match its schema). The web app's build runs it into
   `apps/web/dist/ui-manifest/`, its dev watcher into `apps/web/dist-dev/ui-manifest/`.
-- `ui-contract emit values|fields --out <file>`, from the root or any folder under it: writes
-  the module of plain data `CONTRACT_VALUES` or `FIELD_FACTS` into `<file>`, relative to the
+- `ui-contract emit values|fields|terms --out <file>`, from the root or any folder under it:
+  writes the module of plain data `CONTRACT_VALUES`, `FIELD_FACTS` or `CONTRACT_ROLES` with
+  `CONTRACT_ROUTES` into `<file>`, relative to the
   working directory, which the caller always names; prints the problems and exits 1, writing
   nothing, when the contract check finds any. From the root, `bun run contract:emit`
   (`turbo run emit`) runs the `emit` script of every package that keeps one. Not part of
