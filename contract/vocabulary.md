@@ -3,8 +3,9 @@
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
 value and screen name that the screen files (`contract/domain/screens/`) and the platform
 file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
-in the screen files, and the roles in `contract/domain/terms.yaml`. A name that is not here is a problem of the contract, not a new word:
-a new word is added to its table in the same change that first uses it.
+in the screen files, and the roles in `contract/domain/terms.yaml`. A name of these lists that is
+not here is a problem of the contract, not a new word: a new word is added to its table in the
+same change that first uses it.
 
 ## Grammar
 
