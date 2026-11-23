@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { I18nProvider } from '@workspace/i18n'
 import { identityIdFactory, invitationIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import {
   gatewayWith,
@@ -43,25 +44,25 @@ import { organisationCommands, organisationShape } from './organisation.model.ge
 const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 const bea = { id: identityIdFactory.create(), email: 'bea@example.test' }
 
-const annAdmin: MemberView = { identity: ann, role: 'admin' }
-const beaMember: MemberView = { identity: bea, role: 'member' }
+const annAdmin: MemberView = { identity: ann, role: CONTRACT_ROLES.admin }
+const beaMember: MemberView = { identity: bea, role: CONTRACT_ROLES.member }
 
 const sentToBea: InvitationView = {
   id: invitationIdFactory.create(),
   email: bea.email,
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   link: 'https://perch.example.test/invitation?token=t',
 }
 
 type Membership = ReturnType<typeof membership>
 
-const acme = membership('acme', 'Acme', 'admin')
-const globex = membership('globex', 'Globex', 'admin')
+const acme = membership('acme', 'Acme', CONTRACT_ROLES.admin)
+const globex = membership('globex', 'Globex', CONTRACT_ROLES.admin)
 
 const fromInitech: ReceivedInvitation = {
   id: invitationIdFactory.create(),
   organisation: { name: 'Initech' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /**
@@ -99,10 +100,10 @@ async function openPage(
     declarations: { Organisation: OrganisationContainer },
     routes: [
       {
-        path: '/org',
+        path: CONTRACT_ROUTES.organisation,
         page: 'Organisation',
         guard: 'authenticated',
-        roles: ['identity', 'member', 'admin'],
+        roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
       },
     ],
   })
@@ -110,7 +111,7 @@ async function openPage(
     modules: [TestModule],
     session,
     layout: () => <Outlet />,
-    history: createMemoryHistory({ initialEntries: ['/org'] }),
+    history: createMemoryHistory({ initialEntries: [CONTRACT_ROUTES.organisation] }),
   })
 
   render(
@@ -322,7 +323,7 @@ describe('OrganisationContainer', () => {
       expect(await roleOf(beaMember)).toBe('admin')
 
       await act(async () => {
-        reread.done([annAdmin, { ...beaMember, role: 'admin' }])
+        reread.done([annAdmin, { ...beaMember, role: CONTRACT_ROLES.admin }])
       })
 
       expect(await roleOf(beaMember)).toBe('admin')

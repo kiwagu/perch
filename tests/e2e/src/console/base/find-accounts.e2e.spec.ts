@@ -1,4 +1,7 @@
 // scenario: console/base/find-accounts
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   accountItems,
   chooseSize,
@@ -75,7 +78,7 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       //   [console.users.list.verified-badge] and no [console.users.list.banned-badge];
       //   [console.users.list.range] says 1-11 of 11, and neither [console.users.list.previous-link]
       //   nor [console.users.list.next-link] shows
-      await expectAddress(page, '/console/users', { q: data.emailPrefix })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], { q: data.emailPrefix })
       await expect(page.getByTestId('console.users.list')).toHaveAttribute('data-state', 'ready')
       await expect(accountItems(page)).toHaveCount(11)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(11, 1))
@@ -99,7 +102,10 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       //   ten [console.users.list.account-item], user 11's to user 2's, [console.users.list.range]
       //   says 1-10 of 11, [console.users.list.next-link] shows and
       //   [console.users.list.previous-link] does not
-      await expectAddress(page, '/console/users', { q: data.emailPrefix, size: '10' })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], {
+        q: data.emailPrefix,
+        size: '10',
+      })
       await expect(accountItems(page)).toHaveCount(10)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(11, 2))
       await expectRange(page, { from: 1, to: 10, total: 11 })
@@ -113,7 +119,11 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       //   holds one [console.users.list.account-item], user 1's, [console.users.list.range] says
       //   11-11 of 11, [console.users.list.previous-link] shows and [console.users.list.next-link]
       //   does not
-      await expectAddress(page, '/console/users', { q: data.emailPrefix, size: '10', page: '2' })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], {
+        q: data.emailPrefix,
+        size: '10',
+        page: '2',
+      })
       await expect(accountItems(page)).toHaveCount(1)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(1, 1))
       await expectRange(page, { from: 11, to: 11, total: 11 })
@@ -127,7 +137,11 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       // Expected: After step 6 the page is the same: one [console.users.list.account-item], user
       //   1's, [console.users.list.range] saying 11-11 of 11, and [console.users.search-input]
       //   holding the email prefix
-      await expectAddress(page, '/console/users', { q: data.emailPrefix, size: '10', page: '2' })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], {
+        q: data.emailPrefix,
+        size: '10',
+        page: '2',
+      })
       await expect(page.getByTestId('console.users.list')).toHaveAttribute('data-state', 'ready')
       await expect(accountItems(page)).toHaveCount(1)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(1, 1))
@@ -139,7 +153,10 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       await page.getByTestId('console.users.list.previous-link').click()
       // Expected: After step 7 the URL carries the size 10 and no page, and [console.users.list]
       //   holds ten [console.users.list.account-item] again
-      await expectAddress(page, '/console/users', { q: data.emailPrefix, size: '10' })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], {
+        q: data.emailPrefix,
+        size: '10',
+      })
       await expect(accountItems(page)).toHaveCount(10)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(11, 2))
     })
@@ -149,7 +166,7 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       // Expected: After step 8 the URL carries neither the size nor the page, 25 being the size a
       //   list has by default, and [console.users.list] holds eleven
       //   [console.users.list.account-item] with [console.users.list.range] saying 1-11 of 11
-      await expectAddress(page, '/console/users', { q: data.emailPrefix })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], { q: data.emailPrefix })
       await expect(accountItems(page)).toHaveCount(11)
       await expect(listedEmails(page)).toHaveText(emailsOfUsers(11, 1))
       await expectRange(page, { from: 1, to: 11, total: 11 })
@@ -162,7 +179,7 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       //   [console.users.list] holds the platform's newest accounts, at least twelve and at most
       //   25, since the stand's other tests sign accounts up too, and [console.users.list.range]
       //   counts from 1 to the number it holds
-      await expectAddress(page, '/console/users', {})
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], {})
       // The run decides only the twelve accounts this test made: the tests of the other worker
       // sign accounts up on the same stand meanwhile, so the page holds at least those twelve and
       // at most a page of the default size. The search's page held eleven, so twelve or more are
@@ -187,7 +204,7 @@ test.describe('Find accounts and page through them', { tag: '@full' }, () => {
       // Expected: After step 10 [console.users.list] holds one [console.users.list.account-item],
       //   device A's own, with its [console.users.list.operator-badge] and its
       //   [console.users.list.verified-badge]
-      await expectAddress(page, '/console/users', { q: data.operatorEmail })
+      await expectAddress(page, CONTRACT_ROUTES['console.users'], { q: data.operatorEmail })
       await expect(accountItems(page)).toHaveCount(1)
       // Device A's own: the account of the operator email it signed up with.
       await expect(listedEmails(page)).toHaveText([data.operatorEmail])

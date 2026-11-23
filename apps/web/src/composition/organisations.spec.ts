@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { dataError } from '@workspace/data'
 import { identityIdFactory, invitationIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { InvitationView, MemberView } from '../platform/organisations.port'
@@ -28,17 +29,17 @@ const ann = {
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const bob: MemberView = {
   identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** Bob as another tab of the browser keeps him once it signed him in. */
@@ -47,7 +48,7 @@ const bobsDevice: KeptDevice = { identity: bob.identity, token: 'token-bob', mem
 const invitationToBob: InvitationView = {
   id: invitationIdFactory.create(),
   email: 'bob@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   link: 'https://perch.example.test/invitation?token=bob',
 }
 
@@ -210,7 +211,9 @@ describe('createOrganisations', () => {
 
     expect((await organisations.members('acme'))._unsafeUnwrap()).toEqual([bob])
     expect(
-      (await organisations.invite('acme', bob.identity.email, 'admin'))._unsafeUnwrap(),
+      (
+        await organisations.invite('acme', bob.identity.email, CONTRACT_ROLES.admin)
+      )._unsafeUnwrap(),
     ).toEqual(invitationToBob)
     expect((await organisations.invitations('acme'))._unsafeUnwrap()).toEqual([invitationToBob])
     expect((await organisations.revokeInvitation('acme', invitationToBob.id)).isOk()).toBe(true)
@@ -234,7 +237,9 @@ describe('createOrganisations', () => {
     const before = savedMemberships(storage, annSession)
     const opened = tenantsOpened()
 
-    expect((await organisations.setRole('acme', bob.identity.id, 'admin')).isOk()).toBe(true)
+    expect(
+      (await organisations.setRole('acme', bob.identity.id, CONTRACT_ROLES.admin)).isOk(),
+    ).toBe(true)
     expect(calls).toEqual([['setRole', 'acme', bob.identity.id, 'admin']])
     expect(session.memberships()).toEqual([acme])
     expect(savedMemberships(storage, annSession)).toEqual(before)
@@ -250,7 +255,9 @@ describe('createOrganisations', () => {
     const organisations = createOrganisations(refusing, session)
 
     expect(
-      (await organisations.setRole('acme', bob.identity.id, 'member'))._unsafeUnwrapErr(),
+      (
+        await organisations.setRole('acme', bob.identity.id, CONTRACT_ROLES.member)
+      )._unsafeUnwrapErr(),
     ).toMatchObject({
       code: 'data:WRITE_REJECTED',
       message: 'last-admin',

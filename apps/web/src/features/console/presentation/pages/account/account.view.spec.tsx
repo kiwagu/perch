@@ -2,6 +2,8 @@
 import { fireEvent, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
 import { bart, opal, una } from '../../../../../platform/__fixtures__/accounts'
@@ -20,8 +22,8 @@ const unaCard: AccountCard = {
   hasProfile: true,
   lastSeenAt: at('2026-10-18T09:30:00.000Z'),
   organisations: [
-    { key: 'acme', name: 'Acme', role: 'admin' },
-    { key: 'beta', name: 'Beta', role: 'member' },
+    { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin },
+    { key: 'beta', name: 'Beta', role: CONTRACT_ROLES.member },
   ],
 }
 
@@ -84,7 +86,7 @@ describe('AccountView', () => {
 
     const back = byId('console.account.back-link')
 
-    expect(back.getAttribute('href')).toBe('/console/users')
+    expect(back.getAttribute('href')).toBe(CONTRACT_ROUTES['console.users'])
     expect(back.textContent).toBe(en['console.account.back'])
     expect(back.className).toMatch(/min-h-11/)
     expect(back.className).toMatch(/min-w-11/)

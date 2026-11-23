@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { I18nProvider, type Locale } from '@workspace/i18n'
 import { identityIdFactory, settingsIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { Input } from '@workspace/ui/components/ui/input'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
@@ -65,8 +66,17 @@ const OperatorsModule = defineModule({
   id: 'operators',
   declarations: { Console: () => <p>the operator's page</p>, Lost: () => <p>no page here</p> },
   routes: [
-    { path: '/console/users', page: 'Console', roles: ['operator'] },
-    { path: '/$', page: 'Lost', roles: ['guest', 'identity', 'member', 'admin'] },
+    { path: CONTRACT_ROUTES['console.users'], page: 'Console', roles: [CONTRACT_ROLES.operator] },
+    {
+      path: CONTRACT_ROUTES['not-found'],
+      page: 'Lost',
+      roles: [
+        CONTRACT_ROLES.guest,
+        CONTRACT_ROLES.identity,
+        CONTRACT_ROLES.member,
+        CONTRACT_ROLES.admin,
+      ],
+    },
   ],
 })
 
@@ -211,7 +221,7 @@ describe('ShellContainer', () => {
           </ShellContainer>
         </NoticeProvider>
       ),
-      history: createMemoryHistory({ initialEntries: ['/console/users'] }),
+      history: createMemoryHistory({ initialEntries: [CONTRACT_ROUTES['console.users']] }),
     })
     const notFoundTitle = en['app.title.page'].replace('{title}', en['app.title.not-found'])
     // The links of the navigation marked current.
@@ -240,7 +250,7 @@ describe('ShellContainer', () => {
     expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
     expect(current()).toEqual([])
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
 
     await screen.findByText("the operator's page")
     await waitFor(() => expect(document.title).not.toBe(notFoundTitle))
@@ -252,7 +262,7 @@ describe('ShellContainer', () => {
     await waitFor(() => expect(document.title).toBe(notFoundTitle))
     expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
     expect(current()).toEqual([])
-    expect(router.state.location.href).toBe('/console/users')
+    expect(router.state.location.href).toBe(CONTRACT_ROUTES['console.users'])
   })
 
   it('tells the user of a change the gateway refused and this device undid', async () => {

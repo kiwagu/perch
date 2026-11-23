@@ -9,6 +9,7 @@ import {
   membershipIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 
 import identityRow from '../../auth/__fixtures__/identity-row.surql'
@@ -103,8 +104,11 @@ async function harness() {
   }
 
   /** `ann` invites `email` to `tenant` (acme unless named) with `role`. */
-  const invite = async (email: string, role: 'member' | 'admin' = 'member', tenant = acme) =>
-    (await invitations.replace({ tenant, email, role, inviter: ann }))._unsafeUnwrap()
+  const invite = async (
+    email: string,
+    role: 'member' | 'admin' = CONTRACT_ROLES.member,
+    tenant = acme,
+  ) => (await invitations.replace({ tenant, email, role, inviter: ann }))._unsafeUnwrap()
 
   return { directory, clock, invitations, ann, bob, acme, organisation, identity, rows, invite }
 }
@@ -128,14 +132,14 @@ const pending = (
 describe('PendingInvitations', () => {
   it('keeps an invitation for seven days from the gateway clock and reads its token back', async () => {
     const { invitations, clock, acme, invite } = await harness()
-    const invitation = await invite('carol@example.test', 'admin')
+    const invitation = await invite('carol@example.test', CONTRACT_ROLES.admin)
 
     expect(invitation.id).toMatch(/^inv_/)
     expect(invitation).toEqual({
       id: invitation.id,
       tenant: { ...acme, ready: true },
       email: 'carol@example.test',
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
       token: invitation.token,
       expiresAt: START + INVITATION_LIFETIME_MS,
     })
@@ -157,8 +161,8 @@ describe('PendingInvitations', () => {
 
   it('keeps one row for an email and an organisation: the second invitation replaces the first, whose link then reads invalid', async () => {
     const { invitations, acme, invite, rows } = await harness()
-    const first = await invite('carol@example.test', 'member')
-    const second = await invite('carol@example.test', 'admin')
+    const first = await invite('carol@example.test', CONTRACT_ROLES.member)
+    const second = await invite('carol@example.test', CONTRACT_ROLES.admin)
 
     expect(second.id).not.toBe(first.id)
     expect(second.token).not.toBe(first.token)
@@ -174,7 +178,7 @@ describe('PendingInvitations', () => {
   it('keeps an email in lower case, and an invitation in upper case replaces the one in lower case', async () => {
     const { invitations, invite, rows } = await harness()
     const first = await invite('carol@example.test')
-    const second = await invite('CAROL@Example.TEST', 'admin')
+    const second = await invite('CAROL@Example.TEST', CONTRACT_ROLES.admin)
 
     expect(second.email).toBe('carol@example.test')
     expect(await rows()).toEqual(['acme carol@example.test'])
@@ -185,7 +189,7 @@ describe('PendingInvitations', () => {
     const { invitations, ann, invite, organisation, rows } = await harness()
     const orbit = await organisation('orbit', ann)
     const inAcme = await invite('carol@example.test')
-    const inOrbit = await invite('carol@example.test', 'admin', orbit)
+    const inOrbit = await invite('carol@example.test', CONTRACT_ROLES.admin, orbit)
 
     expect(await rows()).toEqual(['acme carol@example.test', 'orbit carol@example.test'])
     expect((await invitations.read(inAcme.token))._unsafeUnwrap().kind).toBe('invitation')
@@ -197,7 +201,7 @@ describe('PendingInvitations', () => {
     const orbit = await organisation('orbit', ann)
     const swept = await invite('carol@example.test')
 
-    await invite('carol@example.test', 'member', orbit)
+    await invite('carol@example.test', CONTRACT_ROLES.member, orbit)
     await clock.advance(INVITATION_LIFETIME_MS - HOUR_MS)
     await invite('dave@example.test')
     await clock.advance(2 * HOUR_MS)
@@ -234,7 +238,7 @@ describe('PendingInvitations', () => {
   it("reads the token of an invitation to an organisation that is not ready as invalid, though byId says it isn't ready", async () => {
     const { invitations, ann, organisation, invite } = await harness()
     const draft = await organisation('draft', ann, false)
-    const invitation = await invite('carol@example.test', 'member', draft)
+    const invitation = await invite('carol@example.test', CONTRACT_ROLES.member, draft)
 
     expect((await invitations.read(invitation.token))._unsafeUnwrap()).toEqual({ kind: 'invalid' })
     expect((await invitations.byId(invitation.id))._unsafeUnwrap()).toEqual({
@@ -261,16 +265,16 @@ describe('PendingInvitations', () => {
     await invite('carol@example.test')
     await clock.advance(INVITATION_LIFETIME_MS - HOUR_MS)
 
-    const dave = await invite('dave@example.test', 'admin')
+    const dave = await invite('dave@example.test', CONTRACT_ROLES.admin)
     const bobs = await invite('bob@example.test')
 
-    await invite('carol@example.test', 'member', orbit)
+    await invite('carol@example.test', CONTRACT_ROLES.member, orbit)
     await clock.advance(2 * HOUR_MS)
     await directory.db.query(membershipAddStatement, {
       id: membershipIdFactory.create(),
       identity: recordId('identity', bob),
       tenant: recordId('tenant', acme.id),
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
 
     // Bob belongs to acme now, and still shows: the admin may revoke what it sent.
@@ -293,19 +297,19 @@ describe('PendingInvitations', () => {
     const draft = await organisation('draft', ann, false)
     const old = await organisation('old', ann)
 
-    await invite('bob@example.test', 'member', old)
+    await invite('bob@example.test', CONTRACT_ROLES.member, old)
     await clock.advance(INVITATION_LIFETIME_MS)
 
-    const inAcme = await invite('bob@example.test', 'admin')
-    const inLime = await invite('Bob@Example.test', 'member', lime)
+    const inAcme = await invite('bob@example.test', CONTRACT_ROLES.admin)
+    const inLime = await invite('Bob@Example.test', CONTRACT_ROLES.member, lime)
 
-    await invite('bob@example.test', 'member', bobs)
-    await invite('bob@example.test', 'member', draft)
-    await invite('carol@example.test', 'member', lime)
+    await invite('bob@example.test', CONTRACT_ROLES.member, bobs)
+    await invite('bob@example.test', CONTRACT_ROLES.member, draft)
+    await invite('carol@example.test', CONTRACT_ROLES.member, lime)
 
     expect((await invitations.forEmail(bob, 'Bob@example.test'))._unsafeUnwrap()).toEqual([
-      { id: inLime.id, organisation: { name: 'Org lime' }, role: 'member' },
-      { id: inAcme.id, organisation: { name: 'Org acme' }, role: 'admin' },
+      { id: inLime.id, organisation: { name: 'Org lime' }, role: CONTRACT_ROLES.member },
+      { id: inAcme.id, organisation: { name: 'Org acme' }, role: CONTRACT_ROLES.admin },
     ])
     expect((await invitations.forEmail(ann, 'ann@example.test'))._unsafeUnwrap()).toEqual([])
   })

@@ -1,4 +1,7 @@
 // scenario: app-shell/base/guest-start
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { holdEngines } from '../../support/engines'
 import { appReady, expect, test } from '../../support/fixtures'
 
@@ -11,7 +14,7 @@ test.describe('Open the sign-in page without the database engines', { tag: '@smo
         holdEngines(page.context()))
 
     await test.step('2. Open [/sign-in] as a guest', async () => {
-      await page.goto('/sign-in', { waitUntil: 'commit' })
+      await page.goto(CONTRACT_ROUTES['user.sign-in'], { waitUntil: 'commit' })
     })
 
     // Expected:

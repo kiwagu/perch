@@ -4,7 +4,7 @@ import { expect, notice, signUp, test, toast } from '../../support/fixtures'
 import { createOrganisation, noteItem } from '../../support/organisation'
 
 test.describe('Say what a change did in a toast', { tag: '@full' }, () => {
-  test('An administrator sees a toast for each note added, edited and deleted, and one for a profile saved in two writes', async ({
+  test('An admin sees a toast for each note added, edited and deleted, and one for a profile saved in two writes', async ({
     page,
   }) => {
     const data = {

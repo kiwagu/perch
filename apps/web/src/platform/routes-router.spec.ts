@@ -21,6 +21,7 @@ import { join } from 'node:path'
 import { trimPathRight } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import {
   type Binding,
   bindingSchema,
@@ -277,19 +278,23 @@ const SampleModule = defineModule({
   id: 'sample',
   declarations: { Page },
   routes: [
-    { path: '/org/$key', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/notes/{-$tab}', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/files/$', page: 'Page', roles: ['guest', 'identity'] },
+    { path: '/org/$key', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/notes/{-$tab}',
+      page: 'Page',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/files/$', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
     {
       path: '/list',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ tab: z.enum(['a', 'b']).default('a'), page: z.int().min(1) }),
     },
     {
       path: '/range',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         below: z.number().max(-2),
         between: z.int().min(-5).max(-1),
@@ -300,7 +305,7 @@ const SampleModule = defineModule({
     {
       path: '/find',
       page: 'Page',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({
         q: z.string().max(5),
         name: z.string().min(3),
@@ -324,10 +329,10 @@ describe('the round trip', () => {
   it('builds an optional parameter in both forms and a splat across segments', () => {
     const optional = bindingSchema.parse({
       path: '/notes/{-$tab}',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: stringParams('tab'),
     })
-    const splat = bindingSchema.parse({ path: '/files/$', roles: ['identity'] })
+    const splat = bindingSchema.parse({ path: '/files/$', roles: [CONTRACT_ROLES.identity] })
 
     expect(
       paramForms(optional.path).forms.map((params) =>
@@ -359,7 +364,7 @@ describe('the round trip', () => {
   it('sends a value per required parameter and reads the defaults back', ({ skip }) => {
     const list = bindingSchema.parse({
       path: '/list',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -382,7 +387,7 @@ describe('the round trip', () => {
   it('sends a number within the bounds of its schema', ({ skip }) => {
     const range = bindingSchema.parse({
       path: '/range',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -405,7 +410,7 @@ describe('the round trip', () => {
   it('sends a string within the lengths and the pattern of its schema', ({ skip }) => {
     const find = bindingSchema.parse({
       path: '/find',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -429,7 +434,7 @@ describe('the round trip', () => {
   it('builds a parameter with its first example, before any sample', ({ skip }) => {
     const org = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string', examples: ['org_01hzx9k2', 'org_01hzxa7q'] } },
@@ -438,7 +443,7 @@ describe('the round trip', () => {
     })
     const find = bindingSchema.parse({
       path: '/find',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: {
         type: 'object',
         properties: {
@@ -467,7 +472,7 @@ describe('the round trip', () => {
   it('builds a parameter without an example within its schema', () => {
     const org = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string', pattern: '^org_[a-z0-9]+$' } },
@@ -493,7 +498,7 @@ describe('the round trip', () => {
   /** An optional segment whose pattern is beyond plain characters and one repeated class. */
   const notes = bindingSchema.parse({
     path: '/notes/{-$tab}',
-    roles: ['identity'],
+    roles: [CONTRACT_ROLES.identity],
     params: {
       type: 'object',
       properties: { tab: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
@@ -521,7 +526,7 @@ describe('the round trip', () => {
   /** A pattern beyond plain characters and one repeated class. */
   const odd = bindingSchema.parse({
     path: '/odd',
-    roles: ['identity'],
+    roles: [CONTRACT_ROLES.identity],
     search: {
       type: 'object',
       properties: { q: { type: 'string', pattern: '^[a-z]+-\\d+$' } },
@@ -541,11 +546,14 @@ describe('the round trip', () => {
   })
 
   it('tells a path parameter the binding forgot or invented', () => {
-    const forgot = bindingSchema.parse({ path: '/org/$key', roles: ['identity'] })
-    const forgotOptional = bindingSchema.parse({ path: '/notes/{-$tab}', roles: ['identity'] })
+    const forgot = bindingSchema.parse({ path: '/org/$key', roles: [CONTRACT_ROLES.identity] })
+    const forgotOptional = bindingSchema.parse({
+      path: '/notes/{-$tab}',
+      roles: [CONTRACT_ROLES.identity],
+    })
     const invented = bindingSchema.parse({
       path: '/org/$key',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       params: {
         type: 'object',
         properties: { key: { type: 'string' }, tab: { type: 'string' } },
@@ -571,8 +579,8 @@ describe('the round trip', () => {
   })
 
   it('tells a splat the binding left out of its path', () => {
-    const splat = bindingSchema.parse({ path: '/files/$', roles: ['identity'] })
-    const unsplat = bindingSchema.parse({ path: '/files', roles: ['identity'] })
+    const splat = bindingSchema.parse({ path: '/files/$', roles: [CONTRACT_ROLES.identity] })
+    const unsplat = bindingSchema.parse({ path: '/files', roles: [CONTRACT_ROLES.identity] })
 
     expect(parameterNames(sampleRouter, splat)).toEqual({
       path: ['_splat'],

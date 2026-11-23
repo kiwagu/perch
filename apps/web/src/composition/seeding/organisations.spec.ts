@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { invitationIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { InvitationView } from '../../platform/organisations.port'
@@ -14,14 +15,14 @@ const beto = 'beto@example.test'
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme Corp' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** What the admin's invite answers for an email: its invitation, the link of its mail included. */
 const invitationTo = (email: string): InvitationView => ({
   id: invitationIdFactory.create(),
   email,
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   link: `https://perch.example.test/invitation?token=${email}`,
 })
 

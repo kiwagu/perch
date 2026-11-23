@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { dataError } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import {
   closeConsoleAuth,
@@ -22,13 +23,13 @@ const listing = (ask: Parameters<typeof consoleRequest>[2]) =>
 describe('operatorCaller', () => {
   it('answers the operator whose live session the token holds on the device it names', async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
 
     expect(await operatorCaller(auth.sessions, listing({ as: ann }))).toMatchObject({
       kind: 'caller',
       identity: ann.identity,
       device: ann.device,
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       token: ann.token,
     })
   })
@@ -50,7 +51,7 @@ describe('operatorCaller', () => {
 
   it('reads the role with every request: a revoke refuses the next one, a grant admits it', async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
     const asked = () => operatorCaller(auth.sessions, listing({ as: ann }))
 
     expect(await asked()).toMatchObject({ kind: 'caller' })
@@ -61,12 +62,12 @@ describe('operatorCaller', () => {
 
     await setRole(auth, ann.identity, 'operator')
 
-    expect(await asked()).toMatchObject({ kind: 'caller', roles: ['operator'] })
+    expect(await asked()).toMatchObject({ kind: 'caller', roles: [CONTRACT_ROLES.operator] })
   })
 
   it('refuses a request without a token, or with one no live session holds, as unauthorized', async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
 
     expect(await operatorCaller(auth.sessions, listing({ device: ann.device }))).toEqual({
       kind: 'unauthorized',
@@ -78,7 +79,7 @@ describe('operatorCaller', () => {
 
   it("refuses an operator's token from another device than its session's as unauthorized", async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
 
     expect(await operatorCaller(auth.sessions, listing({ as: ann, device: 'phone' }))).toEqual({
       kind: 'unauthorized',
@@ -87,7 +88,7 @@ describe('operatorCaller', () => {
 
   it("refuses an operator's sign-in still waiting for its admission as no session", async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
     const waiting = await waitingSignIn(auth, ann, 'phone')
 
     expect(
@@ -97,7 +98,7 @@ describe('operatorCaller', () => {
 
   it('refuses a request that names no valid device as a bad request, before any session is read', async () => {
     const auth = await openConsoleAuth()
-    const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
+    const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
     const read: string[] = []
     const sessions = {
       read: (token: string) => {

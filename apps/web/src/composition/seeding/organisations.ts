@@ -7,6 +7,7 @@
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { dataError, type SignInInput } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { Invited, OrganisationView, SeedError, SeedOrganisationDevice } from './types'
@@ -28,7 +29,7 @@ export function ensureOrganisation(
       const found = error.code === 'data:WRITE_REJECTED' && error.message === 'key-taken'
       const existing = found ? membershipOf(device, input.key) : undefined
 
-      return existing?.role === 'admin' ? okAsync(existing) : errAsync(error)
+      return existing?.role === CONTRACT_ROLES.admin ? okAsync(existing) : errAsync(error)
     })
     .andThen((membership) => device.settle().map(() => membership))
 }
@@ -43,7 +44,7 @@ export function ensureInvited(
   email: string,
 ): ResultAsync<Invited, SeedError> {
   return device.organisations
-    .invite(key, email, 'member')
+    .invite(key, email, CONTRACT_ROLES.member)
     .map((invitation): Invited => ({ kind: 'invited', invitation: invitation.id }))
     .orElse((error) =>
       error.code === 'data:WRITE_REJECTED' && error.message === 'already-member'

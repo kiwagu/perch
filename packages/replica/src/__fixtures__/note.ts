@@ -7,6 +7,8 @@
 
 import { type LoroDoc, LoroMap } from 'loro-crdt'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { recordKey } from '../keys'
 import type { ReplicaSchema } from '../schema'
 
@@ -24,8 +26,8 @@ export const replicaSchema: ReplicaSchema = {
     },
     owner: 'author',
     can: {
-      member: { create: 'any', update: 'own', delete: 'own' },
-      admin: { create: 'any', update: 'any', delete: 'any' },
+      [CONTRACT_ROLES.member]: { create: 'any', update: 'own', delete: 'own' },
+      [CONTRACT_ROLES.admin]: { create: 'any', update: 'any', delete: 'any' },
     },
   },
 }

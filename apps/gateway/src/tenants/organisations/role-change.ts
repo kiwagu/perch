@@ -2,6 +2,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow'
 
 import { dataError, type LocalDb, recordId, tenantRegionId } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 import type { OrganisationLookup } from '../organisation-lookup'
@@ -79,7 +80,7 @@ export class OrganisationRoleChange {
         return errAsync<void, OrganisationError>(refused('no-such-member'))
       }
 
-      if (current !== 'admin' || role === 'admin') {
+      if (current !== CONTRACT_ROLES.admin || role === CONTRACT_ROLES.admin) {
         return okAsync<void, OrganisationError>(undefined)
       }
 

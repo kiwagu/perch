@@ -14,6 +14,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { bindingSchema, flatJsonSchema, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { z } from '@workspace/zod'
 
@@ -100,13 +101,13 @@ describe('the binding a route is held to', () => {
   })
   const was = {
     screen: 'sample',
-    binding: bindingSchema.parse({ path: '/list', roles: ['identity'] }),
+    binding: bindingSchema.parse({ path: '/list', roles: [CONTRACT_ROLES.identity] }),
   }
   const now = {
     screen: 'sample',
     binding: bindingSchema.parse({
       path: '/list',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       guard: 'guest',
       search: searchOf({ q: { type: 'string' } }),
     }),
@@ -117,7 +118,7 @@ describe('the binding a route is held to', () => {
       path: '/list',
       page,
       guard: 'guest',
-      roles: ['identity'],
+      roles: [CONTRACT_ROLES.identity],
       search: z.object({ q: z.string().optional() }),
     }
 
@@ -125,32 +126,47 @@ describe('the binding a route is held to', () => {
   })
 
   it('is the binding at the base when the route still equals that one', () => {
-    const route: RouteDef = { path: '/list', page, roles: ['identity'] }
+    const route: RouteDef = { path: '/list', page, roles: [CONTRACT_ROLES.identity] }
 
     expect(heldTo(route, now, [was])).toBe(was)
     expect(heldTo(route, now, [{ ...was, screen: 'other' }])).toBe(now)
     expect(
       heldTo(route, now, [
-        { ...was, binding: bindingSchema.parse({ path: '/other', roles: ['identity'] }) },
+        {
+          ...was,
+          binding: bindingSchema.parse({ path: '/other', roles: [CONTRACT_ROLES.identity] }),
+        },
       ]),
     ).toBe(now)
     expect(heldTo(route, now, [])).toBe(now)
   })
 
   it('is the binding now, which it fails, when the route equals neither', () => {
-    const route: RouteDef = { path: '/list', page, guard: 'authenticated', roles: ['identity'] }
+    const route: RouteDef = {
+      path: '/list',
+      page,
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    }
 
     expect(heldTo(route, now, [was])).toBe(now)
     expect(bindingReading(now.binding)).not.toEqual(routeReading(route))
   })
 
   it('reads the roles as a set: their order and a repeat do not count, another role does', () => {
-    const binding = bindingSchema.parse({ path: '/list', roles: ['member', 'admin'] })
+    const binding = bindingSchema.parse({
+      path: '/list',
+      roles: [CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+    })
 
-    expect(routeReading({ path: '/list', page, roles: ['admin', 'member', 'admin'] })).toEqual(
-      bindingReading(binding),
-    )
-    expect(routeReading({ path: '/list', page, roles: ['admin'] })).not.toEqual(
+    expect(
+      routeReading({
+        path: '/list',
+        page,
+        roles: [CONTRACT_ROLES.admin, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+      }),
+    ).toEqual(bindingReading(binding))
+    expect(routeReading({ path: '/list', page, roles: [CONTRACT_ROLES.admin] })).not.toEqual(
       bindingReading(binding),
     )
   })

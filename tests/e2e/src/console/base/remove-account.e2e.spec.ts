@@ -1,4 +1,7 @@
 // scenario: console/base/remove-account
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { expectAddress, openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import { appReady, expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
@@ -14,7 +17,7 @@ import {
 import { databases, identityDatabase } from '../../support/storage'
 
 test.describe('Remove an account', { tag: '@full' }, () => {
-  test("The removal of an organisation's only administrator is refused while other members are in, the operator's own account is refused, and the removal then goes through with its notice", async ({
+  test("The removal of an organisation's only admin is refused while other members are in, the operator's own account is refused, and the removal then goes through with its notice", async ({
     page,
     freshDevices,
   }) => {
@@ -124,13 +127,13 @@ test.describe('Remove an account', { tag: '@full' }, () => {
         'data-code',
         'last-admin',
       )
-      await expectAddress(page, '/console/account', { id })
+      await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })
       await expect(page.getByTestId('console.account.section')).toHaveAttribute(
         'data-state',
         'ready',
       )
       await expect(page.getByTestId('console.account.email-cell')).toHaveText(data.email)
-      await expectPathname(deviceB, '/org')
+      await expectPathname(deviceB, CONTRACT_ROUTES.organisation)
       await expect(deviceB.getByTestId('organisation.page.heading')).toHaveText(
         data.organisationName,
       )
@@ -149,7 +152,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
         'own-account',
       )
       await expect(page.getByTestId('console.account.operator-badge')).toBeVisible()
-      await expectPathname(page, '/console/account')
+      await expectPathname(page, CONTRACT_ROUTES['console.account'])
       await expect(page.getByTestId('app-shell.nav')).toBeVisible()
     })
 
@@ -183,7 +186,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
       await Promise.all([
         (async () => {
           await expect(toast(page, 'account-removed')).toBeVisible()
-          await expectAddress(page, '/console/users', {})
+          await expectAddress(page, CONTRACT_ROUTES['console.users'], {})
           await expect(page.getByTestId('console.users.list')).toHaveAttribute(
             'data-state',
             'ready',
@@ -192,7 +195,7 @@ test.describe('Remove an account', { tag: '@full' }, () => {
             page.locator(`[data-testid="console.users.list.account-item"][data-id="${id}"]`),
           ).toHaveCount(0)
         })(),
-        expectPathname(deviceB, '/sign-in', 5_000),
+        expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 5_000),
         expect
           .poll(() => databases(deviceB), {
             message: "device B's database of the account",

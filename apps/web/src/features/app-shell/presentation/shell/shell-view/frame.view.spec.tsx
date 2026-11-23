@@ -3,6 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
@@ -30,7 +31,7 @@ const shell = (props: Partial<ShellViewProps> = {}) => (
     status="ready"
     renders={READY}
     held={GUEST}
-    activePath="/sign-in"
+    activePath={CONTRACT_ROUTES['user.sign-in']}
     can={() => true}
     onLocaleChange={() => {}}
     theme="system"
@@ -89,7 +90,7 @@ describe('ShellView', () => {
   it('shows the messages of the platform once ready, the update and the install above the page', () => {
     renderShell({
       held: ACCOUNT,
-      activePath: '/me',
+      activePath: CONTRACT_ROUTES['user.profile'],
       sync: 'synced',
       update: 'new-version',
       install: 'install-available',
@@ -126,7 +127,7 @@ describe('ShellView', () => {
   })
 
   it('shows a guest no navigation, only the banner and the page', () => {
-    renderShell({ held: GUEST, activePath: '/sign-in' })
+    renderShell({ held: GUEST, activePath: CONTRACT_ROUTES['user.sign-in'] })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('navigation')).toBeNull()
@@ -138,14 +139,18 @@ describe('ShellView', () => {
   })
 
   it("shows a signed-in account no navigation where the frame's state renders none", () => {
-    renderShell({ held: ACCOUNT, activePath: '/me', renders: rendering() })
+    renderShell({
+      held: ACCOUNT,
+      activePath: CONTRACT_ROUTES['user.profile'],
+      renders: rendering(),
+    })
 
     expect(screen.queryByTestId('app-shell.nav')).toBeNull()
     expect(screen.queryByRole('link')).toBeNull()
   })
 
   it("marks a signed-in account's navigation, its four links in it, with no language select", () => {
-    renderShell({ held: ACCOUNT, activePath: '/me' })
+    renderShell({ held: ACCOUNT, activePath: CONTRACT_ROUTES['user.profile'] })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -167,7 +172,10 @@ describe('ShellView', () => {
   })
 
   it("adds the console's link to an operator's navigation, and to nobody else's", () => {
-    renderShell({ held: heldRoles(true, ['admin', 'operator']), activePath: '/me' })
+    renderShell({
+      held: heldRoles(true, ['admin', 'operator']),
+      activePath: CONTRACT_ROUTES['user.profile'],
+    })
 
     const navigation = screen.getByTestId('app-shell.nav')
 
@@ -185,7 +193,7 @@ describe('ShellView', () => {
   })
 
   it('speaks Spanish when the Spanish catalog is chosen', () => {
-    renderShell({ locale: 'es', held: ACCOUNT, activePath: '/me' })
+    renderShell({ locale: 'es', held: ACCOUNT, activePath: CONTRACT_ROUTES['user.profile'] })
 
     const navigation = screen.getByTestId('app-shell.nav')
 

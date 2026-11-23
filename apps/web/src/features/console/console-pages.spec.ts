@@ -6,6 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { routerOf } from '../../platform/__fixtures__/router'
@@ -48,7 +49,10 @@ async function opened(roles: readonly string[], path: string) {
 describe("the console's pages", () => {
   it('load their code only once an operator opens them: any other device gets the not-found page and loads none of it', async () => {
     for (const roles of REFUSED) {
-      for (const path of ['/console/users', '/console/account?id=idn_ann']) {
+      for (const path of [
+        CONTRACT_ROUTES['console.users'],
+        `${CONTRACT_ROUTES['console.account']}?id=idn_ann`,
+      ]) {
         expect((await opened(roles, path))?.status, `${roles.join(' ')} at ${path}`).toBe(
           'notFound',
         )
@@ -57,12 +61,15 @@ describe("the console's pages", () => {
 
     expect([...loaded]).toEqual([])
 
-    expect((await opened([IDENTITY, 'operator'], '/console/users'))?.status).toBe('success')
-    expect([...loaded]).toEqual(['users'])
-
-    expect((await opened([IDENTITY, 'operator'], '/console/account?id=idn_ann'))?.status).toBe(
+    expect((await opened([IDENTITY, 'operator'], CONTRACT_ROUTES['console.users']))?.status).toBe(
       'success',
     )
+    expect([...loaded]).toEqual(['users'])
+
+    expect(
+      (await opened([IDENTITY, 'operator'], `${CONTRACT_ROUTES['console.account']}?id=idn_ann`))
+        ?.status,
+    ).toBe('success')
     expect([...loaded]).toEqual(['users', 'account'])
   })
 })

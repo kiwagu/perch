@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { ADDRESS, closeHarness, harness, request } from '../__fixtures__/organisation-routes'
 
 afterEach(closeHarness)
@@ -12,7 +14,10 @@ describe('organisationRoutes', () => {
     const invitationsOf = (key: string) => `/organisations/${key}/invitations`
 
     /** The body inviting the n-th email nobody has an account for: accepted, and an attempt. */
-    const stranger = (n: number) => ({ email: `stranger-${n}@example.test`, role: 'member' })
+    const stranger = (n: number) => ({
+      email: `stranger-${n}@example.test`,
+      role: CONTRACT_ROLES.member,
+    })
 
     it("lets an admin's 30 invites within 10 minutes reach the service, unknown emails included, and answers the 31st 429 without calling it", async () => {
       const { root, ann, ask, founded } = await harness()
@@ -149,7 +154,7 @@ describe('organisationRoutes', () => {
         expect(
           await ask('POST', invitationsOf('acme'), {
             as: ann,
-            body: { email: 'nope', role: 'member' },
+            body: { email: 'nope', role: CONTRACT_ROLES.member },
           }),
         ).toEqual({ status: 400, body: { code: 'email-invalid' } })
       }

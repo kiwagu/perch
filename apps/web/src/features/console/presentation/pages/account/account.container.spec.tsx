@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { FakeAccounts, opal, una } from '../../../../../platform/__fixtures__/accounts'
 import { fakeServices, fakeSession } from '../../../../../platform/__fixtures__/session'
@@ -13,7 +14,7 @@ import { createAppRouter } from '../../../../../platform/router'
 import { renderWithProviders } from '../../../../../test-utils'
 import { ConsoleModule } from '../../../console.module'
 
-const OPERATOR: ReadonlySet<PlatformRole> = new Set(['operator'])
+const OPERATOR: ReadonlySet<PlatformRole> = new Set([CONTRACT_ROLES.operator])
 
 /** Opal, signed in: one value, as the session hands it out until it changes. */
 const signedIn = { id: opal.id, email: opal.email }
@@ -22,7 +23,10 @@ const signedIn = { id: opal.id, email: opal.email }
 function withUna(): FakeAccounts {
   const accounts = new FakeAccounts()
 
-  accounts.rows = [opal, { ...una, organisations: [{ key: 'acme', name: 'Acme', role: 'admin' }] }]
+  accounts.rows = [
+    opal,
+    { ...una, organisations: [{ key: 'acme', name: 'Acme', role: CONTRACT_ROLES.admin }] },
+  ]
 
   return accounts
 }
@@ -66,7 +70,7 @@ describe('AccountContainer on the router', () => {
   it('reads the account the address names and shows it', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
 
     expect(byId('console.account.heading').textContent).toBe('Una')
@@ -78,8 +82,8 @@ describe('AccountContainer on the router', () => {
   })
 
   it.each([
-    ['names no account', '/console/account'],
-    ['names something that is no identity id', '/console/account?id=nobody'],
+    ['names no account', CONTRACT_ROUTES['console.account']],
+    ['names something that is no identity id', `${CONTRACT_ROUTES['console.account']}?id=nobody`],
   ])('says account-gone where the address %s, asking nobody', async (_case, at) => {
     const accounts = withUna()
 
@@ -93,7 +97,10 @@ describe('AccountContainer on the router', () => {
   })
 
   it('says account-gone for an account no longer there', async () => {
-    await openCard(withUna(), `/console/account?id=${identityIdFactory.create()}`)
+    await openCard(
+      withUna(),
+      `${CONTRACT_ROUTES['console.account']}?id=${identityIdFactory.create()}`,
+    )
 
     expect((await screen.findByTestId('console.account.error')).getAttribute('data-code')).toBe(
       'account-gone',
@@ -103,7 +110,7 @@ describe('AccountContainer on the router', () => {
   it('renames the account and shows the name read again', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
 
     fireEvent.change(byId('console.account.name.name-input'), { target: { value: 'Una Smith' } })
@@ -120,7 +127,7 @@ describe('AccountContainer on the router', () => {
   it('empties the new email once its mail is on its way, the email kept', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
 
     const input = byId<HTMLInputElement>('console.account.email.email-input')
@@ -136,7 +143,7 @@ describe('AccountContainer on the router', () => {
   it('shows a taken email under its field, the email kept as typed', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
     accounts.refuse('changeEmail', 'email-taken')
 
@@ -155,7 +162,7 @@ describe('AccountContainer on the router', () => {
   it('bans the account with its reason, then lifts the ban', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
 
     fireEvent.change(byId('console.account.ban.reason-input'), { target: { value: 'spam' } })
@@ -178,19 +185,21 @@ describe('AccountContainer on the router', () => {
 
   it('moves to the accounts once the account is removed', async () => {
     const accounts = withUna()
-    const router = await openCard(accounts, `/console/account?id=${una.id}`)
+    const router = await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
 
     await ready()
     fireEvent.click(byId('console.account.removal.remove-button'))
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/console/users'))
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['console.users']),
+    )
     expect(accounts.rows.some((row) => row.id === una.id)).toBe(false)
     await screen.findByTestId('console.users.heading')
   })
 
   it('stays on the card with last-admin when the removal is refused, the card read again', async () => {
     const accounts = withUna()
-    const router = await openCard(accounts, `/console/account?id=${una.id}`)
+    const router = await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
 
     await ready()
     accounts.refuse('remove', 'last-admin')
@@ -200,14 +209,14 @@ describe('AccountContainer on the router', () => {
       (await screen.findByTestId('console.account.removal.error')).getAttribute('data-code'),
     ).toBe('last-admin')
     await waitFor(() => expect(reads(accounts)).toHaveLength(2))
-    expect(router.state.location.pathname).toBe('/console/account')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['console.account'])
     expect(byId('console.account.organisations.item').getAttribute('data-id')).toBe('acme')
   })
 
   it('keeps the card shown while it is read again after an action', async () => {
     const accounts = withUna()
 
-    await openCard(accounts, `/console/account?id=${una.id}`)
+    await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
     await ready()
 
     accounts.hold = true
@@ -224,14 +233,16 @@ describe('AccountContainer on the router', () => {
 
   it("starts afresh on another account's card", async () => {
     const accounts = withUna()
-    const router = await openCard(accounts, `/console/account?id=${una.id}`)
+    const router = await openCard(accounts, `${CONTRACT_ROUTES['console.account']}?id=${una.id}`)
 
     await ready()
     accounts.refuse('sendReset', 'rate-limited')
     fireEvent.click(byId('console.account.reset.send-button'))
     await screen.findByTestId('console.account.reset.error')
 
-    await act(() => router.navigate({ to: '/console/account', search: { id: opal.id } }))
+    await act(() =>
+      router.navigate({ to: CONTRACT_ROUTES['console.account'], search: { id: opal.id } }),
+    )
 
     await waitFor(() => expect(byId('console.account.heading').textContent).toBe('Opal'))
     expect(screen.queryByTestId('console.account.reset.error')).toBeNull()

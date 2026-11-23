@@ -13,6 +13,7 @@ import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { I18nProvider } from '@workspace/i18n'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { Input } from '@workspace/ui/components/ui/input'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 import { z } from '@workspace/zod'
@@ -70,10 +71,10 @@ const Pages = defineModule({
     {
       path: '/one',
       page: 'One',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ tab: z.enum(['a', 'b']).default('a') }),
     },
-    { path: '/two', page: 'Two', roles: ['guest', 'identity'] },
+    { path: '/two', page: 'Two', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
   ],
 })
 

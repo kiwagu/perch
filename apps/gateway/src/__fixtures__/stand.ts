@@ -8,6 +8,7 @@
 import { expect } from 'vitest'
 
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { deviceHeaders } from '../auth/__fixtures__/auth-instance'
@@ -128,7 +129,7 @@ export async function openStand() {
 
     await base.root.local.db.query(identityRoleSetStatement, {
       identity: made.identity,
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
     })
 
     return made
@@ -233,7 +234,7 @@ export async function openStand() {
         actor: admin.identity,
         key,
         email: `invited-${issued}@example.test`,
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     )._unsafeUnwrap().id
   }

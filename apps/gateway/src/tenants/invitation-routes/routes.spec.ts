@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { recordId } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { invitationIdFactory, membershipIdFactory } from '@workspace/ids'
-import { CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
@@ -61,7 +61,11 @@ async function invitedHarness() {
     await root.organisations.create({ identity: ann.identity.id, key: 'zeta', name: 'Zeta' })
   )._unsafeUnwrap()
 
-  const invite = async (email: string, role: 'member' | 'admin' = 'member', key = 'acme') => {
+  const invite = async (
+    email: string,
+    role: 'member' | 'admin' = CONTRACT_ROLES.member,
+    key = 'acme',
+  ) => {
     const view = (
       await root.organisations.invitations.invite({ actor: ann.identity.id, key, email, role })
     )._unsafeUnwrap()
@@ -81,17 +85,17 @@ describe('invitationRoutes', () => {
   describe('POST /invitations/read', () => {
     it('shows a guest the organisation and the role, never the email, and the invited account that it is for it', async () => {
       const { ask, bob, cat, invite } = await invitedHarness()
-      const { token } = await invite('bob@example.test', 'admin')
+      const { token } = await invite('bob@example.test', CONTRACT_ROLES.admin)
 
       const guest = await ask('POST', '/invitations/read', { body: { token } })
 
-      expect(guest).toEqual(read('Acme', 'admin', false))
+      expect(guest).toEqual(read('Acme', CONTRACT_ROLES.admin, false))
       expect(JSON.stringify(guest.body)).not.toContain('bob@example.test')
       expect(await ask('POST', '/invitations/read', { as: bob, body: { token } })).toEqual(
-        read('Acme', 'admin', true),
+        read('Acme', CONTRACT_ROLES.admin, true),
       )
       expect(await ask('POST', '/invitations/read', { as: cat, body: { token } })).toEqual(
-        read('Acme', 'admin', false),
+        read('Acme', CONTRACT_ROLES.admin, false),
       )
     })
 
@@ -115,7 +119,7 @@ describe('invitationRoutes', () => {
         refusal(404, 'link-invalid'),
       )
 
-      await invite('bob@example.test', 'admin')
+      await invite('bob@example.test', CONTRACT_ROLES.admin)
 
       expect(await ask('POST', '/invitations/read', { body: { token: first.token } })).toEqual(
         refusal(404, 'link-invalid'),
@@ -209,7 +213,7 @@ describe('invitationRoutes', () => {
       expect(refused?.headers.get('Retry-After')).toBe('600')
       expect(
         await ask('POST', '/invitations/read', { from: '203.0.113.2', body: { token } }),
-      ).toEqual(read('Acme', 'member', false))
+      ).toEqual(read('Acme', CONTRACT_ROLES.member, false))
       // A window of its own: the other kinds of link attempts of the address are untouched.
       expect(limits.passwordReset(ADDRESS)).toEqual({ allowed: true })
       expect(limits.accountDeletion(ADDRESS)).toEqual({ allowed: true })
@@ -227,7 +231,7 @@ describe('invitationRoutes', () => {
       await clock.advance(10 * 60_000)
 
       expect(await ask('POST', '/invitations/read', { body: { token } })).toEqual(
-        read('Acme', 'member', false),
+        read('Acme', CONTRACT_ROLES.member, false),
       )
     })
   })
@@ -242,14 +246,14 @@ describe('invitationRoutes', () => {
       })
 
       const acme = await invite('bob@example.test')
-      const zeta = await invite('bob@example.test', 'admin', 'zeta')
+      const zeta = await invite('bob@example.test', CONTRACT_ROLES.admin, 'zeta')
 
       expect(await ask('GET', '/invitations', { as: bob })).toEqual({
         status: 200,
         body: {
           invitations: [
-            { id: zeta.id, organisation: { name: 'Zeta' }, role: 'admin' },
-            { id: acme.id, organisation: { name: 'Acme' }, role: 'member' },
+            { id: zeta.id, organisation: { name: 'Zeta' }, role: CONTRACT_ROLES.admin },
+            { id: acme.id, organisation: { name: 'Acme' }, role: CONTRACT_ROLES.member },
           ],
         },
       })
@@ -263,7 +267,7 @@ describe('invitationRoutes', () => {
   describe('POST /invitations/accept', () => {
     it('makes the account a member by the invitation id, with the invitation role, and answers 200 with the membership', async () => {
       const { ask, bob, invite } = await invitedHarness()
-      const { id } = await invite('bob@example.test', 'admin')
+      const { id } = await invite('bob@example.test', CONTRACT_ROLES.admin)
       const { status, body } = await ask('POST', '/invitations/accept', {
         as: bob,
         body: { invitation: id },
@@ -273,7 +277,9 @@ describe('invitationRoutes', () => {
       expect(accepted.parse(body).membership.role).toBe('admin')
       expect(await ask('GET', '/organisations', { as: bob })).toMatchObject({
         status: 200,
-        body: { memberships: [{ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' }] },
+        body: {
+          memberships: [{ tenant: { key: 'acme', name: 'Acme' }, role: CONTRACT_ROLES.admin }],
+        },
       })
       expect(await ask('GET', '/invitations', { as: bob })).toEqual({
         status: 200,
@@ -289,7 +295,7 @@ describe('invitationRoutes', () => {
         (await ask('POST', '/invitations/accept', { as: bob, body: { invitation: token } })).status,
       ).toBe(200)
       expect(await ask('GET', '/organisations', { as: bob })).toMatchObject({
-        body: { memberships: [{ tenant: { key: 'acme' }, role: 'member' }] },
+        body: { memberships: [{ tenant: { key: 'acme' }, role: CONTRACT_ROLES.member }] },
       })
     })
 
@@ -324,7 +330,7 @@ describe('invitationRoutes', () => {
         id: membershipIdFactory.create(),
         identity: recordId('identity', bob.identity.id),
         tenant: recordId('tenant', acme?.tenant.id ?? expect.unreachable('acme exists')),
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
 
       expect(
@@ -344,8 +350,8 @@ describe('invitationRoutes', () => {
       await ask('DELETE', `/organisations/acme/invitations/${revoked.id}`, { as: ann })
 
       const replaced = await invite('bob@example.test')
-      const current = await invite('bob@example.test', 'admin')
-      const spent = await invite('bob@example.test', 'member', 'zeta')
+      const current = await invite('bob@example.test', CONTRACT_ROLES.admin)
+      const spent = await invite('bob@example.test', CONTRACT_ROLES.member, 'zeta')
 
       expect(
         (await ask('POST', '/invitations/accept', { as: bob, body: { invitation: spent.id } }))
@@ -424,7 +430,7 @@ describe('invitationRoutes', () => {
     it("spends the invitation by its id or its link's token, answers 204 and makes no member", async () => {
       const { ask, bob, invite } = await invitedHarness()
       const byId = await invite('bob@example.test')
-      const byToken = await invite('bob@example.test', 'admin', 'zeta')
+      const byToken = await invite('bob@example.test', CONTRACT_ROLES.admin, 'zeta')
 
       expect(
         await ask('POST', '/invitations/decline', { as: bob, body: { invitation: byId.id } }),
@@ -624,7 +630,7 @@ describe('invitationRoutes', () => {
           (await root.organisations.membershipsOf(bob.identity.id))._unsafeUnwrap(),
         ],
       ])
-      expect(heard[0]?.[1]).toEqual([expect.objectContaining({ role: 'member' })])
+      expect(heard[0]?.[1]).toEqual([expect.objectContaining({ role: CONTRACT_ROLES.member })])
     })
   })
 })

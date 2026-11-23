@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
-import { CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 
 import { sessionStates } from '../../auth/__fixtures__/account-ban'
@@ -134,8 +134,8 @@ async function served(
     turns,
     onFailure: (error) => failures.push(error),
   })
-  const ann = await signedUp(auth, 'ann@example.test', { role: 'operator' })
-  const cat = await signedUp(auth, 'cat@example.test', { role: 'operator' })
+  const ann = await signedUp(auth, 'ann@example.test', { role: CONTRACT_ROLES.operator })
+  const cat = await signedUp(auth, 'cat@example.test', { role: CONTRACT_ROLES.operator })
   const bob = await signedUp(auth, 'bob@example.test')
   const ask = async (method: string, path: string, by: Ask = { as: ann }) =>
     answered(await routes(consoleRequest(method, path, by), ADDRESS))

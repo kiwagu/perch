@@ -2,6 +2,8 @@
 import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import type { InvitationErrorCode } from '../../../application/invitation.machine'
 import es from '../../i18n/organisation.es.json'
@@ -29,7 +31,7 @@ function renderView(props: Partial<InvitationViewProps> = {}, locale: 'en' | 'es
   renderWithProviders(
     <InvitationView
       organisation="Acme"
-      joinAs="admin"
+      joinAs={CONTRACT_ROLES.admin}
       renders={rendering(...ASKING)}
       can={() => true}
       guest={false}
@@ -96,7 +98,7 @@ describe('InvitationView', () => {
   })
 
   it('words the role of a plain member', () => {
-    renderView({ joinAs: 'member' })
+    renderView({ joinAs: CONTRACT_ROLES.member })
 
     const badge = screen.getByTestId('organisation.invitation.role-badge')
 
@@ -147,7 +149,7 @@ describe('InvitationView', () => {
     expect(message.getAttribute('data-code')).toBe('sign-in-to-accept')
     expect(message.textContent).toContain('Sign in')
     expect(screen.getByTestId('organisation.invitation.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Acme')
     expect(screen.getByTestId('organisation.invitation.role-badge')).toBeTruthy()

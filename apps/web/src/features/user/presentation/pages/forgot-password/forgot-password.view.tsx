@@ -1,6 +1,7 @@
 import { type ComponentType, useId } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -94,7 +95,7 @@ export function ForgotPasswordView(props: ForgotPasswordViewProps) {
               {t('user.forgot-password.send')}
             </Button>
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="user.forgot-password.sign-in-link"
             >

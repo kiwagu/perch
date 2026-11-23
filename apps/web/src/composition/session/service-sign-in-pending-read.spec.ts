@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { type IdentityId, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { FakeLocks } from '@workspace/replica/testing'
 
@@ -37,12 +38,12 @@ const bobSignUp = { email: 'bob@example.test', password: 'Pass-word-2', name: 'B
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const worlds: TestWorld[] = []

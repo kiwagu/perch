@@ -2,6 +2,8 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { renderWithProviders } from '../../../../../test-utils'
 import es from '../../i18n/user.es.json'
 
@@ -79,7 +81,7 @@ describe('DeleteAccountView', () => {
     expect(message.getAttribute('data-code')).toBe('account-deleted')
     expect(message.textContent).toContain('every device of it is signed out')
     expect(screen.getByTestId('user.delete-account.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.queryByTestId(BUTTON)).toBeNull()
   })

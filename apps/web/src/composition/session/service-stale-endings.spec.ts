@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthUser } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { writeLockName } from '@workspace/replica/sync'
 import { FakeLocks } from '@workspace/replica/testing'
@@ -39,7 +40,7 @@ const bobSignUp = { email: 'bob@example.test', password: 'Pass-word-2', name: 'B
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const worlds: TestWorld[] = []
@@ -199,7 +200,7 @@ describe('an ending that began with one sign-in, while another tab signs the nex
 
     const again = signedIn(other, { identity: ann, token: 'token-ann-2', memberships: [acme] })
 
-    saveRoles(other, again, ['operator'])
+    saveRoles(other, again, [CONTRACT_ROLES.operator])
     keptAccountStart(other).keep(again.signIn, { identity: ann.id, name: 'Ann', locale: 'en' })
     saveTenant(other, again.signIn, 'acme')
 

@@ -15,6 +15,7 @@ import { join } from 'node:path'
 import { createMemoryHistory, defaultStringifySearch } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { type Binding, bindingSchema, exampleOf, loadScreens } from '@workspace/ui-contract'
 import { admits, GUEST, heldRoles, IDENTITY } from '@workspace/ui-contract/anchors'
 import { z } from '@workspace/zod'
@@ -39,7 +40,7 @@ const ROLE_SETS: readonly (readonly string[])[] = [
 ]
 
 /** The path of the binding that opens the not-found screen. */
-const NOT_FOUND_PATH = '/$'
+const NOT_FOUND_PATH = CONTRACT_ROUTES['not-found']
 
 /** An address only the not-found screen's splat takes. */
 const UNKNOWN_ADDRESS = '/no-such-page'
@@ -207,9 +208,13 @@ const PAGE_SEARCH = {
 
 /** Bindings for some roles alone, which no routed screen of the contract has outside the console. */
 const LIMITED = [
-  bindingSchema.parse({ path: '/limited', roles: ['operator'], search: PAGE_SEARCH }),
-  bindingSchema.parse({ path: '/members', roles: ['member', 'admin'] }),
-  bindingSchema.parse({ path: '/members-signed-in', guard: 'authenticated', roles: ['admin'] }),
+  bindingSchema.parse({ path: '/limited', roles: [CONTRACT_ROLES.operator], search: PAGE_SEARCH }),
+  bindingSchema.parse({ path: '/members', roles: [CONTRACT_ROLES.member, CONTRACT_ROLES.admin] }),
+  bindingSchema.parse({
+    path: '/members-signed-in',
+    guard: 'authenticated',
+    roles: [CONTRACT_ROLES.admin],
+  }),
 ] as const
 
 const SampleModule = defineModule({
@@ -219,12 +224,21 @@ const SampleModule = defineModule({
     {
       path: '/limited',
       page: 'Page',
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       search: z.object({ page: z.int().min(1).default(1) }),
     },
-    { path: '/members', page: 'Page', roles: ['member', 'admin'] },
-    { path: '/members-signed-in', page: 'Page', guard: 'authenticated', roles: ['admin'] },
-    { path: '/$', page: 'Page', roles: [GUEST, IDENTITY, 'member', 'admin'] },
+    { path: '/members', page: 'Page', roles: [CONTRACT_ROLES.member, CONTRACT_ROLES.admin] },
+    {
+      path: '/members-signed-in',
+      page: 'Page',
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.admin],
+    },
+    {
+      path: CONTRACT_ROUTES['not-found'],
+      page: 'Page',
+      roles: [GUEST, IDENTITY, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+    },
   ],
 })
 

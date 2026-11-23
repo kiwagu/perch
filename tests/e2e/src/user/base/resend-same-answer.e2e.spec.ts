@@ -1,10 +1,13 @@
 // scenario: user/base/resend-same-answer
 import type { Page, Response } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { checkYourMail, expect, expectPathname, signUp, test } from '../../support/fixtures'
 import { expectDeclaredMail } from '../../support/mail-contract'
 import { expectBoundedNonArrival, mailbox } from '../../support/mailbox'
+import { atRoute } from '../../support/routes'
 
 /**
  * Clicks the resend button and waits up to 10 s for the gateway's answer to that resend, the
@@ -41,7 +44,7 @@ async function expectResent(page: Page, answer: Response): Promise<void> {
     'check-your-mail',
   )
   await expect(page.getByTestId('user.verify-email.error')).toHaveCount(0)
-  await expectPathname(page, '/verify-email')
+  await expectPathname(page, CONTRACT_ROUTES['user.verify-email'])
 }
 
 test.describe('Ask for a new verification link for any email', { tag: '@full' }, () => {
@@ -62,7 +65,7 @@ test.describe('Ask for a new verification link for any email', { tag: '@full' },
       await signUp(page, data)
       await expect(page.getByTestId('user.profile.heading')).toHaveText(data.name)
       await page.getByTestId('user.profile.sign-out-button').click()
-      await expect(page).toHaveURL(/\/sign-in$/, { timeout: 15_000 })
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.sign-in']), { timeout: 15_000 })
     })
 
     await test.step('2. Click [user.sign-in.toggle-button], enter the other email, the password twice and the name into [user.sign-in.email-input], [user.sign-in.password-input], [user.sign-in.password-confirmation-input] and [user.sign-in.name-input], and click [user.sign-in.submit-button]', async () => {
@@ -76,7 +79,7 @@ test.describe('Ask for a new verification link for any email', { tag: '@full' },
     })
 
     await test.step('3. Open [/verify-email] with a made-up token', async () => {
-      await page.goto('/verify-email?token=made.up.token')
+      await page.goto(`${CONTRACT_ROUTES['user.verify-email']}?token=made.up.token`)
       // Expected: After step 3 [user.verify-email.error] carries [code:link-invalid]
       await expect(page.getByTestId('user.verify-email.error')).toHaveAttribute(
         'data-code',

@@ -10,7 +10,7 @@ import {
   invitationIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
-import { CONTRACT_VALUES, NO_ABILITY } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES, NO_ABILITY } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import type {
@@ -28,38 +28,42 @@ import { OrganisationService, type OrganisationSession } from './organisation.se
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const initech: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'initech', name: 'Initech' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const bea: MemberView = {
   identity: { id: identityIdFactory.create(), email: 'bea@example.test' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 const toBea: InvitationView = {
   id: invitationIdFactory.create(),
   email: 'bea@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   link: 'https://perch.example.test/invitation?token=bea',
 }
 
 const toAcme: ReceivedInvitation = {
   id: invitationIdFactory.create(),
   organisation: { name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
-const onLink: InvitationOnLink = { organisation: { name: 'Acme' }, role: 'admin', forYou: true }
+const onLink: InvitationOnLink = {
+  organisation: { name: 'Acme' },
+  role: CONTRACT_ROLES.admin,
+  forYou: true,
+}
 
 /** The session's memberships in memory: a selected key of no membership changes nothing. */
 class FakeSession implements OrganisationSession {
@@ -113,7 +117,7 @@ class FakeOrganisations implements OrganisationsPort {
 
     const created: Membership = {
       tenant: { id: tenantIdFactory.create(), key: input.key, name: input.name },
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     }
 
     return this.#answer(created).map((membership) => {
@@ -306,7 +310,9 @@ describe('OrganisationService', () => {
     organisations.refusal = refused('no-such-tenant')
 
     expect(
-      (await service.invite('acme', 'nobody@example.test', 'member'))._unsafeUnwrapErr().code,
+      (
+        await service.invite('acme', 'nobody@example.test', CONTRACT_ROLES.member)
+      )._unsafeUnwrapErr().code,
     ).toBe('no-such-tenant')
   })
 
@@ -318,9 +324,9 @@ describe('OrganisationService', () => {
 
   it('lists the members, and invites and removes them with the role, the email trimmed', async () => {
     expect((await service.members('acme'))._unsafeUnwrap()).toEqual([bea])
-    expect((await service.invite('acme', ' bea@example.test ', 'admin'))._unsafeUnwrap()).toEqual(
-      toBea,
-    )
+    expect(
+      (await service.invite('acme', ' bea@example.test ', CONTRACT_ROLES.admin))._unsafeUnwrap(),
+    ).toEqual(toBea)
     expect((await service.remove('acme', bea.identity.id)).isOk()).toBe(true)
     expect(organisations.calls).toEqual([
       ['members', 'acme'],
@@ -332,7 +338,7 @@ describe('OrganisationService', () => {
   it('lists the pending invitations, revokes one by its id and changes a role', async () => {
     expect((await service.invitations('acme'))._unsafeUnwrap()).toEqual([toBea])
     expect((await service.revokeInvitation('acme', toBea.id)).isOk()).toBe(true)
-    expect((await service.setRole('acme', bea.identity.id, 'admin')).isOk()).toBe(true)
+    expect((await service.setRole('acme', bea.identity.id, CONTRACT_ROLES.admin)).isOk()).toBe(true)
     expect(organisations.calls).toEqual([
       ['invitations', 'acme'],
       ['revokeInvitation', 'acme', toBea.id],
@@ -351,8 +357,8 @@ describe('OrganisationService', () => {
 
     const outcome =
       call === 'setRole'
-        ? await service.setRole('acme', bea.identity.id, 'member')
-        : await service.invite('acme', 'bea@example.test', 'member')
+        ? await service.setRole('acme', bea.identity.id, CONTRACT_ROLES.member)
+        : await service.invite('acme', 'bea@example.test', CONTRACT_ROLES.member)
 
     expect(outcome._unsafeUnwrapErr().code).toBe(code)
   })

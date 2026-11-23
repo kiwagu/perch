@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container, token } from '@workspace/di'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { holding } from './__fixtures__/router'
@@ -48,9 +49,9 @@ const LazyModule = defineModule({
   providers: [{ provide: WORDS, useFactory: () => "the operator's page" }],
   declarations: { Operator: { load: () => load() }, Home, Lost },
   routes: [
-    { path: '/console', page: 'Operator', roles: ['operator'] },
+    { path: '/console', page: 'Operator', roles: [CONTRACT_ROLES.operator] },
     { path: '/home', page: 'Home', roles: [GUEST, IDENTITY] },
-    { path: '/$', page: 'Lost', roles: [GUEST, IDENTITY] },
+    { path: CONTRACT_ROUTES['not-found'], page: 'Lost', roles: [GUEST, IDENTITY] },
   ],
 })
 
@@ -155,7 +156,7 @@ describe('a page whose code loads on demand', () => {
     expect(await screen.findByText('no page here')).toBeTruthy()
     expect(load).not.toHaveBeenCalled()
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
     expect(load).toHaveBeenCalledTimes(1)

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import {
   CLOSE,
   type ClientMessage,
@@ -51,7 +52,7 @@ const ann = identityIdFactory.create()
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** The gateway's welcome of Ann's device, with `roles`. */
@@ -153,7 +154,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
   it("keeps a welcome's roles in the identity's record and tells the subscribers", () => {
     const { storage, session, roles, told, opened } = annChannel()
 
-    opened().receive(welcomeWith(['operator']))
+    opened().receive(welcomeWith([CONTRACT_ROLES.operator]))
 
     expect(savedRoles(storage, session)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
@@ -163,7 +164,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
   it('takes the role away when a later welcome does not carry it', async () => {
     const { storage, session, roles, told, clock, opened } = annChannel()
 
-    opened().receive(welcomeWith(['operator']))
+    opened().receive(welcomeWith([CONTRACT_ROLES.operator]))
     // The connection is lost; the device connects again and is welcomed anew, without the role.
     opened().drop(1006)
     await clock.advance(1_000)
@@ -186,7 +187,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
     const { heard, opened } = annChannel()
     const socket = opened()
 
-    socket.receive(welcomeWith(['operator']))
+    socket.receive(welcomeWith([CONTRACT_ROLES.operator]))
     socket.drop(CLOSE.banned)
 
     expect(heard).toEqual(['banned'])

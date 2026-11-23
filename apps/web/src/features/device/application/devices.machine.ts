@@ -3,6 +3,7 @@ import { assertEvent, emit, fromPromise, setup } from 'xstate'
 
 import type { DataError } from '@workspace/data'
 import type { DeviceSessionId } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import { failureOf, settled } from '../../../platform/actor-outcome'
 
@@ -63,7 +64,7 @@ const SIGNED_OUT = {
   type: 'show',
   params: { anchor: 'user.sign-in.notice-message', codes: ['signed-out-elsewhere'] },
 } as const
-const TO_SIGN_IN = { type: 'navigate', params: { to: '/sign-in' } } as const
+const TO_SIGN_IN = { type: 'navigate', params: { to: CONTRACT_ROUTES['user.sign-in'] } } as const
 
 /**
  * The devices page as the screen's flow says (`contract/domain/screens/devices.yaml`): another

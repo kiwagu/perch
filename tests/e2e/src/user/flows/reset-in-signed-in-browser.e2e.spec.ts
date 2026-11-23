@@ -1,4 +1,7 @@
 // scenario: user/flows/reset-in-signed-in-browser
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, notice, signUp, test } from '../../support/fixtures'
 import { askForReset, enterNewPassword, openResetMail } from '../../support/password-reset'
@@ -36,19 +39,19 @@ test.describe('Set a new password from a browser that is still signed in', { tag
         'password-reset',
       )
       await expect(page.getByTestId('app-shell.nav')).toHaveCount(0, { timeout: 10_000 })
-      await expectPathname(page, '/reset-password')
+      await expectPathname(page, CONTRACT_ROUTES['user.reset-password'])
     })
 
     await test.step('4. On device A, click [user.reset-password.sign-in-link], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input], and click [user.sign-in.submit-button]', async () => {
       await page.getByTestId('user.reset-password.sign-in-link').click()
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
       await page.getByTestId('user.sign-in.email-input').fill(data.email)
       await page.getByTestId('user.sign-in.password-input').fill(data.newPassword)
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome] and the URL is
       //   [/me]
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, invitationIdFactory, noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
 import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
@@ -24,9 +25,9 @@ import {
 } from './organisation.view'
 import { useOrganisationDraft } from './use-organisation-draft'
 
-const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: 'member' }
-const acmeAdmin: OrganisationChoice = { ...acme, role: 'admin' }
-const globex: OrganisationChoice = { key: 'globex', name: 'Globex', role: 'member' }
+const acme: OrganisationChoice = { key: 'acme', name: 'Acme', role: CONTRACT_ROLES.member }
+const acmeAdmin: OrganisationChoice = { ...acme, role: CONTRACT_ROLES.admin }
+const globex: OrganisationChoice = { key: 'globex', name: 'Globex', role: CONTRACT_ROLES.member }
 
 const hello: NoteItem = {
   id: noteIdFactory.create(),
@@ -47,36 +48,36 @@ const agenda: NoteItem = { ...hello, id: noteIdFactory.create(), text: 'Agenda' 
 const ann: MemberItem = {
   id: identityIdFactory.create(),
   email: 'ann@example.test',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
   removable: false,
 }
 const bea: MemberItem = {
   id: identityIdFactory.create(),
   email: 'bea@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
   removable: true,
 }
 
 const toBea: SentItem = {
   id: invitationIdFactory.create(),
   email: 'bea@example.test',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 const toCy: SentItem = {
   id: invitationIdFactory.create(),
   email: 'cy@example.test',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const fromGlobex: ReceivedItem = {
   id: invitationIdFactory.create(),
   name: 'Globex',
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 const fromInitech: ReceivedItem = {
   id: invitationIdFactory.create(),
   name: 'Initech',
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 /** The props the page's container gives, which the page here holds as the container holds them. */
@@ -92,7 +93,7 @@ const NO_CREATE: CreateDraft = { key: '', name: '' }
 
 /** The page with the fields of its forms held as its container holds them. */
 function Page(props: Omit<OrganisationViewProps, Held>) {
-  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: 'member' })
+  const [invite, setInvite] = useState<InviteDraft>({ email: '', role: CONTRACT_ROLES.member })
   const create = useOrganisationDraft(props.current?.key, NO_CREATE)
   const note = useOrganisationDraft(props.current?.key, '')
 
@@ -772,7 +773,7 @@ describe('OrganisationView of an administrator', () => {
     const { rerender } = renderView({
       current: acmeAdmin,
       organisations: [acmeAdmin],
-      members: [ann, { ...bea, role: 'admin' }],
+      members: [ann, { ...bea, role: CONTRACT_ROLES.admin }],
     })
     const roles = () =>
       screen

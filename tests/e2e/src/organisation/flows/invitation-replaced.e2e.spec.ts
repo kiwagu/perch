@@ -1,4 +1,7 @@
 // scenario: organisation/flows/invitation-replaced
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, signUp, test, toast } from '../../support/fixtures'
 import { openMailLink } from '../../support/mail-contract'
@@ -12,7 +15,7 @@ import {
 } from '../../support/organisation'
 
 test.describe('Invite the same email again', { tag: '@full' }, () => {
-  test('A second invitation of an email replaces the first: the first link no longer works, and the second makes the account an administrator', async ({
+  test('A second invitation of an email replaces the first: the first link no longer works, and the second makes the account an admin', async ({
     page,
     anotherAccount,
   }) => {
@@ -88,7 +91,7 @@ test.describe('Invite the same email again', { tag: '@full' }, () => {
     await test.step('6. On device B, open the link of the second [mail:organisations.invite] and click [organisation.invitation.accept-button]', async () => {
       await openMailLink(deviceB, second, 'organisations.invite')
       await deviceB.getByTestId('organisation.invitation.accept-button').click()
-      await expectPathname(deviceB, '/org', 10_000)
+      await expectPathname(deviceB, CONTRACT_ROUTES.organisation, 10_000)
       // Expected: After step 6 [organisation.page.role-badge] carries [value:admin] on device B,
       //   and [organisation.members.list] shows
       await expect(deviceB.getByTestId('organisation.page.role-badge')).toHaveAttribute(

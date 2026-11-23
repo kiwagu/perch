@@ -1,5 +1,6 @@
 import { test as base, expect, type Page, type TestStepInfo } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import type { SeedAccount } from '@workspace/seed/catalog'
 
 import { browsers, expectWatched, frontOf, ownBrowser, watchBrowser } from './browsers'
@@ -120,7 +121,7 @@ export const checkYourMail = (page: Page) =>
  * when the page shows its error instead.
  */
 export async function signIn(page: Page, account: SeedAccount): Promise<void> {
-  await page.goto('/sign-in')
+  await page.goto(CONTRACT_ROUTES['user.sign-in'])
   await appReady(page)
   await page.getByTestId('user.sign-in.email-input').fill(account.email)
   await page.getByTestId('user.sign-in.password-input').fill(account.password)
@@ -128,7 +129,7 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
 
   const outcome = await page.waitForFunction(
     () =>
-      window.location.pathname === '/me' ||
+      window.location.pathname === CONTRACT_ROUTES['user.profile'] ||
       document.querySelector('[data-testid="user.sign-in.error"]')?.getAttribute('data-code'),
   )
 
@@ -142,7 +143,7 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
  */
 export async function signOut(page: Page): Promise<void> {
   await page.getByTestId('user.profile.sign-out-button').click()
-  await expectPathname(page, '/sign-in', 15_000)
+  await expectPathname(page, CONTRACT_ROUTES['user.sign-in'], 15_000)
 }
 
 /** A fresh account to sign up with, under a name of its own. */
@@ -157,7 +158,7 @@ const freshAccount = (): SeedAccount => ({ ...generate.account(), name: generate
  * every 500 ms, so the page is read every 50 ms instead: the message is seen as it shows.
  */
 export async function startSignUp(page: Page, account: SeedAccount, locale = 'en'): Promise<void> {
-  await page.goto('/sign-in')
+  await page.goto(CONTRACT_ROUTES['user.sign-in'])
   await appReady(page)
 
   if (locale !== 'en') {
@@ -200,7 +201,7 @@ export async function signUp(
 
   await startSignUp(page, account, locale)
   await openDeclaredMail(page, 'sign-up', { params: { email: account.email, locale } }, seen)
-  await expectPathname(page, '/me')
+  await expectPathname(page, CONTRACT_ROUTES['user.profile'])
 
   return account
 }

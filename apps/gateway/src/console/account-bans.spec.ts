@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DataError, LocalDb } from '@workspace/data'
 import { openTestDb } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { CLOSE } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
@@ -262,7 +263,7 @@ async function consoleOver(mounted: Mounted) {
 
   await mounted.local.db.query(identityRoleSetStatement, {
     identity: operator.identity,
-    role: 'operator',
+    role: CONTRACT_ROLES.operator,
   })
 
   const routes = consoleRoutes({

@@ -11,6 +11,7 @@ import { join } from 'node:path'
 
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { type AnchorDef, formatProblem, loadScreens } from '@workspace/ui-contract'
 import { GUEST, IDENTITY, sameAdmission } from '@workspace/ui-contract/anchors'
 
@@ -81,10 +82,23 @@ describe('the links of the navigation', () => {
 
   it('tells a link of other roles apart by admission', () => {
     const roles = [GUEST, IDENTITY, 'member', 'admin']
-    const profile: Link = { to: '/me', roles: [IDENTITY, 'member', 'admin'] }
+    const profile: Link = {
+      to: CONTRACT_ROUTES['user.profile'],
+      roles: [IDENTITY, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
+    }
 
-    expect(sameLink({ to: '/me', roles: [IDENTITY] }, profile, roles)).toBe(true)
-    expect(sameLink({ to: '/me', roles: [GUEST] }, profile, roles)).toBe(false)
-    expect(sameLink({ to: '/me', roles: ['member'] }, profile, roles)).toBe(false)
+    expect(
+      sameLink({ to: CONTRACT_ROUTES['user.profile'], roles: [IDENTITY] }, profile, roles),
+    ).toBe(true)
+    expect(sameLink({ to: CONTRACT_ROUTES['user.profile'], roles: [GUEST] }, profile, roles)).toBe(
+      false,
+    )
+    expect(
+      sameLink(
+        { to: CONTRACT_ROUTES['user.profile'], roles: [CONTRACT_ROLES.member] },
+        profile,
+        roles,
+      ),
+    ).toBe(false)
   })
 })

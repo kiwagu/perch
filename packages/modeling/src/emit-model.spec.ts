@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { CommandFile, ShapeFile } from './collect'
 import { emitModel, emitReplicaSchema } from './emit-model'
 import type { SchemaModel } from './schema-structure'
@@ -43,8 +45,8 @@ const schema: SchemaModel = {
       abilities: {
         owner: 'author',
         can: {
-          member: { create: 'any', update: 'own', delete: 'own' },
-          admin: { create: 'any', update: 'any', delete: 'any' },
+          [CONTRACT_ROLES.member]: { create: 'any', update: 'own', delete: 'own' },
+          [CONTRACT_ROLES.admin]: { create: 'any', update: 'any', delete: 'any' },
         },
       },
     },

@@ -12,6 +12,7 @@ import type { AuthUser } from '@workspace/data'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container, token } from '@workspace/di'
 import type { PlatformRole, TenantRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { z } from '@workspace/zod'
 
@@ -33,10 +34,30 @@ const TestModule = defineModule({
   id: 'test',
   declarations: { Page },
   routes: [
-    { path: '/sign-in', page: 'Page', guard: 'guest', roles: ['guest'] },
-    { path: '/verify-email', page: 'Page', guard: 'guest', roles: ['guest'] },
-    { path: '/forgot-password', page: 'Page', guard: 'guest', roles: ['guest'] },
-    { path: '/me', page: 'Page', guard: 'authenticated', roles: ['identity'] },
+    {
+      path: CONTRACT_ROUTES['user.sign-in'],
+      page: 'Page',
+      guard: 'guest',
+      roles: [CONTRACT_ROLES.guest],
+    },
+    {
+      path: CONTRACT_ROUTES['user.verify-email'],
+      page: 'Page',
+      guard: 'guest',
+      roles: [CONTRACT_ROLES.guest],
+    },
+    {
+      path: CONTRACT_ROUTES['user.forgot-password'],
+      page: 'Page',
+      guard: 'guest',
+      roles: [CONTRACT_ROLES.guest],
+    },
+    {
+      path: CONTRACT_ROUTES['user.profile'],
+      page: 'Page',
+      guard: 'authenticated',
+      roles: [CONTRACT_ROLES.identity],
+    },
   ],
 })
 
@@ -229,76 +250,84 @@ describe('createAppRouter', () => {
   })
 
   it('sends a visitor of a protected page to sign-in', async () => {
-    expect(await landing('/me', undefined)).toBe('/sign-in')
+    expect(await landing(CONTRACT_ROUTES['user.profile'], undefined)).toBe(
+      CONTRACT_ROUTES['user.sign-in'],
+    )
   })
 
   it('lets a signed-in user reach a protected page and keeps them away from sign-in', async () => {
-    expect(await landing('/me', me)).toBe('/me')
-    expect(await landing('/sign-in', me)).toBe('/me')
+    expect(await landing(CONTRACT_ROUTES['user.profile'], me)).toBe(CONTRACT_ROUTES['user.profile'])
+    expect(await landing(CONTRACT_ROUTES['user.sign-in'], me)).toBe(CONTRACT_ROUTES['user.profile'])
   })
 
   it('sends an open protected page to sign-in once the user signs out', async () => {
     const { session, signOut } = switching(me)
-    const router = await loaded('/me', session)
+    const router = await loaded(CONTRACT_ROUTES['user.profile'], session)
 
-    expect(router.state.location.pathname).toBe('/me')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile'])
 
     signOut()
 
-    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/sign-in'))
+    await vi.waitFor(() =>
+      expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in']),
+    )
   })
 
   it('sends an open guest page to the profile once another tab signs the browser in', async () => {
     const { session, signIn } = switching(undefined)
-    const router = await loaded('/sign-in', session)
+    const router = await loaded(CONTRACT_ROUTES['user.sign-in'], session)
 
     signIn(me)
 
-    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/me'))
+    await vi.waitFor(() =>
+      expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile']),
+    )
   })
 
   it('leaves a guest page where it is while this tab signs in itself: its flow moves on', async () => {
     const { session, signIn } = switching(undefined)
-    const router = await loaded('/sign-in', session)
+    const router = await loaded(CONTRACT_ROUTES['user.sign-in'], session)
 
     signIn(me, true)
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
   })
 
   it('leaves it there too when the sign-in of its own reads roles and an organisation', async () => {
     const { session, signIn } = switching(undefined)
-    const router = await loaded('/sign-in', session)
+    const router = await loaded(CONTRACT_ROUTES['user.sign-in'], session)
 
-    signIn(me, true, { roles: ['operator'], tenant: 'admin' })
+    signIn(me, true, { roles: [CONTRACT_ROLES.operator], tenant: CONTRACT_ROLES.admin })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(router.state.location.pathname).toBe('/sign-in')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
   })
 
   it("leaves a verification link's page where it is too while its exchange signs this tab in", async () => {
     const { session, signIn } = switching(undefined)
-    const router = await loaded('/verify-email', session)
+    const router = await loaded(CONTRACT_ROUTES['user.verify-email'], session)
 
-    signIn(me, true, { roles: ['operator'], tenant: 'admin' })
+    signIn(me, true, { roles: [CONTRACT_ROLES.operator], tenant: CONTRACT_ROLES.admin })
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(router.state.location.pathname).toBe('/verify-email')
+    expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.verify-email'])
   })
 
   it('sends any other guest page open meanwhile to the profile: only the page that signs in has a flow to follow', async () => {
     const { session, signIn } = switching(undefined)
-    const router = await loaded('/forgot-password', session)
+    const router = await loaded(CONTRACT_ROUTES['user.forgot-password'], session)
 
     signIn(me, true)
 
-    await vi.waitFor(() => expect(router.state.location.pathname).toBe('/me'))
+    await vi.waitFor(() =>
+      expect(router.state.location.pathname).toBe(CONTRACT_ROUTES['user.profile']),
+    )
   })
 
   it('opens the right start page', async () => {
-    expect(await landing('/', undefined)).toBe('/sign-in')
-    expect(await landing('/', me)).toBe('/me')
+    expect(await landing('/', undefined)).toBe(CONTRACT_ROUTES['user.sign-in'])
+    expect(await landing('/', me)).toBe(CONTRACT_ROUTES['user.profile'])
   })
 
   describe('with the search schema of a route', () => {
@@ -417,11 +446,20 @@ const LimitedModule = defineModule({
     {
       path: '/limited',
       page: 'Limited',
-      roles: ['operator'],
+      roles: [CONTRACT_ROLES.operator],
       search: z.object({ page: z.int().min(1).default(1) }),
     },
-    { path: '/members', page: 'Members', roles: ['member', 'admin'] },
-    { path: '/$', page: 'Lost', roles: ['guest', 'identity', 'member', 'admin'] },
+    { path: '/members', page: 'Members', roles: [CONTRACT_ROLES.member, CONTRACT_ROLES.admin] },
+    {
+      path: CONTRACT_ROUTES['not-found'],
+      page: 'Lost',
+      roles: [
+        CONTRACT_ROLES.guest,
+        CONTRACT_ROLES.identity,
+        CONTRACT_ROLES.member,
+        CONTRACT_ROLES.admin,
+      ],
+    },
   ],
 })
 
@@ -493,7 +531,7 @@ describe('a page for some roles alone', () => {
     expect(renders.limited).toBe(0)
     cleanup()
 
-    const { session } = switching(me, ['operator'])
+    const { session } = switching(me, [CONTRACT_ROLES.operator])
 
     await showing(limitedAt('/limited?page=2', session), '/limited?page=2', "the operator's page")
   })
@@ -514,7 +552,7 @@ describe('a page for some roles alone', () => {
 
     await showing(router, '/limited?page=2', 'no page here')
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
     await showing(router, '/limited?page=2', "the operator's page")
 
     renders.limited = 0
@@ -523,7 +561,7 @@ describe('a page for some roles alone', () => {
     expect(router.state.matches.at(-1)?.status).toBe('notFound')
     expect(renders.limited).toBe(0)
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
     await showing(router, '/limited?page=2', "the operator's page")
   })
 
@@ -533,14 +571,14 @@ describe('a page for some roles alone', () => {
 
     await showing(router, '/limited?page=0', 'no page here')
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
     await showing(router, '/limited?page=0', 'the page failed')
 
     act(() => grant([]))
     await showing(router, '/limited?page=0', 'no page here')
     expect(router.state.matches.at(-1)?.searchError).toBeUndefined()
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
     await showing(router, '/limited?page=0', 'the page failed')
   })
 
@@ -550,7 +588,7 @@ describe('a page for some roles alone', () => {
 
     await showing(router, '/members', 'no page here')
 
-    act(() => join('member'))
+    act(() => join(CONTRACT_ROLES.member))
     await showing(router, '/members', "the members' page")
 
     act(() => join(undefined))
@@ -563,7 +601,7 @@ describe('a page for some roles alone', () => {
 
     await showing(router, '/limited?page=2', 'no page here')
 
-    act(() => signIn(me, true, { roles: ['operator'] }))
+    act(() => signIn(me, true, { roles: [CONTRACT_ROLES.operator] }))
     await showing(router, '/limited?page=2', "the operator's page")
   })
 
@@ -573,12 +611,12 @@ describe('a page for some roles alone', () => {
 
     await showing(router, '/limited?page=0', 'no page here')
 
-    act(() => signIn(me, true, { roles: ['operator'] }))
+    act(() => signIn(me, true, { roles: [CONTRACT_ROLES.operator] }))
     await showing(router, '/limited?page=0', 'the page failed')
   })
 
   it('shows the not-found page at the address once the account signs out', async () => {
-    const { session, signOut } = switching(me, ['operator'])
+    const { session, signOut } = switching(me, [CONTRACT_ROLES.operator])
     const router = limitedAt('/limited?page=2', session)
 
     await showing(router, '/limited?page=2', "the operator's page")

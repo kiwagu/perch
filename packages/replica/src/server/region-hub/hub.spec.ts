@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import type { LocalDb } from '@workspace/data'
 import { noteIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import bumpHeadStatement from '../../__fixtures__/bump-head.surql'
 import { noteCreate, noteUpdate } from '../../__fixtures__/note'
@@ -527,7 +528,9 @@ describe('region hub', () => {
 
     expect((await hub.subscribe(acme, memberOf('idn_ann'), ann, null)).isOk()).toBe(true)
     expect((await hub.subscribe(acme, memberOf('idn_bob'), bob, null)).isOk()).toBe(true)
-    expect((await hub.subscribe(acme, memberOf('idn_boss', 'admin'), boss, null)).isOk()).toBe(true)
+    expect(
+      (await hub.subscribe(acme, memberOf('idn_boss', CONTRACT_ROLES.admin), boss, null)).isOk(),
+    ).toBe(true)
 
     expect(
       (
@@ -1189,7 +1192,9 @@ describe('retiring a region', () => {
 
     const bob = subscriber('bob')
 
-    ;(await hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null))._unsafeUnwrap()
+    ;(
+      await hub.subscribe(acme, memberOf('idn_bob', CONTRACT_ROLES.admin), bob, null)
+    )._unsafeUnwrap()
 
     expect(snapshotIn(bob).getMap('records').toJSON()).toEqual({})
     expect((await hub.heads([acme.id]))._unsafeUnwrap()).toEqual([{ region: acme.id, head: 0 }])
@@ -1527,7 +1532,7 @@ describe('changing the actor of a subscriber', () => {
     ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
     ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as a member')]))._unsafeUnwrap()
 
-    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', CONTRACT_ROLES.admin))
     ;(await hub.push(acme.id, bob, 2, [editOf(bob, id, 'as an admin')]))._unsafeUnwrap()
 
     hub.changeActor(acme.id, bob.id, memberOf('idn_bob'))
@@ -1548,7 +1553,7 @@ describe('changing the actor of a subscriber', () => {
     ;(await hub.subscribe(acme, memberOf('idn_bob'), bob, null))._unsafeUnwrap()
     ;(await hub.subscribe(acme, memberOf('idn_cat'), cat, null))._unsafeUnwrap()
 
-    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', CONTRACT_ROLES.admin))
     ;(await hub.push(acme.id, bob, 1, [editOf(bob, id, 'as an admin')]))._unsafeUnwrap()
     ;(await hub.push(acme.id, cat, 1, [editOf(cat, id, 'as a member')]))._unsafeUnwrap()
 
@@ -1566,7 +1571,7 @@ describe('changing the actor of a subscriber', () => {
     const joining = hub.subscribe(acme, memberOf('idn_bob'), bob, null)
 
     await drain()
-    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', CONTRACT_ROLES.admin))
     queue.open()
     ;(await annsBatch)._unsafeUnwrap()
     ;(await joining)._unsafeUnwrap()
@@ -1580,7 +1585,7 @@ describe('changing the actor of a subscriber', () => {
     const { hub, ann, id } = await acmeWithNote(queue.options)
     const bob = subscriber('bob')
     const { pushed: annsBatch } = await queue.ahead(hub, ann)
-    const joining = hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null)
+    const joining = hub.subscribe(acme, memberOf('idn_bob', CONTRACT_ROLES.admin), bob, null)
 
     await drain()
     hub.changeActor(acme.id, bob.id, memberOf('idn_bob'))
@@ -1599,7 +1604,9 @@ describe('changing the actor of a subscriber', () => {
     const { hub, ann, id } = await acmeWithNote(queue.options)
     const bob = subscriber('bob')
 
-    ;(await hub.subscribe(acme, memberOf('idn_bob', 'admin'), bob, null))._unsafeUnwrap()
+    ;(
+      await hub.subscribe(acme, memberOf('idn_bob', CONTRACT_ROLES.admin), bob, null)
+    )._unsafeUnwrap()
 
     const { pushed: annsBatch } = await queue.ahead(hub, ann)
     const bobsBatch = hub.push(acme.id, bob, 1, [editOf(bob, id, 'queued as an admin')])
@@ -1624,7 +1631,7 @@ describe('changing the actor of a subscriber', () => {
 
     await drain()
     hub.unsubscribe(acme.id, bob.id)
-    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', 'admin'))
+    hub.changeActor(acme.id, bob.id, memberOf('idn_bob', CONTRACT_ROLES.admin))
     queue.open()
     ;(await annsBatch)._unsafeUnwrap()
     ;(await joining)._unsafeUnwrap()
@@ -1637,8 +1644,8 @@ describe('changing the actor of a subscriber', () => {
     const { hub, id } = await acmeWithNote()
     const ghost = subscriber('ghost')
 
-    hub.changeActor('tenant:elsewhere', ghost.id, memberOf('idn_ghost', 'admin'))
-    hub.changeActor(acme.id, ghost.id, memberOf('idn_ghost', 'admin'))
+    hub.changeActor('tenant:elsewhere', ghost.id, memberOf('idn_ghost', CONTRACT_ROLES.admin))
+    hub.changeActor(acme.id, ghost.id, memberOf('idn_ghost', CONTRACT_ROLES.admin))
 
     expect(hub.loadedRegions()).toBe(1)
     ;(await hub.push(acme.id, ghost, 1, []))._unsafeUnwrap()

@@ -1,4 +1,7 @@
 // scenario: user/flows/field-save-state
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
 
@@ -15,7 +18,7 @@ test.describe("See a field's unsaved and saved states", { tag: '@full' }, () => 
     const email = page.getByTestId('user.settings.email.email-input')
 
     await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(name).toHaveValue(signedIn.name)
     })
@@ -44,7 +47,7 @@ test.describe("See a field's unsaved and saved states", { tag: '@full' }, () => 
     await expect(name).not.toHaveAttribute('data-state')
 
     await test.step('5. Open [/settings] and enter the email into [user.settings.email.email-input]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       await email.fill(data.email)
     })

@@ -12,6 +12,7 @@ import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, readSchema } from '@workspace/data/testing'
 import { replicaSchema } from '@workspace/database/replica-schema'
 import { type IdentityId, idSchemas, noteIdFactory, profileIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 import { RegionDoc } from '@workspace/replica'
 import {
@@ -1536,7 +1537,7 @@ describe('SyncConnection', () => {
     expect(types(socket.sent)).toEqual(['welcome', 'memberships', 'updates'])
     expect(socket.sent[1]).toEqual({
       type: 'memberships',
-      memberships: [{ tenant: acme.tenant, role: 'member' }],
+      memberships: [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }],
     })
     expect(socket.closedWith).toBeUndefined()
   })
@@ -1839,8 +1840,8 @@ function heldQuery() {
 }
 
 describe('SyncConnection, a role change', () => {
-  const member: TenantRole = 'member'
-  const admin: TenantRole = 'admin'
+  const member: TenantRole = CONTRACT_ROLES.member
+  const admin: TenantRole = CONTRACT_ROLES.admin
 
   it("judges a device's next push by its new role: an admin's edit of another's note is acknowledged, a member's again refused", async () => {
     const { gateway, anns, bobs } = await withAcme(true)

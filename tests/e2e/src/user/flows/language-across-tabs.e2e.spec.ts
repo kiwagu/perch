@@ -1,4 +1,7 @@
 // scenario: user/flows/language-across-tabs
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, pageLoads, test } from '../../support/fixtures'
 
 test.describe('Keep the language of an account in every tab', { tag: '@full' }, () => {
@@ -9,7 +12,7 @@ test.describe('Keep the language of an account in every tab', { tag: '@full' }, 
     const select = page.getByTestId('user.settings.locale-select')
 
     await test.step('1. In a first tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/settings')
+      await page.goto(CONTRACT_ROUTES['user.settings'])
       await appReady(page)
       // The select takes a choice once the account's settings are on the device.
       await expect(select).toBeEnabled()
@@ -19,7 +22,7 @@ test.describe('Keep the language of an account in every tab', { tag: '@full' }, 
       await test.step('2. In a second tab, open [/settings] and wait for [app-shell.status] to reach [state:ready]', async () => {
         const tab = await page.context().newPage()
 
-        await tab.goto('/settings')
+        await tab.goto(CONTRACT_ROUTES['user.settings'])
         await appReady(tab)
         await expect(tab.getByTestId('user.settings.locale-select')).toHaveAttribute(
           'data-value',

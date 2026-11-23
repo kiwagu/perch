@@ -1,4 +1,7 @@
 // scenario: user/flows/sign-in-with-passkey
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { expect, expectPathname, notice, signOut, signUp, test } from '../../support/fixtures'
 import { codeDialog, turnSecondFactorOn } from '../../support/second-factor'
@@ -37,7 +40,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
 
     await test.step('3. Click [app-shell.nav.profile-link] and click [user.profile.sign-out-button]', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await signOut(page)
     })
 
@@ -48,7 +51,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
       // Expected: After step 4 [app-shell.notice-message] carries [code:welcome], the URL is
       //   [/me], and [user.sign-in.code.dialog] never showed
       await expect(notice(page, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       expect(await codeDialogShown(), 'the code dialog never showed').toBe(false)
       await expect(codeDialog(page)).toHaveCount(0)
     })
@@ -66,7 +69,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
 
     await test.step('6. Click [app-shell.nav.profile-link], click [user.profile.sign-out-button] and click [user.sign-in.passkey-button]', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
-      await expectPathname(page, '/me')
+      await expectPathname(page, CONTRACT_ROUTES['user.profile'])
       await signOut(page)
       await passkeyButton.click()
       // Expected: After step 6 the authenticator offers the passkey it still keeps,
@@ -76,7 +79,7 @@ test.describe('Sign in with a passkey', { tag: '@full' }, () => {
         'data-code',
         'passkey-unknown',
       )
-      await expectPathname(page, '/sign-in')
+      await expectPathname(page, CONTRACT_ROUTES['user.sign-in'])
     })
   })
 })

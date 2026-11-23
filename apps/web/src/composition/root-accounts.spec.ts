@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import { ACCOUNTS } from '../platform/accounts.port'
 
@@ -59,7 +60,7 @@ describe('createAppRoot binds ACCOUNTS', () => {
 
     const session = signedIn(storage, ann)
 
-    saveRoles(storage, session, ['operator'])
+    saveRoles(storage, session, [CONTRACT_ROLES.operator])
 
     const { result } = await bootRoot(cleanups, storage, [], [], {
       accountsApi: (deps) => accountsApi('/backend', { ...deps, fetcher: gateway.fetcher }),

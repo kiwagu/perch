@@ -5,6 +5,7 @@ import type { LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import type { Locale } from '@workspace/i18n/translator'
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { createLogger } from '@workspace/logger'
 
 import { deviceHeaders, openAuth, signUpOn } from '../../auth/__fixtures__/auth-instance'
@@ -160,7 +161,7 @@ const invite = (
   mails: InvitationMails,
   inviter: IdentityId,
   email: string,
-  role: 'member' | 'admin' = 'member',
+  role: 'member' | 'admin' = CONTRACT_ROLES.member,
 ) => mails.invite({ email, organisation: 'Acme Robotics', role, token: TOKEN, inviter })
 
 /** Waits until the log holds a line, the mail having gone nowhere. */
@@ -175,7 +176,7 @@ describe('InvitationMails', () => {
     const { mails, outbox, identities, local } = await harness('en', 'en')
 
     await local.db.query(settingsLocaleStatement, { identity: identities.bob, locale: 'es' })
-    invite(mails, identities.ann, BOB, 'admin')
+    invite(mails, identities.ann, BOB, CONTRACT_ROLES.admin)
 
     const mail = await outbox.next(BOB, 1)
 

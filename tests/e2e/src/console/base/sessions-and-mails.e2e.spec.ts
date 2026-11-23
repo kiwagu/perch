@@ -1,4 +1,7 @@
 // scenario: console/base/sessions-and-mails
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { expectAddress, openAccount, openUsers, signUpOperator } from '../../support/console'
 import { generate } from '../../support/data'
 import {
@@ -98,14 +101,14 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       await Promise.all([
         (async () => {
           await expect(toast(page, 'sessions-revoked')).toBeVisible()
-          await expectAddress(page, '/console/account', { id })
+          await expectAddress(page, CONTRACT_ROUTES['console.account'], { id })
           await expect(page.getByTestId('console.account.section')).toHaveAttribute(
             'data-state',
             'ready',
           )
           await expect(page.getByTestId('console.account.email-cell')).toHaveText(data.email)
         })(),
-        expectPathname(deviceB, '/sign-in', 5_000),
+        expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 5_000),
         expect(signInNotice(deviceB, 'signed-out-elsewhere')).toBeVisible({ timeout: 5_000 }),
       ])
     })
@@ -133,7 +136,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
 
     await test.step('7. On device B, open the link of [mail:accounts.send-reset], enter the new password into [user.reset-password.password-input] and [user.reset-password.password-confirmation-input] and click [user.reset-password.submit-button]', async () => {
       await openMailLink(deviceB, resetMail, 'accounts.send-reset')
-      await expectPathname(deviceB, '/reset-password')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.reset-password'])
       await enterNewPassword(deviceB, data.newPassword)
       // Expected: After step 7 [user.reset-password.message] carries [code:password-reset] on
       //   device B
@@ -144,7 +147,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
     })
 
     await test.step('8. On device B, open [/sign-in], enter the email and the new password into [user.sign-in.email-input] and [user.sign-in.password-input] and click [user.sign-in.submit-button]', async () => {
-      await deviceB.goto('/sign-in')
+      await deviceB.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(deviceB)
       await deviceB.getByTestId('user.sign-in.email-input').fill(data.email)
       await deviceB.getByTestId('user.sign-in.password-input').fill(data.newPassword)
@@ -152,7 +155,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       // Expected: After step 8 device B is on [/me] and [app-shell.notice-message] carries
       //   [code:welcome]: the account signs in with the new password
       await expect(notice(deviceB, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step("9. On device A, open [/console/users], enter the other email into [console.users.search-input], click [console.users.search-button] and click [console.users.list.open-link] on the other account's [console.users.list.account-item]", async () => {
@@ -200,7 +203,7 @@ test.describe('Sign an account out everywhere and send it its mails', { tag: '@f
       // Expected: After step 11 device C is on [/me] and [app-shell.notice-message] carries
       //   [code:welcome]: the link verified the email and signed the device in
       await expect(notice(deviceC, 'welcome')).toBeVisible({ timeout: 15_000 })
-      await expectPathname(deviceC, '/me')
+      await expectPathname(deviceC, CONTRACT_ROUTES['user.profile'])
     })
   })
 })

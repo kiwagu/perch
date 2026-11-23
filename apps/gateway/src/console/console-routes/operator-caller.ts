@@ -1,3 +1,5 @@
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import type { AuthSessions } from '../../auth/auth-sessions'
 import { type BearerCaller, bearerCaller } from '../../auth/bearer-caller'
 
@@ -26,7 +28,7 @@ export async function operatorCaller(
 ): Promise<OperatorCaller> {
   const caller = await bearerCaller(sessions, request)
 
-  return caller.kind === 'caller' && !caller.roles.includes('operator')
+  return caller.kind === 'caller' && !caller.roles.includes(CONTRACT_ROLES.operator)
     ? { kind: 'not-operator' }
     : caller
 }

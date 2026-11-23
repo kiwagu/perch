@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { Mailbox } from '@workspace/mailbox'
 import type { ClientOptions, Fetcher } from '@workspace/web/seeding'
 import { z } from '@workspace/zod'
@@ -204,7 +205,7 @@ describe('seeding through the gateway', () => {
 
     expect(seenByBeto.membership).toEqual({
       tenant: { id: acme.id, key: acme.key, name: 'Acme Corp' },
-      role: 'member',
+      role: CONTRACT_ROLES.member,
     })
     expect(seenByBeto.notes).toEqual([])
 

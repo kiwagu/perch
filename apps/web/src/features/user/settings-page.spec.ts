@@ -7,6 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { routerOf } from '../../platform/__fixtures__/router'
@@ -34,19 +35,19 @@ async function opened(roles: readonly string[], path: string) {
 
 describe('the settings page', () => {
   it('loads its code at the first opening by a signed-in device, never for a guest, and once', async () => {
-    const guest = await opened([GUEST], '/settings')
+    const guest = await opened([GUEST], CONTRACT_ROUTES['user.settings'])
 
-    expect(guest.state.location.pathname).toBe('/sign-in')
+    expect(guest.state.location.pathname).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(loaded.settings).toBe(0)
 
-    const signedIn = await opened([IDENTITY], '/settings')
+    const signedIn = await opened([IDENTITY], CONTRACT_ROUTES['user.settings'])
 
-    expect(signedIn.state.location.pathname).toBe('/settings')
+    expect(signedIn.state.location.pathname).toBe(CONTRACT_ROUTES['user.settings'])
     expect(signedIn.state.matches.at(-1)?.status).toBe('success')
     expect(loaded.settings).toBe(1)
 
     // The browser loads the module once, however many routers open the page.
-    await opened([IDENTITY, 'admin'], '/settings')
+    await opened([IDENTITY, 'admin'], CONTRACT_ROUTES['user.settings'])
 
     expect(loaded.settings).toBe(1)
   })

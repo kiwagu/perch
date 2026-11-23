@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { idSchemas, invitationIdFactory, profileIdFactory } from '@workspace/ids'
-import { CONTRACT_VALUES, isTenantKey } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES, isTenantKey } from '@workspace/kernel'
 import { membership, tenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
@@ -53,7 +53,7 @@ const invitationAnswer = z.object({
 const pending = z.object({ invitations: z.array(invitationAnswer.shape.invitation) })
 
 /** The body of an admin inviting `email` as a member. */
-const asMember = (email: string) => ({ email, role: 'member' })
+const asMember = (email: string) => ({ email, role: CONTRACT_ROLES.member })
 
 afterEach(closeHarness)
 
@@ -89,7 +89,7 @@ describe('organisationRoutes', () => {
     expect(answered.tenant.id).toMatch(/^tnt_/)
     expect(answered).toEqual({
       tenant: { id: answered.tenant.id, key: 'acme', name: 'Acme' },
-      role: 'admin',
+      role: CONTRACT_ROLES.admin,
     })
     expect(await ask('GET', '/organisations', { as: ann })).toEqual({
       status: 200,
@@ -196,7 +196,9 @@ describe('organisationRoutes', () => {
 
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+      body: {
+        members: [memberOf(ann, CONTRACT_ROLES.admin), memberOf(bob, CONTRACT_ROLES.member)],
+      },
     })
   })
 
@@ -260,7 +262,7 @@ describe('organisationRoutes', () => {
     })
     const unknown = await ask('POST', '/organisations/acme/invitations', {
       as: ann,
-      body: { email: 'dan@example.test', role: 'admin' },
+      body: { email: 'dan@example.test', role: CONTRACT_ROLES.admin },
     })
 
     expect([known.status, unknown.status]).toEqual([201, 201])
@@ -273,10 +275,10 @@ describe('organisationRoutes', () => {
     expect(withAccount).toEqual({
       id: withAccount.id,
       email: 'bob@example.test',
-      role: 'member',
+      role: CONTRACT_ROLES.member,
       link: withAccount.link,
     })
-    expect(withoutAccount).toMatchObject({ email: 'dan@example.test', role: 'admin' })
+    expect(withoutAccount).toMatchObject({ email: 'dan@example.test', role: CONTRACT_ROLES.admin })
 
     const url = new URL(withAccount.link)
 
@@ -358,8 +360,8 @@ describe('organisationRoutes', () => {
       { email: 'bob@example.test', role: 'owner' },
       { email: 'bob@example.test', role: 'ADMIN' },
       { email: 'bob@example.test' },
-      { role: 'member' },
-      { email: 5, role: 'member' },
+      { role: CONTRACT_ROLES.member },
+      { email: 5, role: CONTRACT_ROLES.member },
       {},
       '{"email":',
     ]) {
@@ -432,7 +434,7 @@ describe('organisationRoutes', () => {
       (
         await ask('POST', '/organisations/acme/invitations', {
           as: ann,
-          body: { email: 'eve@example.test', role: 'admin' },
+          body: { email: 'eve@example.test', role: CONTRACT_ROLES.admin },
         })
       ).body,
     ).invitation
@@ -464,7 +466,7 @@ describe('organisationRoutes', () => {
       (
         await ask('POST', '/organisations/acme/invitations', {
           as: ann,
-          body: { email: 'dan@example.test', role: 'admin' },
+          body: { email: 'dan@example.test', role: CONTRACT_ROLES.admin },
         })
       ).body,
     ).invitation
@@ -549,22 +551,24 @@ describe('organisationRoutes', () => {
     expect(
       await ask('PATCH', `/organisations/acme/members/${bob.identity.id}`, {
         as: ann,
-        body: { role: 'admin' },
+        body: { role: CONTRACT_ROLES.admin },
       }),
     ).toEqual({ status: 204, body: undefined })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'admin')] },
+      body: { members: [memberOf(ann, CONTRACT_ROLES.admin), memberOf(bob, CONTRACT_ROLES.admin)] },
     })
     expect(
       await ask('PATCH', `/organisations/acme/members/${bob.identity.id}`, {
         as: ann,
-        body: { role: 'member' },
+        body: { role: CONTRACT_ROLES.member },
       }),
     ).toEqual({ status: 204, body: undefined })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+      body: {
+        members: [memberOf(ann, CONTRACT_ROLES.admin), memberOf(bob, CONTRACT_ROLES.member)],
+      },
     })
   })
 
@@ -576,12 +580,12 @@ describe('organisationRoutes', () => {
     expect(
       await ask('PATCH', `/organisations/acme/members/${ann.identity.id}`, {
         as: ann,
-        body: { role: 'member' },
+        body: { role: CONTRACT_ROLES.member },
       }),
     ).toEqual({ status: 409, body: { code: 'last-admin' } })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin')] },
+      body: { members: [memberOf(ann, CONTRACT_ROLES.admin)] },
     })
   })
 
@@ -595,8 +599,8 @@ describe('organisationRoutes', () => {
       [bob.identity.id, { role: 'owner' }],
       [bob.identity.id, {}],
       [bob.identity.id, '{"role":'],
-      ['bob', { role: 'admin' }],
-      [profileIdFactory.create(), { role: 'admin' }],
+      ['bob', { role: CONTRACT_ROLES.admin }],
+      [profileIdFactory.create(), { role: CONTRACT_ROLES.admin }],
     ] as const) {
       expect(
         await ask('PATCH', `/organisations/acme/members/${identity}`, { as: ann, body }),
@@ -613,13 +617,13 @@ describe('organisationRoutes', () => {
     expect(
       await ask('PATCH', `/organisations/acme/members/${ann.identity.id}`, {
         as: bob,
-        body: { role: 'member' },
+        body: { role: CONTRACT_ROLES.member },
       }),
     ).toEqual({ status: 403, body: { code: 'not-admin' } })
     expect(
       await ask('PATCH', `/organisations/acme/members/${bob.identity.id}`, {
         as: cat,
-        body: { role: 'admin' },
+        body: { role: CONTRACT_ROLES.admin },
       }),
     ).toEqual({ status: 403, body: { code: 'not-a-member' } })
   })
@@ -630,7 +634,7 @@ describe('organisationRoutes', () => {
     expect(
       await ask('PATCH', `/organisations/acme/members/${cat.identity.id}`, {
         as: ann,
-        body: { role: 'admin' },
+        body: { role: CONTRACT_ROLES.admin },
       }),
     ).toEqual({ status: 404, body: { code: 'no-such-tenant' } })
 
@@ -639,7 +643,7 @@ describe('organisationRoutes', () => {
     expect(
       await ask('PATCH', `/organisations/acme/members/${cat.identity.id}`, {
         as: ann,
-        body: { role: 'admin' },
+        body: { role: CONTRACT_ROLES.admin },
       }),
     ).toEqual({ status: 404, body: { code: 'no-such-member' } })
   })
@@ -654,7 +658,7 @@ describe('organisationRoutes', () => {
       ['GET', '/organisations/acme/invitations', undefined],
       ['POST', '/organisations/acme/invitations', asMember('dan@example.test')],
       ['DELETE', `/organisations/acme/invitations/${invitationIdFactory.create()}`, undefined],
-      ['PATCH', `/organisations/acme/members/${bob.identity.id}`, { role: 'admin' }],
+      ['PATCH', `/organisations/acme/members/${bob.identity.id}`, { role: CONTRACT_ROLES.admin }],
     ] as const) {
       for (const authorization of [undefined, 'Bearer not-a-session-token']) {
         const sent = authorization === undefined ? { device } : { authorization, device }
@@ -678,7 +682,7 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 204, body: undefined })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin')] },
+      body: { members: [memberOf(ann, CONTRACT_ROLES.admin)] },
     })
     expect(await ask('GET', '/organisations', { as: bob })).toEqual({
       status: 200,
@@ -710,7 +714,9 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 403, body: { code: 'not-a-member' } })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin'), memberOf(bob, 'member')] },
+      body: {
+        members: [memberOf(ann, CONTRACT_ROLES.admin), memberOf(bob, CONTRACT_ROLES.member)],
+      },
     })
   })
 
@@ -724,7 +730,7 @@ describe('organisationRoutes', () => {
     ).toEqual({ status: 204, body: undefined })
     expect(await ask('GET', '/organisations/acme/members', { as: ann })).toEqual({
       status: 200,
-      body: { members: [memberOf(ann, 'admin')] },
+      body: { members: [memberOf(ann, CONTRACT_ROLES.admin)] },
     })
     expect(await ask('GET', '/organisations', { as: cat })).toEqual({
       status: 200,
@@ -997,7 +1003,10 @@ describe('organisationRoutes, a failed tell', () => {
     const answered = created.parse(body).membership
 
     expect(status).toBe(201)
-    expect(answered).toMatchObject({ tenant: { key: 'acme', name: 'Acme' }, role: 'admin' })
+    expect(answered).toMatchObject({
+      tenant: { key: 'acme', name: 'Acme' },
+      role: CONTRACT_ROLES.admin,
+    })
     expect(heard).toEqual([])
 
     await retold()
@@ -1018,7 +1027,7 @@ describe('organisationRoutes, a failed tell', () => {
         await routes(
           request('PATCH', `/organisations/acme/members/${bob.identity.id}`, {
             as: ann,
-            body: { role: 'admin' },
+            body: { role: CONTRACT_ROLES.admin },
           }),
           ADDRESS,
         ),
@@ -1028,7 +1037,9 @@ describe('organisationRoutes, a failed tell', () => {
 
     await retold()
 
-    expect(heard).toEqual([[bob.identity.id, [{ tenant: acme.tenant, role: 'admin' }]]])
+    expect(heard).toEqual([
+      [bob.identity.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.admin }]],
+    ])
   })
 
   it('answers 204 to a removal whose tell failed, and the listeners hear the list after the delay', async () => {

@@ -4,7 +4,7 @@ import { appReady, expect, signUp, test } from '../../support/fixtures'
 import { createOrganisation } from '../../support/organisation'
 
 test.describe('Create a second organisation and switch between them', { tag: '@smoke' }, () => {
-  test('An administrator of one organisation creates a second one, which becomes current, and chooses the first one again', async ({
+  test('An admin of one organisation creates a second one, which becomes current, and chooses the first one again', async ({
     page,
   }) => {
     const data = {
