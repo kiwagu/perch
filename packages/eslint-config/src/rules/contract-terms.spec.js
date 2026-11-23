@@ -147,6 +147,10 @@ tester.run('contract-terms', contractTerms, {
       ],
     },
     {
+      ...byValue("void page.goto('/console/card?id=1')"),
+      errors: [route('/console/card', 'console.account@2')],
+    },
+    {
       ...byValue(
         'declare const origin: string\nexport const at = `${origin}/me`\nexport const done = /\\/me$/\nexport const either = /^\\/settings(\\?|$)/',
       ),

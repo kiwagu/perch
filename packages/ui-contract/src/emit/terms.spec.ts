@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { type Contract, loadContract } from '../check'
+import { sampleContract } from '../check/contract.fixture'
 import { formatProblem, TERMS_FILE, VOCABULARY_FILE } from '../files'
 
 import { moduleConstants, writeEmitRepository } from './emit.fixture'
@@ -60,6 +61,25 @@ describe('termsModuleOf', () => {
       CONTRACT_ROLES: { guest: 'guest', member: 'member' },
     })
   })
+  it("names a screen's further routes by its id and their place among its bindings", () => {
+    const contract = sampleContract()
+    const sample = contract.screens.screens[1]
+    const first = sample?.bindings[0]
+
+    if (sample === undefined || first === undefined) {
+      throw new Error('the sample has no binding')
+    }
+
+    sample.bindings = [first, { ...first, path: '/thing/$key' }, { ...first, path: '/item/$key' }]
+
+    expect(moduleConstants(termsModuleOf(contract))).toMatchObject({
+      CONTRACT_ROUTES: {
+        sample: '/sample/$key',
+        'sample@2': '/thing/$key',
+        'sample@3': '/item/$key',
+      },
+    })
+  })
   it('writes the two constants as plain data under the generated header, keys sorted', () => {
     const text = termsModuleOf(loaded())
 
@@ -74,7 +94,7 @@ export const CONTRACT_ROLES = {
   "member": "member"
 } as const
 
-/** The route path of every screen bound to one, by the screen's id: its first binding's, which names its file. */
+/** The route path of every binding of a screen: its first by the screen's id, which names its file; a further one by the id and its place, \`<id>@2\`. */
 export const CONTRACT_ROUTES = {
   "not-found": "/$",
   "sample": "/sample/$key"

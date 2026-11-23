@@ -9,9 +9,10 @@ export const CONTRACT_ROLES = {
   "operator": "operator"
 } as const
 
-/** The route path of every screen bound to one, by the screen's id: its first binding's, which names its file. */
+/** The route path of every binding of a screen: its first by the screen's id, which names its file; a further one by the id and its place, `<id>@2`. */
 export const CONTRACT_ROUTES = {
   "console.account": "/console/account",
+  "console.account@2": "/console/card",
   "not-found": "/$",
   "user.profile": "/me",
   "user.settings": "/settings"
