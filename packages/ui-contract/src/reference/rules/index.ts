@@ -1,6 +1,7 @@
 import type { ReferenceRule } from '../rule'
 
 import { ANCHOR_RULES } from './anchors'
+import { ANSWER_RULES } from './answers'
 import { CHECK_RULES } from './checks'
 import { COMMIT_RULES } from './commits'
 import { COVERAGE_RULES } from './coverage'
@@ -23,7 +24,7 @@ export { INSTRUCTION_RULES } from './instructions'
 
 /**
  * Every rule of the engine that no key states, in the order the reference writes them: the
- * anchors and the routes, the flows and what they render and read, a paged list, the values,
+ * anchors and the routes, the flows and what they render and read, a paged list, the values, what a platform action answers,
  * what a screen leaves out, a password pair, the scenarios, the checks, the commits, the manifest,
  * the emitted modules, the hand-over and the coverage, and last the fixed texts of the manifest's
  * instructions.
@@ -36,6 +37,7 @@ export const REFERENCE_RULES: readonly ReferenceRule[] = [
   ...READ_RULES,
   ...PAGING_RULES,
   ...VALUE_RULES,
+  ...ANSWER_RULES,
   ...LEAVES_OUT_RULES,
   ...PAIR_RULES,
   ...OUTCOME_RULES,

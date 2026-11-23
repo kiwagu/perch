@@ -26,12 +26,14 @@ import { referenceDrift, referenceLinkProblems } from '../reference'
 import { accessProblems } from './access'
 import { activitiesProblems } from './activities'
 import { attributionProblems } from './attribution'
+import { behaviourTextsProblems } from './behaviour-texts'
 import { bindingsProblems } from './bindings'
 import { changesProblems } from './changes'
 import { confirmationsProblems } from './confirmations'
 import type { Contract } from './contract'
 import { descriptionsProblems } from './descriptions'
 import { flowProblems } from './flow'
+import { invariantsProblems } from './invariants'
 import { keyProblems } from './keys'
 import { leavingProblems } from './leaving'
 import { mailsProblems } from './mails'
@@ -121,6 +123,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   unsavedInputProblems,
   valueProblems,
   attributionProblems,
+  invariantsProblems,
   searchProblems,
   keyProblems,
   mailsProblems,
@@ -130,6 +133,7 @@ const RULES: ReadonlyArray<(contract: Contract) => Problem[]> = [
   pagingProblems,
   scenariosProblems,
   descriptionsProblems,
+  behaviourTextsProblems,
   withProblems,
 ]
 

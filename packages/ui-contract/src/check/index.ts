@@ -1,5 +1,6 @@
 export { accessProblems } from './access'
 export { activitiesProblems } from './activities'
+export { behaviourTextsProblems } from './behaviour-texts'
 export { bindingsProblems } from './bindings'
 export { anchorCarries, type Carried } from './carries'
 export { changesProblems } from './changes'
@@ -35,6 +36,7 @@ export {
   rootOf,
   transitionsOf,
 } from './flow'
+export { invariantsProblems } from './invariants'
 export { keyProblems } from './keys'
 export { leavingProblems } from './leaving'
 export { mailsProblems } from './mails'

@@ -183,7 +183,9 @@ bound to a model field can carry `saved`.
 ## Codes
 
 The `data-code` values. Each code is used by at least one anchor of the screen files, and a
-dialog's code names what it asks (`unsent-changes`), not the answer.
+dialog's code names what it asks (`unsent-changes`), not the answer. The meaning says what the
+code tells the user; when an action answers with it is the action's condition in
+`domain/platform.yaml`, and a rule several actions keep is the invariant it refuses for there.
 
 | Code | Where | Meaning |
 |---|---|---|

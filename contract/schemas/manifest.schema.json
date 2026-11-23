@@ -7230,17 +7230,86 @@
                 "description": "The parameters by name."
               },
               "result": {
-                "type": "string",
-                "description": "What holds once the action succeeds."
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. At most 200 characters."
+                    }
+                  }
+                ],
+                "description": "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`."
               },
               "codes": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                  "description": "A code of the vocabulary (data-code)."
-                },
-                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rule `attributed-codes`."
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. At most 200 characters."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "invariant": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                },
+                                {
+                                  "minItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                  },
+                                  "uniqueItems": true
+                                }
+                              ],
+                              "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."
+                            },
+                            "condition": {
+                              "description": "A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.",
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "invariant"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
+                        }
+                      ]
+                    },
+                    "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`."
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "description": "The older form: the codes by name alone, with no condition."
+                  }
+                ],
+                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
               },
               "roles": {
                 "description": "The roles that may run the action.",
@@ -7389,6 +7458,44 @@
             "description": "One platform action."
           },
           "description": "The platform actions by name: `platform.<name>` in a binding."
+        },
+        "invariants": {
+          "description": "The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The rule, said once for every action that names it under the code it refuses with. At most 200 characters."
+              },
+              "refuses": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`."
+              }
+            },
+            "required": [
+              "rule",
+              "refuses",
+              "actions"
+            ],
+            "additionalProperties": false
+          }
         },
         "events": {
           "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",

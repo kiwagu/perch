@@ -53,6 +53,29 @@ describe('vocabularyProblems', () => {
       'contract/domain/platform.yaml:1: actions["devices.list"].codes[1]: "nope" is not a code of the vocabulary',
     ])
   })
+  it('checks the codes of an action written as a map, each at its code', () => {
+    const contract = sampleContract()
+    const action = contract.screens.platform.actions['devices.list']
+
+    Object.assign(action ?? {}, {
+      codes: { 'devices-read-failed': 'the devices cannot be read', nope: 'never' },
+    })
+
+    expect(printed(contract)).toEqual([
+      'contract/domain/platform.yaml:1: actions["devices.list"].codes.nope: "nope" is not a code of the vocabulary',
+    ])
+  })
+  it('counts a code an action writes as a key of its map as used', () => {
+    const contract = sampleContract()
+    const action = contract.screens.platform.actions['devices.list']
+
+    contract.vocabulary.codes['spare'] = { where: 'nowhere', meaning: 'nothing' }
+    Object.assign(action ?? {}, {
+      codes: { 'devices-read-failed': 'the devices cannot be read', spare: 'a spare reason' },
+    })
+
+    expect(printed(contract)).toEqual([])
+  })
   it('names a screen id and an anchor prefix that are not screen names', () => {
     const contract = sampleContract()
     const sample = screenIn(contract, 'sample')

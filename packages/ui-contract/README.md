@@ -80,6 +80,12 @@ links to as `contract/REFERENCE.md#<slug>`.
   - `attributedCodes(action, platform)` (`files/derive/failures.ts`): per parameter of a platform
     action, the codes that concern it, by the suffixes of `FIELD_CODE_SUFFIXES`
     (`contract/REFERENCE.md#rule-attributed-codes`).
+  - `codeNamesOf(codes)`, `codeEntriesOf(codes)` and `outcomesOf(result)`
+    (`files/action-codes.ts`): a platform action's codes by name, each with its place and its
+    invariants and condition, and its outcome lines, read one way whether it writes the codes as a
+    map or as the older list, its result as a list or as one string; `invariantActions(platform)`
+    (`files/invariants.ts`): per invariant of `platform.invariants`, the actions that name it, in
+    the platform file's order (`contract/REFERENCE.md#rule-action-outcomes`).
   - `readDescriptions(root)` (`files/written-descriptions/`): every description the domain files
     write, as they write them, each a `WrittenDescription` (`file`, `line`, `at`, `kind`, `place`,
     `text`); the `Contract` carries them as `descriptions`, read by `loadContract`
@@ -104,7 +110,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     `model.schema.json` is authored), and `writeSchemas` writes the reference after them.
     `DESCRIPTION_PURPOSES` gives, by its `DescriptionKind`, the purpose of each description field
     in one text, `DESCRIPTION_BUDGET` its budget, and `descriptionLength(text)` counts a
-    description as the budget does (`contract/REFERENCE.md#rule-check-files`).
+    description as the budget does (`contract/REFERENCE.md#rule-check-files`);
+    `BEHAVIOUR_PURPOSES`, by its `BehaviourKind`, the purpose of an outcome line, a condition and
+    a rule, which keep the same budget (`contract/REFERENCE.md#rule-action-outcomes`).
   - The reference: `renderReference()` is the text of `contract/REFERENCE.md` (`REFERENCE_FILE`,
     generated, never edited): one section per file with each key the schema describes, then
     `REFERENCE_RULES`, the engine's rules that no key states (`ReferenceRule`: a kebab-case `id`,
@@ -128,6 +136,9 @@ links to as `contract/REFERENCE.md#<slug>`.
     - `vocabularyProblems`, `screensProblems`, `descriptionsProblems`: the vocabulary's words,
       the anchors' uniqueness and their facets, the descriptions' budget
       (`contract/REFERENCE.md#rule-check-files`);
+    - `invariantsProblems`, `behaviourTextsProblems`: each invariant an action names exists and
+      refuses with the code it is named under, every invariant is named, and each outcome line,
+      condition and rule keeps the budget (`contract/REFERENCE.md#rule-action-outcomes`);
     - `bindingsProblems`, `searchProblems`, `routesProblems` with `parseRoutePath(path)` (the
       router's path syntax): model fields, actions and their params, routes and the search
       parameters (`contract/REFERENCE.md#rule-check-bindings`);

@@ -33,7 +33,9 @@ import {
   bindingSchema,
   derivedFromSchema,
   leavesSchema,
+  platformActionNameSchema,
   platformDefaultsSchema,
+  platformInvariantSchema,
   platformSchema,
   resolvedValueSchema,
   screenSchema,
@@ -285,9 +287,27 @@ export const manifestSchema = z
     ids: z
       .record(baseAnchorSchema, idSchema)
       .describe('Every declared anchor by name; a derived one is its base plus a suffix.'),
-    platform: platformSchema.describe(
-      'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
-    ),
+    platform: platformSchema
+      .extend({
+        invariants: z
+          .record(
+            kebabNameSchema,
+            platformInvariantSchema.extend({
+              actions: z
+                .array(platformActionNameSchema)
+                .describe(
+                  'Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`.',
+                ),
+            }),
+          )
+          .optional()
+          .describe(
+            'The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.',
+          ),
+      })
+      .describe(
+        'The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out.',
+      ),
     activities: z
       .array(activitySchema)
       .describe(
