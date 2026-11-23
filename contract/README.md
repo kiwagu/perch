@@ -101,7 +101,7 @@ The authored files, edited by hand or by a model in the modeling thread:
 
 - `vocabulary.md`, Markdown: the closed lists, one table per section (the kinds of anchors,
   the derived suffixes, the attributes, the app, container and row states, the codes, the
-  choice values, the screen names, the roles while the contract has no terms file, the anchors
+  choice values, the screen names, the anchors
   the shell reserves and the platform's composites). Its
   `Grammar` section says how an anchor is spelled. The loader reads each table by its fixed
   heading. The grammar, the kinds, the suffixes and the attributes are the engine's (meta);
@@ -113,10 +113,11 @@ The authored files, edited by hand or by a model in the modeling thread:
   membership, invitation, device, session) and its `roles` the roles a device holds: each with
   its `meaning` within the budget of a description, its `synonyms`, the words the texts never
   use for it, and its `storage`, the name storage gives it where that differs (organisation is
-  the table `tenant`; no applied migration is renamed). A contract with the file keeps its
-  roles there and the vocabulary lists none. The check refuses a synonym in a description, a
-  behaviour text, an action's, a screen's, an anchor's, a value's or a field's name, an enum's
-  value, a route path or a role's name; code and
+  the table `tenant`; no applied migration is renamed). Every contract writes it and keeps its
+  roles there; the vocabulary lists none. The check refuses a synonym in a description, a
+  behaviour text, an action's, an invariant's, a screen's, an anchor's, a value's or a field's
+  name, an enum's value, a route path, a role's name, a row of the vocabulary's tables, an
+  activity's names or a scenario's prose; code and
   tests name a role or a route through `CONTRACT_ROLES` and `CONTRACT_ROUTES`
   (`ui-contract emit terms`), never by hand, which the ESLint rule `workspace/contract-terms`
   holds ([the rule](REFERENCE.md#rule-terms)).

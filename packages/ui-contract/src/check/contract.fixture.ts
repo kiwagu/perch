@@ -180,7 +180,7 @@ export function sampleContract(): Contract {
       },
       screenNames: meaning(['app-shell', 'sample']),
       roles: meaning(['guest', 'member']),
-      writesRoles: true,
+      writesRoles: false,
       reserved: meaning(['app-shell.status']),
       composites: {},
     },
@@ -231,7 +231,11 @@ export function sampleContract(): Contract {
     ],
     scenarioLines: new Map(),
     descriptions: [],
-    terms: undefined,
+    terms: {
+      contexts: { sample: { meaning: 'The sample platform.' } },
+      terms: {},
+      roles: { guest: { meaning: 'guest' }, member: { meaning: 'member' } },
+    },
     termsLines: {},
     model: {
       document: {},

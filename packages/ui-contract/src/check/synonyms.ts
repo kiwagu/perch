@@ -3,7 +3,11 @@
  * stands in the contract's texts or in what the engine emits from it. The texts are every written
  * description (`readDescriptions`: the screens', the platform's, the activities', the model's and
  * the terms' own meanings), every behaviour text of the platform (an outcome line, a code's
- * condition, an invariant's rule), every platform action's name and every screen's id. What the
+ * condition, an invariant's rule), every platform action's and invariant's name, every screen's
+ * id, each row of the vocabulary's tables (its key and its meaning), each model action's name (in
+ * kebab case) and the confirmation's code it derives (what that says beyond them), each activity's
+ * id, title and state names, and the prose of each scenario, read past its bracket references
+ * but in its title, which holds none. What the
  * engine emits from them is read too: the route path of each binding and the name of each role
  * (`CONTRACT_ROUTES`, `CONTRACT_ROLES`), the name and the enum of each platform value and of each
  * field of the model and each entity's name, which every key of its fields carries
@@ -17,10 +21,28 @@
  */
 
 import { SIZE_SELECT, sizeOptionOf, testIdFor } from '../anchors'
-import { jsonPath, MODEL_FILE, type Problem, routeKeyOf, TERMS_FILE, type Terms } from '../files'
+import {
+  activityFile,
+  jsonPath,
+  lineAt,
+  MODEL_FILE,
+  type Problem,
+  questionCodeOf,
+  routeKeyOf,
+  scenarioFile,
+  TERMS_FILE,
+  type Terms,
+  VOCABULARY_FILE,
+} from '../files'
+import { kebab } from '../kebab'
 
 import { BEHAVIOUR_NOUNS, behaviourTexts } from './behaviour-texts'
 import { type Contract, inFile, locate } from './contract'
+import { textsOf } from './scenarios'
+import { vocabularyTexts } from './vocabulary-texts'
+
+/** A bracket reference of a scenario's text: `[organisation.create.submit-button]`, `[code:saved]`. */
+const BRACKETS = /\[[^\]]*\]/g
 
 /** A synonym the terms file forbids, with the term or the role it stands for. */
 interface Forbidden {
@@ -122,6 +144,14 @@ export function synonymsProblems(contract: Contract): Problem[] {
     ...Object.keys(screens.platform.actions).flatMap((name) =>
       saidIn(name, "the action's name", forbidden, at(['platform', 'actions', name])),
     ),
+    ...Object.keys(screens.platform.invariants ?? {}).flatMap((name) =>
+      saidIn(name, "the invariant's name", forbidden, at(['platform', 'invariants', name])),
+    ),
+    ...vocabularyTexts(contract.vocabulary).flatMap(({ place, kind, text }) =>
+      saidIn(text, `the ${kind}`, forbidden, (message) =>
+        inFile(VOCABULARY_FILE, `${place}: ${message}`),
+      ),
+    ),
     ...screens.screens.flatMap((screen, index) => [
       ...saidIn(screen.id, "the screen's id", forbidden, at(['screens', index, 'id'])),
       ...screen.bindings.flatMap(({ path }, binding) => {
@@ -153,10 +183,32 @@ export function synonymsProblems(contract: Contract): Problem[] {
         ),
       ),
     ]),
-    ...Object.entries(contract.model.entities).flatMap(([entity, { fields }]) => [
+    ...Object.entries(contract.model.entities).flatMap(([entity, { fields, actions }]) => [
       ...saidIn(entity, "the entity's name", forbidden, (message) =>
         inFile(MODEL_FILE, `${jsonPath(['$defs', entity])}: ${message}`),
       ),
+      ...Object.keys(actions).flatMap((action) => {
+        const here = (message: string) =>
+          inFile(
+            MODEL_FILE,
+            `${jsonPath(['$defs', entity, 'x-perch', 'actions', action])}: ${message}`,
+          )
+        const name = kebab(action)
+        // A destructive action's question code, `<object>-<verb>`: what it says beyond both.
+        const code = questionCodeOf(`${entity}.${action}`)
+
+        return [
+          ...saidIn(name, "the model action's name", forbidden, here),
+          ...(code === undefined
+            ? []
+            : saidIn(
+                code,
+                `the confirmation's code ${code}`,
+                beyond(name, beyond(entity, forbidden)),
+                here,
+              )),
+        ]
+      }),
       ...Object.entries(fields).flatMap(([field, { enum: values }]) => {
         const inModel = (path: readonly PropertyKey[]) => (message: string) =>
           inFile(
@@ -202,6 +254,39 @@ export function synonymsProblems(contract: Contract): Problem[] {
         ]
       }),
     ),
+    ...contract.activities.flatMap(({ id, title, states }) => {
+      const here = (path: readonly PropertyKey[]) => (message: string) =>
+        inFile(
+          activityFile(id),
+          `${jsonPath(path)}: ${message}`,
+          lineAt(contract.activityLines.get(id), path),
+        )
+
+      return [
+        ...saidIn(id, "the activity's id", forbidden, here(['id'])),
+        ...saidIn(title, "the activity's title", forbidden, here(['title'])),
+        ...Object.keys(states).flatMap((state) =>
+          saidIn(state, "the state's name", forbidden, here(['states', state])),
+        ),
+      ]
+    }),
+    ...contract.scenarios.flatMap((scenario) => {
+      const here = (path: readonly PropertyKey[]) => (message: string) =>
+        inFile(
+          scenarioFile(scenario.id),
+          `${jsonPath(path)}: ${message}`,
+          lineAt(contract.scenarioLines.get(scenario.id), path),
+        )
+
+      return [
+        // The title resolves no reference: it is prose throughout.
+        ...saidIn(scenario.title, "the scenario's title", forbidden, here(['title'])),
+        ...textsOf(scenario).flatMap(({ text, at: path }) =>
+          // A bracket reference names a declaration, read where it is declared.
+          saidIn(text.replace(BRACKETS, ' '), "the scenario's text", forbidden, here(path)),
+        ),
+      ]
+    }),
     ...Object.keys(terms.roles).flatMap((role) =>
       saidIn(role, "the role's name", forbidden, (message) =>
         inFile(TERMS_FILE, `${jsonPath(['roles', role])}: ${message}`),

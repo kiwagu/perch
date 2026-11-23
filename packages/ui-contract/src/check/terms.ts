@@ -1,7 +1,7 @@
 /**
- * The terms file and the roles' one place. A contract with `contract/domain/terms.yaml` keeps its
- * roles there, and its vocabulary lists none; one without it lists them in the vocabulary, as
- * before. In the file a name is a term or a role, never both; a synonym is a word no term or role
+ * The terms file and the roles' one place. A contract writes `contract/domain/terms.yaml` and keeps
+ * its roles there; its vocabulary lists none. A contract of an older ref that lists them in the
+ * vocabulary still loads (a diff reads it), and the check refuses it. In the file a name is a term or a role, never both; a synonym is a word no term or role
  * is named, forbidden for one of them only, and listed once; and the terms belong to at least one
  * context.
  */
@@ -33,18 +33,25 @@ function entriesOf(terms: NonNullable<Contract['terms']>) {
   )
 }
 
+/**
+ * Whether the contract is one written before the terms file: none, and its roles in the
+ * vocabulary. It still loads (a diff reads it), and only the in-flight check lets it pass, as a
+ * branch's that has not merged `main` since the file came.
+ */
+export const isBeforeTerms = ({ terms, vocabulary }: Contract): boolean =>
+  terms === undefined && vocabulary.writesRoles
+
 export function termsProblems(contract: Contract): Problem[] {
   const { terms, termsLines, vocabulary } = contract
 
   if (terms === undefined) {
-    return vocabulary.writesRoles
-      ? []
-      : [
-          {
-            file: VOCABULARY_FILE,
-            message: `no section "Roles" and no ${TERMS_FILE}: the roles are listed in one of them`,
-          },
-        ]
+    return [
+      {
+        file: TERMS_FILE,
+        message:
+          'missing: the contract writes its terms and its roles here, and the vocabulary lists no roles',
+      },
+    ]
   }
 
   const at = (path: readonly PropertyKey[], message: string): Problem => {
