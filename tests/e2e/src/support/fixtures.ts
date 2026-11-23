@@ -136,7 +136,7 @@ export async function signIn(page: Page, account: SeedAccount): Promise<void> {
   )
 
   expect(await outcome.jsonValue(), 'the sign-in page answered with its error code').toBe(true)
-  await page.waitForURL('**/me')
+  await page.waitForURL(`**${CONTRACT_ROUTES['user.profile']}`)
 }
 
 /**

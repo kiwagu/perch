@@ -62,7 +62,7 @@ test.describe('Start a new account in the language chosen as a guest', { tag: '@
       await page.getByTestId('user.sign-in.submit-button').click()
       // Expected: After step 5 device A is on [/me], and its [/settings] shows
       //   [user.settings.locale-select] with [value:es]
-      await page.waitForURL('**/me')
+      await page.waitForURL(`**${CONTRACT_ROUTES['user.profile']}`)
       await page.getByTestId('app-shell.nav.settings-link').click()
       await expect(page.getByTestId('user.settings.locale-select')).toHaveAttribute(
         'data-value',

@@ -800,7 +800,7 @@ describe('OrganisationInvitations', () => {
       }
 
       expect(await everything.rolesOf('acme', cat.id)).toEqual([])
-      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -1045,8 +1045,8 @@ describe('OrganisationInvitations', () => {
           )._unsafeUnwrap(),
         ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
         expect(await everything.memberRolesIn('acme')).toEqual({
-          [everything.ann.id]: 'admin',
-          [bob.id]: 'member',
+          [everything.ann.id]: CONTRACT_ROLES.admin,
+          [bob.id]: CONTRACT_ROLES.member,
         })
         expect(await everything.rows()).toEqual([])
         expect(heard).toEqual([])
@@ -1093,8 +1093,8 @@ describe('OrganisationInvitations', () => {
           const told = [bob.id, [{ tenant: acme.tenant, role: CONTRACT_ROLES.member }]] as const
 
           expect(await everything.memberRolesIn('acme')).toEqual({
-            [everything.ann.id]: 'admin',
-            [bob.id]: 'member',
+            [everything.ann.id]: CONTRACT_ROLES.admin,
+            [bob.id]: CONTRACT_ROLES.member,
           })
           expect(heard).toEqual([told])
           expect(deaf).toEqual([told])
@@ -1132,7 +1132,7 @@ describe('OrganisationInvitations', () => {
       }
 
       expect(await everything.rolesOf('acme', bob.id)).toEqual([])
-      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: 'admin' })
+      expect(await everything.memberRolesIn('acme')).toEqual({ [ann.id]: CONTRACT_ROLES.admin })
     })
 
     it('answers invitation-gone to a link a week past, and makes no membership', async () => {

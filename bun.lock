@@ -291,6 +291,7 @@
       "name": "@workspace/mailbox",
       "version": "0.1.0",
       "dependencies": {
+        "@workspace/kernel": "workspace:*",
         "@workspace/zod": "workspace:*",
       },
       "devDependencies": {

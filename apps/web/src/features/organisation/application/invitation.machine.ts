@@ -2,7 +2,7 @@ import type { ResultAsync } from 'neverthrow'
 import { emit, enqueueActions, fromPromise, setup } from 'xstate'
 
 import type { BusError } from '@workspace/cqrs'
-import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import type { TenantRole } from '@workspace/replica/protocol'
 
 import { failureOf, settled } from '../../../platform/actor-outcome'
@@ -82,7 +82,7 @@ function linkOf(event: object): InvitationOnLink | undefined {
   const name = organisation['name']
 
   return typeof name === 'string' &&
-    (role === 'admin' || role === 'member') &&
+    (role === CONTRACT_ROLES.admin || role === CONTRACT_ROLES.member) &&
     typeof forYou === 'boolean'
     ? { organisation: { name }, role, forYou }
     : undefined
