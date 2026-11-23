@@ -68,6 +68,12 @@ tester.run('contract-terms', contractTerms, {
     typed("void page.goto('/settings')"),
     typed('export const told = `role ${role}`'),
     typed("const titles: Record<string, string> = { '/me': 'Profile' }"),
+    typed(
+      "declare const profile: { set<K extends 'identity' | 'name'>(key: K, value: string): void }\nprofile.set('identity', 'idn_1')",
+    ),
+    typed(
+      "type Target = { kind: 'member'; key: string } | { kind: 'members'; key: string }\ndeclare const key: string\nexport const target = (): Target => ({ kind: 'member', key })",
+    ),
     byValue("void page.goto('/settings/x')"),
     byValue("void page.goto('/settingsx')"),
     byValue("void page.goto('/')"),

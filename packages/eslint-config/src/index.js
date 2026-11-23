@@ -305,20 +305,26 @@ export function importBoundaries({ modules = [], reachIn = [] }) {
 /**
  * The contract-terms rule over `files` (globs from the repository root), fixtures included: test
  * data names roles and routes too. `module` is the absolute path of the module
- * `ui-contract emit terms` writes; `routeValues` the globs among them where a string that names a
- * route by its value is refused too (the e2e tests, whose `goto` takes any string). See the rule.
+ * `ui-contract emit terms` writes. `routeValues` names, by `files` and `ignores`, where a string that
+ * names a route by its value is refused too: where no other kind of path is written (the e2e tests,
+ * whose `goto` takes any string; the web app's screens, but its adapters to the gateway, whose API
+ * paths can be the same strings). See the rule.
  */
-export function contractTerms({ module, files, routeValues = [] }) {
-  const block = (globs, options) => ({
+export function contractTerms({ module, files, routeValues = { files: [] } }) {
+  const block = (globs, ignored, options) => ({
     files: globs,
+    // A config file is in no TypeScript project, so it has no types to read.
+    ignores: [...TYPED.ignores, ...ignored],
     languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true } },
     plugins: { workspace },
     rules: { 'workspace/contract-terms': ['error', options] },
   })
 
   return [
-    block(files, { module }),
-    ...(routeValues.length > 0 ? [block(routeValues, { module, routeValues: true })] : []),
+    block(files, [], { module }),
+    ...(routeValues.files.length > 0
+      ? [block(routeValues.files, routeValues.ignores ?? [], { module, routeValues: true })]
+      : []),
   ]
 }
 

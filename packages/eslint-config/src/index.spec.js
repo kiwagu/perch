@@ -46,6 +46,27 @@ describe('workspace eslint config', () => {
       'workspace/contract-terms',
     ])
     expect(await rulesFiredIn('clean.ts', withTerms)).toEqual([])
+    expect(contractTerms({ module: MODULE, files: ['**/*.ts'] })[0]?.ignores).toEqual([
+      '**/*.config.ts',
+    ])
+  })
+
+  it('refuses a route named by its value only where routeValues says, but its ignores', async () => {
+    const byValue = new ESLint({
+      cwd,
+      overrideConfigFile: true,
+      overrideConfig: contractTerms({
+        module: MODULE,
+        files: ['**/*.ts'],
+        routeValues: { files: ['feature/**/*.ts'], ignores: ['feature/adapters/**'] },
+      }),
+    })
+
+    expect(await rulesFiredIn('feature/presentation/route.ts', byValue)).toEqual([
+      'workspace/contract-terms',
+    ])
+    expect(await rulesFiredIn('feature/adapters/gateway.ts', byValue)).toEqual([])
+    expect(await rulesFiredIn('units/route.ts', byValue)).toEqual([])
   })
 
   it('requires a blank line after local variables and before return', async () => {

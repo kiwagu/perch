@@ -221,24 +221,67 @@ export const contractTerms = {
     const checker = services.program.getTypeChecker()
     const typeOf = (node) => checker.getTypeAtLocation(services.esTreeNodeToTSNodeMap.get(node))
 
-    /** The type the code expects at the string `node`, if it expects one. */
+    /**
+     * The type the code declares for the expression `node`, never one inferred from `node` itself
+     * (a type parameter it would instantiate is read by its constraint).
+     */
+    const declaredAt = (node) =>
+      checker.getContextualType(
+        services.esTreeNodeToTSNodeMap.get(node),
+        ts.ContextFlags.IgnoreNodeInferences,
+      )
+
+    /**
+     * The string values the code admits at the string `node`, if it admits only some: the type it
+     * declares there, the other side of a comparison, the discriminant of a `switch`; a property's
+     * value is read across every member of a union its object is expected to be, so a discriminant
+     * (`{ kind: 'member' }` of a union of kinds) admits every kind.
+     */
     function expectedAt(node) {
       const { parent } = node
 
       if (parent?.type === 'BinaryExpression' && COMPARISONS.has(parent.operator)) {
-        return typeOf(parent.left === node ? parent.right : parent.left)
+        return closedValues(typeOf(parent.left === node ? parent.right : parent.left), checker)
       }
 
       if (parent?.type === 'SwitchCase' && parent.test === node) {
-        return typeOf(parent.parent.discriminant)
+        return closedValues(typeOf(parent.parent.discriminant), checker)
       }
 
-      return checker.getContextualType(services.esTreeNodeToTSNodeMap.get(node))
+      if (
+        parent?.type === 'Property' &&
+        parent.value === node &&
+        parent.parent?.type === 'ObjectExpression'
+      ) {
+        const object = declaredAt(parent.parent)
+        const name =
+          parent.key.type === 'Identifier' && !parent.computed
+            ? parent.key.name
+            : typeof parent.key.value === 'string'
+              ? parent.key.value
+              : undefined
+
+        if (object?.isUnion() && name !== undefined) {
+          const values = object.types.map((member) => {
+            const property = checker.getPropertyOfType(member, name)
+
+            return property === undefined
+              ? []
+              : closedValues(checker.getTypeOfSymbol(property), checker)
+          })
+
+          return values.some((each) => each === undefined) ? undefined : values.flat()
+        }
+      }
+
+      const declared = declaredAt(node)
+
+      return declared === undefined ? undefined : closedValues(declared, checker)
     }
 
     /** The names of the keys the object `objectNode` is expected to have, if it is expected. */
     function expectedKeys(objectNode) {
-      const type = checker.getContextualType(services.esTreeNodeToTSNodeMap.get(objectNode))
+      const type = declaredAt(objectNode)
 
       if (type === undefined || type.isUnion()) {
         return undefined
@@ -301,13 +344,7 @@ export const contractTerms = {
         return
       }
 
-      const expected = expectedAt(node)
-
-      checkExpected(
-        node,
-        value,
-        expected === undefined ? undefined : closedValues(expected, checker),
-      )
+      checkExpected(node, value, expectedAt(node))
     }
 
     return {
