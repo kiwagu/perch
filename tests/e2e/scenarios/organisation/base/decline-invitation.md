@@ -10,9 +10,9 @@ data:
 ---
 # Decline an invitation on the organisation page
 
-Where: [/org] on device A (user A, administrator) and [/org] on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/org] on device B (user B, another browser)
 
-## Scenario: The invited account declines on its organisation page; the invitation leaves its list and the administrator's, and its link no longer works
+## Scenario: The invited account declines on its organisation page; the invitation leaves its list and the admin's, and its link no longer works
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
