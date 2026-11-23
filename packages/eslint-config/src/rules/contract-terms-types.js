@@ -8,36 +8,9 @@
 
 import ts from 'typescript'
 
+import { closedValues, readings } from './contract-terms-readings.js'
+
 const COMPARISONS = new Set(['===', '!==', '==', '!='])
-
-/**
- * The string values a type admits, when it admits nothing but string literals; none otherwise. A
- * type parameter is read by its constraint, and `undefined` and `null` are set aside.
- */
-function closedValues(type, checker) {
-  const read =
-    type.flags & ts.TypeFlags.TypeParameter ? checker.getBaseConstraintOfType(type) : type
-
-  if (read === undefined) {
-    return undefined
-  }
-
-  const values = []
-
-  for (const part of read.isUnion() ? read.types : [read]) {
-    if (part.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) {
-      continue
-    }
-
-    if (!part.isStringLiteral()) {
-      return undefined
-    }
-
-    values.push(part.value)
-  }
-
-  return values.length > 0 ? values : undefined
-}
 
 /** Whether the property comes from a union of keys, with no field declared for it. */
 const fromKeyUnion = (property) =>
@@ -55,41 +28,75 @@ const unwrapped = (node) =>
     ? unwrapped(node.expression)
     : node
 
+/** The text of the string `node`: a literal or a template with no expression. */
+const stringOf = (node) => (node.type === 'Literal' ? node.value : node.quasis[0]?.value.cooked)
+
+/** Whether `node` is an `as const` assertion. */
+const isConstAssertion = (node) =>
+  node?.type === 'TSAsExpression' &&
+  node.typeAnnotation.type === 'TSTypeReference' &&
+  node.typeAnnotation.typeName.type === 'Identifier' &&
+  node.typeAnnotation.typeName.name === 'const'
+
+/** Whether the member access `node` writes its key as a number: `a[0]`. */
+const isNumericKey = (node) =>
+  node.computed && node.property.type === 'Literal' && typeof node.property.value === 'number'
+
 /** The readers of the types of one file, over its parser services' program. */
 export function typeReaders(services) {
   const checker = services.program.getTypeChecker()
   const tsNodeOf = (node) => services.esTreeNodeToTSNodeMap.get(node)
+  const { membersOf, readingOf, both, readingValues } = readings(checker)
 
   /**
-   * The string values the property `name` admits across the members of `type`: a member that is
-   * `undefined` or `null`, or that has no such property and no string index, adds none; one whose
-   * index holds the values says them; a member that admits any string makes the whole open.
+   * The indexes of `member` that take the property `name`, as TypeScript picks them: those over
+   * particular keys (a pattern, `number` for a numeric name), and only when none does, the one
+   * over every string. A key written as a number (`a[0]`) is taken by its number, never as text.
    */
-  function propertyValues(type, name) {
-    const values = (type.isUnion() ? type.types : [type]).map((member) => {
-      if (member.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)) {
-        return []
-      }
+  function indexesTaking(member, name, numeric) {
+    const taking = checker
+      .getIndexInfosOfType(member)
+      .filter(({ keyType }) =>
+        numeric
+          ? checker.isTypeAssignableTo(checker.getNumberLiteralType(Number(name)), keyType) ||
+            Boolean(keyType.flags & ts.TypeFlags.String)
+          : indexTakes(keyType, name),
+      )
+    const particular = taking.filter(({ keyType }) => !(keyType.flags & ts.TypeFlags.String))
 
-      const field = checker.getPropertyOfType(member, name)
-
-      if (field !== undefined) {
-        return closedValues(checker.getTypeOfSymbol(field), checker)
-      }
-
-      // No property of that name: the index signatures that take the name say what it holds.
-      const applicable = checker
-        .getIndexInfosOfType(member)
-        .filter(({ keyType }) => indexTakes(keyType, name))
-        .map(({ type: held }) => held)
-        .filter((held) => !(held.flags & ts.TypeFlags.Never))
-      const read = applicable.map((held) => closedValues(held, checker))
-
-      return read.some((each) => each === undefined) ? undefined : read.flat()
-    })
-
-    return values.some((each) => each === undefined) ? undefined : values.flat()
+    return particular.length > 0 ? particular : taking
   }
+
+  /**
+   * The reading of the property `name` of one type: its own property's type, or what the indexes
+   * that take the name hold, all at once; none when the type has neither.
+   */
+  function propertyOfType(type, name, numeric) {
+    const field = checker.getPropertyOfType(type, name)
+
+    if (field !== undefined) {
+      return readingOf(checker.getTypeOfSymbol(field))
+    }
+
+    const indexes = indexesTaking(type, name, numeric)
+
+    return indexes.length === 0
+      ? undefined
+      : indexes.map(({ type: held }) => readingOf(held)).reduce(both)
+  }
+
+  /**
+   * The reading of the property `name` across the alternatives of `reading`: an alternative none
+   * of whose types has it adds none; one several of whose types have it holds each at once.
+   */
+  const propertyReading = (reading, name, numeric = false) =>
+    reading.flatMap((alternative) => {
+      const parts = alternative
+        .map((type) => propertyOfType(type, name, numeric))
+        .filter((part) => part !== undefined)
+
+      return parts.length === 0 ? [] : parts.reduce(both)
+    })
 
   /** Whether an index whose keys are `keyType` takes the property name `name`. */
   function indexTakes(keyType, name) {
@@ -106,7 +113,7 @@ export function typeReaders(services) {
     )
   }
 
-  /** The name of the property `a.b`, `a['b']` or ``a[`b`]`` reads, when it is written out. */
+  /** The name of the property `a.b`, `a['b']`, ``a[`b`]`` or `a[0]` reads, when it is written out. */
   function propertyNameOf(node) {
     if (!node.computed && node.property.type === 'Identifier') {
       return node.property.name
@@ -118,6 +125,10 @@ export function typeReaders(services) {
 
     if (node.property.type === 'Literal' && typeof node.property.value === 'string') {
       return node.property.value
+    }
+
+    if (node.property.type === 'Literal' && typeof node.property.value === 'number') {
+      return String(node.property.value)
     }
 
     return node.property.type === 'TemplateLiteral' && node.property.expressions.length === 0
@@ -139,33 +150,91 @@ export function typeReaders(services) {
   }
 
   /**
-   * The string values the expression `node` admits as declared, never as the flow narrowed it
-   * where it stands: a variable by the type of its declaration, a property by its type across
-   * every member of its object's declared union (through `?.` and `!` alike); any other
-   * expression by its type.
+   * The reading of the expression `node` as declared, never as the flow narrowed it where it
+   * stands: a variable by its declaration, `this` by its class's, `a.b` or `a[0]` by the property
+   * across `a`'s declared reading, at any depth and through `?.` and `!`; any other expression, a
+   * call among them, by its type there.
    */
-  function declaredValuesOf(node) {
-    if (node !== unwrapped(node)) {
-      return declaredValuesOf(unwrapped(node))
+  function declaredReadingOf(node) {
+    const bare = unwrapped(node)
+
+    if (bare.type === 'Identifier') {
+      return readingOf(declaredTypeOfIdentifier(bare))
     }
 
-    if (node.type === 'Identifier') {
-      return closedValues(declaredTypeOfIdentifier(node), checker)
+    if (bare.type === 'ThisExpression') {
+      const declared = classTypeOf(bare)
+
+      return readingOf(declared ?? checker.getTypeAtLocation(tsNodeOf(bare)))
     }
 
-    const property = node.type === 'MemberExpression' ? propertyNameOf(node) : undefined
+    const property = bare.type === 'MemberExpression' ? propertyNameOf(bare) : undefined
 
-    if (property !== undefined) {
-      const object = unwrapped(node.object)
-      const declared =
-        object.type === 'Identifier'
-          ? declaredTypeOfIdentifier(object)
-          : checker.getTypeAtLocation(tsNodeOf(object))
+    return property === undefined
+      ? readingOf(checker.getTypeAtLocation(tsNodeOf(bare)))
+      : propertyReading(declaredReadingOf(bare.object), property, isNumericKey(bare))
+  }
 
-      return propertyValues(declared, property)
+  /**
+   * The type `this` (`node`) has in its class, as declared: the instance type in a method or a
+   * field (an arrow in it too), the class itself (its constructor) in a static one or a static
+   * block; none in a function that is no method, a field's value among them, which binds its own.
+   */
+  function classTypeOf(node) {
+    let isStatic = false
+    let member = false
+    let at = node.parent
+
+    while (at !== undefined && at !== null) {
+      // A function binds its own `this`, but a method's: a function in a field's value does too.
+      if (
+        (at.type === 'FunctionDeclaration' || at.type === 'FunctionExpression') &&
+        at.parent?.type !== 'MethodDefinition'
+      ) {
+        return undefined
+      }
+
+      if (
+        !member &&
+        (at.type === 'MethodDefinition' ||
+          at.type === 'PropertyDefinition' ||
+          at.type === 'StaticBlock')
+      ) {
+        member = true
+        isStatic = at.type === 'StaticBlock' || at.static === true
+      }
+
+      if (at.type === 'ClassDeclaration' || at.type === 'ClassExpression') {
+        const symbol = at.id === null ? undefined : checker.getSymbolAtLocation(tsNodeOf(at.id))
+
+        if (symbol === undefined) {
+          return undefined
+        }
+
+        return isStatic ? checker.getTypeOfSymbol(symbol) : checker.getDeclaredTypeOfSymbol(symbol)
+      }
+
+      at = at.parent
     }
 
-    return closedValues(checker.getTypeAtLocation(tsNodeOf(node)), checker)
+    return undefined
+  }
+
+  /**
+   * The string values the expression `node` admits as declared (`declaredReadingOf`), so a
+   * discriminant narrowed where it is compared still admits every kind its union declares.
+   */
+  const declaredValuesOf = (node) => readingValues(declaredReadingOf(node))
+
+  /** Whether the expression `node` is declared `unknown`. */
+  function isUnknown(node) {
+    const bare = unwrapped(node)
+    const type =
+      bare.type === 'Identifier'
+        ? declaredTypeOfIdentifier(bare)
+        : checker.getTypeAtLocation(tsNodeOf(bare))
+
+    return Boolean(type.flags & ts.TypeFlags.Unknown)
   }
 
   /**
@@ -185,7 +254,26 @@ export function typeReaders(services) {
     const { parent } = node
 
     if (parent?.type === 'BinaryExpression' && COMPARISONS.has(parent.operator)) {
-      return declaredValuesOf(parent.left === node ? parent.right : parent.left)
+      const other = parent.left === node ? parent.right : parent.left
+      const values = declaredValuesOf(other)
+
+      // A value the code knows nothing of, compared with a string: the code asks whether it is
+      // that string, so the string is all it admits there.
+      return values === undefined && isUnknown(other) ? [stringOf(node)] : values
+    }
+
+    // A list frozen `as const` of two strings or more admits what it lists: all roles, a list of
+    // roles. One string alone (`['identity'] as const`, a table) says too little.
+    if (parent?.type === 'ArrayExpression' && isConstAssertion(parent.parent)) {
+      const listed = parent.elements.map((element) =>
+        element?.type === 'Literal' && typeof element.value === 'string'
+          ? element.value
+          : undefined,
+      )
+
+      if (listed.length >= 2 && listed.every((each) => each !== undefined)) {
+        return listed
+      }
     }
 
     if (parent?.type === 'SwitchCase' && parent.test === node) {
@@ -206,7 +294,7 @@ export function typeReaders(services) {
             : undefined
 
       if (object?.isUnion() && name !== undefined) {
-        return propertyValues(object, name)
+        return readingValues(propertyReading(readingOf(object), name))
       }
     }
 
@@ -223,17 +311,18 @@ export function typeReaders(services) {
    */
   function expectedKeys(objectNode) {
     const declared = declaredAt(objectNode)
-    // An optional map (`Partial<Record<Role, …>> | undefined`) is the map.
-    const members =
-      declared === undefined
-        ? []
-        : (declared.isUnion() ? declared.types : [declared]).filter(
-            (member) => !(member.flags & (ts.TypeFlags.Undefined | ts.TypeFlags.Null)),
-          )
-    const type = members.length === 1 ? members[0] : undefined
+    // An optional map (`Partial<Record<Role, …>> | undefined`) is the map; several maps over key
+    // unions expect the keys of each.
+    const maps = declared === undefined ? [] : membersOf(declared).map(keysOfMap)
 
+    return maps.length > 0 && maps.every((keys) => keys !== undefined)
+      ? [...new Set(maps.flat())]
+      : undefined
+  }
+
+  /** The keys of `type` when it is a map over a union of keys, with no field declared for one. */
+  function keysOfMap(type) {
     if (
-      type === undefined ||
       type.isUnion() ||
       !(type.flags & ts.TypeFlags.Object) ||
       !(type.objectFlags & ts.ObjectFlags.Mapped)

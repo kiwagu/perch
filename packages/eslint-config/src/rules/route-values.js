@@ -1,16 +1,21 @@
 /**
  * Where a string names a route of the contract by its value: the route itself or followed by a
- * search or a hash; a part of a template literal that starts with one; a regular expression that
+ * search or a hash, behind a Playwright glob's `**` too; a part of a template literal that starts with one; a regular expression that
  * names one where it ends. A route holding `$` (a splat) is a router path, never a URL, so only
  * the whole string names it.
  */
 
-/** The route `text` names by its value: the route itself, or a route followed by `?` or `#`. */
+/**
+ * The route `text` names by its value: the route itself, or a route followed by `?` or `#`; after
+ * a Playwright URL glob's `**` too (`**` then `/me`, or `/settings?*`).
+ */
 export function routeNamedBy(text, routes) {
+  const plain = text.startsWith('**/') ? text.slice(2) : text
+
   for (const route of routes.keys()) {
     if (
-      text === route ||
-      (!route.includes('$') && (text.startsWith(`${route}?`) || text.startsWith(`${route}#`)))
+      plain === route ||
+      (!route.includes('$') && (plain.startsWith(`${route}?`) || plain.startsWith(`${route}#`)))
     ) {
       return route
     }
