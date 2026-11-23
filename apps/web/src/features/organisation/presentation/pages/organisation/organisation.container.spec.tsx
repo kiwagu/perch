@@ -289,20 +289,20 @@ describe('OrganisationContainer', () => {
       await makeAdmin(beaMember)
       await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       // The membership in Acme goes away on another device, which makes Globex current here;
       // bea is a member there too, and nobody changed her role in it.
       act(() => select('globex'))
       await waitFor(() => expect(members).toHaveBeenCalledWith('globex'))
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
 
       await act(async () => {
         change.done(undefined)
       })
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
     })
 
     it('keeps the role just set until the members read after the change settle', async () => {
@@ -313,20 +313,20 @@ describe('OrganisationContainer', () => {
 
       await openPage([acme], gatewayWith({ members, setRole }))
 
-      expect(await roleOf(beaMember)).toBe('member')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member)
 
       await makeAdmin(beaMember)
       await waitFor(() => expect(setRole).toHaveBeenCalledWith('acme', bea.id, 'admin'))
       // The members are read again once the change is done; that read has not come yet.
       await waitFor(() => expect(members).toHaveBeenCalledTimes(2))
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       await act(async () => {
         reread.done([annAdmin, { ...beaMember, role: CONTRACT_ROLES.admin }])
       })
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
     })
 
     it('shows what the members read after the change lists once it settled', async () => {
@@ -338,14 +338,14 @@ describe('OrganisationContainer', () => {
       await makeAdmin(beaMember)
       await waitFor(() => expect(members).toHaveBeenCalledTimes(2))
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       // Another administrator put the member back meanwhile: the list is what the select shows.
       await act(async () => {
         reread.done([annAdmin, beaMember])
       })
 
-      await waitFor(async () => expect(await roleOf(beaMember)).toBe('member'))
+      await waitFor(async () => expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member))
     })
 
     it('shows the role the member keeps when the change is refused', async () => {
@@ -359,13 +359,13 @@ describe('OrganisationContainer', () => {
       await makeAdmin(beaMember)
       await waitFor(() => expect(setRole).toHaveBeenCalled())
 
-      expect(await roleOf(beaMember)).toBe('admin')
+      expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.admin)
 
       await act(async () => {
         change.refuse('not-admin')
       })
 
-      await waitFor(async () => expect(await roleOf(beaMember)).toBe('member'))
+      await waitFor(async () => expect(await roleOf(beaMember)).toBe(CONTRACT_ROLES.member))
       expect(screen.getByTestId('organisation.invite.error').getAttribute('data-code')).toBe(
         'not-admin',
       )

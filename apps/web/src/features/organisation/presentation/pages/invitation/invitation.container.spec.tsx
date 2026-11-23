@@ -129,7 +129,7 @@ describe('InvitationContainer', () => {
     expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Acme')
     expect(
       screen.getByTestId('organisation.invitation.role-badge').getAttribute('data-value'),
-    ).toBe('admin')
+    ).toBe(CONTRACT_ROLES.admin)
     expect(port.read).toHaveBeenCalledWith('the-token')
     expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(false)
     expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(false)

@@ -77,7 +77,7 @@ describe('InvitationView', () => {
 
     const badge = screen.getByTestId('organisation.invitation.role-badge')
 
-    expect(badge.getAttribute('data-value')).toBe('admin')
+    expect(badge.getAttribute('data-value')).toBe(CONTRACT_ROLES.admin)
     expect(badge.textContent).toBe('Administrator')
     expect(screen.queryByTestId('organisation.invitation.status')).toBeNull()
     expect(screen.queryByTestId('organisation.invitation.message')).toBeNull()
@@ -102,7 +102,7 @@ describe('InvitationView', () => {
 
     const badge = screen.getByTestId('organisation.invitation.role-badge')
 
-    expect(badge.getAttribute('data-value')).toBe('member')
+    expect(badge.getAttribute('data-value')).toBe(CONTRACT_ROLES.member)
     expect(badge.textContent).toBe('Member')
   })
 

@@ -772,7 +772,7 @@ describe('OrganisationInvitations', () => {
         })
         expect((await organisations.membershipsOf(bob.id))._unsafeUnwrap()).toEqual([membership])
         expect(await rolesOf('acme', bob.id)).toEqual(['admin'])
-        expect((await memberRolesIn('acme'))[bob.id]).toBe('admin')
+        expect((await memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
         expect(heard.at(-1)).toEqual([bob.id, [membership]])
         expect(await rows()).toEqual([])
         expect(
@@ -822,7 +822,7 @@ describe('OrganisationInvitations', () => {
           await organisations.invitations.accept({ identity: bob.id, invitation: view.id })
         )._unsafeUnwrapErr(),
       ).toEqual(refused('already-member'))
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('admin')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -856,7 +856,7 @@ describe('OrganisationInvitations', () => {
         )._unsafeUnwrapErr(),
       ).toEqual(refused('already-member'))
       expect(await everything.rolesOf('acme', bob.id)).toEqual(['admin'])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('admin')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.admin)
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
       expect(heard).toHaveLength(told)
     })
@@ -977,7 +977,7 @@ describe('OrganisationInvitations', () => {
       ).toMatchObject({ code: 'data:WRITE_FAILED' })
       expect(await everything.rolesOf('acme', bob.id)).toEqual([])
       expect(await everything.rows()).toEqual([`acme ${bob.email}`])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('member')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.member)
       expect(heard).toHaveLength(told)
 
       everything.onDirectoryQuery(undefined)
@@ -1008,7 +1008,7 @@ describe('OrganisationInvitations', () => {
         )._unsafeUnwrap(),
       ).toEqual({ tenant: acme.tenant, role: CONTRACT_ROLES.member })
       expect(await everything.rolesOf('acme', bob.id)).toEqual(['member'])
-      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe('member')
+      expect((await everything.memberRolesIn('acme'))[bob.id]).toBe(CONTRACT_ROLES.member)
       expect(await everything.rows()).toEqual([])
       expect((await organisations.invitations.read({ token }))._unsafeUnwrapErr()).toEqual(
         refused('link-invalid'),

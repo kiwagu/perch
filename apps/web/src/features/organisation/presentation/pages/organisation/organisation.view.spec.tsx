@@ -799,7 +799,7 @@ describe('OrganisationView of an administrator', () => {
       field('organisation.invite.email-input'),
     )
     expect(expectFieldFacts(document.body)).toContain('organisation.invite.email-input')
-    expect(select.getAttribute('data-value')).toBe('member')
+    expect(select.getAttribute('data-value')).toBe(CONTRACT_ROLES.member)
     expect(select.getAttribute('aria-label')).toBe(en['organisation.invite.role'])
 
     type('organisation.invite.email-input', 'bea@example.test')

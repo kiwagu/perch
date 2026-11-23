@@ -213,7 +213,7 @@ describe('seeding through the gateway', () => {
       await readOrganisation(client, acme.key, ann ?? expect.unreachable('ann'))
     )._unsafeUnwrap()
 
-    expect(seenByAnn.membership.role).toBe('admin')
+    expect(seenByAnn.membership.role).toBe(CONTRACT_ROLES.admin)
   })
 
   it('runs twice without duplicating anything', async () => {

@@ -274,7 +274,7 @@ describe('invitationRoutes', () => {
       })
 
       expect(status).toBe(200)
-      expect(accepted.parse(body).membership.role).toBe('admin')
+      expect(accepted.parse(body).membership.role).toBe(CONTRACT_ROLES.admin)
       expect(await ask('GET', '/organisations', { as: bob })).toMatchObject({
         status: 200,
         body: {
@@ -619,7 +619,7 @@ describe('invitationRoutes', () => {
       )
 
       expect(status).toBe(200)
-      expect(accepted.parse(body).membership.role).toBe('member')
+      expect(accepted.parse(body).membership.role).toBe(CONTRACT_ROLES.member)
       expect(heard).toEqual([])
 
       await retold()

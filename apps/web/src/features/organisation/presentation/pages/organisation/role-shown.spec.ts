@@ -19,7 +19,7 @@ describe('roleShown', () => {
         set: [{ identity: cy, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' }],
         settled: 0,
       }),
-    ).toBe('member')
+    ).toBe(CONTRACT_ROLES.member)
   })
 
   it('shows the role being set, before the role set earlier', () => {
@@ -32,7 +32,7 @@ describe('roleShown', () => {
         set: [{ identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' }],
         settled: 0,
       }),
-    ).toBe('member')
+    ).toBe(CONTRACT_ROLES.member)
   })
 
   it('shows the role just set until the read after its change settled', () => {
@@ -47,10 +47,10 @@ describe('roleShown', () => {
         settled,
       })
 
-    expect(shown(undefined)).toBe('admin')
-    expect(shown(1)).toBe('admin')
-    expect(shown(2)).toBe('member')
-    expect(shown(3)).toBe('member')
+    expect(shown(undefined)).toBe(CONTRACT_ROLES.admin)
+    expect(shown(1)).toBe(CONTRACT_ROLES.admin)
+    expect(shown(2)).toBe(CONTRACT_ROLES.member)
+    expect(shown(3)).toBe(CONTRACT_ROLES.member)
   })
 
   it('shows no role set in another organisation, whose rows list the same identity', () => {
@@ -63,6 +63,6 @@ describe('roleShown', () => {
         set: [{ identity: bea, role: CONTRACT_ROLES.admin, read: 1, of: 'acme' }],
         settled: undefined,
       }),
-    ).toBe('member')
+    ).toBe(CONTRACT_ROLES.member)
   })
 })

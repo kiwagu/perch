@@ -1,4 +1,5 @@
 import { type Command, runCommand, type Shape } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { openStand, openStandTenant, type SeedManifest, type StandOptions } from '../seed'
@@ -132,7 +133,7 @@ export async function operatorsAmong(
     )
 
     return rows
-      .filter((row) => row.role === 'operator')
+      .filter((row) => row.role === CONTRACT_ROLES.operator)
       .map((row) => row.email)
       .sort()
   } finally {
