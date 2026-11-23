@@ -10,6 +10,7 @@ import {
   renderResetPasswordMail,
 } from '@workspace/email'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 
 import type { MailError, MailMessage, MailPort } from '../mail'
 
@@ -23,19 +24,22 @@ import type { DeletedAccount } from './account-teardown'
 import type { AuthLog } from './auth-log'
 
 /** The front's screen a reset link opens: it sets a new password with the link's token. */
-export const RESET_PASSWORD_PATH = '/reset-password'
+export const RESET_PASSWORD_PATH = CONTRACT_ROUTES['user.reset-password']
 
 /** The front's screen a confirmation link opens: it changes the email with the link's token. */
-export const CONFIRM_EMAIL_PATH = '/confirm-email'
+export const CONFIRM_EMAIL_PATH = CONTRACT_ROUTES['user.confirm-email']
 
 /** The front's screen a deletion link opens: its button deletes the account with the link's token. */
-export const DELETE_ACCOUNT_PATH = '/delete-account'
+export const DELETE_ACCOUNT_PATH = CONTRACT_ROUTES['user.delete-account']
 
 /** The front's screen that asks for a reset mail, which a password-changed notice links to. */
-export const FORGOT_PASSWORD_PATH = '/forgot-password'
+export const FORGOT_PASSWORD_PATH = CONTRACT_ROUTES['user.forgot-password']
 
-/** The link to the front's `path` carrying `token`. */
-export const tokenLink = (publicUrl: string, path: string, token: string): string =>
+/** A route of the contract: the front serves a screen there. */
+export type FrontRoute = (typeof CONTRACT_ROUTES)[keyof typeof CONTRACT_ROUTES]
+
+/** The link to the front's route `path` carrying `token`. */
+export const tokenLink = (publicUrl: string, path: FrontRoute, token: string): string =>
   `${publicUrl}${path}?${new URLSearchParams({ token }).toString()}`
 
 export interface AccountMailsOptions {
