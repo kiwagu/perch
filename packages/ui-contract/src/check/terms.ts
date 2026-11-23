@@ -16,7 +16,7 @@ import {
 } from '../files'
 
 import type { Contract } from './contract'
-import { sameSynonym } from './synonyms'
+import { namedBy, sameSynonym } from './synonyms'
 
 type Kind = 'term' | 'role'
 
@@ -87,7 +87,7 @@ export function termsProblems(contract: Contract): Problem[] {
 
     for (const [index, synonym] of (entry.synonyms ?? []).entries()) {
       const path = [SECTION[kind], name, 'synonyms', index]
-      const naming = entries.find((other) => sameSynonym(other.name, synonym))
+      const naming = entries.find((other) => namedBy(other.name, synonym))
       const holder = forbidden.find((held) => sameSynonym(held.synonym, synonym))?.term
 
       if (naming !== undefined) {

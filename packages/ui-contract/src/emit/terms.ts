@@ -2,12 +2,11 @@
  * `CONTRACT_ROLES` and `CONTRACT_ROUTES`: every role of the contract by its name, from the terms
  * file when the contract writes one and from the vocabulary otherwise, and the route path of every
  * binding of a screen: its first by the screen's id (the binding its file is named by), a further
- * one by the id and its path (`<id>@<path>`, `routeKeyOf`), so every path has its name and a
- * binding added before it moves none. A path renamed on the first binding keeps its key; one
- * renamed on a further binding renames its key, a type error at every reader; a further binding
- * made the first takes the id, and every reader of the id with it.
- * Code and tests name a role or a route through them instead of writing it by hand; a route
- * renamed in its screen file reaches them all through the screen's id, which stays.
+ * one by the id and its path (`<id>@<path>`, `routeKeyOf`), so every path has its name. A
+ * binding added as a further one moves no key; one added as the first takes the id, and every
+ * reader of the id with it. The first binding's path renamed keeps its key, the screen's id, so it
+ * reaches every reader; a further binding's path renamed renames its key, a type error at each.
+ * Code and tests name a role or a route through them instead of writing it by hand.
  */
 
 import type { Contract } from '../check'

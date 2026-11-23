@@ -53,6 +53,15 @@ export function sameSynonym(a: string, b: string): boolean {
   return spellings(a).some((spelling) => ofB.includes(spelling))
 }
 
+/**
+ * Whether the synonym says the name: the name, whole, is what the synonym's pattern reads (the
+ * name `account` and the synonym `accounts`), or the other way round. Unlike two synonyms, a name
+ * reserves no plural of its own: the check forbids only synonyms.
+ */
+export const namedBy = (name: string, synonym: string): boolean =>
+  new RegExp(`^${wordsOf(synonym)}$`, 'i').test(name) ||
+  new RegExp(`^${wordsOf(name)}$`, 'i').test(synonym)
+
 /** The synonyms `base` does not say already: what a longer name built on it says beyond it. */
 const beyond = (base: string, forbidden: readonly Forbidden[]): Forbidden[] =>
   forbidden.filter(({ pattern }) => !pattern.test(base))

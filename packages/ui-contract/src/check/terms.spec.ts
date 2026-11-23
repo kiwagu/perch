@@ -154,6 +154,18 @@ describe('termsProblems', () => {
       ),
     ])
   })
+  it("lets a name and another term's synonym share only a plural neither base spelling takes", () => {
+    const terms: Terms = {
+      ...TERMS,
+      terms: {
+        ...TERMS.terms,
+        plane: { meaning: 'A flat thing.' },
+        region: { meaning: 'Where data lives.', synonyms: ['plan'] },
+      },
+    }
+
+    expect(termsProblems(withTerms(terms))).toEqual([])
+  })
   it('refuses a name that is a term and a role at once', () => {
     const terms: Terms = {
       ...TERMS,
