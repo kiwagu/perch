@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { type Contract, loadContract } from '../check'
-import { fieldFactsModuleOf, valuesModuleOf } from '../emit'
+import { fieldFactsModuleOf, termsModuleOf, valuesModuleOf } from '../emit'
 import { writeEmitRepository } from '../emit/emit.fixture'
 import { formatProblem, MODEL_FILE } from '../files'
 
@@ -73,6 +73,11 @@ describe('ui-contract emit', () => {
   it('writes the field facts module to --out', () => {
     expect(emit(['fields', '--out', 'src/field-facts.gen.ts'])).toMatchObject({ code: 0 })
     expect(read(`${PACKAGE}/src/field-facts.gen.ts`)).toBe(fieldFactsModuleOf(contractOf()))
+  })
+
+  it('writes the terms module to --out', () => {
+    expect(emit(['terms', '--out', 'src/contract-terms.gen.ts'])).toMatchObject({ code: 0 })
+    expect(read(`${PACKAGE}/src/contract-terms.gen.ts`)).toBe(termsModuleOf(contractOf()))
   })
 
   it('writes nowhere without --out: the caller names the file', () => {

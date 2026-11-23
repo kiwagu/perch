@@ -37,6 +37,7 @@ import {
   type ResolvedValue,
   type Screen,
   type ScreensFile,
+  type Terms,
   TOAST_RULE_ROW,
   type Vocabulary,
 } from '../files'
@@ -62,6 +63,8 @@ export interface ManifestInput {
   readonly model: Model
   readonly activities: Activity[]
   readonly scenarios: Scenario[]
+  /** The terms file, when the contract writes one. */
+  readonly terms?: Terms | undefined
   readonly product: Product
   /** When the manifest is built; now by default. */
   readonly now?: Date
@@ -260,6 +263,7 @@ export function buildManifest({
   model,
   activities,
   scenarios,
+  terms,
   product,
   now = new Date(),
 }: ManifestInput): Manifest {
@@ -269,6 +273,7 @@ export function buildManifest({
     generatedAt: now.toISOString(),
     product,
     contract: contractOf(vocabulary, screens),
+    ...(terms === undefined ? {} : { terms }),
     screens: screensOf(screens.screens, {
       screens: screens.screens,
       codes: vocabulary.codes,

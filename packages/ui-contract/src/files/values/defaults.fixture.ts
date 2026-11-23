@@ -22,7 +22,7 @@ export interface DefaultsRepository {
   readonly title?: number | undefined
   /** What `sign-out`'s `reason` writes, a YAML flow map. */
   readonly reason?: string
-  /** The codes `sign-out` declares beyond `failed`. */
+  /** The codes `sign-out` declares beyond `failed`, each with a condition of its own. */
   readonly codes?: readonly string[]
 }
 
@@ -66,9 +66,10 @@ export function writeDefaultsRepository(root: string, options: DefaultsRepositor
         '        description: Drop the unsent changes.\n',
         `        description: Drop the unsent changes.\n      reason: ${reason}\n`,
       )
+      // A map, the form every version reads and the one version 6 asks for.
       .replace(
-        '      - failed\n',
-        `      - failed\n${codes.map((code) => `      - ${code}\n`).join('')}`,
+        '    codes:\n      - failed\n',
+        `    codes:\n      failed: the device cannot reach the server\n${codes.map((code) => `      ${code}: the request answers ${code}\n`).join('')}`,
       ),
   )
   writeFileSync(

@@ -239,6 +239,25 @@ describe('buildManifest', () => {
       '/sample/$key': contract.screens.screens[0]?.bindings[0]?.params,
     })
   })
+  it('carries no terms for a contract that writes no terms file', () => {
+    expect(manifest.terms).toBeUndefined()
+    expect(Object.keys(manifest)).not.toContain('terms')
+  })
+  it('carries the terms file verbatim, after the vocabulary, for a contract that writes one', () => {
+    const terms = {
+      contexts: { sample: { meaning: 'The sample platform.' } },
+      terms: { account: { meaning: 'Whoever signs in.', synonyms: ['user'], storage: 'identity' } },
+      roles: { guest: { meaning: 'Nobody is signed in.' }, member: { meaning: 'A member.' } },
+    }
+    const withTerms = buildManifest({ ...contract, terms, product: PRODUCT, now: NOW })
+
+    expect(withTerms.terms).toEqual(terms)
+    expect(Object.keys(withTerms).slice(4, 6)).toEqual(['contract', 'terms'])
+    expect(manifestSchema.safeParse(withTerms).success).toBe(true)
+  })
+  it('tells an agent where the terms are', () => {
+    expect(manifest.contract.instructions.model).toContain('`terms`')
+  })
   it('gives each binding of a screen its example link', () => {
     const [binding] = contract.screens.screens[0]?.bindings ?? []
 

@@ -1,0 +1,112 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contexts": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "meaning": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the bounded context is: the part of the product whose terms mean one thing in it. At most 200 characters."
+          }
+        },
+        "required": [
+          "meaning"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The bounded contexts, by name: one while the product is one."
+    },
+    "terms": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "meaning": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and `storage` names it where storage does otherwise. At most 200 characters."
+          },
+          "synonyms": {
+            "description": "The words the contract's texts and the emitted constants never use for it.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*([ -][a-z0-9]+)*$",
+              "description": "A word the texts never use for it: lowercase, `tenant`, `device session`."
+            },
+            "uniqueItems": true
+          },
+          "storage": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$",
+            "description": "Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`."
+          }
+        },
+        "required": [
+          "meaning"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The platform's terms, by the one word the contract uses for each."
+    },
+    "roles": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+        "description": "A role of the contract: of its terms file, or of the vocabulary's Roles."
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "meaning": {
+            "type": "string",
+            "minLength": 1,
+            "description": "What holding the role means on a device: whose account is signed in and what applies to it. At most 200 characters."
+          },
+          "synonyms": {
+            "description": "The words the contract's texts and the emitted constants never use for it.",
+            "minItems": 1,
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9]*([ -][a-z0-9]+)*$",
+              "description": "A word the texts never use for it: lowercase, `tenant`, `device session`."
+            },
+            "uniqueItems": true
+          },
+          "storage": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)?$",
+            "description": "Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`."
+          }
+        },
+        "required": [
+          "meaning"
+        ],
+        "additionalProperties": false
+      },
+      "description": "The roles a device holds, by name: what `roles` of a binding, an anchor or an action list."
+    }
+  },
+  "required": [
+    "contexts",
+    "terms",
+    "roles"
+  ],
+  "additionalProperties": false,
+  "description": "The project's language: its contexts, its terms and its roles."
+}
