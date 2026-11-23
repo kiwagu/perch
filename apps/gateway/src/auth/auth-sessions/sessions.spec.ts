@@ -113,13 +113,13 @@ describe('AuthSessions', () => {
       await local.db.query(identityRoleSetStatement, { identity: user.id, role })
     }
 
-    await roleOf('operator')
+    await roleOf(CONTRACT_ROLES.operator)
     expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
 
     await roleOf('user')
     expect(callerOf(await sessions.read(token)).roles).toEqual([])
 
-    await roleOf('operator')
+    await roleOf(CONTRACT_ROLES.operator)
     expect(callerOf(await sessions.read(token)).roles).toEqual([CONTRACT_ROLES.operator])
   })
 

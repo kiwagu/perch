@@ -60,7 +60,7 @@ describe('operatorCaller', () => {
 
     expect(await asked()).toEqual({ kind: 'not-operator' })
 
-    await setRole(auth, ann.identity, 'operator')
+    await setRole(auth, ann.identity, CONTRACT_ROLES.operator)
 
     expect(await asked()).toMatchObject({ kind: 'caller', roles: [CONTRACT_ROLES.operator] })
   })

@@ -3,7 +3,7 @@ import { screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import type { Locale } from '@workspace/i18n'
-import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
@@ -173,7 +173,7 @@ describe('ShellView', () => {
 
   it("adds the console's link to an operator's navigation, and to nobody else's", () => {
     renderShell({
-      held: heldRoles(true, ['admin', 'operator']),
+      held: heldRoles(true, [CONTRACT_ROLES.admin, CONTRACT_ROLES.operator]),
       activePath: CONTRACT_ROUTES['user.profile'],
     })
 

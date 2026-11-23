@@ -26,7 +26,7 @@ const me: AuthUser = {
 }
 
 /** The roles of a page anyone opens, a guest or any signed-in account. */
-const ANYONE = ['guest', 'identity']
+const ANYONE = [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity]
 
 const Page = () => null
 

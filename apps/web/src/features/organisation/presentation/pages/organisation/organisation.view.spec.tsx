@@ -303,7 +303,7 @@ describe('OrganisationView of a member', () => {
 
     expect(screen.getByTestId('organisation.page.heading').textContent).toBe('Acme')
     expect(screen.getByTestId('organisation.page.role-badge').getAttribute('data-value')).toBe(
-      'member',
+      CONTRACT_ROLES.member,
     )
     expect(screen.getByTestId('organisation.page.role-badge').textContent).toBe(
       en['organisation.role.member'],
@@ -695,7 +695,7 @@ describe('OrganisationView of an administrator', () => {
     })
 
     expect(screen.getByTestId('organisation.page.role-badge').getAttribute('data-value')).toBe(
-      'admin',
+      CONTRACT_ROLES.admin,
     )
     expect(screen.getByTestId('organisation.page.role-badge').textContent).toBe(
       en['organisation.role.admin'],
@@ -837,7 +837,7 @@ describe('OrganisationView of an administrator', () => {
     await user.click(await screen.findByRole('option', { name: en['organisation.role.admin'] }))
 
     expect(screen.getByTestId('organisation.invite.role-select').getAttribute('data-value')).toBe(
-      'admin',
+      CONTRACT_ROLES.admin,
     )
 
     type('organisation.invite.email-input', 'cy@example.test')

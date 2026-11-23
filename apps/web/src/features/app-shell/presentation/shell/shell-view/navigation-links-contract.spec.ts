@@ -81,7 +81,7 @@ describe('the links of the navigation', () => {
   })
 
   it('tells a link of other roles apart by admission', () => {
-    const roles = [GUEST, IDENTITY, 'member', 'admin']
+    const roles = [GUEST, IDENTITY, CONTRACT_ROLES.member, CONTRACT_ROLES.admin]
     const profile: Link = {
       to: CONTRACT_ROUTES['user.profile'],
       roles: [IDENTITY, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],

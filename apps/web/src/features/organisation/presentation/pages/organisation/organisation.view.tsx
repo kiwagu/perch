@@ -52,7 +52,7 @@ export type {
 export interface OrganisationChoice {
   readonly key: string
   readonly name: string
-  readonly role: 'member' | 'admin'
+  readonly role: TenantRole
 }
 
 export interface OrganisationViewProps {

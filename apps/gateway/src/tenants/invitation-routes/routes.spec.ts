@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { recordId } from '@workspace/data'
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { invitationIdFactory, membershipIdFactory } from '@workspace/ids'
-import { CONTRACT_ROLES, CONTRACT_VALUES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES, type TenantRole } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
 
@@ -37,7 +37,7 @@ const { maxLength: MAX_TOKEN } = CONTRACT_VALUES.token
 const { maxLength: MAX_INVITATION } = CONTRACT_VALUES['invitation-ref']
 
 /** What the answer to a read of a link holds. */
-const read = (organisation: string, role: 'member' | 'admin', forYou: boolean) => ({
+const read = (organisation: string, role: TenantRole, forYou: boolean) => ({
   status: 200,
   body: { invitation: { organisation: { name: organisation }, role, forYou } },
 })
@@ -61,11 +61,7 @@ async function invitedHarness() {
     await root.organisations.create({ identity: ann.identity.id, key: 'zeta', name: 'Zeta' })
   )._unsafeUnwrap()
 
-  const invite = async (
-    email: string,
-    role: 'member' | 'admin' = CONTRACT_ROLES.member,
-    key = 'acme',
-  ) => {
+  const invite = async (email: string, role: TenantRole = CONTRACT_ROLES.member, key = 'acme') => {
     const view = (
       await root.organisations.invitations.invite({ actor: ann.identity.id, key, email, role })
     )._unsafeUnwrap()

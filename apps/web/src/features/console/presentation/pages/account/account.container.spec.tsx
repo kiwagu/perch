@@ -76,7 +76,7 @@ describe('AccountContainer on the router', () => {
     expect(byId('console.account.heading').textContent).toBe('Una')
     expect(byId('console.account.email-cell').textContent).toBe(una.email)
     expect(byId('console.account.organisations.role-badge').getAttribute('data-value')).toBe(
-      'admin',
+      CONTRACT_ROLES.admin,
     )
     expect(reads(accounts)).toEqual([['read', una.id]])
   })

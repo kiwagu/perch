@@ -605,7 +605,7 @@ describe('SyncConnection', () => {
       return socket.sent.flatMap((message) => (message.type === 'welcome' ? [message.roles] : []))
     }
 
-    await roleOf('operator')
+    await roleOf(CONTRACT_ROLES.operator)
     expect(await welcomedRoles()).toEqual([[CONTRACT_ROLES.operator]])
 
     // Taken back: the next hello reads it so, nothing kept from the one before.

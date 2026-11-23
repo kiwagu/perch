@@ -1022,7 +1022,7 @@ describe('Organisations.setRole', () => {
 
   it('re-judges a role written again, and no connection for a change that is refused', async () => {
     const { organisations, ann, bob, cat, steps } = await withBob()
-    const set = (actor: IdentityId, identity: IdentityId, role: 'member' | 'admin') =>
+    const set = (actor: IdentityId, identity: IdentityId, role: TenantRole) =>
       organisations.setRole({ actor, key: 'acme', identity, role })
 
     expect(await set(ann.id, bob.id, CONTRACT_ROLES.member)).toEqual(ok(undefined))

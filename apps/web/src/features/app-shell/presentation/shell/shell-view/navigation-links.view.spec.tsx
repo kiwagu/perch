@@ -2,7 +2,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
@@ -78,7 +78,7 @@ describe('NavigationLinks', () => {
     renderWithProviders(
       <NavigationLinks
         activePath={CONTRACT_ROUTES['console.users']}
-        held={heldRoles(true, ['operator'])}
+        held={heldRoles(true, [CONTRACT_ROLES.operator])}
       />,
       { locale: 'es', es },
     )
@@ -98,7 +98,11 @@ describe('NavigationLinks', () => {
   })
 
   it('shows no console link to an account that is no operator, an organisation admin included', () => {
-    for (const held of [ACCOUNT, heldRoles(true, ['member']), heldRoles(true, ['admin'])]) {
+    for (const held of [
+      ACCOUNT,
+      heldRoles(true, [CONTRACT_ROLES.member]),
+      heldRoles(true, [CONTRACT_ROLES.admin]),
+    ]) {
       const { unmount } = renderWithProviders(
         <NavigationLinks activePath={CONTRACT_ROUTES['user.profile']} held={held} />,
       )

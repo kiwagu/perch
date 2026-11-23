@@ -34,7 +34,7 @@ import { ShellContainer } from './shell.container'
 import { ShellFrameContext } from './shell-frame'
 
 /** The roles of a page anyone opens, a guest or any signed-in account. */
-const ANYONE = ['guest', 'identity']
+const ANYONE = [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity]
 
 const HomeModule = defineModule({
   id: 'home',

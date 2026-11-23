@@ -34,9 +34,9 @@ const ROOT = join(import.meta.dirname, '../../../..')
 const ROLE_SETS: readonly (readonly string[])[] = [
   [GUEST],
   [IDENTITY],
-  [IDENTITY, 'member'],
-  [IDENTITY, 'admin'],
-  [IDENTITY, 'operator'],
+  [IDENTITY, CONTRACT_ROLES.member],
+  [IDENTITY, CONTRACT_ROLES.admin],
+  [IDENTITY, CONTRACT_ROLES.operator],
 ]
 
 /** The path of the binding that opens the not-found screen. */

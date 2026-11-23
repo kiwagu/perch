@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { idSchemas, invitationIdFactory, profileIdFactory } from '@workspace/ids'
-import { CONTRACT_ROLES, CONTRACT_VALUES, isTenantKey } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_VALUES, isTenantKey, type TenantRole } from '@workspace/kernel'
 import { membership, tenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
@@ -58,7 +58,7 @@ const asMember = (email: string) => ({ email, role: CONTRACT_ROLES.member })
 afterEach(closeHarness)
 
 /** A member as the member list answers it. */
-function memberOf(signedUp: SignedUp, role: 'admin' | 'member') {
+function memberOf(signedUp: SignedUp, role: TenantRole) {
   return { identity: signedUp.identity, role }
 }
 

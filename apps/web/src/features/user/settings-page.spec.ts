@@ -7,7 +7,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { routerOf } from '../../platform/__fixtures__/router'
@@ -47,7 +47,7 @@ describe('the settings page', () => {
     expect(loaded.settings).toBe(1)
 
     // The browser loads the module once, however many routers open the page.
-    await opened([IDENTITY, 'admin'], CONTRACT_ROUTES['user.settings'])
+    await opened([IDENTITY, CONTRACT_ROLES.admin], CONTRACT_ROUTES['user.settings'])
 
     expect(loaded.settings).toBe(1)
   })

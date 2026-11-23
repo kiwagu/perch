@@ -11,7 +11,7 @@ import {
 import { nodeEngines } from '@workspace/data/engines/node'
 import { interceptQueries, openTestDb, readSchema } from '@workspace/data/testing'
 import { type IdentityId, identityIdFactory, membershipIdFactory } from '@workspace/ids'
-import { CONTRACT_ROLES } from '@workspace/kernel'
+import { CONTRACT_ROLES, type TenantRole } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 
@@ -162,11 +162,8 @@ async function harness() {
     (await organisations.create({ identity: creator.id, key, name }))._unsafeUnwrap()
 
   /** Ann invites `email` into `key` (acme unless named) as `role`. */
-  const invited = async (
-    email: string,
-    role: 'member' | 'admin' = CONTRACT_ROLES.member,
-    key = 'acme',
-  ) => (await organisations.invitations.invite({ actor: ann.id, key, email, role }))._unsafeUnwrap()
+  const invited = async (email: string, role: TenantRole = CONTRACT_ROLES.member, key = 'acme') =>
+    (await organisations.invitations.invite({ actor: ann.id, key, email, role }))._unsafeUnwrap()
 
   /** The mail the last invitation started. */
   const lastMailed = (): MailedInvitation => {
@@ -182,7 +179,7 @@ async function harness() {
   /** `who` (an account of the directory) joins acme through an invitation, as `role`. */
   const joined = async (
     who: { id: IdentityId; email: string },
-    role: 'member' | 'admin' = CONTRACT_ROLES.member,
+    role: TenantRole = CONTRACT_ROLES.member,
   ) => {
     const view = await invited(who.email, role)
 

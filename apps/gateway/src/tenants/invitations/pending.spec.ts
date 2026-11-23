@@ -9,7 +9,7 @@ import {
   membershipIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
-import { CONTRACT_ROLES } from '@workspace/kernel'
+import { CONTRACT_ROLES, type TenantRole } from '@workspace/kernel'
 import { manualClock } from '@workspace/replica/testing'
 
 import identityRow from '../../auth/__fixtures__/identity-row.surql'
@@ -104,11 +104,8 @@ async function harness() {
   }
 
   /** `ann` invites `email` to `tenant` (acme unless named) with `role`. */
-  const invite = async (
-    email: string,
-    role: 'member' | 'admin' = CONTRACT_ROLES.member,
-    tenant = acme,
-  ) => (await invitations.replace({ tenant, email, role, inviter: ann }))._unsafeUnwrap()
+  const invite = async (email: string, role: TenantRole = CONTRACT_ROLES.member, tenant = acme) =>
+    (await invitations.replace({ tenant, email, role, inviter: ann }))._unsafeUnwrap()
 
   return { directory, clock, invitations, ann, bob, acme, organisation, identity, rows, invite }
 }

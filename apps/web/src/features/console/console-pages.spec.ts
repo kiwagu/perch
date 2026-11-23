@@ -6,7 +6,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 
-import { CONTRACT_ROUTES } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { routerOf } from '../../platform/__fixtures__/router'
@@ -33,8 +33,8 @@ vi.mock('./presentation/pages/account/account.container', (original) => {
 const REFUSED: readonly (readonly string[])[] = [
   [GUEST],
   [IDENTITY],
-  [IDENTITY, 'member'],
-  [IDENTITY, 'admin'],
+  [IDENTITY, CONTRACT_ROLES.member],
+  [IDENTITY, CONTRACT_ROLES.admin],
 ]
 
 /** The router of the console at `path` for a device holding `roles`, loaded; nothing renders it. */
@@ -61,14 +61,18 @@ describe("the console's pages", () => {
 
     expect([...loaded]).toEqual([])
 
-    expect((await opened([IDENTITY, 'operator'], CONTRACT_ROUTES['console.users']))?.status).toBe(
-      'success',
-    )
+    expect(
+      (await opened([IDENTITY, CONTRACT_ROLES.operator], CONTRACT_ROUTES['console.users']))?.status,
+    ).toBe('success')
     expect([...loaded]).toEqual(['users'])
 
     expect(
-      (await opened([IDENTITY, 'operator'], `${CONTRACT_ROUTES['console.account']}?id=idn_ann`))
-        ?.status,
+      (
+        await opened(
+          [IDENTITY, CONTRACT_ROLES.operator],
+          `${CONTRACT_ROUTES['console.account']}?id=idn_ann`,
+        )
+      )?.status,
     ).toBe('success')
     expect([...loaded]).toEqual(['users', 'account'])
   })
