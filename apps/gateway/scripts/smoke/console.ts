@@ -4,6 +4,7 @@
  * signs it out everywhere.
  */
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Mailbox } from '@workspace/mailbox'
 import { CLOSE } from '@workspace/replica/protocol'
 
@@ -37,7 +38,9 @@ export async function consoleSteps(
       throw new Error('the gateway is not open')
     }
 
-    const set = unwrap(await setPlatformRole(opened.root.local, operatorEmail, 'operator'))
+    const set = unwrap(
+      await setPlatformRole(opened.root.local, operatorEmail, CONTRACT_ROLES.operator),
+    )
 
     check(set === 'set', `the role write answered ${set}`)
   })

@@ -1,5 +1,6 @@
 import { SHAPE_RUNNER } from '@workspace/data'
 import { replicaSchema } from '@workspace/database/replica-schema'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import { COMMANDS } from '../../platform/commands.port'
@@ -49,16 +50,16 @@ export const OrganisationModule = defineModule({
   declarations: { OrganisationPage: OrganisationContainer, InvitationPage: InvitationContainer },
   routes: [
     {
-      path: '/org',
+      path: CONTRACT_ROUTES.organisation,
       page: 'OrganisationPage',
       guard: 'authenticated',
-      roles: ['identity', 'member', 'admin'],
+      roles: [CONTRACT_ROLES.identity, CONTRACT_ROLES.member, CONTRACT_ROLES.admin],
     },
     // Open to anyone: the link says what it offers, and a guest is asked to sign in first.
     {
-      path: '/invitation',
+      path: CONTRACT_ROUTES['organisation.invitation'],
       page: 'InvitationPage',
-      roles: ['guest', 'identity'],
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
       search: z.object({ token: z.string().min(1).max(4096).optional() }),
     },
   ],

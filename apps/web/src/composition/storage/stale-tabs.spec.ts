@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { laggingStorage } from '../__fixtures__/lagging-storage'
@@ -24,7 +25,7 @@ const SIGN_INS_KEY = 'perch.session.sign-ins'
 
 const membership = (key: string): Membership => ({
   tenant: { id: tenantIdFactory.create(), key, name: key },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 })
 
 const ann = {

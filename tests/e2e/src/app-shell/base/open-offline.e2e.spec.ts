@@ -1,6 +1,10 @@
 // scenario: app-shell/base/open-offline
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, signUp, test } from '../../support/fixtures'
 import { precachedScript } from '../../support/precache'
+import { atRoute } from '../../support/routes'
 
 // The one test that lets the app's service worker run: it opens the app offline.
 test.use({ serviceWorkers: 'allow' })
@@ -61,7 +65,7 @@ test.describe('Open the app without a network', { tag: '@full' }, () => {
       //   [user.profile.heading] shows the name the account signed up with, and
       //   [app-shell.sync-message] carries [code:offline]
       await appReady(page)
-      await expect(page).toHaveURL(/\/me$/)
+      await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
       await expect(page.getByTestId('user.profile.heading')).toHaveText(account.name)
       await expect(page.getByTestId('app-shell.sync-message')).toHaveAttribute(
         'data-code',

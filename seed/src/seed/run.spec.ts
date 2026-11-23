@@ -2,6 +2,7 @@ import { errAsync, okAsync } from 'neverthrow'
 import { describe, expect, it } from 'vitest'
 
 import { type AuthUser, dataError } from '@workspace/data'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type {
   Inbox,
   Invited,
@@ -136,7 +137,7 @@ function recordingClient(members: readonly string[] = []) {
 
       return okAsync({
         tenant: { id: someOrganisation, key: input.key, name: input.name },
-        role: 'admin',
+        role: CONTRACT_ROLES.admin,
       })
     },
     ensureInvited: (key, email) => {
@@ -159,7 +160,7 @@ function recordingClient(members: readonly string[] = []) {
 
       return okAsync({
         tenant: { id: someOrganisation, key: 'joined', name: 'Joined' },
-        role: 'member',
+        role: CONTRACT_ROLES.member,
       })
     },
   }

@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import { useLocale, useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -220,7 +221,7 @@ export function SignInView(props: SignInViewProps) {
               {props.renders('user.sign-in.forgot-link') ? (
                 // The flow moves, carrying the email typed; the address is there for a new tab.
                 <a
-                  href="/forgot-password"
+                  href={CONTRACT_ROUTES['user.forgot-password']}
                   className="self-start text-sm underline"
                   onClick={(event) => {
                     event.preventDefault()

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Membership } from '@workspace/replica/protocol'
 
 import { signedIn } from '../__fixtures__/signed-in'
@@ -25,7 +26,7 @@ const ann = {
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 describe('memberships and the current tenant', () => {

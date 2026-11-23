@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { FakeShapeRunner } from '@workspace/data/testing'
 import { Container, token } from '@workspace/di'
 import type { PlatformRole } from '@workspace/kernel'
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { GUEST, IDENTITY } from '@workspace/ui-contract/anchors'
 
 import { holding } from './__fixtures__/router'
@@ -48,9 +49,9 @@ const LazyModule = defineModule({
   providers: [{ provide: WORDS, useFactory: () => "the operator's page" }],
   declarations: { Operator: { load: () => load() }, Home, Lost },
   routes: [
-    { path: '/console', page: 'Operator', roles: ['operator'] },
+    { path: '/console', page: 'Operator', roles: [CONTRACT_ROLES.operator] },
     { path: '/home', page: 'Home', roles: [GUEST, IDENTITY] },
-    { path: '/$', page: 'Lost', roles: [GUEST, IDENTITY] },
+    { path: CONTRACT_ROUTES['not-found'], page: 'Lost', roles: [GUEST, IDENTITY] },
   ],
 })
 
@@ -135,13 +136,13 @@ describe('a page whose code loads on demand', () => {
     expect(await screen.findByText('no page here')).toBeTruthy()
     cleanup()
 
-    openAt('/console', holding([IDENTITY, 'admin']))
+    openAt('/console', holding([IDENTITY, CONTRACT_ROLES.admin]))
     expect(await screen.findByText('no page here')).toBeTruthy()
     expect(load).not.toHaveBeenCalled()
   })
 
   it("loads its code once its roles admit the device, and renders it in its module's scope", async () => {
-    openAt('/console', holding([IDENTITY, 'operator']))
+    openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
     expect(screen.getByText('the frame')).toBeTruthy()
@@ -155,7 +156,7 @@ describe('a page whose code loads on demand', () => {
     expect(await screen.findByText('no page here')).toBeTruthy()
     expect(load).not.toHaveBeenCalled()
 
-    act(() => grant(['operator']))
+    act(() => grant([CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
     expect(load).toHaveBeenCalledTimes(1)
@@ -164,7 +165,7 @@ describe('a page whose code loads on demand', () => {
   it('shows the frame at once while its code loads, its place empty, and the page once the code is in', async () => {
     const code = heldLoad()
 
-    openAt('/console', holding([IDENTITY, 'operator']))
+    openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText('the frame')).toBeTruthy()
     expect(screen.getByRole('main').textContent).toBe('the frame')
@@ -178,7 +179,7 @@ describe('a page whose code loads on demand', () => {
 
   it('opened from another page, leaves its place empty in the frame while its code loads', async () => {
     const code = heldLoad()
-    const router = openAt('/home', holding([IDENTITY, 'operator']))
+    const router = openAt('/home', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText('the home page')).toBeTruthy()
 
@@ -196,7 +197,7 @@ describe('a page whose code loads on demand', () => {
   })
 
   it('loads its code once, however often the page opens', async () => {
-    const router = openAt('/console', holding([IDENTITY, 'operator']))
+    const router = openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
 
@@ -209,7 +210,7 @@ describe('a page whose code loads on demand', () => {
   })
 
   it('stays as it is when the open page is checked again', async () => {
-    const router = openAt('/console', holding([IDENTITY, 'operator']))
+    const router = openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText("the operator's page")).toBeTruthy()
 
@@ -225,7 +226,7 @@ describe('a page whose code loads on demand', () => {
     const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     load.mockImplementationOnce(() => Promise.reject(new Error('the code did not arrive')))
-    const router = openAt('/console', holding([IDENTITY, 'operator']))
+    const router = openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     expect(await screen.findByText('the page failed')).toBeTruthy()
 
@@ -241,7 +242,7 @@ describe('a page whose code loads on demand', () => {
     const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
     load.mockImplementationOnce(() => Promise.reject(new Error('the code did not arrive')))
-    openAt('/console', holding([IDENTITY, 'operator']))
+    openAt('/console', holding([IDENTITY, CONTRACT_ROLES.operator]))
 
     fireEvent.click(await screen.findByText('the page failed'))
 

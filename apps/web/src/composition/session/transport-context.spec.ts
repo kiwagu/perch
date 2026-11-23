@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { EndReason } from '@workspace/replica/sync'
 
 import { type KeptSession, memoryStorage } from '../storage'
@@ -54,7 +55,7 @@ describe('sessionTransportContext', () => {
   it("hands a welcome's platform roles to the session", () => {
     const { heard, context } = contextHearing()
 
-    context.onRoles(['operator'])
+    context.onRoles([CONTRACT_ROLES.operator])
 
     expect(heard).toEqual(['roles'])
   })

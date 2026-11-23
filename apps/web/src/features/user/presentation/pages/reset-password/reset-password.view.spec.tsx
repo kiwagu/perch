@@ -2,6 +2,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { expectEachCodeMarksItsField } from '../../../../../error-fields.test-support'
@@ -139,7 +140,7 @@ describe('ResetPasswordView', () => {
 
       expect(screen.getByTestId('user.reset-password.error').getAttribute('data-code')).toBe(code)
       expect(screen.getByTestId('user.reset-password.forgot-link').getAttribute('href')).toBe(
-        '/forgot-password',
+        CONTRACT_ROUTES['user.forgot-password'],
       )
       expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
     },
@@ -152,7 +153,7 @@ describe('ResetPasswordView', () => {
       'password-reset',
     )
     expect(screen.getByTestId('user.reset-password.sign-in-link').getAttribute('href')).toBe(
-      '/sign-in',
+      CONTRACT_ROUTES['user.sign-in'],
     )
     expect(screen.queryByTestId('user.reset-password.form')).toBeNull()
   })

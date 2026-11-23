@@ -2,6 +2,7 @@
 import { screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { CONTRACT_ROLES, CONTRACT_ROUTES } from '@workspace/kernel'
 import { heldRoles } from '@workspace/ui-contract/anchors'
 
 import en from '../../../../../platform/i18n/app.en.json'
@@ -19,32 +20,36 @@ const links = () =>
 
 describe('NavigationLinks', () => {
   it('links a signed-in account to its profile, marked current on it', () => {
-    renderWithProviders(<NavigationLinks activePath="/me" held={ACCOUNT} />)
+    renderWithProviders(
+      <NavigationLinks activePath={CONTRACT_ROUTES['user.profile']} held={ACCOUNT} />,
+    )
 
     const profile = screen.getByTestId('app-shell.nav.profile-link')
 
-    expect(profile.getAttribute('href')).toBe('/me')
+    expect(profile.getAttribute('href')).toBe(CONTRACT_ROUTES['user.profile'])
     expect(profile.getAttribute('aria-current')).toBe('page')
     expect(profile.textContent).toBe(en['app.shell.nav.profile'])
   })
 
   it('links a signed-in user to the organisation page', () => {
-    renderWithProviders(<NavigationLinks activePath="/org" held={ACCOUNT} />)
+    renderWithProviders(
+      <NavigationLinks activePath={CONTRACT_ROUTES.organisation} held={ACCOUNT} />,
+    )
 
     const organisation = screen.getByTestId('app-shell.nav.organisation-link')
 
-    expect(organisation.getAttribute('href')).toBe('/org')
+    expect(organisation.getAttribute('href')).toBe(CONTRACT_ROUTES.organisation)
     expect(organisation.getAttribute('aria-current')).toBe('page')
     expect(organisation.textContent).toBe(en['app.shell.nav.organisation'])
     expect(screen.getByTestId('app-shell.nav.profile-link').getAttribute('aria-current')).toBeNull()
   })
 
   it('links a signed-in user to their devices', () => {
-    renderWithProviders(<NavigationLinks activePath="/devices" held={ACCOUNT} />)
+    renderWithProviders(<NavigationLinks activePath={CONTRACT_ROUTES.device} held={ACCOUNT} />)
 
     const devices = screen.getByTestId('app-shell.nav.devices-link')
 
-    expect(devices.getAttribute('href')).toBe('/devices')
+    expect(devices.getAttribute('href')).toBe(CONTRACT_ROUTES.device)
     expect(devices.getAttribute('aria-current')).toBe('page')
     expect(devices.textContent).toBe(en['app.shell.nav.devices'])
   })
@@ -54,7 +59,13 @@ describe('NavigationLinks', () => {
       <a href={`/app${to}`} data-routed="yes" {...props} />
     )
 
-    renderWithProviders(<NavigationLinks link={RoutedLink} activePath="/settings" held={ACCOUNT} />)
+    renderWithProviders(
+      <NavigationLinks
+        link={RoutedLink}
+        activePath={CONTRACT_ROUTES['user.settings']}
+        held={ACCOUNT}
+      />,
+    )
 
     const settings = screen.getByTestId('app-shell.nav.settings-link')
 
@@ -65,13 +76,16 @@ describe('NavigationLinks', () => {
 
   it('links an operator to the console as well, marked current on it, in the language the app speaks', () => {
     renderWithProviders(
-      <NavigationLinks activePath="/console/users" held={heldRoles(true, ['operator'])} />,
+      <NavigationLinks
+        activePath={CONTRACT_ROUTES['console.users']}
+        held={heldRoles(true, [CONTRACT_ROLES.operator])}
+      />,
       { locale: 'es', es },
     )
 
     const consoleLink = screen.getByTestId('app-shell.nav.console-link')
 
-    expect(consoleLink.getAttribute('href')).toBe('/console/users')
+    expect(consoleLink.getAttribute('href')).toBe(CONTRACT_ROUTES['console.users'])
     expect(consoleLink.getAttribute('aria-current')).toBe('page')
     expect(consoleLink.textContent).toBe(es['app.shell.nav.console'])
     expect(links()).toEqual([
@@ -84,8 +98,14 @@ describe('NavigationLinks', () => {
   })
 
   it('shows no console link to an account that is no operator, an organisation admin included', () => {
-    for (const held of [ACCOUNT, heldRoles(true, ['member']), heldRoles(true, ['admin'])]) {
-      const { unmount } = renderWithProviders(<NavigationLinks activePath="/me" held={held} />)
+    for (const held of [
+      ACCOUNT,
+      heldRoles(true, [CONTRACT_ROLES.member]),
+      heldRoles(true, [CONTRACT_ROLES.admin]),
+    ]) {
+      const { unmount } = renderWithProviders(
+        <NavigationLinks activePath={CONTRACT_ROUTES['user.profile']} held={held} />,
+      )
 
       expect(screen.queryByTestId('app-shell.nav.console-link')).toBeNull()
       expect(links()).toEqual([

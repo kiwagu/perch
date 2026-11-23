@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fromDriverValue, type LocalDb } from '@workspace/data'
 import { interceptQueries } from '@workspace/data/testing'
 import { device_sessionIdFactory, identityIdFactory } from '@workspace/ids'
-import { PASSWORD_LENGTH } from '@workspace/kernel'
+import { CONTRACT_ROLES, PASSWORD_LENGTH } from '@workspace/kernel'
 
 import { passwordOfLength } from '../__fixtures__/platform-values'
 import { linkToken } from '../mail/__fixtures__/outbox'
@@ -521,7 +521,7 @@ describe('createAuthInstance', () => {
 
     await local.db.query(identityRoleSetStatement, {
       identity: user.id,
-      role: 'operator',
+      role: CONTRACT_ROLES.operator,
       reason: 'MARKER kept',
     })
 
@@ -560,7 +560,11 @@ describe('createAuthInstance', () => {
       identity: user.id,
     })
 
-    expect(standing).toEqual({ role: 'operator', banned: false, ban_reason: 'MARKER kept' })
+    expect(standing).toEqual({
+      role: CONTRACT_ROLES.operator,
+      banned: false,
+      ban_reason: 'MARKER kept',
+    })
     expect(await auth.api.getSession({ headers: bearer(token) })).not.toBeNull()
   })
 

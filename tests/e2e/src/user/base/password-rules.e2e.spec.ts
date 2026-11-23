@@ -1,6 +1,8 @@
 // scenario: user/base/password-rules
 import type { Locator } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, checkYourMail, expect, test } from '../../support/fixtures'
 import { expectDeclaredMail } from '../../support/mail-contract'
@@ -49,7 +51,7 @@ test.describe('Sign up with a password that keeps the rules', { tag: '@smoke' },
     }
 
     await test.step('1. Open [/sign-in] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/sign-in')
+      await page.goto(CONTRACT_ROUTES['user.sign-in'])
       await appReady(page)
       await expect(list).toHaveCount(0)
     })

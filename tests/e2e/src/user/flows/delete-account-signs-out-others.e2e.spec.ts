@@ -1,4 +1,7 @@
 // scenario: user/flows/delete-account-signs-out-others
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import {
   accountDeleted,
   askToDeleteAccount,
@@ -48,12 +51,12 @@ test.describe('Delete the account while another device is signed in', { tag: '@f
       await expect(page.getByTestId('user.delete-account.sign-in-link')).toBeVisible({
         timeout: 10_000,
       })
-      await expectPathname(page, '/delete-account')
+      await expectPathname(page, CONTRACT_ROUTES['user.delete-account'])
     })
 
     // Expected: Device B is signed out: its URL is [/sign-in] and [user.sign-in.notice-message]
     //   carries [code:signed-out-elsewhere]
-    await expectPathname(deviceB, '/sign-in', 10_000)
+    await expectPathname(deviceB, CONTRACT_ROUTES['user.sign-in'], 10_000)
     await expect(signInNotice(deviceB, 'signed-out-elsewhere')).toBeVisible()
     await expect(deviceB.getByTestId('app-shell.nav')).toHaveCount(0)
     // Device A keeps the page's message, signed out too.

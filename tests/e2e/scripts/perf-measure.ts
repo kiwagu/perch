@@ -16,6 +16,8 @@
 
 import { type CDPSession, chromium, devices, type Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { BASE_URL } from '../playwright.config'
 import { APP_READY, signUp } from '../src/support/fixtures'
 
@@ -163,7 +165,7 @@ async function main(): Promise<number> {
       const fresh = await open()
 
       await slowDown(fresh.cdp)
-      await fresh.page.goto('/sign-in', { timeout: 120_000 })
+      await fresh.page.goto(CONTRACT_ROUTES['user.sign-in'], { timeout: 120_000 })
       guest?.push(await stepsOf(fresh.page, 'ready'))
       await fresh.context.close()
     }

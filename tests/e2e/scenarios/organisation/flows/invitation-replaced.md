@@ -10,9 +10,9 @@ data:
 ---
 # Invite the same email again
 
-Where: [/org] on device A (user A, administrator) and [/invitation] from [mail:organisations.invite] on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/invitation] from [mail:organisations.invite] on device B (user B, another browser)
 
-## Scenario: A second invitation of an email replaces the first: the first link no longer works, and the second makes the account an administrator
+## Scenario: A second invitation of an email replaces the first: the first link no longer works, and the second makes the account an admin
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]

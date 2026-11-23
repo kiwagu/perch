@@ -1,4 +1,7 @@
 // scenario: user/flows/idle-traffic
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { appReady, expect, test } from '../../support/fixtures'
 
 const MINUTE_MS = 60_000
@@ -61,7 +64,7 @@ test.describe('Stay quiet while idle', { tag: '@full' }, () => {
           }
         })
         await page.clock.install()
-        await page.goto('/me')
+        await page.goto(CONTRACT_ROUTES['user.profile'])
         await appReady(page)
         await expect(page.getByTestId('user.profile.heading')).toHaveText(signedIn.name)
         await expect(page.locator('html')).toHaveAttribute('data-sync-channel', 'up', {

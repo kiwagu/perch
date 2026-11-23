@@ -11,9 +11,9 @@ data:
 ---
 # Open the organisation page as a member
 
-Where: [/org] on device A (user A, administrator) and [/org] on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/org] on device B (user B, another browser)
 
-## Scenario: An administrator invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations
+## Scenario: An admin invites an unknown email and an account alike; the account accepts on its organisation page and sees the organisation as a member, without its members or the invitations
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]

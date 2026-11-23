@@ -1,4 +1,7 @@
 // scenario: device/flows/device-limit-place-freed
+
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import {
   deviceLimitDialog,
@@ -40,7 +43,7 @@ test.describe('Confirm a sign-in past the device limit once a place freed', {
     await test.step("4. On device A, open [/devices], click [device.list.revoke-button] on device C's [device.list.session-item] and confirm with [app-shell.confirmation.confirm-button]", async () => {
       // Through the navigation, not a reload: device A stays the device seen least recently.
       await page.getByTestId('app-shell.nav.devices-link').click()
-      await expectPathname(page, '/devices')
+      await expectPathname(page, CONTRACT_ROUTES.device)
 
       // The list goes by sign-in, the earliest first: device A's (this one), then device C's.
       const items = page.getByTestId('device.list').getByTestId('device.list.session-item')
@@ -56,12 +59,12 @@ test.describe('Confirm a sign-in past the device limit once a place freed', {
     await test.step('5. On device B, click [user.sign-in.device-limit-dialog.confirm-button]', async () => {
       await deviceB.getByTestId('user.sign-in.device-limit-dialog.confirm-button').click()
       // Expected: After step 5 device B is on [/me]
-      await expectPathname(deviceB, '/me')
+      await expectPathname(deviceB, CONTRACT_ROUTES['user.profile'])
     })
 
     await test.step('6. On device B, open [/devices]', async () => {
       await deviceB.getByTestId('app-shell.nav.devices-link').click()
-      await expectPathname(deviceB, '/devices')
+      await expectPathname(deviceB, CONTRACT_ROUTES.device)
       // Expected: After step 6 [device.list] holds eleven [device.list.session-item]: device B's
       //   in [state:current], device C's in [state:revoked], and device A's, seen least recently,
       //   and the eight others in neither

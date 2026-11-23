@@ -1,8 +1,11 @@
 // scenario: user/flows/unsaved-input
 import type { Page } from '@playwright/test'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import { generate } from '../../support/data'
 import { appReady, expect, test } from '../../support/fixtures'
+import { atRoute } from '../../support/routes'
 import { watchShown } from '../../support/shown'
 
 /** The frame's leave dialog, by its anchor and its code together. */
@@ -18,7 +21,7 @@ test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => 
     const name = page.getByTestId('user.profile.name-input')
 
     await test.step('1. Open [/me] and wait for [app-shell.status] to reach [state:ready]', async () => {
-      await page.goto('/me')
+      await page.goto(CONTRACT_ROUTES['user.profile'])
       await appReady(page)
       await expect(name).toHaveValue(signedIn.name)
     })
@@ -33,7 +36,7 @@ test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => 
 
     // - After step 3 [app-shell.leave-dialog] carries [code:unsaved-input] and the page stays on [/me]
     await expect(dialog(page)).toBeVisible()
-    await expect(page).toHaveURL(/\/me$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES['user.profile']))
 
     await test.step('4. Click [app-shell.leave-dialog.cancel-button]', async () => {
       await page.getByTestId('app-shell.leave-dialog.cancel-button').click()
@@ -53,7 +56,7 @@ test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => 
     })
 
     // - After step 6 the page is on [/org]
-    await expect(page).toHaveURL(/\/org$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
 
     await test.step('7. Open [/me], enter the new name into [user.profile.name-input], then enter the stored name back', async () => {
       await page.getByTestId('app-shell.nav.profile-link').click()
@@ -71,7 +74,7 @@ test.describe('Leave the profile with an unsaved name', { tag: '@full' }, () => 
     })
 
     // - After step 8 the page is on [/org] without [app-shell.leave-dialog] having been shown
-    await expect(page).toHaveURL(/\/org$/)
+    await expect(page).toHaveURL(atRoute(CONTRACT_ROUTES.organisation))
     expect(await shown()).toBe(false)
 
     await test.step("9. Open [/me], enter the new name into [user.profile.name-input] and reload the page, accepting the browser's prompt", async () => {

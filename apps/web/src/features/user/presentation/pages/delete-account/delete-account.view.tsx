@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
@@ -102,7 +103,7 @@ export function DeleteAccountView(props: DeleteAccountViewProps) {
           )}
           {props.renders('user.delete-account.sign-in-link') && props.guest ? (
             <Link
-              to="/sign-in"
+              to={CONTRACT_ROUTES['user.sign-in']}
               className="text-sm underline"
               data-testid="user.delete-account.sign-in-link"
             >

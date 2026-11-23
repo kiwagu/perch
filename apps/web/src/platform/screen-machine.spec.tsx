@@ -5,6 +5,8 @@ import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { emit, fromPromise, setup } from 'xstate'
 
+import { CONTRACT_ROLES } from '@workspace/kernel'
+
 import { fakeServices, fakeSession } from './__fixtures__/session'
 import { type ConfirmGuard, ConfirmGuardContext } from './confirm-guard.port'
 import { type LeaveGuard, LeaveGuardContext } from './leave-guard.port'
@@ -220,9 +222,13 @@ const PageModule = defineModule({
   id: 'page',
   declarations: { Page, WatchedPage, There: () => <p>there</p> },
   routes: [
-    { path: '/here', page: 'Page', roles: ['guest', 'identity'] },
-    { path: '/watched', page: 'WatchedPage', roles: ['guest', 'identity'] },
-    { path: '/there', page: 'There', roles: ['guest', 'identity'] },
+    { path: '/here', page: 'Page', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
+    {
+      path: '/watched',
+      page: 'WatchedPage',
+      roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity],
+    },
+    { path: '/there', page: 'There', roles: [CONTRACT_ROLES.guest, CONTRACT_ROLES.identity] },
   ],
 })
 

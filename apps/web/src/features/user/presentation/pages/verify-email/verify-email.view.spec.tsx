@@ -2,6 +2,7 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
 
 import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
@@ -60,7 +61,7 @@ describe('VerifyEmailView', () => {
 
     const link = screen.getByTestId('user.verify-email.sign-in-link')
 
-    expect(link.getAttribute('href')).toBe('/sign-in')
+    expect(link.getAttribute('href')).toBe(CONTRACT_ROUTES['user.sign-in'])
     expect(link.textContent).toBe(en['user.verify-email.sign-in'])
     expect(screen.queryByTestId('user.verify-email.status')).toBeNull()
     expect(screen.queryByTestId('user.verify-email.form')).toBeNull()

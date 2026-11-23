@@ -7,6 +7,7 @@
 
 import type { LocalDb } from '@workspace/data'
 import type { IdentityId } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import type { Clock } from '@workspace/replica'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
@@ -63,7 +64,7 @@ export interface Admission {
  */
 export async function admitted(
   organisations: Organisations,
-  { actor, key, invitee, role = 'member' }: Admission,
+  { actor, key, invitee, role = CONTRACT_ROLES.member }: Admission,
 ): Promise<Membership> {
   const invitation = (
     await organisations.invitations.invite({ actor, key, email: invitee.email, role })

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../../schemas/screen.schema.json
 id: organisation
 title: Organisation
-description: "The organisations the account belongs to and the invitations to it: creating one, choosing the current one, its members and invitations for an administrator, the notes every member shares."
+description: "The organisations the account belongs to and the invitations to it: creating one, choosing the current one, its members and invitations for an admin, the notes every member shares."
 flag: null
 bindings: [ { path: /org, guard: authenticated, roles: [ identity, member, admin ], history: push } ]
 entry: [ organisation.page.status, organisation.page.heading, organisation.notes.section, organisation.create.form ]
@@ -90,7 +90,7 @@ anchors:
     roles: [ member, admin ]
   organisation.notes.edit-button:
     kind: button
-    description: Opens the edit form of the note in its item; a member sees it on its own notes, an administrator on every note.
+    description: Opens the edit form of the note in its item; a member sees it on its own notes, an admin on every note.
     roles: [ member, admin ]
     own: true
   organisation.notes.delete-button:
@@ -149,7 +149,7 @@ anchors:
     dataId: identity
   organisation.members.role-select:
     kind: select
-    description: The member's role; another choice changes it at once, the administrator's own included while another administrator stays.
+    description: The member's role; another choice changes it at once, an admin's own included while another admin stays.
     binding:
       action: platform.organisations.set-role
       params:
@@ -158,7 +158,7 @@ anchors:
     roles: [ admin ]
   organisation.members.remove-button:
     kind: button
-    description: Removes the member; not on the administrator's own row.
+    description: Removes the member; not on the admin's own row.
     binding:
       action: platform.organisations.remove
       params:
@@ -264,7 +264,7 @@ anchors:
     description: Why the read of the invitations for the account failed, in place of the list; or why the last acceptance or decline failed, beside the list.
 states:
   loading: "The heading, the role and the notes card with organisation.notes.section in loading: the notes are not read yet."
-  ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an administrator, the invitations for the account, and the create toggle.
+  ready: The heading, the role badge, the select with two memberships or more, the notes, the members and the invitations sent for an admin, the invitations for the account, and the create toggle.
   empty: "organisation.page.status in empty: no membership; the invitations for the account, if any, and the create form below it."
   error: "organisation.page.status in error: memberships, but no organisation's database opened on this device; the invitations for the account, if any, and the create form."
 flow:
@@ -277,7 +277,7 @@ flow:
   states:
     viewing:
       type: parallel
-      description: The current organisation with its notes and, for an administrator, its members; without a membership, the create form.
+      description: The current organisation with its notes and, for an admin, its members; without a membership, the create form.
       on:
         organisation.page.current-select: selecting
       states:
@@ -303,7 +303,7 @@ flow:
                 input: { key: organisation.create.key-input, name: organisation.create.name-input }
                 onDone:
                   target: "#organisation.viewing"
-                  description: The caller is the administrator of the new organisation, which becomes current; every area starts afresh and the form is closed.
+                  description: The caller is the admin of the new organisation, which becomes current; every area starts afresh and the form is closed.
                   actions:
                     - clear: organisation.create.key-input
                     - clear: organisation.create.name-input

@@ -1,5 +1,7 @@
 import { emit, setup } from 'xstate'
 
+import { CONTRACT_ROUTES } from '@workspace/kernel'
+
 import type { FieldValues, ItemIds, NavigateParams } from '../../../platform/flow-effects'
 
 /** The search box, whose text a search moves with. */
@@ -27,13 +29,13 @@ export type UsersEmitted = { readonly type: 'navigate' } & NavigateParams & {
 
 /** A new search: the first page of what the box holds, the page size kept by the route. */
 const SEARCH = {
-  to: '/console/users',
+  to: CONTRACT_ROUTES['console.users'],
   search: { q: { anchor: SEARCH_INPUT }, page: 1 },
 } as const satisfies NavigateParams
 
 /** The card of the account whose row's link was followed, the account in the address. */
 export const OPEN_ACCOUNT = {
-  to: '/console/account',
+  to: CONTRACT_ROUTES['console.account'],
   search: { id: { item: ACCOUNT_ITEM } },
 } as const satisfies NavigateParams
 

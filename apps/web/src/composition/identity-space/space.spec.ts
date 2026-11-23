@@ -17,6 +17,7 @@ import {
   profileIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 import { privateRegionId, RegionDoc, replaceRegionDoc } from '@workspace/replica'
 import type { ClientMessage, Membership } from '@workspace/replica/protocol'
 import { leadership, lockName, type SyncTransport, syncHints } from '@workspace/replica/sync'
@@ -44,12 +45,12 @@ const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test
 
 const acme: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'acme', name: 'Acme' },
-  role: 'admin',
+  role: CONTRACT_ROLES.admin,
 }
 
 const globex: Membership = {
   tenant: { id: tenantIdFactory.create(), key: 'globex', name: 'Globex' },
-  role: 'member',
+  role: CONTRACT_ROLES.member,
 }
 
 /** How long a test waits for the sync to settle; the manual clock never gets there on its own. */

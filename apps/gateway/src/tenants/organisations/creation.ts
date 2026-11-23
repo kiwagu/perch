@@ -2,6 +2,7 @@ import { errAsync, okAsync, type ResultAsync } from 'neverthrow'
 
 import { type DataError, type LocalDb, recordId, tenantDatabase } from '@workspace/data'
 import { type IdentityId, membershipIdFactory, tenantIdFactory } from '@workspace/ids'
+import { CONTRACT_ROLES } from '@workspace/kernel'
 
 import type { OrganisationLookup } from '../organisation-lookup'
 import { type OrganisationError, refused } from '../organisation-refusal'
@@ -113,7 +114,7 @@ export class OrganisationCreation {
         // would not have the schema applied.
         this.#databases.evict(key)
 
-        return this.#members.add(key, identity, 'admin')
+        return this.#members.add(key, identity, CONTRACT_ROLES.admin)
       })
       .andThen(() =>
         writing(

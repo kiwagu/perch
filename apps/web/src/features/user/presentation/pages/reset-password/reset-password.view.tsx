@@ -1,6 +1,7 @@
 import { type ComponentType, useId, useState } from 'react'
 
 import { useT } from '@workspace/i18n'
+import { CONTRACT_ROUTES } from '@workspace/kernel'
 import { PasswordInput } from '@workspace/ui/components/platform/password-input'
 import { Alert, AlertDescription } from '@workspace/ui/components/ui/alert'
 import { Button } from '@workspace/ui/components/ui/button'
@@ -197,7 +198,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
             {aboveForm}
             {props.renders('user.reset-password.sign-in-link') ? (
               <Link
-                to="/sign-in"
+                to={CONTRACT_ROUTES['user.sign-in']}
                 className="text-sm underline"
                 data-testid="user.reset-password.sign-in-link"
               >
@@ -206,7 +207,7 @@ export function ResetPasswordView(props: ResetPasswordViewProps) {
             ) : null}
             {props.renders('user.reset-password.forgot-link') ? (
               <Link
-                to="/forgot-password"
+                to={CONTRACT_ROUTES['user.forgot-password']}
                 className="text-sm underline"
                 data-testid="user.reset-password.forgot-link"
               >
