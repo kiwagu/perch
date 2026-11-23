@@ -129,7 +129,7 @@ tester.run('contract-terms', contractTerms, {
       "declare const row: Record<string, unknown>\nexport const shown = typeof row['displayName'] === 'string' && row['displayName'] === 'admin'\nswitch (row['displayName']) {\n  case 'admin':\n    break\n}",
     ),
     typed(
-      "export const gatewayRoutes = ['/devices', '/organisations', '/me'] as const\nexport const documentRoles = ['author', '/devices'] as const",
+      "export const gatewayRoutes = ['/devices', '/organisations', '/me'] as const\nexport const documentRoles = ['author', '/me'] as const",
     ),
     byValue("void page.goto('/settings/x')"),
     byValue("void page.goto('/settingsx')"),
