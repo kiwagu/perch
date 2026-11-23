@@ -12,7 +12,7 @@ data:
 ---
 # Open an invitation's link elsewhere than in the invited account
 
-Where: [/org] on device A (user A, administrator), then [/invitation] from [mail:organisations.invite] on device B (user B, signed in, another browser) and on device C (nobody signed in, a third browser)
+Where: [/org] on device A (user A, admin), then [/invitation] from [mail:organisations.invite] on device B (user B, signed in, another browser) and on device C (nobody signed in, a third browser)
 
 ## Scenario: Another account sees the organisation and the role with an error and nothing to press; a guest is asked to sign in to the invited account, with the link to the sign-in page
 

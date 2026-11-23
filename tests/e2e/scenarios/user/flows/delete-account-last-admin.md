@@ -10,7 +10,7 @@ data:
 ---
 # Delete an account that administers an organisation with other members
 
-Where: [/settings] on device A (user A, administrator) and [/org] on device B (user B, another browser)
+Where: [/settings] on device A (user A, admin) and [/org] on device B (user B, another browser)
 
 ## Scenario: The deletion is refused while other members are in; once they are removed, the account goes with its organisation, and the key is free
 

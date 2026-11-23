@@ -10,9 +10,9 @@ data:
 ---
 # Revoke an invitation
 
-Where: [/org] on device A (user A, administrator) and [/invitation] from [mail:organisations.invite], then [/org], on device B (user B, another browser)
+Where: [/org] on device A (user A, admin) and [/invitation] from [mail:organisations.invite], then [/org], on device B (user B, another browser)
 
-## Scenario: An administrator revokes a pending invitation once the frame has asked; its link then no longer works, and the invited account has no invitation
+## Scenario: An admin revokes a pending invitation once the frame has asked; its link then no longer works, and the invited account has no invitation
 
 ### Steps
 1. On device B, sign up as user B, open the link of its [mail:sign-up] and wait for [/me]
