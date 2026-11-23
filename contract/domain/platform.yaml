@@ -43,7 +43,7 @@ values:
     type: string
     minLength: 1
     maxLength: 64
-    description: "The id of a platform record: an identity, a device session, an invitation, a passkey."
+    description: "The id of a platform record: an account, a session, an invitation, a passkey."
   invitation-ref:
     type: string
     minLength: 1
@@ -76,10 +76,10 @@ invariants:
     rule: "A browser holds one signed-in account: while another is signed in here, the action answers other-account before anything is asked or checked, and signs no device in or out."
     refuses: other-account
   last-admin:
-    rule: "An organisation keeps an administrator: its only one becomes a member only after another is made one, and is deleted or removed only after that or once no other member is left."
+    rule: "An organisation keeps an admin: its only one becomes a member only after another is made one, and is deleted or removed only after that or once no other member is left."
     refuses: last-admin
-  administrators-only:
-    rule: "Only an administrator of the organisation may do it; an account whose role changed meanwhile is refused and nothing changes."
+  admins-only:
+    rule: "Only an admin of the organisation may do it; an account whose role changed meanwhile is refused and nothing changes."
     refuses: not-admin
   operators-only:
     rule: "Only an operator of the platform may do it; an account whose role was taken away while the console was open is refused."
@@ -524,7 +524,7 @@ actions:
   devices.list:
     description: Reads the devices of the account.
     params: {}
-    result: "the account's devices: for each its device session id, label, last seen, when it was revoked, and whether it is the current device"
+    result: "the account's devices: for each its session id, label, last seen, when it was revoked, and whether it is the current device"
     changes: []
     codes:
       devices-read-failed: "the devices could not be read"
@@ -533,7 +533,7 @@ actions:
     params:
       device:
         value: id
-        description: The device session id of that device.
+        description: The session id of that device.
     result:
       - "that device signs out, and the answer lists the account's devices as they are then"
       - "the devices could not be read after it: the answer lists none"
@@ -600,10 +600,10 @@ actions:
   organisations.members:
     description: Reads the members of the current organisation.
     params: {}
-    result: its members with their identity id, email and role
+    result: its members with their account's id, email and role
     changes: []
     codes:
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       failed: "anything else fails"
     roles:
       - admin
@@ -625,7 +625,7 @@ actions:
     codes:
       already-member: "the email is a member's"
       email-invalid: "the email is not an email"
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       rate-limited: { invariant: address-mails }
       failed: "anything else fails"
     roles:
@@ -640,7 +640,7 @@ actions:
     result: its invitations not accepted, declined, revoked or expired yet, the newest first, each with its id, email, role and link
     changes: []
     codes:
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       failed: "anything else fails"
     roles:
       - admin
@@ -665,7 +665,7 @@ actions:
     result: the invitation is gone and its link stops working
     changes: [ organisations.invitations ]
     codes:
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       failed: "anything else fails"
     roles:
       - admin
@@ -674,16 +674,16 @@ actions:
     params:
       identity:
         value: id
-        description: The identity id of the member.
+        description: The id of the member's account.
       role:
         value: role
         description: member or admin.
     result:
       - "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it"
-      - "an administrator may make itself a member while another administrator stays"
+      - "an admin may make itself a member while another admin stays"
     changes: [ organisations.members, accounts.read ]
     codes:
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       last-admin: { invariant: last-admin }
       failed: "anything else fails"
     roles:
@@ -742,11 +742,11 @@ actions:
     params:
       identity:
         value: id
-        description: The identity id of the member.
+        description: The id of the member's account.
     result: the member is removed; its devices lose the organisation without a reload
     changes: [ organisations.members, accounts.read ]
     codes:
-      not-admin: { invariant: administrators-only }
+      not-admin: { invariant: admins-only }
       failed: "anything else fails"
     roles:
       - admin
@@ -765,7 +765,7 @@ actions:
         description: The accounts a page holds.
     result:
       - "the accounts the search finds, the newest first (two made at the same moment by their id), that page of them and their number in all"
-      - "for each: its identity id, its name (its profile's, or the one it signed up with while it has none), email, whether verified, banned or an operator, and when made"
+      - "for each: its id, its name (its profile's, or the one it signed up with while it has none), email, whether verified, banned or an operator, and when made"
       - "a page past the last holds none"
     changes: []
     codes:
@@ -779,10 +779,10 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
-      - "the account: its identity id, name (as accounts.list names it), email, whether the email is verified, when it was made"
-      - "whether it has a profile: none until its first sign-in, so its name is the one it signed up with"
+      - "the account: its id, name (as accounts.list names it), email, whether the email is verified, when it was made"
+      - "whether it has a profile: none until it first starts on a device, so its name is the one it signed up with"
       - "when one of its devices was last seen among its sessions still kept (none, never), whether it is an operator, whether it is banned and the reason given"
       - "its organisations, each with its key, its name and the account's role in it"
     changes: []
@@ -797,13 +797,13 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       name:
         value: profile.name
         description: The name.
     result:
       - "the profile's name is the new one, and the account's devices show it as they show any change of the profile"
-      - "an account with no profile yet (it never signed in) has no name to set, so the card offers no rename then"
+      - "an account with no profile yet has no name to set, so the card offers no rename then"
     changes: [ accounts.list, accounts.read ]
     codes:
       name-required: "the name, trimmed, is empty"
@@ -818,7 +818,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       email:
         value: email
         description: The new email.
@@ -844,7 +844,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
       reason:
         value: ban-reason
         optional: true
@@ -866,7 +866,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
       - "the account is not banned and signs in as before; the devices its ban signed out stay signed out"
       - "an account not banned stays as it is"
@@ -882,7 +882,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
       - "every device of the account signs out, and /sign-in shows signed-out-elsewhere on each"
     changes: [ accounts.read ]
@@ -898,7 +898,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
       - "the mail below is on its way to the account's email, its link replacing the links of earlier requests"
       - "a rate-limited refusal sends nothing"
@@ -921,7 +921,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
       - "the mail below is on its way to the account's email"
       - "a rate-limited refusal sends nothing"
@@ -945,7 +945,7 @@ actions:
     params:
       id:
         value: id
-        description: The identity id of the account.
+        description: The id of the account.
     result:
       - "the account is gone for good, as delete-account leaves it: its profile, settings, sessions and memberships, so every device of it is signed out"
       - "each organisation it was the only member of goes with it, its data too; its email gets the notice below and can sign up again at once"
