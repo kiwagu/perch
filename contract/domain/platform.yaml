@@ -78,6 +78,9 @@ invariants:
   last-admin:
     rule: "An organisation keeps an administrator: its only one becomes a member only after another is made one, and is deleted or removed only after that or once no other member is left."
     refuses: last-admin
+  administrators-only:
+    rule: "Only an administrator of the organisation may do it; an account whose role changed meanwhile is refused and nothing changes."
+    refuses: not-admin
   address-attempts:
     rule: "A network address takes twenty attempts at each kind of mailed link within ten minutes, refused or not; the next answers rate-limited."
     refuses: rate-limited
@@ -570,12 +573,12 @@ actions:
     result: the organisation exists with the caller as admin and becomes current
     changes: [ accounts.read ]
     codes:
-      - key-invalid
-      - name-required
-      - name-too-long
-      - key-taken
-      - rate-limited
-      - failed
+      key-invalid: "the key breaks its pattern"
+      name-required: "the name, trimmed, is empty"
+      name-too-long: "the name, trimmed, is longer than its value allows"
+      key-taken: "another organisation has the key"
+      rate-limited: "the account asked ten creations within an hour or, when its own limit allows one, its network address thirty; each counted once its key and name are valid"
+      failed: "anything else fails"
   organisations.select:
     description: Makes one of the account's organisations current on this device.
     params:
@@ -584,15 +587,15 @@ actions:
         description: The key of an organisation the account belongs to.
     result: the organisation becomes current on this device (no server call); the choice is kept on this browser
     changes: []
-    codes: []
+    codes: {}
   organisations.members:
     description: Reads the members of the current organisation.
     params: {}
     result: its members with their identity id, email and role
     changes: []
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: administrators-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.invite:
@@ -604,14 +607,18 @@ actions:
       role:
         value: role
         description: "member or admin: the role the account takes when it accepts."
-    result: "an invitation of the email with the role, pending for seven days, and the mail below on its way to the email; an email with an account and one without get the same answer, in the same time; inviting an email again replaces its pending invitation, whose link stops working; the email of a member answers already-member; the email is a member only once the account with that email accepts; the mails count toward the network address's budget of mails"
+    result:
+      - "an invitation of the email with the role, pending for seven days, and the mail below on its way to the email"
+      - "an email with an account and one without get the same answer, in the same time"
+      - "inviting an email again replaces its pending invitation, whose link stops working"
+      - "the email is a member only once the account with that email accepts"
     changes: [ organisations.invitations ]
     codes:
-      - already-member
-      - email-invalid
-      - not-admin
-      - rate-limited
-      - failed
+      already-member: "the email is a member's"
+      email-invalid: "the email is not an email"
+      not-admin: { invariant: administrators-only }
+      rate-limited: { invariant: address-mails }
+      failed: "anything else fails"
     roles:
       - admin
     mail:
@@ -624,8 +631,8 @@ actions:
     result: its invitations not accepted, declined, revoked or expired yet, the newest first, each with its id, email, role and link
     changes: []
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: administrators-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.copy-invitation:
@@ -637,7 +644,7 @@ actions:
     result: the link is on the clipboard (no server call); it is the link the mail carries, and works for the invited email alone
     changes: []
     codes:
-      - failed
+      failed: "the clipboard does not take the link"
     roles:
       - admin
   organisations.revoke-invitation:
@@ -649,8 +656,8 @@ actions:
     result: the invitation is gone and its link stops working
     changes: [ organisations.invitations ]
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: administrators-only }
+      failed: "anything else fails"
     roles:
       - admin
   organisations.set-role:
@@ -662,12 +669,14 @@ actions:
       role:
         value: role
         description: member or admin.
-    result: "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it; an administrator may make itself a member while another administrator stays; the only administrator of the organisation answers last-admin and keeps its role"
+    result:
+      - "the member has the role from now on: its devices show it without a reload, and the next change they send is judged by it"
+      - "an administrator may make itself a member while another administrator stays"
     changes: [ organisations.members, accounts.read ]
     codes:
-      - not-admin
-      - last-admin
-      - failed
+      not-admin: { invariant: administrators-only }
+      last-admin: { invariant: last-admin }
+      failed: "anything else fails"
     roles:
       - admin
   invitations.read:
@@ -677,45 +686,48 @@ actions:
         value: token
         codes: [ link-invalid, link-expired ]
         description: The token the link of the invitation mail carries in the address of /invitation.
-    result: "the organisation's name, the role, and whether the invitation is for the account signed in on this device, whose email is then the invitation's; never the email. A link unknown, used, declined, revoked or replaced by a newer one, or whose organisation is gone, answers link-invalid; one older than seven days link-expired. A network address takes twenty attempts within ten minutes, and the next answers rate-limited"
+    result:
+      - "the organisation's name, the role, and whether the invitation is for the account signed in here, whose email is then the invitation's; never the email"
     changes: []
     codes:
-      - link-invalid
-      - link-expired
-      - rate-limited
-      - failed
+      link-invalid: "the link is unknown, used, declined, revoked or replaced by a newer one, or its organisation is gone"
+      link-expired: "the link is older than seven days"
+      rate-limited: { invariant: address-attempts }
+      failed: "anything else fails"
   invitations.mine:
     description: Reads the invitations to the signed-in account's email.
     params: {}
     result: the pending invitations to the account's email, of organisations it is not a member of, the newest first, each with its id, the organisation's name and the role
     changes: []
     codes:
-      - failed
+      failed: "anything else fails"
   invitations.accept:
     description: Accepts an invitation to the signed-in account's email.
     params:
       invitation:
         value: invitation-ref
         description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
-    result: "the account is a member of the invitation's organisation with its role, that organisation becomes current on this device, the account's devices learn it without a reload, and the invitation is spent; an invitation to another email answers other-account; one revoked, replaced, declined, accepted or expired meanwhile invitation-gone; an account that is a member already already-member"
+    result:
+      - "the account is a member of the invitation's organisation with its role, which becomes current here, its devices learn it without a reload, and the invitation is spent"
     changes: [ invitations.mine, accounts.read ]
     codes:
-      - invitation-gone
-      - other-account
-      - already-member
-      - failed
+      invitation-gone: "the invitation was revoked, replaced, declined, accepted or expired meanwhile"
+      other-account: "the invitation is to another email"
+      already-member: "the account is a member already"
+      failed: "anything else fails"
   invitations.decline:
     description: Declines an invitation to the signed-in account's email.
     params:
       invitation:
         value: invitation-ref
         description: "The invitation: its id, as the invitations for the account list it, or the token its link carries."
-    result: the invitation is gone and its link stops working; an invitation to another email answers other-account, and one gone meanwhile invitation-gone
+    result:
+      - "the invitation is gone and its link stops working"
     changes: [ invitations.mine ]
     codes:
-      - invitation-gone
-      - other-account
-      - failed
+      invitation-gone: "the invitation is gone meanwhile"
+      other-account: "the invitation is to another email"
+      failed: "anything else fails"
   organisations.remove:
     description: Removes a member from the current organisation.
     params:
@@ -725,8 +737,8 @@ actions:
     result: the member is removed; its devices lose the organisation without a reload
     changes: [ organisations.members, accounts.read ]
     codes:
-      - not-admin
-      - failed
+      not-admin: { invariant: administrators-only }
+      failed: "anything else fails"
     roles:
       - admin
   accounts.list:
