@@ -10,8 +10,11 @@
  *     domain and application code (core max-classes-per-file, workspace/one-unit-per-file),
  *   - a folder with an index.ts, or a module, entered only through its index
  *     (workspace/import-through-index),
- *   - raw fields out of views, so every field tracks unsaved input (react/forbid-elements).
- * No rule here may format tokens.
+ *   - raw fields out of views, so every field tracks unsaved input (react/forbid-elements),
+ *   - the UI contract's roles and routes named through its emitted constants, never written by
+ *     hand (workspace/contract-terms, by `contractTerms`, which reads fixtures too).
+ * No rule here may format tokens. A fixture (`__fixtures__/`) is test data, which no rule of the
+ * base reads.
  */
 
 import stylistic from '@stylistic/eslint-plugin'
@@ -20,6 +23,7 @@ import functional from 'eslint-plugin-functional'
 import react from 'eslint-plugin-react'
 import tseslint from 'typescript-eslint'
 
+import { contractTerms as contractTermsRule } from './rules/contract-terms.js'
 import { importThroughIndex } from './rules/import-through-index.js'
 import { mustUseResult } from './rules/must-use-result.js'
 import { oneUnitPerFile } from './rules/one-unit-per-file.js'
@@ -29,6 +33,7 @@ const KIT_FIELDS = { input: 'Input', textarea: 'Textarea', select: 'Select' }
 
 const workspace = {
   rules: {
+    'contract-terms': contractTermsRule,
     'import-through-index': importThroughIndex,
     'must-use-result': mustUseResult,
     'one-unit-per-file': oneUnitPerFile,
@@ -65,6 +70,7 @@ const UI_MODULES = [
   '@workspace/ui/*',
 ]
 const TESTS = '**/*.spec.{ts,tsx}'
+const FIXTURES = '**/__fixtures__/**'
 const TYPED = { files: ['**/*.{ts,tsx}'], ignores: ['**/*.config.ts'] }
 
 const RAW_DRIVERS = ['surrealdb', '@surrealdb/*', 'loro-crdt']
@@ -125,14 +131,12 @@ export const ignores = {
     '**/coverage/**',
     '**/playwright-report/**',
     '**/test-results/**',
-    '**/__fixtures__/**',
     '**/*.gen.ts',
     '**/*.surql.d.ts',
   ],
 }
 
-export const base = [
-  ignores,
+const BLOCKS = [
   {
     files: ['**/*.{js,mjs,cjs,ts,tsx}'],
     languageOptions: {
@@ -279,6 +283,11 @@ export const base = [
   },
 ]
 
+/** A block of the base, with the fixtures left out of the files it reads. */
+const skippingFixtures = (block) => ({ ...block, ignores: [...(block.ignores ?? []), FIXTURES] })
+
+export const base = [ignores, ...BLOCKS.map(skippingFixtures)]
+
 /**
  * The import-through-index rule with the repository's own layout, by absolute paths:
  * `modules` lists folders of modules (`{ root, flat, outside }`: the modules that predate the
@@ -287,10 +296,30 @@ export const base = [
  */
 export function importBoundaries({ modules = [], reachIn = [] }) {
   return {
-    ...TYPED,
+    ...skippingFixtures(TYPED),
     plugins: { workspace },
     rules: { 'workspace/import-through-index': ['error', { modules, reachIn }] },
   }
+}
+
+/**
+ * The contract-terms rule over `files` (globs from the repository root), fixtures included: test
+ * data names roles and routes too. `module` is the absolute path of the module
+ * `ui-contract emit terms` writes; `routeValues` the globs among them where a string that names a
+ * route by its value is refused too (the e2e tests, whose `goto` takes any string). See the rule.
+ */
+export function contractTerms({ module, files, routeValues = [] }) {
+  const block = (globs, options) => ({
+    files: globs,
+    languageOptions: { parser: tseslint.parser, parserOptions: { projectService: true } },
+    plugins: { workspace },
+    rules: { 'workspace/contract-terms': ['error', options] },
+  })
+
+  return [
+    block(files, { module }),
+    ...(routeValues.length > 0 ? [block(routeValues, { module, routeValues: true })] : []),
+  ]
 }
 
 export default base
