@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { CONTRACT_VERSION } from '../anchors'
 import { writeContractRepository } from '../contract-repository.fixture'
-import { MODEL_FILE, migrate } from '../files'
+import { MODEL_FILE, migrate, PLATFORM_FILE } from '../files'
 
 import { check } from './check'
 
@@ -29,10 +29,20 @@ function run(argv: readonly string[]): { code: number; out: string; err: string 
   return { code, out: out.join('\n'), err: err.join('\n') }
 }
 
-/** The fixture at the current version, migrated the way `ui-contract migrate --write` moves it. */
+/** The fixture at the current version, migrated the way `ui-contract migrate --write` moves it, its work by hand done. */
 function writeCurrentRepository(): void {
   writeContractRepository(root)
   migrate(root, { write: true })
+  // The work the migration leaves by hand: from version 6 an action's codes are a map.
+  const platform = join(root, PLATFORM_FILE)
+
+  writeFileSync(
+    platform,
+    readFileSync(platform, 'utf8').replace(
+      '    codes:\n      - failed\n',
+      '    codes:\n      failed: the device cannot reach the server\n',
+    ),
+  )
 }
 
 /** An e2e test under `tests/e2e/src` that clicks an anchor the contract does not declare. */

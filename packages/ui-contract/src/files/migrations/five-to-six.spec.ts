@@ -72,6 +72,16 @@ const ACTIONS = `actions:
       label: { type: string, format: email, optional: true, description: A label. }
 `
 
+/** Actions as a version 5 platform may write them: one in the older forms, one in the newer. */
+const BEHAVIOUR = `actions:
+  sign-in:
+    result: ${'a'.repeat(201)}
+    codes: [ failed, rate-limited ]
+  sign-out:
+    result: [ the device is signed out ]
+    codes: { failed: the device is offline }
+`
+
 const MODEL = `{
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$defs": {
@@ -152,6 +162,19 @@ describe('the migration from version 5 to 6', () => {
       `${PLATFORM_FILE}: actions["sign-out"].params.note: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
       `${PLATFORM_FILE}: actions.rename.params.label: names no limit, and from version 6 takes the default length, 80: write its own \`maxLength\` where that is too short, or refer to a named value (\`value: <name>\`) that writes \`maxLength: null\``,
     ])
+  })
+
+  it('names each action whose codes are a list and each result of one string past the budget, default or none', () => {
+    for (const defaults of [80, null]) {
+      expect(
+        migrated(platform(defaults, VALUES, BEHAVIOUR)).manual.filter((line) =>
+          line.startsWith(`${PLATFORM_FILE}: actions`),
+        ),
+      ).toEqual([
+        `${PLATFORM_FILE}: actions["sign-in"].codes: a list of codes, and from version 6 an action's codes are a map: write when each answers, \`<code>: <condition>\`, or \`<code>: { invariant: <name> }\` for a rule several actions keep`,
+        `${PLATFORM_FILE}: actions["sign-in"].result: one string of 201 characters, and from version 6 it keeps the budget of 200: write it as outcome lines within the budget, a refusal as its code's condition`,
+      ])
+    }
   })
 
   it('names the default the platform declares, and no parameter of a contract with none', () => {

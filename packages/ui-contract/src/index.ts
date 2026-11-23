@@ -29,7 +29,9 @@ export {
 } from './anchors'
 export {
   accessProblems,
+  actionFormsProblems,
   activitiesProblems,
+  BEHAVIOUR_EDITION,
   behaviourTextsProblems,
   bindingsProblems,
   type Contract,

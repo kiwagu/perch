@@ -2,7 +2,8 @@
  * How a platform action writes its codes and its result, read one way by every reader of the
  * engine. Its `codes` are a map from each code to the condition it answers on, or to the invariants
  * it refuses for (`{ invariant: <name> }`, `{ invariant: [<name>, ...] }`), with a condition of its
- * own beside them when it has one; or, the older form, a list of their names. Its
+ * own beside them when it has one; or, the older form a contract before version 6 may write, a list
+ * of their names. Its
  * `result` is one outcome or a list of outcome lines, the plain success first.
  */
 

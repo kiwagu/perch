@@ -79,7 +79,8 @@ const invariantRefSchema = z
 
 /**
  * The codes of an action: a map from each code to the condition it answers on, or to the invariants
- * it refuses for with a condition of its own beside them, or, the older form, a list of their names.
+ * it refuses for with a condition of its own beside them, or, the older form a contract before version
+ * 6 may write, a list of their names.
  */
 const actionCodesSchema = z
   .union([
@@ -91,7 +92,9 @@ const actionCodesSchema = z
       .describe(
         'Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`.',
       ),
-    z.array(codeSchema).describe('The older form: the codes by name alone, with no condition.'),
+    z
+      .array(codeSchema)
+      .describe('The older form, before version 6: the codes by name alone, with no condition.'),
   ])
   .describe(
     'The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`.',
@@ -101,7 +104,10 @@ export type ActionCodes = z.infer<typeof actionCodesSchema>
 
 /** What an action answers once it runs: one outcome, or a list of outcome lines. */
 const actionResultSchema = z
-  .union([z.string(), z.array(z.string().min(1).describe(BEHAVIOUR_PURPOSES.outcome)).min(1)])
+  .union([
+    z.string().describe('One outcome; from version 6 at most 200 characters.'),
+    z.array(z.string().min(1).describe(BEHAVIOUR_PURPOSES.outcome)).min(1),
+  ])
   .describe(
     "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`.",
   )
