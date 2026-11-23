@@ -1,9 +1,9 @@
 # Vocabulary
 
 The closed lists of the UI contract. Every kind, suffix, attribute, state, code, choice
-value, role and screen name that the screen files (`contract/domain/screens/`) and the platform
+value and screen name that the screen files (`contract/domain/screens/`) and the platform
 file (`contract/domain/platform.yaml`) use is listed here once; the anchors themselves are declared
-in the screen files. A name that is not here is a problem of the contract, not a new word:
+in the screen files, and the roles in `contract/domain/terms.yaml`. A name that is not here is a problem of the contract, not a new word:
 a new word is added to its table in the same change that first uses it.
 
 ## Grammar
@@ -318,16 +318,6 @@ screen name of its own.
 | `organisation.invitation` | the page the link of an invitation mail opens, where the invited account accepts or declines it (`/invitation`) |
 | `console.users` | the accounts of the platform, for an operator: a page at a time, found by a part of their name or email (`/console/users`) |
 | `console.account` | one account of the platform, for an operator: what it is, its organisations, and the actions on it (`/console/account`) |
-
-## Roles
-
-| Role | Meaning |
-|---|---|
-| `guest` | nobody is signed in on the device; for the frame also a device whose saved account is not open: while the app starts, when its start or its data fails, and while it signs out from there |
-| `identity` | an account is signed in, with or without organisations |
-| `member` | the signed-in account is a member of the current organisation |
-| `admin` | the signed-in account administers the current organisation |
-| `operator` | the signed-in account operates the platform: it sees every account from the console and acts on it |
 
 ## Reserved anchors
 
