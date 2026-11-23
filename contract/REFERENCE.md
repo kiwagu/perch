@@ -2017,6 +2017,61 @@ How to read `scenarios` and their bracket references.
 <a id="manifest-contract-instructions-gaps"></a>
 What to do when the contract cannot say what a build needs.
 
+### `terms`
+
+<a id="manifest-terms"></a>
+`contract/domain/terms.yaml`, verbatim, when the contract writes it: the contexts, the platform's terms and the roles. See the rule `terms`.
+
+### `terms.contexts`
+
+<a id="manifest-terms-contexts"></a>
+The bounded contexts, by name: one while the product is one.
+
+### `terms.contexts.<name>.meaning`
+
+<a id="manifest-terms-contexts-name-meaning"></a>
+What the bounded context is: the part of the product whose terms mean one thing in it. At most 200 characters.
+
+### `terms.terms`
+
+<a id="manifest-terms-terms"></a>
+The platform's terms, by the one word the contract uses for each.
+
+### `terms.terms.<name>.meaning`
+
+<a id="manifest-terms-terms-name-meaning"></a>
+What the term means in the contract: the one word its texts use for it. Its synonyms are the words they never use for it, and `storage` names it where storage does otherwise. At most 200 characters.
+
+### `terms.terms.<name>.synonyms`
+
+<a id="manifest-terms-terms-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `terms.terms.<name>.storage`
+
+<a id="manifest-terms-terms-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
+
+### `terms.roles`
+
+<a id="manifest-terms-roles"></a>
+The roles a device holds, by name: what `roles` of a binding, an anchor or an action list.
+
+### `terms.roles.<name>.meaning`
+
+<a id="manifest-terms-roles-name-meaning"></a>
+What holding the role means on a device: whose account is signed in and what applies to it. At most 200 characters.
+
+### `terms.roles.<name>.synonyms`
+
+<a id="manifest-terms-roles-name-synonyms"></a>
+The words the contract's texts and the emitted constants never use for it.
+
+### `terms.roles.<name>.storage`
+
+<a id="manifest-terms-roles-name-storage"></a>
+Where storage names it otherwise: a table, `identity`, or a table's field, `identity.role`.
+
 ### `screens`
 
 <a id="manifest-screens"></a>
@@ -5744,7 +5799,7 @@ Keys it concerns: [`manifest.contract.instructions.bindings`](#manifest-contract
 ### Reading the model
 
 <a id="rule-model"></a>
-`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity. An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it), and `unique` and `index`. A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer).
+`model` is the data model: a JSON Schema 2020-12 document with one `$defs` entry per entity. An entity's `x-perch` says its `table`, its `region` (`private`: the account's own data; `tenant`: the current organisation's), its `id` prefix, its `owner` field, `can` (per role, the actions allowed on any entry or only on its own), its `actions` with their parameters and their `changes` (written on every action, as a platform action writes it), and `unique` and `index`. A field's `x-perch` says whether it is `readonly`, the entity a `record` points at, and its `crdt`: how concurrent edits merge (`text`, `list`, `counter`, or `none` for the last writer). `terms`, when present, says what each of the platform's nouns and each role means, the words the contract never uses for it, and its name in storage where that differs (`storage`).
 
 Keys it concerns: [`manifest.contract.instructions.model`](#manifest-contract-instructions-model).
 
