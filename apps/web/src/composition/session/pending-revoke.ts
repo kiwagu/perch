@@ -16,12 +16,12 @@ import type { GatewayAuth } from '../gateway-auth'
 import {
   addPendingRevoke,
   deviceIdFrom,
-  forgetDevice,
   forgetPendingRevoke,
+  forgetSignIn,
+  type KeptSession,
   type KeyValueStorage,
   type PendingToken,
   pendingRevokes,
-  savedToken,
 } from '../storage'
 
 /**
@@ -66,15 +66,19 @@ export class PendingRevoke {
   }
 
   /**
-   * Forgets who is signed in and the token; a token that still works is left to sign out first,
-   * and sent at once while the browser is online.
+   * Forgets the sign-in `ended` names, as whatever ends it captured it when it began, never one
+   * another tab saved since; its token, while it still works, is left to sign out first (after
+   * the tokens kept before, another account's among them; more than 8 waiting drops the oldest,
+   * which is reported), and sent at once while the browser is online.
    */
-  forgetKeys(keys: KeysLeft): void {
+  forgetKeys(keys: KeysLeft, ended: KeptSession): void {
+    const storage = this.#options.storage
+
     if (keys === 'live') {
-      this.keep()
+      this.#hold({ token: ended.token, device: deviceIdFrom(storage) })
     }
 
-    forgetDevice(this.#options.storage)
+    forgetSignIn(storage, ended.signIn)
 
     if (keys === 'live' && this.#options.online()) {
       void this.send()
@@ -96,19 +100,6 @@ export class PendingRevoke {
 
     if (this.#options.online()) {
       void this.#chain(() => this.#sendLeft(left), 'could not send a token left to sign out')
-    }
-  }
-
-  /**
-   * Keeps the token the device holds now to sign out later, after the tokens kept before, another
-   * account's among them. More than 8 waiting drops the oldest, which is reported.
-   */
-  keep(): void {
-    const storage = this.#options.storage
-    const token = savedToken(storage)
-
-    if (token !== undefined) {
-      this.#hold({ token, device: deviceIdFrom(storage) })
     }
   }
 

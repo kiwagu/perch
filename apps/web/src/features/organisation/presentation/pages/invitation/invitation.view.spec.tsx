@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent, screen } from '@testing-library/react'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { renderWithProviders } from '../../../../../test-utils'
@@ -31,8 +31,7 @@ function renderView(props: Partial<InvitationViewProps> = {}, locale: 'en' | 'es
       organisation="Acme"
       joinAs="admin"
       renders={rendering(...ASKING)}
-      canAccept
-      canDecline
+      can={() => true}
       guest={false}
       {...handlers}
       {...props}
@@ -106,10 +105,23 @@ describe('InvitationView', () => {
   })
 
   it('holds the buttons while the flow takes no press', () => {
-    renderView({ canAccept: false, canDecline: false })
+    renderView({ can: () => false })
 
     expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(true)
     expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  it('enables each button exactly while the flow takes its own event', () => {
+    renderView({ can: (event) => event.type === ACCEPT })
+
+    expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(false)
+    expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(true)
+
+    cleanup()
+    renderView({ can: (event) => event.type === DECLINE })
+
+    expect((screen.getByTestId(ACCEPT) as HTMLButtonElement).disabled).toBe(true)
+    expect((screen.getByTestId(DECLINE) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('shows no email, anywhere', () => {

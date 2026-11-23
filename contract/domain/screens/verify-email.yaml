@@ -8,16 +8,6 @@ bindings:
     guard: guest
     roles: [ guest ]
     history: push
-    search:
-      type: object
-      properties:
-        token:
-          type: string
-          minLength: 1
-          maxLength: 4096
-          description: The token the verification mail carries in its link.
-          examples: [ eyJhbGciOiJIUzI1NiJ9.eyJlbWFpbCI6ImFubkBleGFtcGxlLnRlc3QifQ.c2lnbmF0dXJl ]
-      additionalProperties: false
 entry: [ user.verify-email.status, user.verify-email.message, user.verify-email.error ]
 anchors:
   user.verify-email.status:
@@ -39,7 +29,8 @@ anchors:
     description: Sends a new verification link to the email typed.
   user.verify-email.email-input:
     kind: input
-    description: The email to send a new verification link to (type email).
+    description: The email to send a new verification link to.
+    marksState: false
     binding:
       action: platform.resend-verification
       params:

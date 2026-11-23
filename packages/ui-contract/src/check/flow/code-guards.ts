@@ -9,6 +9,7 @@
 
 import type { FlowTransition, Problem } from '../../files'
 import { failuresOf, flowNodes } from '../../files'
+import { editionOf } from '../editions'
 
 import type { At, InFlow } from './in-flow'
 
@@ -84,7 +85,7 @@ export function codeGuardProblems(inFlow: InFlow): Problem[] {
   const { flow, contract } = inFlow
   const guards: Guards = new Map(
     Object.entries(flow.meta?.guards ?? {}).flatMap(([name, guard]) =>
-      typeof guard === 'string' ? [] : [[name, guard.codes] as const],
+      typeof guard === 'string' || !('codes' in guard) ? [] : [[name, guard.codes] as const],
     ),
   )
 
@@ -92,7 +93,11 @@ export function codeGuardProblems(inFlow: InFlow): Problem[] {
     return []
   }
 
-  const failureOf = failuresOf(contract.model, contract.screens.platform.actions)
+  const failureOf = failuresOf(
+    contract.model,
+    contract.screens.platform.actions,
+    editionOf(contract),
+  )
 
   return [
     ...repeatedProblems(inFlow, guards),

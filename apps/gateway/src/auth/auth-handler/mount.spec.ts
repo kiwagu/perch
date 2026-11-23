@@ -26,6 +26,7 @@ import {
   mountedOnFakeAuth,
   noAccounts,
   noSessions,
+  ORIGIN,
   printedDuring,
   STAND_IN_ACCOUNT,
   signedInAnswer,
@@ -119,6 +120,11 @@ async function overBetterAuth(options: OpenAuthOptions = {}) {
     auth: opened.auth,
     sessions: noSessions,
     ...accountServicesOf(opened),
+    challenges: noAccounts.challenges,
+    twoFactor: noAccounts.twoFactor,
+    passkeys: noAccounts.passkeys,
+    passkeyChallenges: noAccounts.passkeyChallenges,
+    publicUrl: ORIGIN,
     deletions: noAccounts.deletions,
     departure: noAccounts.departure,
     teardown: noAccounts.teardown,
@@ -433,9 +439,13 @@ describe('authHandler', () => {
     expect(received).toHaveLength(20)
   })
 
-  it("clears an email's failed sign-ins once Better Auth answers 403: the password was right, the email is not verified", async () => {
+  it("clears an email's failed sign-ins once Better Auth answers 403 EMAIL_NOT_VERIFIED: the password was right, the email is not verified", async () => {
     let answer = 401
-    const { route, received } = mountedOnFakeAuth(() => new Response(null, { status: answer }))
+    const { route, received } = mountedOnFakeAuth(() =>
+      answer === 403
+        ? Response.json({ code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
+        : new Response(null, { status: answer }),
+    )
 
     await signIns(route, 'ann@example.test', 9)
     answer = 403
@@ -459,6 +469,30 @@ describe('authHandler', () => {
     expect(await signIns(route, 'ann@example.test', 11)).toEqual([...times(10, 401), 429])
     expect(received).toHaveLength(34)
   })
+
+  it.each([
+    [
+      'a 403 coded INVALID_ORIGIN',
+      () => Response.json({ code: 'INVALID_ORIGIN' }, { status: 403 }),
+    ],
+    ['a 403 that names no code', status(403)],
+  ])(
+    "keeps an email's failed sign-ins through %s, which Better Auth answers before it checks the password, and gives the place back",
+    async (_, refusal) => {
+      let answer = status(401)
+      const { route, received } = mountedOnFakeAuth(() => answer())
+
+      expect(await signIns(route, 'ann@example.test', 9)).toEqual(times(9, 401))
+      answer = refusal
+      // The refusals count nothing and keep no place: twelve in a row reach Better Auth.
+      expect(await signIns(route, 'ann@example.test', 12)).toEqual(times(12, 403))
+      answer = status(401)
+
+      // The nine failures stand: the tenth spends them.
+      expect(await signIns(route, 'ann@example.test', 2)).toEqual([401, 429])
+      expect(received).toHaveLength(22)
+    },
+  )
 
   it('gives the place of a sign-in whose handler threw back, and lets the throw through', async () => {
     let fail = true
@@ -540,7 +574,7 @@ describe('authHandler', () => {
     expect(await signIns(route, 'decoy@example.test', 10)).toEqual([...times(9, 401), 429])
   })
 
-  it("strips every Set-Cookie from Better Auth's answers, the rest of a sign-in's answer kept", async () => {
+  it("strips every Set-Cookie and every other header of Better Auth's answer from a sign-in's, its body by the allowlist", async () => {
     const body = JSON.stringify(acceptedSignIn())
     const { route, clock } = mountedOnFakeAuth(() => {
       const headers = new Headers({
@@ -558,7 +592,8 @@ describe('authHandler', () => {
     expect(response?.status).toBe(200)
     expect(response?.headers.getSetCookie()).toEqual([])
     expect(response?.headers.has('set-cookie')).toBe(false)
-    expect(response?.headers.get('set-auth-token')).toBe('raw-token.signature')
+    // The signed token stays with the gateway: the device signs in by the raw token of the body.
+    expect(response?.headers.get('set-auth-token')).toBeNull()
     expect(response?.headers.get('content-type')).toMatch(/^application\/json\b/)
     expect(await response?.text()).toBe(body)
 
@@ -843,7 +878,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     expect(printed).not.toMatch(MARKED)
   })
 
-  it('answers a sign-in whose session cannot be created 500 internal, and logs its code alone', async () => {
+  it('answers a sign-in whose session the directory did not take 500 internal, and logs its code alone', async () => {
     const { send, logs, failure } = await failing()
 
     failure.pattern = /\bINSERT\s+INTO\s+`?device_session`?/
@@ -852,7 +887,7 @@ describe('authHandler over Better Auth: nothing of an address or a token on stde
     )
 
     expect(result).toEqual({ status: 500, text: '{"code":"internal"}', cookies: [] })
-    expect(logs.map(({ code }) => code)).toEqual(['auth:UNEXPECTED'])
+    expect(logs.map(({ code }) => code)).toEqual(['auth:STORAGE_FAILED'])
     expect(JSON.stringify(logs)).not.toMatch(MARKED)
     expect(printed).not.toMatch(MARKED)
   })

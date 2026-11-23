@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { type DataError, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import { KeyedTurns } from '../../keyed-turns'
 import {
@@ -36,6 +37,10 @@ const day = (days: number): Date => new Date(MADE_AT.getTime() + days * DAY_MS)
 
 /** The client address every request comes from. */
 const ADDRESS = '203.0.113.1'
+
+/** The longest an id and a search text are, as the contract says it. */
+const { maxLength: MAX_ID } = CONTRACT_VALUES.id
+const { maxLength: MAX_QUERY } = CONTRACT_VALUES['account-search']
 
 /** A route's answer: its status, its JSON body (none when empty) and its headers. */
 async function answered(response: Response | undefined) {
@@ -222,7 +227,7 @@ describe('consoleRoutes: GET /console/accounts', () => {
       'size=0',
       'size=',
       'size=1e1',
-      `q=${'a'.repeat(255)}`,
+      `q=${'a'.repeat(MAX_QUERY + 1)}`,
       'page=1&page=2',
       'q=ann&q=bob',
       'sort=email',
@@ -306,6 +311,47 @@ describe('consoleRoutes: GET /console/accounts/:id', () => {
         body: { code: 'account-gone' },
       })
     }
+  })
+})
+
+describe('consoleRoutes: an id past the bound', () => {
+  it('answers 400 bad-request to an id longer than the contract allows at every path of an account, before looking for an account', async () => {
+    const { ask, reads } = await served()
+    const [shorter, longer] = ['a'.repeat(MAX_ID), 'a'.repeat(MAX_ID + 1)]
+
+    for (const [method, suffix] of [
+      ['GET', ''],
+      ['POST', '/rename'],
+      ['POST', '/email'],
+      ['POST', '/ban'],
+      ['POST', '/unban'],
+      ['POST', '/sign-out'],
+      ['POST', '/reset'],
+      ['POST', '/verification'],
+      ['POST', '/removal'],
+    ] as const) {
+      expect(await ask(method, `/console/accounts/${shorter}${suffix}`)).toMatchObject({
+        status: 404,
+        body: { code: 'account-gone' },
+      })
+      expect(await ask(method, `/console/accounts/${longer}${suffix}`)).toMatchObject({
+        status: 400,
+        body: { code: 'bad-request' },
+      })
+    }
+
+    expect(reads).toEqual([])
+  })
+
+  it('judges who sends the request before the id: a caller that is no operator answers 403', async () => {
+    const { ask, bob } = await served()
+
+    expect(
+      await ask('GET', `/console/accounts/${'a'.repeat(MAX_ID + 1)}`, { as: bob }),
+    ).toMatchObject({
+      status: 403,
+      body: { code: 'not-operator' },
+    })
   })
 })
 

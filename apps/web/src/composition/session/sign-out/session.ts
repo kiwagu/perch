@@ -11,9 +11,8 @@
 import { okAsync, ResultAsync } from 'neverthrow'
 
 import type { DataError } from '@workspace/data'
-import type { IdentityId } from '@workspace/ids'
 
-import { forgetDevice, savedIdentity, savedToken, signInMark } from '../../storage'
+import { forgetSignIn, type KeptSession, savedSession, signInMark } from '../../storage'
 import type { SessionHost } from '../host'
 import type { OpenSpace } from '../open-space'
 import type { KeysLeft, PendingRevoke } from '../pending-revoke'
@@ -66,7 +65,12 @@ export class SessionSignOut {
     const open = this.#host.open()
 
     if (!open) {
-      forgetDevice(this.#host.options.storage)
+      // Nothing open names a sign-in: the one this tab sees saved now is the one asked to end.
+      const seen = savedSession(this.#host.options.storage)
+
+      if (seen) {
+        forgetSignIn(this.#host.options.storage, seen.signIn)
+      }
 
       return okAsync('signed-out')
     }
@@ -109,17 +113,20 @@ export class SessionSignOut {
     return ended.andTee(release).orTee(release)
   }
 
-  /** Signs out `identity`, still the saved one, whose space did not open; see `SessionService.signOutUnopened`. */
-  unopened(identity: IdentityId): ResultAsync<void, DataError> {
-    if (savedIdentity(this.#host.options.storage)?.id !== identity || this.#host.open()) {
+  /**
+   * Signs out the sign-in `ended`, still the saved one, whose space did not open; see
+   * `SessionService.signOutUnopened`.
+   */
+  unopened(ended: KeptSession): ResultAsync<void, DataError> {
+    if (savedSession(this.#host.options.storage)?.signIn !== ended.signIn || this.#host.open()) {
       return okAsync(undefined)
     }
 
     const raised = signInMark(this.#host.options.storage)
 
-    this.#pendingRevoke.forgetKeys('live')
+    this.#pendingRevoke.forgetKeys('live', ended)
 
-    return this.#deletion.deleteUnopened(identity, raised).map(() => undefined)
+    return this.#deletion.deleteUnopened(ended.identity, raised).map(() => undefined)
   }
 
   /**
@@ -132,27 +139,29 @@ export class SessionSignOut {
    * any; otherwise (or when that cannot be read, or the write lock never comes) the database
    * stays, and the sign-in page says that signing in again as the identity sends the changes,
    * unless `notice` ranks above that word (`SESSION_NOTICES`): both are left, and it says the
-   * first. A token another tab saves while it waits for the writes or reads the outbox is a
-   * sign-in made since, which keeps the data and the keys (`signed-in-since`): this tab only
-   * leaves its space, for its caller to follow it.
+   * first. It ends the sign-in `ended`, whose token the gateway refused or whose sessions it
+   * ended, and changes nothing when the space open here is not that sign-in's. A sign-in another
+   * tab saves while it waits for the writes or reads the outbox is a sign-in made since, which
+   * keeps the data and the keys (`signed-in-since`): this tab only leaves its space, for its
+   * caller to follow it.
    */
-  refused(identity: IdentityId, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
+  refused(ended: KeptSession, notice?: ElsewhereNotice): ResultAsync<ForcedSignOut, DataError> {
     const open = this.#host.open()
     const storage = this.#host.options.storage
     const raised = signInMark(storage)
+    const identity = ended.identity
 
-    if (open?.space.identity.id !== identity) {
+    if (open?.signIn.signIn !== ended.signIn) {
       return okAsync('signed-out')
     }
 
-    // Another tab changed who is signed in: what happens to this identity's data is its call.
-    if (savedIdentity(storage)?.id !== identity) {
+    // Another tab ended that sign-in, or made another one: what happens to the data is its call.
+    if (savedSession(storage)?.signIn !== ended.signIn) {
       this.#host.leaveAndTell()
 
       return okAsync('signed-out')
     }
 
-    const ended = savedToken(storage)
     // Judged again right before anything is forgotten, with nothing awaited in between.
     const signedInSince = () => this.#signedInSince(open, ended)
 
@@ -192,14 +201,14 @@ export class SessionSignOut {
   }
 
   /**
-   * Whether another tab saved a token since `ended`, the one the forced sign-out ends, signing in
-   * again: this tab then lifts the barrier while its hints are open (they close with its space),
-   * and leaves its space, keeping the data and the keys.
+   * Whether another tab saved a sign-in since `ended`, the one the forced sign-out ends: this tab
+   * then lifts the barrier while its hints are open (they close with its space), and leaves its
+   * space, keeping the data and the keys.
    */
-  #signedInSince(open: OpenSpace, ended: string | undefined): boolean {
-    const token = savedToken(this.#host.options.storage)
+  #signedInSince(open: OpenSpace, ended: KeptSession): boolean {
+    const now = savedSession(this.#host.options.storage)
 
-    if (token === undefined || token === ended) {
+    if (now === undefined || now.signIn === ended.signIn) {
       return false
     }
 

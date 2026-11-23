@@ -28,8 +28,14 @@ import {
 } from '../features/user/presentation/pages/profile/profile.model.gen'
 import type { CommandsPort } from '../platform/commands.port'
 
-import { fakeGatewayAuth, verifiedElsewhere } from './__fixtures__/gateway-auth'
-import { browserDatabases, openTestWorld, type TestWorld } from './__fixtures__/session'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from './__fixtures__/gateway-auth'
+import {
+  browserDatabases,
+  openTestWorld,
+  signedInUser,
+  type TestWorld,
+} from './__fixtures__/session'
+import { signedIn } from './__fixtures__/signed-in'
 import {
   ACCOUNT_START_LOCK,
   type AccountStarts,
@@ -38,7 +44,7 @@ import {
   START_RETRY_MS,
 } from './account-starts'
 import type { GatewayAuth } from './gateway-auth'
-import { type KeptDevice, keptAccountStart, memoryStorage, saveDevice } from './storage'
+import { type KeptDevice, keptAccountStart, memoryStorage } from './storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -67,7 +73,7 @@ async function twoTabs() {
   const locks = new FakeLocks()
   const databases = browserDatabases()
 
-  saveDevice(storage, ann)
+  const session = signedIn(storage, ann)
 
   const a = await openTestWorld({ storage, locks, databases, online: false })
 
@@ -79,7 +85,7 @@ async function twoTabs() {
   worlds.push(b)
   expect((await b.session.restore()).isOk()).toBe(true)
 
-  return { a, b, storage, locks }
+  return { a, b, storage, locks, session }
 }
 
 /** The settings and profile services of a tab. */
@@ -98,7 +104,7 @@ function servicesOf(tab: TestWorld) {
 
 describe('the account starts of a browser', () => {
   it("lets one tab start an account at a time: a tab's late recovery creates nothing over what another created and edited", async () => {
-    const { a, b, storage, locks } = await twoTabs()
+    const { a, b, storage, locks, session } = await twoTabs()
     const ofA = servicesOf(a)
     const ofB = servicesOf(b)
     const created: NewSettings[] = []
@@ -131,7 +137,7 @@ describe('the account starts of a browser', () => {
       () => 'system',
     )
 
-    keptAccountStart(storage).keep(annStart)
+    keptAccountStart(storage).keep(session.signIn, annStart)
 
     // Both tabs finish the start this browser kept at once, as one leading tab hands over to another.
     const resumingA = startsOfA.resumeAfterPull(ann.identity)
@@ -155,12 +161,13 @@ describe('the account starts of a browser', () => {
       { id, locale: 'en', theme: 'system' },
     ])
     expect((await ofB.profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toHaveLength(1)
-    expect(keptAccountStart(storage).kept()).toBeUndefined()
+    expect(keptAccountStart(storage).kept(ann.identity.id)).toBeUndefined()
   })
 
   it("keeps a start another tab still has to finish when one tab's session closes", async () => {
-    const { a, storage, locks } = await twoTabs()
+    const { a, storage, locks, session } = await twoTabs()
     const ofA = servicesOf(a)
+    const another = identityIdFactory.create()
 
     accountStarts({
       session: a.session,
@@ -175,11 +182,11 @@ describe('the account starts of a browser', () => {
       logger: { warn: () => {} },
     })
     // Tab B's start, which tab B is still to finish.
-    keptAccountStart(storage).keep({ ...annStart, identity: identityIdFactory.create() })
+    keptAccountStart(storage).keep(session.signIn, { ...annStart, identity: another })
 
     await a.session.close()
 
-    expect(keptAccountStart(storage).kept()).toBeDefined()
+    expect(keptAccountStart(storage).kept(another)).toBeDefined()
   })
 
   it('projects what this tab pulled before the start reads, hands it that flush, and flushes its writes after', async () => {
@@ -253,9 +260,10 @@ describe('a start a sign-in learnt of', () => {
     const starting: GatewayAuth = {
       ...auth,
       signIn: (input, device) =>
-        auth
-          .signIn(input, device)
-          .map((signed) => ({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+        auth.signIn(input, device).map((signed) => ({
+          kind: 'signed-in' as const,
+          device: { ...signedDevice(signed), start: { name: 'Ann', locale: 'es' as const } },
+        })),
     }
 
     return { auth: starting, signUp }
@@ -286,7 +294,7 @@ describe('a start a sign-in learnt of', () => {
       ...(gateway ? { gateway } : {}),
       ...(options.wrap ? { wrap: options.wrap } : {}),
       ...(options.offline ? { online: false, network: true } : {}),
-      keepAccountStart: (user, from) => tab.starts?.keepAfterPull(user, from),
+      keepAccountStart: (signIn, user, from) => tab.starts?.keepAfterPull(signIn, user, from),
       onSyncState: (state) => tab.starts?.syncState(state),
     })
 
@@ -337,9 +345,9 @@ describe('a start a sign-in learnt of', () => {
   it('creates the settings and the profile once the device pulled what the account has: nothing', async () => {
     const { auth, signUp } = await annElsewhere()
     const { world, settings, profiles } = await browser(auth)
-    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(signUp))._unsafeUnwrap())
 
-    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept(user.id)).toBeUndefined())
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
       { locale: 'es' },
     ])
@@ -351,10 +359,12 @@ describe('a start a sign-in learnt of', () => {
   it('creates nothing over what another device started and changed before this one pulled it', async () => {
     const { auth, signUp } = await annElsewhere()
     const first = await browser(auth)
-    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await first.world.session.signIn(signUp))._unsafeUnwrap())
 
     // The first device starts the account, then changes its language, and syncs it all.
-    await vi.waitFor(() => expect(keptAccountStart(first.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(first.world.storage).kept(user.id)).toBeUndefined(),
+    )
 
     const [row] = (await first.settings.read({ identity: user.id }))._unsafeUnwrap()
 
@@ -372,7 +382,9 @@ describe('a start a sign-in learnt of', () => {
     const second = await browser(auth, first.world.gateway)
 
     expect((await second.world.session.signIn(signUp)).isOk()).toBe(true)
-    await vi.waitFor(() => expect(keptAccountStart(second.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(second.world.storage).kept(user.id)).toBeUndefined(),
+    )
 
     // Its start found both records pulled: the change stands, and there is one of each.
     expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
@@ -403,9 +415,10 @@ describe('a start a sign-in learnt of', () => {
     const starting: GatewayAuth = {
       ...auth,
       signIn: (input, device) =>
-        auth
-          .signIn(input, device)
-          .map((signed) => ({ ...signed, start: { name: 'Ann', locale: 'es' as const } })),
+        auth.signIn(input, device).map((signed) => ({
+          kind: 'signed-in' as const,
+          device: { ...signedDevice(signed), start: { name: 'Ann', locale: 'es' as const } },
+        })),
     }
     const created: string[] = []
     // The verifying browser reaches the gateway only once the spec lets it.
@@ -416,9 +429,11 @@ describe('a start a sign-in learnt of', () => {
 
     // Meanwhile another browser signs in, starts the account, changes its language, syncs it all.
     const other = await browser(starting, verifying.world.gateway)
-    const user = (await other.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await other.world.session.signIn(signUp))._unsafeUnwrap())
 
-    await vi.waitFor(() => expect(keptAccountStart(other.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(other.world.storage).kept(user.id)).toBeUndefined(),
+    )
 
     const [row] = (await other.settings.read({ identity: user.id }))._unsafeUnwrap()
     const id = row?.id ?? expect.unreachable('settings')
@@ -436,7 +451,9 @@ describe('a start a sign-in learnt of', () => {
       transport.goOnline()
     }
 
-    await vi.waitFor(() => expect(keptAccountStart(verifying.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(verifying.world.storage).kept(user.id)).toBeUndefined(),
+    )
     expect(created).toEqual([])
     expect((await verifying.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
       { id, locale: 'en', theme: 'system' },
@@ -463,15 +480,15 @@ describe('a start a sign-in learnt of', () => {
         },
       }),
     })
-    const user = (await world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await world.session.signIn(signUp))._unsafeUnwrap())
 
     await vi.waitFor(() => expect(logged).toEqual(['account-start: data:WRITE_FAILED']))
-    expect(keptAccountStart(world.storage).kept()).toMatchObject({ identity: user.id })
+    expect(keptAccountStart(world.storage).kept(user.id)).toMatchObject({ identity: user.id })
     expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
 
     await world.clock.advance(START_RETRY_MS)
 
-    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() => expect(keptAccountStart(world.storage).kept(user.id)).toBeUndefined())
     expect((await profiles.read({ identity: user.id }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann' },
     ])
@@ -481,10 +498,12 @@ describe('a start a sign-in learnt of', () => {
   it('creates nothing while the pull of the private region failed to import, and starts the account once it recovered', async () => {
     const { auth, signUp } = await annElsewhere()
     const first = await browser(auth)
-    const user = (await first.world.session.signIn(signUp))._unsafeUnwrap()
+    const user = signedInUser((await first.world.session.signIn(signUp))._unsafeUnwrap())
 
     // The first device starts the account and changes its language; the gateway holds both.
-    await vi.waitFor(() => expect(keptAccountStart(first.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(first.world.storage).kept(user.id)).toBeUndefined(),
+    )
 
     const [row] = (await first.settings.read({ identity: user.id }))._unsafeUnwrap()
     const id = row?.id ?? expect.unreachable('settings')
@@ -537,7 +556,9 @@ describe('a start a sign-in learnt of', () => {
       void locks.request(ACCOUNT_START_LOCK, { mode: 'exclusive' }, async () => resolve())
     })
 
-    expect(keptAccountStart(second.world.storage).kept()).toMatchObject({ identity: user.id })
+    expect(keptAccountStart(second.world.storage).kept(user.id)).toMatchObject({
+      identity: user.id,
+    })
     expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
     expect((await second.profiles.read({ identity: user.id }))._unsafeUnwrap()).toEqual([])
 
@@ -546,7 +567,9 @@ describe('a start a sign-in learnt of', () => {
     second.world.failures.splice(0)
     await second.world.clock.advance(CADENCE_MS.full)
 
-    await vi.waitFor(() => expect(keptAccountStart(second.world.storage).kept()).toBeUndefined())
+    await vi.waitFor(() =>
+      expect(keptAccountStart(second.world.storage).kept(user.id)).toBeUndefined(),
+    )
     expect((await second.settings.read({ identity: user.id }))._unsafeUnwrap()).toEqual([
       { id, locale: 'en', theme: 'system' },
     ])
@@ -579,8 +602,7 @@ describe("a start that waits for the pull, by its engine's word", () => {
   /** Ann's browser offline, its starts led by `engine`; a start waits for the pull. */
   async function ledBy(engine: SyncEngine) {
     const storage = memoryStorage()
-
-    saveDevice(storage, ann)
+    const session = signedIn(storage, ann)
 
     const world = await openTestWorld({ storage, online: false })
 
@@ -601,20 +623,23 @@ describe("a start that waits for the pull, by its engine's word", () => {
       logger: { warn: () => {} },
     })
 
-    keptAccountStart(storage).keep(annStart)
+    keptAccountStart(storage).keep(session.signIn, annStart)
     starts.syncState({ leader: true, channel: 'up' })
 
-    return { world, storage, ...services }
+    return { world, storage, session, ...services }
   }
 
   it('creates nothing while its private region has not caught up, as one stopped or left out of the welcome never does', async () => {
     const { engine, asked } = engineOf({ caughtUp: new Promise(() => {}) })
-    const { storage, settings, profiles } = await ledBy(engine)
+    const { storage, session, settings, profiles } = await ledBy(engine)
 
     await new Promise<void>((resolve) => setTimeout(resolve, 0))
 
     expect(asked).toEqual([privateRegionId(ann.identity.id)])
-    expect(keptAccountStart(storage).kept()).toEqual(annStart)
+    expect(keptAccountStart(storage).kept(ann.identity.id)).toEqual({
+      ...annStart,
+      signIn: session.signIn,
+    })
     expect((await settings.read({ identity: ann.identity.id }))._unsafeUnwrap()).toEqual([])
     expect((await profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toEqual([])
   })
@@ -631,7 +656,7 @@ describe("a start that waits for the pull, by its engine's word", () => {
 
     caughtUp()
 
-    await vi.waitFor(() => expect(keptAccountStart(storage).kept()).toBeUndefined())
+    await vi.waitFor(() => expect(keptAccountStart(storage).kept(ann.identity.id)).toBeUndefined())
     expect((await profiles.read({ identity: ann.identity.id }))._unsafeUnwrap()).toMatchObject([
       { name: 'Ann' },
     ])

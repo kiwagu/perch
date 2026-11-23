@@ -10,7 +10,7 @@ import {
   invitationIdFactory,
   tenantIdFactory,
 } from '@workspace/ids'
-import { NO_ABILITY } from '@workspace/kernel'
+import { CONTRACT_VALUES, NO_ABILITY } from '@workspace/kernel'
 import type { Membership, TenantRole } from '@workspace/replica/protocol'
 
 import type {
@@ -286,7 +286,12 @@ describe('OrganisationService', () => {
       'organisation:NAME_REQUIRED',
     )
     expect(
-      (await service.create({ key: 'acme', name: 'x'.repeat(81) }))._unsafeUnwrapErr().code,
+      (
+        await service.create({
+          key: 'acme',
+          name: 'x'.repeat(CONTRACT_VALUES['organisation-name'].maxLength + 1),
+        })
+      )._unsafeUnwrapErr().code,
     ).toBe('organisation:NAME_TOO_LONG')
     expect(organisations.calls).toEqual([])
   })

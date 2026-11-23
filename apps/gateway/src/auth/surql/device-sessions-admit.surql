@@ -5,8 +5,9 @@
 -- transaction: a banned account lets nothing in (`banned`), its session ended `banned` unless the
 -- ban ended it already, so whichever of the ban and the admission commits second sees the other.
 -- Otherwise the account's devices with a live admitted session are counted, the new session's own
--- device included and a device with several live sessions once; a session still waiting for its
--- admission (`pending`) counts for its own sign-in only. The sign-in is admitted as it is
+-- device included and a device with several live sessions once (`fn::devices_signed_in_with` of
+-- the schema, by which a sign-in's code step judges the limit too); a session still waiting for
+-- its admission (`pending`) counts for its own sign-in only. The sign-in is admitted as it is
 -- (`admitted`) within the limit, and when its session is no longer live. Past it, a sign-in not
 -- confirmed ($sign_out_oldest false) leaves nothing: its session, never handed to its device, is
 -- deleted (`asked`). A confirmed one signs out the other device seen least recently (by
@@ -39,19 +40,7 @@ BEGIN TRANSACTION;
   LET $live = IF $own = NONE {
     [];
   } ELSE {
-    SELECT
-      device,
-      time::max(last_seen_at) AS seen_at
-    FROM device_session
-    WHERE
-      identity = $own.identity
-      AND ended_at = NONE
-      AND expires_at > $now
-      AND (
-        pending = false
-        OR token = $session_token
-      )
-    GROUP BY device;
+    fn::devices_signed_in_with($own.identity, $own.device, $now);
   };
   LET $outcome = IF $banned {
     'banned';

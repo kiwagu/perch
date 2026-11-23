@@ -42,6 +42,7 @@ function pagedSample(): ReturnType<typeof sampleContract> {
     paged: { sizes: [10, 25, 50], default: 25 },
     result: 'the page of accounts and how many there are',
     codes: ['failed'],
+    changes: [],
   }
   screenIn(contract, 'sample').anchors['sample.accounts-list'] = {
     kind: 'list',
@@ -91,6 +92,39 @@ describe('searchProblems', () => {
       `${AT}.search.properties.size: the enum value "25" has no control under x-perch.values`,
       `${AT}.search.properties.size: the enum value "50" has no control under x-perch.values`,
     ])
+  })
+  it('wants no control for an enum value of the parameter a mail derives from version 4, which a link carries', () => {
+    const mailed = (version: number) => {
+      const contract = sampleContract()
+
+      contract.screens.version = version
+      contract.screens.platform.actions['things.invite'] = {
+        description: 'Invites.',
+        params: { email: { type: 'string', maxLength: 254, description: 'The email.' } },
+        result: 'the mail is on its way',
+        codes: ['failed'],
+        changes: [],
+        mail: { to: 'email', language: 'account', link: { screen: 'sample', search: 'token' } },
+      }
+      sampleBinding(contract).search = {
+        type: 'object',
+        properties: {
+          token: { type: 'string', enum: ['a', 'b'] },
+          tab: { type: 'string', enum: ['a', 'b'] },
+        },
+        additionalProperties: false,
+      }
+
+      return contract
+    }
+    const lacking = (name: string) =>
+      ['a', 'b'].map(
+        (value) =>
+          `${AT}.search.properties.${name}: the enum value "${value}" has no control under x-perch.values`,
+      )
+
+    expect(printed(mailed(4))).toEqual(lacking('tab'))
+    expect(printed(mailed(3))).toEqual([...lacking('token'), ...lacking('tab')])
   })
   it('takes the control of the size of a paged list from its derived size select', () => {
     expect(printed(pagedSample())).toEqual([])

@@ -70,9 +70,6 @@ export const declaredAnchors = (screens: ScreensFile): DeclaredAnchor[] =>
     })),
   )
 
-/** The two answers of a question the frame asks: going on, and staying. */
-export const ANSWERS = ['confirm-button', 'cancel-button'] as const
-
 /** The refs of an anchor's binding, one or a list, each at its path under the anchor. */
 export function bindingRefsOf(
   def: AnchorDef,
@@ -248,12 +245,13 @@ export const codesOf = (vocabulary: Vocabulary, screens: ScreensFile): Set<strin
     ...screens.questions.map(({ code }) => code),
   ])
 
-/** Every state of the vocabulary: app, container and row states. */
+/** Every state of the vocabulary: app, container, row and field states. */
 export const statesOf = (vocabulary: Vocabulary): Set<string> =>
   new Set([
     ...Object.keys(vocabulary.appStates),
     ...Object.keys(vocabulary.containerStates),
     ...Object.keys(vocabulary.rowStates),
+    ...Object.keys(vocabulary.fieldStates),
   ])
 
 /** A choice value written as a pattern (`^[a-z]+$`) stands for every value it matches. */

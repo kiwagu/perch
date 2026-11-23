@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { identityIdFactory, tenantIdFactory } from '@workspace/ids'
 import type { PlatformRole } from '@workspace/kernel'
@@ -15,8 +15,9 @@ import {
 import type { DeviceNetwork, SyncTransport } from '@workspace/replica/sync'
 import { manualClock } from '@workspace/replica/testing'
 
+import { signedIn } from './__fixtures__/signed-in'
 import { SessionRoles, sessionTransportContext } from './session'
-import { deviceIdFrom, memoryStorage, saveDevice, savedRoles } from './storage'
+import { deviceIdFrom, memoryStorage, savedRoles } from './storage'
 import { syncTransport } from './sync-transport'
 
 /** A socket the test opens, feeds and closes by hand; it keeps what the transport sent. */
@@ -71,6 +72,8 @@ afterEach(() => {
   for (const transport of started.splice(0)) {
     transport.stop()
   }
+
+  vi.restoreAllMocks()
 })
 
 /**
@@ -81,10 +84,9 @@ afterEach(() => {
 function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
   const storage = memoryStorage()
 
-  saveDevice(storage, {
+  const session = signedIn(storage, {
     identity: { id: ann, email: 'ann@example.test' },
     token: 'token-ann',
-    memberships: [],
   })
 
   const roles = new SessionRoles({ storage, shown: () => ann })
@@ -97,9 +99,9 @@ function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
 
   roles.subscribe((held) => told.push([...held]))
 
-  const context = sessionTransportContext(ann, storage, {
+  const context = sessionTransportContext(session, storage, {
     memberships: (list) => memberships.push(list),
-    roles: (held) => roles.apply(ann, held),
+    roles: (held) => roles.apply(session, held),
     refused: hear('refused'),
     revoked: hear('revoked'),
     passwordChanged: hear('passwordChanged'),
@@ -134,7 +136,7 @@ function annChannel(device: { readonly network?: DeviceNetwork } = {}) {
     return socket
   }
 
-  return { storage, roles, told, memberships, heard, clock, sockets, opened }
+  return { storage, session, roles, told, memberships, heard, clock, sockets, opened }
 }
 
 describe('syncTransport: the channel the browser and the seed open', () => {
@@ -149,17 +151,17 @@ describe('syncTransport: the channel the browser and the seed open', () => {
   })
 
   it("keeps a welcome's roles in the identity's record and tells the subscribers", () => {
-    const { storage, roles, told, opened } = annChannel()
+    const { storage, session, roles, told, opened } = annChannel()
 
     opened().receive(welcomeWith(['operator']))
 
-    expect(savedRoles(storage, ann)).toEqual(['operator'])
+    expect(savedRoles(storage, session)).toEqual(['operator'])
     expect([...roles.current()]).toEqual(['operator'])
     expect(told).toEqual([['operator']])
   })
 
   it('takes the role away when a later welcome does not carry it', async () => {
-    const { storage, roles, told, clock, opened } = annChannel()
+    const { storage, session, roles, told, clock, opened } = annChannel()
 
     opened().receive(welcomeWith(['operator']))
     // The connection is lost; the device connects again and is welcomed anew, without the role.
@@ -167,7 +169,7 @@ describe('syncTransport: the channel the browser and the seed open', () => {
     await clock.advance(1_000)
     opened().receive(welcomeWith([]))
 
-    expect(savedRoles(storage, ann)).toEqual([])
+    expect(savedRoles(storage, session)).toEqual([])
     expect(roles.current().size).toBe(0)
     expect(told).toEqual([['operator'], []])
   })
@@ -190,9 +192,13 @@ describe('syncTransport: the channel the browser and the seed open', () => {
     expect(heard).toEqual(['banned'])
   })
 
-  it("hears the device's network: a reconnect waiting connects at once once it is back", () => {
+  it("hears the device's network: a reconnect waiting connects after the short delay of the network back", async () => {
+    // The browser gives the transport no random source, so it draws from Math.random, taken when
+    // the transport is built: the close draws 0.9 of the first step, 900 ms, and the network back
+    // draws 0, which comes sooner.
+    const random = vi.spyOn(Math, 'random').mockReturnValueOnce(0.9).mockReturnValueOnce(0)
     const listeners = new Set<() => void>()
-    const { sockets, opened } = annChannel({
+    const { clock, sockets, opened } = annChannel({
       network: {
         online: () => true,
         onOnlineChange: (listener) => {
@@ -209,6 +215,11 @@ describe('syncTransport: the channel the browser and the seed open', () => {
       listener()
     }
 
+    expect(sockets).toHaveLength(1)
+
+    await clock.advance(0)
+
     expect(sockets).toHaveLength(2)
+    expect(random).toHaveBeenCalledTimes(2)
   })
 })

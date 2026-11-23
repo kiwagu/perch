@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { openTestDb, readSchema } from '@workspace/data/testing'
 import { idSchemas, invitationIdFactory, profileIdFactory } from '@workspace/ids'
-import { isTenantKey } from '@workspace/kernel'
+import { CONTRACT_VALUES, isTenantKey } from '@workspace/kernel'
 import { membership, tenantRole } from '@workspace/replica/protocol'
 import { manualClock } from '@workspace/replica/testing'
 import { z } from '@workspace/zod'
@@ -31,6 +31,10 @@ import tenantReadyStatement from '../surql/tenant-ready.surql'
 
 import { INVITE_FLOOR_MS } from './invitation-handlers'
 import { organisationRoutes } from './routes'
+
+/** The most characters an organisation's name and its key have, as the contract says it. */
+const { maxLength: MAX_NAME } = CONTRACT_VALUES['organisation-name']
+const { maxLength: MAX_KEY } = CONTRACT_VALUES['organisation-key']
 
 /** What a creation answers. */
 const created = z.object({ membership })
@@ -93,18 +97,10 @@ describe('organisationRoutes', () => {
     })
   })
 
-  it('answers 400 to a creation whose body does not follow the schema, and creates nothing', async () => {
+  it('answers 400 bad-request to a creation whose body does not follow the schema, and creates nothing', async () => {
     const { ann, ask } = await harness()
 
-    for (const body of [
-      { key: 'Acme', name: 'Acme' },
-      { key: 'a', name: 'Acme' },
-      { key: 'acme-corp', name: 'Acme' },
-      { key: 'acme', name: '   ' },
-      { key: 'acme', name: 'x'.repeat(81) },
-      { key: 'acme' },
-      '{"key":',
-    ]) {
+    for (const body of [{ key: 'acme' }, { name: 'Acme' }, { key: 7, name: 'Acme' }, '{"key":']) {
       expect(await ask('POST', '/organisations', { as: ann, body })).toEqual({
         status: 400,
         body: { code: 'bad-request' },
@@ -115,6 +111,52 @@ describe('organisationRoutes', () => {
       status: 200,
       body: { memberships: [] },
     })
+  })
+
+  it.each([
+    { what: 'a key with a capital', key: 'Acme', name: 'Acme', code: 'key-invalid' },
+    { what: 'a key of one character', key: 'a', name: 'Acme', code: 'key-invalid' },
+    { what: 'a key with a dash', key: 'acme-corp', name: 'Acme', code: 'key-invalid' },
+    {
+      what: 'a key past the longest length',
+      key: 'a'.repeat(MAX_KEY + 1),
+      name: 'Acme',
+      code: 'key-invalid',
+    },
+    { what: 'an empty name', key: 'acme', name: '', code: 'name-required' },
+    { what: 'a name of spaces', key: 'acme', name: '   ', code: 'name-required' },
+    {
+      what: 'a name past the longest length',
+      key: 'acme',
+      name: 'x'.repeat(MAX_NAME + 1),
+      code: 'name-too-long',
+    },
+  ])(
+    'answers 400 $code to a creation with $what, and creates nothing',
+    async ({ key, name, code }) => {
+      const { ann, ask } = await harness()
+
+      expect(await ask('POST', '/organisations', { as: ann, body: { key, name } })).toEqual({
+        status: 400,
+        body: { code },
+      })
+      expect(await ask('GET', '/organisations', { as: ann })).toEqual({
+        status: 200,
+        body: { memberships: [] },
+      })
+    },
+  )
+
+  it('takes a name of the longest length once trimmed', async () => {
+    const { ann, ask } = await harness()
+    const name = 'x'.repeat(MAX_NAME)
+    const { status, body } = await ask('POST', '/organisations', {
+      as: ann,
+      body: { key: 'acme', name: ` ${name} ` },
+    })
+
+    expect(status).toBe(201)
+    expect(created.parse(body).membership.tenant.name).toBe(name)
   })
 
   it('creates the organisation for the caller, whatever identity the body names', async () => {
@@ -892,9 +934,14 @@ describe('organisationRoutes', () => {
 
   it("takes a key in the path exactly when the kernel's key rule accepts it", async () => {
     const { ann, routes } = await harness()
-    const keys = ['ab', 'acme_2026', 'a'.repeat(32), 'a', '1acme', 'Acme', 'acme-corp']
+    const keys = ['ab', 'acme_2026', 'a'.repeat(MAX_KEY), 'a', '1acme', 'Acme', 'acme-corp']
 
-    for (const key of [...keys, 'a'.repeat(33), 'a'.repeat(40), 'a'.repeat(41)]) {
+    for (const key of [
+      ...keys,
+      'a'.repeat(MAX_KEY + 1),
+      'a'.repeat(MAX_KEY + 8),
+      'a'.repeat(MAX_KEY + 9),
+    ]) {
       const response = await routes(
         request('GET', `/organisations/${key}/members`, { as: ann }),
         ADDRESS,

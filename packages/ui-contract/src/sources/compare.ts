@@ -5,12 +5,14 @@
  * allowed, a literal the contract lacks never is); no literal is another
  * literal plus a derived suffix (that one is built with `testIdFor()`); every code is in the
  * vocabulary, and every suffix of `testIdFor()` too, listed in the `derived` of an anchor of the
- * contract (of the base itself when the call writes it as a literal); a `holdsInput` written in
- * the sources is `{false}`, on a field the contract says holds no input, never on an anchor that
- * is not a field, and every such field rendered carries it. The problems carry `file:line`.
+ * contract (of the base itself when the call writes it as a literal); a `holdsInput` or a
+ * `marksState` written on a field (`opt-outs.ts`), a `maxLength` and a `type` on a text field
+ * (`facets.ts`) are problems, since the kit takes them from the contract's field facts, and the
+ * `aria-invalid` and `disabled` of a control's element are held to the contract (`facets.ts`). The
+ * problems carry `file:line`.
  */
 
-import { baseOf, FIELD_KINDS } from '../anchors'
+import { baseOf } from '../anchors'
 import { codesOf, type DeclaredAnchor, declaredAnchors, locate } from '../check'
 import {
   type Problem,
@@ -22,6 +24,8 @@ import {
 } from '../files'
 
 import type { Collected } from './collect'
+import { facetProblems } from './facets'
+import { optOutProblems } from './opt-outs'
 
 interface Place {
   readonly file: string
@@ -143,50 +147,13 @@ export function compareWithContract(
       .map(({ code, line }) => at({ file, line }, `"${code}" is not a code of ${VOCABULARY_FILE}`)),
   )
 
-  const fields = new Map(
-    contract
-      .filter(({ def }) => FIELD_KINDS.has(def.kind))
-      .map(({ anchor, def, at: path }) => [anchor, { holds: def.holdsInput !== false, path }]),
-  )
-  const kinds = new Map(contract.map(({ anchor, def }) => [anchor, def.kind]))
-  const inputProblems = collected.flatMap(({ file, inputs }) =>
-    inputs.flatMap(({ anchor, holdsInput, line }) => {
-      const kind = kinds.get(anchor)
-
-      if (kind !== undefined && !FIELD_KINDS.has(kind)) {
-        return [
-          at({ file, line }, `"${anchor}" is a ${kind}, not a field; only a field holds input`),
-        ]
-      }
-
-      if (holdsInput) {
-        return [at({ file, line }, `"${anchor}": holdsInput={true} is the default; leave it out`)]
-      }
-
-      return fields.get(anchor)?.holds === true
-        ? [at({ file, line }, `"${anchor}" holds input by the contract; drop holdsInput={false}`)]
-        : []
-    }),
-  )
-
-  // A field that holds no input (a choice that applies at once) says so on its element, once
-  // rendered; on a branch the contract may run ahead of that element, as of an anchor not rendered.
-  const optedOut = new Set(
-    collected.flatMap(({ inputs }) =>
-      inputs.filter(({ holdsInput }) => !holdsInput).map(({ anchor }) => anchor),
-    ),
-  )
-  const missingOptOuts = [...fields]
-    .filter(
-      ([anchor, { holds }]) =>
-        !options.ahead && !holds && first.has(anchor) && !optedOut.has(anchor),
-    )
-    .map(([, { path }]) =>
-      inScreens(
-        path,
-        'does not hold input by the contract; its element carries holdsInput={false}',
-      ),
-    )
+  const optOuts = optOutProblems({ collected, contract })
+  const facets = facetProblems({
+    collected,
+    screens,
+    rendered: first,
+    ahead: options.ahead === true,
+  })
 
   return sortProblems([
     ...collected.flatMap(({ problems }) => problems),
@@ -195,7 +162,7 @@ export function compareWithContract(
     ...unrendered,
     ...partProblems(collected, contract, suffixes),
     ...codeProblems,
-    ...inputProblems,
-    ...missingOptOuts,
+    ...optOuts,
+    ...facets,
   ])
 }

@@ -5,7 +5,7 @@ import type { DataError } from '@workspace/data'
 import type { EmailVerified } from '../../platform/session.port'
 import type { GatewayAuth } from '../gateway-auth'
 
-import type { SessionSignIn } from './sign-in'
+import type { Asked, SessionSignIn } from './sign-in'
 
 /**
  * Exchanges a verification link's token as a sign-in: in the browser's sign-in lock, with the
@@ -22,20 +22,19 @@ export function verifyEmail(
   token: string,
   generation: number,
 ): ResultAsync<EmailVerified, DataError> {
-  return signingIn
-    .enter(
-      undefined,
-      (device) =>
-        auth.verifyEmail(token, device).map((answer) =>
+  return signingIn.enter<EmailVerified>(
+    undefined,
+    (device) =>
+      auth.verifyEmail(token, device).map(
+        (answer): Asked<EmailVerified> =>
           answer.kind === 'verified-before'
-            ? undefined
-            : // The account starts as one a sign-in learnt of: once this device pulled what it has.
-              { ...answer.device, start: answer.account },
-        ),
-      generation,
-    )
-    .map(
-      (user): EmailVerified =>
-        user === undefined ? { kind: 'verified-before' } : { kind: 'signed-in', user },
-    )
+            ? { stopped: { kind: 'verified-before' } }
+            : {
+                // The account starts as one a sign-in learnt of: once this device pulled what it has.
+                device: { ...answer.device, start: answer.account },
+                signedIn: (user) => ({ kind: 'signed-in', user }),
+              },
+      ),
+    generation,
+  )
 }

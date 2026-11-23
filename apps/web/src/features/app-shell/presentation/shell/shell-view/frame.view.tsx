@@ -6,6 +6,7 @@ import { IDENTITY } from '@workspace/ui-contract/anchors'
 
 import type { SyncStatus } from '../../../../../platform/sync-status.port'
 import type { Theme } from '../../../../../platform/theme'
+import type { ShellEvent } from '../../../application/shell-machine'
 
 import { HeaderActions } from './header-actions.view'
 import { InstallAlert, type InstallCode } from './install-alert.view'
@@ -38,19 +39,18 @@ export interface ShellViewProps {
   readonly held: ReadonlySet<string>
   /** The path of the screen open, as the router resolved it (`/$` for a page refused). */
   readonly activePath: string | undefined
-  /** Whether the frame's flow takes a language choice now: the select is enabled while it does. */
-  readonly canChooseLocale: boolean
+  /**
+   * Whether the frame's flow, in its state, takes `event`: each control of the frame is enabled
+   * exactly while the state takes its press, read from the machine.
+   */
+  readonly can: (event: ShellEvent) => boolean
   readonly onLocaleChange: (locale: Locale) => void
   /** The theme this device shows. */
   readonly theme: Theme
-  /** Whether the frame's flow takes a theme choice now: the select is enabled while it does. */
-  readonly canChooseTheme: boolean
   readonly onThemeChange: (theme: Theme) => void
   readonly link?: ComponentType<ShellLinkProps>
   /** Signs the saved account out on this device when its data could not be opened; none without one. */
   readonly onSignOutHere?: (() => void) | undefined
-  /** That sign-out runs: the button waits for it. */
-  readonly signingOutHere?: boolean | undefined
   /** The latest message for the user: its contract code and its text, already translated. */
   readonly notice?: ShellNotice | undefined
   /** The toasts shown, the newest first, each with its tone and its words in the language the app speaks. */
@@ -58,23 +58,15 @@ export interface ShellViewProps {
   readonly onDismissToast?: ((id: number) => void) | undefined
   /** The code the crash message shows while the open screen failed to render; none otherwise. */
   readonly crash?: CrashCode | undefined
-  /** Whether the frame's flow takes a reload now: the button is enabled while it does. */
-  readonly canReload?: boolean | undefined
   readonly onReload?: (() => void) | undefined
   /** The code the update message shows once the page should load again; none before. */
   readonly update?: UpdateCode | undefined
-  /** Whether the frame's flow takes the update's reload now: the button is enabled while it does. */
-  readonly canUpdate?: boolean | undefined
   readonly onUpdate?: (() => void) | undefined
   /** The code the state of the sync shows for a signed-in account; none for a guest. */
   readonly sync?: SyncStatus | undefined
   /** The code the reminder to install the app shows until it is installed or put off; none else. */
   readonly install?: InstallCode | undefined
-  /** Whether the frame's flow takes the install now: its button is enabled while it does. */
-  readonly canInstall?: boolean | undefined
   readonly onInstall?: (() => void) | undefined
-  /** Whether the frame's flow takes the reminder put off now. */
-  readonly canPostponeInstall?: boolean | undefined
   readonly onPostponeInstall?: (() => void) | undefined
   readonly children?: ReactNode
 }
@@ -105,9 +97,8 @@ export function ShellView(props: ShellViewProps) {
           signedIn={signedIn}
           sync={ready ? props.sync : undefined}
           theme={props.theme}
-          canChooseTheme={props.canChooseTheme}
+          can={props.can}
           onThemeChange={props.onThemeChange}
-          canChooseLocale={props.canChooseLocale}
           onLocaleChange={props.onLocaleChange}
         />
       }
@@ -115,14 +106,13 @@ export function ShellView(props: ShellViewProps) {
       status={<StatusLine status={props.status} />}
     >
       {ready && props.update ? (
-        <UpdateAlert update={props.update} canUpdate={props.canUpdate} onUpdate={props.onUpdate} />
+        <UpdateAlert update={props.update} can={props.can} onUpdate={props.onUpdate} />
       ) : null}
       {ready && props.install ? (
         <InstallAlert
           install={props.install}
-          canInstall={props.canInstall}
+          can={props.can}
           onInstall={props.onInstall}
-          canPostponeInstall={props.canPostponeInstall}
           onPostponeInstall={props.onPostponeInstall}
         />
       ) : null}
@@ -131,13 +121,13 @@ export function ShellView(props: ShellViewProps) {
       <NoticeLine notice={ready ? props.notice : undefined} />
       <Toasts toasts={props.toasts} onDismissToast={props.onDismissToast} />
       {props.renders('app-shell.sign-out-here-button') && props.onSignOutHere ? (
-        <SignOutHere onSignOutHere={props.onSignOutHere} signingOutHere={props.signingOutHere} />
+        <SignOutHere can={props.can} onSignOutHere={props.onSignOutHere} />
       ) : null}
       {props.crash || reload ? (
         <ScreenCrash
           crash={props.crash}
           reload={reload}
-          canReload={props.canReload}
+          can={props.can}
           onReload={props.onReload}
         />
       ) : null}

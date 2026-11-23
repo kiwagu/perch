@@ -9,12 +9,28 @@ interface Refusal {
 /** Whether an attempt may go on, and when to ask again if it may not. */
 export type Allowance = { readonly allowed: true } | Refusal
 
-/** An attempt counted while it is under way: its holder may give it back. */
+/**
+ * An attempt counted while it is under way: its holder settles it once, giving it back or keeping
+ * it; the first settle counts, any later one changes nothing.
+ */
 export type Reservation =
   | {
       readonly allowed: true
-      /** Uncounts the attempt once, while the window that counted it still holds its key. */
+      /**
+       * Uncounts the attempt, while the window that counted it still holds its key. A window left
+       * with no attempt is dropped, so a key whose attempts were all given back is as if it had
+       * never been counted: its next attempt starts a fresh window.
+       */
       giveBack(): void
+      /**
+       * Keeps the attempt counted for good. While the window that counted it still holds its key
+       * it stays there; once that window is gone (the key forgotten while the attempt was under
+       * way, its window passed or evicted), the attempt counts in the key's window as it is now,
+       * opening one if there is none, past its limit when newer attempts filled it: an attempt
+       * judged after a forgetting always counts, once, so a newer attempt given back later leaves
+       * it counted.
+       */
+      keep(): void
     }
   | Refusal
 
@@ -37,11 +53,12 @@ interface Counter {
 const defaultMaxKeys = 100_000
 
 /**
- * Counts attempts per key in fixed windows that start at a key's first attempt. The table is
- * bounded: an unseen key at a full table evicts the window that started first, even a live one,
- * rather than being refused. Availability wins over a marginal gain: refusing unseen keys would
- * let anyone who fills a table with cheap requests lock every other key out, while an evicted
- * key only starts a fresh window.
+ * Counts attempts per key in fixed windows that start at a key's first attempt that still counts:
+ * a window whose every attempt was given back (`reserve`) leaves nothing behind, neither a count
+ * nor a deadline. The table is bounded: an unseen key at a full table evicts the window that
+ * started first, even a live one, rather than being refused. Availability wins over a marginal
+ * gain: refusing unseen keys would let anyone who fills a table with cheap requests lock every
+ * other key out, while an evicted key only starts a fresh window.
  */
 export class FixedWindow {
   /** The windows in the order they started, the first started first. */
@@ -59,7 +76,12 @@ export class FixedWindow {
     return 'allowed' in counted ? counted : { allowed: true }
   }
 
-  /** Counts one attempt of `key` like `take`, for its holder to give back if it does not count. */
+  /**
+   * Counts one attempt of `key` like `take`, for its holder to give back if it does not count.
+   * An attempt given back that leaves its window empty takes the window with it, so an attempt
+   * that opened it and was given back does not leave its deadline to cut short the window of the
+   * attempts that follow.
+   */
   reserve(key: string): Reservation {
     const counted = this.countIn(key)
 
@@ -67,18 +89,30 @@ export class FixedWindow {
       return counted
     }
 
-    let given = false
+    let settled = false
 
     return {
       allowed: true,
       giveBack: () => {
         // A window that restarted, or a key forgotten or evicted since, holds nothing of it; a
-        // reservation given back once holds nothing more.
-        if (!given && this.live(key) === counted && counted.count > 0) {
+        // reservation settled once holds nothing more.
+        if (!settled && this.live(key) === counted && counted.count > 0) {
           counted.count -= 1
+
+          if (counted.count === 0) {
+            this.counters.delete(key)
+          }
         }
 
-        given = true
+        settled = true
+      },
+      keep: () => {
+        // Its own window still counts it; any other window, or none, has not counted it yet.
+        if (!settled && this.live(key) !== counted) {
+          this.record(key)
+        }
+
+        settled = true
       },
     }
   }
@@ -86,6 +120,20 @@ export class FixedWindow {
   /** Forgets `key`'s window (a success that clears its failures). */
   forget(key: string): void {
     this.counters.delete(key)
+  }
+
+  /**
+   * Counts one attempt of `key` that was judged already, which no window refuses: past the limit
+   * of a full window, or in a window it opens.
+   */
+  private record(key: string): void {
+    const counter = this.live(key)
+
+    if (counter) {
+      counter.count += 1
+    } else {
+      this.open(key)
+    }
   }
 
   /** Counts one attempt of `key`: the window that counted it, or the refusal of a full window. */

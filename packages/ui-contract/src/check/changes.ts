@@ -1,10 +1,11 @@
 /**
- * Rule 19: the reads an action changes. A platform action, or an action of the model under
- * `x-perch.actions`, may say under `changes` which reads answer otherwise once it succeeds, for
- * the organisation, the account and the params it ran with: each a platform action, never the
- * action itself (an action changes what other reads answer), that a list, a section or a table
- * of some screen takes as its `source`, named once. `[]` says it changes none. A problem is
- * placed at the offending name, in the platform file or in the model.
+ * Rule 19: the reads an action changes. Every platform action, and every action of the model
+ * under `x-perch.actions`, says under `changes` (its schema wants it) which reads answer
+ * otherwise once it succeeds, for the organisation, the account and the params it ran with: each
+ * a platform action, never the action itself (an action changes what other reads answer), that
+ * a list, a section or a table of some screen takes as its `source`, named once. `[]` says it
+ * changes none. A problem is placed at the offending name, in the platform file or in the model.
+ * The flow holds a read after an action that changes a list of its screen (`flow/held-reads.ts`).
  */
 
 import { jsonPath, MODEL_FILE, type Problem } from '../files'
@@ -72,13 +73,13 @@ export function changesProblems(contract: Contract): Problem[] {
 
   return [
     ...Object.entries(actions).flatMap(([name, { changes }]) =>
-      namesProblems({ actions, sources, self: name }, changes ?? []).map(({ index, message }) =>
+      namesProblems({ actions, sources, self: name }, changes).map(({ index, message }) =>
         inScreens(['platform', 'actions', name, 'changes', index], message),
       ),
     ),
     ...Object.values(contract.model.entities).flatMap((entity) =>
       Object.entries(entity.actions).flatMap(([action, { changes }]) =>
-        namesProblems({ actions, sources }, changes ?? []).map(({ index, message }) => ({
+        namesProblems({ actions, sources }, changes).map(({ index, message }) => ({
           file: MODEL_FILE,
           message: `${jsonPath(['$defs', entity.name, 'x-perch', 'actions', action, 'changes', index])}: ${message}`,
         })),

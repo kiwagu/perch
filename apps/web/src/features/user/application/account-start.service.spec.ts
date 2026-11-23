@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { type AuthUser, dataError } from '@workspace/data'
 import { identityIdFactory, profileIdFactory, settingsIdFactory } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 
 import { openTestSession, type TestSession } from '../../../composition/__fixtures__/session'
 import type { Theme } from '../../../platform/theme'
@@ -11,12 +12,16 @@ import { profileCommands, profileShape } from '../presentation/pages/profile/pro
 import {
   type AccountStart,
   AccountStartService,
+  type KeptStart,
   type KeptStartPort,
   type StartTurns,
 } from './account-start.service'
 import { type NewProfile, ProfileService } from './profile.service'
 import { settingsCommands, settingsShape } from './settings/settings.model.gen'
 import { type NewSettings, SettingsService } from './settings/settings.service'
+
+/** The most characters a display name has, as the contract says it. */
+const { maxLength: NAME_MAX } = CONTRACT_VALUES['profile.name']
 
 const ann: AuthUser = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
@@ -26,19 +31,31 @@ const shows = (): Theme => 'dark'
 /** Each turn at once: a single tab, whose store shows what its document holds. */
 const inTurn: StartTurns = (run) => run(() => okAsync(undefined))
 
-/** The one start a browser keeps, in memory. */
-function keptHere(): KeptStartPort & { readonly now: () => AccountStart | undefined } {
-  let start: AccountStart | undefined
+/**
+ * The starts a browser keeps, in memory, each under the sign-in that learnt of it, with `signIn`
+ * the sign-in current on it; `now` is the start kept under the current one.
+ */
+function keptHere(): KeptStartPort & {
+  readonly signIn: string
+  readonly now: () => AccountStart | undefined
+} {
+  const signIn = 'sign-in-here'
+  const starts = new Map<string, AccountStart>()
 
   return {
-    keep: (next) => {
-      start = next
+    signIn,
+    keep: (under, start) => {
+      starts.set(under, start)
     },
-    kept: () => start,
-    forget: () => {
-      start = undefined
+    kept: (identity): KeptStart | undefined => {
+      const start = starts.get(signIn)
+
+      return start?.identity === identity ? { ...start, signIn } : undefined
     },
-    now: () => start,
+    forget: (start) => {
+      starts.delete(start.signIn)
+    },
+    now: () => starts.get(signIn),
   }
 }
 
@@ -93,7 +110,7 @@ describe('AccountStartService', () => {
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
     expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
     expect(held.created).toEqual([])
 
@@ -118,9 +135,35 @@ describe('AccountStartService', () => {
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect(starts.keepAfterPull(ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code).toBe(
-      'profile:NAME_REQUIRED',
-    )
+    expect(
+      starts.keepAfterPull(kept.signIn, ann, { name: '  ', locale: 'en' })._unsafeUnwrapErr().code,
+    ).toBe('profile:NAME_REQUIRED')
+    expect(kept.now()).toBeUndefined()
+  })
+
+  it('keeps the start of a name of the longest length outside the basic plane, as the gateway takes it, and creates its profile', async () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+    const name = '\u{1F600}'.repeat(NAME_MAX)
+
+    expect(starts.keepAfterPull(kept.signIn, ann, { name, locale: 'en' }).isOk()).toBe(true)
+    expect(kept.now()).toEqual({ identity: ann.id, name, locale: 'en' })
+
+    expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
+    expect(held.profileRows()).toMatchObject([{ identity: ann.id, name }])
+  })
+
+  it('keeps nothing for a name past the longest length outside the basic plane', () => {
+    const kept = keptHere()
+    const held = records()
+    const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
+
+    expect(
+      starts
+        .keepAfterPull(kept.signIn, ann, { name: '\u{1F600}'.repeat(NAME_MAX + 1), locale: 'en' })
+        ._unsafeUnwrapErr().code,
+    ).toBe('profile:NAME_TOO_LONG')
     expect(kept.now()).toBeUndefined()
   })
 
@@ -129,7 +172,7 @@ describe('AccountStartService', () => {
     const held = records()
     const starts = new AccountStartService(held.profiles, held.settings, kept, inTurn, shows)
 
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
 
     // The pull brought the settings another device made: only the profile is missing.
     expect(
@@ -157,7 +200,7 @@ describe('AccountStartService', () => {
 
     held.refuseProfiles(true)
 
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
     expect((await starts.resumeAfterPull(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(held.created).toEqual(['settings'])
     expect(kept.now()).toEqual({ identity: ann.id, name: 'Ann', locale: 'es' })
@@ -182,7 +225,7 @@ describe('AccountStartService', () => {
 
     expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep(kept.signIn, { identity: ann.id, name: 'Ann', locale: 'en' })
 
     expect((await starts.resumeAfterPull(bob)).isOk()).toBe(true)
     expect(held.created).toEqual([])
@@ -200,12 +243,17 @@ describe('AccountStartService', () => {
       ResultAsync.fromSafePromise(waiting).andThen(() => run(() => okAsync(undefined)))
     const starts = new AccountStartService(held.profiles, held.settings, kept, later, shows)
 
-    kept.keep({ identity: ann.id, name: 'Ann', locale: 'en' })
+    kept.keep(kept.signIn, { identity: ann.id, name: 'Ann', locale: 'en' })
 
     const resuming = starts.resumeAfterPull(ann)
 
     // Another tab finished the start in its turn, and forgot it.
-    kept.forget()
+    const finished = kept.kept(ann.id)
+
+    if (finished) {
+      kept.forget(finished)
+    }
+
     letRun()
 
     expect((await resuming).isOk()).toBe(true)
@@ -289,7 +337,7 @@ describe('AccountStartService over a projection that lags', () => {
     const starts = new AccountStartService(held.profiles, held.settings, kept, projecting, shows)
 
     pulledSettings(held)
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
 
     expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
     expect(held.created).toEqual(['profile'])
@@ -305,7 +353,7 @@ describe('AccountStartService over a projection that lags', () => {
     const starts = new AccountStartService(held.profiles, held.settings, kept, late, shows)
 
     pulledSettings(held)
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
 
     expect((await starts.resumeAfterPull(ann)).isOk()).toBe(true)
     expect(held.created).toEqual(['profile'])
@@ -328,7 +376,7 @@ describe('AccountStartService over a projection that lags', () => {
       shows,
     )
 
-    expect(starts.keepAfterPull(ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(starts.keepAfterPull(kept.signIn, ann, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
 
     expect((await starts.resumeAfterPull(ann))._unsafeUnwrapErr().code).toBe('data:WRITE_FAILED')
     expect(kept.now()).toMatchObject({ identity: ann.id })
@@ -386,7 +434,9 @@ describe('AccountStartService on a session', () => {
       shows,
     )
 
-    expect(failing.keepAfterPull(user, { name: 'Ann', locale: 'es' }).isOk()).toBe(true)
+    expect(failing.keepAfterPull(kept.signIn, user, { name: 'Ann', locale: 'es' }).isOk()).toBe(
+      true,
+    )
     expect((await failing.resumeAfterPull(user)).isErr()).toBe(true)
     expect((await opened.session.flush()).isOk()).toBe(true)
     expect((await settings.read({ identity: user.id }))._unsafeUnwrap()).toHaveLength(1)

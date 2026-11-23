@@ -85,6 +85,82 @@ describe('anchorCarries', () => {
   })
 })
 
+describe('the field states of a field', () => {
+  it('a field carries the field states the contract derives for it', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+    anchorIn(contract, 'sample.title-input').holdsInput = true
+    screenIn(contract, 'sample').anchors['sample.email-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+    }
+
+    const carries = anchorCarries(contract)
+
+    expect(carries('sample.title-input', 'state', 'saved')).toBe(true)
+    expect(carries('sample.title-input', 'state', 'unsaved')).toBe(true)
+    expect(carries('sample.email-input', 'state', 'unsaved')).toBe(true)
+    expect(carries('sample.email-input', 'state', 'saved')).toBe(false)
+    expect(carries('sample.save-button', 'state', 'saved')).toBe(false)
+  })
+  it('never takes a field state from what an anchor writes', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+
+    const anchors = screenIn(contract, 'sample').anchors
+
+    anchors['sample.note-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+      states: ['saved'],
+    }
+    anchors['sample.flag-button'] = { kind: 'button', states: ['unsaved'] }
+    anchors['sample.plain-select'] = {
+      kind: 'select',
+      holdsInput: false,
+      binding: { model: 'thing.title' },
+      states: ['saved'],
+    }
+
+    const carries = anchorCarries(contract)
+
+    expect(carries('sample.note-input', 'state', 'saved')).toBe(false)
+    expect(carries('sample.note-input', 'state', 'unsaved')).toBe(true)
+    expect(carries('sample.flag-button', 'state', 'unsaved')).toBe(false)
+    expect(carries('sample.plain-select', 'state', 'saved')).toBe(false)
+  })
+  it('gives a parent the field states of the fields under it, and no sibling that only shares a prefix', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+
+    const anchors = screenIn(contract, 'sample').anchors
+
+    anchors['sample.name-form'] = { kind: 'form' }
+    anchors['sample.name-form.name-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { model: 'thing.title' },
+    }
+    anchors['sample.name-form-hint'] = { kind: 'message' }
+
+    const carries = anchorCarries(contract)
+
+    expect(carries('sample.name-form', 'state', 'saved')).toBe(true)
+    expect(carries('sample.name-form-hint', 'state', 'saved')).toBe(false)
+  })
+  it('still reads a container state and a row state from what is written', () => {
+    const carries = anchorCarries(sampleContract())
+
+    expect(carries('sample.list', 'state', 'loading')).toBe(true)
+    expect(carries('sample.thing-item', 'state', 'current')).toBe(true)
+  })
+})
+
 describe('the page sizes of a paged list', () => {
   /** The sample with a paged list of devices, whose action pages by 10 or 25. */
   function paged(): ReturnType<typeof sampleContract> {

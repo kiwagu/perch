@@ -3,21 +3,21 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { identityIdFactory } from '@workspace/ids'
 
-import { fakeGatewayAuth, verifiedElsewhere } from '../__fixtures__/gateway-auth'
+import { fakeGatewayAuth, signedDevice, verifiedElsewhere } from '../__fixtures__/gateway-auth'
 import {
   browserDatabases,
   openTestWorld,
   signUpVerified,
   type TestWorld,
 } from '../__fixtures__/session'
+import { signedIn as signedInOn, signedOut } from '../__fixtures__/signed-in'
 import {
   type MemoryStorage,
   memoryStorage,
-  saveDevice,
+  newSignInId,
   savedIdentity,
   savedToken,
-  TOKEN_KEY,
-  tokenRecord,
+  signedInKeyOf,
 } from '../storage'
 
 const annSignUp = { email: 'ann@example.test', password: 'Secret-ann1', name: 'Ann', locale: 'en' }
@@ -138,17 +138,26 @@ describe("a change of the signed-in account's password or email", () => {
   it.each([
     [
       'signed Ann out and Bob in',
-      (storage: MemoryStorage) =>
-        saveDevice(storage, {
+      (storage: MemoryStorage) => {
+        signedInOn(storage, {
           identity: { id: identityIdFactory.create(), email: 'bob@example.test' },
           token: 'token-bob',
-          memberships: [],
-        }),
+        })
+      },
     ],
     [
-      "wrote Bob's token, not yet his identity",
-      (storage: MemoryStorage) =>
-        storage.set(TOKEN_KEY, tokenRecord(identityIdFactory.create(), 'token-bob')),
+      "signed Ann out and wrote Bob's sign-in, not yet made it current",
+      (storage: MemoryStorage) => {
+        signedOut(storage)
+        storage.set(
+          signedInKeyOf(newSignInId()),
+          JSON.stringify({
+            identity: identityIdFactory.create(),
+            email: 'bob@example.test',
+            token: 'token-bob',
+          }),
+        )
+      },
     ],
   ])(
     "asks nothing with another account's session that another tab saved while the space opens: it %s",
@@ -203,7 +212,7 @@ describe('the confirmation of a new email', () => {
 
     // Bob asks for the change on his own device, and his link is opened in Ann's browser.
     const bobDevice = await auth.signIn(bob, { id: 'bob-device', label: 'Edge on Windows' })
-    const bobSession = bobDevice._unsafeUnwrap()
+    const bobSession = signedDevice(bobDevice._unsafeUnwrap())
 
     expect(
       (
@@ -215,6 +224,59 @@ describe('the confirmation of a new email', () => {
     ).toBe(true)
     expect((await session.confirmEmail(auth.confirmationLinkFor(bob.email))).isOk()).toBe(true)
     expect(savedIdentity(storage)).toEqual({ id: me.id, email: annSignUp.email })
+  })
+
+  it('changes nothing of a later sign-in of the account: a confirmation changes the sign-in it was asked in', async () => {
+    const { session, auth, storage, driveClock } = await signedIn()
+
+    expect((await session.changeEmail('Ann.New@example.test', annSignUp.password)).isOk()).toBe(
+      true,
+    )
+
+    // The gateway takes the link only once this browser has signed Ann out and in again.
+    let answer = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const confirm = auth.confirmEmail.bind(auth)
+
+    auth.confirmEmail = (link) => ResultAsync.fromSafePromise(answered).andThen(() => confirm(link))
+
+    const confirming = session.confirmEmail(auth.confirmationLinkFor(annSignUp.email))
+
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+    expect((await session.signIn(annSignUp)).isOk()).toBe(true)
+    answer()
+
+    expect((await confirming).isOk()).toBe(true)
+    // The later sign-in's email stands; the next one reads the email the gateway has then.
+    expect(savedIdentity(storage)?.email).toBe(annSignUp.email)
+  })
+
+  it('changes nothing of a session signed in after a confirmation asked while signed out', async () => {
+    const { session, auth, storage, driveClock } = await signedIn()
+
+    expect((await session.changeEmail('Ann.New@example.test', annSignUp.password)).isOk()).toBe(
+      true,
+    )
+    expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
+
+    // The link is opened while nobody is signed in here; the gateway takes it once Ann signed in.
+    let answer = () => {}
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve
+    })
+    const confirm = auth.confirmEmail.bind(auth)
+
+    auth.confirmEmail = (link) => ResultAsync.fromSafePromise(answered).andThen(() => confirm(link))
+
+    const confirming = session.confirmEmail(auth.confirmationLinkFor(annSignUp.email))
+
+    expect((await session.signIn(annSignUp)).isOk()).toBe(true)
+    answer()
+
+    expect((await confirming).isOk()).toBe(true)
+    expect(savedIdentity(storage)?.email).toBe(annSignUp.email)
   })
 
   it('keeps the refusal of a link that does not work', async () => {

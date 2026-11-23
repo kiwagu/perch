@@ -5,23 +5,29 @@ import { type DataError, dataError } from '@workspace/data'
 import { identityIdFactory } from '@workspace/ids'
 
 import { fakeFetch, noContent, respond } from '../__fixtures__/gateway-fetch'
+import { signedIn } from '../__fixtures__/signed-in'
 import { gatewayAuth } from '../gateway-auth'
 import {
   addPendingRevoke,
   browserStorage,
+  CURRENT_KEY,
   deviceIdFrom,
+  type KeptSession,
   type KeyValueStorage,
   memoryStorage,
   pendingRevokes,
+  savedSession,
   savedToken,
-  TOKEN_KEY,
-  tokenRecord,
+  signedInKeyOf,
 } from '../storage'
 
 import { PendingRevoke } from './pending-revoke'
 
 /** Whose the device's token is: no call here reads it for its identity. */
 const owner = identityIdFactory.create()
+
+/** The account `owner` signs in as. */
+const ownerUser = { id: owner, email: 'owner@example.test' }
 
 /** A token a sign-out left to sign out, with the device it signed out. */
 const left = { token: 'token-1', device: 'device-1' }
@@ -102,8 +108,7 @@ describe('PendingRevoke', () => {
   it("forgets the device's token, leaving a token that still works to sign out, sent at once online", async () => {
     const { pending, memory, sent, waiting } = harness([noContent()], { waiting: [] })
 
-    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
-    pending.forgetKeys('live')
+    pending.forgetKeys('live', signedIn(memory, { identity: ownerUser, token: 'token-3' }))
 
     expect(savedToken(memory)).toBeUndefined()
     // Sent unasked: the browser is online.
@@ -116,8 +121,7 @@ describe('PendingRevoke', () => {
   it('keeps a token that still works to sign out later while the browser is offline', () => {
     const { pending, memory, sent, waiting } = harness([], { waiting: [], online: false })
 
-    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
-    pending.forgetKeys('live')
+    pending.forgetKeys('live', signedIn(memory, { identity: ownerUser, token: 'token-3' }))
 
     expect(savedToken(memory)).toBeUndefined()
     expect(sent).toHaveLength(0)
@@ -127,12 +131,23 @@ describe('PendingRevoke', () => {
   it('forgets a dead token without leaving it to sign out', () => {
     const { pending, memory, sent, waiting } = harness([], { waiting: [] })
 
-    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-3'))
-    pending.forgetKeys('dead')
+    pending.forgetKeys('dead', signedIn(memory, { identity: ownerUser, token: 'token-3' }))
 
     expect(savedToken(memory)).toBeUndefined()
     expect(sent).toHaveLength(0)
     expect(waiting()).toEqual([])
+  })
+
+  it('forgets, and leaves to sign out, the sign-in it is told ended, never one saved since', () => {
+    const { pending, memory, sent, waiting } = harness([], { waiting: [], online: false })
+    const ended = signedIn(memory, { identity: ownerUser, token: 'token-3' })
+    const since = signedIn(memory, { identity: ownerUser, token: 'token-4' })
+
+    pending.forgetKeys('live', ended)
+
+    expect(savedSession(memory)).toEqual(since)
+    expect(sent).toHaveLength(0)
+    expect(waiting().map(({ token }) => token)).toEqual(['token-3'])
   })
 
   it('keeps a token left to sign out online in storage while its send is in flight, and forgets it once signed out (204)', async () => {
@@ -267,13 +282,12 @@ describe('PendingRevoke', () => {
     expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
   })
 
-  it('keeps the token the device holds after those kept before, and reports the oldest it drops past 8', () => {
+  it('keeps the token of the sign-in it forgets after those kept before, and reports the oldest it drops past 8', () => {
     const kept = Array.from({ length: 8 }, (_, n) => ({ token: `token-w${n}`, device: 'device-1' }))
-    const { pending, memory, failures, waiting } = harness([], { waiting: kept })
+    const { pending, memory, failures, waiting } = harness([], { waiting: kept, online: false })
 
-    memory.set(TOKEN_KEY, tokenRecord(owner, 'token-now'))
     memory.set('perch.device.id', 'device-now')
-    pending.keep()
+    pending.forgetKeys('live', signedIn(memory, { identity: ownerUser, token: 'token-now' }))
 
     expect(waiting()).toEqual([...kept.slice(1), { token: 'token-now', device: 'device-now' }])
     expect(failures.map((failure) => failure.code)).toEqual(['data:WRITE_FAILED'])
@@ -490,15 +504,21 @@ describe('PendingRevoke over the browser storage, its quota full', () => {
   })
 
   it("holds in memory the device's own token a sign-out leaves live, and sends it", async () => {
+    const ended: KeptSession = { signIn: 'sign-in-8', identity: owner, token: 'token-8' }
     const { pending, failures, signedOut } = onFullStorage(
       [noContent()],
       { online: true },
       {
-        [TOKEN_KEY]: tokenRecord(owner, 'token-8'),
+        [CURRENT_KEY]: ended.signIn,
+        [signedInKeyOf(ended.signIn)]: JSON.stringify({
+          identity: owner,
+          email: ownerUser.email,
+          token: 'token-8',
+        }),
       },
     )
 
-    pending.forgetKeys('live')
+    pending.forgetKeys('live', ended)
     await pending.send()
 
     expect(signedOut()).toEqual([['Bearer token-8', 'device-1']])

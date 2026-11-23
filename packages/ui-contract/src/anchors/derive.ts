@@ -11,7 +11,10 @@ import { SIZE_SELECT } from './paging'
 export const testIdFor = (base: string, suffix: string): string => `${base}.${suffix}`
 
 /** The derived `option` of a select, one per choice. */
-const OPTION = 'option'
+export const OPTION = 'option'
+
+/** The two answers of a question the frame asks: going on, and staying. */
+export const ANSWERS = ['confirm-button', 'cancel-button'] as const
 
 /** The base of a derived anchor: everything before the last segment, when that segment is a suffix. */
 export const baseOf = (anchor: string, suffixes: readonly string[]): string | undefined => {

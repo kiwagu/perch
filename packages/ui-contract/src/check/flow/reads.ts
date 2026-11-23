@@ -105,7 +105,7 @@ export function readOptOutProblems(
 type Transitions = FlowTransition | FlowTransition[]
 
 /** Each transition of one or a list, with where it is; a single one is a branch of its own. */
-const placed = (transitions: Transitions, at: At): Array<readonly [FlowTransition, At]> =>
+export const placed = (transitions: Transitions, at: At): Array<readonly [FlowTransition, At]> =>
   Array.isArray(transitions)
     ? transitions.map((transition, index) => [transition, [...at, index]] as const)
     : [[transitions, at] as const]

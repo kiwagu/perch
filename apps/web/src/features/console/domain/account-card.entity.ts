@@ -1,20 +1,14 @@
 /**
  * The account an operator's card shows, as its address names it (`/console/account?id=...`): the
- * identity id of the account, the one its entry in the accounts list carries; and the bound the
- * gateway keeps on a ban's reason.
+ * identity id of the account, the one its entry in the accounts list carries.
  */
 
 import { type IdentityId, idSchemas } from '@workspace/ids'
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
-/** The longest id the card's address carries. */
-export const ACCOUNT_ID_MAX = 64
-
-/** The longest reason of a ban the gateway keeps: a longer one is refused, never stored. */
-export const BAN_REASON_MAX = 500
-
 export const AccountCardSearchSchema = z.object({
-  id: z.string().min(1).max(ACCOUNT_ID_MAX).optional(),
+  id: z.string().min(1).max(CONTRACT_VALUES.id.maxLength).optional(),
 })
 
 /** The search of the card as its route reads the address. */

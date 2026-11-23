@@ -86,6 +86,25 @@ describe('parseVocabulary', () => {
     expect(older.problems).toEqual([])
     expect(older.vocabulary.composites).toEqual({})
   })
+  it('reads the field states, and a vocabulary without the section reads none', () => {
+    const states = parseVocabulary(
+      `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | the field holds input not yet saved |\n| \`saved\` | the field holds what was saved |\n`,
+    )
+
+    expect(states.problems).toEqual([])
+    expect(Object.keys(states.vocabulary.fieldStates)).toEqual(['unsaved', 'saved'])
+    expect(vocabulary.fieldStates).toEqual({})
+    expect(problems).toEqual([])
+  })
+  it('wants a state and a meaning in a field states row', () => {
+    const markdown = `${fixture}\n## Field states\n\n| State | Meaning |\n|---|---|\n| \`unsaved\` | |\n| | a meaning |\n| \`saved\` |\n`
+
+    expect(parseVocabulary(markdown).problems.map((problem) => problem.message)).toEqual([
+      'section "Field states": the "Meaning" cell is empty',
+      'section "Field states": the "State" cell is empty',
+      'section "Field states": a row has 1 cell(s), expected 2',
+    ])
+  })
   it('reports an unknown section by line', () => {
     const markdown = `${fixture}\n## Extra\n\nMore text.\n`
 
@@ -133,13 +152,14 @@ describe('parseVocabulary', () => {
       },
     ])
   })
-  it('reports a missing contract version', () => {
-    const result = parseVocabulary(fixture.replace('Contract version: 1\n', ''))
+  it('reads a vocabulary without the contract version line as one that says no version', () => {
+    const markdown = fixture.replace('Contract version: 1\n\n', '')
 
-    expect(result.vocabulary.version).toBeUndefined()
-    expect(result.problems.map((problem) => problem.message)).toEqual([
-      'no "Contract version: N" line',
-    ])
+    expect(markdown).not.toContain('Contract version')
+    expect(parseVocabulary(markdown)).toMatchObject({
+      vocabulary: { version: undefined },
+      problems: [],
+    })
   })
   it('reports an empty mandatory cell by line, and leaves the Playwright cell optional', () => {
     const markdown = fixture

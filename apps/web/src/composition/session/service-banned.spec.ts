@@ -9,7 +9,15 @@ import { FakeLocks } from '@workspace/replica/testing'
 
 import { createProfile } from '../__fixtures__/profile'
 import { openTestWorld, type TestWorld } from '../__fixtures__/session'
-import { type KeptDevice, memoryStorage, rolesKeyOf, saveDevice, savedNotice } from '../storage'
+import { signedIn } from '../__fixtures__/signed-in'
+import {
+  type KeptDevice,
+  memoryStorage,
+  rolesKeyOf,
+  savedIdentity,
+  savedNotice,
+  savedSession,
+} from '../storage'
 
 const ann: KeptDevice = {
   identity: { id: identityIdFactory.create(), email: 'ann@example.test' },
@@ -35,7 +43,7 @@ afterEach(async () => {
 async function annSyncing(locks = new FakeLocks()): Promise<TestWorld> {
   const storage = memoryStorage()
 
-  saveDevice(storage, ann)
+  signedIn(storage, ann)
 
   const booted = await openTestWorld({ storage, locks, online: true })
 
@@ -53,7 +61,7 @@ async function annSyncing(locks = new FakeLocks()): Promise<TestWorld> {
 async function annHoldingUnsent(): Promise<TestWorld> {
   const storage = memoryStorage()
 
-  saveDevice(storage, ann)
+  signedIn(storage, ann)
 
   const booted = await openTestWorld({ storage, online: false })
 
@@ -93,8 +101,8 @@ describe("an operator's ban of the account", () => {
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await vi.waitFor(() => expect(destroyed()).toEqual([ann.identity.id]))
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('account-banned')
     // The ban ended the session on the gateway: nothing waits to be signed out.
     expect(storage.get('perch.session.pending-revoke')).toBeUndefined()
@@ -103,6 +111,7 @@ describe("an operator's ban of the account", () => {
   it("takes the account's platform roles off the device with the session", async () => {
     const { session, stub, storage, contexts } = await annSyncing()
     const id = storage.get('perch.device.id') ?? expect.unreachable('a device id')
+    const kept = savedSession(storage) ?? expect.unreachable('a saved session')
     const heard: Array<readonly string[]> = []
 
     // A welcome had carried the operator's role.
@@ -113,7 +122,7 @@ describe("an operator's ban of the account", () => {
     stub.closeChannels(ann.identity.id, id, CLOSE.banned)
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
-    expect(storage.get(rolesKeyOf(ann.identity.id))).toBeUndefined()
+    expect(storage.get(rolesKeyOf(kept.signIn))).toBeUndefined()
     expect(session.roles().size).toBe(0)
     expect(heard.at(-1)).toEqual([])
   })
@@ -137,8 +146,8 @@ describe("an operator's ban of the account, on a device that holds changes it ha
     closeOwnChannel(world, CLOSE.banned)
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
-    expect(storage.get('perch.session.identity')).toBeUndefined()
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     // The changes wait for a next sign-in as Ann: nothing deleted the database.
     await settle()
     expect(destroyed()).toEqual([])
@@ -167,7 +176,7 @@ describe("an operator's ban of the account, on a device that holds changes it ha
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     await settle()
     expect(destroyed()).toEqual([])
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('account-banned')
     expect(failures.splice(0)).toEqual([unreadable])
   })
@@ -187,7 +196,7 @@ describe("an operator's ban of the account, on a device that holds changes it ha
 
     await vi.waitFor(() => expect(session.current()).toBeUndefined())
     expect(destroyed()).toEqual([])
-    expect(storage.get('perch.session.token')).toBeUndefined()
+    expect(savedSession(storage)).toBeUndefined()
     expect(session.notice()).toBe('account-banned')
   })
 
@@ -206,7 +215,7 @@ describe("an operator's ban of the account, on a device that holds changes it ha
       await vi.waitFor(() => expect(session.current()).toBeUndefined())
       await settle()
       expect(destroyed()).toEqual([])
-      expect(storage.get('perch.session.token')).toBeUndefined()
+      expect(savedSession(storage)).toBeUndefined()
       expect(session.notice()).toBe('resend-after-sign-in')
     },
   )

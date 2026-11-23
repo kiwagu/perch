@@ -8,6 +8,7 @@ import type { ContractChanges } from './diff'
 const LISTS = [
   ['screens', 'screen', 'screens'],
   ['routeAccess', 'route access line', 'route access lines'],
+  ['routeSearch', 'route search parameter', 'route search parameters'],
   ['anchors', 'anchor', 'anchors'],
   ['sources', 'list source', 'list sources'],
   ['derived', 'derived anchor', 'derived anchors'],
@@ -18,10 +19,15 @@ const LISTS = [
   ['anchorRoles', 'anchor role', 'anchor roles'],
   ['errorFields', 'error field', 'error fields'],
   ['inputs', 'field holding input', 'fields holding input'],
+  ['stateColours', 'field without a state colour', 'fields without a state colour'],
   ['questions', 'question before a destructive action', 'questions before destructive actions'],
+  ['leaveQuestions', 'question before a leave', 'questions before leaves'],
   ['ranks', 'ranked message', 'ranked messages'],
+  ['visibility', 'visibility entry', 'visibility entries'],
   ['leaving', 'leaving action', 'leaving actions'],
   ['unsavedInput', 'unsaved-input entry', 'unsaved-input entries'],
+  ['defaults', 'default', 'defaults'],
+  ['values', 'platform value', 'platform values'],
   ['actions', 'platform action', 'platform actions'],
   ['notices', 'notice', 'notices'],
   ['entities', 'entity', 'entities'],
@@ -31,7 +37,11 @@ const LISTS = [
 
 /** The non-empty lists of one change: its count and its entries, after `where` when given. */
 function linesOf(
-  change: Change | ContractChanges['anchors'],
+  change:
+    | Change
+    | ContractChanges['anchors']
+    | ContractChanges['values']
+    | ContractChanges['routeSearch'],
   one: string,
   many: string,
   where = '',
@@ -42,6 +52,7 @@ function linesOf(
     ...('renamed' in change
       ? [{ verb: 'renamed', entries: change.renamed.map(({ from, to }) => `${from} -> ${to}`) }]
       : []),
+    ...('changed' in change ? [{ verb: 'changed', entries: change.changed }] : []),
   ]
 
   return lists
@@ -68,10 +79,10 @@ const descriptionsOf = (changes: readonly DescriptionChange[]) =>
       ]
 
 /**
- * Each non-empty list (`anchors renamed`), then the transitions changed in each activity, the
- * lines changed in each screen's flow, the lines changed in each platform action, the reads
- * each action of the model comes to change or stops changing, and last the descriptions
- * changed, each with its length before and after.
+ * Each non-empty list (`anchors renamed`, `platform values changed`), then the transitions
+ * changed in each activity, the lines changed in each screen's flow, the lines changed in each
+ * platform action and each invariant, the reads each action of the model comes to change or stops changing, and
+ * last the descriptions changed, each with its length before and after.
  */
 const listsOf = (changes: ContractChanges) => [
   ...LISTS.flatMap(([key, one, many]) => linesOf(changes[key], one, many)),
@@ -83,6 +94,9 @@ const listsOf = (changes: ContractChanges) => [
   ),
   ...Object.entries(changes.actionLines).flatMap(([name, change]) =>
     linesOf(change, 'platform action line', 'platform action lines', ` in ${name}`),
+  ),
+  ...Object.entries(changes.invariantLines).flatMap(([name, change]) =>
+    linesOf(change, 'invariant line', 'invariant lines', ` in ${name}`),
   ),
   ...Object.entries(changes.modelActionLines).flatMap(([name, change]) =>
     linesOf(change, 'model action line', 'model action lines', ` in ${name}`),

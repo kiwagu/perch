@@ -22,6 +22,7 @@ import { fakeGatewayAuth } from './__fixtures__/gateway-auth'
 import { fakeFetch, respond } from './__fixtures__/gateway-fetch'
 import { bootRoot } from './__fixtures__/root'
 import { signUpVerified } from './__fixtures__/session'
+import { signedIn } from './__fixtures__/signed-in'
 import { devicesApi } from './devices-api'
 import type { BearerDeps } from './gateway-bearer'
 import { invitationsApi } from './invitations-api'
@@ -32,7 +33,7 @@ import {
   type MemoryStorage,
   memoryStorage,
   PASSWORD_RESET_KEY,
-  saveDevice,
+  savedIdentity,
   savedToken,
 } from './storage'
 
@@ -92,7 +93,7 @@ describe('createAppRoot', () => {
     }
     const gateway = fakeFetch(respond(200, { membership: acme }))
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result } = await boot(storage, [], [], {
       invitationsApi: (given) => invitationsApi('/backend', { ...given, fetcher: gateway.fetcher }),
@@ -135,7 +136,7 @@ describe('createAppRoot', () => {
     const steps: BootStep[] = []
     const failures: DataError[] = []
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result, opened } = await boot(storage, steps, failures)
 
@@ -151,7 +152,7 @@ describe('createAppRoot', () => {
     const storage = memoryStorage()
     const steps: BootStep[] = []
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result } = await boot(storage, steps, [], {
       openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
@@ -168,7 +169,7 @@ describe('createAppRoot', () => {
     const storage = memoryStorage()
     const deleted: IdentityId[] = []
 
-    saveDevice(storage, ann)
+    signedIn(storage, ann)
 
     const { result } = await boot(storage, [], [], {
       openLocal: () => errAsync(dataError('data:OPEN_FAILED', 'could not open the store')),
@@ -183,7 +184,7 @@ describe('createAppRoot', () => {
       failure.kind === 'open-failed' ? failure.signOutHere : expect.unreachable('open-failed')
 
     expect((await (signOutHere ?? expect.unreachable('offered'))()).isOk()).toBe(true)
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(deleted).toEqual([ann.identity.id])
   })
 
@@ -253,17 +254,21 @@ describe('createAppRoot', () => {
 
   it("finishes the start of the saved identity's account this browser kept once its tab pulled what the account has, in the theme this device shows", async () => {
     const storage = memoryStorage()
+    const session = signedIn(storage, ann)
 
-    saveDevice(storage, ann)
     // A first verification here created nothing yet when the page went.
-    keptAccountStart(storage).keep({ identity: ann.identity.id, name: 'Ann', locale: 'es' })
+    keptAccountStart(storage).keep(session.signIn, {
+      identity: ann.identity.id,
+      name: 'Ann',
+      locale: 'es',
+    })
 
     const { result, transports } = await boot(storage, [], [], { theme: () => 'dark' })
 
     services = result._unsafeUnwrap()
 
     // Nothing is created before the pull.
-    expect(keptAccountStart(storage).kept()).toBeDefined()
+    expect(keptAccountStart(storage).kept(ann.identity.id)).toBeDefined()
 
     for (const transport of transports) {
       transport.goOnline()
@@ -275,7 +280,7 @@ describe('createAppRoot', () => {
     })
     const identity = ann.identity.id
 
-    await vi.waitFor(() => expect(keptAccountStart(storage).kept()).toBeUndefined())
+    await vi.waitFor(() => expect(keptAccountStart(storage).kept(identity)).toBeUndefined())
     expect((await services.session.flush()).isOk()).toBe(true)
     expect(
       (await services.container.get(SETTINGS_SERVICE).read({ identity }))._unsafeUnwrap(),
@@ -287,39 +292,31 @@ describe('createAppRoot', () => {
 
   it('keeps the kept start when the session merely closes: its tab goes, the browser stays signed in', async () => {
     const storage = memoryStorage()
-
-    saveDevice(storage, ann)
+    const session = signedIn(storage, ann)
+    const bob = identityIdFactory.create()
 
     const { result } = await boot(storage, [], [])
     const booted = result._unsafeUnwrap()
 
     // Another tab's start, still to finish there.
-    keptAccountStart(storage).keep({
-      identity: identityIdFactory.create(),
-      name: 'Bob',
-      locale: 'en',
-    })
+    keptAccountStart(storage).keep(session.signIn, { identity: bob, name: 'Bob', locale: 'en' })
     await booted.close()
 
-    expect(keptAccountStart(storage).kept()).toBeDefined()
+    expect(keptAccountStart(storage).kept(bob)).toBeDefined()
   })
 
   it('forgets the kept start once this browser signs out, with the data it held', async () => {
     const storage = memoryStorage()
-
-    saveDevice(storage, ann)
+    const session = signedIn(storage, ann)
+    const bob = identityIdFactory.create()
 
     const { result } = await boot(storage, [], [])
 
     services = result._unsafeUnwrap()
     // Kept for an account whose space this browser does not open: nothing finishes it here.
-    keptAccountStart(storage).keep({
-      identity: identityIdFactory.create(),
-      name: 'Bob',
-      locale: 'en',
-    })
+    keptAccountStart(storage).keep(session.signIn, { identity: bob, name: 'Bob', locale: 'en' })
 
     expect((await services.session.signOut())._unsafeUnwrap()).toBe('signed-out')
-    expect(keptAccountStart(storage).kept()).toBeUndefined()
+    expect(keptAccountStart(storage).kept(bob)).toBeUndefined()
   })
 })

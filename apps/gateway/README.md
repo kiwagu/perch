@@ -13,10 +13,12 @@ accounts under `/console`; devices sync over a WebSocket at
 
 The source is one module per mechanism of the platform under `src/`, each with its own README
 for its role, surface and commands. `src/server.ts` routes each request to its module and
-`src/composition/root.ts` builds them; `src/keyed-turns.ts` runs one key's work one turn at a
-time (one identity's membership changes, one account's sign-ups, verifications, resets and
-changes). The modules that predate the index rule have no
-`index.ts` yet and are imported file by file.
+`src/composition/root.ts` builds them; `src/route-path.ts` reads a request's path against the path
+templates a route module lists (a segment `:name` is a parameter), so a module answers only the
+paths it lists, and `src/path-id.ts` holds the longest id a path may carry; `src/keyed-turns.ts`
+runs one key's work one turn at a time (one identity's membership changes, one account's sign-ups,
+verifications, resets and changes). The modules that
+predate the index rule have no `index.ts` yet and are imported file by file.
 
 - [auth](src/auth/README.md): accounts on Better Auth: sign-up, sign-in, the verification of an
   email and the resend of its mail behind the gateway's limits, the recovery and the change of a
@@ -96,7 +98,12 @@ the update; each device's next hello is then refused with 4401.
   `gateway` app has them) after `mcproc start services`; the pm2 stand's `gateway` app
   (`mcproc start dev`) is the other way to run it.
 - `bun run test`: unit and functional tests on embedded in-memory databases: the directory, and
-  one per organisation for the organisation services and routes.
+  one per organisation for the organisation services and routes. `src/platform-contract.spec.ts`
+  holds the whole server, asked over HTTP, to the actions of the platform the UI contract declares
+  (`contract/domain/platform.yaml`, read through `@workspace/ui-contract`, a dev dependency of
+  this package that no gateway source imports): each action is a route or the client's own, each
+  route has its action or its reason, and each bound of a parameter (a length, a pattern, a
+  format) is the bound of its route.
 - `bun run test:db`: the smoke test. It starts the gateway in its own process on a free
   port in front of the stand at `SURREAL_URL` (an `http(s)://` address becomes the
   WebSocket endpoint; `bun run test:db` at the repository root sets it through `mcproc exec`
@@ -190,6 +197,7 @@ total. One table row is printed per step; a step's devices stay open for the nex
 | `--surreal-container` | by the stand's port | container `docker stats` reads for the surreal columns; the default is `perch-surrealdb-e2e` for port 8010 of `SURREAL_URL`, `perch-w<slot>-surrealdb-e2e` for port 8010 + 100 x slot, none (the columns show `-`) for any other port |
 | `--json <path>` | none | also writes the steps with the run id, arguments, host and start time |
 | `--stop-on-degrade` | off | stops after the first degraded step |
+| `--no-restart` | off | leaves out the restart of the gateway after the last step |
 
 Columns:
 
@@ -214,12 +222,49 @@ Columns:
   `undelivered` are not zero, pushes were made and no ack came, or no fan-out sample came
   though other devices were due one.
 
+After the last step's row, with every device still connected, the run restarts its gateway and
+measures how the devices come back (`--no-restart` leaves it out, and it does not run when a
+step failed or no device is live). No one writes meanwhile. `t0` is the moment the run stops the
+child gateway with SIGTERM, which closes every socket; as soon as that process has exited the run
+starts a new gateway on the same port and notes when its `/health` first answers 200 (polled every
+50 ms). The new gateway is the one the teardown and the signal handlers stop from then on, and one
+that does not start fails the run. A device whose socket closes is neither retired nor counted
+in `closes`: it reconnects as the client's `WebSocketTransport` does, with the delays drawn as the
+transport draws them (the replica's own `reconnectDelay` over `Math.random`, not a copy of its
+schedule) before each attempt, counted from 0 at the close, and the transport's
+`WELCOME_TIMEOUT_MS` for each open. An open that is refused, closed before the welcome or not
+welcomed in time is a failed hello, and the next attempt waits a delay drawn from the next step; a
+close that `endingOf` maps to an ending (a revoked or signed-out device, for one) stops the
+device's loop for good and counts the device as `ended`. On its welcome a device subscribes its
+region again with its copy's version, as the engine's first subscription of a connection does,
+and what it receives from then on does not feed the latency figures. The step ends when every
+device live at `t0` is back or ended, or 120 s after `t0`, by a timer: a welcome after the
+deadline does not count, an open still waiting for its welcome is cancelled with its socket
+closed, and the devices still trying then count as not back. Meanwhile a sampler reads CPU time
+every 250 ms, of the new gateway from its spawn and of the stand container from `t0` (the
+`usage_usec` of its cgroup v2 `cpu.stat`, found by the id `docker inspect` gives), and a peak is
+the largest CPU-seconds delta over wall-seconds delta between two consecutive samples, in
+percent, so it may pass 100 on several cores. The step prints a blank line, its own header and
+one row, and `--json` gains `restart` beside `steps`:
+
+- `devices`: live at `t0`. `back s`: from `t0` to the last welcome. `down s`: from `t0` to the
+  new gateway's first 200 on `/health`. `after health s`: from that 200 to the last welcome.
+  `back s` and `after health s` show `-` when no device came back.
+- `failed hellos`: opens that were rejected, over all the devices.
+- `gw CPU peak %`, `surreal CPU peak %`: the peaks over the new gateway and the stand container
+  (`-` when the container is not known or its cgroup cannot be read); `gw RSS MiB`: the new
+  gateway's resident memory at the step's end.
+- `not back`, `ended`: devices that were not welcomed again by the end of the step, and devices
+  the gateway ended with a close no reconnect follows. `degraded` is `yes` when either is not
+  zero.
+
 A device has 30 s to open its socket, say hello and be welcomed, and 30 s more to get its
 snapshot; one that fails is counted as an error and dropped. The arguments are checked: devices
 positive integers that grow, members a positive integer, writers from 0 to 1, rate and hold
 above 0, the port 1-65535; a violation names the flag.
 
-The run exits 0, or 1 when the setup or a step failed; SIGINT and SIGTERM stop the devices and
-the child gateway and exit 130. The load accounts live on the in-memory e2e stand and vanish
-when it restarts: afterwards `mcproc restart surrealdb-e2e`, then `mcproc restart gateway-e2e`.
-The seed sweep (`bun run seed:sweep`) targets the dev stand, not this one.
+The run exits 0, or 1 when the setup, a step or the restart failed; SIGINT and SIGTERM stop the
+devices and the child gateway, the latest one, and exit 130. The load accounts live on the
+in-memory e2e stand and vanish when it restarts: afterwards `mcproc restart surrealdb-e2e`, then
+`mcproc restart gateway-e2e`. The seed sweep (`bun run seed:sweep`) targets the dev stand, not
+this one.

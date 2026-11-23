@@ -1,6 +1,6 @@
 /** What a seed client is given, what it answers, and what its steps use of its device. */
 
-import type { ResultAsync } from 'neverthrow'
+import type { Result, ResultAsync } from 'neverthrow'
 
 import type { BusError } from '@workspace/cqrs'
 import type { AuthUser, DataError, SignInInput } from '@workspace/data'
@@ -9,17 +9,22 @@ import type { ProfileId } from '@workspace/ids'
 import type { Membership } from '@workspace/replica/protocol'
 
 import type { NoteRow, NotesService } from '../../features/organisation/application/notes.service'
-import type { AccountStartService } from '../../features/user/application/account-start.service'
+import type {
+  AccountStartFrom,
+  AccountStartService,
+} from '../../features/user/application/account-start.service'
 import type { ProfileRow, ProfileService } from '../../features/user/application/profile.service'
 import type {
   SettingsRow,
   SettingsService,
 } from '../../features/user/application/settings/settings.service'
+import type { SignInError } from '../../features/user/application/sign-in.service'
 import type { InvitationsPort } from '../../platform/invitations.port'
 import type { OrganisationsPort } from '../../platform/organisations.port'
-import type { SessionPort } from '../../platform/session.port'
 import type { CommandLogger } from '../commands'
 import type { Fetcher } from '../gateway-auth'
+
+import type { SeedSession } from './session'
 
 /**
  * Where the seed reads an account's verification link: the stand's mailbox (`@workspace/mailbox`'s
@@ -123,13 +128,23 @@ export interface SeedClient {
   close(): Promise<void>
 }
 
+/** The app's starts of new accounts, as the seed runs them for the account its device is signed in as. */
+export interface SeedStarts {
+  /**
+   * Keeps the start of `user`'s account under the sign-in current on the device, to finish after
+   * its pull (`AccountStartService.keepAfterPull`); with nobody signed in it keeps nothing and fails.
+   */
+  keepAfterPull(user: AuthUser, from: AccountStartFrom): Result<void, SignInError>
+  readonly resumeAfterPull: AccountStartService['resumeAfterPull']
+}
+
 /** The seed client's device as its account steps use it: its session, services and mailbox. */
 export interface SeedDevice {
-  readonly session: Pick<SessionPort, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
+  readonly session: Pick<SeedSession, 'signIn' | 'signUp' | 'verifyEmail' | 'resendVerification'>
   readonly profiles: Pick<ProfileService, 'read' | 'updateBio'>
   readonly settings: Pick<SettingsService, 'read' | 'updateLocale'>
   /** The app's starts of new accounts, which create an account's settings and profile. */
-  readonly starts: Pick<AccountStartService, 'keepAfterPull' | 'resumeAfterPull'>
+  readonly starts: SeedStarts
   readonly inbox: Inbox
   /**
    * Signs in through `signIn` and waits for the first catch-up, which brings what the gateway
@@ -142,7 +157,7 @@ export interface SeedDevice {
 
 /** The seed client's device as its organisation steps use it. */
 export interface SeedOrganisationDevice {
-  readonly session: Pick<SessionPort, 'signIn' | 'memberships' | 'selectTenant' | 'currentTenant'>
+  readonly session: Pick<SeedSession, 'signIn' | 'memberships' | 'selectTenant' | 'currentTenant'>
   readonly organisations: Pick<OrganisationsPort, 'create' | 'invite'>
   readonly invitations: Pick<InvitationsPort, 'accept'>
   readonly notes: Pick<NotesService, 'read'>

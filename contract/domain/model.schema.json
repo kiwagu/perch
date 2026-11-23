@@ -44,7 +44,6 @@
           "type": "string",
           "description": "The name the account shows.",
           "minLength": 1,
-          "maxLength": 80,
           "x-perch": { "crdt": "none" }
         },
         "email": {

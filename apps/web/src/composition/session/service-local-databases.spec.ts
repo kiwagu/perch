@@ -10,16 +10,18 @@ import {
   type TestWorld,
   type TestWorldOptions,
 } from '../__fixtures__/session'
+import { signedIn } from '../__fixtures__/signed-in'
 import {
+  addLeftoverIdentity,
+  leftoverIdentities,
   type MemoryStorage,
   memoryStorage,
   pendingRevokes,
-  saveDevice,
+  savedIdentity,
   saveTenantDatabases,
   signingOutSince,
 } from '../storage'
 
-import { addLeftoverIdentity, leftoverIdentities } from './leftover-identities'
 import { spaceLockName } from './space-deletion'
 
 const annSignUp = { email: 'ann@example.test', password: 'Pass-word-1', name: 'Ann', locale: 'en' }
@@ -85,7 +87,7 @@ describe('a delete another tab holds up', () => {
     expect((await driveClock(session.signOut()))._unsafeUnwrap()).toBe('signed-out')
     expect(heard).toEqual(['delete-pending'])
     expect(session.current()).toBeUndefined()
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     // The barrier over every tab's writes is down, and the delete goes on, listed.
     expect(signingOutSince(storage)).toBeUndefined()
     expect(leftoverIdentities(storage)).toEqual([ann.id])
@@ -148,7 +150,7 @@ describe('the next start', () => {
     const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
     const storage = leftBehind(ann.id)
 
-    saveDevice(storage, { identity: ann, token: 'token-ann', memberships: [] })
+    signedIn(storage, { identity: ann, token: 'token-ann' })
 
     const tab = await world({ storage, online: false })
 
@@ -165,23 +167,23 @@ describe('a saved identity whose database does not open', () => {
   const ann = { id: identityIdFactory.create(), email: 'ann@example.test' }
 
   /** A browser where Ann is signed in and counts the database of her organisation `acme`. */
-  function annSaved(): MemoryStorage {
+  function annSaved() {
     const storage = memoryStorage()
+    const session = signedIn(storage, { identity: ann, token: 'token-ann' })
 
-    saveDevice(storage, { identity: ann, token: 'token-ann', memberships: [] })
     saveTenantDatabases(storage, ann.id, ['acme'])
 
-    return storage
+    return { storage, session }
   }
 
   it('signs out on this device: the token is left to sign out, and her databases deleted', async () => {
-    const storage = annSaved()
+    const { storage, session } = annSaved()
     const tab = await world({ storage, online: false, refusedIdentities: [ann.id] })
 
     expect((await tab.session.restore())._unsafeUnwrapErr().code).toBe('data:OPEN_FAILED')
-    expect((await tab.session.signOutUnopened(ann.id)).isOk()).toBe(true)
+    expect((await tab.session.signOutUnopened(session)).isOk()).toBe(true)
 
-    expect(storage.get('perch.session.identity')).toBeUndefined()
+    expect(savedIdentity(storage)).toBeUndefined()
     expect(pendingRevokes(storage).map(({ token }) => token)).toEqual(['token-ann'])
     expect(tab.localsDeleted()).toEqual([ann.id])
     expect(tab.tenantsDeletedOf(ann.id)).toEqual(['acme'])
@@ -189,14 +191,14 @@ describe('a saved identity whose database does not open', () => {
   })
 
   it('changes nothing while a space is open', async () => {
-    const storage = annSaved()
+    const { storage, session } = annSaved()
     const tab = await world({ storage, online: false })
 
     expect((await tab.session.restore()).isOk()).toBe(true)
-    expect((await tab.session.signOutUnopened(ann.id)).isOk()).toBe(true)
+    expect((await tab.session.signOutUnopened(session)).isOk()).toBe(true)
 
     expect(tab.session.current()?.id).toBe(ann.id)
-    expect(storage.get('perch.session.identity')).toBeDefined()
+    expect(savedIdentity(storage)).toBeDefined()
     expect(tab.localsDeleted()).toEqual([])
   })
 })
@@ -255,7 +257,7 @@ describe('two tabs, one identity being deleted and signed in again', () => {
     const ann = a.session.current() ?? expect.unreachable('signed in')
     const signingOut = a.driveClock(a.session.signOut())
 
-    await vi.waitFor(() => expect(shared.storage.get('perch.session.identity')).toBeUndefined())
+    await vi.waitFor(() => expect(savedIdentity(shared.storage)).toBeUndefined())
     expect((await b.session.signIn(annSignUp)).isOk()).toBe(true)
 
     closing.resolve()

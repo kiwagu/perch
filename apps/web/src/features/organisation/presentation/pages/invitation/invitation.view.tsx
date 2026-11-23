@@ -6,7 +6,7 @@ import { Button } from '@workspace/ui/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@workspace/ui/components/ui/card'
 import { FieldGroup } from '@workspace/ui/components/ui/field'
 
-import type { InvitationErrorCode } from '../../../application/invitation.machine'
+import type { InvitationErrorCode, InvitationEvent } from '../../../application/invitation.machine'
 import type { TenantRole } from '../../../application/organisation-machine'
 import { roleLabel } from '../../components/role-words'
 
@@ -41,9 +41,8 @@ export interface InvitationViewProps {
   readonly error?: InvitationErrorCode | undefined
   /** Whether the flow's state renders an anchor: the status, the invitation, the buttons, the link. */
   readonly renders: (anchor: InvitationListed) => boolean
-  /** Whether the flow takes the press of each button now: a button is enabled while it does. */
-  readonly canAccept: boolean
-  readonly canDecline: boolean
+  /** Whether the flow takes the event now: a button is enabled exactly while it does. */
+  readonly can: (event: InvitationEvent) => boolean
   /** Whether nobody is signed in here, the one who is led to the sign-in page from the message. */
   readonly guest: boolean
   readonly onAccept: () => void
@@ -117,7 +116,7 @@ export function InvitationView(props: InvitationViewProps) {
           {props.renders('organisation.invitation.accept-button') ? (
             <Button
               type="button"
-              disabled={!props.canAccept}
+              disabled={!props.can({ type: 'organisation.invitation.accept-button' })}
               onClick={props.onAccept}
               data-testid="organisation.invitation.accept-button"
             >
@@ -128,7 +127,7 @@ export function InvitationView(props: InvitationViewProps) {
             <Button
               type="button"
               variant="outline"
-              disabled={!props.canDecline}
+              disabled={!props.can({ type: 'organisation.invitation.decline-button' })}
               onClick={props.onDecline}
               data-testid="organisation.invitation.decline-button"
             >

@@ -25,24 +25,19 @@ anchors:
   app-shell.nav.profile-link:
     kind: link
     binding: { route: /me }
-    roles: [ identity, member, admin ]
   app-shell.nav.organisation-link:
     kind: link
     binding: { route: /org }
-    roles: [ identity, member, admin ]
   app-shell.nav.devices-link:
     kind: link
     binding: { route: /devices }
-    roles: [ identity, member, admin ]
   app-shell.nav.settings-link:
     kind: link
     binding: { route: /settings }
-    roles: [ identity, member, admin ]
   app-shell.nav.console-link:
     kind: link
     description: Leads to the console, for an operator alone.
     binding: { route: /console/users }
-    roles: [ operator ]
   app-shell.theme-select:
     kind: select
     description: "The theme of this device for a guest; it starts as the theme this device showed last, so after a sign-out it keeps the signed-out account's theme."
@@ -52,8 +47,6 @@ anchors:
         params:
           theme: app-shell.theme-select
     roles: [ guest ]
-    dataValue: true
-    derived: [ option ]
   app-shell.locale-select:
     kind: select
     description: The language of the app for a guest, and the one a new account starts with.
@@ -63,8 +56,6 @@ anchors:
         params:
           locale: app-shell.locale-select
     roles: [ guest ]
-    dataValue: true
-    derived: [ option ]
   app-shell.sign-out-here-button:
     kind: button
     description: Signs the saved account out on this device when its data could not be opened, and the changes this device has not sent are lost.
@@ -83,7 +74,8 @@ anchors:
     codes: [ new-version, protocol-outdated ]
   app-shell.update-button:
     kind: button
-    description: Loads the page again on the version the server serves, shown with app-shell.update-message.
+    description: Loads the page again on the version the server serves.
+    with: [ app-shell.update-message ]
     binding: { action: platform.reload }
   app-shell.sync-message:
     kind: message
@@ -95,21 +87,21 @@ anchors:
     codes: [ install-available, install-by-steps ]
   app-shell.install-button:
     kind: button
-    description: Asks the browser to install the app, shown with app-shell.install-message where the browser can.
+    description: Asks the browser to install the app.
+    with: [ { app-shell.install-message: [ install-available ] } ]
     binding: { action: platform.install.prompt }
   app-shell.install-later-button:
     kind: button
-    description: Puts the reminder to install the app off for three days on this device, shown with app-shell.install-message.
+    description: Puts the reminder to install the app off for three days on this device.
+    with: [ app-shell.install-message ]
     binding: { action: platform.install.postpone }
   app-shell.confirmation:
     kind: confirmation
     description: "Asks whether to go on with a destructive action before it runs: deleting a note, removing a member, signing another device out."
-    derived: [ confirm-button, cancel-button ]
   app-shell.leave-dialog:
     kind: dialog
     description: "Asks whether to leave and lose what was typed but not saved: another screen, a sign-out, a switch of organisation, a change of language."
     codes: [ unsaved-input ]
-    derived: [ confirm-button, cancel-button ]
 states:
   opening: app-shell.status says the app is starting, with the theme select and the language select; no screen is rendered.
   opening-data: The navigation of the signed-in account and the open screen, whose reads wait for its data; no notice, crash message or message of the sync, update or install shows yet.

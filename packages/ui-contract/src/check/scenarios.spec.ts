@@ -256,6 +256,24 @@ describe('scenariosProblems', () => {
 
     expect(printed(contract)).toEqual([])
   })
+  it('refuses a saved state on a field that shows no stored value', () => {
+    const contract = sampleContract()
+
+    contract.vocabulary.fieldStates = { unsaved: 'held, not yet saved', saved: 'what is stored' }
+    screenIn(contract, 'sample').anchors['sample.email-input'] = {
+      kind: 'input',
+      holdsInput: true,
+      binding: { action: 'thing.createThing' },
+    }
+    firstScenario(contract).expected = [
+      '[sample.email-input] carries [state:unsaved]',
+      '[sample.email-input] carries [state:saved]',
+    ]
+
+    expect(printed(contract)).toEqual([
+      'tests/e2e/scenarios/sample/base/thing.md:1: expected[1]: sample.email-input never carries state saved',
+    ])
+  })
   it('leaves an unknown anchor and an unknown code to their own problem', () => {
     const contract = sampleContract()
 

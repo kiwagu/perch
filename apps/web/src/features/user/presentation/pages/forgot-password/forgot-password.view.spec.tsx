@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { fireEvent, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
-import { renderWithProviders } from '../../../../../test-utils'
+import { UnsavedInputScope } from '@workspace/ui/unsaved-input'
+
+import { expectFieldFacts, renderWithFacts } from '../../../../../field-facts.test-support'
+import { expectNoStateColour } from '../../../../../field-state-colour.test-support'
 import es from '../../i18n/user.es.json'
 
 import { ForgotPasswordView, type ForgotPasswordViewProps } from './forgot-password.view'
@@ -11,11 +15,11 @@ function renderView(props: Partial<ForgotPasswordViewProps> = {}, locale: 'en' |
   const onSend = vi.fn((_email: string) => Promise.resolve(true))
   const onEmailChange = vi.fn((_email: string) => {})
 
-  renderWithProviders(
+  renderWithFacts(
     <ForgotPasswordView
       email=""
       onEmailChange={onEmailChange}
-      canSend
+      can={() => true}
       onSend={onSend}
       {...props}
     />,
@@ -47,6 +51,12 @@ describe('ForgotPasswordView', () => {
     )
   })
 
+  it('gives the email what the contract says of it', () => {
+    renderView()
+
+    expect(expectFieldFacts(document.body)).toEqual(['user.forgot-password.email-input'])
+  })
+
   it('asks to open the link of the mail, naming where it went', () => {
     renderView({ message: 'check-your-mail', sentTo: 'ann@example.test' })
 
@@ -66,12 +76,23 @@ describe('ForgotPasswordView', () => {
     expect(screen.getByTestId('user.forgot-password.error').getAttribute('data-code')).toBe(code)
   })
 
-  it('holds the send button while the flow does not take it', () => {
-    renderView({ canSend: false })
+  it('holds the send button while the flow does not take its event', () => {
+    renderView({ can: () => false })
 
     expect(
       (screen.getByTestId('user.forgot-password.send-button') as HTMLButtonElement).disabled,
     ).toBe(true)
+  })
+
+  it('asks the flow about the send with the email the page holds', () => {
+    const can = vi.fn(() => true)
+
+    renderView({ email: 'ann@example.test', can })
+
+    expect(can).toHaveBeenCalledWith({
+      type: 'user.forgot-password.send-button',
+      email: 'ann@example.test',
+    })
   })
 
   it('speaks Spanish', () => {
@@ -80,5 +101,32 @@ describe('ForgotPasswordView', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(
       es['user.forgot-password.title'],
     )
+  })
+})
+
+describe('the state colour of the fields', () => {
+  it('draws none on the email', () => {
+    function Page() {
+      const [email, setEmail] = useState('')
+
+      return (
+        <UnsavedInputScope>
+          <ForgotPasswordView
+            email={email}
+            onEmailChange={setEmail}
+            can={() => true}
+            onSend={() => Promise.resolve(true)}
+          />
+        </UnsavedInputScope>
+      )
+    }
+
+    renderWithFacts(<Page />)
+
+    fireEvent.change(screen.getByTestId('user.forgot-password.email-input'), {
+      target: { value: 'ann@example.test' },
+    })
+
+    expectNoStateColour(screen.getByTestId('user.forgot-password.email-input'))
   })
 })

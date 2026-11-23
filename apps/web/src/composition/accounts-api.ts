@@ -1,10 +1,11 @@
 /**
  * The gateway's console routes over HTTP, for an operator: a page of the platform's accounts and
  * one account's card. Each request is made with the credentials of the tab when it starts, read
- * once (the identity the tab shows and the session token saved for it), and the device's id
- * (`X-Perch-Device`). A refusal because that identity is no operator (403 `not-operator`) takes
- * `operator` off the roles this browser keeps for that identity, whichever identity the tab or
- * the browser shows by the time it is answered.
+ * once (the identity the tab shows, the session token saved for it and the sign-in that saved
+ * it), and the device's id (`X-Perch-Device`). A refusal because that identity is no operator
+ * (403 `not-operator`) takes `operator` off the roles this browser keeps for that sign-in alone,
+ * whichever sign-in the tab or the browser shows by the time it is answered: a later one, of the
+ * same account or not, keeps the roles its own welcome brought.
  */
 
 import type { ResultAsync } from 'neverthrow'
@@ -40,6 +41,8 @@ import { type BearerCalls, bearerCalls } from './gateway-bearer'
 export interface Credentials {
   readonly identity: IdentityId
   readonly token: string
+  /** The sign-in this browser keeps the token under: what a refusal of it changes is its own. */
+  readonly signIn: string
 }
 
 export interface AccountsDeps {
@@ -50,8 +53,11 @@ export interface AccountsDeps {
   readonly credentials: () => Credentials | undefined
   /** The device's own id, named in every call. */
   readonly device: () => string
-  /** Takes `role` off the roles this browser keeps for `identity`, and from no other identity. */
-  readonly dropRole: (identity: IdentityId, role: PlatformRole) => void
+  /**
+   * Takes `role` off the roles this browser keeps for the sign-in `asker` names, and from no other
+   * sign-in.
+   */
+  readonly dropRole: (asker: Credentials, role: PlatformRole) => void
   readonly fetcher?: Fetcher
 }
 
@@ -128,7 +134,7 @@ const queryOf = (search: AccountSearch): string =>
  * parsed, each failure one of its action's codes.
  */
 export function accountsApi(baseUrl: string, deps: AccountsDeps): AccountsPort {
-  /** One call with the credentials of its start; a `not-operator` drops that identity's role. */
+  /** One call with the credentials of its start; a `not-operator` drops that sign-in's role. */
   const asking = <T, Code extends string>(
     codes: readonly [Code, ...Code[]],
     call: (calls: BearerCalls) => ResultAsync<T, DataError>,
@@ -144,7 +150,7 @@ export function accountsApi(baseUrl: string, deps: AccountsDeps): AccountsPort {
       const failure = failureOf(codes, error)
 
       if (failure.code === 'not-operator' && asker !== undefined) {
-        deps.dropRole(asker.identity, 'operator')
+        deps.dropRole(asker, 'operator')
       }
 
       return failure

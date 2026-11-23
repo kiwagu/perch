@@ -3,12 +3,21 @@
  * the whole file and never named like a derived anchor of another one; it starts with
  * its screen's id and ends with its kind; the entry anchors are the screen's own; a
  * screen that is not the frame has a route; an error's `fields` map codes it carries to
- * fields of its own screen; only a field says whether it holds input; only an input renders a
+ * fields of its own screen or to `form`, the form as a whole; only a field says whether it holds
+ * input; only a field that holds input drops its state colour; only an input renders a
  * visibility-button.
  */
 
-import { FIELD_KINDS, kindOf, screenOf, VISIBILITY_BASE_KIND, VISIBILITY_BUTTON } from '../anchors'
-import type { Problem } from '../files'
+import {
+  FIELD_KINDS,
+  kindOf,
+  STATEFUL_FIELD_KINDS,
+  screenOf,
+  VISIBILITY_BASE_KIND,
+  VISIBILITY_BUTTON,
+  WHOLE_FORM,
+} from '../anchors'
+import type { Problem, Screen } from '../files'
 
 import { type Contract, declaredAnchors, has, knownAnchors, locate } from './contract'
 
@@ -129,6 +138,21 @@ function nameProblems({ screens }: Contract): Problem[] {
   ])
 }
 
+/** Why an error's code cannot concern `field` on `screen`: `form`, or a field the screen declares. */
+function placeProblem(field: string, screen: Screen): string | undefined {
+  if (field === WHOLE_FORM) {
+    return undefined
+  }
+
+  const target = screen.anchors[field]
+
+  if (target === undefined) {
+    return `"${field}" is not an anchor of the screen`
+  }
+
+  return FIELD_KINDS.has(target.kind) ? undefined : `"${field}" is a ${target.kind}, not a field`
+}
+
 function fieldsProblems({ screens }: Contract): Problem[] {
   const inScreens = locate(screens)
 
@@ -143,17 +167,13 @@ function fieldsProblems({ screens }: Contract): Problem[] {
 
     return Object.entries(def.fields).flatMap(([code, field]) => {
       const here = [...at, 'fields', code]
-      const target = screen.anchors[field]
+      const place = placeProblem(field, screen)
 
       return [
         ...((def.codes ?? []).includes(code)
           ? []
           : [inScreens(here, `"${code}" is not a code of the anchor`)]),
-        ...(target === undefined
-          ? [inScreens(here, `"${field}" is not an anchor of the screen`)]
-          : FIELD_KINDS.has(target.kind)
-            ? []
-            : [inScreens(here, `"${field}" is a ${target.kind}, not a field`)]),
+        ...(place === undefined ? [] : [inScreens(here, place)]),
       ]
     })
   })
@@ -164,6 +184,22 @@ const holdsInputProblems = ({ screens }: Contract): Problem[] =>
   declaredAnchors(screens).flatMap(({ def, at }) =>
     def.holdsInput !== undefined && !FIELD_KINDS.has(def.kind)
       ? [locate(screens)([...at, 'holdsInput'], 'only a field holds input')]
+      : [],
+  )
+
+/**
+ * `marksState: false` drops the state colour of a field the kit colours: only an `input`, a
+ * `textarea` or a `select` that holds input shows one.
+ */
+const marksStateProblems = ({ screens }: Contract): Problem[] =>
+  declaredAnchors(screens).flatMap(({ def, at }) =>
+    def.marksState !== undefined && !(STATEFUL_FIELD_KINDS.has(def.kind) && def.holdsInput === true)
+      ? [
+          locate(screens)(
+            [...at, 'marksState'],
+            'only a field that holds input shows a state colour',
+          ),
+        ]
       : [],
   )
 
@@ -245,6 +281,7 @@ export const screensProblems = (contract: Contract): Problem[] => [
   ...nameProblems(contract),
   ...fieldsProblems(contract),
   ...holdsInputProblems(contract),
+  ...marksStateProblems(contract),
   ...secretProblems(contract),
   ...rankedProblems(contract),
   ...visibilityProblems(contract),

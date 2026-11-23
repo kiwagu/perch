@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern'
 
+import { CONTRACT_VALUES } from '@workspace/kernel'
 import { z } from '@workspace/zod'
 
 import type { AuthSessions } from '../../auth/auth-sessions'
@@ -16,14 +17,29 @@ import {
 } from '../organisation-http'
 import type { Organisations } from '../organisations'
 
-/** The longest value of a token or an invitation the routes read: far above a signed token. */
-const MAX_VALUE = 4096
-
 /** What a reader of an invitation's link sends: the link's token. */
-const readBodySchema = z.object({ token: z.string().min(1).max(MAX_VALUE) })
+const readBodySchema = z.object({ token: z.string().min(1).max(CONTRACT_VALUES.token.maxLength) })
 
 /** What an account sends to accept or decline: an invitation's id, or its link's token. */
-const answerBody = z.object({ invitation: z.string().min(1).max(MAX_VALUE) })
+const answerBody = z.object({
+  invitation: z.string().min(1).max(CONTRACT_VALUES['invitation-ref'].maxLength),
+})
+
+/** The paths the routes serve, each with the one method it takes. */
+const METHOD_OF = {
+  '/invitations': 'GET',
+  '/invitations/read': 'POST',
+  '/invitations/accept': 'POST',
+  '/invitations/decline': 'POST',
+} as const
+
+type InvitationPath = keyof typeof METHOD_OF
+
+const isInvitationPath = (pathname: string): pathname is InvitationPath =>
+  Object.hasOwn(METHOD_OF, pathname)
+
+/** The paths the invitation routes answer. */
+export const INVITATION_PATHS: readonly string[] = Object.keys(METHOD_OF)
 
 export interface InvitationRoutesOptions {
   /**
@@ -140,40 +156,32 @@ export function invitationRoutes(
       .exhaustive()
   }
 
-  /** The paths the routes answer, each with the one method it takes and what answers it. */
-  const routes: ReadonlyMap<
-    string,
-    {
-      readonly method: string
-      readonly answer: (request: Request, from: string) => Promise<Response>
-    }
-  > = new Map([
-    ['/invitations', { method: 'GET', answer: (request, from) => signedIn(mine, request, from) }],
-    ['/invitations/read', { method: 'POST', answer: read }],
-    [
-      '/invitations/accept',
-      { method: 'POST', answer: (request, from) => signedIn(accept, request, from) },
-    ],
-    [
-      '/invitations/decline',
-      { method: 'POST', answer: (request, from) => signedIn(decline, request, from) },
-    ],
-  ])
+  /** What answers each path the routes serve. */
+  const answers: Readonly<
+    Record<InvitationPath, (request: Request, from: string) => Promise<Response>>
+  > = {
+    '/invitations': (request, from) => signedIn(mine, request, from),
+    '/invitations/read': read,
+    '/invitations/accept': (request, from) => signedIn(accept, request, from),
+    '/invitations/decline': (request, from) => signedIn(decline, request, from),
+  }
 
   return async (request, from) => {
-    const route = routes.get(new URL(request.url).pathname)
+    const { pathname } = new URL(request.url)
 
-    if (!route) {
+    if (!isInvitationPath(pathname)) {
       return undefined
     }
 
-    if (request.method !== route.method) {
+    const method = METHOD_OF[pathname]
+
+    if (request.method !== method) {
       return Response.json(
         { code: 'method-not-allowed' },
-        { status: 405, headers: { Allow: route.method } },
+        { status: 405, headers: { Allow: method } },
       )
     }
 
-    return route.answer(request, from)
+    return answers[pathname](request, from)
   }
 }

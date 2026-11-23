@@ -2,7 +2,8 @@
  * Rule 18: a paged list. A list whose platform source says `paged: true` shows one page of its
  * action's entries, the page and the size the route's search parameters `page` and `size` name:
  * its action pages (`paged: { sizes, default }`: the sizes each once, the smallest first, the
- * default one of them), taking the number parameters `page` and `size`; every route of its
+ * default one of them), taking the number parameters `page` and `size` (a type `number` or
+ * `integer`, written or of the value each refers to); every route of its
  * screen declares `page`, an integer from 1 whose default is 1, and `size`, an integer of the
  * action's sizes whose default is the action's; no source's `params` names `page` or `size`, which
  * the route gives; a screen pages one list, as a route has one `page`; and a paged list has at
@@ -11,9 +12,16 @@
  */
 
 import { PAGE, SIZE, segmentsOf, sizeOptionOf } from '../anchors'
-import type { Binding, Problem } from '../files'
+import { type Binding, type Problem, parameterValueOf } from '../files'
 
-import { type Contract, declaredAnchors, type InScreens, locate, own } from './contract'
+import {
+  type Contract,
+  declaredAnchors,
+  type InScreens,
+  locate,
+  own,
+  PLATFORM_ACTION,
+} from './contract'
 import { searchOf } from './lookups'
 
 type PlatformAction = Contract['screens']['platform']['actions'][string]
@@ -30,8 +38,20 @@ const SOURCE_PARAMS = {
 /** What a paged list reads of the route, by search key. */
 const ROUTE_KEYS = { [PAGE]: 'the page', [SIZE]: 'the page size' } as const
 
-/** The action's sizes listed once each, the smallest first, with its default among them. */
-function actionProblems(name: string, action: PlatformAction, inScreens: InScreens): Problem[] {
+/** The types of a number a paged action's `page` and `size` may have. */
+const NUMBER_TYPES: ReadonlySet<string> = new Set(['number', 'integer'])
+
+/**
+ * The action's `page` and `size` numbers, by the type each writes or takes from the value it
+ * refers to (`parameterValueOf`), and its sizes listed once each, the smallest first, with its
+ * default among them.
+ */
+function actionProblems(
+  contract: Contract,
+  name: string,
+  action: PlatformAction,
+  inScreens: InScreens,
+): Problem[] {
   const { paged } = action
 
   if (paged === undefined) {
@@ -39,7 +59,16 @@ function actionProblems(name: string, action: PlatformAction, inScreens: InScree
   }
 
   const at = ['platform', 'actions', name, 'paged']
-  const numbers = [PAGE, SIZE].every((param) => own(action.params, param)?.type === 'number')
+  const numbers = [PAGE, SIZE].every((param) =>
+    NUMBER_TYPES.has(
+      parameterValueOf(
+        `${PLATFORM_ACTION}${name}`,
+        param,
+        contract.screens.platform,
+        contract.model,
+      ).type ?? '',
+    ),
+  )
   const ordered = paged.sizes.every(
     (size, index) => index === 0 || size > (paged.sizes[index - 1] ?? 0),
   )
@@ -47,7 +76,12 @@ function actionProblems(name: string, action: PlatformAction, inScreens: InScree
   return [
     ...(numbers
       ? []
-      : [inScreens(at, 'a paged action takes "page" and "size" parameters of type number')]),
+      : [
+          inScreens(
+            at,
+            'a paged action takes "page" and "size" parameters whose type, written or of the value they refer to, is number or integer',
+          ),
+        ]),
     ...(ordered
       ? []
       : [
@@ -187,6 +221,8 @@ export function pagingProblems(contract: Contract): Problem[] {
             )),
       ]
     }),
-    ...Object.entries(actions).flatMap(([name, action]) => actionProblems(name, action, inScreens)),
+    ...Object.entries(actions).flatMap(([name, action]) =>
+      actionProblems(contract, name, action, inScreens),
+    ),
   ]
 }

@@ -55,9 +55,26 @@
       "type": "object",
       "properties": {
         "version": {
-          "type": "number",
-          "const": 1,
-          "description": "The version of the contract format."
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "The version of the contract format the contract declares."
+        },
+        "defaults": {
+          "description": "From version 6, what a value takes where it writes nothing of its own; the platform's values, the model and every field's value here carry it already. See the rule `declared-values`.",
+          "type": "object",
+          "properties": {
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
+            }
+          },
+          "required": [
+            "maxLength"
+          ],
+          "additionalProperties": false
         },
         "idAttribute": {
           "type": "string",
@@ -270,6 +287,17 @@
           },
           "description": "The composites the platform declares once, derived into the screens whose field opts in; the declaration itself is under `platform.composites`."
         },
+        "fieldStates": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "description": "What the state of a field means."
+          },
+          "description": "The data-state values of a field that holds input; `unsaved` and `saved`."
+        },
         "pageHelper": {
           "type": "string",
           "const": "__perch.ui",
@@ -364,6 +392,7 @@
         "screenNames",
         "reserved",
         "composites",
+        "fieldStates",
         "pageHelper",
         "instructions"
       ],
@@ -388,7 +417,7 @@
           "description": {
             "type": "string",
             "minLength": 1,
-            "description": "What the screen is for: the task it serves and when it is shown, in one or two sentences, so an agent chooses the screen before reading its anchors. Not a list of its parts: each anchor has a description of its own. At most 200 characters."
+            "description": "What the screen is for: the task it serves and when it is shown. Not a list of its parts: each anchor has its own description. See the rule `description-purposes`. At most 200 characters."
           },
           "frame": {
             "description": "The frame around every screen: it has no route of its own.",
@@ -584,7 +613,7 @@
                   "additionalProperties": false
                 },
                 "search": {
-                  "description": "The search parameters, as a flat JSON Schema.",
+                  "description": "The search parameters, as a flat JSON Schema. The one a platform action's mail links to this screen with is derived from version 4: a file never writes it. See the rule `mail-link-search`.",
                   "type": "object",
                   "properties": {
                     "type": {
@@ -710,10 +739,15 @@
                                   "additionalProperties": false,
                                   "description": "How a page sets one enum value of the parameter."
                                 }
+                              },
+                              "key": {
+                                "description": "The screen's key: a missing or broken value fails with this code, from an action whose `{ search: <name> }` feeds a param referring to a value. One per route, no `default`. See the rule `address-key`.",
+                                "type": "string",
+                                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                               }
                             },
                             "additionalProperties": false,
-                            "description": "The controls of the page that set the parameter."
+                            "description": "The controls of the page that set the parameter, and whether it is the screen's key."
                           }
                         },
                         "required": [
@@ -807,7 +841,7 @@
                   "description": "The kind of the anchor; matches the end of its last segment."
                 },
                 "description": {
-                  "description": "What the element is for. Its kind, binding, codes, states, roles and the flow say the rest, and what the engine says itself (a heading, a link to a screen, a secret input, an error) is left out. At most 200 characters.",
+                  "description": "What the element is for. Its kind, binding, codes, states, roles and flow say the rest; leave out what the engine says itself. See the rule `description-purposes`. At most 200 characters.",
                   "type": "string"
                 },
                 "binding": {
@@ -922,7 +956,7 @@
                             "search"
                           ],
                           "additionalProperties": false,
-                          "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                          "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                         }
                       ],
                       "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1040,7 +1074,7 @@
                               "search"
                             ],
                             "additionalProperties": false,
-                            "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                            "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                           }
                         ],
                         "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -1048,10 +1082,10 @@
                       "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
                     }
                   ],
-                  "description": "What the anchor is bound to: one binding, or several in a non-empty list."
+                  "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
                 },
                 "roles": {
-                  "description": "The roles that see the element, among those its screen's bindings serve; absent: every role of the screen.",
+                  "description": "Who sees the element, among the roles its screen's bindings serve. Absent, it adds no limit: those above it and a link's derived roles hold. See the rules `anchor-roles`, `roles` and `link-roles`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1060,20 +1094,95 @@
                   }
                 },
                 "own": {
-                  "description": "Shown to a member only on the entries the member owns.",
+                  "description": "Shown to a member only on the entries the member owns: the anchor sits in an entry of a list, and shows on the entries the member owns alone. See the rule `own-entries`.",
                   "type": "boolean"
                 },
                 "holdsInput": {
-                  "description": "A field holds input: what is typed into it stays until an action takes it, so a leave with it typed loses it. False for a field whose own change runs its action, which applies at once.",
+                  "description": "True when what is typed stays in the field until an action takes it or a flow clears it, so a leave with it typed loses it; false when it holds none. See the rule `field-holds-input`.",
                   "type": "boolean"
                 },
+                "marksState": {
+                  "description": "`false`: an `input`, `textarea` or `select` that holds input shows no state colour, its `data-state` still kept. Left out, it shows it. See the rules `state-colour` and `check-sources`.",
+                  "type": "boolean",
+                  "const": false
+                },
                 "secret": {
-                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never leaves the page but in the request of the action that takes it, so no navigate carries it into a search and no search parameter starts it; only a secret input renders a `visibility-button`.",
+                  "description": "A field that holds a secret (a password, its confirmation, a current password): it never comes from or goes into a URL, and leaves only in its action's request. See the rule `secret-field`.",
                   "type": "boolean",
                   "const": true
                 },
+                "with": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                          "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                        },
+                        "additionalProperties": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "A code of the vocabulary (data-code)."
+                          }
+                        },
+                        "minProperties": 1,
+                        "maxProperties": 1,
+                        "description": "The anchor, with the codes it shows meanwhile."
+                      }
+                    ],
+                    "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+                  },
+                  "description": "The element renders only while every entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
+                },
+                "without": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "object",
+                        "propertyNames": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                          "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                        },
+                        "additionalProperties": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                            "description": "A code of the vocabulary (data-code)."
+                          }
+                        },
+                        "minProperties": 1,
+                        "maxProperties": 1,
+                        "description": "The anchor, with the codes it shows meanwhile."
+                      }
+                    ],
+                    "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+                  },
+                  "description": "The element renders only while no entry matches: an anchor while it renders, `{ <anchor>: [codes] }` while that anchor shows one of the codes. See the rule `with-without`."
+                },
                 "codes": {
-                  "description": "The data-code values the element carries.",
+                  "description": "The data-code values the element carries. On an `error`, `failed` shows for a failure whose code it does not list, and for one with no code.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1082,12 +1191,12 @@
                   }
                 },
                 "ranked": {
-                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first, and the others go with it; a clear of it, in any flow, takes away every code raised before it. Only a message of two codes or more, each once.",
+                  "description": "A message whose codes are in rank order: of the codes raised before it shows, it shows the first. Only on a message of two codes or more, each listed once. See the rule `ranked-message`.",
                   "type": "boolean",
                   "const": true
                 },
                 "fields": {
-                  "description": "An error's codes, each with the field of the screen it concerns, which the error shows under and marks invalid; a code left out concerns the form.",
+                  "description": "An error's codes, each with the field it concerns, which it shows under and marks invalid, or `form`; a code left out concerns the form. See the rules `error-placement` and `error-codes-and-fields`.",
                   "type": "object",
                   "propertyNames": {
                     "type": "string",
@@ -1095,21 +1204,30 @@
                     "description": "A code of the vocabulary (data-code)."
                   },
                   "additionalProperties": {
-                    "type": "string",
-                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      {
+                        "type": "string",
+                        "const": "form"
+                      }
+                    ],
+                    "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
                   }
                 },
                 "dataId": {
-                  "description": "What the data-id of the element holds: the id of the entity it shows.",
+                  "description": "What the `data-id` of the element holds: the id of the entity it shows, on an `item` or a `row`. A `data-id` is data, not contract: no check reads its value. See the rule `attributes`.",
                   "type": "string"
                 },
                 "dataValue": {
-                  "description": "The element carries a data-value from the choice values.",
+                  "description": "It or its options carry a `data-value`, a choice's stable key, not its label. From version 4 the loader sets it on a select; a screen file omits it there. See the rules `attributes` and `kind-parts`.",
                   "type": "boolean"
                 },
                 "states": {
-                  "description": "The data-state values the element takes.",
+                  "description": "The `data-state` values it takes: an app, container or row state. Not the field states of an `input`, `textarea` or `select`: `ids` lists those. See the rules `attributes` and `field-states-carried`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1118,7 +1236,7 @@
                   }
                 },
                 "derived": {
-                  "description": "The derived suffixes the element renders: `confirm-button`, `option`; an `input` alone renders `visibility-button`, the eye of a password input.",
+                  "description": "The derived suffixes it renders; a screen file omits a paged list's parts and, from version 4, a kind's own: the loader lists them. See the rules `derived-parts`, `kind-parts` and `visibility-button`.",
                   "type": "array",
                   "items": {
                     "type": "string",
@@ -1204,10 +1322,10 @@
                               }
                             ]
                           },
-                          "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list reads again when it becomes another, or a constant; never a field. `page` and `size` are never among them: a paged source takes them from the route."
+                          "description": "Per parameter of the action, a search parameter of the route `{ \"search\": \"<name>\" }`, which the list rereads when it changes while it renders, or a constant; never a field. See the rule `list-reads`."
                         },
                         "paged": {
-                          "description": "The list shows one page of the action's entries: the page and the size the route's search parameters `page` and `size` name; it derives `range`, `previous-link`, `next-link` and `size-select`.",
+                          "description": "The list is a page of the action's entries: its page and size are the route's search parameters, and its parts are derived, never written. See the rule `paged-list`.",
                           "type": "boolean",
                           "const": true
                         }
@@ -1216,10 +1334,10 @@
                         "platform"
                       ],
                       "additionalProperties": false,
-                      "description": "The entries come from a platform action, which the anchor reads each time it starts to render after it did not (the screen opening, a state that renders it entered after one that did not, the account's role becoming one its roles admit), each time the organisation or account it reads for becomes another or a search parameter it reads does, and where a flow says `read: <anchor>`."
+                      "description": "The entries come from a platform action, read when the anchor starts to render, while it renders when what it reads for changes, and where a flow says `read: <anchor>`. See the rule `list-reads`."
                     }
                   ],
-                  "description": "Where the entries of a list, a section or a table come from; no other kind has one."
+                  "description": "Where a list's, section's or table's entries come from, and when they are read; no other kind has one. See the rule `list-reads` for when a list reads and the rule `paged-list` for a paged one."
                 },
                 "asks": {
                   "type": "object",
@@ -1239,10 +1357,35 @@
                     "code"
                   ],
                   "additionalProperties": false,
-                  "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+                  "description": "Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`."
+                },
+                "leaves": {
+                  "type": "object",
+                  "properties": {
+                    "dialog": {
+                      "type": "string",
+                      "description": "The frame's dialog that asks whether to leave and lose what was typed."
+                    },
+                    "loses": {
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                        "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                      },
+                      "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+                    }
+                  },
+                  "required": [
+                    "dialog",
+                    "loses"
+                  ],
+                  "additionalProperties": false,
+                  "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
                 },
                 "composite": {
-                  "description": "The platform composite the field opts into (`password-rules`): the loader derives its list and items on the screen, `<screen>.<list>` and `<screen>.<list>.<item>-item`; only a secret input opts in.",
+                  "description": "The platform composite the field opts into, declared once in `platform.yaml`; the loader derives its list and items. Only a secret `input` opts in. See the rule `composite-of-the-platform`.",
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
                 },
@@ -1265,6 +1408,11 @@
                   ],
                   "additionalProperties": false,
                   "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
+                },
+                "confirms": {
+                  "description": "Written on an unbound secret input: names the other secret input of its screen, one that opts into a composite, whose password it repeats. See the rule `password-pair`.",
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$"
                 }
               },
               "required": [
@@ -1276,7 +1424,7 @@
             "description": "The declared anchors by name."
           },
           "states": {
-            "description": "The container states of the screen, each with what is visible in it.",
+            "description": "The container states of the screen, rows of the vocabulary's Container states table: what is visible in each, never what each means. See the rule `readiness`.",
             "type": "object",
             "propertyNames": {
               "type": "string"
@@ -1290,7 +1438,7 @@
             "type": "object",
             "properties": {
               "id": {
-                "description": "The id of the machine: a one-segment name the flow declares, which the app gives its machine, and an id target `#<id>.<state>` names (one segment, as XState splits a target on `.`); absent, the app names the machine by the screen id.",
+                "description": "The id of the machine: one segment, which the app gives its machine and an id target `#<id>.<state>` names; absent, the screen id. See the rule `flow-states`.",
                 "type": "string",
                 "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
               },
@@ -1308,7 +1456,7 @@
                 "type": "object",
                 "properties": {
                   "guards": {
-                    "description": "The guards by name, each with what it holds: a sentence, or `{ codes }`, the failure codes it holds for.",
+                    "description": "The guards by name, each with what it holds.",
                     "type": "object",
                     "propertyNames": {
                       "type": "string",
@@ -1340,9 +1488,43 @@
                           ],
                           "additionalProperties": false,
                           "description": "A guard by failure code, on a branch of an `onError` only: it holds when the action failed with one of its codes."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "confirms": {
+                              "type": "string",
+                              "enum": [
+                                "differs",
+                                "strays",
+                                "follows"
+                              ],
+                              "description": "What it holds of the confirmation against the input the confirmation confirms: `differs`, `strays` or `follows`, each the meaning of the rule `pair-differs`, `pair-strays` or `pair-follows`."
+                            }
+                          },
+                          "required": [
+                            "confirms"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Derived: a guard on the confirmation of the screen's password pair, the input that writes `confirms`; a screen file never writes it. See the rule `password-pair`."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "composite": {
+                              "type": "string",
+                              "const": "breaks",
+                              "description": "The input the confirmation confirms breaks a rule of its composite: the meaning of the rule `composite-breaks`."
+                            }
+                          },
+                          "required": [
+                            "composite"
+                          ],
+                          "additionalProperties": false,
+                          "description": "Derived: a guard on the composite of the input the screen's password pair confirms; a screen file never writes it. See the rule `password-pair`."
                         }
                       ],
-                      "description": "What a guard holds: a sentence, or the failure codes it holds for."
+                      "description": "What a guard holds: a sentence, the failure codes it holds for, or a guard the loader derives from the screen's password pair."
                     }
                   }
                 },
@@ -1401,7 +1583,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -1521,7 +1703,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -1715,7 +1897,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -1841,7 +2023,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -1950,7 +2132,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -2064,7 +2246,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2173,7 +2355,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2350,7 +2532,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2459,7 +2641,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -2573,7 +2755,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -2682,7 +2864,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -2801,7 +2983,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -2910,7 +3092,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -3024,7 +3206,7 @@
                                       "read": {
                                         "type": "boolean",
                                         "const": false,
-                                        "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                        "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                       },
                                       "actions": {
                                         "minItems": 1,
@@ -3133,7 +3315,7 @@
                                                 "params"
                                               ],
                                               "additionalProperties": false,
-                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                              "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                             },
                                             {
                                               "type": "object",
@@ -3293,7 +3475,7 @@
                               "additionalProperties": false
                             },
                             "renders": {
-                              "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                              "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                               "minItems": 1,
                               "type": "array",
                               "items": {
@@ -3413,7 +3595,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3607,7 +3789,7 @@
                                   "params"
                                 ],
                                 "additionalProperties": false,
-                                "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                               },
                               {
                                 "type": "object",
@@ -3733,7 +3915,7 @@
                                   "read": {
                                     "type": "boolean",
                                     "const": false,
-                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                   },
                                   "actions": {
                                     "minItems": 1,
@@ -3842,7 +4024,7 @@
                                             "params"
                                           ],
                                           "additionalProperties": false,
-                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                         },
                                         {
                                           "type": "object",
@@ -3956,7 +4138,7 @@
                                     "read": {
                                       "type": "boolean",
                                       "const": false,
-                                      "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                      "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                     },
                                     "actions": {
                                       "minItems": 1,
@@ -4065,7 +4247,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4204,7 +4386,7 @@
                                       "type": "object",
                                       "properties": {
                                         "renders": {
-                                          "description": "Anchors of the screen that only some states render, this one among them: an anchor no state of the flow lists is rendered in every state, one that a state lists only in the states that list it, and the anchors declared under it (`<anchor>.<rest>`) with it; a state of a region also renders what its parallel state lists.",
+                                          "description": "Anchors only some states render. An anchor no state lists, nor any it is under, renders in all; else only where it or one above it is listed. A part renders with its base. See the rule `renders`.",
                                           "minItems": 1,
                                           "type": "array",
                                           "items": {
@@ -4324,7 +4506,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4518,7 +4700,7 @@
                                               "params"
                                             ],
                                             "additionalProperties": false,
-                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                            "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                           },
                                           {
                                             "type": "object",
@@ -4644,7 +4826,7 @@
                                               "read": {
                                                 "type": "boolean",
                                                 "const": false,
-                                                "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                               },
                                               "actions": {
                                                 "minItems": 1,
@@ -4753,7 +4935,7 @@
                                                         "params"
                                                       ],
                                                       "additionalProperties": false,
-                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                      "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                     },
                                                     {
                                                       "type": "object",
@@ -4867,7 +5049,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -4976,7 +5158,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5153,7 +5335,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5262,7 +5444,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5376,7 +5558,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -5485,7 +5667,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",
@@ -5604,7 +5786,7 @@
                                                 "read": {
                                                   "type": "boolean",
                                                   "const": false,
-                                                  "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                  "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                 },
                                                 "actions": {
                                                   "minItems": 1,
@@ -5713,7 +5895,7 @@
                                                           "params"
                                                         ],
                                                         "additionalProperties": false,
-                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                        "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                       },
                                                       {
                                                         "type": "object",
@@ -5827,7 +6009,7 @@
                                                   "read": {
                                                     "type": "boolean",
                                                     "const": false,
-                                                    "description": "Nothing reads after this outcome: it changes nothing a list of the screen shows, where another outcome of the same action may. Only on a branch of an invoke's `onDone` or `onError`; refused on the transition of an event, beside a `read` on the same branch, and under an invoke that says `read: false` itself."
+                                                    "description": "No read after this outcome: it changes nothing a list of this screen shows. On an invoke's `onDone`/`onError` branch, never beside a `read` or under `read: false`. See the rule `read-after-an-action`."
                                                   },
                                                   "actions": {
                                                     "minItems": 1,
@@ -5936,7 +6118,7 @@
                                                             "params"
                                                           ],
                                                           "additionalProperties": false,
-                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again and shows its entries once the read is in; the app may take them from the answer of the action that just ran, when it returns them. A list whose source is an entity is never read: it follows the stored data."
+                                                          "description": "A list of the flow's own screen whose source is a platform action reads that action again; one whose source is an entity is never read: it follows the stored data. See the rule `flow-effects`."
                                                         },
                                                         {
                                                           "type": "object",
@@ -6086,7 +6268,7 @@
             "description": "The flow of the screen: an XState v5 machine config."
           },
           "wireframe": {
-            "description": "A text sketch of the layout.",
+            "description": "A text sketch of the layout: the default state of the screen in Playwright's aria snapshot grammar.",
             "type": "string"
           }
         },
@@ -6403,7 +6585,7 @@
                       "search"
                     ],
                     "additionalProperties": false,
-                    "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                    "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                   }
                 ],
                 "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6521,7 +6703,7 @@
                         "search"
                       ],
                       "additionalProperties": false,
-                      "description": "The field starts with the value of that search parameter of the route the screen was opened at, takes it again each time that parameter becomes another, and the user may change it: `{ search: email }`."
+                      "description": "A field that holds no secret starts with the value of a search parameter of the route and takes it again when the parameter changes; the user may edit the field. See the rule `anchor-binding`."
                     }
                   ],
                   "description": "What the anchor is bound to: a model field, an action, a route, or the search parameter a field starts with."
@@ -6529,7 +6711,7 @@
                 "description": "Several bindings: the anchor runs them in this order, or one of them depending on the mode of the screen; the flow says which."
               }
             ],
-            "description": "What the anchor is bound to: one binding, or several in a non-empty list."
+            "description": "What the anchor does or shows: a field of the model, an action, a route, or (on a field that holds no secret) the search parameter it starts with. See the rules `anchor-binding` and `flow-effects`."
           },
           "codes": {
             "description": "The data-code values the element carries.",
@@ -6546,7 +6728,7 @@
             "const": true
           },
           "fields": {
-            "description": "An error's codes, each with the field it concerns.",
+            "description": "An error's codes, each with the field it concerns, or `form`, the form as a whole.",
             "type": "object",
             "propertyNames": {
               "type": "string",
@@ -6554,9 +6736,18 @@
               "description": "A code of the vocabulary (data-code)."
             },
             "additionalProperties": {
-              "type": "string",
-              "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
-              "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "string",
+                  "const": "form"
+                }
+              ],
+              "description": "A field of the screen, by its anchor, or `form`, the form as a whole."
             }
           },
           "dataId": {
@@ -6597,6 +6788,74 @@
             "description": "Shown to a member only on the entries it owns.",
             "type": "boolean"
           },
+          "with": {
+            "description": "It renders only while each of these renders (an anchor, or one showing these codes).",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                  },
+                  "additionalProperties": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    }
+                  },
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "description": "The anchor, with the codes it shows meanwhile."
+                }
+              ],
+              "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+            }
+          },
+          "without": {
+            "description": "It renders only while none of these renders (an anchor, or one showing these codes).",
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                {
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                    "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                  },
+                  "additionalProperties": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    }
+                  },
+                  "minProperties": 1,
+                  "maxProperties": 1,
+                  "description": "The anchor, with the codes it shows meanwhile."
+                }
+              ],
+              "description": "An anchor of the screen, or `{ <anchor>: [codes] }`: that anchor while it shows one of these codes."
+            }
+          },
           "asks": {
             "type": "object",
             "properties": {
@@ -6615,7 +6874,32 @@
               "code"
             ],
             "additionalProperties": false,
-            "description": "Derived: the control asks the frame's confirmation before its action runs, the action being destructive (a delete of the model; a ban, delete, remove or revoke of the platform)."
+            "description": "Derived: the control asks the frame's confirmation before its destructive action runs. A screen file never writes it. See the rule `destructive-question`."
+          },
+          "leaves": {
+            "type": "object",
+            "properties": {
+              "dialog": {
+                "type": "string",
+                "description": "The frame's dialog that asks whether to leave and lose what was typed."
+              },
+              "loses": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*(\\.[a-z][a-z0-9]*(-[a-z0-9]+)*){1,3}$",
+                  "description": "A declared anchor: 2 to 4 dot-separated kebab-case segments, kind last."
+                },
+                "description": "The fields of its screen that hold input and that the move does not carry in its search: it asks while one of them holds unsaved input."
+              }
+            },
+            "required": [
+              "dialog",
+              "loses"
+            ],
+            "additionalProperties": false,
+            "description": "Derived: the control's event moves its flow to another screen, so it asks the frame's leave question first, as a link does."
           },
           "composite": {
             "description": "The platform composite the secret input opts into (`platform.composites.<name>`): its list and items are anchors of the same screen, each marked `derivedFrom`.",
@@ -6642,14 +6926,89 @@
             "additionalProperties": false,
             "description": "Derived: the anchor is the list, or one item, of a platform composite a field of the screen opted into; a screen file never writes it."
           },
+          "fieldStates": {
+            "description": "The data-state values the field takes about its input, `unsaved` and `saved`.",
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "unsaved",
+                "saved"
+              ]
+            }
+          },
           "holdsInput": {
             "description": "The field holds input: the app is to ask before a leave that would lose what is typed into it.",
             "type": "boolean"
+          },
+          "marksState": {
+            "description": "The field shows no state colour: the app leaves its border uncoloured; its `fieldStates` still hold.",
+            "type": "boolean",
+            "const": false
           },
           "secret": {
             "description": "The field holds a secret (a password): it never leaves the page but in the request of the action that takes it, never in an address.",
             "type": "boolean",
             "const": true
+          },
+          "value": {
+            "description": "On an `input` or a `textarea`, the value the field takes, derived: the loosest of the values of its model binding and of the action parameters that take it. See the rule `declared-values`.",
+            "type": "object",
+            "properties": {
+              "type": {
+                "description": "The type of the value: `string`, `integer`, `number`, `boolean`.",
+                "type": "string"
+              },
+              "enum": {
+                "description": "The values it takes, each a string or a number.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "description": "A string or a number.",
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "minLength": {
+                "description": "The fewest characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxLength": {
+                "description": "The most characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "pattern": {
+                "description": "A regular expression (ECMA-262) every value of a string matches.",
+                "type": "string"
+              },
+              "format": {
+                "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
+                "type": "string",
+                "enum": [
+                  "email"
+                ]
+              },
+              "minimum": {
+                "description": "The smallest value of a number or an integer.",
+                "type": "number"
+              },
+              "maximum": {
+                "description": "The largest value of a number or an integer.",
+                "type": "number"
+              },
+              "readOnly": {
+                "description": "The value is a field of the model that is read-only (`x-perch.readonly`).",
+                "type": "boolean",
+                "const": true
+              }
+            },
+            "additionalProperties": false
           }
         },
         "required": [
@@ -6664,6 +7023,109 @@
     "platform": {
       "type": "object",
       "properties": {
+        "defaults": {
+          "type": "object",
+          "properties": {
+            "maxLength": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991,
+              "description": "Default for writable non-enum strings: platform value, model field or constrained inline param (no `value`). Own limit wins; platform `maxLength: null` opts out. See the rule `declared-values`."
+            }
+          },
+          "required": [
+            "maxLength"
+          ],
+          "additionalProperties": false,
+          "description": "What a value takes where it writes nothing of its own, said once for every value; from version 6. See the rule `declared-values`."
+        },
+        "values": {
+          "description": "The values by name, each declared once where its policy lives (`email`): a parameter of an action takes one by `value: <name>`. See the rule `declared-values`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "description": "The primitive type of the value.",
+                "type": "string",
+                "enum": [
+                  "string",
+                  "integer",
+                  "number",
+                  "boolean"
+                ]
+              },
+              "enum": {
+                "description": "The values it takes, each a string or a number.",
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "description": "A string or a number.",
+                  "type": [
+                    "string",
+                    "number"
+                  ]
+                }
+              },
+              "minLength": {
+                "description": "The fewest characters of a string.",
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "maxLength": {
+                "description": "The most characters of a string; from version 6 a string value that writes none, no `enum`, takes `defaults.maxLength`, and `null` takes no limit. See the rule `declared-values`.",
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "pattern": {
+                "description": "A regular expression (ECMA-262) every value of a string matches.",
+                "type": "string"
+              },
+              "format": {
+                "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
+                "type": "string",
+                "enum": [
+                  "email"
+                ]
+              },
+              "minimum": {
+                "description": "The smallest value of a number or an integer.",
+                "type": "number"
+              },
+              "maximum": {
+                "description": "The largest value of a number or an integer.",
+                "type": "number"
+              },
+              "description": {
+                "type": "string",
+                "description": "What the value holds, for every parameter that refers to it. At most 200 characters."
+              },
+              "examples": {
+                "description": "Fake values the value accepts, for a test or an example to use: any list.",
+                "type": "array",
+                "items": {}
+              }
+            },
+            "required": [
+              "description"
+            ],
+            "additionalProperties": false,
+            "description": "A value declared once: its type and its constraints, which every parameter that refers to it by name takes. See the rule `declared-values`."
+          }
+        },
         "actions": {
           "type": "object",
           "propertyNames": {
@@ -6688,35 +7150,166 @@
                   "type": "object",
                   "properties": {
                     "type": {
+                      "description": "The type of the value: string, boolean, number; left out where `value` gives it.",
+                      "type": "string"
+                    },
+                    "value": {
                       "type": "string",
-                      "description": "The type of the value: string, boolean, number."
+                      "pattern": "^([a-z][a-z0-9-]*|[a-z_]+\\.[a-z_]+)$",
+                      "description": "The value the parameter takes: a name of `platform.values` or a model field, `<entity>.<field>`, with its constraints; a keyword beside it may narrow them, never widen. See the rule `declared-values`."
+                    },
+                    "enum": {
+                      "description": "The values it takes, each a string or a number.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "description": "A string or a number.",
+                        "type": [
+                          "string",
+                          "number"
+                        ]
+                      }
+                    },
+                    "minLength": {
+                      "description": "The fewest characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "maxLength": {
+                      "description": "The most characters of a string.",
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "pattern": {
+                      "description": "A regular expression (ECMA-262) every value of a string matches.",
+                      "type": "string"
+                    },
+                    "format": {
+                      "description": "A string value's format: `email`. Its editable field is `type=email` in a form without `noValidate`; an action run without submitting skips the browser's check. See the rule `email-format`.",
+                      "type": "string",
+                      "enum": [
+                        "email"
+                      ]
+                    },
+                    "minimum": {
+                      "description": "The smallest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "maximum": {
+                      "description": "The largest value of a number or an integer.",
+                      "type": "number"
+                    },
+                    "optional": {
+                      "description": "The action runs without the parameter: a field that passes it may stay empty.",
+                      "type": "boolean",
+                      "const": true
+                    },
+                    "codes": {
+                      "description": "The codes of the action whose failure concerns this parameter, each one of its `codes`, beyond those named after it (`<parameter>-<suffix>`). See the rule `attributed-codes`.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                        "description": "A code of the vocabulary (data-code)."
+                      }
                     },
                     "description": {
                       "type": "string",
-                      "description": "What the value is and its limits; its type is written beside it. At most 200 characters."
+                      "description": "What the parameter is for. Its type or the value it refers to, and its constraints, are written beside it. At most 200 characters."
                     }
                   },
                   "required": [
-                    "type",
                     "description"
                   ],
                   "additionalProperties": false,
-                  "description": "One parameter of a platform action."
+                  "description": "One parameter of a platform action: it writes its `type` or the `value` it refers to, and may write the keywords of a value beside it, each only narrowing the value. See the rule `declared-values`."
                 },
                 "description": "The parameters by name."
               },
               "result": {
-                "type": "string",
-                "description": "What holds once the action succeeds."
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "One outcome of the action: the plain success first, then each other outcome under its condition. A refusal is said by its code's condition. At most 200 characters."
+                    }
+                  }
+                ],
+                "description": "What holds once the action runs: one outcome, or a list of outcome lines, the plain success first. A refusal is its code's condition. See the rule `action-outcomes`."
               },
               "codes": {
-                "type": "array",
-                "items": {
-                  "type": "string",
-                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
-                  "description": "A code of the vocabulary (data-code)."
-                },
-                "description": "The codes a failure of the action shows."
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "additionalProperties": {
+                      "anyOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1,
+                          "description": "When the action answers with the code, as the server judges it. A rule several actions keep is an invariant, named under the code with or instead of it. At most 200 characters."
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "invariant": {
+                              "anyOf": [
+                                {
+                                  "type": "string",
+                                  "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                },
+                                {
+                                  "minItems": 2,
+                                  "type": "array",
+                                  "items": {
+                                    "type": "string",
+                                    "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+                                  },
+                                  "uniqueItems": true
+                                }
+                              ],
+                              "description": "The invariant, by its name under `platform.invariants`, or a list of two or more when several refuse with this code; each has this code as its `refuses`."
+                            },
+                            "condition": {
+                              "description": "A cause of the code that is no invariant, beside the ones named: when else the action answers with it. At most 200 characters.",
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          },
+                          "required": [
+                            "invariant"
+                          ],
+                          "additionalProperties": false,
+                          "description": "The code answers when the rule of an invariant named would break; each rule is said once, under `platform.invariants`. See the rule `action-outcomes`."
+                        }
+                      ]
+                    },
+                    "description": "Each code a failure of the action shows, with when it answers: its condition, or the invariants it refuses for, a condition beside. See the rule `action-outcomes`."
+                  },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                      "description": "A code of the vocabulary (data-code)."
+                    },
+                    "description": "The older form: the codes by name alone, with no condition."
+                  }
+                ],
+                "description": "The codes a failure of the action shows; from version 3 each that ends like the code of a field concerns a parameter. See the rules `action-outcomes` and `attributed-codes`."
               },
               "roles": {
                 "description": "The roles that may run the action.",
@@ -6728,7 +7321,7 @@
                 }
               },
               "paged": {
-                "description": "The action answers one page of its entries: it takes the number parameters `page`, from 1, and `size`, one of the sizes, and answers that page in the order its result says, with the number of entries the other parameters find in all.",
+                "description": "The action answers one page: number parameters `page`, from 1, and `size`, one of its sizes; the page in its result's order, with the total the other parameters match. See the rule `paged-list`.",
                 "type": "object",
                 "properties": {
                   "sizes": {
@@ -6755,13 +7348,13 @@
                 "additionalProperties": false
               },
               "changes": {
-                "description": "The reads whose answer, for the organisation, the account and the params the action ran with, differs once it succeeds: each a platform action that a list, a section or a table of some screen takes as its `source`, never the action itself. A switch of organisation or account, the first read's, is never named, nor what another account reads for itself. `[]`: it changes none.",
                 "type": "array",
                 "items": {
                   "type": "string",
                   "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
                   "description": "A platform action: `sign-in`, `organisations.create`."
-                }
+                },
+                "description": "Required: the list, section or table `source` actions its success changes in its context; never itself, nor a switch of organisation or account. `[]`: none. See the rule `read-after-an-action`."
               },
               "mail": {
                 "description": "The mail the action sends, when it sends one.",
@@ -6770,12 +7363,12 @@
                   "to": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on, the signed-in account for an action on its own account, else the one its parameters name."
+                    "description": "The parameter of the action whose value the mail goes to, or `account`: the email of the account the action acts on. See the rule `mail-recipients`."
                   },
                   "language": {
                     "type": "string",
                     "pattern": "^[a-z][a-zA-Z0-9]*$",
-                    "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages; `account`: the settings of the account the action acts on once it has them, else the language it signed up in; or `recipient`: the account whose email the mail goes to, read the same way, else the signed-in account's."
+                    "description": "Where the mail's language comes from: a language parameter of the action, `account` (the account acted on) or `recipient` (the account the mail goes to). See the rule `mail-recipients`."
                   },
                   "link": {
                     "type": "object",
@@ -6788,7 +7381,7 @@
                       "search": {
                         "type": "string",
                         "pattern": "^[a-z][a-zA-Z0-9]*$",
-                        "description": "The search parameter of that screen's route the link carries its token in."
+                        "description": "The token's route search parameter. From version 4 the loader adds it to each route from the same-named platform value (`type`, no `format`); screen files omit it. See the rule `mail-link-search`."
                       }
                     },
                     "required": [
@@ -6821,12 +7414,12 @@
                     "to": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action changed anything (an email changed is told to the old address)."
+                      "description": "The parameter of the action whose value the notice goes to, or `account`: the email of the account the action acts on, as it was before the action. See the rule `mail-recipients`."
                     },
                     "language": {
                       "type": "string",
                       "pattern": "^[a-z][a-zA-Z0-9]*$",
-                      "description": "Where the mail's language comes from: a parameter of the action that holds one of the app's languages, or `account`: the settings of the account the action acts on once it has them, else the language it signed up in."
+                      "description": "Where the mail's language comes from: a language parameter of the action, or `account` (the account the action acts on). See the rule `mail-recipients`."
                     },
                     "link": {
                       "description": "The plain link of the notice, when it has one: a password changed links to the reset of a password, if it was not the account's owner.",
@@ -6858,12 +7451,51 @@
               "description",
               "params",
               "result",
-              "codes"
+              "codes",
+              "changes"
             ],
             "additionalProperties": false,
             "description": "One platform action."
           },
           "description": "The platform actions by name: `platform.<name>` in a binding."
+        },
+        "invariants": {
+          "description": "The invariants by name, each once: its rule, the code it refuses with and the actions it limits, derived. See the rule `action-outcomes`.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The rule, said once for every action that names it under the code it refuses with. At most 200 characters."
+              },
+              "refuses": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+                "description": "The code an action refuses with when the rule would break: each action names the invariant under it."
+              },
+              "actions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)*$",
+                  "description": "A platform action: `sign-in`, `organisations.create`."
+                },
+                "description": "Derived: the actions that name the invariant under the code it refuses with, in the order of the platform file. See the rule `action-outcomes`."
+              }
+            },
+            "required": [
+              "rule",
+              "refuses",
+              "actions"
+            ],
+            "additionalProperties": false
+          }
         },
         "events": {
           "description": "The events the platform raises, by name, each with what it means: `platform.<name>` as an event of a flow.",
@@ -6878,7 +7510,7 @@
           }
         },
         "leaving": {
-          "description": "The actions whose run leaves what the user typed behind (a sign-out, a switch of organisation, a change of language), as a binding names them: the app is to ask before one runs while a field holds unsaved input.",
+          "description": "Actions (named as in a binding) that drop typed input, e.g. a sign-out. Ask first only when `unsavedInput.actions` is `question` and a field holds unsaved input. See the rule `leave-questions`.",
           "type": "array",
           "items": {
             "type": "string",
@@ -6887,7 +7519,7 @@
           }
         },
         "toasts": {
-          "description": "The platform actions whose success toasts, each with the code of its toast (`organisations.create: organisation-created`): an invoke of a listed action gets the standard toast, as an action of the model does; an unlisted platform action never toasts.",
+          "description": "The platform actions whose success toasts, each with its toast's code (`organisations.create: organisation-created`); an unlisted platform action never toasts. See the rule `success-toast`.",
           "type": "object",
           "propertyNames": {
             "type": "string",
@@ -6971,7 +7603,7 @@
                 "question",
                 "never"
               ],
-              "description": "A change of screen the user starts: a link, Back, Forward."
+              "description": "A change of screen the user starts: a link, a control whose flow moves to another screen (the loader marks it `leaves`), Back, Forward."
             },
             "actions": {
               "type": "string",
@@ -7005,7 +7637,7 @@
             "elsewhere": {
               "type": "string",
               "const": "cannot",
-              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open. Nothing here can keep what was typed."
+              "description": "A leave nobody started here: another tab or device signed the account in or out, a database that will not open, a flow moving on a platform or data event. Nothing here can keep what was typed."
             }
           },
           "required": [
@@ -7062,7 +7694,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "What the platform offers every screen."
+      "description": "The platform section of `contract/domain/platform.yaml`, each value with its length resolved: the default taken where it names none (`contract.defaults`), a `null` left out."
     },
     "activities": {
       "type": "array",
@@ -7296,7 +7928,7 @@
           "id": {
             "type": "string",
             "pattern": "^[a-z][a-z0-9-]*(\\/[a-z][a-z0-9-]*){2,3}$",
-            "description": "`<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base` (the entity works on its own), `flows` (several roles or devices meet), `features` (how one function behaves): the path of the file `tests/e2e/scenarios/<id>.md`, and the test `tests/e2e/src/<id>.e2e.spec.ts`."
+            "description": "`<entity>/<layer>/<slug>` or `<entity>/<layer>/<area>/<slug>`, the layer one of `base`, `flows`, `features`: the path of `tests/e2e/scenarios/<id>.md` and of its test. See the rule `scenario-files`."
           },
           "title": {
             "type": "string",
@@ -7391,7 +8023,36 @@
       "additionalProperties": {
         "description": "A keyword of the model document."
       },
-      "description": "`contract/domain/model.schema.json`, verbatim: the data model as JSON Schema 2020-12."
+      "description": "`contract/domain/model.schema.json`: the data model as JSON Schema 2020-12, verbatim but each field that names no limit with the default length taken (`contract.defaults`)."
+    },
+    "rules": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+      },
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The title of the rule."
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The rule as the reference writes it, ending with a line \"Keys it concerns\": its links point into the reference, which the manifest does not carry, so read each key by its name."
+          }
+        },
+        "required": [
+          "title",
+          "text"
+        ],
+        "additionalProperties": false,
+        "description": "One rule of the engine."
+      },
+      "description": "The texts of the rules this manifest and its schema name by id, each id in backticks after \"rule\" or \"rules\"; the reference is not shipped. A rule only these texts name is not carried."
     }
   },
   "required": [
@@ -7405,7 +8066,8 @@
     "platform",
     "activities",
     "scenarios",
-    "model"
+    "model",
+    "rules"
   ],
   "additionalProperties": false,
   "description": "The UI manifest: the contract of the application for tests and agents."

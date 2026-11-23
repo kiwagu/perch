@@ -4,13 +4,14 @@
  * finishes once its engine says the account's private region caught up with the gateway, so it
  * creates only what the pull left missing; a start left half-way is finished after a later pull.
  * The tabs take their turns under one Web Lock, each leaving its writes durable and projected for
- * the next. A sign-out forgets the kept start with the device (`forgetDevice`), a session that
- * merely closes keeps it. A failure is logged by its code alone.
+ * the next. A start is kept under the sign-in that learnt of it, whose ending forgets it
+ * (`forgetSignIn`); a session that merely closes keeps it. A failure is logged by its code alone.
  */
 
 import { err, ResultAsync } from 'neverthrow'
 
 import { type AuthUser, type DataError, dataError, type ShapeRunnerPort } from '@workspace/data'
+import type { IdentityId } from '@workspace/ids'
 import { type Clock, privateRegionId } from '@workspace/replica'
 import type { LockManagerLike, SyncEngine } from '@workspace/replica/sync'
 
@@ -104,7 +105,7 @@ export interface AccountStarts {
    * until this device has pulled what the account has. A name the profile refuses keeps nothing,
    * and is logged.
    */
-  keepAfterPull(user: AuthUser, from: AccountStartFrom): void
+  keepAfterPull(signIn: string, user: AuthUser, from: AccountStartFrom): void
   /** This tab's sync changed: a tab that leads finishes a start waiting for the pull, once pulled. */
   syncState(state: SyncState): void
 }
@@ -145,7 +146,7 @@ export function accountStarts(deps: AccountStartsDeps): AccountStarts {
 
   return {
     service: starts,
-    keepAfterPull: (user, from) => starts.keepAfterPull(user, from).mapErr(logged),
+    keepAfterPull: (signIn, user, from) => starts.keepAfterPull(signIn, user, from).mapErr(logged),
     syncState: (state) => {
       if (state.leader) {
         afterPull()
@@ -174,7 +175,7 @@ function afterFirstPull(
   let watched: SyncEngine | undefined
 
   /** Whether a start is kept for `identity`: it waits for the pull. */
-  const waiting = (identity: string) => kept.kept()?.identity === identity
+  const waiting = (identity: IdentityId) => kept.kept(identity) !== undefined
 
   return () => {
     const space = deps.space()

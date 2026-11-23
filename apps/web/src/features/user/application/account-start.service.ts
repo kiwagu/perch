@@ -29,14 +29,22 @@ export interface AccountStart extends AccountStartFrom {
   readonly identity: IdentityId
 }
 
+/** A start this browser keeps, with the sign-in it is kept under (an id the session gives each sign-in). */
+export interface KeptStart extends AccountStart {
+  readonly signIn: string
+}
+
 /**
  * Where this browser keeps the start of an account until its settings and its profile both exist:
- * one at a time, as one account is signed in on a browser.
+ * under the sign-in that learnt of it, whose ending forgets it too.
  */
 export interface KeptStartPort {
-  keep(start: AccountStart): void
-  kept(): AccountStart | undefined
-  forget(): void
+  /** Keeps `start` under the sign-in `signIn`. */
+  keep(signIn: string, start: AccountStart): void
+  /** The start kept under the sign-in current on this browser, while it is of `identity`. */
+  kept(identity: IdentityId): KeptStart | undefined
+  /** Forgets `start` as `kept` answered it: under its own sign-in, whichever is current by then. */
+  forget(start: KeptStart): void
 }
 
 /**
@@ -115,13 +123,13 @@ export class AccountStartService {
   ) {}
 
   /**
-   * Keeps the start of `user`'s account, which has no settings or profile at the gateway yet, to
-   * finish once this device has pulled what the account has (`resumeAfterPull`). A name the
-   * profile would refuse keeps nothing.
+   * Keeps the start of `user`'s account, which has no settings or profile at the gateway yet,
+   * under the sign-in `signIn` that learnt of it, to finish once this device has pulled what the
+   * account has (`resumeAfterPull`). A name the profile would refuse keeps nothing.
    */
-  keepAfterPull(user: AuthUser, from: AccountStartFrom): Result<void, SignInError> {
+  keepAfterPull(signIn: string, user: AuthUser, from: AccountStartFrom): Result<void, SignInError> {
     return profileName(from.name).map((name) =>
-      this.kept.keep({ identity: user.id, name, locale: from.locale }),
+      this.kept.keep(signIn, { identity: user.id, name, locale: from.locale }),
     )
   }
 
@@ -132,17 +140,13 @@ export class AccountStartService {
    */
   resumeAfterPull(user: AuthUser): ResultAsync<void, SignInError> {
     return this.turns((projected) => {
-      const start = this.kept.kept()
+      const start = this.kept.kept(user.id)
 
-      return start?.identity === user.id ? this.#finish(user, start, projected) : okAsync(undefined)
+      return start ? this.#finish(user, start, projected) : okAsync(undefined)
     })
   }
 
-  #finish(
-    user: AuthUser,
-    start: AccountStart,
-    projected: Projected,
-  ): ResultAsync<void, SignInError> {
+  #finish(user: AuthUser, start: KeptStart, projected: Projected): ResultAsync<void, SignInError> {
     const owner = { identity: start.identity }
 
     return ensured(
@@ -170,7 +174,7 @@ export class AccountStartService {
           projected,
         ),
       )
-      .map(() => this.kept.forget())
+      .map(() => this.kept.forget(start))
   }
 }
 

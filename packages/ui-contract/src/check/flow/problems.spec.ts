@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { formatProblem } from '../../files'
 import { parallelIn, regionStateIn, withAreas } from '../areas.fixture'
-import { flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
+import { afterSave, flowIn, flowStateIn, sampleContract, screenIn } from '../contract.fixture'
 
 import { flowProblems } from './problems'
 
@@ -169,23 +169,22 @@ describe('flowProblems', () => {
     const editing = flowStateIn(contract, 'editing')
 
     editing.entry = [show('sample.gone-message', ['saved']), show('sample.save-button', ['gone'])]
-    editing.exit = [
+    afterSave(contract, [
       { type: 'navigate', params: { to: '/nowhere' } },
       { type: 'navigate', params: { to: '/sample/$key', search: { page: 2, tab: 'b' } } },
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
       `${AT}.states.editing.entry[0].params.anchor: "sample.gone-message" is not a declared anchor`,
       `${AT}.states.editing.entry[1].params.codes[0]: "sample.save-button" carries no code "gone"`,
-      `${AT}.states.editing.exit[0].params.to: "/nowhere" is the path of no binding`,
-      `${AT}.states.editing.exit[1].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+      `${AT}.states.saving.invoke.onDone[0].actions[0].params.to: "/nowhere" is the path of no binding`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
   it('carries into a search what a field of the screen holds', () => {
     const contract = sampleContract()
-    const editing = flowStateIn(contract, 'editing')
 
-    editing.exit = [
+    afterSave(contract, [
       {
         type: 'navigate',
         params: { to: '/sample/$key', search: { tab: { anchor: 'sample.title-input' } } },
@@ -194,7 +193,7 @@ describe('flowProblems', () => {
         type: 'navigate',
         params: { to: '/sample/$key', search: { tab: { anchor: 'sample.mode-select' } } },
       },
-    ]
+    ])
 
     expect(printed(contract)).toEqual([])
   })
@@ -206,22 +205,22 @@ describe('flowProblems', () => {
     Object.assign(screenIn(contract, 'sample').anchors['sample.title-input'] ?? {}, {
       derived: ['visibility-button'],
     })
-    flowStateIn(contract, 'editing').exit = [
+    afterSave(contract, [
       navigate({ tab: { anchor: 'sample.gone-input' } }),
       navigate({ tab: { anchor: 'sample.save-button' } }),
       navigate({ tab: { anchor: 'sample.list' } }),
       navigate({ tab: { anchor: 'sample.title-input.visibility-button' } }),
       navigate({ tab: { anchor: 'app-shell.status' } }),
       navigate({ page: { anchor: 'sample.title-input' } }),
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
-      `${AT}.states.editing.exit[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
-      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
-      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
-      `${AT}.states.editing.exit[3].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
-      `${AT}.states.editing.exit[4].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
-      `${AT}.states.editing.exit[5].params.search.page: "page" is not a search parameter of "/sample/$key"`,
+      `${AT}.states.saving.invoke.onDone[0].actions[0].params.search.tab.anchor: "sample.gone-input" is not a declared anchor of the screen`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.tab.anchor: "sample.save-button" is a button, not a field: a search takes the value a field holds`,
+      `${AT}.states.saving.invoke.onDone[2].actions[0].params.search.tab.anchor: "sample.list" is a list, not a field: a search takes the value a field holds`,
+      `${AT}.states.saving.invoke.onDone[3].actions[0].params.search.tab.anchor: "sample.title-input.visibility-button" is a visibility-button: presentation only, never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[4].actions[0].params.search.tab.anchor: "app-shell.status" is not a declared anchor of the screen`,
+      `${AT}.states.saving.invoke.onDone[5].actions[0].params.search.page: "page" is not a search parameter of "/sample/$key"`,
     ])
   })
   it('carries an email typed into a search, never a secret field', () => {
@@ -234,15 +233,15 @@ describe('flowProblems', () => {
       'sample.password-input': { kind: 'input', secret: true, derived: ['visibility-button'] },
       'sample.password-confirmation-input': { kind: 'input', secret: true },
     })
-    flowStateIn(contract, 'editing').exit = [
+    afterSave(contract, [
       navigate('sample.email-input'),
       navigate('sample.password-input'),
       navigate('sample.password-confirmation-input'),
-    ]
+    ])
 
     expect(printed(contract)).toEqual([
-      `${AT}.states.editing.exit[1].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
-      `${AT}.states.editing.exit[2].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[1].actions[0].params.search.tab.anchor: "sample.password-input" is a secret field: never a value a search carries`,
+      `${AT}.states.saving.invoke.onDone[2].actions[0].params.search.tab.anchor: "sample.password-confirmation-input" is a secret field: never a value a search carries`,
     ])
   })
   it('takes a clear of an anchor that carries codes, or of a field, a secret one included', () => {

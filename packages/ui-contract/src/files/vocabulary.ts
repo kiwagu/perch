@@ -1,12 +1,13 @@
 /**
  * Reads `contract/vocabulary.md`: the closed lists of the contract, one `## ` section
  * each, as Markdown tables whose first cell is the key, after the Grammar in prose: the kinds,
- * the derived suffixes, the attributes, the app, container and row states, the codes, the
+ * the derived suffixes, the attributes, the app, container, row and field states, the codes, the
  * choice values, the screen names in use, the roles, the reserved anchors and the composites
- * the platform declares. The sections are fixed; a missing section (but the composites, which a
- * vocabulary written before them lacks), an unknown or repeated one, a row with the wrong number
- * of cells or with an empty cell (only the Playwright cell of a kind may stay empty), a key
- * listed twice and a missing `Contract version: N` line are problems.
+ * the platform declares. The sections are fixed; a missing section (but the composites and the field
+ * states, which a vocabulary written before them lacks), an unknown or repeated one, a row with the wrong number
+ * of cells or with an empty cell (only the Playwright cell of a kind may stay empty) and a key
+ * listed twice are problems. The `Contract version: N` line is read when there is one: a contract
+ * at version 1 repeats its version there, and the check asks for the line by that version alone.
  */
 
 import { VOCABULARY_FILE } from './paths'
@@ -25,6 +26,7 @@ export interface Vocabulary {
   appStates: Record<string, string>
   containerStates: Record<string, string>
   rowStates: Record<string, Located>
+  fieldStates: Record<string, string>
   codes: Record<string, Located>
   choiceValues: Record<string, Record<string, string>>
   screenNames: Record<string, string>
@@ -41,6 +43,7 @@ export const VOCABULARY_SECTIONS = [
   'App states',
   'Container states',
   'Row states',
+  'Field states',
   'Codes',
   'Choice values',
   'Screen names in use',
@@ -64,6 +67,7 @@ const COLUMNS: Readonly<Record<Exclude<Section, 'Grammar'>, readonly string[]>> 
   'App states': ['State', 'Meaning'],
   'Container states': ['State', 'Meaning'],
   'Row states': ['State', 'Where', 'Meaning'],
+  'Field states': ['State', 'Meaning'],
   Codes: ['Code', 'Where', 'Meaning'],
   'Choice values': ['Anchor', 'Value', 'Meaning'],
   'Screen names in use': ['Screen', 'Meaning'],
@@ -79,9 +83,10 @@ const OPTIONAL_COLUMN = { section: 'Kinds', column: 'Playwright' } as const
  * The sections a vocabulary written before them may lack: a missing one reads as an empty
  * table, so an older contract still loads, and the check asks for it once a row is wanted.
  */
-const LATER_SECTIONS: ReadonlySet<Section> = new Set(['Composites'])
+const LATER_SECTIONS: ReadonlySet<Section> = new Set(['Composites', 'Field states'])
 
-const VERSION_LINE = /^Contract version: (\d+)$/m
+/** The line a vocabulary at version 1 says the contract version in: `Contract version: 1`. */
+export const VERSION_LINE = /^Contract version: (\d+)$/m
 const SEPARATOR_ROW = /^\|[\s:|-]+\|$/
 
 const isSection = (heading: string): heading is Section =>
@@ -248,10 +253,6 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
     }
   }
 
-  if (version === undefined) {
-    problems.push({ file: VOCABULARY_FILE, message: 'no "Contract version: N" line' })
-  }
-
   const table = (section: Exclude<Section, 'Grammar'>) => tableOf(sections, section, problems)
   const simple = (section: Exclude<Section, 'Grammar'>) =>
     keyed(table(section), section, problems, meaningOf)
@@ -267,6 +268,7 @@ export function parseVocabulary(markdown: string): { vocabulary: Vocabulary; pro
     appStates: simple('App states'),
     containerStates: simple('Container states'),
     rowStates: keyed(table('Row states'), 'Row states', problems, locatedOf),
+    fieldStates: simple('Field states'),
     codes: keyed(table('Codes'), 'Codes', problems, locatedOf),
     choiceValues: choiceValuesOf(table('Choice values'), problems),
     screenNames: simple('Screen names in use'),
