@@ -77,6 +77,20 @@ export function moduleData(text: string): unknown {
   return JSON.parse(text.slice(start.index + start[0].length, end))
 }
 
+/** The data of every constant an emitted module exports, by its name, in the module's order. */
+export function moduleConstants(text: string): Record<string, unknown> {
+  return Object.fromEntries(
+    text
+      .split(/^(?=export const )/m)
+      .slice(1)
+      .map((part) => {
+        const name = /^export const ([A-Z_]+) = /.exec(part)?.[1] ?? ''
+
+        return [name, moduleData(part)] as const
+      }),
+  )
+}
+
 /** Replaces `from` in the file once, failing when the file does not hold it. */
 function edit(root: string, file: string, from: string, to: string): void {
   const text = readFileSync(join(root, file), 'utf8')
